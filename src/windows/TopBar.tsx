@@ -28,7 +28,9 @@ export interface TopBarProps {
   onRedo?: () => void;
   /** Absent hides the button entirely — e.g. no Render node to read frame count/fps from. */
   onExportVideo?: () => void;
+  onExportSequence?: () => void;
   isExporting?: boolean;
+  exportMode?: "video" | "sequence" | null;
   /** 0-1. */
   exportProgress?: number;
   isTimelineOpen?: boolean;
@@ -47,7 +49,9 @@ export const TopBar: React.FC<TopBarProps> = ({
   onUndo,
   onRedo,
   onExportVideo,
+  onExportSequence,
   isExporting = false,
+  exportMode = null,
   exportProgress = 0,
   isTimelineOpen = false,
   onToggleTimeline,
@@ -344,7 +348,9 @@ export const TopBar: React.FC<TopBarProps> = ({
           isOutputOpen={isOutputOpen}
           onToggleOutput={handleToggleOutput}
           onExportVideo={onExportVideo}
+          onExportSequence={onExportSequence}
           isExporting={isExporting}
+          exportMode={exportMode}
           exportProgress={exportProgress}
         />
       </div>

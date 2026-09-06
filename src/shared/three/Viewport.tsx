@@ -799,7 +799,9 @@ export function Viewport({
     // stencil: true — three.js leaves this off by default; the Clip Box /
     // Visual Slice "solid cap" draws (clipCaps.ts) need a real stencil buffer
     // or their stencil ops are silent no-ops and no cap ever appears.
-    const renderer = new THREE.WebGLRenderer({ antialias: true, stencil: true });
+    // preserveDrawingBuffer: true — ensures WebGL buffer pixels remain readable
+    // after composition for exportCtx.drawImage / canvas.toBlob on Linux (WebKitGTK/NVIDIA).
+    const renderer = new THREE.WebGLRenderer({ antialias: true, stencil: true, preserveDrawingBuffer: true });
     // The native app can afford 2x on a retina display; the browser build is
     // CPU/GPU-bound, so cap it lower there — a big fill-rate saving on a 2x
     // display (4x pixels → 2.25x at 1.5) for a barely perceptible softness.

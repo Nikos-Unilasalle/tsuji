@@ -44,6 +44,7 @@ import {
 } from "./shared/graph/types";
 import { broadcastGraph, maximizeMainWindow, PreviewCameraPose, startBroadcasting } from "./shared/ipc";
 import { exportVideo, mimeToExtension, saveVideoBlob } from "./shared/export/videoExport";
+import { exportPngSequence, saveZipBlob } from "./shared/export/imageSequenceExport";
 import { TransformPatch, Viewport, ViewportExportHandle } from "./shared/three/Viewport";
 import { SplitViewport, SplitViewMode } from "./shared/three/SplitViewport";
 import "./shared/three/viewport.css";
@@ -278,7 +279,21 @@ function MainEditor() {
   const exportHandleRef = useRef<ViewportExportHandle | null>(null);
   const exportCancelledRef = useRef(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [exportMode, setExportMode] = useState<"video" | "sequence" | null>(null);
   const [exportProgress, setExportProgress] = useState(0);
+
+  const waitForExportHandle = useCallback(async () => {
+    // Wait for the hidden export Viewport to mount and expose its handle
+    const start = Date.now();
+    while (!exportHandleRef.current && Date.now() - start < 3000) {
+      await new Promise((r) => setTimeout(r, 50));
+    }
+    const handle = exportHandleRef.current;
+    if (!handle) throw new Error("Export view is not ready — retry.");
+    // Extra tick to let the WebGL context, shaders, and initial layout settle
+    await new Promise((r) => setTimeout(r, 100));
+    return handle;
+  }, []);
 
   const handleExportVideo = useCallback(async () => {
     if (!renderNodeInstance || totalFrames <= 0) {
@@ -287,13 +302,10 @@ function MainEditor() {
     }
     exportCancelledRef.current = false;
     setIsExporting(true);
+    setExportMode("video");
     setExportProgress(0);
     try {
-      // Lets the hidden export Viewport's own mount effect (WebGL context,
-      // scene, first tick) finish before captureFrame is called on it.
-      await new Promise((r) => setTimeout(r, 100));
-      const handle = exportHandleRef.current;
-      if (!handle) throw new Error("Export view is not ready — retry.");
+      const handle = await waitForExportHandle();
 
       const blob = await exportVideo(handle, {
         totalFrames,
@@ -314,8 +326,41 @@ function MainEditor() {
       alert("Video export failed: " + message);
     } finally {
       setIsExporting(false);
+      setExportMode(null);
     }
-  }, [renderNodeInstance, totalFrames, exportFps, currentFilename]);
+  }, [renderNodeInstance, totalFrames, exportFps, currentFilename, waitForExportHandle]);
+
+  const handleExportSequence = useCallback(async () => {
+    if (!renderNodeInstance || totalFrames <= 0) {
+      alert("Add a Render node with at least one frame before exporting.");
+      return;
+    }
+    exportCancelledRef.current = false;
+    setIsExporting(true);
+    setExportMode("sequence");
+    setExportProgress(0);
+    try {
+      const handle = await waitForExportHandle();
+
+      const blob = await exportPngSequence(handle, {
+        totalFrames,
+        fps: exportFps,
+        onProgress: (done, total) => setExportProgress(done / total),
+        isCancelled: () => exportCancelledRef.current,
+      });
+
+      const base = currentFilename.replace(/\.[^.]+$/, "") || "export";
+      const suggested = `${base}_frames.zip`;
+      await saveZipBlob(blob, suggested);
+    } catch (err) {
+      console.error("Image sequence export failed:", err);
+      const message = err instanceof Error ? err.message : String(err);
+      alert("Image sequence export failed: " + message);
+    } finally {
+      setIsExporting(false);
+      setExportMode(null);
+    }
+  }, [renderNodeInstance, totalFrames, exportFps, currentFilename, waitForExportHandle]);
 
   const [isPlaying, setIsPlaying] = useState(false);
   // Per canvas: each has its own Render node and so its own frame count, and
@@ -1946,7 +1991,9 @@ function MainEditor() {
         onUndo={undo}
         onRedo={redo}
         onExportVideo={keyframesEnabled ? handleExportVideo : undefined}
+        onExportSequence={keyframesEnabled ? handleExportSequence : undefined}
         isExporting={isExporting}
+        exportMode={exportMode}
         exportProgress={exportProgress}
         isTimelineOpen={isTimelineDrawerOpen}
         onToggleTimeline={() => setIsTimelineDrawerOpen((prev) => !prev)}

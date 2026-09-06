@@ -6,7 +6,7 @@
 
 <div style="margin-top: 10px; display: flex; gap: 8px; justify-content: center; flex-wrap: wrap;">
   <img src="https://img.shields.io/badge/TSUJI-3D_Node_Engine-7c3aed?style=flat-square&logo=three.js&logoColor=white" />
-  <img src="https://img.shields.io/badge/Version-0.4.1-06b6d4?style=flat-square" />
+  <img src="https://img.shields.io/badge/Version-0.4.2-06b6d4?style=flat-square" />
   <img src="https://img.shields.io/badge/Vault_Health-Optimal-10b981?style=flat-square" />
   <img src="https://img.shields.io/badge/Atomic_Notes-60+-f59e0b?style=flat-square" />
 </div>

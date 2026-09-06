@@ -6,18 +6,20 @@ export interface ShareMenuProps {
   onToggleOutput: () => void;
   /** Absent hides the row entirely — e.g. no Render node to read frame count/fps from. */
   onExportVideo?: () => void;
+  onExportSequence?: () => void;
   isExporting?: boolean;
+  exportMode?: "video" | "sequence" | null;
   /** 0-1. */
   exportProgress?: number;
 }
 
 /**
- * The two ways a graph leaves the app — the projector window and the video
- * file — behind one button.
+ * The ways a graph leaves the app — the projector window, video file,
+ * or image sequence — behind one button.
  *
  * They sat in the toolbar as peers of Timeline and Shortcuts, which put two
  * end-of-session actions in the middle of a row otherwise made of things you
- * touch constantly. Grouping them also gives Export Video somewhere to live
+ * touch constantly. Grouping them also gives Export somewhere to live
  * when there is no Render node: the row disappears instead of the whole
  * toolbar reflowing.
  */
@@ -25,7 +27,9 @@ export const ShareMenu: React.FC<ShareMenuProps> = ({
   isOutputOpen,
   onToggleOutput,
   onExportVideo,
+  onExportSequence,
   isExporting = false,
+  exportMode = null,
   exportProgress = 0,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -52,7 +56,7 @@ export const ShareMenu: React.FC<ShareMenuProps> = ({
       <button
         className={`top-bar-button top-bar-button-share${isOpen || isOutputOpen ? " top-bar-button-output-active" : ""}`}
         onClick={() => setIsOpen((v) => !v)}
-        title="Fullscreen output and video export"
+        title="Fullscreen output and export"
       >
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <circle cx="18" cy="5" r="3" />
@@ -91,10 +95,29 @@ export const ShareMenu: React.FC<ShareMenuProps> = ({
               }}
             >
               <span className="share-menu-item-label">
-                {isExporting ? `Export… ${Math.round(exportProgress * 100)}%` : "Export Video"}
+                {isExporting && exportMode === "video" ? `Exporting Video… ${Math.round(exportProgress * 100)}%` : "Export Video"}
               </span>
               <span className="share-menu-item-desc">
                 Render the timeline frame-by-frame (MP4, fallback to WebM).
+              </span>
+            </button>
+          )}
+
+          {onExportSequence && (
+            <button
+              type="button"
+              className="share-menu-item"
+              disabled={isExporting}
+              onClick={() => {
+                onExportSequence();
+                setIsOpen(false);
+              }}
+            >
+              <span className="share-menu-item-label">
+                {isExporting && exportMode === "sequence" ? `Exporting Sequence… ${Math.round(exportProgress * 100)}%` : "Export PNG Sequence"}
+              </span>
+              <span className="share-menu-item-desc">
+                Lossless frame-by-frame PNG sequence packaged as a ZIP.
               </span>
             </button>
           )}
