@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 import { EvalContext } from "../types";
-import { OBJECT_DISC_NODE, OBJECT_PLANE_NODE, OBJECT_POLYGON_NODE, OBJECT_TEXT_NODE } from "./object";
+import { OBJECT_BOX_NODE, OBJECT_CYLINDER_NODE, OBJECT_DISC_NODE, OBJECT_PLANE_NODE, OBJECT_POLYGON_NODE, OBJECT_TEXT_NODE } from "./object";
 import { BUILTIN_FONTS, FONT_NAMES } from "../../three/fonts/fonts";
 import helvetikerData from "../../three/fonts/helvetikerData.json";
 
@@ -336,3 +336,26 @@ describe("OBJECT_POLYGON_NODE", () => {
     }
   });
 });
+
+describe("primitive pivot", () => {
+  it("stores userData.pivot on the returned mesh", () => {
+    const res = OBJECT_BOX_NODE.evaluate(
+      {},
+      { ...OBJECT_BOX_NODE.defaultParams, pivot: new THREE.Vector3(0, -0.5, 0) },
+      { nodeId: "box-piv-test" } as EvalContext,
+    );
+    const mesh = res.geometry as THREE.Mesh;
+    expect(mesh.userData.pivot).toBeDefined();
+    expect(mesh.userData.pivot.y).toBe(-0.5);
+
+    const cylRes = OBJECT_CYLINDER_NODE.evaluate(
+      {},
+      { ...OBJECT_CYLINDER_NODE.defaultParams, pivot: new THREE.Vector3(0, -1, 0) },
+      { nodeId: "cyl-piv-test" } as EvalContext,
+    );
+    const cylMesh = cylRes.geometry as THREE.Mesh;
+    expect(cylMesh.userData.pivot).toBeDefined();
+    expect(cylMesh.userData.pivot.y).toBe(-1);
+  });
+});
+

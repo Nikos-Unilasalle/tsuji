@@ -35,13 +35,28 @@ export function sampleColorRamp(ramp: ColorRamp | undefined | null, t: number): 
   return evalColorRamp(ramp?.stops, t, ramp?.interpolation ?? "linear");
 }
 
+function toColor(c: unknown): THREE.Color {
+  if (c instanceof THREE.Color) return c.clone();
+  if (typeof c === "number" || typeof c === "string") return new THREE.Color(c);
+  if (c && typeof c === "object") {
+    const obj = c as { r?: unknown; g?: unknown; b?: unknown };
+    return new THREE.Color(Number(obj.r) || 0, Number(obj.g) || 0, Number(obj.b) || 0);
+  }
+  return new THREE.Color(0xffffff);
+}
+
 /** Evaluates a color ramp at parameter t in [0, 1]. */
 export function evalColorRamp(
   stops: ColorStop[] | undefined | null,
   t: number,
   interpolation: ColorRampInterpolation = "linear",
 ): THREE.Color {
-  const pts = stops && stops.length > 0 ? [...stops].sort((a, b) => a.position - b.position) : DEFAULT_COLOR_STOPS;
+  const pts =
+    stops && stops.length > 0
+      ? [...stops]
+          .map((s) => ({ position: Number(s.position) || 0, color: toColor(s.color) }))
+          .sort((a, b) => a.position - b.position)
+      : DEFAULT_COLOR_STOPS;
   if (pts.length === 1) return pts[0].color.clone();
 
   const clampedT = Math.max(0, Math.min(1, t));

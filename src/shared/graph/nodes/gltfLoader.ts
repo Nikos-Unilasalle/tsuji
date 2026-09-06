@@ -668,6 +668,6 @@ export const OBJECT_GLTF_NODE: NodeDefinition = {
       });
     }
 
-    return primitiveOutputs(group);
+    return primitiveOutputs(group, params);
   },
 };

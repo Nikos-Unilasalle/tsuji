@@ -16,6 +16,9 @@ describe("TEXTURE NODES", () => {
     // Octaves only appears when perlin is selected.
     const perlinFields = TEXTURE_PROCEDURAL_NODE.dynamicParamFields!({ id: "p", type: "texture/procedural", position: { x: 0, y: 0 }, params: { type: "perlin" } } as never);
     expect(perlinFields.some((f) => f.id === "octaves")).toBe(true);
+    // Exposes scale and seed inputs
+    expect(TEXTURE_PROCEDURAL_NODE.inputs.some((i) => i.id === "scale")).toBe(true);
+    expect(TEXTURE_PROCEDURAL_NODE.inputs.some((i) => i.id === "seed")).toBe(true);
     // Node environment has no `document` → evaluate returns a null texture, not a crash.
     const res = TEXTURE_PROCEDURAL_NODE.evaluate({}, TEXTURE_PROCEDURAL_NODE.defaultParams, CTX);
     expect(res.texture).toBeNull();

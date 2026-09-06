@@ -5,6 +5,7 @@ import { IndexedMesh, subdivide as runSubdivide, SubdivisionMode } from "../subd
 import { NodeDefinition } from "../types";
 import { clearMeshWarning, findFirstMesh, warnMeshRequired } from "../meshRequired";
 import { primitiveOutputs } from "./object";
+import { preserveModifierUserData } from "./transform";
 
 
 interface SubdivideState {
@@ -229,6 +230,7 @@ export const SUBDIVIDE_NODE: NodeDefinition = {
       inputObj.updateMatrixWorld(true);
       state.mesh.matrixAutoUpdate = false;
       state.mesh.matrix.copy(srcMesh.matrixWorld);
+      preserveModifierUserData(state.mesh, inputObj, srcMesh, ctx.nodeId);
       return primitiveOutputs(state.mesh);
     }
 
@@ -258,6 +260,7 @@ export const SUBDIVIDE_NODE: NodeDefinition = {
     inputObj.updateMatrixWorld(true);
     state.mesh.matrixAutoUpdate = false;
     state.mesh.matrix.copy(srcMesh.matrixWorld);
+    preserveModifierUserData(state.mesh, inputObj, srcMesh, ctx.nodeId);
     state.lastSignature = signature;
 
     return primitiveOutputs(state.mesh);

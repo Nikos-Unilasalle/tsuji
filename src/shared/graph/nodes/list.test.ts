@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
-import { DISTANCE_GRADIENT_LIST_NODE, GET_LIST_ITEM_NODE, LIST_MAP_RANGE_NODE, RANDOM_SAMPLE_LIST_NODE } from "./list";
+import { DISTANCE_GRADIENT_LIST_NODE, GET_LIST_ITEM_NODE, GRADIENT_LIST_NODE, LIST_MAP_RANGE_NODE, RANDOM_SAMPLE_LIST_NODE } from "./list";
 import { CURVE_FROM_POINTS_NODE } from "./curve";
 import { EvalContext } from "../types";
 
@@ -78,8 +78,53 @@ describe("RANDOM_SAMPLE_LIST_NODE", () => {
   });
 });
 
-describe("DISTANCE_GRADIENT_LIST_NODE", () => {
-  it("samples the ramp start at distance 0 and the ramp end at/past radius", () => {
+describe("GRADIENT_LIST_NODE", () => {
+  it("samples the ramp using 'values' input", () => {
+    const res = GRADIENT_LIST_NODE.evaluate(
+      { values: [0, 3, 10] },
+      { ...GRADIENT_LIST_NODE.defaultParams, radius: 5 },
+      CTX,
+    );
+    const colors = res.list as THREE.Color[];
+    expect(colors.length).toBe(3);
+    expect(colors[0].getHex()).toBe(new THREE.Color(0x38bdf8).getHex());
+    expect(colors[2].getHex()).toBe(new THREE.Color(0xec4899).getHex());
+    expect(colors[1].getHex()).not.toBe(colors[0].getHex());
+    expect(colors[1].getHex()).not.toBe(colors[2].getHex());
+  });
+
+  it("supports legacy 'distances' input seamlessly", () => {
+    const res = GRADIENT_LIST_NODE.evaluate(
+      { distances: [0, 3, 10] },
+      { ...GRADIENT_LIST_NODE.defaultParams, radius: 5 },
+      CTX,
+    );
+    const colors = res.list as THREE.Color[];
+    expect(colors.length).toBe(3);
+    expect(colors[0].getHex()).toBe(new THREE.Color(0x38bdf8).getHex());
+  });
+
+  it("exposes dynamicInputs including legacy distances when connected", () => {
+    expect(GRADIENT_LIST_NODE.dynamicInputs!([])).toEqual([
+      { id: "values", label: "Values", type: "list" },
+      { id: "radius", label: "Radius / Max", type: "value" },
+    ]);
+    expect(
+      GRADIENT_LIST_NODE.dynamicInputs!([
+        { id: "c1", fromNode: "a", fromSocket: "out", toNode: "b", toSocket: "distances" },
+      ]),
+    ).toContainEqual({ id: "distances", label: "Distances (Legacy)", type: "list" });
+  });
+
+  it("returns an empty list when given no values", () => {
+    const res = GRADIENT_LIST_NODE.evaluate({ values: [] }, GRADIENT_LIST_NODE.defaultParams, CTX);
+    expect((res.list as unknown[]).length).toBe(0);
+  });
+});
+
+describe("DISTANCE_GRADIENT_LIST_NODE alias", () => {
+  it("points to list/distance-gradient with identical behavior", () => {
+    expect(DISTANCE_GRADIENT_LIST_NODE.type).toBe("list/distance-gradient");
     const res = DISTANCE_GRADIENT_LIST_NODE.evaluate(
       { distances: [0, 3, 10] },
       { ...DISTANCE_GRADIENT_LIST_NODE.defaultParams, radius: 5 },
@@ -88,15 +133,6 @@ describe("DISTANCE_GRADIENT_LIST_NODE", () => {
     const colors = res.list as THREE.Color[];
     expect(colors.length).toBe(3);
     expect(colors[0].getHex()).toBe(new THREE.Color(0x38bdf8).getHex());
-    expect(colors[2].getHex()).toBe(new THREE.Color(0xec4899).getHex());
-    // Halfway through the radius sits strictly between the two ramp stops.
-    expect(colors[1].getHex()).not.toBe(colors[0].getHex());
-    expect(colors[1].getHex()).not.toBe(colors[2].getHex());
-  });
-
-  it("returns an empty list when given no distances", () => {
-    const res = DISTANCE_GRADIENT_LIST_NODE.evaluate({ distances: [] }, DISTANCE_GRADIENT_LIST_NODE.defaultParams, CTX);
-    expect((res.list as unknown[]).length).toBe(0);
   });
 });
 

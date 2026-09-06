@@ -283,6 +283,6 @@ export const OBJECT_OBJ_NODE: NodeDefinition = {
       }
     });
 
-    return primitiveOutputs(group);
+    return primitiveOutputs(group, params);
   },
 };

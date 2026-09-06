@@ -5,7 +5,7 @@ import { toBoolean } from "../sockets";
 import { defaultFont } from "../../three/fonts/helvetikerFont";
 import { BUILTIN_FONTS, FONT_NAMES } from "../../three/fonts/fonts";
 import { createNodeCache, disposeObject3D } from "../nodeCaches";
-import { composeNativeMatrix } from "./transform";
+import { asVector3, composeNativeMatrix } from "./transform";
 
 export function numberInput(input: unknown, param: unknown, fallback: number): number {
   const raw = input !== undefined ? input : param;
@@ -551,7 +551,10 @@ export const COMMON_PRIMITIVE_OUTPUTS = [
  * Cloned, so a downstream node mutating the matrix cannot move the object
  * behind its back.
  */
-export function primitiveOutputs(object: THREE.Object3D): Record<string, unknown> {
+export function primitiveOutputs(object: THREE.Object3D, params?: Record<string, unknown>): Record<string, unknown> {
+  if (params && "pivot" in params) {
+    object.userData.pivot = asVector3(params.pivot, new THREE.Vector3());
+  }
   if (object.matrixAutoUpdate) object.updateMatrix();
   return { geometry: object, matrix: object.matrix.clone() };
 }
@@ -818,7 +821,7 @@ export const OBJECT_BOX_NODE: NodeDefinition = {
     const texParams = extractTextureParams(inputs, params, ctx.nodeId);
     applyMaterialParams(mesh, matParams, THREE.FrontSide, texParams);
 
-    return primitiveOutputs(mesh);
+    return primitiveOutputs(mesh, params);
   },
 };
 
@@ -1013,7 +1016,7 @@ export const OBJECT_PLANE_NODE: NodeDefinition = {
     const defaultSide: THREE.Side = depth > 0 ? THREE.FrontSide : THREE.DoubleSide;
     applyMaterialParams(mesh, matParams, defaultSide, texParams);
 
-    return primitiveOutputs(mesh);
+    return primitiveOutputs(mesh, params);
   },
 };
 
@@ -1053,7 +1056,7 @@ export const OBJECT_SPHERE_NODE: NodeDefinition = {
     const texParams = extractTextureParams(inputs, params, ctx.nodeId);
     applyMaterialParams(mesh, matParams, THREE.FrontSide, texParams);
 
-    return primitiveOutputs(mesh);
+    return primitiveOutputs(mesh, params);
   },
 };
 
@@ -1179,7 +1182,7 @@ export const OBJECT_DISC_NODE: NodeDefinition = {
     const defaultSide: THREE.Side = depth > 0 ? THREE.FrontSide : THREE.DoubleSide;
     applyMaterialParams(mesh, matParams, defaultSide, texParams);
 
-    return primitiveOutputs(mesh);
+    return primitiveOutputs(mesh, params);
   },
 };
 
@@ -1299,7 +1302,7 @@ export const OBJECT_POLYGON_NODE: NodeDefinition = {
     const texParams = extractTextureParams(inputs, params, ctx.nodeId);
     applyMaterialParams(mesh, matParams, depth > 0 ? THREE.FrontSide : THREE.DoubleSide, texParams);
 
-    return primitiveOutputs(mesh);
+    return primitiveOutputs(mesh, params);
   },
 };
 
@@ -1339,7 +1342,7 @@ export const OBJECT_CYLINDER_NODE: NodeDefinition = {
     const texParams = extractTextureParams(inputs, params, ctx.nodeId);
     applyMaterialParams(mesh, matParams, THREE.FrontSide, texParams);
 
-    return primitiveOutputs(mesh);
+    return primitiveOutputs(mesh, params);
   },
 };
 
@@ -1379,7 +1382,7 @@ export const OBJECT_CONE_NODE: NodeDefinition = {
     const texParams = extractTextureParams(inputs, params, ctx.nodeId);
     applyMaterialParams(mesh, matParams, THREE.FrontSide, texParams);
 
-    return primitiveOutputs(mesh);
+    return primitiveOutputs(mesh, params);
   },
 };
 
@@ -1486,7 +1489,7 @@ export const OBJECT_TEXT_NODE: NodeDefinition = {
     const texParams = extractTextureParams(inputs, params, ctx.nodeId);
     applyMaterialParams(mesh, matParams, THREE.FrontSide, texParams);
 
-    return primitiveOutputs(mesh);
+    return primitiveOutputs(mesh, params);
   },
 };
 
@@ -1796,7 +1799,7 @@ export const OBJECT_BAR_GRAPH_NODE: NodeDefinition = {
       }
     }
 
-    return primitiveOutputs(group);
+    return primitiveOutputs(group, params);
   },
 };
 

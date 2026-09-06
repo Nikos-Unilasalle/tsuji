@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { createNodeCache, disposeObject3D } from "../nodeCaches";
+import { getSourcePivot } from "./transform";
 
 /**
  * One item to place: `template` is the source object to draw (its mesh
@@ -12,6 +13,11 @@ export interface InstancedItemSpec {
   template: THREE.Object3D;
   matrix: THREE.Matrix4;
   color?: THREE.Color;
+  /**
+   * Whether to apply the template's own matrix and pivot offset. Defaults to true.
+   * Set to false when matrix is already pre-composed with the template transform (e.g. Spawner).
+   */
+  applyTemplateTransform?: boolean;
 }
 
 /**
@@ -51,6 +57,20 @@ export function renderInstanced(nodeId: string, group: THREE.Group, items: Insta
 
   for (const item of items) {
     item.template.updateMatrixWorld(true);
+    const sourcePivot = getSourcePivot(item.template);
+    const hasPivot = sourcePivot.lengthSq() > 1e-9;
+    const pivotInv = hasPivot ? new THREE.Matrix4().makeTranslation(-sourcePivot.x, -sourcePivot.y, -sourcePivot.z) : null;
+
+    const applyTransform = item.applyTemplateTransform !== false;
+    let templateTransform = new THREE.Matrix4();
+    if (applyTransform) {
+      if (pivotInv) {
+        templateTransform.multiplyMatrices(item.template.matrix, pivotInv);
+      } else {
+        templateTransform.copy(item.template.matrix);
+      }
+    }
+
     const invRoot = new THREE.Matrix4().copy(item.template.matrixWorld).invert();
     let meshIndex = 0;
     item.template.traverse((child) => {
@@ -58,7 +78,10 @@ export function renderInstanced(nodeId: string, group: THREE.Group, items: Insta
       const key = `${item.template.uuid}#${meshIndex}`;
       let bucket = buckets.get(key);
       if (!bucket) {
-        const localMatrix = new THREE.Matrix4().multiplyMatrices(invRoot, child.matrixWorld);
+        const childRelative = new THREE.Matrix4().multiplyMatrices(invRoot, child.matrixWorld);
+        const localMatrix = applyTransform
+          ? new THREE.Matrix4().multiplyMatrices(templateTransform, childRelative)
+          : childRelative;
         bucket = { meshTemplate: child, localMatrix, entries: [] };
         buckets.set(key, bucket);
       }

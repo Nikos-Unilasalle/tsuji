@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { NodeDefinition } from "../types";
 import { toBoolean } from "../sockets";
 import { createNodeCache, disposeObject3D } from "../nodeCaches";
-import { composeNativeMatrix } from "./transform";
+import { composeNativeMatrix, getSourcePivot } from "./transform";
 import { COMMON_PRIMITIVE_OUTPUTS, primitiveOutputs } from "./object";
 import { InstancedItemSpec, renderInstanced } from "./instancedRender";
 
@@ -642,6 +642,8 @@ export const TEXTURE_PROCEDURAL_NODE: NodeDefinition = {
   label: "Procedural Texture",
   category: "texture",
   inputs: [
+    { id: "scale", label: "Scale", type: "value" },
+    { id: "seed", label: "Seed", type: "value" },
     { id: "uvScale", label: "UV Scale", type: "vector" },
     { id: "uvOffset", label: "UV Offset", type: "vector" },
   ],
@@ -677,8 +679,10 @@ export const TEXTURE_PROCEDURAL_NODE: NodeDefinition = {
 
     const type = String(params.type || "checker");
     const resolution = Math.max(16, Math.min(1024, Math.round(Number(params.resolution) || 256)));
-    const scale = Math.max(1, Number(params.scale) || 8);
-    const seed = Math.floor(Number(params.seed) || 1);
+    const rawScale = inputs.scale !== undefined ? inputs.scale : params.scale;
+    const scale = Math.max(0.0001, Number(rawScale) || 8);
+    const rawSeed = inputs.seed !== undefined ? inputs.seed : params.seed;
+    const seed = Math.floor(Number(rawSeed) || 1);
     const octaves = Math.max(1, Math.round(Number(params.octaves) || 3));
     const colorA = asColor(params.colorA, new THREE.Color(0xffffff));
     const colorB = asColor(params.colorB, new THREE.Color(0x222222));
@@ -1170,6 +1174,9 @@ export const TEXTURE_PIXEL_SPAWNER_NODE: NodeDefinition = {
 
     const gpuInstancing = Boolean(params.gpuInstancing);
     const instancedItems: InstancedItemSpec[] = [];
+    const sourcePivot = getSourcePivot(template);
+    const hasPivot = sourcePivot.lengthSq() > 1e-9;
+    const pivotInv = hasPivot ? new THREE.Matrix4().makeTranslation(-sourcePivot.x, -sourcePivot.y, -sourcePivot.z) : null;
 
     let pixelCounter = 0;
 
@@ -1224,6 +1231,10 @@ export const TEXTURE_PIXEL_SPAWNER_NODE: NodeDefinition = {
           instancedItems.push({ template, matrix: instanceMatrix, color });
         } else {
           const clone = template.clone(true);
+          if (pivotInv) {
+            clone.matrixAutoUpdate = false;
+            clone.matrix.copy(template.matrix).multiply(pivotInv);
+          }
 
           clone.traverse((child) => {
             if (child instanceof THREE.Mesh && child.material) {
@@ -1239,6 +1250,7 @@ export const TEXTURE_PIXEL_SPAWNER_NODE: NodeDefinition = {
           const wrapper = new THREE.Group();
           wrapper.matrixAutoUpdate = false;
           wrapper.matrix.copy(instanceMatrix);
+          if (hasPivot) wrapper.userData.pivot = sourcePivot.clone();
           wrapper.add(clone);
 
           group.add(wrapper);

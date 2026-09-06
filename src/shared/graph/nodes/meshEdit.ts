@@ -5,7 +5,7 @@ import { NodeDefinition } from "../types";
 import { clearMeshWarning, findFirstMesh, warnMeshRequired } from "../meshRequired";
 import { createPRNG } from "../../math/random";
 import { applyMaterialParams, materialParamsFromValue, primitiveOutputs } from "./object";
-import { asVector3 } from "./transform";
+import { asVector3, preserveModifierUserData } from "./transform";
 
 export type FaceSelectMode = "all" | "normal" | "height";
 
@@ -504,6 +504,7 @@ export const EXTRUDE_MESH_NODE: NodeDefinition = {
       inputObj.updateMatrixWorld(true);
       state.mesh.matrixAutoUpdate = false;
       state.mesh.matrix.copy(srcMesh.matrixWorld);
+      preserveModifierUserData(state.mesh, inputObj, srcMesh, ctx.nodeId);
       applyExtrudeMaterial(state.mesh, srcMesh, inputs.material);
       return primitiveOutputs(state.mesh);
     }
@@ -560,6 +561,7 @@ export const EXTRUDE_MESH_NODE: NodeDefinition = {
     inputObj.updateMatrixWorld(true);
     state.mesh.matrixAutoUpdate = false;
     state.mesh.matrix.copy(srcMesh.matrixWorld);
+    preserveModifierUserData(state.mesh, inputObj, srcMesh, ctx.nodeId);
     state.lastSignature = signature;
 
     return primitiveOutputs(state.mesh);
@@ -721,6 +723,7 @@ export const DELETE_GEOMETRY_NODE: NodeDefinition = {
       inputObj.updateMatrixWorld(true);
       state.mesh.matrixAutoUpdate = false;
       state.mesh.matrix.copy(srcMesh.matrixWorld);
+      preserveModifierUserData(state.mesh, inputObj, srcMesh, ctx.nodeId);
       // Live material inheritance, same as Extrude: the surviving faces keep
       // the source's material, refreshed on cache hits so upstream animation
       // keeps driving it.
@@ -765,6 +768,7 @@ export const DELETE_GEOMETRY_NODE: NodeDefinition = {
     inputObj.updateMatrixWorld(true);
     state.mesh.matrixAutoUpdate = false;
     state.mesh.matrix.copy(srcMesh.matrixWorld);
+    preserveModifierUserData(state.mesh, inputObj, srcMesh, ctx.nodeId);
     state.lastSignature = signature;
 
     return primitiveOutputs(state.mesh);

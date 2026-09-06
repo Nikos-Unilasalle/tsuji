@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 import { EvalContext } from "../types";
 import { DELETE_GEOMETRY_NODE, EXTRUDE_MESH_NODE, FACE_SELECTION_NODE, selectFaces } from "./meshEdit";
+import { HEX_GRID_NODE } from "./hexGrid";
 
 const CTX: EvalContext = { time: 0, step: 0, nodeId: "mesh-edit-test" };
 
@@ -258,6 +259,46 @@ describe("EXTRUDE_MESH_NODE", () => {
     expect((mesh.material as THREE.MeshStandardMaterial).color.r).toBeCloseTo(0.2);
     expect((mesh.material as THREE.MeshStandardMaterial).color.g).toBeCloseTo(0.6);
     expect((mesh.material as THREE.MeshStandardMaterial).color.b).toBeCloseTo(0.9);
+  });
+
+  it("preserves incoming mesh userData.pivot and showPivot adjustments", () => {
+    const polygon = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 0.5, 6));
+    polygon.userData.pivot = new THREE.Vector3(0, -0.25, 0);
+    polygon.userData.showPivot = true;
+
+    const res = EXTRUDE_MESH_NODE.evaluate(
+      { geometry: polygon, distance: 0.5 },
+      { ...EXTRUDE_MESH_NODE.defaultParams, selectMode: "all" },
+      { ...CTX, nodeId: "extrude-pivot-test" },
+    );
+    const mesh = res.geometry as THREE.Mesh;
+    expect(mesh.userData.pivot).toBeDefined();
+    expect(mesh.userData.pivot.x).toBeCloseTo(0);
+    expect(mesh.userData.pivot.y).toBeCloseTo(-0.25);
+    expect(mesh.userData.pivot.z).toBeCloseTo(0);
+    expect(mesh.userData.showPivot).toBe(true);
+
+    // Cache hit should also preserve the pivot
+    const resCached = EXTRUDE_MESH_NODE.evaluate(
+      { geometry: polygon, distance: 0.5 },
+      { ...EXTRUDE_MESH_NODE.defaultParams, selectMode: "all" },
+      { ...CTX, nodeId: "extrude-pivot-test" },
+    );
+    const cachedMesh = resCached.geometry as THREE.Mesh;
+    expect(cachedMesh.userData.pivot).toBeDefined();
+    expect(cachedMesh.userData.pivot.y).toBeCloseTo(-0.25);
+
+    // Downstream Hex Grid should inherit the pivot and apply pivotInv
+    const hexRes = HEX_GRID_NODE.evaluate(
+      { geometry: mesh },
+      { cols: 2, rows: 2, radius: 1, spacing: 1 },
+      { ...CTX, nodeId: "hex-after-extrude" },
+    );
+    const group = hexRes.geometry as THREE.Group;
+    expect(group.children.length).toBe(4);
+    const firstWrapper = group.children[0] as THREE.Group;
+    expect(firstWrapper.userData.pivot).toBeDefined();
+    expect(firstWrapper.userData.pivot.y).toBeCloseTo(-0.25);
   });
 });
 

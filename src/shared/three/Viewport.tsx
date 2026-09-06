@@ -1596,8 +1596,10 @@ export function Viewport({
         // Native object gizmo anchored directly at the pivot point
         if (object === gizmoPivotProxy && gizmoPivotProxyNodeId && gizmoPivotProxyRealObject && onTransformChangeRef.current) {
           const node = graphRef.current.nodes.find((n) => n.id === gizmoPivotProxyNodeId);
-          if (!node) return;
-          const piv = asVector3(node.params.pivot, new THREE.Vector3());
+          const piv =
+            gizmoPivotProxyRealObject.userData && gizmoPivotProxyRealObject.userData.pivot
+              ? asVector3(gizmoPivotProxyRealObject.userData.pivot, new THREE.Vector3())
+              : asVector3(node.params.pivot, new THREE.Vector3());
           const targetNodeId = gizmoPivotProxyNodeId;
           const deltaConn = graphRef.current.connections.find((c) => c.toNode === targetNodeId && c.toSocket === "matrix");
           const upstreamNodeId = deltaConn ? deltaConn.fromNode : null;
@@ -3371,7 +3373,10 @@ export function Viewport({
             scene.traverse((obj) => {
               if (!targetObj && obj.userData?.nodeId === node.id) targetObj = obj;
             });
-            const pivOffset = asVector3(node.params?.pivot, new THREE.Vector3());
+            const pivOffset =
+              targetObj && targetObj.userData && targetObj.userData.pivot
+                ? asVector3(targetObj.userData.pivot, new THREE.Vector3())
+                : asVector3(node.params?.pivot, new THREE.Vector3());
             const foundObj: THREE.Object3D | undefined = targetObj;
             if (foundObj) {
               foundObj.updateWorldMatrix(true, false);
@@ -3477,7 +3482,10 @@ export function Viewport({
             if (!transformControls?.dragging || transformControls.object !== gizmoPivotProxy) {
               targetObject.updateWorldMatrix(true, false);
               const node = graphRef.current.nodes.find((n) => n.id === selectedNodeIdRef.current);
-              const pivOffset = asVector3(node?.params?.pivot, new THREE.Vector3());
+              const pivOffset =
+                targetObject.userData && targetObject.userData.pivot
+                  ? asVector3(targetObject.userData.pivot, new THREE.Vector3())
+                  : asVector3(node?.params?.pivot, new THREE.Vector3());
               const worldPivot = pivOffset.clone().applyMatrix4(targetObject.matrixWorld);
               gizmoPivotProxy.position.copy(worldPivot);
               targetObject.getWorldQuaternion(gizmoPivotProxy.quaternion);

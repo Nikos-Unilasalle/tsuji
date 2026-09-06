@@ -2,8 +2,39 @@ import * as THREE from "three";
 import { NodeDefinition, ParamFieldDef } from "../types";
 import { createNodeCache, disposeObject3D } from "../nodeCaches";
 import { InstancedItemSpec, renderInstanced } from "./instancedRender";
+import { getSourcePivot } from "./transform";
 
 const groupCache = createNodeCache<THREE.Group>(disposeObject3D);
+
+function attachInstance(
+  itemSource: THREE.Object3D,
+  instanceMatrix: THREE.Matrix4,
+  gpuInstancing: boolean,
+  instancedItems: InstancedItemSpec[],
+  group: THREE.Group,
+): void {
+  if (gpuInstancing) {
+    instancedItems.push({ template: itemSource, matrix: instanceMatrix });
+    return;
+  }
+
+  const sourcePivot = getSourcePivot(itemSource);
+  const hasPivot = sourcePivot.lengthSq() > 1e-9;
+  const pivotInv = hasPivot ? new THREE.Matrix4().makeTranslation(-sourcePivot.x, -sourcePivot.y, -sourcePivot.z) : null;
+
+  const clone = itemSource.clone(true);
+  if (pivotInv) {
+    clone.matrixAutoUpdate = false;
+    clone.matrix.copy(itemSource.matrix).multiply(pivotInv);
+  }
+  const wrapper = new THREE.Group();
+  wrapper.matrixAutoUpdate = false;
+  wrapper.matrix.copy(instanceMatrix);
+  if (hasPivot) wrapper.userData.pivot = sourcePivot.clone();
+  wrapper.add(clone);
+
+  group.add(wrapper);
+}
 
 function getGroup(nodeId: string): THREE.Group {
   const existing = groupCache.get(nodeId);
@@ -77,6 +108,7 @@ export const ARRAY_NODE: NodeDefinition = {
     { id: "spacingY", label: "Spacing Y", type: "value" },
     { id: "spacingZ", label: "Spacing Z", type: "value" },
     { id: "curve", label: "Curve", type: "curve" },
+    { id: "matrix", label: "Matrix", type: "matrix" },
   ],
   outputs: [{ id: "geometry", label: "Geometry", type: "geometry" }],
   defaultParams: {
@@ -209,6 +241,11 @@ export const ARRAY_NODE: NodeDefinition = {
     };
 
     const mode = String(params.mode || "linear");
+    const stepMatrix = inputs.matrix instanceof THREE.Matrix4
+      ? inputs.matrix
+      : (Array.isArray(inputs.matrix) && inputs.matrix[0] instanceof THREE.Matrix4
+        ? (inputs.matrix[0] as THREE.Matrix4)
+        : null);
     const gpuInstancing = Boolean(params.gpuInstancing);
     const instancedItems: InstancedItemSpec[] = [];
 
@@ -242,6 +279,7 @@ export const ARRAY_NODE: NodeDefinition = {
       const colOffsets = centeredOffsetsWithVariance(cols, spX, spacingVariance, center);
       const rowOffsets = centeredOffsetsWithVariance(rows, spY, spacingVariance, center);
 
+      let stepPower = new THREE.Matrix4();
       for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
           const itemSource = pickSource(r * cols + c);
@@ -262,19 +300,12 @@ export const ARRAY_NODE: NodeDefinition = {
           }
 
           instanceMatrix.compose(pos, new THREE.Quaternion(), new THREE.Vector3(1, 1, 1));
-
-          if (gpuInstancing) {
-            instancedItems.push({ template: itemSource, matrix: instanceMatrix });
-            continue;
+          if (stepMatrix) {
+            instanceMatrix.premultiply(stepPower);
+            stepPower = new THREE.Matrix4().multiplyMatrices(stepMatrix, stepPower);
           }
 
-          const clone = itemSource.clone(true);
-          const wrapper = new THREE.Group();
-          wrapper.matrixAutoUpdate = false;
-          wrapper.matrix.copy(instanceMatrix);
-          wrapper.add(clone);
-
-          group.add(wrapper);
+          attachInstance(itemSource, instanceMatrix, gpuInstancing, instancedItems, group);
         }
       }
       if (gpuInstancing) renderInstanced(ctx.nodeId, group, instancedItems);
@@ -298,6 +329,7 @@ export const ARRAY_NODE: NodeDefinition = {
       const yOffsets = centeredOffsetsWithVariance(cY, spY, spacingVariance, center);
       const zOffsets = centeredOffsetsWithVariance(cZ, spZ, spacingVariance, center);
 
+      let stepPower = new THREE.Matrix4();
       for (let ix = 0; ix < cX; ix++) {
         for (let iy = 0; iy < cY; iy++) {
           for (let iz = 0; iz < cZ; iz++) {
@@ -307,19 +339,12 @@ export const ARRAY_NODE: NodeDefinition = {
             const pos = new THREE.Vector3(xOffsets[ix], yOffsets[iy], zOffsets[iz]);
 
             instanceMatrix.compose(pos, new THREE.Quaternion(), new THREE.Vector3(1, 1, 1));
-
-            if (gpuInstancing) {
-              instancedItems.push({ template: itemSource, matrix: instanceMatrix });
-              continue;
+            if (stepMatrix) {
+              instanceMatrix.premultiply(stepPower);
+              stepPower = new THREE.Matrix4().multiplyMatrices(stepMatrix, stepPower);
             }
 
-            const clone = itemSource.clone(true);
-            const wrapper = new THREE.Group();
-            wrapper.matrixAutoUpdate = false;
-            wrapper.matrix.copy(instanceMatrix);
-            wrapper.add(clone);
-
-            group.add(wrapper);
+            attachInstance(itemSource, instanceMatrix, gpuInstancing, instancedItems, group);
           }
         }
       }
@@ -367,6 +392,7 @@ export const ARRAY_NODE: NodeDefinition = {
       curveUOffsets = raw.map((v) => v / total);
     }
 
+    let stepPower = new THREE.Matrix4();
     for (let i = 0; i < count; i++) {
       const itemSource = pickSource(i);
       if (!itemSource) continue;
@@ -424,21 +450,12 @@ export const ARRAY_NODE: NodeDefinition = {
       }
 
       instanceMatrix.compose(pos, quatOverride ?? new THREE.Quaternion().setFromEuler(rot), scale);
-
-      if (gpuInstancing) {
-        instancedItems.push({ template: itemSource, matrix: instanceMatrix });
-        continue;
+      if (stepMatrix) {
+        instanceMatrix.premultiply(stepPower);
+        stepPower = new THREE.Matrix4().multiplyMatrices(stepMatrix, stepPower);
       }
 
-      const clone = itemSource.clone(true);
-
-      // Wrapper group ensures position/orientation applies cleanly over cloned objects
-      const wrapper = new THREE.Group();
-      wrapper.matrixAutoUpdate = false;
-      wrapper.matrix.copy(instanceMatrix);
-      wrapper.add(clone);
-
-      group.add(wrapper);
+      attachInstance(itemSource, instanceMatrix, gpuInstancing, instancedItems, group);
     }
 
     if (gpuInstancing) renderInstanced(ctx.nodeId, group, instancedItems);

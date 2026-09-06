@@ -86,4 +86,56 @@ describe("renderInstanced", () => {
     expect(group.children.length).toBe(1);
     expect((group.children[0] as THREE.InstancedMesh).count).toBe(2);
   });
+
+  it("applies template transformation matrix (location, rotation, scale) to instances", () => {
+    const template = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1));
+    template.position.set(2, 3, 4);
+    template.scale.set(2, 2, 2);
+    template.updateMatrix();
+
+    const group = new THREE.Group();
+    renderInstanced("node-5", group, [
+      { template, matrix: new THREE.Matrix4().makeTranslation(10, 0, 0) },
+    ]);
+
+    const mesh = group.children[0] as THREE.InstancedMesh;
+    const m = new THREE.Matrix4();
+    mesh.getMatrixAt(0, m);
+
+    const pos = new THREE.Vector3();
+    const scale = new THREE.Vector3();
+    m.decompose(pos, new THREE.Quaternion(), scale);
+
+    expect(pos.x).toBeCloseTo(12); // 10 + 2
+    expect(pos.y).toBeCloseTo(3);
+    expect(pos.z).toBeCloseTo(4);
+    expect(scale.x).toBeCloseTo(2);
+    expect(scale.y).toBeCloseTo(2);
+    expect(scale.z).toBeCloseTo(2);
+  });
+
+  it("applies template pivot offset and transformation matrix together", () => {
+    const template = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 2, 16));
+    // Pivot at base of cylinder (local y = -1)
+    template.userData.pivot = new THREE.Vector3(0, -1, 0);
+    // Scale height by 2
+    template.scale.set(1, 2, 1);
+    template.updateMatrix();
+
+    const group = new THREE.Group();
+    renderInstanced("node-6", group, [
+      { template, matrix: new THREE.Matrix4().makeTranslation(5, 10, 0) },
+    ]);
+
+    const mesh = group.children[0] as THREE.InstancedMesh;
+    const m = new THREE.Matrix4();
+    mesh.getMatrixAt(0, m);
+
+    // The pivot point in geometry coords is (0, -1, 0).
+    // Under m, this pivot point should land at exactly the placement translation (5, 10, 0).
+    const pivotWorld = new THREE.Vector3(0, -1, 0).applyMatrix4(m);
+    expect(pivotWorld.x).toBeCloseTo(5);
+    expect(pivotWorld.y).toBeCloseTo(10);
+    expect(pivotWorld.z).toBeCloseTo(0);
+  });
 });

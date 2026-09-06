@@ -104,6 +104,11 @@ export const DEMO_CATALOG: DemoCategory[] = [
         label: "Array Grid",
         description: "Repeat one object into a grid.",
       },
+      {
+        file: "demo_structure_hexaworld.tsuji",
+        label: "Hexaworld",
+        description: "Hex Grid + Sample Texture -> Set Instance Transform.",
+      },
     ],
   },
   {

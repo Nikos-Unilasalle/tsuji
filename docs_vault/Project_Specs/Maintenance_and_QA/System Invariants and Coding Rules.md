@@ -19,6 +19,9 @@ Ce document consigne les invariants stricts et les conventions de code applicabl
    - Le graphe de nœuds est la source de vérité absolue pour toute la scène 3D.
 5. **Gestion Stricte de la Mémoire GPU (`createNodeCache`)** :
    - Tout état, groupe ou texture persistant associé à un `nodeId` doit impérativement être enregistré via `createNodeCache<T>(disposeObject3D)` dans `src/shared/graph/nodeCaches.ts`. Les `new Map` brutes au niveau module sont proscrites.
+6. **Conception Générique et Modularité des Nœuds (Orthogonalité)** :
+   - Tout nœud doit être conçu de façon universelle, sans présupposer d'un cas d'usage ou d'un exercice particulier.
+   - Interdiction de créer des sorties composites ou ad-hoc (ex: sorties combinées "heights" ou "displacements" dans un nœud d'échantillonnage de texture). Les nœuds fournissent des données atomiques pures (ex: liste normalisée `[0, 1]`), et la composition est réalisée par le graphe.
 
 ---
 

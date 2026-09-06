@@ -3,6 +3,7 @@ import { createNodeCache, disposeObject3D } from "../nodeCaches";
 import { NodeDefinition } from "../types";
 import { clearMeshWarning, findFirstMesh, warnMeshRequired } from "../meshRequired";
 import { primitiveOutputs } from "./object";
+import { preserveModifierUserData } from "./transform";
 
 /**
  * The three shading modes, in Blender's vocabulary. "auto" is Blender's
@@ -315,6 +316,7 @@ export const SHADE_NODE: NodeDefinition = {
       inputObj.updateMatrixWorld(true);
       state.mesh.matrixAutoUpdate = false;
       state.mesh.matrix.copy(srcMesh.matrixWorld);
+      preserveModifierUserData(state.mesh, inputObj, srcMesh, ctx.nodeId);
       state.mesh.material = srcMesh.material;
       return primitiveOutputs(state.mesh);
     }
@@ -340,6 +342,7 @@ export const SHADE_NODE: NodeDefinition = {
     inputObj.updateMatrixWorld(true);
     state.mesh.matrixAutoUpdate = false;
     state.mesh.matrix.copy(srcMesh.matrixWorld);
+    preserveModifierUserData(state.mesh, inputObj, srcMesh, ctx.nodeId);
     state.signature = signature;
     state.srcPosArray = posAttr.array;
     state.srcPosCount = posAttr.count;

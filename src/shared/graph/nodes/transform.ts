@@ -640,3 +640,45 @@ export const MATRIX_DELAY_NODE: NodeDefinition = {
     return { matrix: sampleAt(samples, now - frames) ?? incoming.clone() };
   },
 };
+
+/**
+ * Retrieve the pivot offset of a source object (from userData.pivot), or (0,0,0) if none is specified.
+ */
+export function getSourcePivot(obj: unknown): THREE.Vector3 {
+  if (obj instanceof THREE.Object3D && obj.userData && obj.userData.pivot) {
+    return asVector3(obj.userData.pivot, ZERO);
+  }
+  return ZERO;
+}
+
+/**
+ * Preserves metadata, pivot, and pivot visibility from an input object onto a modifier's output object.
+ */
+export function preserveModifierUserData(
+  outputObj: THREE.Object3D,
+  inputObj: THREE.Object3D,
+  srcMesh?: THREE.Mesh | null,
+  nodeId?: string,
+): void {
+  const sourcePivot =
+    (inputObj.userData && inputObj.userData.pivot ? getSourcePivot(inputObj) : null) ??
+    (srcMesh && srcMesh.userData && srcMesh.userData.pivot ? getSourcePivot(srcMesh) : ZERO);
+  const hasPivot = sourcePivot.lengthSq() > 1e-9;
+
+  outputObj.userData = {
+    ...inputObj.userData,
+    ...(srcMesh?.userData ?? {}),
+    ...(nodeId ? { nodeId } : {}),
+  };
+
+  if (hasPivot) {
+    outputObj.userData.pivot = sourcePivot.clone();
+  } else {
+    delete outputObj.userData.pivot;
+  }
+
+  if (inputObj.userData?.showPivot || srcMesh?.userData?.showPivot) {
+    outputObj.userData.showPivot = true;
+  }
+}
+

@@ -89,4 +89,15 @@ describe("sampleColorRamp", () => {
   it("falls back to the default ramp when given null", () => {
     expect(sampleColorRamp(null, 0).getHex()).toBe(DEFAULT_COLOR_STOPS[0].color.getHex());
   });
+
+  it("handles deserialized stops with raw numeric colors", () => {
+    const ramp = {
+      stops: [
+        { position: 0, color: 0xff0000 as unknown as THREE.Color },
+        { position: 1, color: 0x0000ff as unknown as THREE.Color },
+      ],
+      interpolation: "constant" as const,
+    };
+    expect(sampleColorRamp(ramp, 0.9).getHex()).toBe(0xff0000);
+  });
 });

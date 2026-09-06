@@ -4,6 +4,7 @@ import { NodeDefinition } from "../types";
 import { clearMeshWarning, warnMeshRequired } from "../meshRequired";
 import { sampleSurfacePoints } from "../../three/bvh";
 import { InstancedItemSpec, renderInstanced } from "./instancedRender";
+import { getSourcePivot } from "./transform";
 
 function toNumberList(v: unknown): number[] {
   if (!Array.isArray(v)) return typeof v === "number" ? [v] : [];
@@ -90,7 +91,7 @@ export const SPAWN_NODE: NodeDefinition = {
       kind: "boolean",
       group: "Spawning",
     },
-    { id: "placement", label: "Placement", kind: "select", options: ["center", "base"], group: "Spawning" },
+    { id: "placement", label: "Placement", kind: "select", options: ["center", "base", "pivot"], group: "Spawning" },
     { id: "alignToNormal", label: "Align to Normal", kind: "boolean", group: "Spawning" },
     { id: "dispersion", label: "Dispersion / Jitter", kind: "number", step: 0.05, group: "Spawning" },
     { id: "scaleMin", label: "Min Scale", kind: "number", step: 0.05, group: "Variation" },
@@ -196,6 +197,8 @@ export const SPAWN_NODE: NodeDefinition = {
       // would scatter them. Anchor the copy by its actual bounds instead:
       // - "center": the bounds' centre lands on the spawn point.
       // - "base": the bounds' bottom-centre lands on it (sits on the surface).
+      const sourcePivot = getSourcePivot(sourceItem);
+      const hasPivot = sourcePivot.lengthSq() > 1e-9;
       const box = new THREE.Box3().setFromObject(sourceItem);
       const worldCenter = box.getCenter(new THREE.Vector3());
       const invItem = new THREE.Matrix4().copy(sourceItem.matrixWorld).invert();
@@ -203,6 +206,8 @@ export const SPAWN_NODE: NodeDefinition = {
       const anchor =
         placement === "base"
           ? new THREE.Vector3(centerLocal.x, box.min.clone().applyMatrix4(invItem).y, centerLocal.z)
+          : placement === "pivot" || (hasPivot && placement !== "center" && placement !== "base")
+          ? sourcePivot.clone()
           : centerLocal;
 
       // Orientation & Rotation (surface normal × variation × item's own rotation)
@@ -229,13 +234,14 @@ export const SPAWN_NODE: NodeDefinition = {
       const finalMatrix = new THREE.Matrix4().multiplyMatrices(spawnMatrix, anchorOffset);
 
       if (gpuInstancing) {
-        instancedItems.push({ template: sourceItem, matrix: finalMatrix });
+        instancedItems.push({ template: sourceItem, matrix: finalMatrix, applyTemplateTransform: false });
         continue;
       }
 
       const instance = sourceItem.clone(true);
       instance.matrixAutoUpdate = false;
       instance.matrix.copy(finalMatrix);
+      if (hasPivot) instance.userData.pivot = sourcePivot.clone();
       finalMatrix.decompose(instance.position, instance.quaternion, instance.scale);
 
       group.add(instance);
