@@ -1596,6 +1596,7 @@ export function Viewport({
         // Native object gizmo anchored directly at the pivot point
         if (object === gizmoPivotProxy && gizmoPivotProxyNodeId && gizmoPivotProxyRealObject && onTransformChangeRef.current) {
           const node = graphRef.current.nodes.find((n) => n.id === gizmoPivotProxyNodeId);
+          if (!node) return;
           const piv =
             gizmoPivotProxyRealObject.userData && gizmoPivotProxyRealObject.userData.pivot
               ? asVector3(gizmoPivotProxyRealObject.userData.pivot, new THREE.Vector3())

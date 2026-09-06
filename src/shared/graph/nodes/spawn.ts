@@ -118,7 +118,7 @@ export const SPAWN_NODE: NodeDefinition = {
     const rotZVarRad = (Number.isFinite(Number(params.rotZVar)) ? Number(params.rotZVar) : 0) * RAD;
     const alignToNormal = params.alignToNormal !== undefined ? Boolean(params.alignToNormal) : true;
     const dispersion = Number.isFinite(Number(params.dispersion)) ? Number(params.dispersion) : 0;
-    const placement = String(params.placement || "center") === "base" ? "base" : "center";
+    const placement = String(params.placement || "center");
 
     const gpuInstancing = Boolean(params.gpuInstancing);
     const instancedItems: InstancedItemSpec[] = [];
