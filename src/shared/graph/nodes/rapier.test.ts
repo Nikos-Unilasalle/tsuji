@@ -1,4 +1,6 @@
 import * as THREE from "three";
+import { readFileSync, readdirSync } from "node:fs";
+import { join } from "node:path";
 import { beforeAll, describe, expect, test } from "vitest";
 import { PHYSICS_CHARACTER_NODE, PHYSICS_WORLD_NODE, RIGID_BODY_NODE, VEHICLE_NODE } from "./rapier";
 import { EvalContext } from "../types";
@@ -819,4 +821,40 @@ describe("rigid body — one node, many bodies", () => {
     const out = run("rb8", new THREE.Group(), bodyParams());
     expect(out.count).toBe(0);
   });
+});
+
+describe("the shipped physics demos stay grouped", () => {
+  /**
+   * The point of Split: per-child is that a scene needs a handful of Rigid
+   * Body nodes, not one per object. This pins that the demos keep showing it —
+   * a demo that drifts back to a node per crate is teaching the wrong thing.
+   */
+  const DEMO_DIR = join(process.cwd(), "public/demos");
+  const physicsDemos = readdirSync(DEMO_DIR).filter((file) => /^demo_physics_.*\.tsuji$/.test(file));
+
+  test("there are physics demos to check", () => {
+    expect(physicsDemos.length).toBeGreaterThan(0);
+  });
+
+  for (const file of physicsDemos) {
+    test(`${file} groups its bodies`, () => {
+      const project = JSON.parse(readFileSync(join(DEMO_DIR, file), "utf8")) as {
+        canvases: { nodes: { type: string; params: Record<string, unknown> }[] }[];
+      };
+      const nodes = project.canvases.flatMap((canvas) => canvas.nodes);
+      const bodies = nodes.filter((node) => node.type === "physics/rigid-body");
+
+      // A static group, a dynamic group, and at most one shape that needs its
+      // own parameters — a ball among crates, say.
+      expect(
+        bodies.length,
+        `${file} has ${bodies.length} Rigid Body nodes; group them through a Merge or an Array`,
+      ).toBeLessThanOrEqual(3);
+
+      // And they must actually be splitting, or grouping them achieves nothing.
+      for (const body of bodies) {
+        expect(body.params.split ?? "per-child").toBe("per-child");
+      }
+    });
+  }
 });

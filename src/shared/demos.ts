@@ -237,7 +237,7 @@ export const DEMO_CATALOG: DemoCategory[] = [
       {
         file: "demo_physics_rigidbody.tsuji",
         label: "Rigid Bodies (Rapier)",
-        description: "Crates and a ball dropped into a Rapier world: stacking, rolling and a ramp.",
+        description: "A stack of crates and a ball on a ramp — six bodies from one Array and one Rigid Body node.",
       },
       {
         file: "demo_physics_character_rapier.tsuji",
