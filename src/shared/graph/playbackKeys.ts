@@ -76,6 +76,10 @@ export function isPlaybackActive(): boolean {
   return playbackActive;
 }
 
+/** Only the fields the reservation test reads. */
+export type KeyEventLike = Pick<KeyboardEvent, "key" | "code"> &
+  Partial<Pick<KeyboardEvent, "shiftKey" | "altKey" | "ctrlKey" | "metaKey">>;
+
 /**
  * True when this event's key is one the graph listens for.
  *
@@ -84,7 +88,7 @@ export function isPlaybackActive(): boolean {
  * layout they are not the same letter — an author who wrote "q" means the
  * letter, one who wrote "keyq" means the position.
  */
-export function isKeyClaimedByGraph(event: Pick<KeyboardEvent, "key" | "code">): boolean {
+export function isKeyClaimedByGraph(event: KeyEventLike): boolean {
   if (claimedKeys.size === 0) return false;
 
   const key = normalizeKeyName(event.key);
@@ -95,7 +99,14 @@ export function isKeyClaimedByGraph(event: Pick<KeyboardEvent, "key" | "code">):
 /**
  * The single check every editor shortcut makes before acting: is the scene
  * currently using this key?
+ *
+ * **A chord is never reserved.** A Keyboard node listens for a plain key, so
+ * the scene claims the plain key and the editor keeps every combination built
+ * on it. Without that split, a graph whose character jumps on Space would also
+ * swallow Shift+Space — which is Reset Simulations, the one command you most
+ * want while a simulation is running away from you.
  */
-export function isKeyReservedForPlayback(event: Pick<KeyboardEvent, "key" | "code">): boolean {
+export function isKeyReservedForPlayback(event: KeyEventLike): boolean {
+  if (event.shiftKey || event.altKey || event.ctrlKey || event.metaKey) return false;
   return playbackActive && isKeyClaimedByGraph(event);
 }

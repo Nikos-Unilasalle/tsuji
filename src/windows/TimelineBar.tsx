@@ -33,6 +33,8 @@ interface TimelineBarProps {
   onDeleteKeyframe?: (frame: number) => void;
   onFrameChange: (frame: number) => void;
   onTogglePlay: () => void;
+  /** Discards every simulation's accumulated state and returns to frame 0. */
+  onResetSimulations?: () => void;
   onSplitHandleMouseDown: (e: React.MouseEvent) => void;
   isDrawerOpen?: boolean;
   onToggleDrawer?: () => void;
@@ -171,6 +173,7 @@ export function TimelineBar({
   onDeleteKeyframe,
   onFrameChange,
   onTogglePlay,
+  onResetSimulations,
   onSplitHandleMouseDown,
   isDrawerOpen = false,
   onToggleDrawer,
@@ -494,6 +497,15 @@ export function TimelineBar({
           title={keyframesEnabled ? (isPlaying ? "Pause animation" : "Play animation") : "Keyframes disabled (No Render node in canvas)"}
         >
           {keyframesEnabled ? (isPlaying ? "⏸" : "▶") : "⏸"}
+        </button>
+
+        <button
+          type="button"
+          className="timeline-play-btn"
+          onClick={onResetSimulations}
+          title="Reset simulations (Shift + Space) — rebuild physics, fluids and integrators, and return to frame 0"
+        >
+          ⟲
         </button>
 
         <div

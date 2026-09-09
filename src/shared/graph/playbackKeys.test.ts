@@ -14,9 +14,13 @@ function node(id: string, type: string, params: Record<string, unknown> = {}): N
   return { id, type, params, position: { x: 0, y: 0 } };
 }
 
-/** Just the two fields the check reads. */
-function press(key: string, code = ""): Pick<KeyboardEvent, "key" | "code"> {
-  return { key, code } as Pick<KeyboardEvent, "key" | "code">;
+/** Just the fields the check reads. */
+function press(
+  key: string,
+  code = "",
+  modifiers: Partial<Pick<KeyboardEvent, "shiftKey" | "altKey" | "ctrlKey" | "metaKey">> = {},
+) {
+  return { key, code, ...modifiers };
 }
 
 afterEach(() => {
@@ -135,5 +139,29 @@ describe("isKeyReservedForPlayback", () => {
     setGraphKeyBindings(["z"]);
     expect(isKeyClaimedByGraph(press("z"))).toBe(true);
     expect(isKeyReservedForPlayback(press("z"))).toBe(false);
+  });
+});
+
+describe("chords are never reserved", () => {
+  test("Shift + a claimed key still reaches the editor", () => {
+    // The case that matters: a character jumps on Space, and Shift+Space is
+    // Reset Simulations — the one command most wanted while a simulation is
+    // running away. Reserving the chord would swallow it.
+    setGraphKeyBindings(["space"]);
+    setPlaybackActive(true);
+
+    expect(isKeyReservedForPlayback(press(" ", "Space"))).toBe(true);
+    expect(isKeyReservedForPlayback(press(" ", "Space", { shiftKey: true }))).toBe(false);
+  });
+
+  test("no modifier reserves anything", () => {
+    setGraphKeyBindings(["s"]);
+    setPlaybackActive(true);
+
+    for (const modifier of ["shiftKey", "altKey", "ctrlKey", "metaKey"] as const) {
+      expect(isKeyReservedForPlayback(press("s", "KeyS", { [modifier]: true }))).toBe(false);
+    }
+    // Plain, though, still belongs to the scene.
+    expect(isKeyReservedForPlayback(press("s", "KeyS"))).toBe(true);
   });
 });

@@ -19,6 +19,7 @@ import { cloneGraph, cloneParams, cloneParamValue } from "./shared/graph/cloneGr
 import { consumeCameraHandoffRequest } from "./shared/graph/cameraHandoffStore";
 import { consumeCanvasSwitchRequest } from "./shared/graph/canvasSwitchStore";
 import { isGraphZone } from "./shared/graph/inputZoneStore";
+import { resetSimulations } from "./shared/graph/simulationEpoch";
 import {
   collectKeyboardBindings,
   isKeyReservedForPlayback,
@@ -453,6 +454,20 @@ function MainEditor() {
     setPlaybackActive(isPlaying);
   }, [isPlaying]);
 
+  /**
+   * Throws away every simulation's accumulated state and returns to the start.
+   *
+   * Both halves matter. A physics world or a fluid grid holds history that
+   * cannot be recomputed from the current frame, so it has to be rebuilt; and
+   * rebuilding without rewinding would leave frame 120 showing a simulation
+   * that has only ever run one frame, which is a state nothing else in the
+   * timeline agrees with.
+   */
+  const handleResetSimulations = useCallback(() => {
+    resetSimulations();
+    setCurrentFrame(0);
+  }, [setCurrentFrame]);
+
   useEffect(() => {
     setGraphKeyBindings(collectKeyboardBindings(graph.nodes));
   }, [graph.nodes]);
@@ -508,6 +523,14 @@ function MainEditor() {
       const isCmdOrCtrl = e.metaKey || e.ctrlKey;
       const code = e.code;
 
+      // Reset is a chord, so it survives a scene that has claimed Space —
+      // see isKeyReservedForPlayback, which never reserves a modified key.
+      if (!isInput && !isCmdOrCtrl && e.shiftKey && (code === "Space" || e.key === " ")) {
+        e.preventDefault();
+        handleResetSimulations();
+        return;
+      }
+
       // A running scene owns the keys it listens for — see playbackKeys.ts.
       // Escape is the way out, since Space may now be the character's jump.
       if (!isInput && !isCmdOrCtrl && isKeyReservedForPlayback(e)) {
@@ -538,7 +561,7 @@ function MainEditor() {
     }
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [keyframesEnabled, cycleViewMode]);
+  }, [keyframesEnabled, cycleViewMode, handleResetSimulations]);
 
   const onToggleKeyframe = useCallback(
     (nodeId: string, paramKey: string, frame: number, currentValue: any) => {
@@ -2145,6 +2168,7 @@ function MainEditor() {
             onDeleteKeyframe={onDeleteKeyframe}
             onFrameChange={setCurrentFrame}
             onTogglePlay={() => setIsPlaying((p) => !p)}
+            onResetSimulations={handleResetSimulations}
             onSplitHandleMouseDown={onSplitHandleMouseDown}
             isDrawerOpen={isTimelineDrawerOpen}
             onToggleDrawer={() => setIsTimelineDrawerOpen((prev) => !prev)}

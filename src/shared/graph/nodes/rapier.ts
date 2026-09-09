@@ -34,6 +34,8 @@ interface WorldState {
   handle: PhysicsWorldHandle;
   signature: string;
   lastTime?: number;
+  /** Which simulation epoch this world was built in — see simulationEpoch.ts. */
+  epoch: number;
 }
 
 const worldCache = createNodeCache<WorldState>((state) => state.handle.dispose());
@@ -105,20 +107,22 @@ export const PHYSICS_WORLD_NODE: NodeDefinition = {
     const time = clockInput(inputs, params, ctx);
     const signature = `${gravity.x},${gravity.y},${gravity.z}`;
 
+    const epoch = ctx.simulationEpoch ?? 0;
     let state = worldCache.get(ctx.nodeId);
     const resetting = Number(inputs.reset !== undefined ? inputs.reset : params.reset) > 0.5;
     const rewound = state?.lastTime !== undefined && time < state.lastTime - REWIND_THRESHOLD;
+    const staleEpoch = state !== undefined && state.epoch !== epoch;
 
     // Gravity is baked into the world at construction, and a scrub means the
     // whole simulation's history no longer applies — both are rebuilds. Bodies
     // notice through `generation` and re-create themselves.
-    if (state && (state.signature !== signature || resetting || rewound)) {
+    if (state && (state.signature !== signature || resetting || rewound || staleEpoch)) {
       const generation = state.handle.generation + 1;
       state.handle.dispose();
-      state = { handle: createPhysicsWorld(api, ctx.nodeId, gravity, generation), signature };
+      state = { handle: createPhysicsWorld(api, ctx.nodeId, gravity, generation), signature, epoch };
       worldCache.set(ctx.nodeId, state);
     } else if (!state) {
-      state = { handle: createPhysicsWorld(api, ctx.nodeId, gravity, 0), signature };
+      state = { handle: createPhysicsWorld(api, ctx.nodeId, gravity, 0), signature, epoch };
       worldCache.set(ctx.nodeId, state);
     }
 
@@ -357,6 +361,7 @@ interface CharacterState {
   velocity: THREE.Vector3;
   grounded: boolean;
   lastTime?: number;
+  epoch?: number;
 }
 
 const characterCache = createNodeCache<CharacterState>();
@@ -524,6 +529,10 @@ export const PHYSICS_CHARACTER_NODE: NodeDefinition = {
     if (snap > 0) controller.enableSnapToGround(snap);
     else controller.disableSnapToGround();
 
+    const epoch = ctx.simulationEpoch ?? 0;
+    const staleEpoch = state.epoch !== undefined && state.epoch !== epoch;
+    state.epoch = epoch;
+
     const time = clockInput(inputs, params, ctx);
     const rewound = state.lastTime !== undefined && time < state.lastTime - REWIND_THRESHOLD;
     const first = state.lastTime === undefined;
@@ -534,7 +543,7 @@ export const PHYSICS_CHARACTER_NODE: NodeDefinition = {
 
     const resetting = Number(inputs.reset !== undefined ? inputs.reset : params.reset) > 0.5;
 
-    if (first || rewound || resetting) {
+    if (first || rewound || staleEpoch || resetting) {
       body.setNextKinematicTranslation({ x: start.x, y: start.y, z: start.z });
       body.setTranslation({ x: start.x, y: start.y, z: start.z }, true);
       state.velocity.set(0, 0, 0);

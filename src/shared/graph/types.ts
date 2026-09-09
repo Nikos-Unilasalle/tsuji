@@ -117,6 +117,20 @@ export interface EvalContext {
    * `inputs` already carries every value. It exists to name a node.
    */
   inputSources?: ReadonlyMap<string, string>;
+  /**
+   * Bumped when the author asks every simulation to start over.
+   *
+   * A node holding accumulated state — a physics world, a fluid grid, an
+   * integrator's running total — records the epoch it was built at and
+   * rebuilds when this no longer matches. That state is history, not something
+   * derivable from the current frame, so discarding it is the only way back to
+   * a known starting point.
+   *
+   * Carried here rather than read from a module by each node so it flows
+   * through the evaluator: an export pins it, a headless call leaves it
+   * undefined (treated as 0), and two viewports on one graph cannot disagree.
+   */
+  simulationEpoch?: number;
   /** The graph's timeline markers — see the Marker node in nodes/marker.ts. */
   markers?: Marker[];
   /**

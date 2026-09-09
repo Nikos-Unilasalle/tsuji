@@ -216,6 +216,14 @@ function composeVolumeMatrix(
 // Caches avec libération automatique conforme P0 VRAM Protocol
 // -----------------------------------------------------------------
 const simStateCache = createNodeCache<FluidSimulationState>((s) => s.dispose());
+
+/**
+ * L'époque de simulation dans laquelle chaque grille a été construite — voir
+ * simulationEpoch.ts. Séparé des caches d'état pour ne pas avoir à élargir les
+ * types de `FluidSimulationState`, qui appartiennent au runtime et non au nœud.
+ */
+const fluidEpochs = createNodeCache<number>();
+const macroEpochs = createNodeCache<number>();
 const volumeMeshCache = createNodeCache<THREE.Mesh>(disposeObject3D);
 const macroSimCache = createNodeCache<{
   /**
@@ -477,8 +485,12 @@ export const FLUID_SOLVER_3D_NODE: NodeDefinition = {
   evaluate: (inputs, params, ctx) => {
     const config = resolveGridConfig(inputs, params);
 
+    const epoch = ctx.simulationEpoch ?? 0;
     let state = simStateCache.get(ctx.nodeId);
-    if (state && gridResolutionChanged(state.config, config)) {
+    // Une grille de fluide *est* son historique : la vitesse et la densité
+    // qu'elle contient ne se recalculent pas depuis la frame courante. Une
+    // nouvelle époque de simulation ne peut donc que la reconstruire.
+    if (state && (gridResolutionChanged(state.config, config) || fluidEpochs.get(ctx.nodeId) !== epoch)) {
       state.dispose();
       simStateCache.delete(ctx.nodeId);
       state = undefined;
@@ -487,6 +499,7 @@ export const FLUID_SOLVER_3D_NODE: NodeDefinition = {
       state = createFluidSimulationState(config);
       simStateCache.set(ctx.nodeId, state);
     }
+    fluidEpochs.set(ctx.nodeId, epoch);
     state.config.worldSize.copy(config.worldSize);
 
     const volumeMatrix = composeVolumeMatrix(inputs, params, config.worldSize);
@@ -877,11 +890,19 @@ export const FIRE_FLUID_VOLUME_NODE: NodeDefinition = {
     const backend = resolveBackend(params, ctx.renderer);
     const config = resolveGridConfig(inputs, params, backend);
 
+    const epoch = ctx.simulationEpoch ?? 0;
     let state = macroSimCache.get(ctx.nodeId);
     // Changer la résolution réalloue tous les buffers ; changer la taille monde
     // ne fait que redimensionner la boîte, la sim continue sans être coupée.
-    // Changer de backend impose aussi de repartir de zéro.
-    if (state && (gridResolutionChanged(state.config, config) || state.backend !== backend)) {
+    // Changer de backend impose aussi de repartir de zéro — de même qu'une
+    // nouvelle époque de simulation, le contenu de la grille étant un
+    // historique et non quelque chose de dérivable de la frame courante.
+    if (
+      state &&
+      (gridResolutionChanged(state.config, config) ||
+        state.backend !== backend ||
+        macroEpochs.get(ctx.nodeId) !== epoch)
+    ) {
       // createNodeCache renvoie une Map nue : un delete() seul saute le disposer
       // et laisse les Data3DTexture sur le GPU. Libération explicite.
       state.sim?.dispose();
@@ -918,6 +939,7 @@ export const FIRE_FLUID_VOLUME_NODE: NodeDefinition = {
       };
       macroSimCache.set(ctx.nodeId, state);
     }
+    macroEpochs.set(ctx.nodeId, epoch);
 
     // Redimensionnement de la boîte sans réallocation : géométrie + uniforme
     if (!state.boxSize.equals(config.worldSize)) {

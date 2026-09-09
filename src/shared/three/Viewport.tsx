@@ -8,6 +8,7 @@ import { CAMERA_FLY_TO_NODE, CAMERA_NODE } from "../graph/nodes/camera";
 import { HubElement } from "../graph/nodes/hub";
 import { asVector3, composeNativeMatrixWithPivot, PIVOT_TRANSFORM_NODE } from "../graph/nodes/transform";
 import { resetAllParticleSimulations } from "../graph/particleRuntime";
+import { getSimulationEpoch, onSimulationReset } from "../graph/simulationEpoch";
 import { resolveCurveEditTarget } from "../graph/curveLookup";
 import { resolveSceneRoots } from "../graph/sceneRoots";
 import { findFirstMesh } from "../graph/meshRequired";
@@ -2506,6 +2507,13 @@ export function Viewport({
       resetAllParticleSimulations();
     };
 
+    // The button and Shift+Space both go through the epoch, so the viewport
+    // listens rather than being called directly — which also means a reset
+    // triggered from anywhere reaches every mounted pane.
+    const stopListeningForReset = onSimulationReset(() => {
+      resetSimulationRef.current();
+    });
+
     if (exportHandleRef) {
       exportHandleRef.current = {
         getCanvas: () => exportCanvas,
@@ -2720,6 +2728,7 @@ export function Viewport({
           capturing: capture !== null,
           currentFrame: capture ? exportFrameIndex : currentFrameRef.current,
           keyframes: graphRef.current.keyframes,
+          simulationEpoch: getSimulationEpoch(),
           scene,
         });
       } catch (err) {
@@ -3966,6 +3975,7 @@ export function Viewport({
       // celle-ci lui est fournie, elle est donc à libérer ici.
       volumetricPass.dispose();
       backgroundBlur.dispose();
+      stopListeningForReset();
       renderer.dispose();
       if (host.contains(renderer.domElement)) {
         host.removeChild(renderer.domElement);

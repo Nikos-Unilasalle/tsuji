@@ -13,6 +13,8 @@ import {
 
 interface ControllerState extends CapsuleMotionState {
   lastTime?: number;
+  /** The simulation epoch this walk was accumulated in. */
+  epoch?: number;
 }
 
 const controllerCache = createNodeCache<ControllerState>();
@@ -107,6 +109,10 @@ export const CAPSULE_CONTROLLER_NODE: NodeDefinition = {
       controllerCache.set(ctx.nodeId, state);
     }
 
+    const epoch = ctx.simulationEpoch ?? 0;
+    const staleEpoch = state.epoch !== undefined && state.epoch !== epoch;
+    state.epoch = epoch;
+
     const time = clockInput(inputs, params, ctx);
     const rewound = state.lastTime !== undefined && time < state.lastTime - REWIND_THRESHOLD;
     const first = state.lastTime === undefined;
@@ -117,7 +123,7 @@ export const CAPSULE_CONTROLLER_NODE: NodeDefinition = {
 
     const resetting = Number(inputs.reset !== undefined ? inputs.reset : params.reset) > 0.5;
 
-    if (first || rewound || resetting) {
+    if (first || rewound || staleEpoch || resetting) {
       // A scrub is a jump to a different point in time, and everything this
       // node holds is history — the only reproducible answer is the start.
       state.position.copy(start);

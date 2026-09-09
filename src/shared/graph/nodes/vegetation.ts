@@ -826,6 +826,9 @@ const interactionCache = createNodeCache<Map<THREE.WebGLRenderer, InteractionMap
   for (const state of perRenderer.values()) state.dispose();
 });
 
+/** Which simulation epoch each node's map was painted in — see simulationEpoch.ts. */
+const interactionEpochs = createNodeCache<number>();
+
 const RESOLUTIONS: Record<string, number> = { "256": 256, "512": 512, "1024": 1024 };
 
 /** Warned-about node ids, so a headless graph logs once rather than every frame. */
@@ -907,8 +910,14 @@ export const INTERACTION_MAP_NODE: NodeDefinition = {
       perRenderer = new Map();
       interactionCache.set(ctx.nodeId, perRenderer);
     }
+    // Everything the map holds is a record of what has already happened, so a
+    // new simulation epoch can only start it blank.
+    const epoch = ctx.simulationEpoch ?? 0;
+    const staleEpoch = interactionEpochs.get(ctx.nodeId) !== epoch;
+    interactionEpochs.set(ctx.nodeId, epoch);
+
     let state = perRenderer.get(renderer);
-    if (!state || state.resolution !== resolution) {
+    if (!state || state.resolution !== resolution || staleEpoch) {
       state?.dispose();
       state = createInteractionMapState(resolution);
       perRenderer.set(renderer, state);

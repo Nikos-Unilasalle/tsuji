@@ -64,11 +64,14 @@ export function clampToRange(value: number, min: number, max: number, enabled: b
 interface ScalarState {
   value: number;
   lastTime?: number;
+  /** The simulation epoch this total was accumulated in. */
+  epoch?: number;
 }
 
 interface VectorState {
   value: THREE.Vector3;
   lastTime?: number;
+  epoch?: number;
 }
 
 const scalarCache = createNodeCache<ScalarState>();
@@ -157,11 +160,15 @@ export const INTEGRATE_NODE: NodeDefinition = {
       scalarCache.set(ctx.nodeId, state);
     }
 
+    const epoch = ctx.simulationEpoch ?? 0;
+    const staleEpoch = state.epoch !== undefined && state.epoch !== epoch;
+    state.epoch = epoch;
+
     const time = clockInput(inputs, params, ctx);
     const { dt, reseed } = timing(state.lastTime, time);
     state.lastTime = time;
 
-    if (reseed || isResetting(inputs, params)) {
+    if (reseed || staleEpoch || isResetting(inputs, params)) {
       state.value = initial;
       return { value: state.value };
     }
@@ -237,11 +244,15 @@ export const INTEGRATE_VECTOR_NODE: NodeDefinition = {
       vectorCache.set(ctx.nodeId, state);
     }
 
+    const epoch = ctx.simulationEpoch ?? 0;
+    const staleEpoch = state.epoch !== undefined && state.epoch !== epoch;
+    state.epoch = epoch;
+
     const time = clockInput(inputs, params, ctx);
     const { dt, reseed } = timing(state.lastTime, time);
     state.lastTime = time;
 
-    if (reseed || isResetting(inputs, params)) {
+    if (reseed || staleEpoch || isResetting(inputs, params)) {
       state.value.copy(initial);
       return { value: state.value.clone(), length: state.value.length() };
     }
