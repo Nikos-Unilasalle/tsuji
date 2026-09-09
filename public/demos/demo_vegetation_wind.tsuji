@@ -415,6 +415,19 @@
             "uvOffsetX": 0,
             "uvOffsetY": 0
           }
+        },
+        {
+          "id": "grass_ground_shadow_mix",
+          "type": "texture/mix",
+          "position": {
+            "x": -60,
+            "y": 420
+          },
+          "params": {
+            "blendMode": "multiply",
+            "factor": 1,
+            "resolution": 256
+          }
         }
       ],
       "connections": [
@@ -468,11 +481,11 @@
           "toSocket": "textureA"
         },
         {
-          "id": "76c325ab-84aa-4d2c-aa51-d0cefa82461f.texture->ground_1.texture",
+          "id": "76c325ab-84aa-4d2c-aa51-d0cefa82461f.texture->grass_ground_shadow_mix.textureA",
           "fromNode": "76c325ab-84aa-4d2c-aa51-d0cefa82461f",
           "fromSocket": "texture",
-          "toNode": "ground_1",
-          "toSocket": "texture"
+          "toNode": "grass_ground_shadow_mix",
+          "toSocket": "textureA"
         },
         {
           "id": "997e4837-f319-41b5-98ed-1519c8aa5489.texture->76c325ab-84aa-4d2c-aa51-d0cefa82461f.textureB",
@@ -494,6 +507,20 @@
           "fromSocket": "texture",
           "toNode": "grass_1",
           "toSocket": "densityMap"
+        },
+        {
+          "id": "grass_1.groundShadow->grass_ground_shadow_mix.textureB",
+          "fromNode": "grass_1",
+          "fromSocket": "groundShadow",
+          "toNode": "grass_ground_shadow_mix",
+          "toSocket": "textureB"
+        },
+        {
+          "id": "grass_ground_shadow_mix.texture->ground_1.texture",
+          "fromNode": "grass_ground_shadow_mix",
+          "fromSocket": "texture",
+          "toNode": "ground_1",
+          "toSocket": "texture"
         }
       ],
       "keyframes": {},

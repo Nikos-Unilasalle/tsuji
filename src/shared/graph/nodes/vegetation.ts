@@ -11,7 +11,12 @@ import {
   isWindField,
   sampleWind,
 } from "../../three/vegetation/windField";
-import { buildGrassGeometry, createGrassMaterial } from "../../three/vegetation/grassField";
+import {
+  buildGrassGeometry,
+  buildGroundShadowCanvas,
+  createGrassMaterial,
+} from "../../three/vegetation/grassField";
+import { drawSourceToCanvas, replaceCanvasTexture } from "./texture";
 import {
   DEFAULT_TREE_PARAMS,
   FOLIAGE_MODE_OPTIONS,
@@ -187,11 +192,16 @@ interface GrassState {
   material: THREE.ShaderMaterial;
   signature: string;
   bladeCount: number;
+  /** Ground shadow texture, rebuilt only when what it depends on changes. */
+  shadowCanvas?: HTMLCanvasElement;
+  shadowTexture?: THREE.CanvasTexture;
+  shadowSignature?: string;
 }
 
 const grassCache = createNodeCache<GrassState>((state) => {
   state.mesh.geometry.dispose();
   state.material.dispose();
+  state.shadowTexture?.dispose();
 });
 
 /**
@@ -226,6 +236,7 @@ export const GRASS_FIELD_NODE: NodeDefinition = {
     { id: "geometry", label: "Geometry", type: "geometry" },
     { id: "matrix", label: "Matrix", type: "matrix" },
     { id: "bladeCount", label: "Blade Count", type: "value" },
+    { id: "groundShadow", label: "Ground Shadow", type: "texture" },
   ],
   defaultParams: {
     ...TRANSFORM_DEFAULT_PARAMS,
@@ -247,6 +258,11 @@ export const GRASS_FIELD_NODE: NodeDefinition = {
     tipColor: new THREE.Color(0xa8c34a),
     lightDirection: new THREE.Vector3(0.5, 1, 0.3),
     ambient: 0.35,
+    shadowColor: new THREE.Color(0x000000),
+    shadowIntensity: 0.55,
+    groundShadowIntensity: 0.6,
+    groundShadowSoftness: 0.04,
+    groundShadowResolution: 256,
   },
   paramFields: [
     ...TRANSFORM_PARAM_FIELDS,
@@ -262,6 +278,23 @@ export const GRASS_FIELD_NODE: NodeDefinition = {
     { id: "tipColor", label: "Tip Color", kind: "color", group: "Shading" },
     { id: "lightDirection", label: "Light Direction", kind: "vector", group: "Shading" },
     { id: "ambient", label: "Ambient", kind: "number", step: 0.05, group: "Shading" },
+    { id: "shadowColor", label: "Shadow Color", kind: "color", group: "Shading" },
+    { id: "shadowIntensity", label: "Blade Root Shadow", kind: "number", step: 0.05, group: "Shading" },
+    {
+      id: "groundShadowIntensity",
+      label: "Intensity (0 = white, no darkening)",
+      kind: "number",
+      step: 0.05,
+      group: "Ground Shadow",
+    },
+    {
+      id: "groundShadowSoftness",
+      label: "Blur (fraction of map width)",
+      kind: "number",
+      step: 0.01,
+      group: "Ground Shadow",
+    },
+    { id: "groundShadowResolution", label: "Resolution (px)", kind: "number", step: 64, group: "Ground Shadow" },
     { id: "densityThreshold", label: "Density Threshold", kind: "number", step: 0.01, group: "Density Map" },
     { id: "densitySize", label: "Map World Size", kind: "number", step: 1, group: "Density Map" },
     { id: "densityCenter", label: "Map Center", kind: "vector", group: "Density Map" },
@@ -323,6 +356,12 @@ export const GRASS_FIELD_NODE: NodeDefinition = {
     );
     material.uniforms.uWindInfluence.value = numberInput(inputs.windInfluence, params.windInfluence, 1);
     material.uniforms.uAmbient.value = numberInput(undefined, params.ambient, 0.35);
+    material.uniforms.uShadowIntensity.value = Math.max(
+      0,
+      Math.min(1, numberInput(undefined, params.shadowIntensity, 0.55)),
+    );
+    const shadowColor = asColor(params.shadowColor, new THREE.Color(0x000000));
+    (material.uniforms.uShadowColor.value as THREE.Color).copy(shadowColor);
     (material.uniforms.uBaseColor.value as THREE.Color).copy(asColor(params.baseColor, new THREE.Color(0x2f5d2a)));
     (material.uniforms.uTipColor.value as THREE.Color).copy(asColor(params.tipColor, new THREE.Color(0xa8c34a)));
     (material.uniforms.uLightDirection.value as THREE.Vector3)
@@ -359,7 +398,59 @@ export const GRASS_FIELD_NODE: NodeDefinition = {
     material.uniforms.uTrampleSize.value = tramplePlacement.size;
     (material.uniforms.uTrampleCenter.value as THREE.Vector2).copy(tramplePlacement.center);
 
-    return { ...primitiveOutputs(mesh, params), bladeCount: state.bladeCount };
+    // The ground shadow: the same density map the blades grow from, blurred
+    // and tinted, for the ground's own material to multiply in. Rebuilt only
+    // when its inputs change — a blur over a 256² canvas is not a per-frame
+    // cost, and the map usually never changes at all.
+    const groundShadowIntensity = Math.max(0, Math.min(1, numberInput(undefined, params.groundShadowIntensity, 0.6)));
+    const groundShadowSoftness = Math.max(0, Math.min(0.5, numberInput(undefined, params.groundShadowSoftness, 0.04)));
+    const groundShadowResolution = Math.max(
+      16,
+      Math.min(1024, Math.round(numberInput(undefined, params.groundShadowResolution, 256))),
+    );
+    const shadowSignature = [
+      densityMap?.uuid ?? "",
+      densityMap?.version ?? 0,
+      groundShadowIntensity,
+      groundShadowSoftness,
+      groundShadowResolution,
+      shadowColor.getHex(),
+    ].join("|");
+
+    if (typeof document !== "undefined" && shadowSignature !== state.shadowSignature) {
+      state.shadowSignature = shadowSignature;
+      state.shadowCanvas = state.shadowCanvas ?? document.createElement("canvas");
+      const drawn = buildGroundShadowCanvas(
+        state.shadowCanvas,
+        (resolution) => {
+          const source = document.createElement("canvas");
+          drawSourceToCanvas(source, densityMap, resolution);
+          return source.getContext("2d")?.getImageData(0, 0, resolution, resolution).data ?? null;
+        },
+        {
+          density: densityMap,
+          color: shadowColor,
+          intensity: groundShadowIntensity,
+          softness: groundShadowSoftness,
+          resolution: groundShadowResolution,
+        },
+      );
+      if (drawn) {
+        state.shadowTexture = replaceCanvasTexture(state.shadowTexture, state.shadowCanvas, THREE.SRGBColorSpace);
+        // Same placement as the density map it was made from, so a downstream
+        // node can line it up with the world exactly as the field does.
+        state.shadowTexture.userData.mapPlacement = {
+          center: densityPlacement.center.clone(),
+          size: densityPlacement.size,
+        };
+      }
+    }
+
+    return {
+      ...primitiveOutputs(mesh, params),
+      bladeCount: state.bladeCount,
+      groundShadow: state.shadowTexture ?? null,
+    };
   },
 };
 
@@ -567,6 +658,8 @@ export const TREE_NODE: NodeDefinition = {
     { id: "barkRoughness", label: "Bark Roughness", kind: "number", step: 0.05, group: "Shading" },
     { id: "lightDirection", label: "Light Direction", kind: "vector", group: "Shading" },
     { id: "ambient", label: "Ambient", kind: "number", step: 0.05, group: "Shading" },
+    { id: "shadowColor", label: "Shadow Color", kind: "color", group: "Shading" },
+    { id: "shadowIntensity", label: "Blade Root Shadow", kind: "number", step: 0.05, group: "Shading" },
     { id: "windInfluence", label: "Wind Influence", kind: "number", step: 0.05, group: "Wind" },
     { id: "trunkStiffness", label: "Trunk Stiffness", kind: "number", step: 0.1, group: "Wind" },
   ],

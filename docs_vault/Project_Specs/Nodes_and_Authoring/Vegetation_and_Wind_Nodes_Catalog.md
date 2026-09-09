@@ -64,16 +64,22 @@ Le champ est décrit **une seule fois** et implémenté **deux fois à l'identiq
   1. **Aucune instanciation.** Un brin fait trois sommets ; un `InstancedMesh` dépenserait plus en matrice par instance qu'en brin. Le champ entier est **une** `BufferGeometry` de triangles libres, et la forme du brin est reconstruite dans le vertex shader depuis un index de coin (pointe / gauche / droite) et un aléa par brin. Un draw call, zéro matrice.
   2. **Repliement torique.** Les bases sont dispersées une fois dans un carré de côté `size`, puis repliées chaque frame modulo ce carré autour de `Center`. Avancez : les brins derrière vous réapparaissent devant. 30 k brins couvrent un monde illimité à coût fixe et sans réallocation. La dispersion est jittée par cellule, donc le repli n'a ni couture visible ni motif de grille.
 - **Entrées** : `wind` (`any`), `matrix` (`matrix`), `center` (`vector`), `densityMap` (`texture`), `size`, `bladeHeight`, `bladeWidth`, `windInfluence` (`value`)
-- **Sorties** : `geometry` (`geometry`), `matrix` (`matrix`), `bladeCount` (`value`)
+- **Sorties** : `geometry` (`geometry`), `matrix` (`matrix`), `bladeCount` (`value`), `groundShadow` (`texture`)
 - **Paramètres notables** :
   - `subdivisions` (défaut 160) — nombre de brins = le carré de cette valeur
   - `seed` — même graine, même champ, à chaque rechargement et à chaque frame exportée (PRNG mulberry32)
   - `densityThreshold`, `densitySize`, `densityCenter` — mapping monde → UV de la carte de densité. Hors carte, rien ne pousse.
   - `baseColor` / `tipColor`, `lightDirection`, `ambient`
+  - `groundShadowIntensity` / `groundShadowSoftness` / `groundShadowResolution` — voir **Ombre au sol** ci-dessous.
+  - `shadowColor` / `shadowIntensity` — **ombre au sol sous les brins**. La lumière qui atteint la base d'un brin a traversé tous ses voisins : la base se teinte donc vers `shadowColor` et la pointe garde la sienne, le dégradé suivant la hauteur du triangle. Les brins foulés s'enfoncent 1,5× plus dans cette ombre. Défauts `#000000` / `0.55`, qui reproduisent exactement l'AO verticale câblée en dur auparavant.
+- **Ombre au sol (sortie `groundShadow`)** : les brins ne peuvent pas projeter d'ombre — trois sommets ne portent aucune normale, et une shadow map de 30 000 triangles coûterait plus cher que le champ lui-même. Un quad sombre posé sur le sol n'est pas la réponse non plus : c'est une surface transparente de plus à trier, et elle se bat contre le matériau du sol.
+  Ce qui se lit comme une ombre d'herbe, c'est un assombrissement **flou** qui suit *où l'herbe est* — ce que la carte de densité dit déjà. La sortie est donc cette carte, **floutée** (box blur séparable, trois passes) et **teintée** de `shadowColor` : **blanc là où rien ne pousse** — l'élément neutre d'un multiply — et la couleur d'ombre sous l'herbe dense.
+  **Câblage** : `Grass Field ▸ Ground Shadow` → `texture/mix` (*Blend Mode* = **multiply**, *Factor* = 1) avec la texture du sol sur l'autre entrée, puis la sortie dans le `Texture Map` du plan. Le sol garde **un** matériau et **un** draw call, et sa texture se compose dans le graphe comme n'importe quelle autre.
+  `groundShadowSoftness` est une fraction de la largeur de la carte, donc une vraie distance au sol : le flou ne change pas de largeur avec la résolution. La texture porte le `mapPlacement` de la carte de densité dont elle sort, et n'est **recalculée que lorsque ses entrées changent** — un flou sur 256² n'est pas un coût par frame.
 - **Carte de densité** : c'est ce qui transforme le nœud d'une texture en une scène — le canal rouge pilote la hauteur du brin, et sous le seuil rien ne pousse. Chemins, berges et zones pelées se **peignent** au lieu de se modéliser.
 - **Limites assumées** :
   - Les brins se dressent toujours selon l'axe Y du monde ; la matrice du nœud positionne la base, elle n'incline pas le champ.
-  - Éclairage propre au shader (lambert plat + AO verticale factice), non intégré au pipeline d'éclairage Three.js : trois sommets ne portent aucune normale honnête.
+  - Éclairage propre au shader (lambert plat + ombre au sol paramétrée), non intégré au pipeline d'éclairage Three.js : trois sommets ne portent aucune normale honnête.
   - `frustumCulled = false` et bounding sphere manuelle, puisque le shader relocalise chaque sommet.
 
 ---

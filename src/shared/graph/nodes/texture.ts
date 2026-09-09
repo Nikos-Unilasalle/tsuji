@@ -751,7 +751,7 @@ function blendChannel(mode: string, a: number, b: number): number {
 }
 
 /** Draws `source` (any drawable texture image, or flat white if absent) into `canvas` at `resolution`. */
-function drawSourceToCanvas(canvas: HTMLCanvasElement, source: THREE.Texture | null, resolution: number): void {
+export function drawSourceToCanvas(canvas: HTMLCanvasElement, source: THREE.Texture | null, resolution: number): void {
   canvas.width = resolution;
   canvas.height = resolution;
   const ctx = canvas.getContext("2d");

@@ -202,6 +202,8 @@ const GRASS_FRAGMENT = /* glsl */ `
   uniform vec3 uTipColor;
   uniform vec3 uLightDirection;
   uniform float uAmbient;
+  uniform vec3 uShadowColor;
+  uniform float uShadowIntensity;
 
   varying float vTipness;
   varying float vRandom;
@@ -221,9 +223,16 @@ const GRASS_FRAGMENT = /* glsl */ `
     // A blade is flat-shaded against the light with a fake vertical AO — real
     // per-vertex normals on three vertices would only ever be a guess anyway.
     float diffuse = 0.55 + 0.45 * max(dot(normalize(uLightDirection), vec3(0.0, 1.0, 0.0)), 0.0);
-    float occlusion = mix(0.45, 1.0, vTipness);
 
-    gl_FragColor = vec4(color * occlusion * (uAmbient + diffuse), 1.0);
+    // The light that reaches a blade's root has been filtered by every blade
+    // around it, so the base tints toward the shadow colour and the tip keeps
+    // its own. vTipness interpolates 0 -> 1 up the triangle, which is the
+    // gradient we want for free. Trampled blades lie in the litter, so they
+    // sink further into it.
+    float rootness = (1.0 - vTipness) * (1.0 + vTrample * 0.5);
+    color = mix(color, uShadowColor, clamp(rootness * uShadowIntensity, 0.0, 1.0));
+
+    gl_FragColor = vec4(color * (uAmbient + diffuse), 1.0);
   }
 `;
 
@@ -251,9 +260,138 @@ export function createGrassMaterial(): THREE.ShaderMaterial {
       uTipColor: { value: new THREE.Color(0xa8c34a) },
       uLightDirection: { value: new THREE.Vector3(0.5, 1, 0.3).normalize() },
       uAmbient: { value: 0.35 },
+      uShadowColor: { value: new THREE.Color(0x000000) },
+      uShadowIntensity: { value: 0.55 },
     },
     vertexShader: GRASS_VERTEX,
     fragmentShader: GRASS_FRAGMENT,
     side: THREE.DoubleSide,
   });
+}
+
+/* -------------------------------------------------------------------------- */
+/* Ground shadow                                                              */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The shadow the field casts on the ground it stands on, as a *texture*.
+ *
+ * The blades cannot cast it themselves: they are three-vertex triangles with
+ * no honest normals, and a shadow map of 30k of them would cost more than the
+ * field. Nor is a dark quad laid over the ground the answer — it is one more
+ * transparent surface to sort, and it fights whatever the ground's own
+ * material is doing.
+ *
+ * What actually reads as a grass shadow is a soft darkening that follows
+ * *where the grass is* — which is exactly what the density map already says.
+ * So the shadow is that map, blurred and tinted, handed back as a texture to
+ * be multiplied into the ground's own map (Mix Texture, blend mode Multiply).
+ * White where nothing grows, so the multiply is a no-op there; the shadow
+ * colour where the field is dense. The ground keeps one material, one draw
+ * call, and its texture is composed in the graph like any other.
+ */
+
+/**
+ * Separable box blur, three passes — the classic cheap approximation of a
+ * gaussian. Kept as a pure function over a mask so it is testable without a
+ * canvas, and so the blur radius can be reasoned about in pixels.
+ */
+export function blurMask(mask: Float32Array, size: number, radius: number): Float32Array {
+  const r = Math.floor(radius);
+  if (r < 1) return mask.slice();
+
+  let src = mask.slice();
+  let dst = new Float32Array(mask.length);
+
+  for (let pass = 0; pass < 3; pass++) {
+    // Horizontal, then vertical — a box blur separates, so 2 * O(n) beats
+    // O(n * r²) and the three passes cost less than one honest gaussian.
+    for (let axis = 0; axis < 2; axis++) {
+      for (let i = 0; i < size; i++) {
+        for (let j = 0; j < size; j++) {
+          let sum = 0;
+          let count = 0;
+          for (let k = -r; k <= r; k++) {
+            const s = j + k;
+            if (s < 0 || s >= size) continue;
+            sum += axis === 0 ? src[i * size + s] : src[s * size + i];
+            count++;
+          }
+          const value = sum / count;
+          if (axis === 0) dst[i * size + j] = value;
+          else dst[j * size + i] = value;
+        }
+      }
+      const swap = src;
+      src = dst;
+      dst = swap;
+    }
+  }
+
+  return src;
+}
+
+export interface GroundShadowOptions {
+  /** The field's density map, or null when grass covers the square evenly. */
+  density: THREE.Texture | null;
+  /** The colour the ground is tinted toward. Multiplied, so white is a no-op. */
+  color: THREE.Color;
+  /** 0 leaves the ground untouched, 1 reaches the shadow colour under dense grass. */
+  intensity: number;
+  /** Blur radius as a fraction of the map's width — a real distance on the ground. */
+  softness: number;
+  /** Texture resolution. */
+  resolution: number;
+}
+
+/**
+ * Reads the density map, blurs it and paints the tint. Returns null off-DOM
+ * (headless evaluation and the test runner), like every other canvas node.
+ *
+ * The mask is the density map's raw red channel — not the blade's growth
+ * smoothstep. That threshold decides a binary yes/no per blade over a narrow
+ * 0.05-wide band, so a density map whose values mostly sit above it (which is
+ * the common case — most authored maps stay bright except where they mean to
+ * bare the ground) saturates the mask to a flat 1 almost everywhere, and the
+ * shadow stops tracking the map at all. The ground doesn't grow blades, it
+ * just darkens with how much grass is nearby — density → blur → multiply.
+ */
+export function buildGroundShadowCanvas(
+  canvas: HTMLCanvasElement,
+  readDensity: (resolution: number) => Uint8ClampedArray | null,
+  options: GroundShadowOptions,
+): boolean {
+  const resolution = Math.max(16, Math.min(1024, Math.round(options.resolution)));
+  canvas.width = resolution;
+  canvas.height = resolution;
+  const context = canvas.getContext("2d");
+  if (!context) return false;
+
+  const pixels = options.density ? readDensity(resolution) : null;
+  const mask = new Float32Array(resolution * resolution);
+
+  if (pixels) {
+    for (let i = 0; i < mask.length; i++) {
+      mask[i] = pixels[i * 4] / 255;
+    }
+  } else {
+    mask.fill(1);
+  }
+
+  const blurred = blurMask(mask, resolution, options.softness * resolution);
+
+  const image = context.createImageData(resolution, resolution);
+  const { r, g, b } = options.color;
+  for (let i = 0; i < blurred.length; i++) {
+    const amount = Math.max(0, Math.min(1, blurred[i] * options.intensity));
+    // White where there is no grass: this texture is multiplied into the
+    // ground's own, and 1 is the identity of a multiply.
+    image.data[i * 4] = Math.round((1 + (r - 1) * amount) * 255);
+    image.data[i * 4 + 1] = Math.round((1 + (g - 1) * amount) * 255);
+    image.data[i * 4 + 2] = Math.round((1 + (b - 1) * amount) * 255);
+    image.data[i * 4 + 3] = 255;
+  }
+  context.putImageData(image, 0, 0);
+
+  return true;
 }

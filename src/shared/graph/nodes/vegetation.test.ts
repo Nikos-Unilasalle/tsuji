@@ -18,7 +18,7 @@ import {
   isWindField,
   sampleWind,
 } from "../../three/vegetation/windField";
-import { buildGrassGeometry, createRandom } from "../../three/vegetation/grassField";
+import { blurMask, buildGrassGeometry, createRandom } from "../../three/vegetation/grassField";
 import {
   DEFAULT_TREE_PARAMS,
   FOLIAGE_MODE_OPTIONS,
@@ -285,6 +285,50 @@ describe("structure/grass-field node", () => {
     expect(center.y).toBe(-4);
   });
 
+  test("the ground shadow is authorable — colour and intensity reach the shader", () => {
+    const out = GRASS_FIELD_NODE.evaluate(
+      {},
+      { ...params(), shadowColor: new THREE.Color(0x123456), shadowIntensity: 0.8 },
+      makeContext("grass-shadow"),
+    ) as { geometry: THREE.Mesh };
+    const uniforms = (out.geometry.material as THREE.ShaderMaterial).uniforms;
+    expect((uniforms.uShadowColor.value as THREE.Color).getHex()).toBe(0x123456);
+    expect(uniforms.uShadowIntensity.value).toBe(0.8);
+  });
+
+  test("shadow intensity is clamped — a negative one would brighten the roots", () => {
+    const dark = GRASS_FIELD_NODE.evaluate(
+      {},
+      { ...params(), shadowIntensity: 4 },
+      makeContext("grass-shadow-2"),
+    ) as { geometry: THREE.Mesh };
+    expect((dark.geometry.material as THREE.ShaderMaterial).uniforms.uShadowIntensity.value).toBe(1);
+
+    const lit = GRASS_FIELD_NODE.evaluate(
+      {},
+      { ...params(), shadowIntensity: -2 },
+      makeContext("grass-shadow-2"),
+    ) as { geometry: THREE.Mesh };
+    expect((lit.geometry.material as THREE.ShaderMaterial).uniforms.uShadowIntensity.value).toBe(0);
+  });
+
+  test("the ground shadow output is a texture carrying the density map's placement", () => {
+    const texture = new THREE.Texture();
+    texture.userData.mapPlacement = { center: new THREE.Vector2(3, -5), size: 22 };
+    const out = GRASS_FIELD_NODE.evaluate({ densityMap: texture }, params(), makeContext("grass-ground")) as {
+      groundShadow: THREE.Texture | null;
+    };
+
+    // Off-DOM (the test runner, and headless export) there is no canvas to
+    // draw into, so the node says so rather than inventing a texture.
+    if (typeof document === "undefined") {
+      expect(out.groundShadow).toBeNull();
+      return;
+    }
+    expect(out.groundShadow).toBeInstanceOf(THREE.Texture);
+    expect(out.groundShadow!.userData.mapPlacement).toEqual({ center: new THREE.Vector2(3, -5), size: 22 });
+  });
+
   test("a density map switches the sampling branch on, and its absence off", () => {
     const withoutMap = GRASS_FIELD_NODE.evaluate({}, params(), makeContext("grass-7")) as { geometry: THREE.Mesh };
     expect((withoutMap.geometry.material as THREE.ShaderMaterial).uniforms.uHasDensityMap.value).toBe(0);
@@ -296,6 +340,54 @@ describe("structure/grass-field node", () => {
     const material = withMap.geometry.material as THREE.ShaderMaterial;
     expect(material.uniforms.uHasDensityMap.value).toBe(1);
     expect(material.uniforms.uDensityMap.value).toBe(texture);
+  });
+});
+
+describe("grass ground shadow mask", () => {
+  const impulse = (size: number, at: number) => {
+    const mask = new Float32Array(size * size);
+    mask[at] = 1;
+    return mask;
+  };
+
+  test("a radius below one pixel leaves the mask alone — nothing to average", () => {
+    const mask = impulse(8, 27);
+    const out = blurMask(mask, 8, 0.4);
+    expect(Array.from(out)).toEqual(Array.from(mask));
+    // and it is a copy, so the caller's mask is never mutated under it
+    expect(out).not.toBe(mask);
+  });
+
+  test("blurring spreads a point outward and conserves its weight", () => {
+    const size = 32;
+    const centre = 16 * size + 16;
+    const mask = impulse(size, centre);
+    const out = blurMask(mask, size, 3);
+
+    expect(out[centre]).toBeLessThan(1);
+    expect(out[centre]).toBeGreaterThan(0);
+    // The neighbours, previously empty, now carry some of it.
+    expect(out[centre + 1]).toBeGreaterThan(0);
+    expect(out[centre + size]).toBeGreaterThan(0);
+    // Away from the edges a box blur is weight-preserving.
+    const before = mask.reduce((a, b) => a + b, 0);
+    const after = out.reduce((a, b) => a + b, 0);
+    expect(after).toBeCloseTo(before, 4);
+  });
+
+  test("the blur falls off with distance — a shadow has no hard rim", () => {
+    const size = 32;
+    const centre = 16 * size + 16;
+    const out = blurMask(impulse(size, centre), size, 4);
+    expect(out[centre]).toBeGreaterThan(out[centre + 2]);
+    expect(out[centre + 2]).toBeGreaterThan(out[centre + 6]);
+  });
+
+  test("a fully covered mask stays covered — blurring flat ground changes nothing", () => {
+    const mask = new Float32Array(16 * 16).fill(1);
+    const out = blurMask(mask, 16, 3);
+    // Interior only: the edges see fewer samples by construction.
+    expect(out[8 * 16 + 8]).toBeCloseTo(1, 6);
   });
 });
 
