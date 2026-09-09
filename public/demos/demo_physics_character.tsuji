@@ -1,0 +1,664 @@
+{
+  "canvases": [
+    {
+      "nodes": [
+        {
+          "id": "k_fwd",
+          "type": "io/keyboard",
+          "position": {
+            "x": 60,
+            "y": 40
+          },
+          "params": {
+            "key": "z"
+          }
+        },
+        {
+          "id": "k_back",
+          "type": "io/keyboard",
+          "position": {
+            "x": 60,
+            "y": 150
+          },
+          "params": {
+            "key": "s"
+          }
+        },
+        {
+          "id": "k_left",
+          "type": "io/keyboard",
+          "position": {
+            "x": 60,
+            "y": 260
+          },
+          "params": {
+            "key": "q"
+          }
+        },
+        {
+          "id": "k_right",
+          "type": "io/keyboard",
+          "position": {
+            "x": 60,
+            "y": 370
+          },
+          "params": {
+            "key": "d"
+          }
+        },
+        {
+          "id": "k_jump",
+          "type": "io/keyboard",
+          "position": {
+            "x": 60,
+            "y": 480
+          },
+          "params": {
+            "key": "space"
+          }
+        },
+        {
+          "id": "pad_1",
+          "type": "io/gamepad",
+          "position": {
+            "x": 60,
+            "y": 620
+          },
+          "params": {
+            "index": 0,
+            "deadzone": 0.15,
+            "triggerDeadzone": 0.05
+          }
+        },
+        {
+          "id": "act_x",
+          "type": "io/action-map",
+          "position": {
+            "x": 400,
+            "y": 120
+          },
+          "params": {
+            "action": "strafe",
+            "mode": "strongest",
+            "scale": 1,
+            "deadzone": 0,
+            "smoothing": 0.06,
+            "threshold": 0.5,
+            "clamp": true,
+            "invert": false
+          }
+        },
+        {
+          "id": "act_z",
+          "type": "io/action-map",
+          "position": {
+            "x": 400,
+            "y": 420
+          },
+          "params": {
+            "action": "forward",
+            "mode": "strongest",
+            "scale": 1,
+            "deadzone": 0,
+            "smoothing": 0.06,
+            "threshold": 0.5,
+            "clamp": true,
+            "invert": false
+          }
+        },
+        {
+          "id": "move_1",
+          "type": "vector/compose",
+          "position": {
+            "x": 700,
+            "y": 260
+          },
+          "params": {
+            "x": 0,
+            "y": 0,
+            "z": 0,
+            "useX": true,
+            "useY": true,
+            "useZ": true
+          }
+        },
+        {
+          "id": "floor_1",
+          "type": "object/box",
+          "position": {
+            "x": 60,
+            "y": 900
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 0,
+              "y": -0.5,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 16,
+              "y": 1,
+              "z": 16
+            },
+            "color": 4871520,
+            "roughness": 0.9,
+            "metalness": 0,
+            "opacity": 1
+          }
+        },
+        {
+          "id": "wall_1",
+          "type": "object/box",
+          "position": {
+            "x": 60,
+            "y": 1020
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 5,
+              "y": 1.5,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 0.6,
+              "y": 3,
+              "z": 10
+            },
+            "color": 7041664,
+            "roughness": 0.85,
+            "metalness": 0,
+            "opacity": 1
+          }
+        },
+        {
+          "id": "wall_2",
+          "type": "object/box",
+          "position": {
+            "x": 60,
+            "y": 1140
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 0,
+              "y": 1.5,
+              "z": -5
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 10,
+              "y": 3,
+              "z": 0.6
+            },
+            "color": 7041664,
+            "roughness": 0.85,
+            "metalness": 0,
+            "opacity": 1
+          }
+        },
+        {
+          "id": "ramp_1",
+          "type": "object/box",
+          "position": {
+            "x": 60,
+            "y": 1260
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": -4,
+              "y": 0.8,
+              "z": 2
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": -0.4
+            },
+            "scale": {
+              "x": 5,
+              "y": 0.5,
+              "z": 4
+            },
+            "color": 8161433,
+            "roughness": 0.85,
+            "metalness": 0,
+            "opacity": 1
+          }
+        },
+        {
+          "id": "box_1",
+          "type": "object/box",
+          "position": {
+            "x": 60,
+            "y": 1380
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 2,
+              "y": 0.5,
+              "z": 3
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0.6,
+              "z": 0
+            },
+            "scale": {
+              "x": 1.2,
+              "y": 1,
+              "z": 1.2
+            },
+            "color": 9075292,
+            "roughness": 0.9,
+            "metalness": 0,
+            "opacity": 1
+          }
+        },
+        {
+          "id": "level_1",
+          "type": "structure/merge",
+          "position": {
+            "x": 380,
+            "y": 1080
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            }
+          }
+        },
+        {
+          "id": "cap_1",
+          "type": "physics/capsule-controller",
+          "position": {
+            "x": 980,
+            "y": 500
+          },
+          "params": {
+            "startPosition": {
+              "x": 0,
+              "y": 3,
+              "z": 3
+            },
+            "radius": 0.4,
+            "height": 1.8,
+            "walkSpeed": 6,
+            "acceleration": 45,
+            "friction": 12,
+            "airControl": 0.35,
+            "gravity": 24,
+            "jumpSpeed": 8,
+            "maxSlope": 0.8726646259971648,
+            "iterations": 4,
+            "respawnBelow": -30,
+            "jump": 0,
+            "reset": 0
+          }
+        },
+        {
+          "id": "xform_1",
+          "type": "transform",
+          "position": {
+            "x": 1240,
+            "y": 500
+          },
+          "params": {
+            "location": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "useLOCATION": true,
+            "useROTATION": true,
+            "useSCALE": true
+          }
+        },
+        {
+          "id": "player_1",
+          "type": "object/cylinder",
+          "position": {
+            "x": 1460,
+            "y": 500
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 0.8,
+              "y": 1.8,
+              "z": 0.8
+            },
+            "color": 14702138,
+            "roughness": 0.5,
+            "metalness": 0.1,
+            "opacity": 1
+          }
+        },
+        {
+          "id": "amb_1",
+          "type": "light/ambient",
+          "position": {
+            "x": 1460,
+            "y": 700
+          },
+          "params": {
+            "color": 10467024,
+            "intensity": 0.55
+          }
+        },
+        {
+          "id": "sun_1",
+          "type": "light/directional",
+          "position": {
+            "x": 1460,
+            "y": 800
+          },
+          "params": {
+            "color": 16773840,
+            "intensity": 1.6,
+            "location": {
+              "x": 6,
+              "y": 10,
+              "z": 5
+            },
+            "castShadow": 1
+          }
+        },
+        {
+          "id": "merge_1",
+          "type": "structure/merge",
+          "position": {
+            "x": 1700,
+            "y": 600
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            }
+          }
+        },
+        {
+          "id": "render_1",
+          "type": "render",
+          "position": {
+            "x": 1960,
+            "y": 600
+          },
+          "params": {
+            "frameCount": 600,
+            "fps": 60,
+            "resolutionPreset": "16:9 (1920x1080)",
+            "width": 1920,
+            "height": 1080
+          }
+        },
+        {
+          "id": "cam_1",
+          "type": "calibration/camera",
+          "position": {
+            "x": 1700,
+            "y": 900
+          },
+          "params": {
+            "active": true,
+            "mode": "manual",
+            "projectionType": "perspective",
+            "location": {
+              "x": 9,
+              "y": 7,
+              "z": 12
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "useTarget": true,
+            "target": {
+              "x": 0,
+              "y": 1,
+              "z": 1
+            },
+            "up": {
+              "x": 0,
+              "y": 1,
+              "z": 0
+            },
+            "fov": 45,
+            "calibrationPicks": {}
+          }
+        }
+      ],
+      "connections": [
+        {
+          "id": "c_k_right_isDown_act_x_pos0",
+          "fromNode": "k_right",
+          "fromSocket": "isDown",
+          "toNode": "act_x",
+          "toSocket": "pos0"
+        },
+        {
+          "id": "c_pad_1_leftX_act_x_pos1",
+          "fromNode": "pad_1",
+          "fromSocket": "leftX",
+          "toNode": "act_x",
+          "toSocket": "pos1"
+        },
+        {
+          "id": "c_k_left_isDown_act_x_neg0",
+          "fromNode": "k_left",
+          "fromSocket": "isDown",
+          "toNode": "act_x",
+          "toSocket": "neg0"
+        },
+        {
+          "id": "c_k_back_isDown_act_z_pos0",
+          "fromNode": "k_back",
+          "fromSocket": "isDown",
+          "toNode": "act_z",
+          "toSocket": "pos0"
+        },
+        {
+          "id": "c_pad_1_leftY_act_z_pos1",
+          "fromNode": "pad_1",
+          "fromSocket": "leftY",
+          "toNode": "act_z",
+          "toSocket": "pos1"
+        },
+        {
+          "id": "c_k_fwd_isDown_act_z_neg0",
+          "fromNode": "k_fwd",
+          "fromSocket": "isDown",
+          "toNode": "act_z",
+          "toSocket": "neg0"
+        },
+        {
+          "id": "c_act_x_value_move_1_x",
+          "fromNode": "act_x",
+          "fromSocket": "value",
+          "toNode": "move_1",
+          "toSocket": "x"
+        },
+        {
+          "id": "c_act_z_value_move_1_z",
+          "fromNode": "act_z",
+          "fromSocket": "value",
+          "toNode": "move_1",
+          "toSocket": "z"
+        },
+        {
+          "id": "c_floor_1_geometry_level_1_in0",
+          "fromNode": "floor_1",
+          "fromSocket": "geometry",
+          "toNode": "level_1",
+          "toSocket": "in0"
+        },
+        {
+          "id": "c_wall_1_geometry_level_1_in1",
+          "fromNode": "wall_1",
+          "fromSocket": "geometry",
+          "toNode": "level_1",
+          "toSocket": "in1"
+        },
+        {
+          "id": "c_wall_2_geometry_level_1_in2",
+          "fromNode": "wall_2",
+          "fromSocket": "geometry",
+          "toNode": "level_1",
+          "toSocket": "in2"
+        },
+        {
+          "id": "c_ramp_1_geometry_level_1_in3",
+          "fromNode": "ramp_1",
+          "fromSocket": "geometry",
+          "toNode": "level_1",
+          "toSocket": "in3"
+        },
+        {
+          "id": "c_box_1_geometry_level_1_in4",
+          "fromNode": "box_1",
+          "fromSocket": "geometry",
+          "toNode": "level_1",
+          "toSocket": "in4"
+        },
+        {
+          "id": "c_level_1_geometry_cap_1_collider",
+          "fromNode": "level_1",
+          "fromSocket": "geometry",
+          "toNode": "cap_1",
+          "toSocket": "collider"
+        },
+        {
+          "id": "c_move_1_out_cap_1_move",
+          "fromNode": "move_1",
+          "fromSocket": "out",
+          "toNode": "cap_1",
+          "toSocket": "move"
+        },
+        {
+          "id": "c_k_jump_isDown_cap_1_jump",
+          "fromNode": "k_jump",
+          "fromSocket": "isDown",
+          "toNode": "cap_1",
+          "toSocket": "jump"
+        },
+        {
+          "id": "c_cap_1_position_xform_1_location",
+          "fromNode": "cap_1",
+          "fromSocket": "position",
+          "toNode": "xform_1",
+          "toSocket": "location"
+        },
+        {
+          "id": "c_xform_1_matrix_player_1_matrix",
+          "fromNode": "xform_1",
+          "fromSocket": "matrix",
+          "toNode": "player_1",
+          "toSocket": "matrix"
+        },
+        {
+          "id": "c_level_1_geometry_merge_1_in0",
+          "fromNode": "level_1",
+          "fromSocket": "geometry",
+          "toNode": "merge_1",
+          "toSocket": "in0"
+        },
+        {
+          "id": "c_player_1_geometry_merge_1_in1",
+          "fromNode": "player_1",
+          "fromSocket": "geometry",
+          "toNode": "merge_1",
+          "toSocket": "in1"
+        },
+        {
+          "id": "c_amb_1_light_merge_1_in2",
+          "fromNode": "amb_1",
+          "fromSocket": "light",
+          "toNode": "merge_1",
+          "toSocket": "in2"
+        },
+        {
+          "id": "c_sun_1_light_merge_1_in3",
+          "fromNode": "sun_1",
+          "fromSocket": "light",
+          "toNode": "merge_1",
+          "toSocket": "in3"
+        },
+        {
+          "id": "c_merge_1_geometry_render_1_geometry",
+          "fromNode": "merge_1",
+          "fromSocket": "geometry",
+          "toNode": "render_1",
+          "toSocket": "geometry"
+        }
+      ],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    }
+  ],
+  "activeCanvas": 0
+}

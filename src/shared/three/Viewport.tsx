@@ -125,6 +125,7 @@ import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
 import { createMotionBlur } from "./motionBlur";
+import { VolumetricPass, findVolumetricSettings, LAYER_VOLUMETRIC } from "./volumetricPass";
 import { advancePlayhead, IDLE_PLAYHEAD, PlayheadState } from "./playhead";
 import { PostProcessConfig } from "../graph/nodes/postprocessing";
 import { Graph, KeyframeStore, NodeInstance, NodeRegistry } from "../graph/types";
@@ -869,6 +870,12 @@ export function Viewport({
     const outputPass = new OutputPass();
     composer.addPass(renderPass);
     composer.addPass(outputPass);
+
+    // Volume en résolution réduite. Instanciée une fois, mais jamais insérée dans
+    // la chaîne tant qu'aucun maillage ne la demande (Render Resolution < 1).
+    // Déclarée ICI, avec le composer : resize() la référence, et resize est
+    // appelée au montage bien avant le bloc du postChain plus bas.
+    const volumetricPass = new VolumetricPass(scene, activeCamera, host.clientWidth || 1, host.clientHeight || 1);
 
     const controls = new OrbitControls(activeCamera, renderer.domElement);
     controls.enableDamping = true;
@@ -2425,6 +2432,7 @@ export function Viewport({
       renderer.setSize(clientWidth, clientHeight);
       composer.setSize(clientWidth, clientHeight);
       motionBlurEffect.setSize(clientWidth, clientHeight);
+      volumetricPass.setSize(clientWidth, clientHeight);
 
       perspectiveCamera.aspect = aspect;
       perspectiveCamera.updateProjectionMatrix();
@@ -2475,7 +2483,7 @@ export function Viewport({
     // direction) and without touching `visible`, which the cloning nodes
     // copy onto their clones.
     const gizmoAnchorScene = new THREE.Scene();
-    const postChain = createPostProcessChain({ renderer, composer, renderPass, outputPass, motionBlurEffect });
+    const postChain = createPostProcessChain({ renderer, composer, renderPass, outputPass, motionBlurEffect, volumetricPass });
 
     const backgroundBlur = createBackgroundBlur(renderer);
 
@@ -3753,9 +3761,16 @@ export function Viewport({
       // even with no postprocess node connected at all.
       const motionBlur = typeof renderResult?.motionBlur === "number" ? renderResult.motionBlur : 0;
 
-      if (postChain.isActive(postConfigs, motionBlur)) {
+      // Un maillage volumétrique demandant une résolution réduite impose le
+      // chemin composer : la passe séparée ne peut pas s'exécuter autrement.
+      const volumetric = findVolumetricSettings(scene);
+
+      if (postChain.isActive(postConfigs, motionBlur, volumetric)) {
         postChainWasActive = true;
         scene.background = bgScene.background;
+        // Le volume est rendu par sa propre passe : l'exclure du rendu de scène
+        // sans quoi il serait dessiné deux fois.
+        if (volumetric) camera.layers.disable(LAYER_VOLUMETRIC);
         postChain.render({
           scene,
           camera,
@@ -3765,7 +3780,9 @@ export function Viewport({
           height,
           outlineTarget: currentObject,
           time: clock.time,
+          volumetric,
         });
+        if (volumetric) camera.layers.enable(LAYER_VOLUMETRIC);
       } else {
         // Nothing in the chain this frame — release the passes once we actually
         // turn the chain off (not every idle frame, which would re-allocate all
@@ -3939,6 +3956,9 @@ export function Viewport({
       postChain.dispose();
       viewportBackground.dispose();
       motionBlurEffect.dispose();
+      // postChain.dispose() ne libère que les passes qu'il a instanciées ;
+      // celle-ci lui est fournie, elle est donc à libérer ici.
+      volumetricPass.dispose();
       backgroundBlur.dispose();
       renderer.dispose();
       if (host.contains(renderer.domElement)) {

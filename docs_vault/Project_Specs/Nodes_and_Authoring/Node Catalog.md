@@ -2,7 +2,7 @@
 
 *Emplacement dans le code : `src/shared/graph/nodes/index.ts`*
 
-Ce document référence l'ensemble des plus de 115 nœuds disponibles dans le moteur Tsuji, classés par domaine fonctionnel.
+Ce document référence l'ensemble des plus de 125 nœuds disponibles dans le moteur Tsuji, classés par domaine fonctionnel.
 
 ---
 
@@ -57,6 +57,42 @@ Tous ces matériaux se branchent directement sur la prise `material` des maillag
 ## 7. Post-Traitement
 - **Post-Process** : Bloom, DOF, RGB Shift, Vignette, Outline, Grain & CRT Scanlines (animés à 60 FPS), Glitch, SSAO, Fog.
 
+## 8. Simulation Fluide 3D & Volumes (Chantier 1 Three.js r185)
+Nœuds universels de simulation eulérienne 3D et de raymarching volumétrique pour feu, fumée et fluides :
+- **`physics/curl-noise-3d`** (*Curl Noise 3D*) : Champ de force vectoriel sans divergence pour micro-turbulences incompressibles, générant une texture volumétrique `THREE.Data3DTexture`.
+- **`physics/mesh-fluid-emitter`** (*Mesh Fluid Emitter*) : Transforme n'importe quel maillage 3D en source de fluide avec injection de densité, température et vitesse inertielle (`motionBoost`).
+- **`physics/fluid-solver-3d`** (*Fluid Solver 3D*) : Solveur Navier-Stokes 3D modulaire (advection semi-Lagrangienne, diffusion thermique, poussée d'Archimède, solveur de pression de Poisson / itérations Jacobi).
+- **`material/volume-3d`** (*Volume Material 3D*) : Shader de rendu volumétrique raymarché avec rayonnement de corps noir (*blackbody emission*), absorption Beer-Lambert et jittering anti-banding.
+- **`simulation/fire-fluid-volume`** (*Volumetric Fire Sim*) : Nœud macro autonome "all-in-one" créant un brasier volumétrique interactif avec maillage englobant, texture 3D de vitesse et lumière dynamique synchrone (`PointLight`).
+
+## 9. Végétation & Vent (Chantier Folio — Herbe, Arbres, Ployage)
+Briques atomiques de végétation temps réel, conçues autour d'**un seul champ de vent partagé** : herbe, feuillage et maillages quelconques ploient selon la même source, sans quoi la scène se disloque visuellement (l'herbe penche à gauche pendant que les feuilles penchent à droite).
+- **`physics/wind-field`** (*Wind Field*) : Champ de vent global, deux octaves de bruit de valeur défilant selon une direction. Implémenté **deux fois à l'identique** (TypeScript et GLSL) afin d'être échantillonnable par les shaders *et* par le graphe (sortie `wind` vectorielle). La phase temporelle est repliée côté CPU (`time × speed`) pour que chaque frame exportée soit reproductible.
+- **`structure/grass-field`** (*Grass Field*) : Champ d'herbe dense, **un seul draw call, sans instanciation** — un brin = 3 sommets, sa forme est reconstruite dans le vertex shader depuis un index de coin et une graine par brin. **Repliement torique** (`mod`) autour du socket `Center` : un champ illimité au prix d'un carré fixe, sans réallocation. Carte de densité optionnelle (canal rouge) pour peindre chemins, berges et zones pelées.
+- **`object/tree`** (*Tree (Parametric)*) : Arbre récursif complet depuis une graine, une **espèce** et un jeu de nombres. L'espèce (chêne, conifère, saule, bouleau, palmier, buisson, arbre mort) est un **port de croissance et non un préréglage** — elle change le comportement de la récursion (flèche centrale contre fourche, latérales montantes contre retombantes, absence totale de ramification pour le palmier) pendant que chaque paramètre numérique continue de la moduler, sans écraser les réglages de l'auteur. Silhouette de feuille paramétrique en 7 profils, exclue de la clé de reconstruction : parcourir les formes est gratuit. Feuillage **dispersé ou en touffes sphériques** (`foliageMode`), **rampe saisonnière** été → or → rouge à décalage par feuille, et **dégradé vertical de canopée** via un attribut instancié de hauteur dans le houppier. Deux draw calls : branches balayées en un maillage tubulaire unique (repères par transport parallèle, pas de vrille), feuilles en `InstancedMesh` de cartes découpées en amande dans le fragment shader (aucune texture, aucun tri alpha). Géométrie reconstruite uniquement quand un paramètre de *forme* change ; budget de branches plafonné (`MAX_TREE_BRANCHES`) car la récursion est en `childCount ^ levels`.
+- **`texture/interaction-map`** (*Interaction Map*) : Carte top-down de ce qui est passé par là — caméra orthographique zénithale, cible de rendu persistante en ping-pong, estompage exprimé en **demi-vie (secondes)** et non en facteur par frame, afin qu'une trace dure le même temps réel à 30 comme à 144 fps. La carte **défile avec son centre** : câblez la position d'un personnage et elle le suit, son contenu se décalant d'autant en UV pour que les marques restent fixes dans le monde. Rien n'y est spécifique à l'herbe : neige, sable, chaleur, humidité, effacement.
+- **`geometry/wind-sway`** (*Wind Sway*) : Ployage de n'importe quelle géométrie du graphe **par injection shader** (`onBeforeCompile`) et non par déformation de sommets — donc applicable à un import de 200 k sommets. Le matériau amont est cloné avant patch, jamais modifié en place.
+
+## 10. Entrées Interactives (Chantier 3 — amorce FPS)
+Briques d'entrée conçues pour que le reste du graphe **ignore d'où vient la commande** :
+- **`physics/capsule-controller`** (*Capsule Controller*) : Personnage cinématique à capsule. Transforme « dans quelle direction on pousse » en « où on est » — ce qu'aucune combinaison des nœuds existants ne sait faire, un intégrateur accumulant un déplacement sans rien connaître du monde traversé. Marche sur les sols, glisse le long des murs, tombe des rebords. Collision CPU contre un BVH (`three-mesh-bvh`) : coût nul sur le GPU, résultat identique en export et dans le viewport.
+  - **Cinématique et non corps rigide** : un solveur donnerait l'inertie gratuitement au prix du contrôle exact, or le déplacement de personnage est précisément l'endroit où l'auteur veut du contrôle exact — cette vitesse, ce saut, aucun rebond sur les murs, aucun basculement.
+  - **Test de collision en espace monde**, chaque triangle candidat y étant amené. L'alternative tentante — emmener la capsule dans l'espace local du mesh, une transformation au lieu de trois par triangle — casse silencieusement sur tout collider à **échelle non uniforme**, c'est-à-dire la plupart : un sol `object/box` est un cube unité mis à l'échelle 16 × 1 × 16 par sa matrice. Dans cet espace la capsule n'est plus une capsule, aucun rayon unique ne la décrit, et le personnage traverse le sol.
+  - Pas de reconstruction du BVH par frame (voir `getBoundsTree`), pas de solveur, et un `dt` borné pour qu'une frame longue ne téléporte jamais le personnage à travers un mur.
+- **`io/gamepad`** (*Gamepad*) : Manette lue par **polling** (`navigator.getGamepads()` rend un instantané, pas un objet vivant — ce qui correspond exactement au modèle d'évaluation par frame du graphe, donc aucun état global à resynchroniser, contrairement au nœud Keyboard). Mapping standard W3C. Sticks disponibles en scalaires bruts **et** en vecteurs pré-mappés dans le plan XZ `(x, 0, y)` : dans un monde Y-up / −Z-avant, pousser le stick vers le haut fait avancer, ce qui évite de refaire l'erreur de signe à chaque câblage. Gâchettes lues par `value` (donc analogiques, pas binaires), D-pad plié en vecteur pour être interchangeable avec un stick.
+  - **Zone morte radiale, pas par axe** : une zone morte appliquée séparément à X et Y découpe un carré dans un stick rond, et une diagonale douce ne déclenche alors ni l'un ni l'autre — le personnage refuse de marcher en diagonale. La magnitude est traitée d'abord, puis le vecteur entier est remis à l'échelle.
+  - **Remise à l'échelle après seuil** : annuler simplement sous le seuil laisse une marche à la sortie de la zone morte (rien, puis un saut à 0.15), ce qui se ressent comme un contrôle nerveux.
+- **`math/integrate`** / **`vector/integrate`** (*Integrate*, *Integrate Vector*) : **La moitié manquante de tout schéma de contrôle.** Un nœud d'entrée dit à quelle force on pousse *maintenant* ; le câbler directement dans une position fait du stick une coordonnée absolue — on relâche, l'objet retourne à l'origine, puisque « pousser zéro » veut dire « position zéro ». Ce qu'il faut, c'est l'accumulation dans le temps : `position += vitesse × dt`. Générique par construction : la même brique intègre une accélération en vitesse, un taux en angle, un débit en niveau.
+  - **Amortissement par seconde, pas par frame** — sinon un objet roule plus loin sur une machine lente que sur une rapide.
+  - **Attention au sens de l'amortissement** : il fait décroître *la valeur accumulée*. Sur une vitesse c'est du frottement ; sur une position, c'est un aimant vers l'origine. Chaîner deux intégrateurs — amorti pour la vitesse, non amorti pour la position — donne à la fois de la traînée et un endroit où s'arrêter.
+  - **Réinitialisation au scrub arrière** : ce que l'intégrateur contient est la somme de tout ce qui s'est passé depuis son démarrage, somme qui n'a plus de sens dès qu'on saute ailleurs dans le temps. Le retour à `Initial` est ce qui rend une frame exportée reproductible.
+  - `Max Length` borne le vecteur accumulé **radialement**, pour qu'une zone de jeu limitée soit ronde et non carrée.
+- **`io/action-map`** (*Action Map*) : Plusieurs sources → une action nommée. C'est la brique qui **sort le schéma de contrôle du reste du graphe** : « avancer » est un seul fil, et savoir si ça vient de Z, du stick gauche, du D-pad ou d'un contrôle tactile ne regarde que ce nœud. Sans lui, chaque consommateur doit connaître chaque périphérique, et ajouter une manette veut dire éditer tout le graphe au lieu d'un nœud.
+  - Sockets **Positive** et **Negative** croissants, parce que la plupart des actions sont en réalité des axes : avancer *moins* reculer. Câbler D en positif et Q en négatif donne un axe −1…1 à partir de deux touches numériques — le cas qu'un nœud « additionne les entrées » ne sait pas exprimer.
+  - Combinaison par défaut **le plus fort** : tenir Z *et* pousser le stick doit marcher à une seule vitesse, pas à deux.
+  - **Lissage exprimé en secondes** (comme la demi-vie de l'Interaction Map), donc indépendant du framerate : un lerp par frame rend un contrôle plus vif sur une machine rapide, bug qui n'apparaît que sur le matériel de quelqu'un d'autre.
+  - Ne lit aucun matériel : il ne fait que combiner, et marche donc aussi bien sur un oscillateur, un pic audio ou un flux réseau.
+
 ---
 
 ## 🔗 Notes Associées
@@ -65,3 +101,7 @@ Tous ces matériaux se branchent directement sur la prise `material` des maillag
 - [[Node Creation Guide]]
 - [[Parametric Geometry and Modifiers]]
 - [[Socket Type System and Ownership]]
+- [[WebGPU Volumetric Fire Simulation and 3D Fluid Dynamics]]
+- [[Universal_Nodes_Catalog_3_Chantiers]]
+- [[Strategic_Roadmap_3_Chantiers_Fire_Lighting_FPS]]
+- [[Vegetation_and_Wind_Nodes_Catalog]]

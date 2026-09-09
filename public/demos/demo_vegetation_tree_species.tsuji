@@ -1,0 +1,889 @@
+{
+  "canvases": [
+    {
+      "nodes": [
+        {
+          "id": "wind_1",
+          "type": "physics/wind-field",
+          "position": {
+            "x": 60,
+            "y": 60
+          },
+          "params": {
+            "angle": 1.8849555921538759,
+            "strength": 0.4,
+            "positionFrequency": 0.5,
+            "timeFrequency": 0.12,
+            "gustiness": 1,
+            "samplePosition": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            }
+          }
+        },
+        {
+          "id": "ground_1",
+          "type": "object/plane",
+          "position": {
+            "x": 60,
+            "y": 240
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "rotation": {
+              "x": -1.5707963267948966,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 40,
+              "y": 40,
+              "z": 1
+            },
+            "color": 3358762,
+            "roughness": 0.95,
+            "metalness": 0,
+            "opacity": 1
+          }
+        },
+        {
+          "id": "amb_1",
+          "type": "light/ambient",
+          "position": {
+            "x": 60,
+            "y": 1400
+          },
+          "params": {
+            "color": 10467024,
+            "intensity": 0.5
+          }
+        },
+        {
+          "id": "sun_1",
+          "type": "light/directional",
+          "position": {
+            "x": 60,
+            "y": 1500
+          },
+          "params": {
+            "color": 16773840,
+            "intensity": 1.7,
+            "location": {
+              "x": 8,
+              "y": 10,
+              "z": 6
+            },
+            "castShadow": 1
+          }
+        },
+        {
+          "id": "env_1",
+          "type": "lighting/environment",
+          "position": {
+            "x": 60,
+            "y": 1600
+          },
+          "params": {
+            "color": 10407423,
+            "intensity": 1,
+            "background": 1,
+            "blurriness": 0,
+            "filePath": "",
+            "backgroundImagePath": "",
+            "backgroundFit": "cover",
+            "backgroundScale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "backgroundOffset": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "backgroundRotation": 0,
+            "ambientIntensity": 0,
+            "sunIntensity": 0
+          }
+        },
+        {
+          "id": "merge_1",
+          "type": "structure/merge",
+          "position": {
+            "x": 740,
+            "y": 600
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            }
+          }
+        },
+        {
+          "id": "render_1",
+          "type": "render",
+          "position": {
+            "x": 1000,
+            "y": 600
+          },
+          "params": {
+            "frameCount": 240,
+            "fps": 30,
+            "resolutionPreset": "16:9 (1920x1080)",
+            "width": 1920,
+            "height": 1080
+          }
+        },
+        {
+          "id": "tree_0",
+          "type": "object/tree",
+          "position": {
+            "x": 380,
+            "y": 400
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": -11.2,
+              "y": 0,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "species": "oak",
+            "seed": 1,
+            "sizeScale": 0.55,
+            "levels": 4,
+            "childCount": 3,
+            "branchStart": 0.45,
+            "trunkHeight": 4,
+            "trunkRadius": 0.2,
+            "trunkFlare": 0.35,
+            "taper": 1.3,
+            "lengthFalloff": 0.72,
+            "radiusFalloff": 0.62,
+            "branchAngle": 0.8796459430051421,
+            "curvature": 0.25,
+            "droop": 0,
+            "phototropism": 0,
+            "gnarl": 0.12,
+            "segments": 6,
+            "radialSegments": 6,
+            "leafShape": "auto",
+            "leavesPerBranch": 6,
+            "leafLevels": 2,
+            "leafSize": 0.45,
+            "leafAspect": 0.62,
+            "leafTip": 0.5,
+            "leafDroop": 0.35,
+            "leafColorA": 5078058,
+            "leafColorB": 9158461,
+            "barkColor": 5914928,
+            "barkRoughness": 0.9,
+            "lightDirection": {
+              "x": 0.5,
+              "y": 1,
+              "z": 0.3
+            },
+            "ambient": 0.42,
+            "windInfluence": 1,
+            "trunkStiffness": 2.4,
+            "foliageMode": "auto",
+            "clumpsPerBranch": 2,
+            "clumpRadius": 3.2,
+            "season": 0,
+            "seasonVariance": 0.35,
+            "autumnColorA": 14722348,
+            "autumnColorB": 11022879,
+            "canopyShade": 0.45,
+            "canopyShadePower": 1.4
+          }
+        },
+        {
+          "id": "tree_1",
+          "type": "object/tree",
+          "position": {
+            "x": 380,
+            "y": 540
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": -8.0,
+              "y": 0,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "species": "cherry",
+            "seed": 13,
+            "sizeScale": 0.55,
+            "levels": 4,
+            "childCount": 3,
+            "branchStart": 0.45,
+            "trunkHeight": 4,
+            "trunkRadius": 0.2,
+            "trunkFlare": 0.35,
+            "taper": 1.3,
+            "lengthFalloff": 0.72,
+            "radiusFalloff": 0.62,
+            "branchAngle": 0.8796459430051421,
+            "curvature": 0.25,
+            "droop": 0,
+            "phototropism": 0,
+            "gnarl": 0.12,
+            "segments": 6,
+            "radialSegments": 6,
+            "leafShape": "auto",
+            "leavesPerBranch": 9,
+            "leafLevels": 2,
+            "leafSize": 0.45,
+            "leafAspect": 0.62,
+            "leafTip": 0.5,
+            "leafDroop": 0.35,
+            "leafColorA": 15891090,
+            "leafColorB": 16765660,
+            "barkColor": 5914928,
+            "barkRoughness": 0.9,
+            "lightDirection": {
+              "x": 0.5,
+              "y": 1,
+              "z": 0.3
+            },
+            "ambient": 0.42,
+            "windInfluence": 1,
+            "trunkStiffness": 2.4,
+            "foliageMode": "auto",
+            "clumpsPerBranch": 2,
+            "clumpRadius": 3.6,
+            "season": 0,
+            "seasonVariance": 0.35,
+            "autumnColorA": 14722348,
+            "autumnColorB": 11022879,
+            "canopyShade": 0.45,
+            "canopyShadePower": 1.4
+          }
+        },
+        {
+          "id": "tree_2",
+          "type": "object/tree",
+          "position": {
+            "x": 380,
+            "y": 680
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": -4.8,
+              "y": 0,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "species": "conifer",
+            "seed": 7,
+            "sizeScale": 0.6,
+            "levels": 4,
+            "childCount": 3,
+            "branchStart": 0.45,
+            "trunkHeight": 4,
+            "trunkRadius": 0.2,
+            "trunkFlare": 0.35,
+            "taper": 1.3,
+            "lengthFalloff": 0.72,
+            "radiusFalloff": 0.62,
+            "branchAngle": 0.8796459430051421,
+            "curvature": 0.25,
+            "droop": 0,
+            "phototropism": 0,
+            "gnarl": 0.12,
+            "segments": 6,
+            "radialSegments": 6,
+            "leafShape": "auto",
+            "leavesPerBranch": 6,
+            "leafLevels": 2,
+            "leafSize": 0.45,
+            "leafAspect": 0.62,
+            "leafTip": 0.5,
+            "leafDroop": 0.35,
+            "leafColorA": 5078058,
+            "leafColorB": 9158461,
+            "barkColor": 5914928,
+            "barkRoughness": 0.9,
+            "lightDirection": {
+              "x": 0.5,
+              "y": 1,
+              "z": 0.3
+            },
+            "ambient": 0.42,
+            "windInfluence": 1,
+            "trunkStiffness": 2.4,
+            "foliageMode": "auto",
+            "clumpsPerBranch": 2,
+            "clumpRadius": 3.2,
+            "season": 0,
+            "seasonVariance": 0.35,
+            "autumnColorA": 14722348,
+            "autumnColorB": 11022879,
+            "canopyShade": 0.45,
+            "canopyShadePower": 1.4
+          }
+        },
+        {
+          "id": "tree_3",
+          "type": "object/tree",
+          "position": {
+            "x": 380,
+            "y": 820
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": -1.6,
+              "y": 0,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "species": "willow",
+            "seed": 23,
+            "sizeScale": 0.5,
+            "levels": 4,
+            "childCount": 3,
+            "branchStart": 0.45,
+            "trunkHeight": 4,
+            "trunkRadius": 0.2,
+            "trunkFlare": 0.35,
+            "taper": 1.3,
+            "lengthFalloff": 0.72,
+            "radiusFalloff": 0.62,
+            "branchAngle": 0.8796459430051421,
+            "curvature": 0.25,
+            "droop": 0,
+            "phototropism": 0,
+            "gnarl": 0.12,
+            "segments": 6,
+            "radialSegments": 6,
+            "leafShape": "auto",
+            "leavesPerBranch": 6,
+            "leafLevels": 2,
+            "leafSize": 0.45,
+            "leafAspect": 0.62,
+            "leafTip": 0.5,
+            "leafDroop": 0.35,
+            "leafColorA": 5078058,
+            "leafColorB": 9158461,
+            "barkColor": 5914928,
+            "barkRoughness": 0.9,
+            "lightDirection": {
+              "x": 0.5,
+              "y": 1,
+              "z": 0.3
+            },
+            "ambient": 0.42,
+            "windInfluence": 1,
+            "trunkStiffness": 2.4,
+            "foliageMode": "auto",
+            "clumpsPerBranch": 2,
+            "clumpRadius": 3.2,
+            "season": 0,
+            "seasonVariance": 0.35,
+            "autumnColorA": 14722348,
+            "autumnColorB": 11022879,
+            "canopyShade": 0.45,
+            "canopyShadePower": 1.4
+          }
+        },
+        {
+          "id": "tree_4",
+          "type": "object/tree",
+          "position": {
+            "x": 380,
+            "y": 960
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 1.6,
+              "y": 0,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "species": "birch",
+            "seed": 41,
+            "sizeScale": 0.58,
+            "levels": 4,
+            "childCount": 3,
+            "branchStart": 0.45,
+            "trunkHeight": 4,
+            "trunkRadius": 0.2,
+            "trunkFlare": 0.35,
+            "taper": 1.3,
+            "lengthFalloff": 0.72,
+            "radiusFalloff": 0.62,
+            "branchAngle": 0.8796459430051421,
+            "curvature": 0.25,
+            "droop": 0,
+            "phototropism": 0,
+            "gnarl": 0.12,
+            "segments": 6,
+            "radialSegments": 6,
+            "leafShape": "auto",
+            "leavesPerBranch": 6,
+            "leafLevels": 2,
+            "leafSize": 0.45,
+            "leafAspect": 0.62,
+            "leafTip": 0.5,
+            "leafDroop": 0.35,
+            "leafColorA": 5078058,
+            "leafColorB": 9158461,
+            "barkColor": 5914928,
+            "barkRoughness": 0.9,
+            "lightDirection": {
+              "x": 0.5,
+              "y": 1,
+              "z": 0.3
+            },
+            "ambient": 0.42,
+            "windInfluence": 1,
+            "trunkStiffness": 2.4,
+            "foliageMode": "auto",
+            "clumpsPerBranch": 2,
+            "clumpRadius": 3.2,
+            "season": 0,
+            "seasonVariance": 0.35,
+            "autumnColorA": 14722348,
+            "autumnColorB": 11022879,
+            "canopyShade": 0.45,
+            "canopyShadePower": 1.4
+          }
+        },
+        {
+          "id": "tree_5",
+          "type": "object/tree",
+          "position": {
+            "x": 380,
+            "y": 1100
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 4.8,
+              "y": 0,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "species": "palm",
+            "seed": 59,
+            "sizeScale": 0.5,
+            "levels": 4,
+            "childCount": 3,
+            "branchStart": 0.45,
+            "trunkHeight": 4,
+            "trunkRadius": 0.2,
+            "trunkFlare": 0.35,
+            "taper": 1.3,
+            "lengthFalloff": 0.72,
+            "radiusFalloff": 0.62,
+            "branchAngle": 0.8796459430051421,
+            "curvature": 0.25,
+            "droop": 0,
+            "phototropism": 0,
+            "gnarl": 0.12,
+            "segments": 6,
+            "radialSegments": 6,
+            "leafShape": "auto",
+            "leavesPerBranch": 6,
+            "leafLevels": 2,
+            "leafSize": 0.45,
+            "leafAspect": 0.62,
+            "leafTip": 0.5,
+            "leafDroop": 0.35,
+            "leafColorA": 5078058,
+            "leafColorB": 9158461,
+            "barkColor": 5914928,
+            "barkRoughness": 0.9,
+            "lightDirection": {
+              "x": 0.5,
+              "y": 1,
+              "z": 0.3
+            },
+            "ambient": 0.42,
+            "windInfluence": 1,
+            "trunkStiffness": 2.4,
+            "foliageMode": "auto",
+            "clumpsPerBranch": 2,
+            "clumpRadius": 3.2,
+            "season": 0,
+            "seasonVariance": 0.35,
+            "autumnColorA": 14722348,
+            "autumnColorB": 11022879,
+            "canopyShade": 0.45,
+            "canopyShadePower": 1.4
+          }
+        },
+        {
+          "id": "tree_6",
+          "type": "object/tree",
+          "position": {
+            "x": 380,
+            "y": 1240
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 8.0,
+              "y": 0,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "species": "bush",
+            "seed": 83,
+            "sizeScale": 0.42,
+            "levels": 4,
+            "childCount": 3,
+            "branchStart": 0.45,
+            "trunkHeight": 4,
+            "trunkRadius": 0.2,
+            "trunkFlare": 0.35,
+            "taper": 1.3,
+            "lengthFalloff": 0.72,
+            "radiusFalloff": 0.62,
+            "branchAngle": 0.8796459430051421,
+            "curvature": 0.25,
+            "droop": 0,
+            "phototropism": 0,
+            "gnarl": 0.12,
+            "segments": 6,
+            "radialSegments": 6,
+            "leafShape": "auto",
+            "leavesPerBranch": 6,
+            "leafLevels": 2,
+            "leafSize": 0.45,
+            "leafAspect": 0.62,
+            "leafTip": 0.5,
+            "leafDroop": 0.35,
+            "leafColorA": 5078058,
+            "leafColorB": 9158461,
+            "barkColor": 5914928,
+            "barkRoughness": 0.9,
+            "lightDirection": {
+              "x": 0.5,
+              "y": 1,
+              "z": 0.3
+            },
+            "ambient": 0.42,
+            "windInfluence": 1,
+            "trunkStiffness": 2.4,
+            "foliageMode": "auto",
+            "clumpsPerBranch": 2,
+            "clumpRadius": 3.2,
+            "season": 0,
+            "seasonVariance": 0.35,
+            "autumnColorA": 14722348,
+            "autumnColorB": 11022879,
+            "canopyShade": 0.45,
+            "canopyShadePower": 1.4
+          }
+        },
+        {
+          "id": "tree_7",
+          "type": "object/tree",
+          "position": {
+            "x": 380,
+            "y": 1380
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 11.2,
+              "y": 0,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "species": "dead",
+            "seed": 97,
+            "sizeScale": 0.55,
+            "levels": 4,
+            "childCount": 3,
+            "branchStart": 0.45,
+            "trunkHeight": 4,
+            "trunkRadius": 0.2,
+            "trunkFlare": 0.35,
+            "taper": 1.3,
+            "lengthFalloff": 0.72,
+            "radiusFalloff": 0.62,
+            "branchAngle": 0.8796459430051421,
+            "curvature": 0.25,
+            "droop": 0,
+            "phototropism": 0,
+            "gnarl": 0.12,
+            "segments": 6,
+            "radialSegments": 6,
+            "leafShape": "auto",
+            "leavesPerBranch": 6,
+            "leafLevels": 2,
+            "leafSize": 0.45,
+            "leafAspect": 0.62,
+            "leafTip": 0.5,
+            "leafDroop": 0.35,
+            "leafColorA": 5078058,
+            "leafColorB": 9158461,
+            "barkColor": 5914928,
+            "barkRoughness": 0.9,
+            "lightDirection": {
+              "x": 0.5,
+              "y": 1,
+              "z": 0.3
+            },
+            "ambient": 0.42,
+            "windInfluence": 1,
+            "trunkStiffness": 2.4,
+            "foliageMode": "auto",
+            "clumpsPerBranch": 2,
+            "clumpRadius": 3.2,
+            "season": 0,
+            "seasonVariance": 0.35,
+            "autumnColorA": 14722348,
+            "autumnColorB": 11022879,
+            "canopyShade": 0.45,
+            "canopyShadePower": 1.4
+          }
+        }
+      ],
+      "connections": [
+        {
+          "id": "conn_merge_1_geometry_render_1_geometry",
+          "fromNode": "merge_1",
+          "fromSocket": "geometry",
+          "toNode": "render_1",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "conn_ground_1_merge_1_in0",
+          "fromNode": "ground_1",
+          "fromSocket": "geometry",
+          "toNode": "merge_1",
+          "toSocket": "in0"
+        },
+        {
+          "id": "conn_tree_0_merge_1_in1",
+          "fromNode": "tree_0",
+          "fromSocket": "geometry",
+          "toNode": "merge_1",
+          "toSocket": "in1"
+        },
+        {
+          "id": "conn_tree_1_merge_1_in2",
+          "fromNode": "tree_1",
+          "fromSocket": "geometry",
+          "toNode": "merge_1",
+          "toSocket": "in2"
+        },
+        {
+          "id": "conn_tree_2_merge_1_in3",
+          "fromNode": "tree_2",
+          "fromSocket": "geometry",
+          "toNode": "merge_1",
+          "toSocket": "in3"
+        },
+        {
+          "id": "conn_tree_3_merge_1_in4",
+          "fromNode": "tree_3",
+          "fromSocket": "geometry",
+          "toNode": "merge_1",
+          "toSocket": "in4"
+        },
+        {
+          "id": "conn_tree_4_merge_1_in5",
+          "fromNode": "tree_4",
+          "fromSocket": "geometry",
+          "toNode": "merge_1",
+          "toSocket": "in5"
+        },
+        {
+          "id": "conn_tree_5_merge_1_in6",
+          "fromNode": "tree_5",
+          "fromSocket": "geometry",
+          "toNode": "merge_1",
+          "toSocket": "in6"
+        },
+        {
+          "id": "conn_tree_6_merge_1_in7",
+          "fromNode": "tree_6",
+          "fromSocket": "geometry",
+          "toNode": "merge_1",
+          "toSocket": "in7"
+        },
+        {
+          "id": "conn_tree_7_merge_1_in8",
+          "fromNode": "tree_7",
+          "fromSocket": "geometry",
+          "toNode": "merge_1",
+          "toSocket": "in8"
+        },
+        {
+          "id": "conn_amb_1_merge_1_in9",
+          "fromNode": "amb_1",
+          "fromSocket": "light",
+          "toNode": "merge_1",
+          "toSocket": "in9"
+        },
+        {
+          "id": "conn_sun_1_merge_1_in10",
+          "fromNode": "sun_1",
+          "fromSocket": "light",
+          "toNode": "merge_1",
+          "toSocket": "in10"
+        },
+        {
+          "id": "conn_wind_tree_0",
+          "fromNode": "wind_1",
+          "fromSocket": "field",
+          "toNode": "tree_0",
+          "toSocket": "wind"
+        },
+        {
+          "id": "conn_wind_tree_1",
+          "fromNode": "wind_1",
+          "fromSocket": "field",
+          "toNode": "tree_1",
+          "toSocket": "wind"
+        },
+        {
+          "id": "conn_wind_tree_2",
+          "fromNode": "wind_1",
+          "fromSocket": "field",
+          "toNode": "tree_2",
+          "toSocket": "wind"
+        },
+        {
+          "id": "conn_wind_tree_3",
+          "fromNode": "wind_1",
+          "fromSocket": "field",
+          "toNode": "tree_3",
+          "toSocket": "wind"
+        },
+        {
+          "id": "conn_wind_tree_4",
+          "fromNode": "wind_1",
+          "fromSocket": "field",
+          "toNode": "tree_4",
+          "toSocket": "wind"
+        },
+        {
+          "id": "conn_wind_tree_5",
+          "fromNode": "wind_1",
+          "fromSocket": "field",
+          "toNode": "tree_5",
+          "toSocket": "wind"
+        },
+        {
+          "id": "conn_wind_tree_6",
+          "fromNode": "wind_1",
+          "fromSocket": "field",
+          "toNode": "tree_6",
+          "toSocket": "wind"
+        },
+        {
+          "id": "conn_wind_tree_7",
+          "fromNode": "wind_1",
+          "fromSocket": "field",
+          "toNode": "tree_7",
+          "toSocket": "wind"
+        }
+      ],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    }
+  ],
+  "activeCanvas": 0
+}

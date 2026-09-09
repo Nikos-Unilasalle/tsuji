@@ -16,6 +16,7 @@ import { ColorCorrectionShader } from "three/examples/jsm/shaders/ColorCorrectio
 import { KaleidoShader } from "three/examples/jsm/shaders/KaleidoShader.js";
 import { PostProcessConfig } from "../graph/nodes/postprocessing";
 import { createMotionBlur } from "./motionBlur";
+import { VolumetricPass, VolumetricSettings } from "./volumetricPass";
 
 const CustomPixelShader = {
   uniforms: {
@@ -208,6 +209,12 @@ export interface PostProcessChainDeps {
   renderPass: RenderPass;
   outputPass: OutputPass;
   motionBlurEffect: ReturnType<typeof createMotionBlur>;
+  /**
+   * Passe volumétrique en résolution réduite. Insérée juste après le rendu de
+   * scène pour que les effets suivants (bloom en tête) voient le volume composé.
+   * Ignorée tant qu'aucun maillage ne la demande.
+   */
+  volumetricPass?: VolumetricPass;
 }
 
 export interface PostProcessFrame {
@@ -222,6 +229,8 @@ export interface PostProcessFrame {
   outlineTarget: THREE.Object3D | null;
   /** Current playback or wallclock time in seconds for animated passes. */
   time?: number;
+  /** Réglages de la passe volumétrique, ou null si aucun volume ne la demande. */
+  volumetric?: VolumetricSettings | null;
 }
 
 /**
@@ -234,7 +243,7 @@ export interface PostProcessFrame {
  * is cheap and is what lets a node reordering take effect immediately.
  */
 export function createPostProcessChain(deps: PostProcessChainDeps) {
-  const { renderer, composer, renderPass, outputPass, motionBlurEffect } = deps;
+  const { renderer, composer, renderPass, outputPass, motionBlurEffect, volumetricPass } = deps;
   const passCache = new Map<string, CachedPass>();
 
   function disposePass(entry: CachedPass) {
@@ -251,8 +260,8 @@ export function createPostProcessChain(deps: PostProcessChainDeps) {
 
   return {
     /** True when anything in this frame needs the composer path at all. */
-    isActive(configs: PostProcessConfig[], motionBlur: number): boolean {
-      return configs.length > 0 || motionBlur > 0;
+    isActive(configs: PostProcessConfig[], motionBlur: number, volumetric?: VolumetricSettings | null): boolean {
+      return configs.length > 0 || motionBlur > 0 || Boolean(volumetric);
     },
 
     /** Rebuild the chain for this frame and draw it. */
@@ -289,6 +298,14 @@ export function createPostProcessChain(deps: PostProcessChainDeps) {
       renderPass.clearAlpha = 1;
       renderPass.clear = true;
       renderPass.clearDepth = true;
+
+      // Volume en résolution réduite : rendu à part puis composé, avant tout
+      // effet, pour que le bloom s'applique bien aux flammes.
+      if (frame.volumetric && volumetricPass) {
+        volumetricPass.configure(frame.volumetric);
+        volumetricPass.setSize(width, height);
+        composer.addPass(volumetricPass);
+      }
 
       for (const cfg of configs) {
         if (!cfg || !cfg.type || !cfg.nodeId) continue;

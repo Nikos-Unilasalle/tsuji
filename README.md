@@ -110,6 +110,10 @@ Les prises de connexion (sockets) sont identifiées par des codes couleur normal
 | **3D Grid** | `calibration/grid` | Grille de repère spatial 3D manipulable au gizmo. |
 | **Merge** | `structure/merge` | Fusionne plusieurs flux géométriques en une seule hiérarchie. |
 | **Render** | `render` | Sortie terminale et configuration globale du rendu. |
+| **Tree (Parametric)** | `object/tree` | Arbre paramétrique récursif : tronc et branches tubés en un seul maillage, feuillage en cartes instanciées découpées procéduralement, le tout ployant dans le vent. **8 ports de croissance** (chêne, cerisier en touffes, conifère, saule, bouleau, palmier, buisson, arbre mort) qui modifient le comportement de la récursion — flèche centrale, retombée, absence de ramification — sans jamais écraser les réglages de l'auteur. **7 formes de feuilles** paramétriques (amande, ovale, ronde, aiguille, lancéolée, cordée, érable) avec largeur, acuité de pointe et retombée, découpées dans le fragment shader. Deux modes de feuillage : dispersé, ou en **touffes sphériques** aux extrémités (biais vers la surface + orientation sortante, pour une masse crédible). **Rampe saisonnière** été → or → rouge avec décalage par feuille, et **dégradé vertical de canopée** (chaque feuille connaît sa hauteur dans le houppier). Échelle maîtresse (`Size`), empattement, profil d'effilement, profondeur de feuillage, phototropisme. |
+| **Grass Field** | `structure/grass-field` | Champ d'herbe dense en un seul draw call : 3 sommets par brin reconstruits dans le vertex shader, repliement torique autour d'un centre mobile (champ infini à coût constant) et carte de densité pour peindre les zones enherbées. |
+| **Interaction Map** | `texture/interaction-map` | Carte top-down persistante de ce qui est passé au sol : rendu orthographique zénithal en ping-pong, pinceau instancié, estompage en demi-vie (indépendant du framerate) et défilement suivant un centre mobile. Se branche sur `Trample Map` de Grass Field, ou sur n'importe quel nœud consommant une texture. |
+| **Wind Sway** | `geometry/wind-sway` | Fait ployer n'importe quelle géométrie du graphe dans le vent, par injection shader (`onBeforeCompile`) — aucun sommet n'est recalculé sur CPU. Masque vertical ancré (Anchor Y / Height / Stiffness). |
 
 ### Édition Géométrique et Opérations CSG
 
@@ -148,7 +152,9 @@ Les prises de connexion (sockets) sont identifiées par des codes couleur normal
 | **Raycast** | `physics/raycast` | Lance un rayon unique et détecte les intersections (point, normale, distance). |
 | **Ray Burst** | `physics/ray-burst` | Émet un champ de rayons (burst) 3D et produit les lignes d'impacts et endpoints. |
 | **Sample Surface** | `physics/sample` | Échantillonne des points et normales aléatoires à la surface d'un maillage (Surface Scatter). |
+| **Capsule Controller** | `physics/capsule-controller` | Personnage cinématique à capsule : marche sur les sols, glisse le long des murs, saute, tombe des rebords. Collision CPU contre un BVH (`three-mesh-bvh`), test mené en espace monde pour rester correct sur les colliders à échelle non uniforme. Sorties position, matrice, vitesse, `grounded` et normale du sol. |
 | **Volume Scatter** | `physics/volume_scatter` | Échantillonne des points et directions aléatoires à l'intérieur du volume 3D d'une géométrie. |
+| **Wind Field** | `physics/wind-field` | Champ de vent global (deux octaves de bruit défilant selon une direction) partagé par toute la scène. Sortie `field` pour les shaders de végétation, sortie `wind` (vecteur, échantillonné CPU) pour piloter transforms, champs de force et logique. |
 
 ### Animation, Mouvement et Dynamique (Spring, Trail, Orbit)
 
@@ -266,6 +272,8 @@ Les prises de connexion (sockets) sont identifiées par des codes couleur normal
 | Node | Type | Description |
 | :--- | :--- | :--- |
 | **Value Math** | `math/value_math` | Opérations scalaires (Add, Subtract, Multiply, Divide, Sin, Cos...). |
+| **Integrate** | `math/integrate` | Accumule un taux dans un total courant : `total += taux × dt`. La moitié manquante de tout schéma de contrôle — une entrée dit à quelle force on pousse *maintenant*, l'intégrateur en fait un déplacement qui persiste au relâchement. Amortissement exprimé par seconde (indépendant du framerate), bornes optionnelles, reset, et réinitialisation au scrub arrière de la timeline. |
+| **Integrate Vector** | `vector/integrate` | Même accumulation sur trois axes : une vitesse entre, une position sort. Bornage **radial** (`Max Length`) et non par axe, pour qu'une zone limitée soit ronde et non carrée. |
 | **Clamp** | `math/clamp` | Borne une valeur dans l'intervalle [min, max]. |
 | **Map Range** | `math/map_range` | Remappe une valeur entre une plage source et une cible. |
 | **Vector Math** | `math/vector_math` | Opérations vectorielles 3D (Dot product, Cross product, Normalize...). |
@@ -286,13 +294,22 @@ Les prises de connexion (sockets) sont identifiées par des codes couleur normal
 | **Color Palette** | `list/palette` | Collections de palettes chromatiques sous forme de listes. |
 | **Random Sample List**| `list/random-sample` | Échantillonne aléatoirement N éléments d'une liste (avec ou sans remise) et extrait leurs indices. |
 
+### Entrées Interactives (Clavier, Souris, Manette)
+
+| Node | Type | Description |
+| :--- | :--- | :--- |
+| **Keyboard** | `io/keyboard` | Détecte l'appui d'une touche : `isDown` (maintenu) et `pressed` (front montant). |
+| **Mouse** | `io/mouse` | Position et déplacement du pointeur. |
+| **Gamepad** | `io/gamepad` | Manette lue par polling (`getGamepads`), mapping standard W3C. Deux sticks (scalaires bruts **et** vecteurs pré-mappés dans le plan XZ, où pousser vers le haut = avancer en −Z), gâchettes analogiques, D-pad plié en vecteur, boutons nommés. **Zone morte radiale** et non par axe. |
+| **Action Map** | `io/action-map` | Plusieurs sources d'entrée → une action nommée. Sockets **Positive** et **Negative** croissants : câbler D en positif et Q en négatif donne un axe −1…1 à partir de deux touches. Combinaison (le plus fort / somme / moyenne), échelle, inversion, zone morte, lissage exprimé en secondes, seuil d'activation, et sorties `pressed` / `released`. |
+| **Inspector** | `io/inspector` | Moniteur de débogage affichant en temps réel la valeur circulant dans un câble. |
+
 ### Utilitaires et Organisation
 
 | Node | Type | Description |
 | :--- | :--- | :--- |
 | **Reroute** | `utility/reroute` | Point de dérivation compact pour organiser le câblage du graphe. |
 | **Canvas Go To** | `canvas/goto` | Bascule vers l'un des canevas du projet lors d'un trigger. |
-| **Inspector** | `io/inspector` | Moniteur de débogage affichant en temps réel la valeur circulant dans un câble. |
 
 ---
 

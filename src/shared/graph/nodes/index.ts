@@ -135,6 +135,17 @@ import { POINTS_SELECTION_NODE } from "./pointsSelection";
 import { POINTS_INFLUENCE_NODE } from "./pointsInfluence";
 import { HEX_GRID_NODE } from "./hexGrid";
 import { SAMPLE_TEXTURE_NODE } from "./sampleTexture";
+import {
+  CURL_NOISE_FIELD_3D_NODE,
+  MESH_FLUID_EMITTER_NODE,
+  FLUID_SOLVER_3D_NODE,
+  VOLUME_MATERIAL_3D_NODE,
+  FIRE_FLUID_VOLUME_NODE,
+} from "./fluidSim";
+import { WIND_FIELD_NODE, GRASS_FIELD_NODE, TREE_NODE, WIND_SWAY_NODE, INTERACTION_MAP_NODE } from "./vegetation";
+import { GAMEPAD_NODE, ACTION_MAP_NODE } from "./input";
+import { INTEGRATE_NODE, INTEGRATE_VECTOR_NODE } from "./integrate";
+import { CAPSULE_CONTROLLER_NODE } from "./character";
 
 /** The starter catalogue — grows node by node; BIBLE.md has the full target list. */
 export const STARTER_NODES = [
@@ -366,6 +377,21 @@ export const STARTER_NODES = [
   PROXIMITY_OBJECT_NODE,
   HEX_GRID_NODE,
   SAMPLE_TEXTURE_NODE,
+  CURL_NOISE_FIELD_3D_NODE,
+  MESH_FLUID_EMITTER_NODE,
+  FLUID_SOLVER_3D_NODE,
+  VOLUME_MATERIAL_3D_NODE,
+  FIRE_FLUID_VOLUME_NODE,
+  WIND_FIELD_NODE,
+  GRASS_FIELD_NODE,
+  TREE_NODE,
+  WIND_SWAY_NODE,
+  INTERACTION_MAP_NODE,
+  GAMEPAD_NODE,
+  ACTION_MAP_NODE,
+  INTEGRATE_NODE,
+  INTEGRATE_VECTOR_NODE,
+  CAPSULE_CONTROLLER_NODE,
 ];
 
 export const DEFAULT_REGISTRY = createRegistry(STARTER_NODES);
@@ -443,4 +469,9 @@ export * from "./distance";
 export * from "./paintOnGeometry";
 export * from "./hexGrid";
 export * from "./sampleTexture";
+export * from "./fluidSim";
+export * from "./vegetation";
+export * from "./input";
+export * from "./integrate";
+export * from "./character";
 

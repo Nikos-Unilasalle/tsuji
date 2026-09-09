@@ -1,0 +1,174 @@
+{
+  "canvases": [
+    {
+      "nodes": [
+        {
+          "id": "floor_1",
+          "type": "object/plane",
+          "position": {
+            "x": 120,
+            "y": 60
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "rotation": {
+              "x": 1.5707963267948966,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 40,
+              "y": 40,
+              "z": 1
+            },
+            "color": 1118485,
+            "roughness": 0.85,
+            "metalness": 0.15,
+            "opacity": 1
+          }
+        },
+        {
+          "id": "fire_1",
+          "type": "simulation/fire-fluid-volume",
+          "position": {
+            "x": 120,
+            "y": 260
+          },
+          "params": {
+            "density": 7,
+            "temperature": 5.5,
+            "buoyancy": 3.2,
+            "turbulence": 3.5,
+            "cooling": 0.85,
+            "dissipation": 0.25,
+            "wind": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "fireIntensity": 20,
+            "steps": 64
+          }
+        },
+        {
+          "id": "merge_1",
+          "type": "structure/merge",
+          "position": {
+            "x": 480,
+            "y": 180
+          },
+          "params": {}
+        },
+        {
+          "id": "bloom_1",
+          "type": "postprocess/bloom",
+          "position": {
+            "x": 480,
+            "y": 380
+          },
+          "params": {
+            "strength": 0.8,
+            "radius": 0.4,
+            "threshold": 0.75
+          }
+        },
+        {
+          "id": "render_1",
+          "type": "render",
+          "position": {
+            "x": 800,
+            "y": 180
+          },
+          "params": {
+            "frameCount": 120,
+            "fps": 30,
+            "resolutionPreset": "16:9 (1920x1080)",
+            "width": 1920,
+            "height": 1080
+          }
+        }
+      ],
+      "connections": [
+        {
+          "id": "conn_floor_to_merge",
+          "fromNode": "floor_1",
+          "fromSocket": "geometry",
+          "toNode": "merge_1",
+          "toSocket": "in0"
+        },
+        {
+          "id": "conn_fire_to_merge",
+          "fromNode": "fire_1",
+          "fromSocket": "geometry",
+          "toNode": "merge_1",
+          "toSocket": "in1"
+        },
+        {
+          "id": "conn_light_to_merge",
+          "fromNode": "fire_1",
+          "fromSocket": "light",
+          "toNode": "merge_1",
+          "toSocket": "in2"
+        },
+        {
+          "id": "conn_merge_to_render",
+          "fromNode": "merge_1",
+          "fromSocket": "geometry",
+          "toNode": "render_1",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "conn_bloom_to_render",
+          "fromNode": "bloom_1",
+          "fromSocket": "effect",
+          "toNode": "render_1",
+          "toSocket": "postprocess"
+        }
+      ],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    },
+    {
+      "nodes": [],
+      "connections": [],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    },
+    {
+      "nodes": [],
+      "connections": [],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    },
+    {
+      "nodes": [],
+      "connections": [],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    },
+    {
+      "nodes": [],
+      "connections": [],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    },
+    {
+      "nodes": [],
+      "connections": [],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    }
+  ],
+  "activeCanvas": 0
+}

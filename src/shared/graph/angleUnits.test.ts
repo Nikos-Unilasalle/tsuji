@@ -44,6 +44,10 @@ const DEGREE_SCALAR_SOCKETS = [
   "lighting/environment.backgroundRotation",
   "object/disc.arcAngle",
   "object/disc.startAngle",
+  "object/tree.branchAngle",
+  "object/tree.curvature",
+  "object/tree.droop",
+  "physics/wind-field.angle",
 ].sort();
 
 /** Convention 1, vector: radians-stored and radians on the wire — they carry rotations between nodes. */

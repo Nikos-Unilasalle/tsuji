@@ -185,11 +185,12 @@ flowchart TD
 <div style="background: rgba(30, 41, 59, 0.5); border: 1px solid #38bdf8; border-radius: 10px; padding: 14px;">
   <h4 style="color: #38bdf8; margin: 0 0 8px 0;">🧠 Base Connaissances</h4>
   <ul style="font-size: 12px; padding-left: 16px; margin: 0; color: #93c5fd; line-height: 1.6;">
+    <li>🔥 [[ThreeJS r185 Release and Migration Deep Dive]]</li>
+    <li>🔥 [[WebGPU Volumetric Fire Simulation and 3D Fluid Dynamics]]</li>
+    <li>💡 [[WebGPU Volumetric Lighting and TRAA Integration]]</li>
+    <li>🎮 [[Unreal FPS Camera and Kinematic Capsule Controller]]</li>
     <li>🌟 [[ThreeJS GPU Optimization Synthesis and Production Playbook]]</li>
-    <li>🌟 [[ThreeJS Creative Showcase Synthesis and Node Ideas]]</li>
     <li>🎨 [[Stylized Procedural SDFs and NPR Anime Rendering]]</li>
-    <li>⚡ [[GLSL Branchless Programming and Optimization]]</li>
-    <li>📦 [[KTX2 and Basis Universal Texture Compression]]</li>
   </ul>
 </div>
 
@@ -197,11 +198,11 @@ flowchart TD
 <div style="background: rgba(30, 41, 59, 0.5); border: 1px solid #22c55e; border-radius: 10px; padding: 14px;">
   <h4 style="color: #4ade80; margin: 0 0 8px 0;">🛠️ Spécifications Tsuji</h4>
   <ul style="font-size: 12px; padding-left: 16px; margin: 0; color: #86efac; line-height: 1.6;">
+    <li>🧩 [[Node Catalog]]</li>
+    <li>⚡ [[Universal_Nodes_Catalog_3_Chantiers]]</li>
     <li>⚙️ [[Graph Evaluation Runtime]]</li>
     <li>✨ [[Creative FX and Stage Nodes]]</li>
     <li>🎨 [[Socket Type System and Ownership]]</li>
-    <li>🖥️ [[ThreeJS Viewport and Calibration Pipeline]]</li>
-    <li>🧩 [[Node Catalog]]</li>
   </ul>
 </div>
 
@@ -209,10 +210,10 @@ flowchart TD
 <div style="background: rgba(30, 41, 59, 0.5); border: 1px solid #c084fc; border-radius: 10px; padding: 14px;">
   <h4 style="color: #c084fc; margin: 0 0 8px 0;">🚀 Roadmap & Évolutions</h4>
   <ul style="font-size: 12px; padding-left: 16px; margin: 0; color: #e9d5ff; line-height: 1.6;">
+    <li>🏆 [[Strategic_Roadmap_3_Chantiers_Fire_Lighting_FPS]]</li>
     <li>⚡ [[WebGPURenderer Architecture Migration]]</li>
     <li>✨ [[TSL Compute Shaders for Particle Simulation]]</li>
     <li>🧹 [[Centralized ResourceLifecycleManager Design]]</li>
-    <li>🧩 [[GroupNodeDefinition and Exposed Ports Schema]]</li>
   </ul>
 </div>
 

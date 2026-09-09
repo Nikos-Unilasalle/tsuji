@@ -14,6 +14,7 @@ Bienvenue dans le coffre de connaissances (Obsidian Vault). Ce système est stru
 - [[ThreeJS Creative Showcase Synthesis and Node Ideas]] — **Synthèse Créative Three.js & Dérivations Nodales**
 
 ### ⚡ Optimisation Three.js (`Knowledge_Base/ThreeJS_Optimization/`)
+- [[ThreeJS r185 Release and Migration Deep Dive]] — Synthèse de la version r185, WebGPU, TSL et nouveaux exemples.
 - [[Draw Call Reduction Strategies]] — Principes de regroupement et budgets de draw calls.
 - [[InstancedMesh Usage and Best Practices]] — Instanciation de maillages identiques et gestion de buffers.
 - [[Advanced Instancing and Attribute-Driven Shading]] — Instanciation avancée, orientation sur normales et textures canvas.
@@ -53,8 +54,11 @@ Bienvenue dans le coffre de connaissances (Obsidian Vault). Ce système est stru
 - [[Stylized Procedural SDFs and NPR Anime Rendering]] — Champs de distance signés (SDF), soustraction lissée polynomiale, flammes cartoon et nuages Ghibli.
 - [[Shadow Map Optimization and Baking]] — Gestion et caching des ombres portées.
 - [[WebGPU Architecture and TSL Shaders]] — Moteur WebGPU et shaders TSL.
+- [[WebGPU Volumetric Fire Simulation and 3D Fluid Dynamics]] — Solveur fluide eulérien 3D et raymarching de corps noir.
+- [[WebGPU Volumetric Lighting and TRAA Integration]] — Éclairage volumétrique, milieux participants et antialiasing temporel (TRAA).
 
 ### 📐 Algorithmique & Mathématiques (`Knowledge_Base/Algorithms_and_Math/`)
+- [[Unreal FPS Camera and Kinematic Capsule Controller]] — Contrôleur de caméra première personne cinématique et franchissement de marches.
 - [[Node Graph Evaluation Models Push vs Pull]] — Modèles d'exécution de graphes.
 - [[Kahn Algorithm and DAG Topological Sorting]] — Tri topologique linéaire $\mathcal{O}(V+E)$.
 - [[Cycle Detection and Feedback Resolution]] — Résolution des boucles temporelles ($t - 1$).
@@ -81,7 +85,8 @@ Bienvenue dans le coffre de connaissances (Obsidian Vault). Ce système est stru
 
 ### 🧩 Nœuds & Création
 - [[Node Creation Guide]] — Guide auteur et contrat de développement.
-- [[Node Catalog]] — Inventaire des plus de 100 nœuds disponibles.
+- [[Node Catalog]] — Inventaire des nœuds disponibles (dont simulation fluide 3D).
+- [[Universal_Nodes_Catalog_3_Chantiers]] — Spécification complète des nœuds pour les 3 chantiers.
 - [[Creative FX and Stage Nodes]] — Shaders créatifs (Hologram, Iridescent, Cel-Shade, Fire SDF, Ghibli Clouds) et nœuds scéniques.
 - [[Parametric Geometry and Modifiers]] — Modificateurs de maillage (Lattice, Subdivide, Boolean CSG).
 
@@ -99,6 +104,7 @@ Bienvenue dans le coffre de connaissances (Obsidian Vault). Ce système est stru
 ## 🗺️ 3. 🚀 Évolutions Futures & Roadmap (`Future_Roadmap/`)
 
 - [[Roadmap Overview and Strategic Vision]] — Vue d'ensemble stratégique.
+- [[Strategic_Roadmap_3_Chantiers_Fire_Lighting_FPS]] — Feuille de route des 3 Chantiers (Feu & Fluide 3D, Éclairage Volumétrique TRAA, Caméra FPS).
 
 ### ⚡ 01 - WebGPU & Calcul Parallèle
 - [[WebGPURenderer Architecture Migration]] — Transition vers `WebGPURenderer`.

@@ -230,6 +230,11 @@ export const DEMO_CATALOG: DemoCategory[] = [
         description: "Sample points on a mesh, spawn objects on them.",
       },
       {
+        file: "demo_physics_character.tsuji",
+        label: "Capsule Character",
+        description: "ZQSD and Space drive a kinematic capsule that walks the level, slides along walls and climbs a ramp.",
+      },
+      {
         file: "demo_physics_raycast.tsuji",
         label: "Raycast Hit Marker",
         description: "Raycast a sphere, place a marker at the hit point.",
@@ -300,6 +305,11 @@ export const DEMO_CATALOG: DemoCategory[] = [
         description: "Mic spectrum driving a bar graph (enable the mic).",
       },
       {
+        file: "demo_io_action_map.tsuji",
+        label: "Action Map & Gamepad",
+        description: "ZQSD, arrow keys and a gamepad stick folded into two named axes, integrated into a position that stays put when you let go.",
+      },
+      {
         file: "demo_io_mouse_pointer.tsuji",
         label: "Mouse Pointer",
         description: "Mouse node's 3D point placing a marker.",
@@ -363,6 +373,21 @@ export const DEMO_CATALOG: DemoCategory[] = [
         file: "demo_particles_trails.tsuji",
         label: "Trails & Web",
         description: "Particle history as trails, plus nearby-point links.",
+      },
+      {
+        file: "demo_physics_fire_sim.tsuji",
+        label: "Volumetric Fire Simulation",
+        description: "3D Navier-Stokes fluid simulation with blackbody raymarching.",
+      },
+      {
+        file: "demo_vegetation_tree_species.tsuji",
+        label: "Tree Species",
+        description: "The eight growth habits side by side: oak, clumped cherry, conifer, willow, birch, palm, bush and a bare winter tree.",
+      },
+      {
+        file: "demo_vegetation_wind.tsuji",
+        label: "Grass & Trees in the Wind",
+        description: "One Wind Field driving grass and trees, plus an Interaction Map that flattens the grass in a moving object's wake.",
       },
     ],
   },
