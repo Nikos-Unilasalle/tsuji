@@ -9,6 +9,8 @@ import {
   setPlaybackActive,
 } from "./playbackKeys";
 import { NodeInstance } from "./types";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 function node(id: string, type: string, params: Record<string, unknown> = {}): NodeInstance {
   return { id, type, params, position: { x: 0, y: 0 } };
@@ -69,6 +71,66 @@ describe("collectKeyboardBindings", () => {
   test("an empty or missing graph claims nothing", () => {
     expect(collectKeyboardBindings([]).size).toBe(0);
     expect(collectKeyboardBindings(null).size).toBe(0);
+  });
+});
+
+describe("Move Input claims its keys too", () => {
+  test("a layout's four keys, jump and sprint are all claimed", () => {
+    // The regression this pins: the registry knew only about io/keyboard, so
+    // the moment Move Input replaced those nodes in every demo the whole
+    // mechanism silently stopped working — the scene read ZQSD while the
+    // editor still thought nobody was.
+    const keys = collectKeyboardBindings([
+      node("m", "io/move-input", {
+        layout: "zqsd",
+        jumpKey: "space",
+        sprintKey: "shift",
+      }),
+    ]);
+    expect([...keys].sort()).toEqual(["d", "q", "s", "shift", "space", "z"]);
+  });
+
+  test("a combined layout claims the arrows as well", () => {
+    const keys = collectKeyboardBindings([
+      node("m", "io/move-input", { layout: "zqsd+arrows", jumpKey: "space", sprintKey: "shift" }),
+    ]);
+    expect(keys.has("arrowup")).toBe(true);
+    expect(keys.has("arrowleft")).toBe(true);
+    expect(keys.has("z")).toBe(true);
+  });
+
+  test("custom keys are claimed, not the layout defaults", () => {
+    const keys = collectKeyboardBindings([
+      node("m", "io/move-input", {
+        layout: "custom",
+        forwardKey: "i",
+        backKey: "k",
+        leftKey: "j",
+        rightKey: "l",
+        jumpKey: "space",
+        sprintKey: "",
+      }),
+    ]);
+    expect([...keys].sort()).toEqual(["i", "j", "k", "l", "space"]);
+  });
+
+  test("Keyboard and Move Input nodes in one graph both contribute", () => {
+    const keys = collectKeyboardBindings([
+      node("k", "io/keyboard", { key: "e" }),
+      node("m", "io/move-input", { layout: "wasd", jumpKey: "space", sprintKey: "shift" }),
+    ]);
+    expect(keys.has("e")).toBe(true);
+    expect(keys.has("w")).toBe(true);
+  });
+
+  test("a WASD scheme takes S back from the scale gizmo while playing", () => {
+    setGraphKeyBindings(
+      collectKeyboardBindings([node("m", "io/move-input", { layout: "wasd", jumpKey: "space" })]),
+    );
+    setPlaybackActive(true);
+    expect(isKeyReservedForPlayback(press("s", "KeyS"))).toBe(true);
+    // And R, which nothing listens for, still reaches the editor.
+    expect(isKeyReservedForPlayback(press("r", "KeyR"))).toBe(false);
   });
 });
 
@@ -163,5 +225,45 @@ describe("chords are never reserved", () => {
     }
     // Plain, though, still belongs to the scene.
     expect(isKeyReservedForPlayback(press("s", "KeyS"))).toBe(true);
+  });
+});
+
+describe("the shipped interactive demos actually claim their keys", () => {
+  /**
+   * The reported symptom, pinned at the level it was reported: "the shortcuts
+   * are active again and I cannot test the demos". A unit test on the registry
+   * would not have caught it, because the registry was correct — it was the
+   * demos that moved to a node the registry had never heard of.
+   */
+  const DRIVEABLE = [
+    "demo_io_move_input.tsuji",
+    "demo_io_action_map.tsuji",
+    "demo_physics_character.tsuji",
+    "demo_physics_character_rapier.tsuji",
+    "demo_physics_vehicle.tsuji",
+  ];
+
+  for (const file of DRIVEABLE) {
+    test(`${file} claims the keys it is driven with`, () => {
+      const text = readFileSync(join(process.cwd(), "public/demos", file), "utf8");
+      const project = JSON.parse(text) as { canvases: { nodes: NodeInstance[] }[] };
+      const nodes = project.canvases.flatMap((canvas) => canvas.nodes);
+
+      const keys = collectKeyboardBindings(nodes);
+      expect(keys.size, `${file} claims no keys, so the editor will eat them`).toBeGreaterThan(0);
+    });
+  }
+
+  test("a driveable demo takes back the keys that are also editor shortcuts", () => {
+    const text = readFileSync(join(process.cwd(), "public/demos", "demo_physics_character_rapier.tsuji"), "utf8");
+    const project = JSON.parse(text) as { canvases: { nodes: NodeInstance[] }[] };
+    setGraphKeyBindings(collectKeyboardBindings(project.canvases.flatMap((c) => c.nodes)));
+    setPlaybackActive(true);
+
+    // S is the scale gizmo, D removes a curve point, Space toggles playback —
+    // all three have to belong to the character while it is being driven.
+    expect(isKeyReservedForPlayback(press("s", "KeyS"))).toBe(true);
+    expect(isKeyReservedForPlayback(press("d", "KeyD"))).toBe(true);
+    expect(isKeyReservedForPlayback(press(" ", "Space"))).toBe(true);
   });
 });

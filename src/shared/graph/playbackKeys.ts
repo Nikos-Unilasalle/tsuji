@@ -1,4 +1,5 @@
 import { NodeInstance } from "./types";
+import { asMoveLayout, layoutKeys } from "./nodes/input";
 
 /**
  * Which keys the running graph has claimed, so playback can take them back
@@ -22,8 +23,35 @@ import { NodeInstance } from "./types";
  * the scene is running.
  */
 
-/** The node type that claims keys. */
-const KEYBOARD_NODE_TYPE = "io/keyboard";
+/**
+ * How each node type declares the keys it listens for.
+ *
+ * A registry rather than a hardcoded check, because the first version knew
+ * only about `io/keyboard` — and the moment Move Input replaced those nodes in
+ * every demo, the whole mechanism silently stopped working: the scene was
+ * reading ZQSD while the editor still thought nobody was. Any future node that
+ * reads the keyboard has to be added here, and that is the point of the list
+ * being one obvious place rather than a condition buried in a loop.
+ */
+const KEY_CLAIMERS: Record<string, (params: Record<string, unknown>) => unknown[]> = {
+  "io/keyboard": (params) => [params.key],
+  "io/move-input": (params) => {
+    const keys = layoutKeys(asMoveLayout(params.layout), [
+      String(params.forwardKey ?? ""),
+      String(params.backKey ?? ""),
+      String(params.leftKey ?? ""),
+      String(params.rightKey ?? ""),
+    ]);
+    return [
+      ...keys.forward,
+      ...keys.back,
+      ...keys.left,
+      ...keys.right,
+      params.jumpKey,
+      params.sprintKey,
+    ];
+  },
+};
 
 let claimedKeys: ReadonlySet<string> = new Set();
 let playbackActive = false;
@@ -42,15 +70,18 @@ export function normalizeKeyName(name: unknown): string {
   return raw.trim();
 }
 
-/** Every key the graph's Keyboard nodes are listening for. */
+/** Every key the graph's input nodes are listening for. */
 export function collectKeyboardBindings(nodes: readonly NodeInstance[] | undefined | null): Set<string> {
   const keys = new Set<string>();
   if (!nodes) return keys;
 
   for (const node of nodes) {
-    if (node.type !== KEYBOARD_NODE_TYPE) continue;
-    const key = normalizeKeyName(node.params?.key);
-    if (key) keys.add(key);
+    const claim = KEY_CLAIMERS[node.type];
+    if (!claim) continue;
+    for (const raw of claim(node.params ?? {})) {
+      const key = normalizeKeyName(raw);
+      if (key) keys.add(key);
+    }
   }
   return keys;
 }
