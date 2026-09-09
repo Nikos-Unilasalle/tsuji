@@ -7,6 +7,7 @@ import { asVector3 } from "./transform";
 import { accelerateHorizontal, applyFriction } from "../../three/controls/capsuleController";
 import {
   COLLIDER_SHAPES,
+  ColliderGeometry,
   ColliderShape,
   PhysicsWorldHandle,
   bodyMatrix,
@@ -20,6 +21,7 @@ import {
   isPhysicsWorld,
   isRapierReady,
   resolveShape,
+  scaleColliderGeometry,
   stepPhysicsWorld,
 } from "../../three/physics/rapierRuntime";
 
@@ -153,12 +155,20 @@ export const PHYSICS_WORLD_NODE: NodeDefinition = {
 export const BODY_TYPES = ["dynamic", "fixed", "kinematic"] as const;
 export type BodyType = (typeof BODY_TYPES)[number];
 
-interface BodyState {
+/** One simulated body, and where its pose is written back on screen. */
+interface BodyEntry {
   body: RAPIER.RigidBody;
+  /** The mesh that draws it — an InstancedMesh when this is one instance of many. */
+  mesh: THREE.Mesh;
+  /** Which instance, or -1 for a mesh that stands on its own. */
+  instanceIndex: number;
+}
+
+interface BodyState {
+  entries: BodyEntry[];
   worldNodeId: string;
   generation: number;
   signature: string;
-  object: THREE.Object3D;
 }
 
 const bodyCache = createNodeCache<BodyState>();
@@ -171,18 +181,109 @@ function asShape(value: unknown): ColliderShape {
   return (COLLIDER_SHAPES as readonly string[]).includes(value as string) ? (value as ColliderShape) : "auto";
 }
 
+export const BODY_SPLIT_MODES = ["per-child", "whole"] as const;
+export type BodySplitMode = (typeof BODY_SPLIT_MODES)[number];
+
+function asSplit(value: unknown): BodySplitMode {
+  return (BODY_SPLIT_MODES as readonly string[]).includes(value as string)
+    ? (value as BodySplitMode)
+    : "per-child";
+}
+
+/** One thing that should become a body: a mesh, or one instance of an instanced mesh. */
+interface BodyTarget {
+  mesh: THREE.Mesh;
+  instanceIndex: number;
+  /** World pose it starts at. */
+  matrix: THREE.Matrix4;
+}
+
+const _instanceMatrix = new THREE.Matrix4();
+
 /**
- * Rigid Body — hands a piece of geometry to the physics world and moves it
- * with whatever the solver decides.
+ * Everything under an object that should be simulated.
+ *
+ * `per-child` is the default because the alternative is a Rigid Body node per
+ * crate: the graph already has `structure/merge` for gathering many geometries
+ * into one, so twenty crates should be one Merge and one Rigid Body, not
+ * twenty of each.
+ *
+ * An InstancedMesh contributes **one body per instance**, which is what makes
+ * an Array of a hundred boxes usable — otherwise instancing, the thing that
+ * makes them cheap to draw, would make them impossible to simulate.
+ */
+export function collectBodyTargets(root: THREE.Object3D, split: BodySplitMode): BodyTarget[] {
+  root.updateWorldMatrix(true, true);
+
+  if (split === "whole") {
+    // One body for the lot: a car chassis built from five meshes is one rigid
+    // body, not five that immediately shove each other apart.
+    const mesh = root as THREE.Mesh;
+    return [{ mesh, instanceIndex: -1, matrix: root.matrixWorld.clone() }];
+  }
+
+  const targets: BodyTarget[] = [];
+  root.traverse((child) => {
+    const mesh = child as THREE.Mesh;
+    if (!mesh.isMesh || !mesh.geometry?.attributes?.position) return;
+
+    const instanced = mesh as THREE.InstancedMesh;
+    if (instanced.isInstancedMesh) {
+      for (let i = 0; i < instanced.count; i++) {
+        instanced.getMatrixAt(i, _instanceMatrix);
+        targets.push({
+          mesh: instanced,
+          instanceIndex: i,
+          matrix: new THREE.Matrix4().multiplyMatrices(instanced.matrixWorld, _instanceMatrix),
+        });
+      }
+      return;
+    }
+
+    targets.push({ mesh, instanceIndex: -1, matrix: mesh.matrixWorld.clone() });
+  });
+
+  return targets;
+}
+
+/**
+ * What the set of targets *is*, rather than where they have got to.
+ *
+ * Rebuilding on every pose change would restart the simulation every frame;
+ * rebuilding on none of them would miss a crate being added. Counting meshes
+ * and instances catches the second without noticing the first.
+ */
+export function describeTargets(targets: readonly BodyTarget[]): string {
+  const counts = new Map<string, number>();
+  for (const target of targets) {
+    counts.set(target.mesh.uuid, (counts.get(target.mesh.uuid) ?? 0) + 1);
+  }
+  return [...counts].map(([uuid, count]) => `${uuid}x${count}`).join("|");
+}
+
+const _pose = new THREE.Vector3();
+const _poseQuat = new THREE.Quaternion();
+const _poseScale = new THREE.Vector3();
+
+/**
+ * Rigid Body — hands geometry to the physics world and moves it with whatever
+ * the solver decides.
+ *
+ * **Split defaults to per-child**, so one node handles a whole Merge: twenty
+ * crates wired into a Merge become twenty bodies behind a single Rigid Body
+ * node. An InstancedMesh contributes one body per instance, so an Array of a
+ * hundred boxes simulates without a hundred nodes. Switch to `whole` for the
+ * opposite case — a chassis built from several meshes has to be *one* body, or
+ * its parts shove each other apart on the first frame.
  *
  * The shape defaults to a convex hull for a dynamic body and a triangle mesh
  * for a fixed one: a hull is cheap, always closed, and stacks predictably,
  * while a trimesh is the only shape that can represent a level exactly and its
  * lack of volume only matters for something that moves.
  *
- * The body is rebuilt when its *shape* changes and left alone otherwise, so
- * dragging friction or restitution never restarts the simulation, while
- * switching from a box to a hull does.
+ * Bodies are rebuilt when the *set* of them changes — shape, body type, split,
+ * or a mesh appearing — and left alone otherwise, so dragging friction never
+ * restarts the simulation.
  */
 export const RIGID_BODY_NODE: NodeDefinition = {
   type: "physics/rigid-body",
@@ -201,10 +302,12 @@ export const RIGID_BODY_NODE: NodeDefinition = {
     { id: "position", label: "Position", type: "vector" },
     { id: "velocity", label: "Velocity", type: "vector" },
     { id: "speed", label: "Speed", type: "value" },
+    { id: "count", label: "Body Count", type: "value" },
   ],
   defaultParams: {
     bodyType: "dynamic",
     shape: "auto",
+    split: "per-child",
     mass: 1,
     friction: 0.7,
     restitution: 0.1,
@@ -216,6 +319,20 @@ export const RIGID_BODY_NODE: NodeDefinition = {
   paramFields: [
     { id: "bodyType", label: "Body Type", kind: "select", options: [...BODY_TYPES] },
     { id: "shape", label: "Collider Shape", kind: "select", options: [...COLLIDER_SHAPES] },
+    {
+      id: "split",
+      label: "Split",
+      kind: "select",
+      options: [...BODY_SPLIT_MODES],
+    },
+    {
+      id: "splitNote",
+      label:
+        "per-child: every mesh — and every instance of an instanced mesh — becomes its own body, " +
+        "so one node handles a whole Merge or Array. whole: one body for the lot, for a chassis " +
+        "built from several meshes.",
+      kind: "note",
+    },
     { id: "mass", label: "Mass", kind: "number", step: 0.1, group: "Material" },
     { id: "friction", label: "Friction", kind: "number", step: 0.05, group: "Material" },
     { id: "restitution", label: "Bounciness", kind: "number", step: 0.05, group: "Material" },
@@ -234,115 +351,154 @@ export const RIGID_BODY_NODE: NodeDefinition = {
     const handle = isPhysicsWorld(inputs.world) ? inputs.world : null;
     const api = getRapier();
 
+    const idle = () => ({
+      geometry: object,
+      matrix: object ? object.matrix.clone() : new THREE.Matrix4(),
+      position: object ? object.position.clone() : new THREE.Vector3(),
+      velocity: new THREE.Vector3(),
+      speed: 0,
+      count: 0,
+    });
+
     // No world, no engine, or nothing to simulate: hand the geometry straight
     // back so the scene still renders while physics warms up.
-    if (!object || !handle || !api || !isRapierReady()) {
-      return {
-        geometry: object,
-        matrix: object ? object.matrix.clone() : new THREE.Matrix4(),
-        position: object ? object.position.clone() : new THREE.Vector3(),
-        velocity: new THREE.Vector3(),
-        speed: 0,
-      };
-    }
+    if (!object || !handle || !api || !isRapierReady()) return idle();
 
     const bodyType = asBodyType(params.bodyType);
     const isDynamic = bodyType === "dynamic";
     const shape = resolveShape(asShape(params.shape), isDynamic);
-    const signature = `${bodyType}|${shape}|${handle.generation}`;
+    const split = asSplit(params.split);
 
+    const targets = collectBodyTargets(object, split);
+    if (targets.length === 0) return idle();
+
+    const signature = `${bodyType}|${shape}|${split}|${handle.generation}|${describeTargets(targets)}`;
     let state = bodyCache.get(ctx.nodeId);
 
     if (!state || state.signature !== signature || state.worldNodeId !== handle.nodeId) {
       if (state && state.worldNodeId === handle.nodeId && state.generation === handle.generation) {
-        handle.world.removeRigidBody(state.body);
+        for (const entry of state.entries) handle.world.removeRigidBody(entry.body);
         handle.bodies.delete(ctx.nodeId);
       }
 
-      const geometry = extractColliderGeometry(object);
-      if (!geometry) {
-        return {
-          geometry: object,
-          matrix: object.matrix.clone(),
-          position: object.position.clone(),
-          velocity: new THREE.Vector3(),
-          speed: 0,
-        };
+      // One collider shape per source mesh, reused across its instances: the
+      // hull of a crate is the same hull whichever copy of it is falling.
+      const shapes = new Map<string, ColliderGeometry | null>();
+      const entries: BodyEntry[] = [];
+
+      for (const target of targets) {
+        let base = shapes.get(target.mesh.uuid);
+        if (base === undefined) {
+          base = extractColliderGeometry(target.mesh);
+          shapes.set(target.mesh.uuid, base);
+        }
+        if (!base) continue;
+
+        target.matrix.decompose(_pose, _poseQuat, _poseScale);
+
+        const desc =
+          bodyType === "fixed"
+            ? api.RigidBodyDesc.fixed()
+            : bodyType === "kinematic"
+              ? api.RigidBodyDesc.kinematicPositionBased()
+              : api.RigidBodyDesc.dynamic();
+        desc.setTranslation(_pose.x, _pose.y, _pose.z);
+        desc.setRotation({ x: _poseQuat.x, y: _poseQuat.y, z: _poseQuat.z, w: _poseQuat.w });
+
+        const body = handle.world.createRigidBody(desc);
+        // An instance's scale lives in its matrix and a collider has none, so
+        // each distinct size needs its own scaled copy of the shape.
+        const scaled =
+          target.instanceIndex >= 0 ? scaleColliderGeometry(base, _poseScale) : base;
+        const colliderDesc = buildColliderDesc(api, shape, scaled);
+        if (colliderDesc) handle.world.createCollider(colliderDesc, body);
+
+        entries.push({ body, mesh: target.mesh, instanceIndex: target.instanceIndex });
       }
 
-      // The body starts where the graph has already put the object, so an
-      // author positions it with the same Transform they use for everything
-      // else rather than a physics-only field.
-      object.updateWorldMatrix(true, false);
-      const start = new THREE.Vector3();
-      const rotation = new THREE.Quaternion();
-      object.matrixWorld.decompose(start, rotation, new THREE.Vector3());
+      if (entries.length === 0) return idle();
 
-      const desc =
-        bodyType === "fixed"
-          ? api.RigidBodyDesc.fixed()
-          : bodyType === "kinematic"
-            ? api.RigidBodyDesc.kinematicPositionBased()
-            : api.RigidBodyDesc.dynamic();
-      desc.setTranslation(start.x, start.y, start.z);
-      desc.setRotation({ x: rotation.x, y: rotation.y, z: rotation.z, w: rotation.w });
-
-      const body = handle.world.createRigidBody(desc);
-      const colliderDesc = buildColliderDesc(api, shape, geometry);
-      if (colliderDesc) handle.world.createCollider(colliderDesc, body);
-
-      handle.bodies.set(ctx.nodeId, body);
-      state = { body, worldNodeId: handle.nodeId, generation: handle.generation, signature, object };
+      handle.bodies.set(ctx.nodeId, entries[0].body);
+      state = { entries, worldNodeId: handle.nodeId, generation: handle.generation, signature };
       bodyCache.set(ctx.nodeId, state);
     }
 
-    const { body } = state;
+    const linearDamping = Math.max(0, numberInput(undefined, params.linearDamping, 0.05));
+    const angularDamping = Math.max(0, numberInput(undefined, params.angularDamping, 0.05));
+    const gravityScale = numberInput(undefined, params.gravityScale, 1);
+    const ccd = Boolean(params.ccd);
+    const friction = Math.max(0, numberInput(undefined, params.friction, 0.7));
+    const restitution = Math.max(0, numberInput(undefined, params.restitution, 0.1));
+    const mass = numberInput(inputs.mass, params.mass, 1);
+    const force = asVector3(inputs.force, new THREE.Vector3());
+    const hasForce = force.lengthSq() > 1e-12;
+    const kinematicTarget = inputs.target instanceof THREE.Vector3 ? inputs.target : null;
 
-    body.setLinearDamping(Math.max(0, numberInput(undefined, params.linearDamping, 0.05)));
-    body.setAngularDamping(Math.max(0, numberInput(undefined, params.angularDamping, 0.05)));
-    body.setGravityScale(numberInput(undefined, params.gravityScale, 1), true);
-    body.enableCcd(Boolean(params.ccd));
+    const touchedInstances = new Set<THREE.InstancedMesh>();
 
-    const collider = body.collider(0);
-    if (collider) {
-      collider.setFriction(Math.max(0, numberInput(undefined, params.friction, 0.7)));
-      collider.setRestitution(Math.max(0, numberInput(undefined, params.restitution, 0.1)));
-    }
+    for (const entry of state.entries) {
+      const { body } = entry;
 
-    if (isDynamic) {
-      const mass = numberInput(inputs.mass, params.mass, 1);
-      if (mass > 0) body.setAdditionalMass(mass, true);
+      body.setLinearDamping(linearDamping);
+      body.setAngularDamping(angularDamping);
+      body.setGravityScale(gravityScale, true);
+      body.enableCcd(ccd);
 
-      const force = asVector3(inputs.force, new THREE.Vector3());
-      if (force.lengthSq() > 1e-12) {
-        body.addForce({ x: force.x, y: force.y, z: force.z }, true);
+      const collider = body.collider(0);
+      if (collider) {
+        collider.setFriction(friction);
+        collider.setRestitution(restitution);
+      }
+
+      if (isDynamic) {
+        if (mass > 0) body.setAdditionalMass(mass, true);
+        if (hasForce) body.addForce({ x: force.x, y: force.y, z: force.z }, true);
+      }
+
+      if (bodyType === "kinematic" && kinematicTarget) {
+        body.setNextKinematicTranslation({
+          x: kinematicTarget.x,
+          y: kinematicTarget.y,
+          z: kinematicTarget.z,
+        });
+      }
+
+      // The solver owns the pose now: write it back rather than letting the
+      // graph's own transform fight it.
+      const matrix = bodyMatrix(body);
+      if (entry.instanceIndex >= 0) {
+        const instanced = entry.mesh as THREE.InstancedMesh;
+        // The instance matrix is relative to its InstancedMesh, and the solver
+        // works in world space.
+        instanced.updateWorldMatrix(true, false);
+        const toLocal = new THREE.Matrix4().copy(instanced.matrixWorld).invert();
+        instanced.setMatrixAt(entry.instanceIndex, toLocal.multiply(matrix));
+        touchedInstances.add(instanced);
+      } else {
+        entry.mesh.matrixAutoUpdate = false;
+        entry.mesh.matrix.copy(matrix);
+        matrix.decompose(entry.mesh.position, entry.mesh.quaternion, entry.mesh.scale);
+        entry.mesh.matrixWorldNeedsUpdate = true;
       }
     }
 
-    if (bodyType === "kinematic" && inputs.target instanceof THREE.Vector3) {
-      body.setNextKinematicTranslation({
-        x: inputs.target.x,
-        y: inputs.target.y,
-        z: inputs.target.z,
-      });
+    for (const instanced of touchedInstances) {
+      instanced.instanceMatrix.needsUpdate = true;
+      // The instances no longer sit where they were authored, so the bounds
+      // computed from those positions would cull them at the wrong moment.
+      instanced.frustumCulled = false;
     }
 
-    // The solver owns the pose now: write it onto the object rather than
-    // letting the graph's own transform fight it.
-    const matrix = bodyMatrix(body);
-    object.matrixAutoUpdate = false;
-    object.matrix.copy(matrix);
-    matrix.decompose(object.position, object.quaternion, object.scale);
-    object.matrixWorldNeedsUpdate = true;
-
-    const velocity = bodyVelocity(body);
+    const first = state.entries[0].body;
+    const velocity = bodyVelocity(first);
 
     return {
       geometry: object,
-      matrix: matrix.clone(),
-      position: bodyPosition(body),
+      matrix: bodyMatrix(first),
+      position: bodyPosition(first),
       velocity,
       speed: velocity.length(),
+      count: state.entries.length,
     };
   },
 };

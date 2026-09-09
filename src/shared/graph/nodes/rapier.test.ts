@@ -649,3 +649,174 @@ describe("physics/vehicle — a raycast car", () => {
     expect(out.speed).toBe(0);
   });
 });
+
+describe("rigid body — one node, many bodies", () => {
+  beforeAll(async () => {
+    await initRapier();
+  });
+
+  const worldParams = () => ({ ...PHYSICS_WORLD_NODE.defaultParams });
+  const bodyParams = (overrides: Record<string, unknown> = {}) => ({
+    ...RIGID_BODY_NODE.defaultParams,
+    ...overrides,
+  });
+
+  function crate(x: number, y: number, z: number): THREE.Mesh {
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1));
+    mesh.position.set(x, y, z);
+    mesh.updateMatrixWorld(true);
+    return mesh;
+  }
+
+  function group(...children: THREE.Object3D[]): THREE.Group {
+    const g = new THREE.Group();
+    for (const child of children) g.add(child);
+    g.updateMatrixWorld(true);
+    return g;
+  }
+
+  function run(id: string, object: THREE.Object3D, params: Record<string, unknown>, frames = 1) {
+    let last: any;
+    for (let f = 0; f < frames; f++) {
+      const world = PHYSICS_WORLD_NODE.evaluate({}, worldParams(), makeContext(`${id}-w`, f / 60)) as {
+        world: unknown;
+      };
+      last = RIGID_BODY_NODE.evaluate(
+        { world: world.world, geometry: object },
+        params,
+        makeContext(`${id}-b`, f / 60),
+      );
+    }
+    return last as { count: number; position: THREE.Vector3 };
+  }
+
+  test("a Merge of crates becomes one body per crate, from a single node", () => {
+    // The whole point: twenty crates should be one Merge and one Rigid Body,
+    // not twenty of each.
+    const level = group(crate(0, 5, 0), crate(2, 5, 0), crate(4, 5, 0));
+    const out = run("rb1", level, bodyParams({ shape: "box" }));
+    expect(out.count).toBe(3);
+  });
+
+  test("whole keeps a multi-mesh object as one body", () => {
+    // A chassis built from several meshes has to be one body, or its parts
+    // shove each other apart on the first frame.
+    const chassis = group(crate(0, 5, 0), crate(0.6, 5, 0));
+    const out = run("rb2", chassis, bodyParams({ shape: "hull", split: "whole" }));
+    expect(out.count).toBe(1);
+  });
+
+  test("each crate falls on its own rather than moving as a block", () => {
+    const a = crate(0, 6, 0);
+    const b = crate(3, 2, 0);
+    const level = group(a, b);
+
+    run("rb3", level, bodyParams({ shape: "box" }), 90);
+    // Started at different heights, so after the same fall they are still at
+    // different heights — a single welded body could not do that.
+    expect(Math.abs(a.position.y - b.position.y)).toBeGreaterThan(0.5);
+  });
+
+  test("an InstancedMesh contributes one body per instance", () => {
+    // Instancing is what makes a hundred boxes cheap to draw; without this it
+    // would make them impossible to simulate.
+    const instanced = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), undefined, 5);
+    for (let i = 0; i < 5; i++) {
+      instanced.setMatrixAt(i, new THREE.Matrix4().setPosition(i * 1.5, 5, 0));
+    }
+    instanced.instanceMatrix.needsUpdate = true;
+    instanced.updateMatrixWorld(true);
+
+    const out = run("rb4", group(instanced), bodyParams({ shape: "box" }));
+    expect(out.count).toBe(5);
+  });
+
+  test("the solver writes back into the instance matrices", () => {
+    const instanced = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), undefined, 3);
+    for (let i = 0; i < 3; i++) {
+      instanced.setMatrixAt(i, new THREE.Matrix4().setPosition(i * 2, 8, 0));
+    }
+    instanced.instanceMatrix.needsUpdate = true;
+    instanced.updateMatrixWorld(true);
+
+    run("rb5", group(instanced), bodyParams({ shape: "box" }), 60);
+
+    const matrix = new THREE.Matrix4();
+    instanced.getMatrixAt(1, matrix);
+    const position = new THREE.Vector3().setFromMatrixPosition(matrix);
+    // It fell, and it kept its own column.
+    expect(position.y).toBeLessThan(8);
+    expect(position.x).toBeCloseTo(2, 1);
+  });
+
+  test("an instance's own scale reaches its collider", () => {
+    // A collider has no scale of its own, so a big instance needs a big shape
+    // or it sinks into the floor up to the size of the small one.
+    const floor = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1));
+    floor.scale.set(40, 1, 40);
+    floor.position.set(0, -0.5, 0);
+    floor.updateMatrixWorld(true);
+
+    const instanced = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), undefined, 2);
+    instanced.setMatrixAt(0, new THREE.Matrix4().compose(
+      new THREE.Vector3(0, 6, 0),
+      new THREE.Quaternion(),
+      new THREE.Vector3(1, 1, 1),
+    ));
+    instanced.setMatrixAt(1, new THREE.Matrix4().compose(
+      new THREE.Vector3(6, 6, 0),
+      new THREE.Quaternion(),
+      new THREE.Vector3(3, 3, 3),
+    ));
+    instanced.instanceMatrix.needsUpdate = true;
+    instanced.updateMatrixWorld(true);
+
+    for (let f = 0; f < 200; f++) {
+      const world = PHYSICS_WORLD_NODE.evaluate({}, worldParams(), makeContext("rb6-w", f / 60)) as {
+        world: unknown;
+      };
+      RIGID_BODY_NODE.evaluate(
+        { world: world.world, geometry: floor },
+        bodyParams({ bodyType: "fixed" }),
+        makeContext("rb6-floor", f / 60),
+      );
+      RIGID_BODY_NODE.evaluate(
+        { world: world.world, geometry: instanced },
+        bodyParams({ shape: "box" }),
+        makeContext("rb6-b", f / 60),
+      );
+    }
+
+    const small = new THREE.Matrix4();
+    const big = new THREE.Matrix4();
+    instanced.getMatrixAt(0, small);
+    instanced.getMatrixAt(1, big);
+
+    // Resting on the floor: a unit cube's centre sits at 0.5, a 3× one at 1.5.
+    expect(new THREE.Vector3().setFromMatrixPosition(small).y).toBeCloseTo(0.5, 0);
+    expect(new THREE.Vector3().setFromMatrixPosition(big).y).toBeCloseTo(1.5, 0);
+  });
+
+  test("adding a crate rebuilds; moving one does not", () => {
+    const a = crate(0, 5, 0);
+    const level = group(a);
+
+    const first = run("rb7", level, bodyParams({ shape: "box" }), 30);
+    expect(first.count).toBe(1);
+
+    // Bodies must not be rebuilt just because the solver moved them, or the
+    // simulation restarts every frame.
+    const settled = run("rb7", level, bodyParams({ shape: "box" }), 30);
+    expect(settled.count).toBe(1);
+
+    level.add(crate(3, 5, 0));
+    level.updateMatrixWorld(true);
+    const grown = run("rb7", level, bodyParams({ shape: "box" }), 1);
+    expect(grown.count).toBe(2);
+  });
+
+  test("an empty group simulates nothing and does not throw", () => {
+    const out = run("rb8", new THREE.Group(), bodyParams());
+    expect(out.count).toBe(0);
+  });
+});

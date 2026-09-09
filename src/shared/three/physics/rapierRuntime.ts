@@ -134,6 +134,36 @@ export function extractColliderGeometry(object: THREE.Object3D): ColliderGeometr
 }
 
 /**
+ * The same geometry scaled about its own origin.
+ *
+ * Instances carry their scale in their matrix, and a Rapier collider has no
+ * scale of its own — so a row of crates at different sizes needs one scaled
+ * copy of the shape per distinct size, not one shared collider that fits none
+ * of them.
+ */
+export function scaleColliderGeometry(geometry: ColliderGeometry, scale: THREE.Vector3): ColliderGeometry {
+  if (Math.abs(scale.x - 1) < 1e-6 && Math.abs(scale.y - 1) < 1e-6 && Math.abs(scale.z - 1) < 1e-6) {
+    return geometry;
+  }
+
+  const vertices = new Float32Array(geometry.vertices.length);
+  for (let i = 0; i < geometry.vertices.length; i += 3) {
+    vertices[i] = geometry.vertices[i] * scale.x;
+    vertices[i + 1] = geometry.vertices[i + 1] * scale.y;
+    vertices[i + 2] = geometry.vertices[i + 2] * scale.z;
+  }
+
+  const box = geometry.box.clone();
+  box.min.multiply(scale);
+  box.max.multiply(scale);
+  // A negative scale flips min past max, which every downstream size query
+  // then reads as a negative extent.
+  const fixed = new THREE.Box3().setFromPoints([box.min, box.max]);
+
+  return { vertices, indices: geometry.indices, box: fixed };
+}
+
+/**
  * Builds the collider description for a shape.
  *
  * Returns null when the geometry cannot support the requested shape — a
