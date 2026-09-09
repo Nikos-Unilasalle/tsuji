@@ -3,126 +3,6 @@
     {
       "nodes": [
         {
-          "id": "k_fwd",
-          "type": "io/keyboard",
-          "position": {
-            "x": 60,
-            "y": 40
-          },
-          "params": {
-            "key": "z"
-          }
-        },
-        {
-          "id": "k_back",
-          "type": "io/keyboard",
-          "position": {
-            "x": 60,
-            "y": 150
-          },
-          "params": {
-            "key": "s"
-          }
-        },
-        {
-          "id": "k_left",
-          "type": "io/keyboard",
-          "position": {
-            "x": 60,
-            "y": 260
-          },
-          "params": {
-            "key": "q"
-          }
-        },
-        {
-          "id": "k_right",
-          "type": "io/keyboard",
-          "position": {
-            "x": 60,
-            "y": 370
-          },
-          "params": {
-            "key": "d"
-          }
-        },
-        {
-          "id": "k_jump",
-          "type": "io/keyboard",
-          "position": {
-            "x": 60,
-            "y": 480
-          },
-          "params": {
-            "key": "space"
-          }
-        },
-        {
-          "id": "pad_1",
-          "type": "io/gamepad",
-          "position": {
-            "x": 60,
-            "y": 620
-          },
-          "params": {
-            "index": 0,
-            "deadzone": 0.15,
-            "triggerDeadzone": 0.05
-          }
-        },
-        {
-          "id": "act_x",
-          "type": "io/action-map",
-          "position": {
-            "x": 400,
-            "y": 120
-          },
-          "params": {
-            "action": "strafe",
-            "mode": "strongest",
-            "scale": 1,
-            "deadzone": 0,
-            "smoothing": 0.06,
-            "threshold": 0.5,
-            "clamp": true,
-            "invert": false
-          }
-        },
-        {
-          "id": "act_z",
-          "type": "io/action-map",
-          "position": {
-            "x": 400,
-            "y": 420
-          },
-          "params": {
-            "action": "forward",
-            "mode": "strongest",
-            "scale": 1,
-            "deadzone": 0,
-            "smoothing": 0.06,
-            "threshold": 0.5,
-            "clamp": true,
-            "invert": false
-          }
-        },
-        {
-          "id": "move_1",
-          "type": "vector/compose",
-          "position": {
-            "x": 700,
-            "y": 260
-          },
-          "params": {
-            "x": 0,
-            "y": 0,
-            "z": 0,
-            "useX": true,
-            "useY": true,
-            "useZ": true
-          }
-        },
-        {
           "id": "floor_1",
           "type": "object/box",
           "position": {
@@ -490,65 +370,32 @@
             "fov": 45,
             "calibrationPicks": {}
           }
+        },
+        {
+          "id": "move_1",
+          "type": "io/move-input",
+          "position": {
+            "x": 120,
+            "y": 200
+          },
+          "params": {
+            "layout": "zqsd+arrows",
+            "forwardKey": "z",
+            "backKey": "s",
+            "leftKey": "q",
+            "rightKey": "d",
+            "jumpKey": "space",
+            "sprintKey": "shift",
+            "useGamepad": true,
+            "gamepadIndex": 0,
+            "deadzone": 0.15,
+            "smoothing": 0.06,
+            "speed": 1,
+            "enabled": 1
+          }
         }
       ],
       "connections": [
-        {
-          "id": "c_k_right_isDown_act_x_pos0",
-          "fromNode": "k_right",
-          "fromSocket": "isDown",
-          "toNode": "act_x",
-          "toSocket": "pos0"
-        },
-        {
-          "id": "c_pad_1_leftX_act_x_pos1",
-          "fromNode": "pad_1",
-          "fromSocket": "leftX",
-          "toNode": "act_x",
-          "toSocket": "pos1"
-        },
-        {
-          "id": "c_k_left_isDown_act_x_neg0",
-          "fromNode": "k_left",
-          "fromSocket": "isDown",
-          "toNode": "act_x",
-          "toSocket": "neg0"
-        },
-        {
-          "id": "c_k_back_isDown_act_z_pos0",
-          "fromNode": "k_back",
-          "fromSocket": "isDown",
-          "toNode": "act_z",
-          "toSocket": "pos0"
-        },
-        {
-          "id": "c_pad_1_leftY_act_z_pos1",
-          "fromNode": "pad_1",
-          "fromSocket": "leftY",
-          "toNode": "act_z",
-          "toSocket": "pos1"
-        },
-        {
-          "id": "c_k_fwd_isDown_act_z_neg0",
-          "fromNode": "k_fwd",
-          "fromSocket": "isDown",
-          "toNode": "act_z",
-          "toSocket": "neg0"
-        },
-        {
-          "id": "c_act_x_value_move_1_x",
-          "fromNode": "act_x",
-          "fromSocket": "value",
-          "toNode": "move_1",
-          "toSocket": "x"
-        },
-        {
-          "id": "c_act_z_value_move_1_z",
-          "fromNode": "act_z",
-          "fromSocket": "value",
-          "toNode": "move_1",
-          "toSocket": "z"
-        },
         {
           "id": "c_floor_1_geometry_level_1_in0",
           "fromNode": "floor_1",
@@ -590,20 +437,6 @@
           "fromSocket": "geometry",
           "toNode": "cap_1",
           "toSocket": "collider"
-        },
-        {
-          "id": "c_move_1_out_cap_1_move",
-          "fromNode": "move_1",
-          "fromSocket": "out",
-          "toNode": "cap_1",
-          "toSocket": "move"
-        },
-        {
-          "id": "c_k_jump_isDown_cap_1_jump",
-          "fromNode": "k_jump",
-          "fromSocket": "isDown",
-          "toNode": "cap_1",
-          "toSocket": "jump"
         },
         {
           "id": "c_cap_1_position_xform_1_location",
@@ -653,6 +486,20 @@
           "fromSocket": "geometry",
           "toNode": "render_1",
           "toSocket": "geometry"
+        },
+        {
+          "id": "c_move_1_move_cap_1_move",
+          "fromNode": "move_1",
+          "fromSocket": "move",
+          "toNode": "cap_1",
+          "toSocket": "move"
+        },
+        {
+          "id": "c_move_1_jump_cap_1_jump",
+          "fromNode": "move_1",
+          "fromSocket": "jump",
+          "toNode": "cap_1",
+          "toSocket": "jump"
         }
       ],
       "keyframes": {},

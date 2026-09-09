@@ -22,110 +22,6 @@
           }
         },
         {
-          "id": "k_fwd",
-          "type": "io/keyboard",
-          "position": {
-            "x": 60,
-            "y": 180
-          },
-          "params": {
-            "key": "z"
-          }
-        },
-        {
-          "id": "k_back",
-          "type": "io/keyboard",
-          "position": {
-            "x": 60,
-            "y": 280
-          },
-          "params": {
-            "key": "s"
-          }
-        },
-        {
-          "id": "k_left",
-          "type": "io/keyboard",
-          "position": {
-            "x": 60,
-            "y": 380
-          },
-          "params": {
-            "key": "q"
-          }
-        },
-        {
-          "id": "k_right",
-          "type": "io/keyboard",
-          "position": {
-            "x": 60,
-            "y": 480
-          },
-          "params": {
-            "key": "d"
-          }
-        },
-        {
-          "id": "k_brake",
-          "type": "io/keyboard",
-          "position": {
-            "x": 60,
-            "y": 580
-          },
-          "params": {
-            "key": "space"
-          }
-        },
-        {
-          "id": "pad_1",
-          "type": "io/gamepad",
-          "position": {
-            "x": 60,
-            "y": 680
-          },
-          "params": {
-            "index": 0,
-            "deadzone": 0.12,
-            "triggerDeadzone": 0.05
-          }
-        },
-        {
-          "id": "act_gas",
-          "type": "io/action-map",
-          "position": {
-            "x": 340,
-            "y": 220
-          },
-          "params": {
-            "action": "throttle",
-            "mode": "strongest",
-            "scale": 1,
-            "deadzone": 0,
-            "smoothing": 0.15,
-            "threshold": 0.5,
-            "clamp": true,
-            "invert": false
-          }
-        },
-        {
-          "id": "act_steer",
-          "type": "io/action-map",
-          "position": {
-            "x": 340,
-            "y": 440
-          },
-          "params": {
-            "action": "steer",
-            "mode": "strongest",
-            "scale": 1,
-            "deadzone": 0,
-            "smoothing": 0.12,
-            "threshold": 0.5,
-            "clamp": true,
-            "invert": false
-          }
-        },
-        {
           "id": "road_geo",
           "type": "object/box",
           "position": {
@@ -704,58 +600,32 @@
             "rotationMode": "euler",
             "alignAxis": "Z"
           }
+        },
+        {
+          "id": "move_1",
+          "type": "io/move-input",
+          "position": {
+            "x": 120,
+            "y": 200
+          },
+          "params": {
+            "layout": "zqsd+arrows",
+            "forwardKey": "z",
+            "backKey": "s",
+            "leftKey": "q",
+            "rightKey": "d",
+            "jumpKey": "space",
+            "sprintKey": "shift",
+            "useGamepad": true,
+            "gamepadIndex": 0,
+            "deadzone": 0.15,
+            "smoothing": 0.12,
+            "speed": 1,
+            "enabled": 1
+          }
         }
       ],
       "connections": [
-        {
-          "id": "c_k_fwd_isDown_act_gas_pos0",
-          "fromNode": "k_fwd",
-          "fromSocket": "isDown",
-          "toNode": "act_gas",
-          "toSocket": "pos0"
-        },
-        {
-          "id": "c_pad_1_rightTrigger_act_gas_pos1",
-          "fromNode": "pad_1",
-          "fromSocket": "rightTrigger",
-          "toNode": "act_gas",
-          "toSocket": "pos1"
-        },
-        {
-          "id": "c_k_back_isDown_act_gas_neg0",
-          "fromNode": "k_back",
-          "fromSocket": "isDown",
-          "toNode": "act_gas",
-          "toSocket": "neg0"
-        },
-        {
-          "id": "c_pad_1_leftTrigger_act_gas_neg1",
-          "fromNode": "pad_1",
-          "fromSocket": "leftTrigger",
-          "toNode": "act_gas",
-          "toSocket": "neg1"
-        },
-        {
-          "id": "c_k_left_isDown_act_steer_pos0",
-          "fromNode": "k_left",
-          "fromSocket": "isDown",
-          "toNode": "act_steer",
-          "toSocket": "pos0"
-        },
-        {
-          "id": "c_k_right_isDown_act_steer_neg0",
-          "fromNode": "k_right",
-          "fromSocket": "isDown",
-          "toNode": "act_steer",
-          "toSocket": "neg0"
-        },
-        {
-          "id": "c_pad_1_leftX_act_steer_neg1",
-          "fromNode": "pad_1",
-          "fromSocket": "leftX",
-          "toNode": "act_steer",
-          "toSocket": "neg1"
-        },
         {
           "id": "c_world_1_world_road_body_world",
           "fromNode": "world_1",
@@ -883,27 +753,6 @@
           "toSocket": "chassis"
         },
         {
-          "id": "c_act_gas_value_car_1_throttle",
-          "fromNode": "act_gas",
-          "fromSocket": "value",
-          "toNode": "car_1",
-          "toSocket": "throttle"
-        },
-        {
-          "id": "c_act_steer_value_car_1_steer",
-          "fromNode": "act_steer",
-          "fromSocket": "value",
-          "toNode": "car_1",
-          "toSocket": "steer"
-        },
-        {
-          "id": "c_k_brake_isDown_car_1_brake",
-          "fromNode": "k_brake",
-          "fromSocket": "isDown",
-          "toNode": "car_1",
-          "toSocket": "brake"
-        },
-        {
           "id": "c_road_body_geometry_merge_1_in0",
           "fromNode": "road_body",
           "fromSocket": "geometry",
@@ -1014,6 +863,27 @@
           "fromSocket": "geometry",
           "toNode": "merge_1",
           "toSocket": "in11"
+        },
+        {
+          "id": "c_move_1_forward_car_1_throttle",
+          "fromNode": "move_1",
+          "fromSocket": "forward",
+          "toNode": "car_1",
+          "toSocket": "throttle"
+        },
+        {
+          "id": "c_move_1_x_car_1_steer",
+          "fromNode": "move_1",
+          "fromSocket": "x",
+          "toNode": "car_1",
+          "toSocket": "steer"
+        },
+        {
+          "id": "c_move_1_jump_car_1_brake",
+          "fromNode": "move_1",
+          "fromSocket": "jump",
+          "toNode": "car_1",
+          "toSocket": "brake"
         }
       ],
       "keyframes": {},

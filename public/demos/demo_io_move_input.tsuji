@@ -3,97 +3,52 @@
     {
       "nodes": [
         {
-          "id": "k_left",
-          "type": "io/keyboard",
+          "id": "move_1",
+          "type": "io/move-input",
           "position": {
             "x": 80,
-            "y": 120
+            "y": 200
           },
           "params": {
-            "key": "q"
-          }
-        },
-        {
-          "id": "k_right",
-          "type": "io/keyboard",
-          "position": {
-            "x": 80,
-            "y": 240
-          },
-          "params": {
-            "key": "d"
-          }
-        },
-        {
-          "id": "pad_1",
-          "type": "io/gamepad",
-          "position": {
-            "x": 80,
-            "y": 360
-          },
-          "params": {
-            "index": 0,
+            "layout": "zqsd+arrows",
+            "forwardKey": "z",
+            "backKey": "s",
+            "leftKey": "q",
+            "rightKey": "d",
+            "jumpKey": "space",
+            "sprintKey": "shift",
+            "useGamepad": true,
+            "gamepadIndex": 0,
             "deadzone": 0.15,
-            "triggerDeadzone": 0.05
-          }
-        },
-        {
-          "id": "act_x",
-          "type": "io/action-map",
-          "position": {
-            "x": 380,
-            "y": 220
-          },
-          "params": {
-            "action": "strafe",
-            "mode": "strongest",
-            "scale": 6,
-            "deadzone": 0,
             "smoothing": 0.08,
-            "threshold": 0.5,
-            "clamp": true,
-            "invert": false
+            "speed": 6,
+            "enabled": 1
           }
         },
         {
-          "id": "speed_1",
-          "type": "math/integrate",
+          "id": "pos_1",
+          "type": "vector/integrate",
           "position": {
-            "x": 660,
-            "y": 220
+            "x": 400,
+            "y": 200
           },
           "params": {
-            "rate": 0,
-            "initial": 0,
+            "initial": {
+              "x": 0,
+              "y": 0.6,
+              "z": 0
+            },
             "damping": 0,
-            "reset": 0,
-            "useLimits": true,
-            "min": -10,
-            "max": 10
-          }
-        },
-        {
-          "id": "vec_1",
-          "type": "vector/compose",
-          "position": {
-            "x": 660,
-            "y": 380
-          },
-          "params": {
-            "x": 0,
-            "y": 0.6,
-            "z": 0,
-            "useX": true,
-            "useY": true,
-            "useZ": true
+            "maxLength": 11,
+            "reset": 0
           }
         },
         {
           "id": "xform_1",
           "type": "transform",
           "position": {
-            "x": 900,
-            "y": 300
+            "x": 660,
+            "y": 200
           },
           "params": {
             "location": {
@@ -120,8 +75,8 @@
           "id": "player_1",
           "type": "object/sphere",
           "position": {
-            "x": 1120,
-            "y": 300
+            "x": 900,
+            "y": 200
           },
           "params": {
             "visible": 1,
@@ -140,7 +95,7 @@
               "y": 1.2,
               "z": 1.2
             },
-            "color": 5218008,
+            "color": 14702138,
             "roughness": 0.4,
             "metalness": 0.1,
             "opacity": 1
@@ -151,7 +106,7 @@
           "type": "object/plane",
           "position": {
             "x": 900,
-            "y": 760
+            "y": 700
           },
           "params": {
             "visible": 1,
@@ -181,7 +136,7 @@
           "type": "light/ambient",
           "position": {
             "x": 900,
-            "y": 880
+            "y": 820
           },
           "params": {
             "color": 10467024,
@@ -193,7 +148,7 @@
           "type": "light/directional",
           "position": {
             "x": 900,
-            "y": 980
+            "y": 920
           },
           "params": {
             "color": 16773840,
@@ -211,7 +166,7 @@
           "type": "structure/merge",
           "position": {
             "x": 1160,
-            "y": 700
+            "y": 640
           },
           "params": {
             "visible": 1,
@@ -237,7 +192,7 @@
           "type": "render",
           "position": {
             "x": 1420,
-            "y": 700
+            "y": 640
           },
           "params": {
             "frameCount": 300,
@@ -250,44 +205,16 @@
       ],
       "connections": [
         {
-          "id": "c_k_right_isDown_act_x_pos0",
-          "fromNode": "k_right",
-          "fromSocket": "isDown",
-          "toNode": "act_x",
-          "toSocket": "pos0"
-        },
-        {
-          "id": "c_pad_1_leftX_act_x_pos1",
-          "fromNode": "pad_1",
-          "fromSocket": "leftX",
-          "toNode": "act_x",
-          "toSocket": "pos1"
-        },
-        {
-          "id": "c_k_left_isDown_act_x_neg0",
-          "fromNode": "k_left",
-          "fromSocket": "isDown",
-          "toNode": "act_x",
-          "toSocket": "neg0"
-        },
-        {
-          "id": "c_act_x_value_speed_1_rate",
-          "fromNode": "act_x",
-          "fromSocket": "value",
-          "toNode": "speed_1",
+          "id": "c_move_1_move_pos_1_rate",
+          "fromNode": "move_1",
+          "fromSocket": "move",
+          "toNode": "pos_1",
           "toSocket": "rate"
         },
         {
-          "id": "c_speed_1_value_vec_1_x",
-          "fromNode": "speed_1",
+          "id": "c_pos_1_value_xform_1_location",
+          "fromNode": "pos_1",
           "fromSocket": "value",
-          "toNode": "vec_1",
-          "toSocket": "x"
-        },
-        {
-          "id": "c_vec_1_out_xform_1_location",
-          "fromNode": "vec_1",
-          "fromSocket": "out",
           "toNode": "xform_1",
           "toSocket": "location"
         },

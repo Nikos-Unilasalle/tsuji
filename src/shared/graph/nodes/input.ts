@@ -378,6 +378,7 @@ export const MOVE_INPUT_NODE: NodeDefinition = {
     { id: "move", label: "Move (XZ)", type: "vector" },
     { id: "x", label: "X (right)", type: "value" },
     { id: "z", label: "Z (forward = -1)", type: "value" },
+    { id: "forward", label: "Forward (+1 = forward)", type: "value" },
     { id: "magnitude", label: "Magnitude", type: "value" },
     { id: "jump", label: "Jump", type: "value" },
     { id: "jumpPressed", label: "Jump Pressed", type: "value" },
@@ -480,6 +481,11 @@ export const MOVE_INPUT_NODE: NodeDefinition = {
       move: new THREE.Vector3(moveX, 0, moveZ),
       x: moveX,
       z: moveZ,
+      // The same push with the sign a human would expect. `z` is the world
+      // axis (forward is -Z); `forward` is "how much forward", which is what a
+      // throttle or a speed wants and saves a multiply-by-minus-one in every
+      // graph that needs one.
+      forward: -moveZ,
       magnitude: Math.hypot(moveX, moveZ),
       jump: fromBoolean(jump > 0.5),
       jumpPressed: fromBoolean(jumpPressed),

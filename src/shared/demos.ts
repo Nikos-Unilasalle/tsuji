@@ -320,9 +320,14 @@ export const DEMO_CATALOG: DemoCategory[] = [
         description: "Mic spectrum driving a bar graph (enable the mic).",
       },
       {
+        file: "demo_io_move_input.tsuji",
+        label: "Move Input",
+        description: "A whole control scheme in one node: ZQSD, arrows and a gamepad stick driving an object. Four nodes end to end.",
+      },
+      {
         file: "demo_io_action_map.tsuji",
         label: "Action Map & Gamepad",
-        description: "ZQSD, arrow keys and a gamepad stick folded into two named axes, integrated into a position that stays put when you let go.",
+        description: "The custom path: two keys and a stick folded into one named axis, for bindings Move Input does not cover.",
       },
       {
         file: "demo_io_mouse_pointer.tsuji",

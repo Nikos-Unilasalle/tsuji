@@ -824,7 +824,7 @@ export const VEHICLE_NODE: NodeDefinition = {
     { id: "world", label: "World", type: "any" },
     { id: "chassis", label: "Chassis", type: "geometry", owns: true },
     { id: "throttle", label: "Throttle (-1…1)", type: "value" },
-    { id: "steer", label: "Steer (-1…1)", type: "value" },
+    { id: "steer", label: "Steer (-1 left … 1 right)", type: "value" },
     { id: "brake", label: "Brake (0…1)", type: "value" },
   ],
   outputs: [
@@ -1000,7 +1000,9 @@ export const VEHICLE_NODE: NodeDefinition = {
 
     const engineForce = throttle * Math.max(0, numberInput(undefined, params.engineForce, 4500));
     const brakeForce = brake * Math.max(0, numberInput(undefined, params.brakeForce, 900));
-    const steerAngle = steer * numberInput(undefined, params.maxSteer, THREE.MathUtils.degToRad(32));
+    // Negated so that positive Steer turns right, which is what "steer right"
+    // has to mean for a Move Input's X axis to drop in without an inverter.
+    const steerAngle = -steer * numberInput(undefined, params.maxSteer, THREE.MathUtils.degToRad(32));
 
     const stiffness = Math.max(0, numberInput(undefined, params.suspensionStiffness, 30));
     const compression = Math.max(0, numberInput(undefined, params.suspensionCompression, 0.85));
