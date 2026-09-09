@@ -78,6 +78,32 @@ export interface ColliderGeometry {
 const _position = new THREE.Vector3();
 
 /**
+ * An object's world matrix, derived from the chain of *local* matrices rather
+ * than read from `matrixWorld`.
+ *
+ * Nodes in this graph set `object.matrix` directly and leave
+ * `matrixAutoUpdate` off; nothing guarantees anyone has refreshed
+ * `matrixWorld` by the time a downstream node looks, and three's
+ * `updateWorldMatrix` does not reliably reach a child that was re-parented
+ * earlier in the same evaluation. Trusting the cached value put every body at
+ * the origin and left a 24-unit floor with a 1-unit collider, so a scene
+ * assembled through a Merge collapsed onto one spot and everything fell
+ * through the ground.
+ *
+ * Walking the parents costs a handful of matrix multiplies per body, and it is
+ * true by construction.
+ */
+export function worldMatrixOf(object: THREE.Object3D, target = new THREE.Matrix4()): THREE.Matrix4 {
+  target.copy(object.matrix);
+  let parent = object.parent;
+  while (parent) {
+    target.premultiply(parent.matrix);
+    parent = parent.parent;
+  }
+  return target;
+}
+
+/**
  * Flattens an object's meshes into one vertex soup, in the object's own space
  * minus its translation and rotation — but **with its scale baked in**.
  *
@@ -95,16 +121,16 @@ export function extractColliderGeometry(object: THREE.Object3D): ColliderGeometr
   const indices: number[] = [];
   const box = new THREE.Box3();
 
-  object.updateWorldMatrix(true, true);
-
   const translation = new THREE.Vector3();
   const rotation = new THREE.Quaternion();
   const scale = new THREE.Vector3();
-  object.matrixWorld.decompose(translation, rotation, scale);
+  const objectWorld = worldMatrixOf(object);
+  objectWorld.decompose(translation, rotation, scale);
 
   const unscaled = new THREE.Matrix4().compose(translation, rotation, new THREE.Vector3(1, 1, 1));
   const toLocal = unscaled.invert();
   const transform = new THREE.Matrix4();
+  const meshWorld = new THREE.Matrix4();
 
   object.traverse((child) => {
     const mesh = child as THREE.Mesh;
@@ -112,7 +138,7 @@ export function extractColliderGeometry(object: THREE.Object3D): ColliderGeometr
     const attribute = mesh.geometry?.attributes?.position as THREE.BufferAttribute | undefined;
     if (!attribute) return;
 
-    transform.multiplyMatrices(toLocal, mesh.matrixWorld);
+    transform.multiplyMatrices(toLocal, worldMatrixOf(mesh, meshWorld));
     const offset = vertices.length / 3;
 
     for (let i = 0; i < attribute.count; i++) {

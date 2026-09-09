@@ -22,6 +22,7 @@ import {
   isRapierReady,
   resolveShape,
   scaleColliderGeometry,
+  worldMatrixOf,
   stepPhysicsWorld,
 } from "../../three/physics/rapierRuntime";
 
@@ -200,26 +201,12 @@ interface BodyTarget {
 
 const _instanceMatrix = new THREE.Matrix4();
 
-/**
- * Everything under an object that should be simulated.
- *
- * `per-child` is the default because the alternative is a Rigid Body node per
- * crate: the graph already has `structure/merge` for gathering many geometries
- * into one, so twenty crates should be one Merge and one Rigid Body, not
- * twenty of each.
- *
- * An InstancedMesh contributes **one body per instance**, which is what makes
- * an Array of a hundred boxes usable — otherwise instancing, the thing that
- * makes them cheap to draw, would make them impossible to simulate.
- */
 export function collectBodyTargets(root: THREE.Object3D, split: BodySplitMode): BodyTarget[] {
-  root.updateWorldMatrix(true, true);
-
   if (split === "whole") {
     // One body for the lot: a car chassis built from five meshes is one rigid
     // body, not five that immediately shove each other apart.
     const mesh = root as THREE.Mesh;
-    return [{ mesh, instanceIndex: -1, matrix: root.matrixWorld.clone() }];
+    return [{ mesh, instanceIndex: -1, matrix: worldMatrixOf(root) }];
   }
 
   const targets: BodyTarget[] = [];
@@ -229,18 +216,19 @@ export function collectBodyTargets(root: THREE.Object3D, split: BodySplitMode): 
 
     const instanced = mesh as THREE.InstancedMesh;
     if (instanced.isInstancedMesh) {
+      const instancedWorld = worldMatrixOf(instanced);
       for (let i = 0; i < instanced.count; i++) {
         instanced.getMatrixAt(i, _instanceMatrix);
         targets.push({
           mesh: instanced,
           instanceIndex: i,
-          matrix: new THREE.Matrix4().multiplyMatrices(instanced.matrixWorld, _instanceMatrix),
+          matrix: new THREE.Matrix4().multiplyMatrices(instancedWorld, _instanceMatrix),
         });
       }
       return;
     }
 
-    targets.push({ mesh, instanceIndex: -1, matrix: mesh.matrixWorld.clone() });
+    targets.push({ mesh, instanceIndex: -1, matrix: worldMatrixOf(mesh) });
   });
 
   return targets;
@@ -250,17 +238,25 @@ export function collectBodyTargets(root: THREE.Object3D, split: BodySplitMode): 
  * What the set of targets *is*, rather than where they have got to.
  *
  * Rebuilding on every pose change would restart the simulation every frame;
- * rebuilding on none of them would miss a crate being added. Counting meshes
- * and instances catches the second without noticing the first.
+ * rebuilding on none of them would miss a crate being added. Counting shapes
+ * catches the second without noticing the first.
+ *
+ * Keyed by **geometry**, not by the mesh: `structure/array` throws its clones
+ * away and makes new ones every frame, so a mesh uuid changes constantly and
+ * would rebuild the whole simulation sixty times a second. `Object3D.clone()`
+ * shares the geometry, which therefore survives.
  */
 export function describeTargets(targets: readonly BodyTarget[]): string {
   const counts = new Map<string, number>();
   for (const target of targets) {
-    counts.set(target.mesh.uuid, (counts.get(target.mesh.uuid) ?? 0) + 1);
+    const key = target.mesh.geometry?.uuid ?? target.mesh.uuid;
+    counts.set(key, (counts.get(key) ?? 0) + 1);
   }
   return [...counts].map(([uuid, count]) => `${uuid}x${count}`).join("|");
 }
 
+const _parentInverse = new THREE.Matrix4();
+const _parentWorld = new THREE.Matrix4();
 const _pose = new THREE.Vector3();
 const _poseQuat = new THREE.Quaternion();
 const _poseScale = new THREE.Vector3();
@@ -421,6 +417,14 @@ export const RIGID_BODY_NODE: NodeDefinition = {
       handle.bodies.set(ctx.nodeId, entries[0].body);
       state = { entries, worldNodeId: handle.nodeId, generation: handle.generation, signature };
       bodyCache.set(ctx.nodeId, state);
+    } else {
+      // Re-bind to the objects that exist *now*. An Array rebuilds its clones
+      // every frame, so the meshes a body was created against are already in
+      // the bin; writing poses into them would move nothing on screen.
+      for (let i = 0; i < state.entries.length && i < targets.length; i++) {
+        state.entries[i].mesh = targets[i].mesh;
+        state.entries[i].instanceIndex = targets[i].instanceIndex;
+      }
     }
 
     const linearDamping = Math.max(0, numberInput(undefined, params.linearDamping, 0.05));
@@ -470,14 +474,25 @@ export const RIGID_BODY_NODE: NodeDefinition = {
         const instanced = entry.mesh as THREE.InstancedMesh;
         // The instance matrix is relative to its InstancedMesh, and the solver
         // works in world space.
-        instanced.updateWorldMatrix(true, false);
-        const toLocal = new THREE.Matrix4().copy(instanced.matrixWorld).invert();
+        const toLocal = worldMatrixOf(instanced, _parentWorld).invert();
         instanced.setMatrixAt(entry.instanceIndex, toLocal.multiply(matrix));
         touchedInstances.add(instanced);
       } else {
+        // The solver works in world space and `matrix` is a *local* one. A mesh
+        // wired straight into this node has no parent transform and the two are
+        // the same, which is why this went unnoticed — but Merge and Array both
+        // wrap their children in transformed Groups, and there the world matrix
+        // written as a local one collapses everything toward the origin.
+        const parent = entry.mesh.parent;
+        if (parent) {
+          _parentInverse.copy(worldMatrixOf(parent, _parentWorld)).invert().multiply(matrix);
+        } else {
+          _parentInverse.copy(matrix);
+        }
+
         entry.mesh.matrixAutoUpdate = false;
-        entry.mesh.matrix.copy(matrix);
-        matrix.decompose(entry.mesh.position, entry.mesh.quaternion, entry.mesh.scale);
+        entry.mesh.matrix.copy(_parentInverse);
+        _parentInverse.decompose(entry.mesh.position, entry.mesh.quaternion, entry.mesh.scale);
         entry.mesh.matrixWorldNeedsUpdate = true;
       }
     }

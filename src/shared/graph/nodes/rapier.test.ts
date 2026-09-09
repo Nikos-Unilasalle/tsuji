@@ -4,6 +4,9 @@ import { join } from "node:path";
 import { beforeAll, describe, expect, test } from "vitest";
 import { PHYSICS_CHARACTER_NODE, PHYSICS_WORLD_NODE, RIGID_BODY_NODE, VEHICLE_NODE } from "./rapier";
 import { EvalContext } from "../types";
+import { DEFAULT_REGISTRY } from "./index";
+import { evaluateGraph } from "../evaluate";
+import { Graph } from "../types";
 import {
   extractColliderGeometry,
   initRapier,
@@ -11,6 +14,7 @@ import {
   isRapierReady,
   planSteps,
   resolveShape,
+  worldMatrixOf,
 } from "../../three/physics/rapierRuntime";
 
 function makeContext(nodeId: string, time: number): EvalContext {
@@ -857,4 +861,181 @@ describe("the shipped physics demos stay grouped", () => {
       }
     });
   }
+});
+
+describe("world matrices come from the local chain, not the cache", () => {
+  test("a nested object's world pose is right even when matrixWorld is stale", () => {
+    // Every node here sets `matrix` and leaves matrixAutoUpdate off. Nothing
+    // refreshes matrixWorld until the renderer runs, which is after the graph
+    // has been evaluated — so a physics node that trusted the cache read
+    // identity and built its body at the origin.
+    const outer = new THREE.Group();
+    outer.matrixAutoUpdate = false;
+    outer.matrix.makeTranslation(10, 0, 0);
+
+    const inner = new THREE.Group();
+    inner.matrixAutoUpdate = false;
+    inner.matrix.makeTranslation(0, 5, 0);
+
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1));
+    mesh.matrixAutoUpdate = false;
+    mesh.matrix.makeTranslation(0, 0, -3);
+
+    outer.add(inner);
+    inner.add(mesh);
+    // Deliberately never updated.
+    expect(new THREE.Vector3().setFromMatrixPosition(mesh.matrixWorld).length()).toBe(0);
+
+    const world = new THREE.Vector3().setFromMatrixPosition(worldMatrixOf(mesh));
+    expect(world.toArray()).toEqual([10, 5, -3]);
+  });
+
+  test("collider geometry bakes a scale that only exists up the chain", () => {
+    const parent = new THREE.Group();
+    parent.matrixAutoUpdate = false;
+    parent.matrix.identity();
+
+    const floor = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1));
+    floor.matrixAutoUpdate = false;
+    floor.matrix.compose(
+      new THREE.Vector3(0, -0.5, 0),
+      new THREE.Quaternion(),
+      new THREE.Vector3(24, 1, 24),
+    );
+    parent.add(floor);
+
+    const geometry = extractColliderGeometry(floor)!;
+    // A 24-wide floor with a 1-wide collider is how everything fell through.
+    expect(geometry.box.max.x).toBeCloseTo(12, 5);
+    expect(geometry.box.max.y).toBeCloseTo(0.5, 5);
+  });
+});
+
+describe("bodies through a Merge and an Array, as the demos wire them", () => {
+  beforeAll(async () => {
+    await initRapier();
+  });
+
+  const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
+
+  function evaluate(graph: Graph, frames: number) {
+    let results: Map<string, any> = new Map();
+    for (let f = 0; f < frames; f++) {
+      results = evaluateGraph(graph, DEFAULT_REGISTRY, {
+        time: f / 60,
+        step: f,
+        nodeId: "",
+        currentFrame: f,
+        keyframes: {},
+        simulationEpoch: 0,
+      } as never) as never;
+    }
+    return results;
+  }
+
+  test("a fixed body behind a Merge sits where the graph put it", () => {
+    // The bug this pins: geometry arriving through a Merge is re-parented, and
+    // reading the cached world matrix put the body at the origin — which
+    // collapsed the whole scene onto one spot and let everything fall through
+    // the floor.
+    const graph = {
+      nodes: [
+        { id: "w", type: "physics/world", params: {}, position: { x: 0, y: 0 } },
+        {
+          id: "box",
+          type: "object/box",
+          params: { location: V(0, -0.5, 0), scale: V(24, 1, 24) },
+          position: { x: 0, y: 0 },
+        },
+        { id: "m", type: "structure/merge", params: {}, position: { x: 0, y: 0 } },
+        {
+          id: "b",
+          type: "physics/rigid-body",
+          params: { bodyType: "fixed", shape: "trimesh", split: "per-child" },
+          position: { x: 0, y: 0 },
+        },
+      ],
+      connections: [
+        { id: "c1", fromNode: "box", fromSocket: "geometry", toNode: "m", toSocket: "in0" },
+        { id: "c2", fromNode: "w", fromSocket: "world", toNode: "b", toSocket: "world" },
+        { id: "c3", fromNode: "m", fromSocket: "geometry", toNode: "b", toSocket: "geometry" },
+      ],
+      keyframes: {},
+      markers: [],
+      exposedParams: [],
+    } as never as Graph;
+
+    const results = evaluate(graph, 3);
+    const body = results.get("b");
+    expect(body.count).toBe(1);
+    expect((body.position as THREE.Vector3).toArray()).toEqual([0, -0.5, 0]);
+  });
+
+  test("an Array of crates falls into a stack, one node driving all of them", () => {
+    const graph = {
+      nodes: [
+        { id: "w", type: "physics/world", params: {}, position: { x: 0, y: 0 } },
+        {
+          id: "floor",
+          type: "object/box",
+          params: { location: V(0, -0.5, 0), scale: V(24, 1, 24) },
+          position: { x: 0, y: 0 },
+        },
+        {
+          id: "floorBody",
+          type: "physics/rigid-body",
+          params: { bodyType: "fixed", shape: "trimesh" },
+          position: { x: 0, y: 0 },
+        },
+        {
+          id: "crate",
+          type: "object/box",
+          params: { location: V(0, 4, 0), scale: V(1, 1, 1) },
+          position: { x: 0, y: 0 },
+        },
+        {
+          id: "arr",
+          type: "structure/array",
+          params: { count: 3, mode: "linear", axis: "Y", spacing: 1.4 },
+          position: { x: 0, y: 0 },
+        },
+        {
+          id: "crates",
+          type: "physics/rigid-body",
+          params: { bodyType: "dynamic", shape: "box" },
+          position: { x: 0, y: 0 },
+        },
+      ],
+      connections: [
+        { id: "c1", fromNode: "w", fromSocket: "world", toNode: "floorBody", toSocket: "world" },
+        { id: "c2", fromNode: "floor", fromSocket: "geometry", toNode: "floorBody", toSocket: "geometry" },
+        { id: "c3", fromNode: "crate", fromSocket: "geometry", toNode: "arr", toSocket: "geometry" },
+        { id: "c4", fromNode: "w", fromSocket: "world", toNode: "crates", toSocket: "world" },
+        { id: "c5", fromNode: "arr", fromSocket: "geometry", toNode: "crates", toSocket: "geometry" },
+      ],
+      keyframes: {},
+      markers: [],
+      exposedParams: [],
+    } as never as Graph;
+
+    const results = evaluate(graph, 400);
+    expect(results.get("crates").count).toBe(3);
+
+    // Read through the local chain: nothing has refreshed matrixWorld, which is
+    // exactly the trap this whole area kept falling into.
+    const scene = results.get("arr").geometry as THREE.Object3D;
+    const heights: number[] = [];
+    scene.traverse((child) => {
+      if ((child as THREE.Mesh).isMesh) {
+        heights.push(new THREE.Vector3().setFromMatrixPosition(worldMatrixOf(child)).y);
+      }
+    });
+    heights.sort((a, b) => a - b);
+
+    // Three unit crates resting on a floor whose top is at y = 0.
+    expect(heights.length).toBe(3);
+    expect(heights[0]).toBeCloseTo(0.5, 0);
+    expect(heights[1]).toBeCloseTo(1.5, 0);
+    expect(heights[2]).toBeCloseTo(2.5, 0);
+  });
 });
