@@ -22,7 +22,8 @@ Pour chaque chantier, nous appliquons rigoureusement les principes architecturau
 | :--- | :--- | :--- | :--- | :--- |
 | **Chantier 1** | **Simulation Fluide 3D & Feu Volumétrique** | **Terminé & Validé** | `physics/curl-noise-3d`<br>`physics/mesh-fluid-emitter`<br>`physics/fluid-solver-3d`<br>`material/volume-3d`<br>`simulation/fire-fluid-volume` | `fluidRuntime3D.ts`<br>`fluidSim.ts`<br>`fluidSim.test.ts` |
 | **Chantier 2** | **Éclairage Volumétrique & TRAA** | **Prêt à Lancer** | `lighting/volumetric-fog`<br>`postprocess/traa`<br>`lighting/light-shafts` | `src/shared/three/lighting/`<br>`src/shared/graph/nodes/volumetricLighting.ts` |
-| **Chantier 3** | **Caméra FPS & Navigation Unreal-Like** | **Prêt à Lancer** | `camera/fps-controller`<br>`physics/capsule-collider`<br>`io/gamepad-input` | `src/shared/three/controls/`<br>`src/shared/graph/nodes/fpsCamera.ts` |
+| **Chantier 3** | **Entrées, Personnage & Physique** | **Terminé & Validé** | `io/gamepad`<br>`io/action-map`<br>`math/integrate`, `vector/integrate`<br>`physics/capsule-controller`<br>`physics/world`, `physics/rigid-body`<br>`physics/character`, `physics/vehicle` | `gamepadRuntime.ts`, `nodes/input.ts`<br>`nodes/integrate.ts`<br>`three/controls/capsuleController.ts`<br>`three/physics/rapierRuntime.ts`, `nodes/rapier.ts` |
+| **Chantier 4** | **Végétation & Vent** | **Terminé & Validé** | `physics/wind-field`<br>`structure/grass-field`<br>`object/tree`<br>`geometry/wind-sway`<br>`texture/interaction-map` | `three/vegetation/*`<br>`nodes/vegetation.ts` |
 
 ---
 
@@ -42,11 +43,16 @@ Pour chaque chantier, nous appliquons rigoureusement les principes architecturau
 
 ---
 
-## 5. Plan d'Exécution du Chantier 3 (Unreal FPS Camera)
+## 5. Chantier 3 (Complété) — et son changement de cap
 
-1. Développer le moteur cinématique de capsule (`src/shared/three/controls/fpsCapsuleController.ts`) avec gestion des pentes et marches.
-2. Créer le nœud `camera/fps-controller` universel avec contrôle souris/clavier et head bobbing.
-3. Intégrer la détection de sol sur maillages complexes via BVH.
+Livré tel que planifié pour les entrées et la capsule BVH, puis **élargi à un vrai moteur physique** en cours de route :
+
+1. **Entrées** — `io/gamepad` (zone morte radiale, gâchettes analogiques) et `io/action-map` (plusieurs sources → une action nommée, sockets Positive/Negative croissants). Le reste du graphe ignore d'où vient la commande.
+2. **Intégrateurs** — `math/integrate` et `vector/integrate`. La moitié manquante de tout schéma de contrôle : une entrée dit à quelle force on pousse *maintenant*, l'intégrateur en fait un déplacement qui persiste au relâchement.
+3. **Capsule cinématique BVH** — `physics/capsule-controller`, sans dépendance, collision en espace monde (voir la note sur les colliders à échelle non uniforme dans le [[Node Catalog]]).
+4. **Moteur physique** — Rapier (`@dimforge/rapier3d-compat`) : `physics/world`, `physics/rigid-body`, `physics/character` (marche automatique, accrochage au sol, poussée des corps dynamiques) et `physics/vehicle` (voiture raycast). Chargé par `import()` dynamique, donc découpé en chunk séparé et téléchargé seulement si la physique est utilisée.
+
+**Non retenu** : le nœud `camera/fps-controller`. La caméra top-down existante couvre le besoin, et un contrôleur de caméra dédié aurait doublonné avec `calibration/camera` sans rien apporter au déplacement.
 
 ---
 
