@@ -1,3 +1,4 @@
+import { isKeyReservedForPlayback } from "../shared/graph/playbackKeys";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { EasingType, Marker } from "../shared/graph/types";
 import { setInputZone } from "../shared/graph/inputZoneStore";
@@ -279,7 +280,7 @@ export function TimelineBar({
           (activeEl as HTMLElement).isContentEditable);
       if (isInput) return;
 
-      if ((e.key === "m" || e.key === "M") && onToggleMarker) {
+      if ((e.key === "m" || e.key === "M") && onToggleMarker && !isKeyReservedForPlayback(e)) {
         e.preventDefault();
         if (hoveredMarkerFrame !== null) {
           onToggleMarker(hoveredMarkerFrame);

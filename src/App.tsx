@@ -19,6 +19,12 @@ import { cloneGraph, cloneParams, cloneParamValue } from "./shared/graph/cloneGr
 import { consumeCameraHandoffRequest } from "./shared/graph/cameraHandoffStore";
 import { consumeCanvasSwitchRequest } from "./shared/graph/canvasSwitchStore";
 import { isGraphZone } from "./shared/graph/inputZoneStore";
+import {
+  collectKeyboardBindings,
+  isKeyReservedForPlayback,
+  setGraphKeyBindings,
+  setPlaybackActive,
+} from "./shared/graph/playbackKeys";
 import { disposeNodeCaches } from "./shared/graph/nodeCaches";
 import { AutosaveRecord, projectHasContent, readAutosave, writeAutosave } from "./shared/graph/autosave";
 import { rehydrateGraphParams } from "./shared/graph/rehydrateParams";
@@ -435,6 +441,22 @@ function MainEditor() {
     void maximizeMainWindow();
   }, []);
 
+  /**
+   * Hand the editor's shortcut handlers what they need to get out of the way
+   * of a running scene: whether it is running, and which keys it listens for.
+   *
+   * Kept in a module rather than passed down because the handlers that have to
+   * consult it live in three different trees — App, Viewport and the graph
+   * canvas — and only one of them is a child of this component.
+   */
+  useEffect(() => {
+    setPlaybackActive(isPlaying);
+  }, [isPlaying]);
+
+  useEffect(() => {
+    setGraphKeyBindings(collectKeyboardBindings(graph.nodes));
+  }, [graph.nodes]);
+
   useEffect(() => {
     if (keyframesEnabled && totalFrames > 0) {
       setCurrentFrame((prev) => Math.max(0, Math.min(totalFrames - 1, prev)));
@@ -485,6 +507,18 @@ function MainEditor() {
 
       const isCmdOrCtrl = e.metaKey || e.ctrlKey;
       const code = e.code;
+
+      // A running scene owns the keys it listens for — see playbackKeys.ts.
+      // Escape is the way out, since Space may now be the character's jump.
+      if (!isInput && !isCmdOrCtrl && isKeyReservedForPlayback(e)) {
+        if (e.key === "Escape") setIsPlaying(false);
+        return;
+      }
+      if (!isInput && e.key === "Escape" && keyframesEnabled) {
+        e.preventDefault();
+        setIsPlaying(false);
+        return;
+      }
 
       if (!isInput && (code === "Space" || e.key === " ") && !isCmdOrCtrl) {
         e.preventDefault();

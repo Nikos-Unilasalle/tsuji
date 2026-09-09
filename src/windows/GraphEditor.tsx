@@ -23,6 +23,7 @@ import { getGraphClipboard, setGraphClipboard } from "../shared/graph/clipboard"
 import { cloneKeyframes, cloneParams, cloneParamValue } from "../shared/graph/cloneGraph";
 import { findCompatibleSocket, segmentIntersectsRect } from "../shared/graph/insertOnWire";
 import { getInputZone, isGraphZone, isTimelineZone, isViewportZone, setInputZone } from "../shared/graph/inputZoneStore";
+import { isKeyReservedForPlayback } from "../shared/graph/playbackKeys";
 import { randomId } from "../shared/randomId";
 import { SOCKET_COLOR } from "../shared/graph/sockets";
 import { Connection, ExposedParamRef, Graph, KeyframeStore, Marker, NodeInstance, NodeRegistry } from "../shared/graph/types";
@@ -1166,6 +1167,7 @@ function GraphEditorContent({
   useEffect(() => {
     const handleFrameKey = (e: KeyboardEvent) => {
       if (!isGraphZone() || e.key.toLowerCase() !== "f" || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (isKeyReservedForPlayback(e)) return;
       const activeEl = document.activeElement;
       const isInput =
         activeEl &&

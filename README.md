@@ -341,6 +341,15 @@ Tsuji intègre un studio complet avec timeline et gizmos interactifs :
 | `Tab` | Masquer / Afficher les aides visuelles de la scène 3D |
 | `Shift` + `Tab` | Basculer entre vue scindée et vue pleine |
 | `Cmd` + `C` / `Cmd` + `V` | Copier / Coller les nœuds sélectionnés |
+| `Échap` | Arrêter la lecture — la sortie de secours quand la scène s'est approprié `Espace` |
+
+### Priorité au jeu pendant la lecture
+
+Dès que la lecture tourne, **les touches écoutées par un nœud `io/keyboard` appartiennent à la scène, pas à l'éditeur** : `S` fait reculer le personnage au lieu d'armer le gizmo d'échelle, `Espace` le fait sauter au lieu de mettre en pause.
+
+La règle est volontairement étroite — un raccourci n'est neutralisé que si **les deux** conditions sont réunies : la lecture tourne, *et* un nœud Keyboard du graphe courant écoute précisément cette touche. Un graphe sans nœud Keyboard conserve tous ses raccourcis en lecture ; un graphe arrêté les conserve tous quoi qu'il écoute. L'éditeur ne perd jamais que les touches réellement utilisées par la scène, et seulement pendant qu'elle tourne.
+
+`Échap` arrête la lecture et rend les touches à l'éditeur.
 | `Cmd` + `Z` / `Ctrl` + `Z` | Annuler la dernière action |
 
 ---

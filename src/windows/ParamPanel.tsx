@@ -1,3 +1,4 @@
+import { isKeyReservedForPlayback } from "../shared/graph/playbackKeys";
 import { useEffect, useRef, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { readFile, readTextFile } from "@tauri-apps/plugin-fs";
@@ -430,7 +431,7 @@ export function ParamPanel({
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if (!keyframesEnabled || !hoveredParamKey || currentFrame === undefined || currentFrame < 0 || !onToggleKeyframe) return;
-      if (e.key === "k" || e.key === "K") {
+      if ((e.key === "k" || e.key === "K") && !isKeyReservedForPlayback(e)) {
         const activeEl = document.activeElement;
         if (activeEl instanceof HTMLElement) {
           activeEl.blur();

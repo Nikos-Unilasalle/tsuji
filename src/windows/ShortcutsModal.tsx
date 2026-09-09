@@ -77,6 +77,10 @@ const SHORTCUT_SECTIONS: ShortcutSection[] = [
     items: [
       { keys: ["T"], description: "Toggle Advanced Timeline Drawer (Open / Close)" },
       { keys: ["Space"], description: "Play / Pause timeline playback" },
+      {
+        keys: ["Esc"],
+        description: "Stop playback — the way out when the scene has taken Space for itself",
+      },
       { keys: ["←", "→"], description: "Previous / Next frame (Shift + Arrow: 10 frames)" },
       { keys: ["J", "K"], description: "Jump to Previous / Next keyframe" },
       { keys: ["M"], description: "Add or remove Marker on active frame" },
@@ -85,6 +89,21 @@ const SHORTCUT_SECTIONS: ShortcutSection[] = [
       { keys: ["⌘", "V"], description: "Paste keyframes at playhead" },
       { keys: ["Delete"], description: "Delete selected keyframes" },
       { keys: ["Drag Playhead"], description: "Scrub timeline animation frames" },
+    ],
+  },
+  {
+    category: "Interactive Playback",
+    items: [
+      {
+        keys: ["While Playing"],
+        description:
+          "Keys a Keyboard node listens for belong to the scene, not the editor: S walks the character instead of arming the scale gizmo",
+      },
+      {
+        keys: ["Other Keys"],
+        description: "Every shortcut the scene does not use keeps working, playing or not",
+      },
+      { keys: ["Esc"], description: "Stop playback and hand the keys back to the editor" },
     ],
   },
 ];

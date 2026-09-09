@@ -130,6 +130,7 @@ import { advancePlayhead, IDLE_PLAYHEAD, PlayheadState } from "./playhead";
 import { PostProcessConfig } from "../graph/nodes/postprocessing";
 import { Graph, KeyframeStore, NodeInstance, NodeRegistry } from "../graph/types";
 import { isViewportZone, setInputZone } from "../graph/inputZoneStore";
+import { isKeyReservedForPlayback } from "../graph/playbackKeys";
 import { isTauri } from "../ipc";
 import type { PreviewCameraPose } from "../ipc";
 import { ViewportParamHUD } from "../../windows/ViewportParamHUD";
@@ -690,6 +691,8 @@ export function Viewport({
       // handled globally in App.tsx now, not here, since one of those four
       // states (full-canvas Graph) unmounts every Viewport instance and a
       // listener that lives inside one can't fire once none are mounted.
+      if (isKeyReservedForPlayback(e)) return;
+
       if ((e.key === "Tab" || e.code === "Tab") && !e.shiftKey) {
         e.preventDefault();
         setShowUiOverlay((prev) => !prev);
@@ -1402,6 +1405,9 @@ export function Viewport({
 
     function onViewportKeyDown(e: KeyboardEvent) {
       if (isInputElement(document.activeElement)) return;
+      // A running scene owns the keys its Keyboard nodes listen for: S must
+      // walk the character rather than arm the scale gizmo behind it.
+      if (isKeyReservedForPlayback(e)) return;
 
       // Blender-style shortcut: Ctrl+Alt+0 (or Cmd+Alt+0) to Align Active Camera to View
       if ((e.ctrlKey || e.metaKey) && e.altKey && (e.code === "Numpad0" || e.code === "Digit0" || e.key === "0")) {
@@ -3973,6 +3979,7 @@ export function Viewport({
     if (outputMode) return;
     const handleFrameKey = (e: KeyboardEvent) => {
       if (!isViewportZone() || e.key.toLowerCase() !== "f" || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (isKeyReservedForPlayback(e)) return;
       const activeEl = document.activeElement;
       const isInput =
         activeEl &&
