@@ -146,7 +146,7 @@ import { WIND_FIELD_NODE, GRASS_FIELD_NODE, TREE_NODE, WIND_SWAY_NODE, INTERACTI
 import { GAMEPAD_NODE, ACTION_MAP_NODE } from "./input";
 import { INTEGRATE_NODE, INTEGRATE_VECTOR_NODE } from "./integrate";
 import { CAPSULE_CONTROLLER_NODE } from "./character";
-import { PHYSICS_WORLD_NODE, RIGID_BODY_NODE, PHYSICS_CHARACTER_NODE } from "./rapier";
+import { PHYSICS_WORLD_NODE, RIGID_BODY_NODE, PHYSICS_CHARACTER_NODE, VEHICLE_NODE } from "./rapier";
 
 /** The starter catalogue — grows node by node; BIBLE.md has the full target list. */
 export const STARTER_NODES = [
@@ -396,6 +396,7 @@ export const STARTER_NODES = [
   PHYSICS_WORLD_NODE,
   RIGID_BODY_NODE,
   PHYSICS_CHARACTER_NODE,
+  VEHICLE_NODE,
 ];
 
 export const DEFAULT_REGISTRY = createRegistry(STARTER_NODES);

@@ -230,6 +230,11 @@ export const DEMO_CATALOG: DemoCategory[] = [
         description: "Sample points on a mesh, spawn objects on them.",
       },
       {
+        file: "demo_physics_vehicle.tsuji",
+        label: "Vehicle (Rapier)",
+        description: "A raycast car driven with ZQSD: suspension, steering, brakes, and crates to scatter.",
+      },
+      {
         file: "demo_physics_rigidbody.tsuji",
         label: "Rigid Bodies (Rapier)",
         description: "Crates and a ball dropped into a Rapier world: stacking, rolling and a ramp.",

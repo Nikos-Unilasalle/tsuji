@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { beforeAll, describe, expect, test } from "vitest";
-import { PHYSICS_CHARACTER_NODE, PHYSICS_WORLD_NODE, RIGID_BODY_NODE } from "./rapier";
+import { PHYSICS_CHARACTER_NODE, PHYSICS_WORLD_NODE, RIGID_BODY_NODE, VEHICLE_NODE } from "./rapier";
 import { EvalContext } from "../types";
 import {
   extractColliderGeometry,
@@ -514,5 +514,138 @@ describe("physics/character — a capsule on Rapier's own controller", () => {
     ) as { position: THREE.Vector3 };
 
     expect(out.position.toArray()).toEqual([0, 2, 0]);
+  });
+});
+
+describe("physics/vehicle — a raycast car", () => {
+  beforeAll(async () => {
+    await initRapier();
+  });
+
+  const worldParams = () => ({ ...PHYSICS_WORLD_NODE.defaultParams });
+  const carParams = (overrides: Record<string, unknown> = {}) => ({
+    ...VEHICLE_NODE.defaultParams,
+    ...overrides,
+  });
+
+  function road(): THREE.Mesh {
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1));
+    mesh.scale.set(200, 1, 200);
+    mesh.position.set(0, -0.5, 0);
+    mesh.updateMatrixWorld(true);
+    return mesh;
+  }
+
+  function chassis(): THREE.Mesh {
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.6, 3));
+    mesh.position.set(0, 1, 0);
+    mesh.updateMatrixWorld(true);
+    return mesh;
+  }
+
+  /** Runs world + road + car for `frames` frames at 60 Hz. */
+  function drive(
+    ids: string,
+    car: THREE.Object3D,
+    inputs: Record<string, unknown>,
+    frames: number,
+    params = carParams(),
+  ) {
+    const ground = road();
+    let last: any;
+    for (let frame = 0; frame < frames; frame++) {
+      const time = frame / 60;
+      const world = PHYSICS_WORLD_NODE.evaluate({}, worldParams(), makeContext(`${ids}-w`, time)) as {
+        world: unknown;
+      };
+      RIGID_BODY_NODE.evaluate(
+        { world: world.world, geometry: ground },
+        { ...RIGID_BODY_NODE.defaultParams, bodyType: "fixed" },
+        makeContext(`${ids}-road`, time),
+      );
+      last = VEHICLE_NODE.evaluate({ world: world.world, chassis: car, ...inputs }, params, makeContext(`${ids}-car`, time));
+    }
+    return last as {
+      position: THREE.Vector3;
+      wheels: THREE.Matrix4[];
+      speed: number;
+      grounded: number;
+    };
+  }
+
+  test("a low centre of mass keeps all four wheels down under acceleration", () => {
+    // Left at the chassis centre, hard acceleration pitches a raycast vehicle
+    // back onto two wheels, which then have no grip and it goes nowhere. This
+    // is the parameter that decides whether the car works at all.
+    const settled = drive("v0", chassis(), { throttle: 1 }, 300);
+    expect(settled.grounded).toBe(4);
+    expect(settled.speed).toBeGreaterThan(10);
+  });
+
+  test("it settles on its suspension with all four wheels down", () => {
+    const out = drive("v1", chassis(), { throttle: 0 }, 180);
+    expect(out.grounded).toBe(4);
+    expect(out.wheels.length).toBe(4);
+    // Held up by its springs rather than resting on the chassis.
+    expect(out.position.y).toBeGreaterThan(0.3);
+  });
+
+  test("throttle drives it forward, and it stays on the road", () => {
+    const car = chassis();
+    const out = drive("v2", car, { throttle: 1 }, 300);
+    expect(out.speed).toBeGreaterThan(1);
+    // Forward is +Z for a chassis that has not been turned.
+    expect(Math.abs(out.position.z)).toBeGreaterThan(1);
+    expect(out.position.y).toBeGreaterThan(0);
+  });
+
+  test("throttle is what makes it go — coasting is far slower than driving", () => {
+    // Not "no throttle, no motion": a raycast vehicle has no rolling
+    // resistance, so whatever speed it picks up settling onto its springs it
+    // keeps. What must hold is that driving is decisively faster than not.
+    const coasting = drive("v3", chassis(), { throttle: 0 }, 300);
+    const driving = drive("v3b", chassis(), { throttle: 1 }, 300);
+    expect(driving.speed).toBeGreaterThan(coasting.speed * 2);
+  });
+
+  test("steering turns it off its original line", () => {
+    const straight = drive("v4", chassis(), { throttle: 1 }, 300);
+    const turning = drive("v5", chassis(), { throttle: 1, steer: 1 }, 300);
+    expect(Math.abs(turning.position.x)).toBeGreaterThan(Math.abs(straight.position.x) + 0.5);
+  });
+
+  test("the brake stops it", () => {
+    const car = chassis();
+    // Get it rolling, then stand on the brake.
+    const rolling = drive("v6", car, { throttle: 1 }, 240);
+    expect(rolling.speed).toBeGreaterThan(1);
+
+    const stopped = drive("v6", car, { throttle: 0, brake: 1 }, 240);
+    expect(stopped.speed).toBeLessThan(rolling.speed * 0.5);
+  });
+
+  test("wheel matrices sit under the chassis, spread across its track", () => {
+    const out = drive("v7", chassis(), { throttle: 0 }, 180);
+    const positions = out.wheels.map((m) => new THREE.Vector3().setFromMatrixPosition(m));
+
+    for (const wheel of positions) {
+      expect(wheel.y).toBeLessThan(out.position.y);
+      expect(wheel.y).toBeGreaterThan(-0.5);
+    }
+    // Two on each side of the centre line, two fore and two aft.
+    expect(positions.filter((p) => p.x > out.position.x).length).toBe(2);
+    expect(positions.filter((p) => p.z > out.position.z).length).toBe(2);
+  });
+
+  test("with no world wired the chassis passes through untouched", () => {
+    const car = chassis();
+    const out = VEHICLE_NODE.evaluate({ chassis: car }, carParams(), makeContext("v8", 0)) as {
+      geometry: THREE.Object3D;
+      wheels: THREE.Matrix4[];
+      speed: number;
+    };
+    expect(out.geometry).toBe(car);
+    expect(out.wheels).toEqual([]);
+    expect(out.speed).toBe(0);
   });
 });

@@ -195,6 +195,17 @@ export interface PhysicsWorldHandle {
   nodeId: string;
   world: RAPIER.World;
   bodies: Map<string, RAPIER.RigidBody>;
+  /**
+   * Callbacks run immediately before each fixed step, keyed by the node that
+   * registered one.
+   *
+   * Rapier's vehicle controller is not advanced by `world.step()` — it has to
+   * be updated just before it, every step, or the wheels never get a chance to
+   * apply their forces. A node evaluating once per *frame* cannot do that
+   * itself when the frame runs three steps, so it leaves a closure here
+   * instead.
+   */
+  preStep: Map<string, (dt: number) => void>;
   /** Leftover time not yet consumed by a fixed step. */
   accumulator: number;
   lastTime: number | undefined;
@@ -219,6 +230,7 @@ export function createPhysicsWorld(
     nodeId,
     world,
     bodies: new Map(),
+    preStep: new Map(),
     accumulator: 0,
     lastTime: undefined,
     generation,
@@ -270,7 +282,10 @@ export function stepPhysicsWorld(
   handle.accumulator = remainder;
 
   handle.world.timestep = timestep;
-  for (let i = 0; i < steps; i++) handle.world.step();
+  for (let i = 0; i < steps; i++) {
+    for (const before of handle.preStep.values()) before(timestep);
+    handle.world.step();
+  }
   return steps;
 }
 

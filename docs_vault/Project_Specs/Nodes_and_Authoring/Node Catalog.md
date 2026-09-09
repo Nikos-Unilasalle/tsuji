@@ -2,7 +2,7 @@
 
 *Emplacement dans le code : `src/shared/graph/nodes/index.ts`*
 
-Ce document référence l'ensemble des plus de 128 nœuds disponibles dans le moteur Tsuji, classés par domaine fonctionnel.
+Ce document référence l'ensemble des plus de 129 nœuds disponibles dans le moteur Tsuji, classés par domaine fonctionnel.
 
 ---
 
@@ -81,6 +81,10 @@ Briques d'entrée conçues pour que le reste du graphe **ignore d'où vient la c
   - Build **`-compat`** délibéré : il embarque le WASM et s'initialise de façon asynchrone — pas de `vite-plugin-wasm`, pas de top-level await dans le bundle, pas d'asset séparé à égarer dans un build Tauri. Tant qu'il compile, `Ready` vaut 0 et les corps laissent passer leur géométrie : rien ne bloque, rien ne lève.
 - **`physics/rigid-body`** (*Rigid Body*) : Confie une géométrie au monde. Forme par défaut selon le type : **enveloppe convexe** pour un corps dynamique (économique, toujours fermée, s'empile de façon prévisible), **maillage de triangles** pour un corps fixe (la seule forme qui représente un niveau exactement, et son absence de volume ne gêne que ce qui bouge). Le corps est reconstruit quand sa *forme* change et laissé tranquille sinon, donc régler le frottement ne redémarre jamais la simulation.
   - **L'échelle de l'objet est intégrée aux sommets du collider**, parce qu'un corps Rapier ne porte que position et rotation. L'oublier transforme un sol construit en cube unité mis à l'échelle 30 × 1 × 30 — ce dont tous les niveaux sont faits ici — en collider 1 × 1 × 1, et tout atterrit à côté. Même piège que celui rencontré sur le contrôleur à capsule, à l'autre bout du code.
+- **`physics/vehicle`** (*Vehicle*) : Voiture à quatre roues sur le contrôleur **raycast** de Rapier. Pas quatre roues en corps rigides articulés : un rayon part de chaque ancrage et applique suspension, motricité et frottement latéral au châssis depuis le point d'impact. C'est ce que font presque tous les jeux de conduite, parce que des roues simulées vibrent à l'arrêt, accrochent sur les jointures entre triangles et exigent un réglage de tolérance de solveur que personne ne veut faire. Ici le châssis est **un seul corps rigide** et les roues sont du calcul.
+  - **La hauteur du centre de gravité est le réglage qui décide si la voiture marche.** Laissé au centre du châssis, une accélération franche cabre la voiture sur deux roues, qui n'ont alors plus d'adhérence, et elle n'avance pas. Le nœud le place bas par défaut et l'expose ; l'inertie est celle d'un pavé aux dimensions du châssis, suffisamment juste pour quelque chose dont la tenue de route se règle au ressenti.
+  - **Rapier n'avance pas un véhicule dans `world.step()`** : il faut appeler `updateVehicle` juste avant chaque pas. Un nœud évalué une fois par frame ne peut pas suivre une frame qui exécute trois pas, alors il dépose une fermeture dans le hook de pré-pas du monde.
+  - Sortie `wheels` : une liste de matrices monde plutôt que des maillages, donc l'allure de la voiture reste l'affaire de l'auteur — à brancher sur un Array + Set Instance Transform avec la géométrie voulue. Braquage et rotation de roulement y sont déjà.
 - **`physics/character`** (*Character (Physics)*) : Le frère du contrôleur à capsule, et celui vers lequel se tourner dès qu'un Physics World est dans le graphe. Les deux sont cinématiques — un personnage veut du contrôle exact, pas de l'inertie — mais celui-ci est déplacé par le contrôleur de personnage de Rapier, qui apporte trois choses qu'un balayage maison n'obtient pas gratuitement :
   - **Marche automatique** : escaliers et bordures franchis au lieu de bloquer, sans que l'auteur modélise une rampe invisible par-dessus chaque marche.
   - **Accrochage au sol** : descendre une pente garde le contact au lieu de partir en petite parabole à chaque rupture de surface.

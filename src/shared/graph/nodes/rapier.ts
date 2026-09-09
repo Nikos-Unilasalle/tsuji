@@ -607,3 +607,289 @@ export const PHYSICS_CHARACTER_NODE: NodeDefinition = {
     };
   },
 };
+
+/* -------------------------------------------------------------------------- */
+/* Vehicle                                                                    */
+/* -------------------------------------------------------------------------- */
+
+interface VehicleState {
+  body: RAPIER.RigidBody;
+  controller: RAPIER.DynamicRayCastVehicleController;
+  worldNodeId: string;
+  generation: number;
+  signature: string;
+  object: THREE.Object3D;
+}
+
+const vehicleCache = createNodeCache<VehicleState>();
+
+/** Front wheels steer, rear wheels drive — the arrangement almost every car uses. */
+const WHEEL_LAYOUT = [
+  { front: true, side: -1 },
+  { front: true, side: 1 },
+  { front: false, side: -1 },
+  { front: false, side: 1 },
+] as const;
+
+/**
+ * Vehicle — a four-wheeled car on Rapier's raycast vehicle controller.
+ *
+ * Not four rigid-body wheels with joints: a raycast vehicle casts a ray down
+ * from each wheel mount and applies suspension, drive and side friction forces
+ * to the chassis from the hit. That is how nearly every driving game does it,
+ * because simulated wheels jitter at rest, catch on seams between triangles,
+ * and need a solver tolerance nobody wants to tune. Here the chassis is one
+ * rigid body and the wheels are maths.
+ *
+ * The wheels come out as a list of matrices rather than as meshes, so the look
+ * of the car is the author's business — wire them into a Spawn or Set Instance
+ * Transform with whatever geometry the scene wants. They already carry
+ * steering angle and rolling rotation.
+ *
+ * Rapier does not advance a vehicle inside `world.step()`, so the node leaves a
+ * closure on the world that runs immediately before each fixed step. A node
+ * evaluating once per frame could not otherwise keep up with a frame that runs
+ * three steps.
+ */
+export const VEHICLE_NODE: NodeDefinition = {
+  type: "physics/vehicle",
+  label: "Vehicle",
+  category: "physics",
+  inputs: [
+    { id: "world", label: "World", type: "any" },
+    { id: "chassis", label: "Chassis", type: "geometry", owns: true },
+    { id: "throttle", label: "Throttle (-1…1)", type: "value" },
+    { id: "steer", label: "Steer (-1…1)", type: "value" },
+    { id: "brake", label: "Brake (0…1)", type: "value" },
+  ],
+  outputs: [
+    { id: "geometry", label: "Geometry", type: "geometry" },
+    { id: "matrix", label: "Matrix", type: "matrix" },
+    { id: "position", label: "Position", type: "vector" },
+    { id: "wheels", label: "Wheel Matrices", type: "list" },
+    { id: "speed", label: "Speed", type: "value" },
+    { id: "grounded", label: "Wheels on Ground", type: "value" },
+  ],
+  defaultParams: {
+    mass: 800,
+    centerOfMass: -0.3,
+    wheelRadius: 0.35,
+    wheelBase: 1.3,
+    trackWidth: 0.8,
+    wheelHeight: -0.25,
+    suspensionRest: 0.35,
+    suspensionStiffness: 30,
+    suspensionCompression: 0.85,
+    suspensionRelaxation: 0.9,
+    suspensionTravel: 0.25,
+    frictionSlip: 3.5,
+    engineForce: 2500,
+    brakeForce: 900,
+    maxSteer: THREE.MathUtils.degToRad(32),
+    throttle: 0,
+    steer: 0,
+    brake: 0,
+  },
+  paramFields: [
+    { id: "mass", label: "Chassis Mass (kg)", kind: "number", step: 25, group: "Chassis" },
+    {
+      id: "centerOfMass",
+      label: "Centre of Mass Height (lower = more stable)",
+      kind: "number",
+      step: 0.05,
+      group: "Chassis",
+    },
+    { id: "engineForce", label: "Engine Force", kind: "number", step: 100, group: "Drive" },
+    { id: "brakeForce", label: "Brake Force", kind: "number", step: 50, group: "Drive" },
+    { id: "maxSteer", label: "Max Steering (°)", kind: "number", step: 1, degrees: true, group: "Drive" },
+    { id: "wheelRadius", label: "Wheel Radius", kind: "number", step: 0.05, group: "Wheels" },
+    { id: "wheelBase", label: "Wheelbase (front to rear)", kind: "number", step: 0.1, group: "Wheels" },
+    { id: "trackWidth", label: "Track Width (left to right)", kind: "number", step: 0.1, group: "Wheels" },
+    { id: "wheelHeight", label: "Mount Height (chassis-relative)", kind: "number", step: 0.05, group: "Wheels" },
+    { id: "frictionSlip", label: "Tyre Grip", kind: "number", step: 0.1, group: "Wheels" },
+    { id: "suspensionRest", label: "Suspension Rest Length", kind: "number", step: 0.05, group: "Suspension" },
+    { id: "suspensionStiffness", label: "Stiffness", kind: "number", step: 1, group: "Suspension" },
+    { id: "suspensionCompression", label: "Compression Damping", kind: "number", step: 0.05, group: "Suspension" },
+    { id: "suspensionRelaxation", label: "Relaxation Damping", kind: "number", step: 0.05, group: "Suspension" },
+    { id: "suspensionTravel", label: "Max Travel", kind: "number", step: 0.05, group: "Suspension" },
+  ],
+  evaluate: (inputs, params, ctx) => {
+    const object = inputs.chassis instanceof THREE.Object3D ? inputs.chassis : null;
+    const handle = isPhysicsWorld(inputs.world) ? inputs.world : null;
+    const api = getRapier();
+
+    if (!object || !handle || !api) {
+      return {
+        geometry: object,
+        matrix: object ? object.matrix.clone() : new THREE.Matrix4(),
+        position: object ? object.position.clone() : new THREE.Vector3(),
+        wheels: [],
+        speed: 0,
+        grounded: 0,
+      };
+    }
+
+    const wheelRadius = Math.max(0.02, numberInput(undefined, params.wheelRadius, 0.35));
+    const wheelBase = Math.max(0.1, numberInput(undefined, params.wheelBase, 1.3));
+    const trackWidth = Math.max(0.1, numberInput(undefined, params.trackWidth, 0.8));
+    const mountHeight = numberInput(undefined, params.wheelHeight, -0.25);
+    const suspensionRest = Math.max(0.01, numberInput(undefined, params.suspensionRest, 0.35));
+
+    const signature = `${wheelRadius}|${wheelBase}|${trackWidth}|${mountHeight}|${suspensionRest}|${numberInput(undefined, params.mass, 800)}|${numberInput(undefined, params.centerOfMass, -0.3)}|${handle.generation}`;
+
+    let state = vehicleCache.get(ctx.nodeId);
+
+    if (!state || state.signature !== signature || state.worldNodeId !== handle.nodeId) {
+      if (state && state.worldNodeId === handle.nodeId && state.generation === handle.generation) {
+        handle.preStep.delete(ctx.nodeId);
+        handle.world.removeVehicleController(state.controller);
+        handle.world.removeRigidBody(state.body);
+      }
+
+      const geometry = extractColliderGeometry(object);
+      if (!geometry) {
+        return {
+          geometry: object,
+          matrix: object.matrix.clone(),
+          position: object.position.clone(),
+          wheels: [],
+          speed: 0,
+          grounded: 0,
+        };
+      }
+
+      object.updateWorldMatrix(true, false);
+      const start = new THREE.Vector3();
+      const rotation = new THREE.Quaternion();
+      object.matrixWorld.decompose(start, rotation, new THREE.Vector3());
+
+      const body = handle.world.createRigidBody(
+        api.RigidBodyDesc.dynamic()
+          .setTranslation(start.x, start.y, start.z)
+          .setRotation({ x: rotation.x, y: rotation.y, z: rotation.z, w: rotation.w })
+          // A car that can flip is a car that spends the session on its roof;
+          // damping keeps it settled without pinning its rotation outright.
+          .setAngularDamping(0.6)
+          .setLinearDamping(0.05),
+      );
+
+      const colliderDesc = buildColliderDesc(api, "hull", geometry);
+      if (colliderDesc) {
+        // Mass lives on the body, not the collider, so the centre of mass can
+        // be moved independently of the shape — see below.
+        colliderDesc.setMass(0);
+        handle.world.createCollider(colliderDesc, body);
+      }
+
+      // A car's centre of mass sits low, and a raycast vehicle is *very*
+      // sensitive to it: leave it at the chassis centre and hard acceleration
+      // pitches the car back onto two wheels, which then have no grip. Inertia
+      // is the box equivalent of the chassis bounds, which is close enough for
+      // something whose handling is tuned by feel anyway.
+      const mass = Math.max(1, numberInput(undefined, params.mass, 800));
+      const extents = geometry.box.getSize(new THREE.Vector3());
+      const inertia = new THREE.Vector3(
+        (mass / 12) * (extents.y * extents.y + extents.z * extents.z),
+        (mass / 12) * (extents.x * extents.x + extents.z * extents.z),
+        (mass / 12) * (extents.x * extents.x + extents.y * extents.y),
+      );
+      body.setAdditionalMassProperties(
+        mass,
+        { x: 0, y: numberInput(undefined, params.centerOfMass, -0.3), z: 0 },
+        { x: inertia.x, y: inertia.y, z: inertia.z },
+        { x: 0, y: 0, z: 0, w: 1 },
+        true,
+      );
+
+      const controller = handle.world.createVehicleController(body);
+      for (const wheel of WHEEL_LAYOUT) {
+        controller.addWheel(
+          { x: wheel.side * (trackWidth / 2), y: mountHeight, z: wheel.front ? wheelBase / 2 : -wheelBase / 2 },
+          { x: 0, y: -1, z: 0 }, // suspension points down
+          { x: -1, y: 0, z: 0 }, // wheels turn about the chassis X axis
+          suspensionRest,
+          wheelRadius,
+        );
+      }
+
+      // Rapier steps vehicles separately from bodies; this is what keeps the
+      // two in phase however many steps a frame runs.
+      handle.preStep.set(ctx.nodeId, (dt) => controller.updateVehicle(dt));
+
+      state = {
+        body,
+        controller,
+        worldNodeId: handle.nodeId,
+        generation: handle.generation,
+        signature,
+        object,
+      };
+      vehicleCache.set(ctx.nodeId, state);
+    }
+
+    const { body, controller } = state;
+
+    const throttle = THREE.MathUtils.clamp(numberInput(inputs.throttle, params.throttle, 0), -1, 1);
+    const steer = THREE.MathUtils.clamp(numberInput(inputs.steer, params.steer, 0), -1, 1);
+    const brake = Math.max(0, numberInput(inputs.brake, params.brake, 0));
+
+    const engineForce = throttle * Math.max(0, numberInput(undefined, params.engineForce, 4500));
+    const brakeForce = brake * Math.max(0, numberInput(undefined, params.brakeForce, 900));
+    const steerAngle = steer * numberInput(undefined, params.maxSteer, THREE.MathUtils.degToRad(32));
+
+    const stiffness = Math.max(0, numberInput(undefined, params.suspensionStiffness, 30));
+    const compression = Math.max(0, numberInput(undefined, params.suspensionCompression, 0.85));
+    const relaxation = Math.max(0, numberInput(undefined, params.suspensionRelaxation, 0.9));
+    const travel = Math.max(0, numberInput(undefined, params.suspensionTravel, 0.25));
+    const grip = Math.max(0, numberInput(undefined, params.frictionSlip, 3.5));
+
+    let wheelsOnGround = 0;
+    for (let i = 0; i < WHEEL_LAYOUT.length; i++) {
+      const wheel = WHEEL_LAYOUT[i];
+      // Rear-wheel drive, front-wheel steering.
+      controller.setWheelEngineForce(i, wheel.front ? 0 : engineForce);
+      controller.setWheelSteering(i, wheel.front ? steerAngle : 0);
+      controller.setWheelBrake(i, brakeForce);
+      controller.setWheelSuspensionStiffness(i, stiffness);
+      controller.setWheelSuspensionCompression(i, compression);
+      controller.setWheelSuspensionRelaxation(i, relaxation);
+      controller.setWheelMaxSuspensionTravel(i, travel);
+      controller.setWheelFrictionSlip(i, grip);
+      if (controller.wheelIsInContact(i)) wheelsOnGround++;
+    }
+
+    const chassisMatrix = bodyMatrix(body);
+    object.matrixAutoUpdate = false;
+    object.matrix.copy(chassisMatrix);
+    chassisMatrix.decompose(object.position, object.quaternion, object.scale);
+    object.matrixWorldNeedsUpdate = true;
+
+    // Wheel poses, in world space and ready to hang geometry on: mount point,
+    // pushed down by however far the suspension is currently extended, turned
+    // by its steering angle and rolled by however far it has travelled.
+    const wheels: THREE.Matrix4[] = [];
+    for (let i = 0; i < WHEEL_LAYOUT.length; i++) {
+      const connection = controller.wheelChassisConnectionPointCs(i);
+      const suspension = controller.wheelSuspensionLength(i) ?? suspensionRest;
+      const steering = controller.wheelSteering(i) ?? 0;
+      const roll = controller.wheelRotation(i) ?? 0;
+      if (!connection) continue;
+
+      const local = new THREE.Matrix4()
+        .makeTranslation(connection.x, connection.y - suspension, connection.z)
+        .multiply(new THREE.Matrix4().makeRotationY(steering))
+        .multiply(new THREE.Matrix4().makeRotationX(roll));
+
+      wheels.push(new THREE.Matrix4().multiplyMatrices(chassisMatrix, local));
+    }
+
+    return {
+      geometry: object,
+      matrix: chassisMatrix.clone(),
+      position: bodyPosition(body),
+      wheels,
+      speed: Math.abs(controller.currentVehicleSpeed()),
+      grounded: wheelsOnGround,
+    };
+  },
+};
