@@ -53,6 +53,7 @@ Accessible instantanément depuis un navigateur web moderne ou compilé en appli
 
 - **Core UI & Logic** : React 19, TypeScript, Vite 7
 - **Rendu 3D & Moteur Graphique** : Three.js (r185), `three-mesh-bvh`, `three-bvh-csg`
+- **Physique** : Rapier (`@dimforge/rapier3d-compat`, WASM) pour les corps rigides ; contrôleur de personnage cinématique maison sur BVH
 - **Graphe Nodal & Éditeur** : `@xyflow/react` v12
 - **Gestion d'État** : Zustand v5
 - **Application Native** : Tauri 2 (Rust)
@@ -152,6 +153,8 @@ Les prises de connexion (sockets) sont identifiées par des codes couleur normal
 | **Raycast** | `physics/raycast` | Lance un rayon unique et détecte les intersections (point, normale, distance). |
 | **Ray Burst** | `physics/ray-burst` | Émet un champ de rayons (burst) 3D et produit les lignes d'impacts et endpoints. |
 | **Sample Surface** | `physics/sample` | Échantillonne des points et normales aléatoires à la surface d'un maillage (Surface Scatter). |
+| **Physics World** | `physics/world` | Monde de corps rigides **Rapier** (WASM). Pas de simulation à la main : empilement, contacts au repos, frottement et articulations sont chacun difficiles et collectivement un projet de recherche. Pas de temps **fixe** avec report du reste entre les frames — un pas variable fait qu'une pile de caisses se stabilise différemment à 60 et à 144 fps, et qu'un export ne ressemble pas à la preview dans laquelle il a été composé. Nombre de sous-pas plafonné pour qu'une frame longue soit abandonnée plutôt que rattrapée en spirale. |
+| **Rigid Body** | `physics/rigid-body` | Confie une géométrie au monde et la déplace selon le solveur. Types `dynamic` / `fixed` / `kinematic`, formes `auto` (enveloppe convexe pour un corps dynamique, maillage de triangles pour un corps fixe), `box`, `sphere`, `capsule`, `hull`, `trimesh`. Masse, frottement, rebond, amortissements, échelle de gravité, CCD. **L'échelle de l'objet est intégrée au collider** — un corps Rapier ne porte que position et rotation. |
 | **Capsule Controller** | `physics/capsule-controller` | Personnage cinématique à capsule : marche sur les sols, glisse le long des murs, saute, tombe des rebords. Collision CPU contre un BVH (`three-mesh-bvh`), test mené en espace monde pour rester correct sur les colliders à échelle non uniforme. Sorties position, matrice, vitesse, `grounded` et normale du sol. |
 | **Volume Scatter** | `physics/volume_scatter` | Échantillonne des points et directions aléatoires à l'intérieur du volume 3D d'une géométrie. |
 | **Wind Field** | `physics/wind-field` | Champ de vent global (deux octaves de bruit défilant selon une direction) partagé par toute la scène. Sortie `field` pour les shaders de végétation, sortie `wind` (vecteur, échantillonné CPU) pour piloter transforms, champs de force et logique. |
