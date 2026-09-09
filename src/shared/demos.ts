@@ -235,6 +235,11 @@ export const DEMO_CATALOG: DemoCategory[] = [
         description: "Crates and a ball dropped into a Rapier world: stacking, rolling and a ramp.",
       },
       {
+        file: "demo_physics_character_rapier.tsuji",
+        label: "Character on Rapier",
+        description: "ZQSD and Space drive a capsule through a Rapier level: auto-step onto a kerb, a ramp, and crates it can shove.",
+      },
+      {
         file: "demo_physics_character.tsuji",
         label: "Capsule Character",
         description: "ZQSD and Space drive a kinematic capsule that walks the level, slides along walls and climbs a ramp.",

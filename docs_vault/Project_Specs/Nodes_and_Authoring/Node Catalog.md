@@ -2,7 +2,7 @@
 
 *Emplacement dans le code : `src/shared/graph/nodes/index.ts`*
 
-Ce document référence l'ensemble des plus de 127 nœuds disponibles dans le moteur Tsuji, classés par domaine fonctionnel.
+Ce document référence l'ensemble des plus de 128 nœuds disponibles dans le moteur Tsuji, classés par domaine fonctionnel.
 
 ---
 
@@ -81,6 +81,11 @@ Briques d'entrée conçues pour que le reste du graphe **ignore d'où vient la c
   - Build **`-compat`** délibéré : il embarque le WASM et s'initialise de façon asynchrone — pas de `vite-plugin-wasm`, pas de top-level await dans le bundle, pas d'asset séparé à égarer dans un build Tauri. Tant qu'il compile, `Ready` vaut 0 et les corps laissent passer leur géométrie : rien ne bloque, rien ne lève.
 - **`physics/rigid-body`** (*Rigid Body*) : Confie une géométrie au monde. Forme par défaut selon le type : **enveloppe convexe** pour un corps dynamique (économique, toujours fermée, s'empile de façon prévisible), **maillage de triangles** pour un corps fixe (la seule forme qui représente un niveau exactement, et son absence de volume ne gêne que ce qui bouge). Le corps est reconstruit quand sa *forme* change et laissé tranquille sinon, donc régler le frottement ne redémarre jamais la simulation.
   - **L'échelle de l'objet est intégrée aux sommets du collider**, parce qu'un corps Rapier ne porte que position et rotation. L'oublier transforme un sol construit en cube unité mis à l'échelle 30 × 1 × 30 — ce dont tous les niveaux sont faits ici — en collider 1 × 1 × 1, et tout atterrit à côté. Même piège que celui rencontré sur le contrôleur à capsule, à l'autre bout du code.
+- **`physics/character`** (*Character (Physics)*) : Le frère du contrôleur à capsule, et celui vers lequel se tourner dès qu'un Physics World est dans le graphe. Les deux sont cinématiques — un personnage veut du contrôle exact, pas de l'inertie — mais celui-ci est déplacé par le contrôleur de personnage de Rapier, qui apporte trois choses qu'un balayage maison n'obtient pas gratuitement :
+  - **Marche automatique** : escaliers et bordures franchis au lieu de bloquer, sans que l'auteur modélise une rampe invisible par-dessus chaque marche.
+  - **Accrochage au sol** : descendre une pente garde le contact au lieu de partir en petite parabole à chaque rupture de surface.
+  - **Impulsions aux corps dynamiques** : le personnage bouscule les caisses, ce qui est tout l'intérêt d'avoir un solveur dans la scène.
+  - Il entre en collision avec **tout ce qui est dans le monde**, donc son niveau est simplement l'ensemble des `physics/rigid-body` ajoutés : pas d'entrée collider séparée à garder synchronisée avec ce qui est à l'écran.
 - **`physics/capsule-controller`** (*Capsule Controller*) : Personnage cinématique à capsule. Transforme « dans quelle direction on pousse » en « où on est » — ce qu'aucune combinaison des nœuds existants ne sait faire, un intégrateur accumulant un déplacement sans rien connaître du monde traversé. Marche sur les sols, glisse le long des murs, tombe des rebords. Collision CPU contre un BVH (`three-mesh-bvh`) : coût nul sur le GPU, résultat identique en export et dans le viewport.
   - **Cinématique et non corps rigide** : un solveur donnerait l'inertie gratuitement au prix du contrôle exact, or le déplacement de personnage est précisément l'endroit où l'auteur veut du contrôle exact — cette vitesse, ce saut, aucun rebond sur les murs, aucun basculement.
   - **Test de collision en espace monde**, chaque triangle candidat y étant amené. L'alternative tentante — emmener la capsule dans l'espace local du mesh, une transformation au lieu de trois par triangle — casse silencieusement sur tout collider à **échelle non uniforme**, c'est-à-dire la plupart : un sol `object/box` est un cube unité mis à l'échelle 16 × 1 × 16 par sa matrice. Dans cet espace la capsule n'est plus une capsule, aucun rayon unique ne la décrit, et le personnage traverse le sol.

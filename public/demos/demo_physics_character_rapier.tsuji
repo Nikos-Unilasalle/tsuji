@@ -1,0 +1,1066 @@
+{
+  "canvases": [
+    {
+      "nodes": [
+        {
+          "id": "world_1",
+          "type": "physics/world",
+          "position": {
+            "x": 60,
+            "y": 40
+          },
+          "params": {
+            "gravity": {
+              "x": 0,
+              "y": -9.81,
+              "z": 0
+            },
+            "timestep": 0.016666666666666666,
+            "maxSteps": 4,
+            "paused": 0,
+            "reset": 0
+          }
+        },
+        {
+          "id": "k_fwd",
+          "type": "io/keyboard",
+          "position": {
+            "x": 60,
+            "y": 200
+          },
+          "params": {
+            "key": "z"
+          }
+        },
+        {
+          "id": "k_back",
+          "type": "io/keyboard",
+          "position": {
+            "x": 60,
+            "y": 300
+          },
+          "params": {
+            "key": "s"
+          }
+        },
+        {
+          "id": "k_left",
+          "type": "io/keyboard",
+          "position": {
+            "x": 60,
+            "y": 400
+          },
+          "params": {
+            "key": "q"
+          }
+        },
+        {
+          "id": "k_right",
+          "type": "io/keyboard",
+          "position": {
+            "x": 60,
+            "y": 500
+          },
+          "params": {
+            "key": "d"
+          }
+        },
+        {
+          "id": "k_jump",
+          "type": "io/keyboard",
+          "position": {
+            "x": 60,
+            "y": 600
+          },
+          "params": {
+            "key": "space"
+          }
+        },
+        {
+          "id": "pad_1",
+          "type": "io/gamepad",
+          "position": {
+            "x": 60,
+            "y": 700
+          },
+          "params": {
+            "index": 0,
+            "deadzone": 0.15,
+            "triggerDeadzone": 0.05
+          }
+        },
+        {
+          "id": "act_x",
+          "type": "io/action-map",
+          "position": {
+            "x": 340,
+            "y": 240
+          },
+          "params": {
+            "action": "strafe",
+            "mode": "strongest",
+            "scale": 1,
+            "deadzone": 0,
+            "smoothing": 0.06,
+            "threshold": 0.5,
+            "clamp": true,
+            "invert": false
+          }
+        },
+        {
+          "id": "act_z",
+          "type": "io/action-map",
+          "position": {
+            "x": 340,
+            "y": 460
+          },
+          "params": {
+            "action": "forward",
+            "mode": "strongest",
+            "scale": 1,
+            "deadzone": 0,
+            "smoothing": 0.06,
+            "threshold": 0.5,
+            "clamp": true,
+            "invert": false
+          }
+        },
+        {
+          "id": "move_1",
+          "type": "vector/compose",
+          "position": {
+            "x": 600,
+            "y": 340
+          },
+          "params": {
+            "x": 0,
+            "y": 0,
+            "z": 0,
+            "useX": true,
+            "useY": true,
+            "useZ": true
+          }
+        },
+        {
+          "id": "floor_geo",
+          "type": "object/box",
+          "position": {
+            "x": 60,
+            "y": 760
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 0,
+              "y": -0.5,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 30,
+              "y": 1,
+              "z": 30
+            },
+            "color": 4871520,
+            "roughness": 0.9,
+            "metalness": 0,
+            "opacity": 1
+          }
+        },
+        {
+          "id": "floor_body",
+          "type": "physics/rigid-body",
+          "position": {
+            "x": 340,
+            "y": 760
+          },
+          "params": {
+            "bodyType": "fixed",
+            "shape": "trimesh",
+            "mass": 1,
+            "friction": 0.8,
+            "restitution": 0,
+            "linearDamping": 0.05,
+            "angularDamping": 0.05,
+            "gravityScale": 1,
+            "ccd": false
+          }
+        },
+        {
+          "id": "kerb_geo",
+          "type": "object/box",
+          "position": {
+            "x": 60,
+            "y": 870
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 6,
+              "y": 0.15,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 8,
+              "y": 0.3,
+              "z": 14
+            },
+            "color": 6122360,
+            "roughness": 0.9,
+            "metalness": 0,
+            "opacity": 1
+          }
+        },
+        {
+          "id": "kerb_body",
+          "type": "physics/rigid-body",
+          "position": {
+            "x": 340,
+            "y": 870
+          },
+          "params": {
+            "bodyType": "fixed",
+            "shape": "trimesh",
+            "mass": 1,
+            "friction": 0.8,
+            "restitution": 0,
+            "linearDamping": 0.05,
+            "angularDamping": 0.05,
+            "gravityScale": 1,
+            "ccd": false
+          }
+        },
+        {
+          "id": "wall_a_geo",
+          "type": "object/box",
+          "position": {
+            "x": 60,
+            "y": 980
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": -10,
+              "y": 1.5,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 0.6,
+              "y": 3,
+              "z": 20
+            },
+            "color": 7041664,
+            "roughness": 0.9,
+            "metalness": 0,
+            "opacity": 1
+          }
+        },
+        {
+          "id": "wall_a_body",
+          "type": "physics/rigid-body",
+          "position": {
+            "x": 340,
+            "y": 980
+          },
+          "params": {
+            "bodyType": "fixed",
+            "shape": "trimesh",
+            "mass": 1,
+            "friction": 0.8,
+            "restitution": 0,
+            "linearDamping": 0.05,
+            "angularDamping": 0.05,
+            "gravityScale": 1,
+            "ccd": false
+          }
+        },
+        {
+          "id": "wall_b_geo",
+          "type": "object/box",
+          "position": {
+            "x": 60,
+            "y": 1090
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 0,
+              "y": 1.5,
+              "z": -10
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 20,
+              "y": 3,
+              "z": 0.6
+            },
+            "color": 7041664,
+            "roughness": 0.9,
+            "metalness": 0,
+            "opacity": 1
+          }
+        },
+        {
+          "id": "wall_b_body",
+          "type": "physics/rigid-body",
+          "position": {
+            "x": 340,
+            "y": 1090
+          },
+          "params": {
+            "bodyType": "fixed",
+            "shape": "trimesh",
+            "mass": 1,
+            "friction": 0.8,
+            "restitution": 0,
+            "linearDamping": 0.05,
+            "angularDamping": 0.05,
+            "gravityScale": 1,
+            "ccd": false
+          }
+        },
+        {
+          "id": "ramp_geo",
+          "type": "object/box",
+          "position": {
+            "x": 60,
+            "y": 1200
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": -5,
+              "y": 1.2,
+              "z": 6
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": -0.45
+            },
+            "scale": {
+              "x": 6,
+              "y": 0.4,
+              "z": 4
+            },
+            "color": 8161433,
+            "roughness": 0.9,
+            "metalness": 0,
+            "opacity": 1
+          }
+        },
+        {
+          "id": "ramp_body",
+          "type": "physics/rigid-body",
+          "position": {
+            "x": 340,
+            "y": 1200
+          },
+          "params": {
+            "bodyType": "fixed",
+            "shape": "trimesh",
+            "mass": 1,
+            "friction": 0.8,
+            "restitution": 0,
+            "linearDamping": 0.05,
+            "angularDamping": 0.05,
+            "gravityScale": 1,
+            "ccd": false
+          }
+        },
+        {
+          "id": "crate_geo_0",
+          "type": "object/box",
+          "position": {
+            "x": 60,
+            "y": 1310
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 1.5,
+              "y": 0.5,
+              "z": 2.0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0.0,
+              "z": 0
+            },
+            "scale": {
+              "x": 0.9,
+              "y": 0.9,
+              "z": 0.9
+            },
+            "color": 14256959,
+            "roughness": 0.8,
+            "metalness": 0,
+            "opacity": 1
+          }
+        },
+        {
+          "id": "crate_body_0",
+          "type": "physics/rigid-body",
+          "position": {
+            "x": 340,
+            "y": 1310
+          },
+          "params": {
+            "bodyType": "dynamic",
+            "shape": "box",
+            "mass": 0.6,
+            "friction": 0.6,
+            "restitution": 0.05,
+            "linearDamping": 0.3,
+            "angularDamping": 0.4,
+            "gravityScale": 1,
+            "ccd": false
+          }
+        },
+        {
+          "id": "crate_geo_1",
+          "type": "object/box",
+          "position": {
+            "x": 60,
+            "y": 1420
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 2.6,
+              "y": 0.5,
+              "z": 2.6
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0.3,
+              "z": 0
+            },
+            "scale": {
+              "x": 0.9,
+              "y": 0.9,
+              "z": 0.9
+            },
+            "color": 12999484,
+            "roughness": 0.8,
+            "metalness": 0,
+            "opacity": 1
+          }
+        },
+        {
+          "id": "crate_body_1",
+          "type": "physics/rigid-body",
+          "position": {
+            "x": 340,
+            "y": 1420
+          },
+          "params": {
+            "bodyType": "dynamic",
+            "shape": "box",
+            "mass": 0.6,
+            "friction": 0.6,
+            "restitution": 0.05,
+            "linearDamping": 0.3,
+            "angularDamping": 0.4,
+            "gravityScale": 1,
+            "ccd": false
+          }
+        },
+        {
+          "id": "crate_geo_2",
+          "type": "object/box",
+          "position": {
+            "x": 60,
+            "y": 1530
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 2.0,
+              "y": 1.5,
+              "z": 2.3
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0.6,
+              "z": 0
+            },
+            "scale": {
+              "x": 0.9,
+              "y": 0.9,
+              "z": 0.9
+            },
+            "color": 14201450,
+            "roughness": 0.8,
+            "metalness": 0,
+            "opacity": 1
+          }
+        },
+        {
+          "id": "crate_body_2",
+          "type": "physics/rigid-body",
+          "position": {
+            "x": 340,
+            "y": 1530
+          },
+          "params": {
+            "bodyType": "dynamic",
+            "shape": "box",
+            "mass": 0.6,
+            "friction": 0.6,
+            "restitution": 0.05,
+            "linearDamping": 0.3,
+            "angularDamping": 0.4,
+            "gravityScale": 1,
+            "ccd": false
+          }
+        },
+        {
+          "id": "crate_geo_3",
+          "type": "object/box",
+          "position": {
+            "x": 60,
+            "y": 1640
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": -2.5,
+              "y": 0.5,
+              "z": -2.0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0.8999999999999999,
+              "z": 0
+            },
+            "scale": {
+              "x": 0.9,
+              "y": 0.9,
+              "z": 0.9
+            },
+            "color": 9412698,
+            "roughness": 0.8,
+            "metalness": 0,
+            "opacity": 1
+          }
+        },
+        {
+          "id": "crate_body_3",
+          "type": "physics/rigid-body",
+          "position": {
+            "x": 340,
+            "y": 1640
+          },
+          "params": {
+            "bodyType": "dynamic",
+            "shape": "box",
+            "mass": 0.6,
+            "friction": 0.6,
+            "restitution": 0.05,
+            "linearDamping": 0.3,
+            "angularDamping": 0.4,
+            "gravityScale": 1,
+            "ccd": false
+          }
+        },
+        {
+          "id": "char_1",
+          "type": "physics/character",
+          "position": {
+            "x": 880,
+            "y": 340
+          },
+          "params": {
+            "startPosition": {
+              "x": 0,
+              "y": 2,
+              "z": 6
+            },
+            "radius": 0.35,
+            "height": 1.8,
+            "offset": 0.02,
+            "walkSpeed": 5,
+            "acceleration": 45,
+            "friction": 12,
+            "airControl": 0.35,
+            "gravity": 22,
+            "jumpSpeed": 7.5,
+            "maxSlope": 0.8726646259971648,
+            "minSlideSlope": 0.6981317007977318,
+            "autostep": 0.4,
+            "autostepMinWidth": 0.15,
+            "autostepDynamic": true,
+            "snapToGround": 0.3,
+            "pushBodies": true,
+            "characterMass": 80,
+            "respawnBelow": -30,
+            "jump": 0,
+            "reset": 0
+          }
+        },
+        {
+          "id": "xform_1",
+          "type": "transform",
+          "position": {
+            "x": 1140,
+            "y": 340
+          },
+          "params": {
+            "location": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "useLOCATION": true,
+            "useROTATION": true,
+            "useSCALE": true
+          }
+        },
+        {
+          "id": "player_1",
+          "type": "object/cylinder",
+          "position": {
+            "x": 1380,
+            "y": 340
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 0.7,
+              "y": 1.8,
+              "z": 0.7
+            },
+            "color": 14702138,
+            "roughness": 0.5,
+            "metalness": 0.1,
+            "opacity": 1
+          }
+        },
+        {
+          "id": "amb_1",
+          "type": "light/ambient",
+          "position": {
+            "x": 1380,
+            "y": 560
+          },
+          "params": {
+            "color": 10467024,
+            "intensity": 0.55
+          }
+        },
+        {
+          "id": "sun_1",
+          "type": "light/directional",
+          "position": {
+            "x": 1380,
+            "y": 660
+          },
+          "params": {
+            "color": 16773840,
+            "intensity": 1.7,
+            "location": {
+              "x": 6,
+              "y": 10,
+              "z": 5
+            },
+            "castShadow": 1
+          }
+        },
+        {
+          "id": "merge_1",
+          "type": "structure/merge",
+          "position": {
+            "x": 1620,
+            "y": 440
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            }
+          }
+        },
+        {
+          "id": "render_1",
+          "type": "render",
+          "position": {
+            "x": 1880,
+            "y": 440
+          },
+          "params": {
+            "frameCount": 600,
+            "fps": 60,
+            "resolutionPreset": "16:9 (1920x1080)",
+            "width": 1920,
+            "height": 1080
+          }
+        }
+      ],
+      "connections": [
+        {
+          "id": "c_k_right_isDown_act_x_pos0",
+          "fromNode": "k_right",
+          "fromSocket": "isDown",
+          "toNode": "act_x",
+          "toSocket": "pos0"
+        },
+        {
+          "id": "c_pad_1_leftX_act_x_pos1",
+          "fromNode": "pad_1",
+          "fromSocket": "leftX",
+          "toNode": "act_x",
+          "toSocket": "pos1"
+        },
+        {
+          "id": "c_k_left_isDown_act_x_neg0",
+          "fromNode": "k_left",
+          "fromSocket": "isDown",
+          "toNode": "act_x",
+          "toSocket": "neg0"
+        },
+        {
+          "id": "c_k_back_isDown_act_z_pos0",
+          "fromNode": "k_back",
+          "fromSocket": "isDown",
+          "toNode": "act_z",
+          "toSocket": "pos0"
+        },
+        {
+          "id": "c_pad_1_leftY_act_z_pos1",
+          "fromNode": "pad_1",
+          "fromSocket": "leftY",
+          "toNode": "act_z",
+          "toSocket": "pos1"
+        },
+        {
+          "id": "c_k_fwd_isDown_act_z_neg0",
+          "fromNode": "k_fwd",
+          "fromSocket": "isDown",
+          "toNode": "act_z",
+          "toSocket": "neg0"
+        },
+        {
+          "id": "c_act_x_value_move_1_x",
+          "fromNode": "act_x",
+          "fromSocket": "value",
+          "toNode": "move_1",
+          "toSocket": "x"
+        },
+        {
+          "id": "c_act_z_value_move_1_z",
+          "fromNode": "act_z",
+          "fromSocket": "value",
+          "toNode": "move_1",
+          "toSocket": "z"
+        },
+        {
+          "id": "c_world_1_world_floor_body_world",
+          "fromNode": "world_1",
+          "fromSocket": "world",
+          "toNode": "floor_body",
+          "toSocket": "world"
+        },
+        {
+          "id": "c_floor_geo_geometry_floor_body_geometry",
+          "fromNode": "floor_geo",
+          "fromSocket": "geometry",
+          "toNode": "floor_body",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "c_world_1_world_kerb_body_world",
+          "fromNode": "world_1",
+          "fromSocket": "world",
+          "toNode": "kerb_body",
+          "toSocket": "world"
+        },
+        {
+          "id": "c_kerb_geo_geometry_kerb_body_geometry",
+          "fromNode": "kerb_geo",
+          "fromSocket": "geometry",
+          "toNode": "kerb_body",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "c_world_1_world_wall_a_body_world",
+          "fromNode": "world_1",
+          "fromSocket": "world",
+          "toNode": "wall_a_body",
+          "toSocket": "world"
+        },
+        {
+          "id": "c_wall_a_geo_geometry_wall_a_body_geometry",
+          "fromNode": "wall_a_geo",
+          "fromSocket": "geometry",
+          "toNode": "wall_a_body",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "c_world_1_world_wall_b_body_world",
+          "fromNode": "world_1",
+          "fromSocket": "world",
+          "toNode": "wall_b_body",
+          "toSocket": "world"
+        },
+        {
+          "id": "c_wall_b_geo_geometry_wall_b_body_geometry",
+          "fromNode": "wall_b_geo",
+          "fromSocket": "geometry",
+          "toNode": "wall_b_body",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "c_world_1_world_ramp_body_world",
+          "fromNode": "world_1",
+          "fromSocket": "world",
+          "toNode": "ramp_body",
+          "toSocket": "world"
+        },
+        {
+          "id": "c_ramp_geo_geometry_ramp_body_geometry",
+          "fromNode": "ramp_geo",
+          "fromSocket": "geometry",
+          "toNode": "ramp_body",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "c_world_1_world_crate_body_0_world",
+          "fromNode": "world_1",
+          "fromSocket": "world",
+          "toNode": "crate_body_0",
+          "toSocket": "world"
+        },
+        {
+          "id": "c_crate_geo_0_geometry_crate_body_0_geometry",
+          "fromNode": "crate_geo_0",
+          "fromSocket": "geometry",
+          "toNode": "crate_body_0",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "c_world_1_world_crate_body_1_world",
+          "fromNode": "world_1",
+          "fromSocket": "world",
+          "toNode": "crate_body_1",
+          "toSocket": "world"
+        },
+        {
+          "id": "c_crate_geo_1_geometry_crate_body_1_geometry",
+          "fromNode": "crate_geo_1",
+          "fromSocket": "geometry",
+          "toNode": "crate_body_1",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "c_world_1_world_crate_body_2_world",
+          "fromNode": "world_1",
+          "fromSocket": "world",
+          "toNode": "crate_body_2",
+          "toSocket": "world"
+        },
+        {
+          "id": "c_crate_geo_2_geometry_crate_body_2_geometry",
+          "fromNode": "crate_geo_2",
+          "fromSocket": "geometry",
+          "toNode": "crate_body_2",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "c_world_1_world_crate_body_3_world",
+          "fromNode": "world_1",
+          "fromSocket": "world",
+          "toNode": "crate_body_3",
+          "toSocket": "world"
+        },
+        {
+          "id": "c_crate_geo_3_geometry_crate_body_3_geometry",
+          "fromNode": "crate_geo_3",
+          "fromSocket": "geometry",
+          "toNode": "crate_body_3",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "c_world_1_world_char_1_world",
+          "fromNode": "world_1",
+          "fromSocket": "world",
+          "toNode": "char_1",
+          "toSocket": "world"
+        },
+        {
+          "id": "c_move_1_out_char_1_move",
+          "fromNode": "move_1",
+          "fromSocket": "out",
+          "toNode": "char_1",
+          "toSocket": "move"
+        },
+        {
+          "id": "c_k_jump_isDown_char_1_jump",
+          "fromNode": "k_jump",
+          "fromSocket": "isDown",
+          "toNode": "char_1",
+          "toSocket": "jump"
+        },
+        {
+          "id": "c_char_1_position_xform_1_location",
+          "fromNode": "char_1",
+          "fromSocket": "position",
+          "toNode": "xform_1",
+          "toSocket": "location"
+        },
+        {
+          "id": "c_xform_1_matrix_player_1_matrix",
+          "fromNode": "xform_1",
+          "fromSocket": "matrix",
+          "toNode": "player_1",
+          "toSocket": "matrix"
+        },
+        {
+          "id": "c_floor_body_geometry_merge_1_in0",
+          "fromNode": "floor_body",
+          "fromSocket": "geometry",
+          "toNode": "merge_1",
+          "toSocket": "in0"
+        },
+        {
+          "id": "c_kerb_body_geometry_merge_1_in1",
+          "fromNode": "kerb_body",
+          "fromSocket": "geometry",
+          "toNode": "merge_1",
+          "toSocket": "in1"
+        },
+        {
+          "id": "c_wall_a_body_geometry_merge_1_in2",
+          "fromNode": "wall_a_body",
+          "fromSocket": "geometry",
+          "toNode": "merge_1",
+          "toSocket": "in2"
+        },
+        {
+          "id": "c_wall_b_body_geometry_merge_1_in3",
+          "fromNode": "wall_b_body",
+          "fromSocket": "geometry",
+          "toNode": "merge_1",
+          "toSocket": "in3"
+        },
+        {
+          "id": "c_ramp_body_geometry_merge_1_in4",
+          "fromNode": "ramp_body",
+          "fromSocket": "geometry",
+          "toNode": "merge_1",
+          "toSocket": "in4"
+        },
+        {
+          "id": "c_crate_body_0_geometry_merge_1_in5",
+          "fromNode": "crate_body_0",
+          "fromSocket": "geometry",
+          "toNode": "merge_1",
+          "toSocket": "in5"
+        },
+        {
+          "id": "c_crate_body_1_geometry_merge_1_in6",
+          "fromNode": "crate_body_1",
+          "fromSocket": "geometry",
+          "toNode": "merge_1",
+          "toSocket": "in6"
+        },
+        {
+          "id": "c_crate_body_2_geometry_merge_1_in7",
+          "fromNode": "crate_body_2",
+          "fromSocket": "geometry",
+          "toNode": "merge_1",
+          "toSocket": "in7"
+        },
+        {
+          "id": "c_crate_body_3_geometry_merge_1_in8",
+          "fromNode": "crate_body_3",
+          "fromSocket": "geometry",
+          "toNode": "merge_1",
+          "toSocket": "in8"
+        },
+        {
+          "id": "c_player_1_geometry_merge_1_in9",
+          "fromNode": "player_1",
+          "fromSocket": "geometry",
+          "toNode": "merge_1",
+          "toSocket": "in9"
+        },
+        {
+          "id": "c_amb_1_light_merge_1_in10",
+          "fromNode": "amb_1",
+          "fromSocket": "light",
+          "toNode": "merge_1",
+          "toSocket": "in10"
+        },
+        {
+          "id": "c_sun_1_light_merge_1_in11",
+          "fromNode": "sun_1",
+          "fromSocket": "light",
+          "toNode": "merge_1",
+          "toSocket": "in11"
+        },
+        {
+          "id": "c_merge_1_geometry_render_1_geometry",
+          "fromNode": "merge_1",
+          "fromSocket": "geometry",
+          "toNode": "render_1",
+          "toSocket": "geometry"
+        }
+      ],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    }
+  ],
+  "activeCanvas": 0
+}

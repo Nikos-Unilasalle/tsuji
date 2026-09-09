@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { beforeAll, describe, expect, test } from "vitest";
-import { PHYSICS_WORLD_NODE, RIGID_BODY_NODE } from "./rapier";
+import { PHYSICS_CHARACTER_NODE, PHYSICS_WORLD_NODE, RIGID_BODY_NODE } from "./rapier";
 import { EvalContext } from "../types";
 import {
   extractColliderGeometry,
@@ -372,5 +372,147 @@ describe("simulation", () => {
     }
     expect((last.position as THREE.Vector3).x).toBeGreaterThan(0.5);
     expect(last.speed).toBeGreaterThan(0);
+  });
+});
+
+describe("physics/character — a capsule on Rapier's own controller", () => {
+  beforeAll(async () => {
+    await initRapier();
+  });
+
+  const worldParams = () => ({ ...PHYSICS_WORLD_NODE.defaultParams });
+  const bodyParams = (overrides: Record<string, unknown> = {}) => ({
+    ...RIGID_BODY_NODE.defaultParams,
+    ...overrides,
+  });
+  const charParams = (overrides: Record<string, unknown> = {}) => ({
+    ...PHYSICS_CHARACTER_NODE.defaultParams,
+    ...overrides,
+  });
+
+  function scaledBox(scale: THREE.Vector3, position: THREE.Vector3): THREE.Mesh {
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1));
+    mesh.scale.copy(scale);
+    mesh.position.copy(position);
+    mesh.updateMatrixWorld(true);
+    return mesh;
+  }
+
+  /** World + level + character, run for `frames` frames at 60 Hz. */
+  function walk(
+    ids: string,
+    level: { id: string; object: THREE.Object3D }[],
+    charInputs: Record<string, unknown>,
+    frames: number,
+    characterParams = charParams(),
+  ) {
+    let last: any;
+    for (let frame = 0; frame < frames; frame++) {
+      const time = frame / 60;
+      const world = PHYSICS_WORLD_NODE.evaluate({}, worldParams(), makeContext(`${ids}-w`, time)) as {
+        world: unknown;
+      };
+      for (const piece of level) {
+        RIGID_BODY_NODE.evaluate(
+          { world: world.world, geometry: piece.object },
+          bodyParams({ bodyType: "fixed" }),
+          makeContext(piece.id, time),
+        );
+      }
+      last = PHYSICS_CHARACTER_NODE.evaluate(
+        { world: world.world, ...charInputs },
+        characterParams,
+        makeContext(`${ids}-c`, time),
+      );
+    }
+    return last as { position: THREE.Vector3; grounded: number; speed: number };
+  }
+
+  const floorPiece = (id: string) => ({
+    id,
+    object: scaledBox(new THREE.Vector3(30, 1, 30), new THREE.Vector3(0, -0.5, 0)),
+  });
+
+  test("it falls onto the level and stands on it", () => {
+    const out = walk("ch1", [floorPiece("ch1-floor")], { move: new THREE.Vector3() }, 200,
+      charParams({ startPosition: new THREE.Vector3(0, 4, 0) }));
+
+    expect(out.grounded).toBe(1);
+    // Capsule centre rests at half its height above the floor.
+    expect(out.position.y).toBeCloseTo(0.9, 1);
+  });
+
+  test("it walks, and letting go leaves it where it stood", () => {
+    const level = [floorPiece("ch2-floor")];
+    const moving = walk("ch2", level, { move: new THREE.Vector3(1, 0, 0) }, 180,
+      charParams({ startPosition: new THREE.Vector3(0, 2, 0) }));
+    expect(moving.position.x).toBeGreaterThan(2);
+  });
+
+  test("a wall stops it", () => {
+    const level = [
+      floorPiece("ch3-floor"),
+      { id: "ch3-wall", object: scaledBox(new THREE.Vector3(0.5, 4, 10), new THREE.Vector3(4, 2, 0)) },
+    ];
+    const out = walk("ch3", level, { move: new THREE.Vector3(1, 0, 0) }, 400,
+      charParams({ startPosition: new THREE.Vector3(0, 2, 0) }));
+
+    // The wall's near face is at 3.75; the capsule stops a radius short of it.
+    expect(out.position.x).toBeLessThan(3.75);
+    expect(out.position.x).toBeGreaterThan(2.5);
+  });
+
+  test("auto-step climbs a kerb that would otherwise block it", () => {
+    // This is the whole reason to prefer Rapier's controller: a 0.25 step is
+    // climbed without the author modelling an invisible ramp over it.
+    const step = () => ({
+      id: "ch4-step",
+      object: scaledBox(new THREE.Vector3(6, 0.25, 10), new THREE.Vector3(5, 0.125, 0)),
+    });
+
+    const withStep = walk("ch4", [floorPiece("ch4-floor"), step()], { move: new THREE.Vector3(1, 0, 0) }, 400,
+      charParams({ startPosition: new THREE.Vector3(0, 2, 0), autostep: 0.4 }));
+
+    const withoutStep = walk("ch5", [floorPiece("ch5-floor"), { ...step(), id: "ch5-step" }],
+      { move: new THREE.Vector3(1, 0, 0) }, 400,
+      charParams({ startPosition: new THREE.Vector3(0, 2, 0), autostep: 0 }));
+
+    // Climbed: past the kerb's near face (x = 2) and standing on top of it,
+    // so its centre sits a step higher than resting on the floor did.
+    expect(withStep.position.x).toBeGreaterThan(2.2);
+    expect(withStep.position.y).toBeGreaterThan(1.0);
+    // Blocked: without auto-step it never gets up onto the kerb.
+    expect(withoutStep.position.y).toBeLessThan(withStep.position.y - 0.1);
+  });
+
+  test("with no world wired it reports its start position rather than throwing", () => {
+    const out = PHYSICS_CHARACTER_NODE.evaluate(
+      {},
+      charParams({ startPosition: new THREE.Vector3(1, 2, 3) }),
+      makeContext("ch6", 0),
+    ) as { position: THREE.Vector3; grounded: number };
+    expect(out.position.toArray()).toEqual([1, 2, 3]);
+    expect(out.grounded).toBe(0);
+  });
+
+  test("falling out of the world respawns it", () => {
+    const out = walk("ch7", [], { move: new THREE.Vector3() }, 400,
+      charParams({ startPosition: new THREE.Vector3(0, 2, 0), respawnBelow: -20 }));
+    expect(out.position.y).toBeGreaterThan(-20);
+  });
+
+  test("Reset returns it to the start", () => {
+    const level = [floorPiece("ch8-floor")];
+    walk("ch8", level, { move: new THREE.Vector3(1, 0, 0) }, 120,
+      charParams({ startPosition: new THREE.Vector3(0, 2, 0) }));
+
+    const world = PHYSICS_WORLD_NODE.evaluate({}, worldParams(), makeContext("ch8-w", 2.1)) as { world: unknown };
+    const out = PHYSICS_CHARACTER_NODE.evaluate(
+      { world: world.world, reset: 1 },
+      charParams({ startPosition: new THREE.Vector3(0, 2, 0) }),
+      makeContext("ch8-c", 2.1),
+    ) as { position: THREE.Vector3 };
+
+    expect(out.position.toArray()).toEqual([0, 2, 0]);
   });
 });

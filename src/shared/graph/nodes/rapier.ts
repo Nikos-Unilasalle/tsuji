@@ -4,6 +4,7 @@ import { NodeDefinition } from "../types";
 import { createNodeCache } from "../nodeCaches";
 import { clockInput, numberInput } from "./object";
 import { asVector3 } from "./transform";
+import { accelerateHorizontal, applyFriction } from "../../three/controls/capsuleController";
 import {
   COLLIDER_SHAPES,
   ColliderShape,
@@ -338,6 +339,271 @@ export const RIGID_BODY_NODE: NodeDefinition = {
       position: bodyPosition(body),
       velocity,
       speed: velocity.length(),
+    };
+  },
+};
+
+/* -------------------------------------------------------------------------- */
+/* Character                                                                  */
+/* -------------------------------------------------------------------------- */
+
+interface CharacterState {
+  body: RAPIER.RigidBody;
+  collider: RAPIER.Collider;
+  controller: RAPIER.KinematicCharacterController;
+  worldNodeId: string;
+  generation: number;
+  signature: string;
+  velocity: THREE.Vector3;
+  grounded: boolean;
+  lastTime?: number;
+}
+
+const characterCache = createNodeCache<CharacterState>();
+
+/**
+ * Character (Physics) — a capsule that walks the physics world.
+ *
+ * The sibling of `physics/capsule-controller`, and the one to reach for once a
+ * Physics World is in the graph. Both are kinematic — a character wants exact
+ * control, not momentum — but this one is moved by Rapier's own character
+ * controller, which brings the three things a hand-rolled sweep does not get
+ * for free:
+ *
+ * - **Auto-step.** Stairs and kerbs are climbed instead of blocking, without
+ *   the author modelling invisible ramps over every step.
+ * - **Snap to ground.** Walking down a slope keeps contact instead of
+ *   launching into a little arc at every break in the surface.
+ * - **Impulses to dynamic bodies.** The character can shove crates around,
+ *   which is the whole point of having a solver in the scene.
+ *
+ * It collides against everything in the world, so its level is whatever
+ * `physics/rigid-body` nodes have been added — no separate collider input to
+ * keep in sync with what is on screen.
+ */
+export const PHYSICS_CHARACTER_NODE: NodeDefinition = {
+  type: "physics/character",
+  label: "Character (Physics)",
+  category: "physics",
+  inputs: [
+    { id: "world", label: "World", type: "any" },
+    { id: "move", label: "Move (XZ)", type: "vector" },
+    { id: "jump", label: "Jump", type: "value" },
+    { id: "walkSpeed", label: "Walk Speed", type: "value" },
+    { id: "time", label: "Time", type: "value" },
+    { id: "reset", label: "Reset", type: "value" },
+  ],
+  outputs: [
+    { id: "position", label: "Position", type: "vector" },
+    { id: "matrix", label: "Matrix", type: "matrix" },
+    { id: "grounded", label: "Grounded", type: "value" },
+    { id: "velocity", label: "Velocity", type: "vector" },
+    { id: "speed", label: "Speed", type: "value" },
+  ],
+  defaultParams: {
+    startPosition: new THREE.Vector3(0, 2, 0),
+    radius: 0.35,
+    height: 1.8,
+    walkSpeed: 5,
+    acceleration: 40,
+    friction: 12,
+    airControl: 0.3,
+    gravity: 22,
+    jumpSpeed: 7,
+    maxSlope: THREE.MathUtils.degToRad(50),
+    minSlideSlope: THREE.MathUtils.degToRad(40),
+    autostep: 0.35,
+    autostepMinWidth: 0.15,
+    autostepDynamic: true,
+    snapToGround: 0.3,
+    pushBodies: true,
+    characterMass: 80,
+    offset: 0.02,
+    respawnBelow: -50,
+    jump: 0,
+    reset: 0,
+  },
+  paramFields: [
+    { id: "startPosition", label: "Start Position", kind: "vector" },
+    { id: "radius", label: "Capsule Radius", kind: "number", step: 0.05, group: "Body" },
+    { id: "height", label: "Capsule Height", kind: "number", step: 0.1, group: "Body" },
+    { id: "offset", label: "Skin Offset", kind: "number", step: 0.005, group: "Body" },
+    { id: "walkSpeed", label: "Walk Speed (units/s)", kind: "number", step: 0.5, group: "Movement" },
+    { id: "acceleration", label: "Acceleration", kind: "number", step: 1, group: "Movement" },
+    { id: "friction", label: "Ground Friction", kind: "number", step: 0.5, group: "Movement" },
+    { id: "airControl", label: "Air Control (0–1)", kind: "number", step: 0.05, group: "Movement" },
+    { id: "gravity", label: "Gravity", kind: "number", step: 0.5, group: "Jump & Gravity" },
+    { id: "jumpSpeed", label: "Jump Speed", kind: "number", step: 0.5, group: "Jump & Gravity" },
+    { id: "maxSlope", label: "Max Slope (°)", kind: "number", step: 1, degrees: true, group: "Jump & Gravity" },
+    {
+      id: "minSlideSlope",
+      label: "Slide Above (°)",
+      kind: "number",
+      step: 1,
+      degrees: true,
+      group: "Jump & Gravity",
+    },
+    { id: "autostep", label: "Auto-step Height (0 = off)", kind: "number", step: 0.05, group: "Stairs & Ground" },
+    { id: "autostepMinWidth", label: "Auto-step Min Width", kind: "number", step: 0.05, group: "Stairs & Ground" },
+    { id: "autostepDynamic", label: "Step onto Dynamic Bodies", kind: "boolean", group: "Stairs & Ground" },
+    { id: "snapToGround", label: "Snap to Ground (0 = off)", kind: "number", step: 0.05, group: "Stairs & Ground" },
+    { id: "pushBodies", label: "Push Dynamic Bodies", kind: "boolean", group: "Interaction" },
+    { id: "characterMass", label: "Character Mass (for pushing)", kind: "number", step: 5, group: "Interaction" },
+    { id: "respawnBelow", label: "Respawn Below Y", kind: "number", step: 1, group: "Solver" },
+  ],
+  evaluate: (inputs, params, ctx) => {
+    const handle = isPhysicsWorld(inputs.world) ? inputs.world : null;
+    const api = getRapier();
+    const start = asVector3(params.startPosition, new THREE.Vector3(0, 2, 0));
+
+    if (!handle || !api) {
+      return {
+        position: start.clone(),
+        matrix: new THREE.Matrix4().setPosition(start),
+        grounded: 0,
+        velocity: new THREE.Vector3(),
+        speed: 0,
+      };
+    }
+
+    const radius = Math.max(0.01, numberInput(undefined, params.radius, 0.35));
+    const height = Math.max(2 * radius + 0.01, numberInput(undefined, params.height, 1.8));
+    const offset = Math.max(0.001, numberInput(undefined, params.offset, 0.02));
+    const signature = `${radius}|${height}|${offset}|${handle.generation}`;
+
+    let state = characterCache.get(ctx.nodeId);
+
+    if (!state || state.signature !== signature || state.worldNodeId !== handle.nodeId) {
+      if (state && state.worldNodeId === handle.nodeId && state.generation === handle.generation) {
+        handle.world.removeCharacterController(state.controller);
+        handle.world.removeRigidBody(state.body);
+      }
+
+      const desc = api.RigidBodyDesc.kinematicPositionBased().setTranslation(start.x, start.y, start.z);
+      const body = handle.world.createRigidBody(desc);
+      // Rapier's capsule half-height excludes the caps, same as everywhere else.
+      const collider = handle.world.createCollider(
+        api.ColliderDesc.capsule(Math.max(0.001, height / 2 - radius), radius),
+        body,
+      );
+      const controller = handle.world.createCharacterController(offset);
+      controller.setUp({ x: 0, y: 1, z: 0 });
+
+      state = {
+        body,
+        collider,
+        controller,
+        worldNodeId: handle.nodeId,
+        generation: handle.generation,
+        signature,
+        velocity: new THREE.Vector3(),
+        grounded: false,
+      };
+      characterCache.set(ctx.nodeId, state);
+    }
+
+    const { body, collider, controller } = state;
+
+    controller.setMaxSlopeClimbAngle(numberInput(undefined, params.maxSlope, THREE.MathUtils.degToRad(50)));
+    controller.setMinSlopeSlideAngle(numberInput(undefined, params.minSlideSlope, THREE.MathUtils.degToRad(40)));
+    controller.setApplyImpulsesToDynamicBodies(Boolean(params.pushBodies ?? true));
+    controller.setCharacterMass(Math.max(0, numberInput(undefined, params.characterMass, 80)));
+
+    const autostep = Math.max(0, numberInput(undefined, params.autostep, 0.35));
+    if (autostep > 0) {
+      controller.enableAutostep(
+        autostep,
+        Math.max(0, numberInput(undefined, params.autostepMinWidth, 0.15)),
+        Boolean(params.autostepDynamic ?? true),
+      );
+    } else {
+      controller.disableAutostep();
+    }
+
+    const snap = Math.max(0, numberInput(undefined, params.snapToGround, 0.3));
+    if (snap > 0) controller.enableSnapToGround(snap);
+    else controller.disableSnapToGround();
+
+    const time = clockInput(inputs, params, ctx);
+    const rewound = state.lastTime !== undefined && time < state.lastTime - REWIND_THRESHOLD;
+    const first = state.lastTime === undefined;
+    // Clamped for the same reason as everywhere else: one long stall must not
+    // become one enormous step.
+    const dt = first || rewound ? 0 : Math.min(0.1, Math.max(0, time - state.lastTime!));
+    state.lastTime = time;
+
+    const resetting = Number(inputs.reset !== undefined ? inputs.reset : params.reset) > 0.5;
+
+    if (first || rewound || resetting) {
+      body.setNextKinematicTranslation({ x: start.x, y: start.y, z: start.z });
+      body.setTranslation({ x: start.x, y: start.y, z: start.z }, true);
+      state.velocity.set(0, 0, 0);
+      state.grounded = false;
+    } else if (dt > 0) {
+      const walkSpeed = Math.max(0, numberInput(inputs.walkSpeed, params.walkSpeed, 5));
+      const control = state.grounded ? 1 : THREE.MathUtils.clamp(numberInput(undefined, params.airControl, 0.3), 0, 1);
+
+      const move = asVector3(inputs.move, new THREE.Vector3());
+      const target = new THREE.Vector3(move.x, 0, move.z);
+      if (target.lengthSq() > 1) target.normalize();
+      target.multiplyScalar(walkSpeed);
+
+      if (target.lengthSq() > 1e-8) {
+        accelerateHorizontal(
+          state.velocity,
+          target,
+          Math.max(0, numberInput(undefined, params.acceleration, 40)) * control,
+          dt,
+        );
+      } else if (state.grounded) {
+        applyFriction(state.velocity, Math.max(0, numberInput(undefined, params.friction, 12)), dt);
+      }
+
+      const jumping = Number(inputs.jump !== undefined ? inputs.jump : params.jump) > 0.5;
+      if (jumping && state.grounded) {
+        state.velocity.y = numberInput(undefined, params.jumpSpeed, 7);
+        state.grounded = false;
+      }
+
+      state.velocity.y -= numberInput(undefined, params.gravity, 22) * dt;
+
+      const desired = state.velocity.clone().multiplyScalar(dt);
+      controller.computeColliderMovement(collider, { x: desired.x, y: desired.y, z: desired.z });
+
+      const corrected = controller.computedMovement();
+      state.grounded = controller.computedGrounded();
+
+      const current = body.translation();
+      const next = {
+        x: current.x + corrected.x,
+        y: current.y + corrected.y,
+        z: current.z + corrected.z,
+      };
+      body.setNextKinematicTranslation(next);
+      // Kinematic bodies only adopt their next translation when the world
+      // steps; setting it directly keeps the graph's readings in step with the
+      // controller rather than a frame behind it.
+      body.setTranslation(next, true);
+
+      // Resting on the floor still accumulates gravity frame after frame; left
+      // alone, stepping off a ledge after standing still would launch the
+      // character at terminal velocity.
+      if (state.grounded && state.velocity.y < 0) state.velocity.y = 0;
+
+      const floor = numberInput(undefined, params.respawnBelow, -50);
+      if (next.y < floor) {
+        body.setTranslation({ x: start.x, y: start.y, z: start.z }, true);
+        state.velocity.set(0, 0, 0);
+      }
+    }
+
+    const position = bodyPosition(body);
+    return {
+      position,
+      matrix: new THREE.Matrix4().setPosition(position),
+      grounded: state.grounded ? 1 : 0,
+      velocity: state.velocity.clone(),
+      speed: Math.hypot(state.velocity.x, state.velocity.z),
     };
   },
 };
