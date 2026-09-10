@@ -260,6 +260,7 @@ const _parentWorld = new THREE.Matrix4();
 const _pose = new THREE.Vector3();
 const _poseQuat = new THREE.Quaternion();
 const _poseScale = new THREE.Vector3();
+const _boxSize = new THREE.Vector3();
 
 /**
  * Rigid Body — hands geometry to the physics world and moves it with whatever
@@ -386,30 +387,46 @@ export const RIGID_BODY_NODE: NodeDefinition = {
         let base = shapes.get(target.mesh.uuid);
         if (base === undefined) {
           base = extractColliderGeometry(target.mesh);
+          // A geometry with no volume (a box scaled to 0 on an axis, a
+          // degenerate merge) has nothing for a convex hull to wrap — feeding
+          // it to Rapier anyway risks a WASM-side panic that corrupts the
+          // *whole* physics world, not just this target, which is a far
+          // worse failure than one crate quietly having no collider.
+          if (base && (base.box.isEmpty() || base.box.getSize(_boxSize).lengthSq() < 1e-10)) {
+            console.warn(`physics/rigid-body: skipping a degenerate (zero-volume) collider on "${target.mesh.name || target.mesh.uuid}"`);
+            base = null;
+          }
           shapes.set(target.mesh.uuid, base);
         }
         if (!base) continue;
 
         target.matrix.decompose(_pose, _poseQuat, _poseScale);
 
-        const desc =
-          bodyType === "fixed"
-            ? api.RigidBodyDesc.fixed()
-            : bodyType === "kinematic"
-              ? api.RigidBodyDesc.kinematicPositionBased()
-              : api.RigidBodyDesc.dynamic();
-        desc.setTranslation(_pose.x, _pose.y, _pose.z);
-        desc.setRotation({ x: _poseQuat.x, y: _poseQuat.y, z: _poseQuat.z, w: _poseQuat.w });
+        // One bad target must not cost every other one in this same Merge its
+        // body — an exception here is caught per-target, not left to unwind
+        // out of the whole rebuild.
+        try {
+          const desc =
+            bodyType === "fixed"
+              ? api.RigidBodyDesc.fixed()
+              : bodyType === "kinematic"
+                ? api.RigidBodyDesc.kinematicPositionBased()
+                : api.RigidBodyDesc.dynamic();
+          desc.setTranslation(_pose.x, _pose.y, _pose.z);
+          desc.setRotation({ x: _poseQuat.x, y: _poseQuat.y, z: _poseQuat.z, w: _poseQuat.w });
 
-        const body = handle.world.createRigidBody(desc);
-        // An instance's scale lives in its matrix and a collider has none, so
-        // each distinct size needs its own scaled copy of the shape.
-        const scaled =
-          target.instanceIndex >= 0 ? scaleColliderGeometry(base, _poseScale) : base;
-        const colliderDesc = buildColliderDesc(api, shape, scaled);
-        if (colliderDesc) handle.world.createCollider(colliderDesc, body);
+          const body = handle.world.createRigidBody(desc);
+          // An instance's scale lives in its matrix and a collider has none, so
+          // each distinct size needs its own scaled copy of the shape.
+          const scaled =
+            target.instanceIndex >= 0 ? scaleColliderGeometry(base, _poseScale) : base;
+          const colliderDesc = buildColliderDesc(api, shape, scaled);
+          if (colliderDesc) handle.world.createCollider(colliderDesc, body);
 
-        entries.push({ body, mesh: target.mesh, instanceIndex: target.instanceIndex });
+          entries.push({ body, mesh: target.mesh, instanceIndex: target.instanceIndex });
+        } catch (err) {
+          console.error(`physics/rigid-body: failed to create a body for "${target.mesh.name || target.mesh.uuid}"`, err);
+        }
       }
 
       if (entries.length === 0) return idle();
