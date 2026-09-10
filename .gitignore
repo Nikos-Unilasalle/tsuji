@@ -31,3 +31,5 @@ __pycache__/
 # Obsidian Vault local state and caches
 .obsidian/
 docs_vault/.obsidian/
+
+scratch/

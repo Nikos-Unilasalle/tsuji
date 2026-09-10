@@ -6,6 +6,7 @@ import { DECOMPOSE_MATRIX_NODE, LOOK_AT_NODE, MATRIX_DELAY_NODE, MATRIX_TRANSFOR
 import { CLAMP_NODE, MAP_RANGE_NODE, VALUE_CONSTANT_NODE, VALUE_MATH_NODE } from "./valueMath";
 import { MERGE_NODE } from "./merge";
 import { OBJECT_BAR_GRAPH_NODE, OBJECT_BOX_NODE, OBJECT_CONE_NODE, OBJECT_CYLINDER_NODE, OBJECT_DISC_NODE, OBJECT_EMPTY_NODE, OBJECT_PLANE_NODE, OBJECT_POLYGON_NODE, OBJECT_SPHERE_NODE, OBJECT_TEXT_NODE } from "./object";
+import { TERRAIN_NODE } from "./terrain";
 import { EDIT_MESH_POINTS_NODE } from "./editMeshPoints";
 import { CHART_AXIS_NODE, LINE_GRAPH_NODE, PIE_CHART_NODE, POINT_CLOUD_NODE, SCATTER_PLOT_NODE } from "./chart";
 import { CANVAS_GOTO_NODE } from "./canvas";
@@ -206,6 +207,7 @@ export const STARTER_NODES = [
   EDIT_MESH_POINTS_NODE,
   OBJECT_EMPTY_NODE,
   OBJECT_PLANE_NODE,
+  TERRAIN_NODE,
   OBJECT_SPHERE_NODE,
   OBJECT_DISC_NODE,
   OBJECT_POLYGON_NODE,
@@ -484,4 +486,5 @@ export * from "./input";
 export * from "./integrate";
 export * from "./character";
 export * from "./rapier";
+export * from "./terrain";
 

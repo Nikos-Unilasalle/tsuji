@@ -60,6 +60,50 @@ function isPaintOrGreaseNode(node: { type: string } | null | undefined): boolean
   return node.type === GREASE_PENCIL_NODE.type || node.type === PAINT_ON_GEOMETRY_NODE.type;
 }
 
+import {
+  applySculptStroke,
+  SculptStrokeParams,
+  TerrainBrushFalloff,
+  TerrainBrushTool,
+} from "./terrainSculpt";
+import { TerrainGridConfig } from "./terrainEngine";
+
+function isTerrainNode(node: { type: string } | null | undefined): boolean {
+  if (!node) return false;
+  return node.type === "object/terrain";
+}
+
+function getTerrainMeshForNode(
+  nodeId: string,
+  latestResults: Map<string, Record<string, unknown>> | null | undefined,
+): THREE.Mesh | null {
+  const res = latestResults?.get(nodeId);
+  if (res?.geometry instanceof THREE.Mesh && res.geometry.userData?.isTerrain) {
+    return res.geometry;
+  }
+  return null;
+}
+
+function createTerrainBrushGizmo(): THREE.LineLoop {
+  const points: THREE.Vector3[] = [];
+  const segments = 64;
+  for (let i = 0; i <= segments; i++) {
+    const theta = (i / segments) * Math.PI * 2;
+    points.push(new THREE.Vector3(Math.cos(theta), 0.05, Math.sin(theta)));
+  }
+  const geo = new THREE.BufferGeometry().setFromPoints(points);
+  const mat = new THREE.LineBasicMaterial({
+    color: 0x10b981,
+    depthTest: false,
+    transparent: true,
+    opacity: 0.85,
+  });
+  const line = new THREE.LineLoop(geo, mat);
+  line.visible = false;
+  line.renderOrder = 9999;
+  return line;
+}
+
 function getTargetGeometryForNode(
   node: { id: string; type: string },
   graph: Graph,
@@ -635,6 +679,20 @@ export function Viewport({
   const gpPressureModifierRef = useRef(1.0);
   const gpWorkingFramesRef = useRef<KeyframeDrawing[] | null>(null);
   const gpSmoothedWorldPosRef = useRef<THREE.Vector3 | null>(null);
+
+  // Terrain sculpting state
+  const [terrainBrushTool, setTerrainBrushTool] = useState<TerrainBrushTool>("sculpt");
+  const terrainBrushToolRef = useRef<TerrainBrushTool>("sculpt");
+  terrainBrushToolRef.current = terrainBrushTool;
+  const [terrainBrushFalloff, setTerrainBrushFalloff] = useState<TerrainBrushFalloff>("smooth");
+  const terrainBrushFalloffRef = useRef<TerrainBrushFalloff>("smooth");
+  terrainBrushFalloffRef.current = terrainBrushFalloff;
+  const [terrainInvert, setTerrainInvert] = useState(false);
+  const terrainInvertRef = useRef(false);
+  terrainInvertRef.current = terrainInvert;
+  const isTerrainSculptingRef = useRef(false);
+  const terrainSculptWorkingOffsetsRef = useRef<Record<number, number> | null>(null);
+  const terrainTargetHeightRef = useRef<number | null>(null);
 
   const snapSelectedCameraToEditorRef = useRef<() => void>(() => {});
   const cameraGuideRef = useRef<HTMLDivElement>(null);
@@ -1302,6 +1360,7 @@ export function Viewport({
       transparent: true,
     });
     const pivotCrossPool: THREE.LineSegments[] = [];
+    const terrainBrushGizmo = createTerrainBrushGizmo();
 
     if (!outputMode) {
       editorUiScene.add(curveHandles.group);
@@ -1315,6 +1374,7 @@ export function Viewport({
       editorUiScene.add(emitterProxy);
       editorUiScene.add(gizmoPivotProxy);
       editorUiScene.add(pivotCrossGroup);
+      editorUiScene.add(terrainBrushGizmo);
       // The face-selection highlight lives in the *main* scene (not the
       // editor overlay, which clears depth and would show every selected face
       // through the object) so it is occluded like the surface it sits on.
@@ -1460,6 +1520,26 @@ export function Viewport({
         // Lock the fixed axis view (toggle) — only meaningful in an X/Y/Z view.
         e.preventDefault();
         toggleViewLock();
+      }
+
+      // Terrain brush size shortcuts: [ (decrease) and ] (increase)
+      const terrainNode = selectedNodeIdRef.current
+        ? graphRef.current.nodes.find((n) => n.id === selectedNodeIdRef.current && isTerrainNode(n))
+        : null;
+      if (terrainNode) {
+        if (e.key === "[" || e.key === "{") {
+          e.preventDefault();
+          const cur = Number(terrainNode.params.brushSize) || 4;
+          const next = Math.max(0.5, Math.round((cur - 0.5) * 2) / 2);
+          onParamChangeRef.current?.("brushSize", next, terrainNode.id);
+          return;
+        } else if (e.key === "]" || e.key === "}") {
+          e.preventDefault();
+          const cur = Number(terrainNode.params.brushSize) || 4;
+          const next = Math.min(50, Math.round((cur + 0.5) * 2) / 2);
+          onParamChangeRef.current?.("brushSize", next, terrainNode.id);
+          return;
+        }
       }
     }
 
@@ -1886,6 +1966,56 @@ export function Viewport({
         ? graphRef.current.nodes.find((n) => n.id === selectedNodeIdRef.current && isPaintOrGreaseNode(n))
         : null;
 
+      const terrainNode = selectedNodeIdRef.current
+        ? graphRef.current.nodes.find((n) => n.id === selectedNodeIdRef.current && isTerrainNode(n))
+        : null;
+
+      if (terrainNode && !outputMode && !elevationView && e.button === 0 && !isMarqueeModifier && raycaster) {
+        const terrainMesh = getTerrainMeshForNode(terrainNode.id, latestResultsRef.current);
+        if (terrainMesh) {
+          const rect = renderer.domElement.getBoundingClientRect();
+          const mouseNorm = new THREE.Vector2(
+            ((e.clientX - rect.left) / rect.width) * 2 - 1,
+            -((e.clientY - rect.top) / rect.height) * 2 + 1,
+          );
+          raycaster.setFromCamera(mouseNorm, camera);
+          const intersects = raycaster.intersectObject(terrainMesh, false);
+          if (intersects.length > 0) {
+            const hit = intersects[0];
+            const localHit = terrainMesh.worldToLocal(hit.point.clone());
+            isTerrainSculptingRef.current = true;
+            controls.enabled = false;
+
+            const workingOffsets = { ...((terrainNode.params.sculptOffsets as Record<number, number>) || {}) };
+            terrainSculptWorkingOffsetsRef.current = workingOffsets;
+            terrainTargetHeightRef.current = localHit.y;
+
+            const brushRadius = Number(terrainNode.params.brushSize) || 4;
+            const brushStrength = Number(terrainNode.params.brushStrength) || 0.5;
+            const tool = (terrainNode.params.brushTool as TerrainBrushTool) || terrainBrushToolRef.current;
+            const falloff = (terrainNode.params.brushFalloff as TerrainBrushFalloff) || terrainBrushFalloffRef.current;
+
+            const strokeParams: SculptStrokeParams = {
+              tool,
+              falloff,
+              radius: brushRadius,
+              strength: brushStrength,
+              invert: terrainInvertRef.current || e.altKey,
+              hitPoint: localHit,
+              targetHeight: localHit.y,
+              deltaTime: 0.03,
+            };
+
+            const terrainConfig = terrainMesh.userData.terrainConfig as TerrainGridConfig;
+            const heightmapPixels = terrainMesh.userData.heightmapPixels;
+
+            applySculptStroke(terrainMesh.geometry, terrainConfig, heightmapPixels, workingOffsets, strokeParams);
+            e.stopImmediatePropagation();
+            return;
+          }
+        }
+      }
+
       const isDrawingOrModifying =
         gpToolRef.current === "pen" ||
         gpToolRef.current === "eraser_hard" ||
@@ -1993,6 +2123,73 @@ export function Viewport({
     }
 
     function onCanvasPointerMove(e: PointerEvent) {
+      const terrainNode = selectedNodeIdRef.current
+        ? graphRef.current.nodes.find((n) => n.id === selectedNodeIdRef.current && isTerrainNode(n))
+        : null;
+
+      if (terrainNode && !outputMode && host && raycaster) {
+        const terrainMesh = getTerrainMeshForNode(terrainNode.id, latestResultsRef.current);
+        if (terrainMesh) {
+          const rect = renderer.domElement.getBoundingClientRect();
+          const mouseNorm = new THREE.Vector2(
+            ((e.clientX - rect.left) / rect.width) * 2 - 1,
+            -((e.clientY - rect.top) / rect.height) * 2 + 1,
+          );
+          raycaster.setFromCamera(mouseNorm, camera);
+          const intersects = raycaster.intersectObject(terrainMesh, false);
+
+          if (intersects.length > 0) {
+            const hit = intersects[0];
+            const localHit = terrainMesh.worldToLocal(hit.point.clone());
+            const brushRadius = Number(terrainNode.params.brushSize) || 4;
+
+            if (terrainBrushGizmo) {
+              terrainBrushGizmo.visible = true;
+              terrainBrushGizmo.position.copy(hit.point);
+              if (hit.face) {
+                const worldNormal = hit.face.normal.clone().transformDirection(terrainMesh.matrixWorld);
+                terrainBrushGizmo.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), worldNormal);
+              }
+              terrainBrushGizmo.scale.set(brushRadius, brushRadius, brushRadius);
+            }
+
+            if (isTerrainSculptingRef.current && terrainSculptWorkingOffsetsRef.current) {
+              const brushStrength = Number(terrainNode.params.brushStrength) || 0.5;
+              const tool = (terrainNode.params.brushTool as TerrainBrushTool) || terrainBrushToolRef.current;
+              const falloff = (terrainNode.params.brushFalloff as TerrainBrushFalloff) || terrainBrushFalloffRef.current;
+
+              const strokeParams: SculptStrokeParams = {
+                tool,
+                falloff,
+                radius: brushRadius,
+                strength: brushStrength,
+                invert: terrainInvertRef.current || e.altKey,
+                hitPoint: localHit,
+                targetHeight: terrainTargetHeightRef.current ?? localHit.y,
+                deltaTime: 0.016,
+              };
+
+              const terrainConfig = terrainMesh.userData.terrainConfig as TerrainGridConfig;
+              const heightmapPixels = terrainMesh.userData.heightmapPixels;
+
+              applySculptStroke(
+                terrainMesh.geometry,
+                terrainConfig,
+                heightmapPixels,
+                terrainSculptWorkingOffsetsRef.current,
+                strokeParams,
+              );
+              e.stopImmediatePropagation();
+              return;
+            }
+          } else if (!isTerrainSculptingRef.current && terrainBrushGizmo) {
+            terrainBrushGizmo.visible = false;
+          }
+        }
+      } else if (terrainBrushGizmo && terrainBrushGizmo.visible) {
+        terrainBrushGizmo.visible = false;
+      }
+
       const gpNode = selectedNodeIdRef.current
         ? graphRef.current.nodes.find((n) => n.id === selectedNodeIdRef.current && isPaintOrGreaseNode(n))
         : null;
@@ -2139,6 +2336,24 @@ export function Viewport({
     }
 
     function onCanvasPointerUp(e: PointerEvent) {
+      if (isTerrainSculptingRef.current) {
+        isTerrainSculptingRef.current = false;
+        controls.enabled = true;
+        const terrainNode = selectedNodeIdRef.current
+          ? graphRef.current.nodes.find((n) => n.id === selectedNodeIdRef.current && isTerrainNode(n))
+          : null;
+        if (terrainNode && terrainSculptWorkingOffsetsRef.current) {
+          onParamChangeRef.current?.(
+            "sculptOffsets",
+            { ...terrainSculptWorkingOffsetsRef.current },
+            terrainNode.id,
+          );
+        }
+        terrainSculptWorkingOffsetsRef.current = null;
+        terrainTargetHeightRef.current = null;
+        return;
+      }
+
       const gpNode = selectedNodeIdRef.current
         ? graphRef.current.nodes.find((n) => n.id === selectedNodeIdRef.current && isPaintOrGreaseNode(n))
         : null;
@@ -3899,6 +4114,7 @@ export function Viewport({
       pointsSelectionHandles.clear();
       pointsInfluenceHandles.clear();
       pivotHandle.clear();
+      terrainBrushGizmo.removeFromParent();
       sliceProxy.removeFromParent();
       sliceVisualGeometry.dispose();
       sliceVisual.material.dispose();
@@ -4683,6 +4899,239 @@ export function Viewport({
                   <line x1="2" y1="12" x2="22" y2="12" />
                   <line x1="12" y1="2" x2="12" y2="22" />
                 </svg>
+              </button>
+            </div>
+          );
+        })()}
+      {/* Terrain Sculpt Floating Toolbar */}
+      {!outputMode &&
+        !elevationView &&
+        selectedNodeId &&
+        (() => {
+          const tNode = graph.nodes.find(
+            (n) => n.id === selectedNodeId && isTerrainNode(n),
+          );
+          if (!tNode) return null;
+          const currentTool = (tNode.params.brushTool as TerrainBrushTool) || terrainBrushTool;
+          const brushSize = Number(tNode.params.brushSize) || 4;
+          const brushStrength = Number(tNode.params.brushStrength) || 0.5;
+          const brushFalloff = (tNode.params.brushFalloff as TerrainBrushFalloff) || terrainBrushFalloff;
+
+          return (
+            <div
+              className="viewport-terrain-hud"
+              style={{
+                position: "absolute",
+                bottom: 16,
+                left: "50%",
+                transform: "translateX(-50%)",
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                padding: "6px 14px",
+                background: "rgba(20, 24, 33, 0.95)",
+                backdropFilter: "blur(12px)",
+                border: "1px solid rgba(16, 185, 129, 0.45)",
+                borderRadius: "8px",
+                boxShadow:
+                  "0 8px 24px rgba(0, 0, 0, 0.5), 0 0 16px rgba(16, 185, 129, 0.2)",
+                color: "#ffffff",
+                fontSize: "12px",
+                zIndex: 45,
+                pointerEvents: "auto",
+              }}
+            >
+              {/* Badge */}
+              <div
+                style={{
+                  fontSize: "11px",
+                  fontWeight: 700,
+                  color: "#10b981",
+                  padding: "2px 8px",
+                  background: "rgba(16, 185, 129, 0.15)",
+                  borderRadius: "4px",
+                  letterSpacing: "0.04em",
+                  userSelect: "none",
+                }}
+                title="Terrain Sculpting Tool"
+              >
+                TERRAIN
+              </div>
+
+              <div style={{ width: 1, height: 16, background: "rgba(255, 255, 255, 0.15)" }} />
+
+              {/* Tool: Sculpt */}
+              <button
+                type="button"
+                className={`viewport-hud-button ${currentTool === "sculpt" ? "viewport-hud-button-active" : ""}`}
+                onClick={() => {
+                  setTerrainBrushTool("sculpt");
+                  onParamChange?.("brushTool", "sculpt", tNode.id);
+                }}
+                title="Sculpt: Raise / Lower (Hold Alt to dig)"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="m8 3 4 8 5-5 5 15H2L8 3z" />
+                </svg>
+              </button>
+
+              {/* Tool: Smooth */}
+              <button
+                type="button"
+                className={`viewport-hud-button ${currentTool === "smooth" ? "viewport-hud-button-active" : ""}`}
+                onClick={() => {
+                  setTerrainBrushTool("smooth");
+                  onParamChange?.("brushTool", "smooth", tNode.id);
+                }}
+                title="Smooth: Soften sharp slopes and rough peaks"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M2 12c3-4 6-4 9 0s6 4 9 0" />
+                  <path d="M2 17c3-4 6-4 9 0s6 4 9 0" />
+                </svg>
+              </button>
+
+              {/* Tool: Flatten */}
+              <button
+                type="button"
+                className={`viewport-hud-button ${currentTool === "flatten" ? "viewport-hud-button-active" : ""}`}
+                onClick={() => {
+                  setTerrainBrushTool("flatten");
+                  onParamChange?.("brushTool", "flatten", tNode.id);
+                }}
+                title="Flatten: Level to target elevation (roads, plateaus)"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 15h18" />
+                  <path d="M7 10h10" />
+                  <path d="M10 5h4" />
+                </svg>
+              </button>
+
+              {/* Tool: Noise */}
+              <button
+                type="button"
+                className={`viewport-hud-button ${currentTool === "noise" ? "viewport-hud-button-active" : ""}`}
+                onClick={() => {
+                  setTerrainBrushTool("noise");
+                  onParamChange?.("brushTool", "noise", tNode.id);
+                }}
+                title="Noise: Add natural rockiness and rough texture"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M2 13.5 5 11l4 5 5-9 4 6 4-3" />
+                </svg>
+              </button>
+
+              {/* Tool: Erode */}
+              <button
+                type="button"
+                className={`viewport-hud-button ${currentTool === "erode" ? "viewport-hud-button-active" : ""}`}
+                onClick={() => {
+                  setTerrainBrushTool("erode");
+                  onParamChange?.("brushTool", "erode", tNode.id);
+                }}
+                title="Erode: Simulate natural sediment and thermal erosion"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 2v6" />
+                  <path d="m4.93 10.93 4.24 4.24" />
+                  <path d="m14.83 15.17 4.24-4.24" />
+                  <path d="M2 18h20" />
+                </svg>
+              </button>
+
+              <div style={{ width: 1, height: 16, background: "rgba(255, 255, 255, 0.15)" }} />
+
+              {/* Invert (+ / -) */}
+              <button
+                type="button"
+                className={`viewport-hud-button ${terrainInvert ? "viewport-hud-button-active" : ""}`}
+                onClick={() => setTerrainInvert(!terrainInvert)}
+                title={terrainInvert ? "Inverted: Digging / Lowering (or hold Alt)" : "Normal: Raising (or hold Alt to invert)"}
+                style={{ fontWeight: 700, fontSize: "13px", minWidth: 26 }}
+              >
+                {terrainInvert ? "−" : "+"}
+              </button>
+
+              <div style={{ width: 1, height: 16, background: "rgba(255, 255, 255, 0.15)" }} />
+
+              {/* Radius / Size */}
+              <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                <span style={{ fontSize: "11px", color: "#94a3b8", minWidth: 32 }} title="Radius (use [ and ] shortcuts)">
+                  R: {brushSize}m
+                </span>
+                <input
+                  type="range"
+                  min={0.5}
+                  max={30}
+                  step={0.5}
+                  value={brushSize}
+                  onChange={(e) => onParamChange?.("brushSize", Number(e.target.value), tNode.id)}
+                  style={{ width: 56, accentColor: "#10b981", cursor: "pointer" }}
+                  title="Brush Radius"
+                />
+              </div>
+
+              {/* Strength */}
+              <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                <span style={{ fontSize: "11px", color: "#94a3b8", minWidth: 30 }} title="Brush Strength">
+                  {Math.round(brushStrength * 100)}%
+                </span>
+                <input
+                  type="range"
+                  min={0.05}
+                  max={1.0}
+                  step={0.05}
+                  value={brushStrength}
+                  onChange={(e) => onParamChange?.("brushStrength", Number(e.target.value), tNode.id)}
+                  style={{ width: 50, accentColor: "#10b981", cursor: "pointer" }}
+                  title="Brush Strength"
+                />
+              </div>
+
+              {/* Falloff */}
+              <select
+                value={brushFalloff}
+                onChange={(e) => {
+                  const f = e.target.value as TerrainBrushFalloff;
+                  setTerrainBrushFalloff(f);
+                  onParamChange?.("brushFalloff", f, tNode.id);
+                }}
+                style={{
+                  background: "rgba(255, 255, 255, 0.08)",
+                  color: "#f1f5f9",
+                  border: "1px solid rgba(255, 255, 255, 0.15)",
+                  borderRadius: 4,
+                  fontSize: "11px",
+                  height: 24,
+                  padding: "0 6px",
+                  outline: "none",
+                  cursor: "pointer",
+                }}
+                title="Brush Falloff Shape"
+              >
+                <option value="smooth" style={{ background: "#1e293b", color: "#fff" }}>Smooth</option>
+                <option value="linear" style={{ background: "#1e293b", color: "#fff" }}>Linear</option>
+                <option value="sphere" style={{ background: "#1e293b", color: "#fff" }}>Sphere</option>
+                <option value="flat" style={{ background: "#1e293b", color: "#fff" }}>Flat</option>
+              </select>
+
+              <div style={{ width: 1, height: 16, background: "rgba(255, 255, 255, 0.15)" }} />
+
+              {/* Clear / Reset button */}
+              <button
+                type="button"
+                className="viewport-hud-button"
+                onClick={() => {
+                  if (window.confirm("Reset all manual sculpt offsets on this terrain?")) {
+                    onParamChange?.("sculptOffsets", {}, tNode.id);
+                  }
+                }}
+                title="Reset manual sculpting offsets"
+                style={{ fontSize: "11px", padding: "2px 6px" }}
+              >
+                Reset
               </button>
             </div>
           );

@@ -20,6 +20,19 @@ Ce document référence l'ensemble des plus de 135 nœuds disponibles dans le mo
 
 ## 2. Géométrie 3D & Modificateurs
 - **Primitives 3D** : Box, Sphere, Cylinder, Cone, Disc, Plane, Polygon, Text 3D, Empty, **`object/raccoon`** *(avec Gizmo interactif)*.
+- **`object/terrain`** (*Terrain Maker*) : Générateur de terrain optimisé pour jeux vidéo et simulations physiques (compatible Rapier / `physics/rigid-body`).
+  - **Entrées** : `heightmap` (texture de relief), `material`, `texture` (albedo), `normal`, `roughnessMap`, `matrix`, `visible`.
+  - **Sorties** : `geometry` (Mesh Three.js sur le plan XZ avec Y pour hauteur), `matrix`, `heightmap` (Texture générée / mise à jour).
+  - **Relief & Dimensions** : Largeur (`width`), Profondeur (`depth`), Résolution maillée (`resolution` : 32x32 à 256x256), Amplitude (`heightScale`) et Décalage vertical (`heightOffset`).
+  - **Ombrage Automatique par Pente & Altitude** : Coloration procédurale par sommets (`slopeShading`) avec transition continue vert prairie (plateau), brun/gris falaise rocheuse (pente raide) et blanc névé (hauts sommets). Support du Flat Shading basse fidélité et Wireframe.
+  - **Palette de Sculpture Temps Réel (HUD Viewport)** : Barre discrète d'outils de sculpture inspirée d'Unreal Landscape et Grease Pencil au bas du Viewport dès qu'un nœud Terrain est sélectionné.
+    - Outils : **Sculpt** (hausser / creuser avec Invert ou touche Alt), **Smooth** (lissage Laplacien local), **Flatten** (aplanissement vers altitude cible), **Noise** (bruit perlin procédural), **Erode** (érosion hydraulique / thermique simplifiée).
+    - Atténuations (*Falloff*) : `smooth`, `linear`, `sphere`, `flat`.
+    - Gizmo de brosse 3D projeté sur le maillage avec orientation selon la normale de surface. Raccourcis `[` et `]` pour redimensionner le rayon.
+  - **Optimisation & Physique** :
+    - Calcul analytique des normales en $O(N)$ par différences finies sans réallocation de maillage.
+    - Attributs configurés en `THREE.DynamicDrawUsage` pour un streaming GPU sans saccade.
+    - Compatibilité directe avec Rapier (`physics/rigid-body`) : dérivation automatique en collider trimesh statique pour véhicules (`physics/vehicle`), personnages (`physics/character`) et corps rigides.
 - **Importateurs** : OBJ (`objLoader.ts`), GLTF (`gltfLoader.ts`), PLY (`plyLoader.ts`).
 - **Modificateurs Paramétriques** :
   - **`geometry/twist-bend-taper`** : Torsion axiale (*Twist*), flexion circulaire (*Bend*) et effilement conique (*Taper*).
