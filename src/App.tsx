@@ -484,11 +484,11 @@ function MainEditor() {
 
   useEffect(() => {
     // No Render node, or Frame Count off: there is no timeline length left to
-    // scrub or keyframe against, so the drawer (and any playback riding on
-    // it) can't stay open behind the author's back.
+    // scrub or keyframe against, so the drawer can't stay open behind the
+    // author's back — but Play/Pause is untouched, since it drives the live
+    // scene (wind, physics, gamepad) regardless of any timeline length.
     if (!keyframesEnabled) {
       setIsTimelineDrawerOpen(false);
-      setIsPlaying(false);
     }
   }, [keyframesEnabled]);
 
@@ -555,17 +555,20 @@ function MainEditor() {
         if (e.key === "Escape") setIsPlaying(false);
         return;
       }
-      if (!isInput && e.key === "Escape" && keyframesEnabled) {
+      if (!isInput && e.key === "Escape") {
         e.preventDefault();
         setIsPlaying(false);
         return;
       }
 
+      // Play/Pause is the master clock for the live scene — wind, physics,
+      // gamepad input, all of it — not just keyframe playback, so it works
+      // with no Render node and with Frame Count off. keyframesEnabled only
+      // gates the *scrub bar and keyframe drawer*, which need an actual
+      // timeline length to make sense of.
       if (!isInput && (code === "Space" || e.key === " ") && !isCmdOrCtrl) {
         e.preventDefault();
-        if (keyframesEnabled) {
-          setIsPlaying((prev) => !prev);
-        }
+        setIsPlaying((prev) => !prev);
       } else if (!isInput && (e.key === "t" || e.key === "T") && !isCmdOrCtrl && !isGraphZone()) {
         e.preventDefault();
         // No Render node, or Frame Count off: there is no timeline length to
@@ -2187,7 +2190,7 @@ function MainEditor() {
             onUpdateKeyframeEasing={onUpdateKeyframeEasing}
             onDeleteKeyframe={onDeleteKeyframe}
             onFrameChange={setCurrentFrame}
-            onTogglePlay={() => keyframesEnabled && setIsPlaying((p) => !p)}
+            onTogglePlay={() => setIsPlaying((p) => !p)}
             onResetSimulations={handleResetSimulations}
             onSplitHandleMouseDown={onSplitHandleMouseDown}
             isDrawerOpen={isTimelineDrawerOpen}

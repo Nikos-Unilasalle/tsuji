@@ -491,12 +491,11 @@ export function TimelineBar({
       <div className="timeline-bar-inner">
         <button
           type="button"
-          className={`timeline-play-btn ${!keyframesEnabled ? "disabled" : ""}`}
+          className="timeline-play-btn"
           onClick={onTogglePlay}
-          disabled={!keyframesEnabled}
-          title={keyframesEnabled ? (isPlaying ? "Pause animation" : "Play animation") : "Keyframes disabled (No Render node in canvas)"}
+          title={isPlaying ? "Pause (Space)" : "Play (Space) — runs the live scene even with no Render node or Frame Count off"}
         >
-          {keyframesEnabled ? (isPlaying ? "⏸" : "▶") : "⏸"}
+          {isPlaying ? "⏸" : "▶"}
         </button>
 
         <button
