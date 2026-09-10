@@ -33,8 +33,16 @@ export const RENDER_NODE: NodeDefinition = {
     width: 1920,
     height: 1080,
     holdout: false,
+    timelineEnabled: true,
   },
   paramFields: [
+    { id: "timelineEnabled", label: "Timeline (Frame Count)", kind: "boolean" },
+    {
+      id: "timelineNote",
+      label:
+        "Off for games and simulations: no fixed length, no scrub bar. Shift+Space still resets.",
+      kind: "note",
+    },
     { id: "frameCount", label: "Frame Count", kind: "number", step: 1 },
     { id: "fps", label: "FPS (video export)", kind: "number", step: 1 },
     {

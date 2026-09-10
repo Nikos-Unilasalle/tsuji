@@ -269,7 +269,7 @@ function MainEditor() {
       ? Math.round(rawFrameCount)
       : 120
     : 0;
-  const keyframesEnabled = !!renderNodeInstance;
+  const keyframesEnabled = !!renderNodeInstance && renderNodeInstance.params?.timelineEnabled !== false;
   const exportFps = Math.max(1, Number(renderNodeInstance?.params?.fps) || 30);
   const exportWidth = Math.max(1, Number(renderNodeInstance?.params?.width) || 1920);
   const exportHeight = Math.max(1, Number(renderNodeInstance?.params?.height) || 1080);
