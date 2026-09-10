@@ -269,7 +269,11 @@ function MainEditor() {
       ? Math.round(rawFrameCount)
       : 120
     : 0;
-  const keyframesEnabled = !!renderNodeInstance && renderNodeInstance.params?.timelineEnabled !== false;
+  // Boolean params round-trip as 0/1 (see booleanField in ParamPanel.tsx), not
+  // real booleans — `0 !== false` is true in JS, so a strict `!== false` check
+  // here never actually caught the checkbox being unchecked.
+  const timelineParamEnabled = Number(renderNodeInstance?.params?.timelineEnabled ?? 1) !== 0;
+  const keyframesEnabled = !!renderNodeInstance && timelineParamEnabled;
   const exportFps = Math.max(1, Number(renderNodeInstance?.params?.fps) || 30);
   const exportWidth = Math.max(1, Number(renderNodeInstance?.params?.width) || 1920);
   const exportHeight = Math.max(1, Number(renderNodeInstance?.params?.height) || 1080);
@@ -478,6 +482,16 @@ function MainEditor() {
     }
   }, [totalFrames, keyframesEnabled, setCurrentFrame]);
 
+  useEffect(() => {
+    // No Render node, or Frame Count off: there is no timeline length left to
+    // scrub or keyframe against, so the drawer (and any playback riding on
+    // it) can't stay open behind the author's back.
+    if (!keyframesEnabled) {
+      setIsTimelineDrawerOpen(false);
+      setIsPlaying(false);
+    }
+  }, [keyframesEnabled]);
+
   /**
    * When the viewport last advanced the playhead itself. See the fallback
    * timer below, and Viewport's `onFrameChange`.
@@ -554,7 +568,9 @@ function MainEditor() {
         }
       } else if (!isInput && (e.key === "t" || e.key === "T") && !isCmdOrCtrl && !isGraphZone()) {
         e.preventDefault();
-        setIsTimelineDrawerOpen((prev) => !prev);
+        // No Render node, or Frame Count off: there is no timeline length to
+        // scrub or keyframe against, so the advanced drawer stays closed.
+        if (keyframesEnabled) setIsTimelineDrawerOpen((prev) => !prev);
       } else if (!isInput && (e.key === "Tab" || e.code === "Tab") && e.shiftKey) {
         // Global on purpose: one of the four states (full-canvas Graph)
         // unmounts every Viewport instance, so a listener living inside one
@@ -2057,7 +2073,7 @@ function MainEditor() {
         exportMode={exportMode}
         exportProgress={exportProgress}
         isTimelineOpen={isTimelineDrawerOpen}
-        onToggleTimeline={() => setIsTimelineDrawerOpen((prev) => !prev)}
+        onToggleTimeline={keyframesEnabled ? () => setIsTimelineDrawerOpen((prev) => !prev) : undefined}
         is2DMode={is2DMode}
         onToggle2DMode={toggle2DMode}
       />
@@ -2171,7 +2187,7 @@ function MainEditor() {
             onUpdateKeyframeEasing={onUpdateKeyframeEasing}
             onDeleteKeyframe={onDeleteKeyframe}
             onFrameChange={setCurrentFrame}
-            onTogglePlay={() => setIsPlaying((p) => !p)}
+            onTogglePlay={() => keyframesEnabled && setIsPlaying((p) => !p)}
             onResetSimulations={handleResetSimulations}
             onSplitHandleMouseDown={onSplitHandleMouseDown}
             isDrawerOpen={isTimelineDrawerOpen}
