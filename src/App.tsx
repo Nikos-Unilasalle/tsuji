@@ -485,10 +485,14 @@ function MainEditor() {
   const viewportDrivenAtRef = useRef(0);
   const onViewportFrame = useCallback(
     (frame: number) => {
+      // With the timeline off (Render's Frame Count checkbox), there is no
+      // fixed length to advance a playhead along — the scrubber stays put
+      // instead of silently ticking in the background.
+      if (!keyframesEnabled) return;
       viewportDrivenAtRef.current = Date.now();
       setCurrentFrame(frame);
     },
-    [setCurrentFrame],
+    [keyframesEnabled, setCurrentFrame],
   );
 
   /**
