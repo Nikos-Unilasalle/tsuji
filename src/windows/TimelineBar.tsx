@@ -450,7 +450,16 @@ export function TimelineBar({
     setEasingPopover(null);
   };
 
-  const progressPct = totalFrames > 1 ? (Math.max(0, Math.min(totalFrames - 1, currentFrame)) / (totalFrames - 1)) * 100 : 0;
+  // No timeline to show progress along (no Render node, or Frame Count off):
+  // the fill can't track a frame that doesn't exist, so it floods solid blue
+  // instead, the one signal left that the live scene is actually running.
+  const progressPct = !keyframesEnabled
+    ? isPlaying
+      ? 100
+      : 0
+    : totalFrames > 1
+      ? (Math.max(0, Math.min(totalFrames - 1, currentFrame)) / (totalFrames - 1)) * 100
+      : 0;
   const oneFramePct = totalFrames > 1 ? (1 / (totalFrames - 1)) * 100 : 1;
 
   const keyframeFrames = Object.keys(selectedKeyframes).map(Number).sort((a, b) => a - b);
