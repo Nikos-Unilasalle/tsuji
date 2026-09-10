@@ -97,32 +97,66 @@ Ce document détaille la spécification complète, les signatures de sockets, le
 
 ---
 
-## 3. Chantier 3 : Caméra FPS & Navigation Unreal-Like (Spécification)
+## 3. Chantier 3 : Entrées Interactives & Moteur Physique Rapier (Réalisé & Élargi)
 
-### Nœud 3.1 : `camera/fps-controller` (*Unreal FPS Controller*)
-- **Rôle** : Contrôleur cinématique complet à la première personne.
-- **Catégorie** : `calibration`
-- **Entrées** :
-  - `walkSpeed` (`value`, défaut: 5.0)
-  - `runSpeed` (`value`, défaut: 9.0)
-  - `jumpForce` (`value`, défaut: 7.5)
-  - `gravity` (`value`, défaut: 20.0)
-  - `capsuleRadius` (`value`, défaut: 0.4)
-  - `capsuleHeight` (`value`, défaut: 1.8)
-  - `stepHeight` (`value`, défaut: 0.35) : franchissement d'escaliers
-  - `headBobAmount` (`value`, défaut: 0.05)
-- **Sorties** :
-  - `camera` (`any`) : caméra active pour le viewport
-  - `position` (`vector`) : position monde du joueur
-  - `velocity` (`vector`) : vecteur vitesse instantané
-  - `isGrounded` (`value`) : booléen de contact avec le sol
+*Note d'évolution : Le projet initial prévoyait un nœud unique `camera/fps-controller`. Il a été abandonné au profit d'une architecture modulaire bien plus puissante : séparation stricte entre la commande d'entrée, la cinématique du personnage et un véritable moteur physique 3D temps réel (Rapier).*
+
+### Nœud 3.1 : `io/move-input` (*Move Input*)
+- **Rôle** : Schéma de contrôle complet clavier + manette en un seul nœud, directement projeté dans le plan du sol (Y-up, avant = $-Z$).
+- **Catégorie** : `io`
+- **Entrées** : `speed` (`value`), `enabled` (`value`).
+- **Sorties** : `move` (`vector` XZ), `x` (`value`), `z` (`value`), `forward` (`value`, $+1$ = avance), `magnitude` (`value`), `jump` (`value`), `jumpPressed` (`value`), `sprint` (`value`).
+- **Fonctionnalités** : Layouts multiples (`zqsd`, `wasd`, `arrows`, `zqsd+arrows`, `wasd+arrows`, `custom`), repli stick gamepad (`strongest wins`), réservation des touches en cours de lecture pour inhiber les raccourcis éditeur (voir [[Input Subsystem and Playback Keys]]).
+
+### Nœud 3.2 : `physics/world` (*Physics World*)
+- **Rôle** : Monde physique de corps rigides basé sur **Rapier 3D** (`@dimforge/rapier3d-compat`).
+- **Catégorie** : `physics`
+- **Entrées** : `gravity` (`vector`), `time` (`value`), `paused` (`value`), `reset` (`value`).
+- **Sorties** : `world` (`any`), `ready` (`value`), `bodies` (`value`), `steps` (`value`).
+- **Fonctionnalités** : Pas de temps fixe déterministe avec report du reste, chargement WASM asynchrone sans blocage, gestion des sous-pas plafonnés, invalidation par `simulationEpoch`.
+
+### Nœud 3.3 : `physics/rigid-body` (*Rigid Body*)
+- **Rôle** : Enregistre des géométries comme corps rigides physiques (dynamiques, fixes ou cinématiques).
+- **Catégorie** : `physics`
+- **Entrées** : `geometry` (`geometry`), `world` (`any`), `mass`, `friction`, `restitution`, `linearDamping`, `angularDamping`.
+- **Sorties** : `geometry` (`geometry`), `matrix` (`matrix`), `count` (`value`).
+- **Fonctionnalités** : Paramètre `Split` (`per-child` par défaut / `whole`), prise en charge transparente des `THREE.InstancedMesh` (un nœud simule 100 instances d'un `Array`), dérivation des matrices monde par chaîne de matrices locales (`worldMatrixOf`) éliminant les bugs de reparenting, identité persistante par géométrie.
+
+### Nœud 3.4 : `physics/character` (*Character (Physics)*)
+- **Rôle** : Contrôleur cinématique de personnage sur Rapier.
+- **Catégorie** : `physics`
+- **Fonctionnalités** : Franchissement automatique de marches (*auto-step*), adhérence au sol dans les pentes (*ground snapping*), impulsion dynamique sur les caisses et débris.
+
+### Nœud 3.5 : `physics/vehicle` (*Raycast Vehicle*)
+- **Rôle** : Véhicule à 4 roues sur contrôleur raycast Rapier.
+- **Catégorie** : `physics`
+- **Fonctionnalités** : Centre de masse bas paramétrable, suspension et friction calculées par rayon, hook de pré-pas, sortie `wheels` en liste de matrices monde incluant braquage et rotation.
+
+### Nœuds 3.6 & 3.7 : `math/integrate` & `vector/integrate` (*Integrators*)
+- **Rôle** : Intégration temporelle $\int v \, dt$ avec amortissement par seconde et réinitialisation sur scrub arrière / epoch.
+
+### Nœud 3.8 : `physics/capsule-controller` (*Capsule Controller*)
+- **Rôle** : Contrôleur de personnage cinématique autonome sur arbre BVH (`three-mesh-bvh`), insensible à l'échelle non-uniforme des colliders.
+
+---
+
+## 4. Chantier 4 : Végétation & Vent (Réalisé)
+*Spécification complète détaillée dans [[Vegetation_and_Wind_Nodes_Catalog]] :*
+- `physics/wind-field` : champ de vent partagé 2 octaves CPU/GLSL.
+- `structure/grass-field` : herbe sans instanciation, repliement torique, ombrage des brins et sortie texture `groundShadow`.
+- `object/tree` : arbre procédural récursif par espèce et silhouette de feuille.
+- `texture/interaction-map` : traces d'écrasement top-down défilantes avec estompage en demi-vie.
+- `geometry/wind-sway` : déformation de vent GPU par injection shader `onBeforeCompile`.
 
 ---
 
 ## 🔗 Notes Associées
 - [[Strategic_Roadmap_3_Chantiers_Fire_Lighting_FPS]]
+- [[Vegetation_and_Wind_Nodes_Catalog]]
 - [[Node Catalog]]
-- [[Node Creation Guide]]
+- [[Simulation Reset and Epoch Architecture]]
+- [[Input Subsystem and Playback Keys]]
+- [[Named Variables System]]
 - [[WebGPU Volumetric Fire Simulation and 3D Fluid Dynamics]]
 - [[WebGPU Volumetric Lighting and TRAA Integration]]
 - [[Unreal FPS Camera and Kinematic Capsule Controller]]

@@ -8,7 +8,7 @@
   <img src="https://img.shields.io/badge/TSUJI-3D_Node_Engine-7c3aed?style=flat-square&logo=three.js&logoColor=white" />
   <img src="https://img.shields.io/badge/Version-0.4.2-06b6d4?style=flat-square" />
   <img src="https://img.shields.io/badge/Vault_Health-Optimal-10b981?style=flat-square" />
-  <img src="https://img.shields.io/badge/Atomic_Notes-60+-f59e0b?style=flat-square" />
+  <img src="https://img.shields.io/badge/Atomic_Notes-70+-f59e0b?style=flat-square" />
 </div>
 
 <p style="font-size: 13px; color: #94a3b8; margin-top: 8px;"><em>Mémoire Architecturale, Base de Connaissances & Cockpit de Développement</em></p>
@@ -54,7 +54,7 @@ dv.paragraph(`
 ```
 
 > [!NOTE]
-> *Volume global du coffre :* **60+ notes atomiques** réparties sur 4 pôles interconnectés.
+> *Volume global du coffre :* **70+ notes atomiques** réparties sur 4 pôles interconnectés.
 
 ---
 
@@ -62,19 +62,20 @@ dv.paragraph(`
 
 ```mermaid
 flowchart TD
-    subgraph ALL_RESOLVED["🟢 100% RÉSOLU : Stabilité, VRAM, GC, Rendu, Gizmos & Motion Blur"]
+    subgraph ALL_RESOLVED["🟢 ARCHITECTURE STABILISÉE : Stabilité, VRAM, GC, Simulation & Contrôles"]
         F1["[[P0_VRAM_Leak_Remediation_Plan]]"]
         F2["[[P1_Evaluation_Loop_GC_Remediation_Plan]]"]
-        F3["[[P2_Geometry_Ownership_and_Clone_Integrity_Plan]]"]
-        F4["[[P3_Dynamic_Sockets_and_Math_Consolidation_Plan]]"]
-        F5["[[Force_Field_Gizmo_and_Show_Pivot_Plan]]"]
+        F3["[[Simulation Reset and Epoch Architecture]]"]
+        F4["[[Input Subsystem and Playback Keys]]"]
+        F5["[[Named Variables System]]"]
         F6["[[Particle_Motion_Blur_Implementation]]"]
     end
 
     subgraph STATUS["🎯 État du Codebase Tsuji"]
-        S1["1740 / 1740 Tests Vitest Réussis (100%)"]
+        S1["2270+ Tests Vitest Réussis (160+ Suites)"]
         S2["Typecheck TypeScript 0 Erreur"]
-        S3["Zéro-Allocation 60 FPS & Motion Blur GPU"]
+        S3["Moteur Physique Rapier, Végétation & Variables"]
+        S4["Zéro-Allocation 60 FPS & Motion Blur GPU"]
     end
 
     ALL_RESOLVED --> STATUS
@@ -83,17 +84,17 @@ flowchart TD
     classDef st fill:#1e3a5f,stroke:#38bdf8,color:#bae6fd,font-size:11px;
 
     class F1,F2,F3,F4,F5,F6 ok;
-    class S1,S2,S3 st;
+    class S1,S2,S3,S4 st;
 ```
 
 > [!SUCCESS]
 > **Toutes les Priorités & Dernières Fonctionnalités sont Validées :**  
-> • **P0 (VRAM) :** Tous les caches de nœuds équipés de `disposeObject3D` $\rightarrow$ [[P0_VRAM_Leak_Remediation_Plan]].  
-> • **P1 (GC 60 FPS) :** `GraphStructuralCache`, indexation $\mathcal{O}(1)$ et Object Pooling $\rightarrow$ [[P1_Evaluation_Loop_GC_Remediation_Plan]].  
-> • **P2 (Rendu & Clonage) :** Propagation multi-hop (`sceneRoots.ts`) et clonage de TypedArrays (`cloneGraph.ts`) $\rightarrow$ [[P2_Geometry_Ownership_and_Clone_Integrity_Plan]].  
-> • **P3 (Sockets & Maths) :** Purge proactive des fils orphelins et invariants d'angles verrouillés $\rightarrow$ [[P3_Dynamic_Sockets_and_Math_Consolidation_Plan]].  
-> • **Gizmos & Pivots :** Gizmo 3D interactif pour Force Fields + Entrée Matrix + Option universelle "Show Pivot" avec croix jaune viewport $\rightarrow$ [[Force_Field_Gizmo_and_Show_Pivot_Plan]].  
-> • **Motion Blur Particules & InstancedMesh :** Shaders de vélocité GPU pour `THREE.Points` et `THREE.InstancedMesh` avec empreinte de déplacement élargie et préservation stricte de la visibilité $\rightarrow$ [[Particle_Motion_Blur_Implementation]].
+> • **Variables Globales Nommées :** `variable/set` & `variable/get`, double-buffering par step $\rightarrow$ [[Named Variables System]].  
+> • **Simulation Reset & Époque :** `ctx.simulationEpoch`, remise à zéro atomique (physique, fluides, intégrateurs, variables) via `Shift+Space` et transport $\rightarrow$ [[Simulation Reset and Epoch Architecture]].  
+> • **Contrôle & Saisie Dynamique :** Nœud tout-en-un `io/move-input`, layouts multiples et réservation de touches en lecture (`playbackKeys.ts`) $\rightarrow$ [[Input Subsystem and Playback Keys]].  
+> • **Physique Rapier 3D :** `Split: per-child` / `whole`, support `InstancedMesh`, dérivation des matrices monde par chaîne locale (`worldMatrixOf`), véhicule raycast `physics/vehicle` $\rightarrow$ [[Node Catalog]].  
+> • **Végétation & Rendu :** Ombrage et texture `groundShadow` sur `structure/grass-field`, timeline débrayable sur `render`.  
+> • **Caches & Zéro Allocation :** `GraphStructuralCache`, pooling d'allocations et `disposeObject3D` systématique $\rightarrow$ [[P0_VRAM_Leak_Remediation_Plan]] & [[P1_Evaluation_Loop_GC_Remediation_Plan]].
 
 ---
 
@@ -200,7 +201,11 @@ flowchart TD
   <ul style="font-size: 12px; padding-left: 16px; margin: 0; color: #86efac; line-height: 1.6;">
     <li>🧩 [[Node Catalog]]</li>
     <li>⚡ [[Universal_Nodes_Catalog_3_Chantiers]]</li>
+    <li>🌲 [[Vegetation_and_Wind_Nodes_Catalog]]</li>
     <li>⚙️ [[Graph Evaluation Runtime]]</li>
+    <li>🔄 [[Simulation Reset and Epoch Architecture]]</li>
+    <li>🎮 [[Input Subsystem and Playback Keys]]</li>
+    <li>📦 [[Named Variables System]]</li>
     <li>✨ [[Creative FX and Stage Nodes]]</li>
     <li>🎨 [[Socket Type System and Ownership]]</li>
   </ul>

@@ -163,6 +163,8 @@ interface BodyEntry {
   mesh: THREE.Mesh;
   /** Which instance, or -1 for a mesh that stands on its own. */
   instanceIndex: number;
+  /** Preserved scale from authoring time. */
+  scale: THREE.Vector3;
 }
 
 interface BodyState {
@@ -423,7 +425,12 @@ export const RIGID_BODY_NODE: NodeDefinition = {
           const colliderDesc = buildColliderDesc(api, shape, scaled);
           if (colliderDesc) handle.world.createCollider(colliderDesc, body);
 
-          entries.push({ body, mesh: target.mesh, instanceIndex: target.instanceIndex });
+          entries.push({
+            body,
+            mesh: target.mesh,
+            instanceIndex: target.instanceIndex,
+            scale: _poseScale.clone(),
+          });
         } catch (err) {
           console.error(`physics/rigid-body: failed to create a body for "${target.mesh.name || target.mesh.uuid}"`, err);
         }
@@ -486,7 +493,7 @@ export const RIGID_BODY_NODE: NodeDefinition = {
 
       // The solver owns the pose now: write it back rather than letting the
       // graph's own transform fight it.
-      const matrix = bodyMatrix(body);
+      const matrix = bodyMatrix(body, undefined, entry.scale);
       if (entry.instanceIndex >= 0) {
         const instanced = entry.mesh as THREE.InstancedMesh;
         // The instance matrix is relative to its InstancedMesh, and the solver
@@ -521,13 +528,13 @@ export const RIGID_BODY_NODE: NodeDefinition = {
       instanced.frustumCulled = false;
     }
 
-    const first = state.entries[0].body;
-    const velocity = bodyVelocity(first);
+    const first = state.entries[0]?.body;
+    const velocity = first ? bodyVelocity(first) : new THREE.Vector3();
 
     return {
       geometry: object,
-      matrix: bodyMatrix(first),
-      position: bodyPosition(first),
+      matrix: first ? bodyMatrix(first, undefined, state.entries[0]?.scale) : (object ? object.matrix.clone() : new THREE.Matrix4()),
+      position: first ? bodyPosition(first) : (object ? object.position.clone() : new THREE.Vector3()),
       velocity,
       speed: velocity.length(),
       count: state.entries.length,
@@ -816,6 +823,7 @@ interface VehicleState {
   generation: number;
   signature: string;
   object: THREE.Object3D;
+  scale: THREE.Vector3;
 }
 
 const vehicleCache = createNodeCache<VehicleState>();
@@ -958,7 +966,8 @@ export const VEHICLE_NODE: NodeDefinition = {
       object.updateWorldMatrix(true, false);
       const start = new THREE.Vector3();
       const rotation = new THREE.Quaternion();
-      object.matrixWorld.decompose(start, rotation, new THREE.Vector3());
+      const scale = new THREE.Vector3();
+      object.matrixWorld.decompose(start, rotation, scale);
 
       const body = handle.world.createRigidBody(
         api.RigidBodyDesc.dynamic()
@@ -1020,6 +1029,7 @@ export const VEHICLE_NODE: NodeDefinition = {
         generation: handle.generation,
         signature,
         object,
+        scale,
       };
       vehicleCache.set(ctx.nodeId, state);
     }
@@ -1057,7 +1067,7 @@ export const VEHICLE_NODE: NodeDefinition = {
       if (controller.wheelIsInContact(i)) wheelsOnGround++;
     }
 
-    const chassisMatrix = bodyMatrix(body);
+    const chassisMatrix = bodyMatrix(body, undefined, state.scale);
     object.matrixAutoUpdate = false;
     object.matrix.copy(chassisMatrix);
     chassisMatrix.decompose(object.position, object.quaternion, object.scale);

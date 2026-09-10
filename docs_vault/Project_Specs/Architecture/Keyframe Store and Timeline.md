@@ -39,7 +39,19 @@ La fonction d'interpolation prend en charge nativement :
 
 ---
 
+## 4. Timeline Débrayable pour Simulations & Jeux (`timelineEnabled`)
+
+Dans le cas de scènes interactives, de jeux ou de simulations physiques sans durée finie (où l'utilisateur pilote un véhicule ou interagit librement) :
+- Le nœud **`render`** expose le paramètre booléen **`timelineEnabled` (*Timeline / Frame Count*)**.
+- Lorsqu'il est désactivé (`false`), la barre de scrub est masquée et la tête de lecture n'est plus incrémentée automatiquement à chaque frame par la boucle de rendu.
+- La scène tourne indéfiniment en temps réel sans être contrainte par un nombre de frames maximal ni reboucler en boucle.
+- La remise à l'état initial s'effectue via le reset universel (`Shift+Space` ou bouton Reset de transport), qui rembobine à la frame 0 et réinitialise tous les états accumulés (voir [[Simulation Reset and Epoch Architecture]]).
+
+---
+
 ## 🔗 Notes Associées
 - [[Motion Design and Easing Mathematics]]
 - [[Graph Evaluation Runtime]]
 - [[Param Panel and Inspector]]
+- [[Simulation Reset and Epoch Architecture]]
+- [[Input Subsystem and Playback Keys]]

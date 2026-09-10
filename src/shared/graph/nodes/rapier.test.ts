@@ -1038,4 +1038,69 @@ describe("bodies through a Merge and an Array, as the demos wire them", () => {
     expect(heights[1]).toBeCloseTo(1.5, 0);
     expect(heights[2]).toBeCloseTo(2.5, 0);
   });
+
+  test("two merged boxes with custom scale retain their scales when rigid body evaluates", () => {
+    const graph = {
+      nodes: [
+        { id: "w", type: "physics/world", params: {}, position: { x: 0, y: 0 } },
+        {
+          id: "box1",
+          type: "object/box",
+          params: { location: V(0, -0.5, 0), scale: V(24, 1, 24) },
+          position: { x: 0, y: 0 },
+        },
+        {
+          id: "box2",
+          type: "object/box",
+          params: { location: V(2, 3, 0), scale: V(1, 4, 1) },
+          position: { x: 0, y: 0 },
+        },
+        { id: "m", type: "structure/merge", params: {}, position: { x: 0, y: 0 } },
+        {
+          id: "b",
+          type: "physics/rigid-body",
+          params: { bodyType: "dynamic", shape: "box", split: "per-child" },
+          position: { x: 0, y: 0 },
+        },
+      ],
+      connections: [
+        { id: "c1", fromNode: "box1", fromSocket: "geometry", toNode: "m", toSocket: "in0" },
+        { id: "c2", fromNode: "box2", fromSocket: "geometry", toNode: "m", toSocket: "in1" },
+        { id: "c3", fromNode: "w", fromSocket: "world", toNode: "b", toSocket: "world" },
+        { id: "c4", fromNode: "m", fromSocket: "geometry", toNode: "b", toSocket: "geometry" },
+      ],
+      keyframes: {},
+      markers: [],
+      exposedParams: [],
+    } as never as Graph;
+
+    const results = evaluate(graph, 1);
+    const bodyResult = results.get("b");
+    expect(bodyResult.count).toBe(2);
+
+    const mergedGroup = bodyResult.geometry as THREE.Group;
+    expect(mergedGroup.children.length).toBe(2);
+
+    const child1 = mergedGroup.children[0] as THREE.Mesh;
+    const child2 = mergedGroup.children[1] as THREE.Mesh;
+
+    expect(child1.position.toArray()).toEqual([0, -0.5, 0]);
+    expect(child2.position.toArray()).toEqual([2, 3, 0]);
+    expect(child1.scale.toArray()).toEqual([24, 1, 24]);
+    expect(child2.scale.toArray()).toEqual([1, 4, 1]);
+    expect(new THREE.Vector3().setFromMatrixScale(child1.matrix).toArray()).toEqual([24, 1, 24]);
+    expect(new THREE.Vector3().setFromMatrixScale(child2.matrix).toArray()).toEqual([1, 4, 1]);
+
+    // Check after multiple simulation frames as well
+    const results5 = evaluate(graph, 5);
+    const bodyResult5 = results5.get("b");
+    const group5 = bodyResult5.geometry as THREE.Group;
+    const c1 = group5.children[0] as THREE.Mesh;
+    const c2 = group5.children[1] as THREE.Mesh;
+    expect(c1.scale.toArray()).toEqual([24, 1, 24]);
+    expect(c2.scale.toArray()).toEqual([1, 4, 1]);
+    expect(new THREE.Vector3().setFromMatrixScale(c1.matrix).toArray()).toEqual([24, 1, 24]);
+    expect(new THREE.Vector3().setFromMatrixScale(c2.matrix).toArray()).toEqual([1, 4, 1]);
+  });
 });
+

@@ -2,7 +2,7 @@
 
 *Emplacement dans le code : `src/shared/graph/nodes/index.ts`*
 
-Ce document référence l'ensemble des plus de 130 nœuds disponibles dans le moteur Tsuji, classés par domaine fonctionnel.
+Ce document référence l'ensemble des plus de 135 nœuds disponibles dans le moteur Tsuji, classés par domaine fonctionnel.
 
 ---
 
@@ -10,8 +10,13 @@ Ce document référence l'ensemble des plus de 130 nœuds disponibles dans le mo
 - **`value/math`**, **`value/map-range`**, **`value/clamp`**, **`value/constant`**
 - **`vector/compose`**, **`vector/decompose`**, **`vector/math`**
 - **`color/compose`**, **`color/decompose`**, **`color/math`**
-- **`logic/compare`**, **`logic/boolean`**, **`logic/trigger`**, **`logic/toggle`**, **`logic/gate`**
+- **`logic/compare`**, **`logic/boolean`**, **`logic/trigger`**, **`logic/toggle`**, **`logic/gate`**, **`logic/bridge`**
 - **`time/time`**, **`time/frame`**, **`oscillator`**, **`envelope`**, **`pulse`**, **`animation/wiggle`**
+
+## 1.bis. Variables Nommées & Routage de Données
+- **`variable/set`** (*Set Variable*) : Écrit une valeur typée (`Float`, `Int`, `String`) ou sa valeur de repli `initial` sous un identifiant déclaré, et la transmet en sortie en transparence (*inline pass-through*). Déclaration enregistrée avec double-buffering par step (`ctx.step`) pour éviter la pollution de fragments de saisie. Réinitialisé lors d'un simulation reset.
+- **`variable/get`** (*Get Variable*) : Lit la valeur écrite par le `Set Variable` correspondant via une liste déroulante dynamique de tous les noms enregistrés. Global à la session et multi-canvas (survit à `Go To Canvas`). Renvoie la valeur zéro de son type si non encore évalué, ou `undefined` si inexistant.
+- **`routing/reroute`** (*Reroute*) : Nœud passe-plat de routage filaire pour clarifier les faisceaux de connexions complexes sans modifier la donnée.
 
 ## 2. Géométrie 3D & Modificateurs
 - **Primitives 3D** : Box, Sphere, Cylinder, Cone, Disc, Plane, Polygon, Text 3D, Empty, **`object/raccoon`** *(avec Gizmo interactif)*.
@@ -54,7 +59,12 @@ Tous ces matériaux se branchent directement sur la prise `material` des maillag
 - **`sound/audio-player`**, **`sound/spectrum`**, **`sound/peak-detector`**, **`sound/synth`**, **`sound/microphone`**.
 - **`keyboard`**, **`mouse`**, **`click`**, **`csv-reader`**.
 
-## 7. Post-Traitement
+## 7. Rendu & Post-Traitement
+- **`render`** (*Render*) : Nœud terminal du pipeline de rendu de la scène.
+  - Sockets : `geometry` (`owns: true`), `environment`, `postprocess`, `motionBlur`.
+  - Sorties : `geometry`, `environment`, `postprocess`.
+  - **`timelineEnabled` (*Timeline / Frame Count*)** : Bascule permettant de désactiver la durée fixe et la barre de scrub pour les scènes interactives, jeux et simulations physiques infinies. Si décoché, la tête de lecture ne défile plus automatiquement et la réinitialisation se fait via `Shift+Space` (voir [[Simulation Reset and Epoch Architecture]]).
+  - Paramètres de format : `resolutionPreset`, `width`, `height`, `fps`, `frameCount`, `motionBlur`.
 - **Post-Process** : Bloom, DOF, RGB Shift, Vignette, Outline, Grain & CRT Scanlines (animés à 60 FPS), Glitch, SSAO, Fog.
 
 ## 8. Simulation Fluide 3D & Volumes (Chantier 1 Three.js r185)
@@ -69,6 +79,8 @@ Nœuds universels de simulation eulérienne 3D et de raymarching volumétrique p
 Briques atomiques de végétation temps réel, conçues autour d'**un seul champ de vent partagé** : herbe, feuillage et maillages quelconques ploient selon la même source, sans quoi la scène se disloque visuellement (l'herbe penche à gauche pendant que les feuilles penchent à droite).
 - **`physics/wind-field`** (*Wind Field*) : Champ de vent global, deux octaves de bruit de valeur défilant selon une direction. Implémenté **deux fois à l'identique** (TypeScript et GLSL) afin d'être échantillonnable par les shaders *et* par le graphe (sortie `wind` vectorielle). La phase temporelle est repliée côté CPU (`time × speed`) pour que chaque frame exportée soit reproductible.
 - **`structure/grass-field`** (*Grass Field*) : Champ d'herbe dense, **un seul draw call, sans instanciation** — un brin = 3 sommets, sa forme est reconstruite dans le vertex shader depuis un index de coin et une graine par brin. **Repliement torique** (`mod`) autour du socket `Center` : un champ illimité au prix d'un carré fixe, sans réallocation. Carte de densité optionnelle (canal rouge) pour peindre chemins, berges et zones pelées.
+  - **Ombrage des brins** : paramètres `shadowColor` et `shadowIntensity` teintant la base des brins vers une couleur d'ombre pour simuler l'occlusion ambiante dense au sol.
+  - **Sortie `groundShadow` (texture)** : carte de densité brute floutée par box-blur séparable 3 passes et teintée de `shadowColor`. Branchée dans un `texture/mix` (multiply, factor 1) avec la texture du sol, elle projette une ombre d'herbe douce et fidèle directement sur le sol sans draw call supplémentaire ni coût de shadow map.
 - **`object/tree`** (*Tree (Parametric)*) : Arbre récursif complet depuis une graine, une **espèce** et un jeu de nombres. L'espèce (chêne, conifère, saule, bouleau, palmier, buisson, arbre mort) est un **port de croissance et non un préréglage** — elle change le comportement de la récursion (flèche centrale contre fourche, latérales montantes contre retombantes, absence totale de ramification pour le palmier) pendant que chaque paramètre numérique continue de la moduler, sans écraser les réglages de l'auteur. Silhouette de feuille paramétrique en 7 profils, exclue de la clé de reconstruction : parcourir les formes est gratuit. Feuillage **dispersé ou en touffes sphériques** (`foliageMode`), **rampe saisonnière** été → or → rouge à décalage par feuille, et **dégradé vertical de canopée** via un attribut instancié de hauteur dans le houppier. Deux draw calls : branches balayées en un maillage tubulaire unique (repères par transport parallèle, pas de vrille), feuilles en `InstancedMesh` de cartes découpées en amande dans le fragment shader (aucune texture, aucun tri alpha). Géométrie reconstruite uniquement quand un paramètre de *forme* change ; budget de branches plafonné (`MAX_TREE_BRANCHES`) car la récursion est en `childCount ^ levels`.
 - **`texture/interaction-map`** (*Interaction Map*) : Carte top-down de ce qui est passé par là — caméra orthographique zénithale, cible de rendu persistante en ping-pong, estompage exprimé en **demi-vie (secondes)** et non en facteur par frame, afin qu'une trace dure le même temps réel à 30 comme à 144 fps. La carte **défile avec son centre** : câblez la position d'un personnage et elle le suit, son contenu se décalant d'autant en UV pour que les marques restent fixes dans le monde. Rien n'y est spécifique à l'herbe : neige, sable, chaleur, humidité, effacement.
 - **`geometry/wind-sway`** (*Wind Sway*) : Ployage de n'importe quelle géométrie du graphe **par injection shader** (`onBeforeCompile`) et non par déformation de sommets — donc applicable à un import de 200 k sommets. Le matériau amont est cloné avant patch, jamais modifié en place.
@@ -82,7 +94,8 @@ Briques d'entrée conçues pour que le reste du graphe **ignore d'où vient la c
 - **`physics/rigid-body`** (*Rigid Body*) : Confie une géométrie au monde. **`Split: per-child` par défaut** — chaque maillage descendant devient son propre corps, et **chaque instance d'un `InstancedMesh` aussi**. L'alternative était un nœud Rigid Body par caisse : le graphe dispose déjà de `structure/merge` pour rassembler N géométries, donc vingt caisses doivent être un Merge et **un** Rigid Body, pas vingt de chaque. Le traitement des instances est ce qui rend un Array de cent boîtes utilisable — sans lui, l'instanciation, qui les rend économiques à dessiner, les rendrait impossibles à simuler. `whole` couvre le cas inverse : un châssis fait de plusieurs maillages doit être **un** corps, sinon ses morceaux se repoussent dès la première frame.
   - Une forme de collision est calculée **une fois par maillage source** et réutilisée par ses instances ; l'échelle propre de chaque instance est appliquée à une copie de cette forme, un collider Rapier n'ayant pas d'échelle.
   - Reconstruction sur changement de l'**ensemble** (forme, type, split, apparition d'un maillage), pas sur les poses : les reconstruire parce que le solveur les a déplacés redémarrerait la simulation à chaque frame. Forme par défaut selon le type : **enveloppe convexe** pour un corps dynamique (économique, toujours fermée, s'empile de façon prévisible), **maillage de triangles** pour un corps fixe (la seule forme qui représente un niveau exactement, et son absence de volume ne gêne que ce qui bouge). Le corps est reconstruit quand sa *forme* change et laissé tranquille sinon, donc régler le frottement ne redémarre jamais la simulation.
-  - **L'échelle de l'objet est intégrée aux sommets du collider**, parce qu'un corps Rapier ne porte que position et rotation. L'oublier transforme un sol construit en cube unité mis à l'échelle 30 × 1 × 30 — ce dont tous les niveaux sont faits ici — en collider 1 × 1 × 1, et tout atterrit à côté. Même piège que celui rencontré sur le contrôleur à capsule, à l'autre bout du code.
+  - **Dérivation des matrices monde par chaîne locale (`worldMatrixOf`)** : Au lieu de lire un cache `matrixWorld` non rafraîchi (les nœuds désactivent `matrixAutoUpdate`), les poses de départ et l'extraction des colliders parcourent explicitement la hiérarchie des matrices locales (`parent.matrix`). Cela élimine l'anomalie où des corps rigides derrière un `structure/merge` ou un `structure/array` s'effondraient à l'origine ou recevaient un collider unitaire non mis à l'échelle.
+  - **Identité par géométrie** : La signature des corps est indexée sur la géométrie et non sur l'UUID du mesh, évitant les destructions/reconstructions destructrices lors du recyclage des clones par `structure/array`.
 - **`physics/vehicle`** (*Vehicle*) : Voiture à quatre roues sur le contrôleur **raycast** de Rapier. Pas quatre roues en corps rigides articulés : un rayon part de chaque ancrage et applique suspension, motricité et frottement latéral au châssis depuis le point d'impact. C'est ce que font presque tous les jeux de conduite, parce que des roues simulées vibrent à l'arrêt, accrochent sur les jointures entre triangles et exigent un réglage de tolérance de solveur que personne ne veut faire. Ici le châssis est **un seul corps rigide** et les roues sont du calcul.
   - **La hauteur du centre de gravité est le réglage qui décide si la voiture marche.** Laissé au centre du châssis, une accélération franche cabre la voiture sur deux roues, qui n'ont alors plus d'adhérence, et elle n'avance pas. Le nœud le place bas par défaut et l'expose ; l'inertie est celle d'un pavé aux dimensions du châssis, suffisamment juste pour quelque chose dont la tenue de route se règle au ressenti.
   - **Rapier n'avance pas un véhicule dans `world.step()`** : il faut appeler `updateVehicle` juste avant chaque pas. Un nœud évalué une fois par frame ne peut pas suivre une frame qui exécute trois pas, alors il dépose une fermeture dans le hook de pré-pas du monde.
@@ -102,9 +115,14 @@ Briques d'entrée conçues pour que le reste du graphe **ignore d'où vient la c
 - **`math/integrate`** / **`vector/integrate`** (*Integrate*, *Integrate Vector*) : **La moitié manquante de tout schéma de contrôle.** Un nœud d'entrée dit à quelle force on pousse *maintenant* ; le câbler directement dans une position fait du stick une coordonnée absolue — on relâche, l'objet retourne à l'origine, puisque « pousser zéro » veut dire « position zéro ». Ce qu'il faut, c'est l'accumulation dans le temps : `position += vitesse × dt`. Générique par construction : la même brique intègre une accélération en vitesse, un taux en angle, un débit en niveau.
   - **Amortissement par seconde, pas par frame** — sinon un objet roule plus loin sur une machine lente que sur une rapide.
   - **Attention au sens de l'amortissement** : il fait décroître *la valeur accumulée*. Sur une vitesse c'est du frottement ; sur une position, c'est un aimant vers l'origine. Chaîner deux intégrateurs — amorti pour la vitesse, non amorti pour la position — donne à la fois de la traînée et un endroit où s'arrêter.
-  - **Réinitialisation au scrub arrière** : ce que l'intégrateur contient est la somme de tout ce qui s'est passé depuis son démarrage, somme qui n'a plus de sens dès qu'on saute ailleurs dans le temps. Le retour à `Initial` est ce qui rend une frame exportée reproductible.
+  - **Réinitialisation au scrub arrière et à l'Epoch** : ce que l'intégrateur contient est la somme de tout ce qui s'est passé depuis son démarrage, réinitialisé à `Initial` lors d'un scrub ou d'un `Shift+Space`.
   - `Max Length` borne le vecteur accumulé **radialement**, pour qu'une zone de jeu limitée soit ronde et non carrée.
-- **`io/move-input`** (*Move Input*) : **Un schéma de contrôle complet en un nœud.** La chaîne qu'il remplace comptait cinq nœuds Keyboard, deux Action Map et un Compose Vector pour piloter un personnage : huit nœuds pour exprimer « l'arrangement habituel », à chaque fois. Beaucoup de graphe pour ce dont presque toute scène interactive a besoin, et rien de tout ça n'est la partie intéressante. Il lit le clavier **et** le stick d'une manette dans le même vecteur, déjà projeté dans le plan du sol (avant = −Z, comme partout ailleurs), et se branche donc directement sur un `physics/character` ou un `physics/capsule-controller`. Le plus appuyé l'emporte entre clavier et stick, sans addition. `io/action-map` n'est pas remplacé et reste la réponse pour tout ce qui sort de l'ordinaire : une action nommée, un axe asymétrique, une source qui n'est pas un périphérique d'entrée.
+- **`io/move-input`** (*Move Input*) : **Un schéma de contrôle complet en un nœud.** La chaîne qu'il remplace comptait cinq nœuds Keyboard, deux Action Map et un Compose Vector pour piloter un personnage : huit nœuds pour exprimer « l'arrangement habituel », à chaque fois. Beaucoup de graphe pour ce dont presque toute scène interactive a besoin.
+  - **Préréglages d'agencement (`layout`)** : `zqsd`, `wasd`, `arrows`, `zqsd+arrows`, `wasd+arrows`, `custom`.
+  - **Entrées** : `speed` (multiplicateur), `enabled` (activation).
+  - **Sorties riches** : `move` (vecteur XZ orienté sol, avant = $-Z$), `x` (axe droit), `z` (axe $-Z$), `forward` ($+1$ = avance, idéal pour papillon de véhicule sans inverseur), `magnitude`, `jump` (maintien), `jumpPressed` (impulsion frame), `sprint`.
+  - **Fusion Clavier + Manette** : repli automatique stick gauche avec zone morte radiale et règle du plus fort (pas d'addition).
+  - **Réservation de touches en lecture** : revendique ses touches auprès du moteur pour inhiber les raccourcis éditeur pendant le jeu (voir [[Input Subsystem and Playback Keys]]).
 - **`io/action-map`** (*Action Map*) : Plusieurs sources → une action nommée. C'est la brique qui **sort le schéma de contrôle du reste du graphe** : « avancer » est un seul fil, et savoir si ça vient de Z, du stick gauche, du D-pad ou d'un contrôle tactile ne regarde que ce nœud. Sans lui, chaque consommateur doit connaître chaque périphérique, et ajouter une manette veut dire éditer tout le graphe au lieu d'un nœud.
   - Sockets **Positive** et **Negative** croissants, parce que la plupart des actions sont en réalité des axes : avancer *moins* reculer. Câbler D en positif et Q en négatif donne un axe −1…1 à partir de deux touches numériques — le cas qu'un nœud « additionne les entrées » ne sait pas exprimer.
   - Combinaison par défaut **le plus fort** : tenir Z *et* pousser le stick doit marcher à une seule vitesse, pas à deux.
@@ -123,3 +141,6 @@ Briques d'entrée conçues pour que le reste du graphe **ignore d'où vient la c
 - [[Universal_Nodes_Catalog_3_Chantiers]]
 - [[Strategic_Roadmap_3_Chantiers_Fire_Lighting_FPS]]
 - [[Vegetation_and_Wind_Nodes_Catalog]]
+- [[Named Variables System]]
+- [[Simulation Reset and Epoch Architecture]]
+- [[Input Subsystem and Playback Keys]]

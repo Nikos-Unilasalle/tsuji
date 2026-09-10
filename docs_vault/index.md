@@ -78,15 +78,19 @@ Bienvenue dans le coffre de connaissances (Obsidian Vault). Ce système est stru
 
 ### 🏛️ Architecture & Runtime
 - [[Graph Evaluation Runtime]] — Évaluateur eager synchrone 60fps (`src/shared/graph/evaluate.ts`).
-- [[State Management and Multi-Canvas]] — Gestion multi-arbres (`CANVAS_COUNT = 6`), autosave et IPC.
+- [[Simulation Reset and Epoch Architecture]] — Remise à zéro universelle (`Shift+Space`), époque scalaire `simulationEpoch` et synchronisation d'état des simulations.
+- [[Input Subsystem and Playback Keys]] — Schéma de contrôle unifié `io/move-input`, layouts ZQSD/manette et réservation contextuelle des raccourcis éditeur.
+- [[State Management and Multi-Canvas]] — Gestion multi-arbres (`CANVAS_COUNT = 6`), communication inter-canvas, autosave et IPC.
 - [[Socket Type System and Ownership]] — Typage des 12 ports et sémantique `owns: true`.
 - [[ThreeJS Viewport and Calibration Pipeline]] — Architecture de `Viewport.tsx` et solveur DLT.
-- [[Keyframe Store and Timeline]] — Pistes d'animation `KeyframeStore` et priorité filaire.
+- [[Keyframe Store and Timeline]] — Pistes d'animation `KeyframeStore`, priorité filaire et timeline débrayable (`timelineEnabled`).
 
 ### 🧩 Nœuds & Création
 - [[Node Creation Guide]] — Guide auteur et contrat de développement.
-- [[Node Catalog]] — Inventaire des nœuds disponibles (dont simulation fluide 3D).
-- [[Universal_Nodes_Catalog_3_Chantiers]] — Spécification complète des nœuds pour les 3 chantiers.
+- [[Node Catalog]] — Inventaire des plus de 135 nœuds disponibles (fluide 3D, Rapier, végétation, variables).
+- [[Named Variables System]] — Variables globales typées (`variable/set`, `variable/get`), double-buffering par step et communication multi-canvas.
+- [[Universal_Nodes_Catalog_3_Chantiers]] — Spécification complète des nœuds pour les 3 chantiers (Fluide 3D, Éclairage, Entrées & Moteur Rapier).
+- [[Vegetation_and_Wind_Nodes_Catalog]] — Catalogue complet de végétation et vent temps réel (champ de vent, herbe torique, arbres, interaction, sway).
 - [[Creative FX and Stage Nodes]] — Shaders créatifs (Hologram, Iridescent, Cel-Shade, Fire SDF, Ghibli Clouds) et nœuds scéniques.
 - [[Parametric Geometry and Modifiers]] — Modificateurs de maillage (Lattice, Subdivide, Boolean CSG).
 

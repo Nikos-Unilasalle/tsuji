@@ -35,16 +35,20 @@ Chaque fonction `evaluate` reçoit le contexte immuable suivant :
 ```typescript
 export interface EvalContext {
   time: number;                   // Secondes déterministes (jamais Date.now())
-  step: number;                   // Numéro de frame
+  step: number;                   // Numéro d'étape / tick d'évaluation
   nodeId: string;                 // UUID d'instance (clé pour le cache GPU)
   liveEditNodeId?: string | null; // Nœud en cours de manipulation par gizmo 3D
   renderer?: THREE.WebGLRenderer; // Instance WebGLRenderer active
   renderSize?: { width: number; height: number }; // Dimensions de la vue
-  sessionId?: string;             // Identifiant de la session de rendu
-  keyframes?: KeyframeStore;      // Pistes d'animation
-  currentFrame?: number;          // Frame courante
-  connectedInputs?: ReadonlySet<string>; // Sockets réellement connectés
-  inputSources?: ReadonlyMap<string, string>; // Nœud source par socket
+  sessionId?: string;             // Identifiant de la session (isolation multi-viewports)
+  capturing?: boolean;            // Vrai pendant un export vidéo frame-par-frame
+  fps?: number;                   // Cadence d'images (30 par défaut en headless)
+  currentFrame?: number;          // Frame courante de la timeline
+  keyframes?: KeyframeStore;      // Pistes d'animation et courbes d'atténuation
+  connectedInputs?: ReadonlySet<string>; // Sockets possédant un fil actif
+  inputSources?: ReadonlyMap<string, string>; // Nœud amont par identifiant de socket
+  simulationEpoch?: number;       // Époque de simulation (reset universel Shift+Space)
+  markers?: Marker[];             // Marqueurs temporels de la timeline
 }
 ```
 
@@ -59,8 +63,26 @@ Lors de l'alimentation d'un socket d'entrée :
 
 ---
 
+## 4. Époque de Simulation & Réinitialisation Globale (`simulationEpoch`)
+
+Pour les nœuds détenant un état temporel non dérivable de la frame courante (moteur physique Rapier, intégrateurs, solveurs fluides 3D, carte d'interaction, variables globales), le runtime véhicule `ctx.simulationEpoch` :
+- Un incrément d'époque (`Shift+Space` ou bouton Transport) signale à tous ces nœuds de purger leur mémoire interne et de se reconstruire à leur pose initiale.
+- Détails complets : [[Simulation Reset and Epoch Architecture]].
+
+---
+
+## 5. Réservation des Touches & Clavier en Lecture
+
+Pendant la lecture (`playbackActive`), les raccourcis de l'éditeur (ex. `S` pour le scale, `Z` pour la vue de face, `Space` pour pause) sont cédés aux nœuds `io/keyboard` et `io/move-input` qui les écoutent, sans jamais bloquer les combinaisons avec modificateurs (`Shift+Space`).
+- Détails complets : [[Input Subsystem and Playback Keys]].
+
+---
+
 ## 🔗 Notes Associées
 - [[Node Graph Theory and Evaluation Models]]
 - [[State Management and Multi-Canvas]]
 - [[Socket Type System and Ownership]]
 - [[Node Creation Guide]]
+- [[Simulation Reset and Epoch Architecture]]
+- [[Input Subsystem and Playback Keys]]
+- [[Named Variables System]]

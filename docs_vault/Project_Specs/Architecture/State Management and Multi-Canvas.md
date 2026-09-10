@@ -20,6 +20,7 @@ export interface Project {
 ### Principes :
 - **6 Arbres Indépendants** : Chaque canvas possède son propre graphe de nœuds, ses fils, ses images-clés et ses paramètres de sortie (Render node).
 - **Commutation Instantanée** : Le basculement de canvas ne détruit pas les caches GPU associés (`nodeCaches.ts`). Seul le canvas actif est évalué et affiché à l'écran.
+- **Communication Inter-Canvas** : Les nœuds `variable/set` et `variable/get` partagent un registre de mémoire global à la session (au niveau du module `variable.ts`). Une valeur écrite sur le Canvas 1 est directement accessible par un `variable/get` sur le Canvas 3 sans fil, survivant aux changements de canvas (`Go To Canvas`, voir [[Named Variables System]]).
 
 ---
 
@@ -27,6 +28,7 @@ export interface Project {
 
 - Les mutations d'état (ajout de nœuds, câblage, modification de paramètres, édition de clés) génèrent de nouvelles copies immuables du graphe via `cloneGraph.ts`.
 - **Isolation du Gizmo (`liveEditNodeId`)** : Pendant la manipulation d'un gizmo dans la vue 3D, le nœud ciblé ignore l'écrasement de sa matrice par le graphe pour éviter tout clignotement à 60 fps.
+- **Reset Universel (`resetSimulations`)** : L'action `Shift+Space` incrémente l'époque de simulation dans `App.tsx`, propage la nouvelle époque dans le contexte de rendu et rembobine le playhead à 0 (voir [[Simulation Reset and Epoch Architecture]]).
 
 ---
 
@@ -41,3 +43,5 @@ export interface Project {
 - [[Graph Evaluation Runtime]]
 - [[ThreeJS Viewport and Calibration Pipeline]]
 - [[Keyframe Store and Timeline]]
+- [[Named Variables System]]
+- [[Simulation Reset and Epoch Architecture]]

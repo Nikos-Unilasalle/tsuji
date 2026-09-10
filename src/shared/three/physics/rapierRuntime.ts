@@ -351,14 +351,19 @@ export function stepPhysicsWorld(
 
 const _quaternion = new THREE.Quaternion();
 const _translation = new THREE.Vector3();
+const _unitScale = new THREE.Vector3(1, 1, 1);
 
 /** Copies a body's pose into a matrix the graph can carry. */
-export function bodyMatrix(body: RAPIER.RigidBody, target = new THREE.Matrix4()): THREE.Matrix4 {
+export function bodyMatrix(
+  body: RAPIER.RigidBody,
+  target = new THREE.Matrix4(),
+  scale: THREE.Vector3 = _unitScale,
+): THREE.Matrix4 {
   const t = body.translation();
   const r = body.rotation();
   _translation.set(t.x, t.y, t.z);
   _quaternion.set(r.x, r.y, r.z, r.w);
-  return target.compose(_translation, _quaternion, new THREE.Vector3(1, 1, 1));
+  return target.compose(_translation, _quaternion, scale);
 }
 
 export function bodyPosition(body: RAPIER.RigidBody, target = new THREE.Vector3()): THREE.Vector3 {
