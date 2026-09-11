@@ -93,6 +93,29 @@ describe("MATERIAL_WORN_NODE and Edge Curvature computation", () => {
     expect(offset7.distanceTo(offset1)).toBeGreaterThan(1);
   });
 
+  it("drives the discrete patch masks for wear and dirt independently", () => {
+    const res = MATERIAL_WORN_NODE.evaluate(
+      { wearPatch: 0.8, dirtPatch: 0.2, patchScale: 9 },
+      MATERIAL_WORN_NODE.defaultParams,
+      { time: 0, step: 0, nodeId: "worn-patch" },
+    );
+    const u = (res.material as any).customMaterial.__wornUniforms;
+    expect(u.uWearPatch.value).toBeCloseTo(0.8);
+    expect(u.uDirtPatch.value).toBeCloseTo(0.2);
+    expect(u.uPatchScale.value).toBeCloseTo(9);
+  });
+
+  it("clamps the patch amounts to 0-1", () => {
+    const res = MATERIAL_WORN_NODE.evaluate(
+      { wearPatch: 5, dirtPatch: -3 },
+      MATERIAL_WORN_NODE.defaultParams,
+      { time: 0, step: 0, nodeId: "worn-patch-clamp" },
+    );
+    const u = (res.material as any).customMaterial.__wornUniforms;
+    expect(u.uWearPatch.value).toBe(1);
+    expect(u.uDirtPatch.value).toBe(0);
+  });
+
   it("clamps Noise Detail to the octave count the shader loop is unrolled to", () => {
     const res = MATERIAL_WORN_NODE.evaluate(
       { noiseDetail: 99 },

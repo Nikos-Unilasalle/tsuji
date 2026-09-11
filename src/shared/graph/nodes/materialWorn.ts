@@ -261,6 +261,11 @@ export function createWornMaterial(): THREE.MeshStandardMaterial {
     // edge wear: a perfectly uniform flat face is the least convincing part
     // of the result.
     uVariation: { value: 0.25 },
+    // Discrete on/off patching of the wear and the dirt, so neither runs the
+    // full length of every qualifying edge.
+    uWearPatch: { value: 0.3 },
+    uDirtPatch: { value: 0.3 },
+    uPatchScale: { value: 2.5 },
   };
 
   (mat as any).__wornUniforms = uniforms;
@@ -321,6 +326,9 @@ export function createWornMaterial(): THREE.MeshStandardMaterial {
       uniform float uNoiseDetail;
       uniform vec3 uSeedOffset;
       uniform float uVariation;
+      uniform float uWearPatch;
+      uniform float uDirtPatch;
+      uniform float uPatchScale;
 
       varying vec3 vWornBary;
       varying vec3 vWornAltitudes;
@@ -397,6 +405,24 @@ export function createWornMaterial(): THREE.MeshStandardMaterial {
         }
         return norm > 0.0 ? sum / norm : 0.0;
       }
+
+      // A discrete patch mask: 0 or 1 over most of the surface, with a narrow
+      // ramp at the boundary that exists for anti-aliasing, not as a gradient.
+      // The continuous Organic Breakup only ever wobbles the width of a band
+      // that still runs the entire length of every qualifying edge, which is
+      // what makes an untouched result look machine-applied. This instead
+      // removes whole stretches. Raising "amount" lifts the threshold, so more
+      // of the noise field falls below it and more of the edge is left clean.
+      float patchMaskWorn(vec3 p, float amount) {
+        if (amount <= 0.001) return 1.0;
+        // 0.7, not the 0.5 a plain [-1,1] -> [0,1] remap would use: two
+        // octaves of simplex rarely approach ±1, so the field bunches around
+        // 0.5 and the first half of the slider would do nothing at all. The
+        // gain spreads it back out across the threshold's range.
+        float m = clamp(fbmWorn(p, 2.0) * 0.7 + 0.5, 0.0, 1.0);
+        float t = amount * 0.8;
+        return smoothstep(t, t + 0.1, m);
+      }
       `
     );
 
@@ -472,6 +498,15 @@ export function createWornMaterial(): THREE.MeshStandardMaterial {
         dirtFactor = pow(dirtFactor, uContrast);
       }
 
+      // Applied after the contrast shaping, so pow() can't soften the mask's
+      // own boundary back into a gradient. Wear and dirt read the field at
+      // separate offsets: sharing one would have the grime collect in exactly
+      // the creases whose neighbouring ridges happen to be worn, which is its
+      // own kind of systematic.
+      vec3 patchPos = vWornWorldPos * uPatchScale + uSeedOffset;
+      wearFactor *= patchMaskWorn(patchPos, uWearPatch);
+      dirtFactor *= patchMaskWorn(patchPos + 53.7, uDirtPatch);
+
       // Base color blending: on flat surfaces, wearFactor == 0 and dirtFactor == 0 -> 100% uBaseColor!
       vec3 blendedCol = uBaseColor;
       blendedCol = mix(blendedCol, uDirtColor, dirtFactor);
@@ -537,6 +572,9 @@ export const MATERIAL_WORN_NODE: NodeDefinition = {
     { id: "noiseDetail", label: "Noise Detail", type: "value" },
     { id: "variation", label: "Surface Variation", type: "value" },
     { id: "seed", label: "Seed", type: "value" },
+    { id: "wearPatch", label: "Wear Patchiness", type: "value" },
+    { id: "dirtPatch", label: "Dirt Patchiness", type: "value" },
+    { id: "patchScale", label: "Patch Scale", type: "value" },
   ],
   outputs: [{ id: "material", label: "Material", type: "material" }],
   defaultParams: {
@@ -557,17 +595,22 @@ export const MATERIAL_WORN_NODE: NodeDefinition = {
     noiseDetail: 3,
     variation: 0.25,
     seed: 1,
+    wearPatch: 0.3,
+    dirtPatch: 0.3,
+    patchScale: 2.5,
   },
   paramFields: [
     { id: "wearAmount", label: "Wear Amount", kind: "number", step: 0.05, group: "Wear (Convex)" },
     { id: "wornColor", label: "Worn Color", kind: "color", group: "Wear (Convex)" },
     { id: "wornRoughness", label: "Worn Roughness", kind: "number", step: 0.05, group: "Wear (Convex)" },
     { id: "wornMetalness", label: "Worn Metalness", kind: "number", step: 0.05, group: "Wear (Convex)" },
+    { id: "wearPatch", label: "Wear Patchiness", kind: "number", step: 0.05, group: "Wear (Convex)" },
 
     { id: "dirtAmount", label: "Dirt Amount", kind: "number", step: 0.05, group: "Dirt (Concave)" },
     { id: "dirtColor", label: "Dirt Color", kind: "color", group: "Dirt (Concave)" },
     { id: "dirtRoughness", label: "Dirt Roughness", kind: "number", step: 0.05, group: "Dirt (Concave)" },
     { id: "dirtMetalness", label: "Dirt Metalness", kind: "number", step: 0.05, group: "Dirt (Concave)" },
+    { id: "dirtPatch", label: "Dirt Patchiness", kind: "number", step: 0.05, group: "Dirt (Concave)" },
 
     { id: "baseColor", label: "Base Color", kind: "color", group: "Base (General)" },
     { id: "baseRoughness", label: "Base Roughness", kind: "number", step: 0.05, group: "Base (General)" },
@@ -578,6 +621,7 @@ export const MATERIAL_WORN_NODE: NodeDefinition = {
     { id: "noiseScale", label: "Noise Scale", kind: "number", step: 0.5, group: "Tuning" },
     { id: "noiseDetail", label: "Noise Detail (Octaves)", kind: "number", step: 0.25, group: "Tuning" },
     { id: "variation", label: "Surface Variation", kind: "number", step: 0.05, group: "Tuning" },
+    { id: "patchScale", label: "Patch Scale", kind: "number", step: 0.25, group: "Tuning" },
     { id: "seed", label: "Seed", kind: "number", step: 1, group: "Tuning" },
   ],
   evaluate: (inputs, params, ctx) => {
@@ -611,6 +655,9 @@ export const MATERIAL_WORN_NODE: NodeDefinition = {
     const noiseDetail = Math.max(1, Math.min(4, numberInput(inputs.noiseDetail, params.noiseDetail, 3)));
     const variation = Math.max(0, Math.min(1, numberInput(inputs.variation, params.variation, 0.25)));
     const seed = numberInput(inputs.seed, params.seed, 1);
+    const wearPatch = Math.max(0, Math.min(1, numberInput(inputs.wearPatch, params.wearPatch, 0.3)));
+    const dirtPatch = Math.max(0, Math.min(1, numberInput(inputs.dirtPatch, params.dirtPatch, 0.3)));
+    const patchScale = Math.max(0.05, Math.min(50, numberInput(inputs.patchScale, params.patchScale, 2.5)));
 
     const u = (mat as any).__wornUniforms;
     if (u) {
@@ -633,6 +680,9 @@ export const MATERIAL_WORN_NODE: NodeDefinition = {
       u.uNoiseScale.value = noiseScale;
       u.uNoiseDetail.value = noiseDetail;
       u.uVariation.value = variation;
+      u.uWearPatch.value = wearPatch;
+      u.uDirtPatch.value = dirtPatch;
+      u.uPatchScale.value = patchScale;
       // Irrational multipliers so consecutive integer seeds land far apart in
       // the noise field on all three axes instead of sliding along one.
       u.uSeedOffset.value.set(seed * 31.4159, seed * 27.1828, seed * 16.1803);
