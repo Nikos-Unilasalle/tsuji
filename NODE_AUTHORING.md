@@ -234,6 +234,29 @@ describe("MY_NODE", () => {
 });
 ```
 
+## 9b. If your node takes geometry in and hands geometry out
+
+Three contracts apply on top of everything above, and
+`src/shared/graph/nodeContracts.test.ts` checks all three across the whole
+registry — your node is in that sweep whether you read this section or not.
+
+- **Appearance.** A node that isn't about materials passes the source's
+  material *by reference*, plus its texture maps, UVs, `userData.pivot` and
+  shadow flags. Don't assign `mesh.material = srcMesh.material` by hand;
+  call `inheritSourceMaterial()` (object.ts) so the material's own geometry
+  hook runs, and `preserveModifierUserData()` (transform.ts) for the rest.
+- **Identity.** Same inputs in, *the same object* back — not an equal one.
+  Downstream caches key on `geometry.uuid` and `mesh.uuid`, so a node that
+  mints a fresh `BufferGeometry` every frame silently breaks them. Cache on
+  a signature and return the cached mesh.
+- **Pose.** Read a source's world matrix with `worldMatrixOf()`, never from
+  `matrixWorld` — that value is stale mid-evaluation. Write your output's
+  matrix with `matrixAutoUpdate = false`.
+
+Contract 2 is the one nobody guesses: Rapier rebuilds a rigid body when the
+source geometry's uuid changes, so an identity leak in a *modelling* node
+freezes physics two nodes downstream.
+
 ## 10. Before you say you're done
 
 Run both, from the repo root, and both must be clean:
