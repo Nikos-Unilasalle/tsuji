@@ -3,6 +3,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { DEFAULT_REGISTRY } from "./nodes";
 import { evaluateGraph } from "./evaluate";
 import { initRapier } from "../three/physics/rapierRuntime";
+import { worldMatrixOf } from "./objectPosition";
 import { Graph, NodeDefinition } from "./types";
 
 /**
@@ -16,10 +17,12 @@ import { Graph, NodeDefinition } from "./types";
  *  2. **Identity** — a node whose inputs did not change must hand back *the
  *     same* object, not an equal one. Downstream caches key on identity.
  *  3. **Physics interop** — a rigid body wired behind the node must actually
- *     simulate. This is contract 2 seen from the other end: Rapier rebuilds a
- *     body when the source geometry's uuid changes, so a node that mints a new
- *     BufferGeometry every frame destroys and re-creates the body at its
- *     authoring pose every frame, and the object never moves.
+ *     simulate: the drawn surface has to move when the solver runs. This used
+ *     to be contract 2 seen from the other end, because a body's rebuild
+ *     signature keyed on the source geometry's uuid — so a node that minted a
+ *     new BufferGeometry every frame destroyed and re-created the body before
+ *     it could move. It no longer does (see describeTarget in rapier.ts), and
+ *     the list below is empty; the test stays to keep it that way.
  *
  * Why registry-wide rather than a test per node: every one of these was found
  * as a single node's bug and fixed in that node, which is exactly the pattern
@@ -258,34 +261,54 @@ function physicsGraph(modifierType: string | null): Graph {
 }
 
 /**
- * Where the body is one frame in (it must be born where the object is) and
- * where it has got to after PHYSICS_FRAMES (it must have moved). Null when
- * the node produced no body at all.
+ * The height of the *drawn surface* — the centroid of the output mesh's
+ * vertices in world space — on the first frame and after PHYSICS_FRAMES.
+ *
+ * Not the body's own translation, which is a weaker and sometimes misleading
+ * reading: Lattice Deform and Curve Deform bake the source pose into their
+ * vertices and leave the mesh at the origin, so their bodies legitimately sit
+ * at (0, 0, 0) with the shape offset inside them. What the contract is
+ * actually about is whether the thing on screen moves when the solver runs,
+ * and that question has the same answer for every node.
  */
-function simulate(modifierType: string | null): { placed: number; settled: number } | null {
+function simulate(modifierType: string | null): { start: number; end: number } | null {
   const graph = physicsGraph(modifierType);
   const session = nextSession();
-  const readY = (results: Map<string, Record<string, unknown>>) => {
-    const body = results.get("b");
-    return body?.position ? (body.position as THREE.Vector3).y : null;
+
+  const drawnHeight = (results: Map<string, Record<string, unknown>>): number | null => {
+    const mesh = firstMesh(results.get("b")?.geometry);
+    const attribute = mesh?.geometry?.getAttribute?.("position") as THREE.BufferAttribute | undefined;
+    if (!mesh || !attribute) return null;
+    const world = worldMatrixOf(mesh);
+    const centroid = new THREE.Vector3();
+    const vertex = new THREE.Vector3();
+    for (let i = 0; i < attribute.count; i++) centroid.add(vertex.fromBufferAttribute(attribute, i).applyMatrix4(world));
+    return centroid.divideScalar(attribute.count).y;
   };
-  const placed = readY(evaluate(graph, 1, session));
-  if (placed === null) return null;
-  const settled = readY(evaluate(graph, PHYSICS_FRAMES, session));
-  return settled === null ? null : { placed, settled };
+
+  const start = drawnHeight(evaluate(graph, 1, session));
+  if (start === null) return null;
+  const end = drawnHeight(evaluate(graph, PHYSICS_FRAMES, session));
+  return end === null ? null : { start, end };
 }
 
-const KNOWN_PHYSICS_VIOLATIONS: Record<string, string> = {
-  "modifier/edit-mesh: frozen":
-    "a new geometry uuid every frame, and describeTargets() keys the rebuild signature on it, so the " +
-    "body is destroyed and re-created at its authoring pose before it can ever move.",
-  "geometry/wave-ripple: frozen": "same cause: a new geometry every frame keeps resetting the body.",
-  "geometry/facet-explode: frozen": "same cause.",
-  "curve/deform: placement":
-    "the rebuilt mesh carries no pose of its own, so the body is created at the origin instead of where " +
-    "the object is — it simulates, just nowhere near what you can see.",
-  "modifier/lattice: placement": "same as curve/deform.",
-};
+/**
+ * Empty, and it should stay that way.
+ *
+ * It used to hold five entries — Edit Mesh, Wave Ripple and Facet Explode
+ * froze a body at its drop height, Lattice Deform and Curve Deform had one
+ * built at the origin. All five were the same root cause, and none of them
+ * was fixed in those nodes: the body's rebuild signature keyed on the source
+ * geometry's uuid, so physics inherited the caching discipline of whatever
+ * happened to be upstream. describeTarget() keys on the producing node plus
+ * the shape's own counts and scale instead, and a rebuild now carries the
+ * body's pose and velocity across rather than restarting it.
+ *
+ * Six of the twelve identity violations above are therefore still there and
+ * no longer reach this contract. That is the point: a node that churns its
+ * geometry is wasteful, but it can no longer break the simulation.
+ */
+const KNOWN_PHYSICS_VIOLATIONS: Record<string, string> = {};
 
 /* -------------------------------------------------------------------------- */
 
@@ -368,11 +391,11 @@ describe("node contracts: a rigid body still simulates behind a modifier", () =>
     // sweep below would report every node as clean for the wrong reason.
     const plain = simulate(null);
     expect(plain).not.toBeNull();
-    expect(Math.abs(plain!.placed - DROP_FROM)).toBeLessThan(0.5);
-    expect(DROP_FROM - plain!.settled).toBeGreaterThan(0.5);
+    expect(Math.abs(plain!.start - DROP_FROM)).toBeLessThan(0.5);
+    expect(plain!.start - plain!.end).toBeGreaterThan(0.5);
   });
 
-  it("every geometry node leaves the body where it belongs, and free to fall", () => {
+  it("every geometry node leaves the drawn surface free to fall", () => {
     const violations: string[] = [];
 
     for (const def of geometryPipelineNodes()) {
@@ -385,7 +408,7 @@ describe("node contracts: a rigid body still simulates behind a modifier", () =>
         continue;
       }
 
-      let result: { placed: number; settled: number } | null = null;
+      let result: { start: number; end: number } | null = null;
       try {
         result = simulate(def.type);
       } catch {
@@ -394,11 +417,10 @@ describe("node contracts: a rigid body still simulates behind a modifier", () =>
       }
       if (!result) continue;
 
-      // Two distinct failures, and they need telling apart: a body born at the
-      // wrong place still moves, and a body re-created every frame stays put
-      // at exactly the height it was authored at.
-      if (Math.abs(result.placed - DROP_FROM) > 0.5) violations.push(`${def.type}: placement`);
-      else if (DROP_FROM - result.settled < 0.5) violations.push(`${def.type}: frozen`);
+      // A body that is destroyed and re-created every frame never gets to
+      // move: the surface is still exactly where it was authored a second
+      // later, whatever the solver did in between.
+      if (result.start - result.end < 0.5) violations.push(`${def.type}: frozen`);
     }
 
     expect(violations.sort(), "a line only present on the left is a node that has been fixed — delete its entry from the list below; a line only on the right is a new violation to fix, not to add to the list").toEqual(expectedViolations(KNOWN_PHYSICS_VIOLATIONS));

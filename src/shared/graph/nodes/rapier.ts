@@ -167,6 +167,14 @@ interface BodyEntry {
   scale: THREE.Vector3;
 }
 
+/** Where a body had got to, so a rebuild can pick the simulation back up rather than restart it. */
+interface MotionSnapshot {
+  translation: RAPIER.Vector;
+  rotation: RAPIER.Rotation;
+  linvel: RAPIER.Vector;
+  angvel: RAPIER.Vector;
+}
+
 interface BodyState {
   entries: BodyEntry[];
   worldNodeId: string;
@@ -236,25 +244,59 @@ export function collectBodyTargets(root: THREE.Object3D, split: BodySplitMode): 
   return targets;
 }
 
+const _shapeScale = new THREE.Vector3();
+
+/**
+ * What one target *is*, in terms that survive the object being rebuilt.
+ *
+ * Not the geometry uuid, which was the obvious choice and the wrong one: a
+ * uuid is identity, and several nodes hand back a freshly built
+ * BufferGeometry every frame even when nothing changed (Edit Mesh, Wave
+ * Ripple, Facet Explode, Lattice Deform, Curve Deform — see
+ * nodeContracts.test.ts). Keying on it made the physics correct only for as
+ * long as every upstream node happened to cache well, and a body behind one
+ * that did not was destroyed and re-created before it could ever move.
+ *
+ * So: the producing node's id where there is one, plus enough of the shape to
+ * notice a real edit —
+ *
+ *  - **vertex and index counts** catch a re-subdivided, extruded or
+ *    re-topologised mesh;
+ *  - **world scale** catches a box resized through its own scale param, which
+ *    changes no counts at all but does change the collider, since
+ *    extractColliderGeometry bakes scale into the vertices.
+ *
+ * What it deliberately does *not* notice is vertices moving with the counts
+ * unchanged — a lattice or a ripple deforming over time. That leaves the
+ * collider slightly behind the visible surface, which is the cheaper of the
+ * two errors by a wide margin: the alternative is resetting the body sixty
+ * times a second, which is not "slightly" anything.
+ */
+function describeTarget(target: BodyTarget): string {
+  const mesh = target.mesh;
+  const nodeId = typeof mesh.userData?.nodeId === "string" ? mesh.userData.nodeId : null;
+  const identity = nodeId ?? mesh.geometry?.uuid ?? mesh.uuid;
+  const vertices = mesh.geometry?.attributes?.position?.count ?? 0;
+  const indices = mesh.geometry?.getIndex()?.count ?? 0;
+  target.matrix.decompose(new THREE.Vector3(), new THREE.Quaternion(), _shapeScale);
+  const scale = `${_shapeScale.x.toFixed(4)},${_shapeScale.y.toFixed(4)},${_shapeScale.z.toFixed(4)}`;
+  return `${identity}:${vertices}/${indices}:${scale}`;
+}
+
 /**
  * What the set of targets *is*, rather than where they have got to.
  *
  * Rebuilding on every pose change would restart the simulation every frame;
  * rebuilding on none of them would miss a crate being added. Counting shapes
  * catches the second without noticing the first.
- *
- * Keyed by **geometry**, not by the mesh: `structure/array` throws its clones
- * away and makes new ones every frame, so a mesh uuid changes constantly and
- * would rebuild the whole simulation sixty times a second. `Object3D.clone()`
- * shares the geometry, which therefore survives.
  */
 export function describeTargets(targets: readonly BodyTarget[]): string {
   const counts = new Map<string, number>();
   for (const target of targets) {
-    const key = target.mesh.geometry?.uuid ?? target.mesh.uuid;
+    const key = describeTarget(target);
     counts.set(key, (counts.get(key) ?? 0) + 1);
   }
-  return [...counts].map(([uuid, count]) => `${uuid}x${count}`).join("|");
+  return [...counts].map(([key, count]) => `${key}x${count}`).join("|");
 }
 
 const _parentInverse = new THREE.Matrix4();
@@ -375,7 +417,20 @@ export const RIGID_BODY_NODE: NodeDefinition = {
     let state = bodyCache.get(ctx.nodeId);
 
     if (!state || state.signature !== signature || state.worldNodeId !== handle.nodeId) {
+      // A rebuild must not be a reset. The shape changed (or an upstream node
+      // churned its geometry) — that is no reason for a crate halfway to the
+      // floor to teleport back to where it was authored and start again, which
+      // is exactly what a body re-created from its target's matrix does.
+      // Carried only within the same world and generation: a Reset rebuilds
+      // the world itself, and there the whole point is to start over.
+      let carried: MotionSnapshot[] | null = null;
       if (state && state.worldNodeId === handle.nodeId && state.generation === handle.generation) {
+        carried = state.entries.map((entry) => ({
+          translation: entry.body.translation(),
+          rotation: entry.body.rotation(),
+          linvel: entry.body.linvel(),
+          angvel: entry.body.angvel(),
+        }));
         for (const entry of state.entries) handle.world.removeRigidBody(entry.body);
         handle.bodies.delete(ctx.nodeId);
       }
@@ -417,7 +472,17 @@ export const RIGID_BODY_NODE: NodeDefinition = {
           desc.setTranslation(_pose.x, _pose.y, _pose.z);
           desc.setRotation({ x: _poseQuat.x, y: _poseQuat.y, z: _poseQuat.z, w: _poseQuat.w });
 
+          const previous = carried?.[entries.length];
+          if (previous) {
+            desc.setTranslation(previous.translation.x, previous.translation.y, previous.translation.z);
+            desc.setRotation(previous.rotation);
+          }
+
           const body = handle.world.createRigidBody(desc);
+          if (previous && bodyType === "dynamic") {
+            body.setLinvel(previous.linvel, true);
+            body.setAngvel(previous.angvel, true);
+          }
           // An instance's scale lives in its matrix and a collider has none, so
           // each distinct size needs its own scaled copy of the shape.
           const scaled =

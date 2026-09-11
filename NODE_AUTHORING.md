@@ -253,9 +253,11 @@ registry — your node is in that sweep whether you read this section or not.
   `matrixWorld` — that value is stale mid-evaluation. Write your output's
   matrix with `matrixAutoUpdate = false`.
 
-Contract 2 is the one nobody guesses: Rapier rebuilds a rigid body when the
-source geometry's uuid changes, so an identity leak in a *modelling* node
-freezes physics two nodes downstream.
+Contract 2 is the one nobody guesses, and it used to be the expensive one:
+a rigid body's rebuild signature keyed on the source geometry's uuid, so an
+identity leak in a *modelling* node froze physics two nodes downstream.
+Physics no longer keys on identity, but plenty of other things still do — and
+rebuilding a mesh sixty times a second is wasteful even when nothing breaks.
 
 ## 10. Before you say you're done
 

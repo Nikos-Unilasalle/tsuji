@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import type RAPIER from "@dimforge/rapier3d-compat";
+import { worldMatrixOf } from "../../graph/objectPosition";
 
 /**
  * Rigid-body physics, on Rapier.
@@ -90,18 +91,12 @@ const _position = new THREE.Vector3();
  * assembled through a Merge collapsed onto one spot and everything fell
  * through the ground.
  *
- * Walking the parents costs a handful of matrix multiplies per body, and it is
- * true by construction.
+ * Re-exported rather than implemented here: this file used to carry its own
+ * copy that skipped `updateMatrix()`, so the *other* half of the same bug
+ * survived the fix above — an object still posed through `.position` rather
+ * than a written `.matrix` reported the origin, and its body was built there.
  */
-export function worldMatrixOf(object: THREE.Object3D, target = new THREE.Matrix4()): THREE.Matrix4 {
-  target.copy(object.matrix);
-  let parent = object.parent;
-  while (parent) {
-    target.premultiply(parent.matrix);
-    parent = parent.parent;
-  }
-  return target;
-}
+export { worldMatrixOf };
 
 /**
  * Flattens an object's meshes into one vertex soup, in the object's own space
