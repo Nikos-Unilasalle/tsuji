@@ -59,4 +59,34 @@ describe("LIGHT NODES", () => {
     expect(light).toBeInstanceOf(THREE.AmbientLight);
     expect(light.intensity).toBe(0.8);
   });
+
+  it("LIGHT_DIRECTIONAL_NODE applies shadowSoftness to shadow.radius", () => {
+    const res = LIGHT_DIRECTIONAL_NODE.evaluate(
+      { shadowSoftness: 3.5 },
+      { shadowSoftness: 1 },
+      { ...CTX, nodeId: "dir-softness" }
+    );
+    const light = res.light as THREE.DirectionalLight;
+    expect(light.shadow.radius).toBeCloseTo(3.5);
+  });
+
+  it("LIGHT_POINT_NODE applies shadowSoftness to shadow.radius", () => {
+    const res = LIGHT_POINT_NODE.evaluate(
+      {},
+      { shadowSoftness: 2.5 },
+      { ...CTX, nodeId: "pt-softness" }
+    );
+    const light = res.light as THREE.PointLight;
+    expect(light.shadow.radius).toBeCloseTo(2.5);
+  });
+
+  it("LIGHT_SPOT_NODE applies shadowSoftness to shadow.radius", () => {
+    const res = LIGHT_SPOT_NODE.evaluate(
+      { shadowSoftness: 4.0 },
+      { shadowSoftness: 1 },
+      { ...CTX, nodeId: "spot-softness" }
+    );
+    const light = res.light as THREE.SpotLight;
+    expect(light.shadow.radius).toBeCloseTo(4.0);
+  });
 });

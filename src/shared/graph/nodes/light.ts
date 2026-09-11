@@ -72,6 +72,7 @@ export const LIGHT_DIRECTIONAL_NODE: NodeDefinition = {
     { id: "target", label: "Target", type: "geometry" },
     { id: "matrix", label: "Matrix", type: "matrix" },
     { id: "castShadow", label: "Shadows", type: "value" },
+    { id: "shadowSoftness", label: "Shadow Softness", type: "value" },
   ],
   outputs: [{ id: "light", label: "Light", type: "geometry" }],
   defaultParams: {
@@ -82,6 +83,7 @@ export const LIGHT_DIRECTIONAL_NODE: NodeDefinition = {
     color: new THREE.Color(0xffffff),
     intensity: 1.5,
     castShadow: 1,
+    shadowSoftness: 1,
   },
   paramFields: [
     { id: "location", label: "Location", kind: "vector" },
@@ -91,6 +93,7 @@ export const LIGHT_DIRECTIONAL_NODE: NodeDefinition = {
     { id: "color", label: "Color", kind: "color" },
     { id: "intensity", label: "Intensity", kind: "number", step: 0.1 },
     { id: "castShadow", label: "Cast Shadows", kind: "boolean" },
+    { id: "shadowSoftness", label: "Shadow Softness", kind: "number", step: 0.1 },
   ],
   evaluate: (inputs, params, ctx) => {
     let light = lightCache.get(ctx.nodeId) as THREE.DirectionalLight | undefined;
@@ -116,10 +119,12 @@ export const LIGHT_DIRECTIONAL_NODE: NodeDefinition = {
     const color = asColor(inputs.color, asColor(params.color, new THREE.Color(0xffffff)));
     const intensity = Math.max(0, inputs.intensity !== undefined ? Number(inputs.intensity) : Number(params.intensity) ?? 1.5);
     const castShadow = inputs.castShadow !== undefined ? Number(inputs.castShadow) > 0 : Boolean(params.castShadow ?? true);
+    const shadowSoftness = Math.max(0, inputs.shadowSoftness !== undefined ? Number(inputs.shadowSoftness) : Number(params.shadowSoftness ?? 1));
 
     light.color.copy(color);
     light.intensity = intensity;
     light.castShadow = castShadow;
+    light.shadow.radius = shadowSoftness;
 
     if (ctx.nodeId !== ctx.liveEditNodeId) {
       light.matrixAutoUpdate = false;
@@ -153,6 +158,7 @@ export const LIGHT_POINT_NODE: NodeDefinition = {
     { id: "decay", label: "Decay", type: "value" },
     { id: "matrix", label: "Matrix", type: "matrix" },
     { id: "castShadow", label: "Shadows", type: "value" },
+    { id: "shadowSoftness", label: "Shadow Softness", type: "value" },
   ],
   outputs: [{ id: "light", label: "Light", type: "geometry" }],
   defaultParams: {
@@ -164,6 +170,7 @@ export const LIGHT_POINT_NODE: NodeDefinition = {
     distance: 15,
     decay: 2,
     castShadow: 1,
+    shadowSoftness: 1,
   },
   paramFields: [
     { id: "location", label: "Location", kind: "vector" },
@@ -174,6 +181,7 @@ export const LIGHT_POINT_NODE: NodeDefinition = {
     { id: "distance", label: "Distance", kind: "number", step: 0.5 },
     { id: "decay", label: "Decay", kind: "number", step: 0.1 },
     { id: "castShadow", label: "Cast Shadows", kind: "boolean" },
+    { id: "shadowSoftness", label: "Shadow Softness", kind: "number", step: 0.1 },
   ],
   evaluate: (inputs, params, ctx) => {
     let light = lightCache.get(ctx.nodeId) as THREE.PointLight | undefined;
@@ -192,12 +200,14 @@ export const LIGHT_POINT_NODE: NodeDefinition = {
     const distance = Math.max(0, inputs.distance !== undefined ? Number(inputs.distance) : Number(params.distance) ?? 15);
     const decay = Math.max(0, inputs.decay !== undefined ? Number(inputs.decay) : Number(params.decay) ?? 2);
     const castShadow = inputs.castShadow !== undefined ? Number(inputs.castShadow) > 0 : Boolean(params.castShadow ?? true);
+    const shadowSoftness = Math.max(0, inputs.shadowSoftness !== undefined ? Number(inputs.shadowSoftness) : Number(params.shadowSoftness ?? 1));
 
     light.color.copy(color);
     light.intensity = intensity;
     light.distance = distance;
     light.decay = decay;
     light.castShadow = castShadow;
+    light.shadow.radius = shadowSoftness;
 
     if (ctx.nodeId !== ctx.liveEditNodeId) {
       light.matrixAutoUpdate = false;
@@ -221,6 +231,7 @@ export const LIGHT_SPOT_NODE: NodeDefinition = {
     { id: "target", label: "Target", type: "geometry" },
     { id: "matrix", label: "Matrix", type: "matrix" },
     { id: "castShadow", label: "Shadows", type: "value" },
+    { id: "shadowSoftness", label: "Shadow Softness", type: "value" },
   ],
   outputs: [{ id: "light", label: "Light", type: "geometry" }],
   defaultParams: {
@@ -233,6 +244,7 @@ export const LIGHT_SPOT_NODE: NodeDefinition = {
     angle: 45,
     penumbra: 0.3,
     castShadow: 1,
+    shadowSoftness: 1,
   },
   paramFields: [
     { id: "location", label: "Location", kind: "vector" },
@@ -244,6 +256,7 @@ export const LIGHT_SPOT_NODE: NodeDefinition = {
     { id: "angle", label: "Cone Angle (°)", kind: "number", step: 5 },
     { id: "penumbra", label: "Soft Edge (0..1)", kind: "number", step: 0.05 },
     { id: "castShadow", label: "Cast Shadows", kind: "boolean" },
+    { id: "shadowSoftness", label: "Shadow Softness", kind: "number", step: 0.1 },
   ],
   evaluate: (inputs, params, ctx) => {
     let light = lightCache.get(ctx.nodeId) as THREE.SpotLight | undefined;
@@ -266,12 +279,14 @@ export const LIGHT_SPOT_NODE: NodeDefinition = {
     const angleDeg = Math.max(1, Math.min(89, inputs.angle !== undefined ? Number(inputs.angle) : Number(params.angle) ?? 45));
     const penumbra = Math.max(0, Math.min(1, inputs.penumbra !== undefined ? Number(inputs.penumbra) : Number(params.penumbra) ?? 0.3));
     const castShadow = inputs.castShadow !== undefined ? Number(inputs.castShadow) > 0 : Boolean(params.castShadow ?? true);
+    const shadowSoftness = Math.max(0, inputs.shadowSoftness !== undefined ? Number(inputs.shadowSoftness) : Number(params.shadowSoftness ?? 1));
 
     light.color.copy(color);
     light.intensity = intensity;
     light.angle = (angleDeg * Math.PI) / 180;
     light.penumbra = penumbra;
     light.castShadow = castShadow;
+    light.shadow.radius = shadowSoftness;
 
     if (ctx.nodeId !== ctx.liveEditNodeId) {
       light.matrixAutoUpdate = false;
