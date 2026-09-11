@@ -1377,7 +1377,11 @@ function MainEditor() {
           id: newNodeId,
           type: EDIT_MESH_NODE.type,
           params: {
-            ...cloneParams(EDIT_MESH_NODE.defaultParams),
+            // Starts from the original's own params (not defaultParams) so the
+            // separated piece keeps the same location/rotation/scale/pivot —
+            // otherwise it snaps back to the identity pose and visibly jumps
+            // away from where its faces used to sit.
+            ...cloneParams(node.params),
             meshData: cloneQuadMesh(separatedMesh),
             shading: node.params.shading ?? "auto",
             selectMode: "faces",
@@ -1391,7 +1395,13 @@ function MainEditor() {
           },
         };
 
-        const materialConn = graph.connections.find((c) => c.toNode === nodeId && c.toSocket === "material");
+        // Every input wired into the original (Geometry/Matrix for the pose
+        // parent, Material and the texture maps) gets the same wire on the
+        // new node, so the separated piece renders with the identical pose
+        // and look instead of falling back to an unposed default-clay mesh.
+        const clonedConnections = graph.connections
+          .filter((c) => c.toNode === nodeId && EDIT_MESH_NODE.inputs.some((input) => input.id === c.toSocket))
+          .map((c) => ({ id: randomId(), fromNode: c.fromNode, fromSocket: c.fromSocket, toNode: newNodeId, toSocket: c.toSocket }));
 
         setGraphWithHistory((prevGraph) => {
           const updatedNodes = prevGraph.nodes.map((n) =>
@@ -1410,9 +1420,7 @@ function MainEditor() {
           return {
             ...prevGraph,
             nodes: [...updatedNodes, newNode],
-            connections: materialConn
-              ? [...prevGraph.connections, { id: randomId(), fromNode: materialConn.fromNode, fromSocket: materialConn.fromSocket, toNode: newNodeId, toSocket: "material" }]
-              : prevGraph.connections,
+            connections: [...prevGraph.connections, ...clonedConnections],
           };
         }, `separate:${nodeId}`);
         return;
