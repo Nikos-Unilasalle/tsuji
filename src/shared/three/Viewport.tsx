@@ -46,6 +46,7 @@ import {
 } from "../graph/quadMesh";
 import { createPostProcessChain } from "./postProcessChain";
 import { computeGizmoWriteback, TransformGizmoMode, TransformPatch } from "./gizmoWriteback";
+import { enableSmoothShadows } from "./smoothShadows";
 
 // Re-exported so call sites (App.tsx, SplitViewport) keep importing these
 // from the component they belong to, not from its internals.
@@ -903,6 +904,7 @@ export function Viewport({
     // display (4x pixels → 2.25x at 1.5) for a barely perceptible softness.
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, isTauri() ? 2 : 1.5));
     renderer.autoClear = false;
+    enableSmoothShadows(32);
     renderer.shadowMap.enabled = true;
     // PCFSoftShadowMap is deprecated as of three r180 and three itself
     // silently falls back to PCFShadowMap (with a console warning every
