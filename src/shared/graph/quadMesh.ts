@@ -1013,7 +1013,7 @@ export function transformSelection(
  */
 export function deleteFaces(mesh: QuadMesh, faceIndices: number[]): QuadMesh {
   if (faceIndices.length === 0) return cloneQuadMesh(mesh);
-  const toDelete = new Set(faceIndices);
+  const toDelete = new Set(faceIndices.map(Number));
 
   const remainingFaces: number[][] = [];
   const remainingFaceUVs: [number, number][][] = [];
@@ -1093,7 +1093,7 @@ export function extractFaces(mesh: QuadMesh, faceIndices: number[]): QuadMesh {
       faceShading: [],
     };
   }
-  const toExtract = new Set(faceIndices);
+  const toExtract = new Set(faceIndices.map(Number));
 
   const extractedFaces: number[][] = [];
   const extractedFaceUVs: [number, number][][] = [];

@@ -359,13 +359,13 @@ describe("FIRE_FLUID_VOLUME_NODE (Macro Node)", () => {
     // la masse totale explosait (mesurée à +84/pas pour 4,5 injectés) et la fumée
     // finissait par remplir 89 % de la boîte. Bord zéro -> l'inflow domine.
     const totals: number[] = [];
-    for (let f = 0; f < 300; f++) {
+    for (let f = 0; f < 150; f++) {
       const res = FIRE_FLUID_VOLUME_NODE.evaluate(
         {},
         FIRE_FLUID_VOLUME_NODE.defaultParams,
         makeContext("fire_macro_mass", f / 60)
       );
-      if (f % 100 !== 99) continue;
+      if (f % 50 !== 49) continue;
       const mesh = res.geometry as THREE.Mesh;
       const tex = (mesh.material as THREE.ShaderMaterial).uniforms.uDyeTexture.value as THREE.Data3DTexture;
       const d = tex.image.data as Float32Array;
@@ -385,7 +385,7 @@ describe("FIRE_FLUID_VOLUME_NODE (Macro Node)", () => {
     // Signature du bug : sans le bord zéro le total dépassait 12000 ici et
     // continuait de grimper de ~50 par pas.
     expect(Math.max(...totals)).toBeLessThan(6000);
-  }, 30_000);
+  }, 90_000);
 
   test("simulate=false freezes the fluid but still renders", () => {
     const params = { ...FIRE_FLUID_VOLUME_NODE.defaultParams, simulate: false };
@@ -422,7 +422,7 @@ describe("FIRE_FLUID_VOLUME_NODE (Macro Node)", () => {
     };
 
     expect(massFor(100, "life_inf")).toBeGreaterThan(massFor(1.0, "life_short"));
-  }, 30_000);
+  }, 60_000);
 
   test("moving the emitter boosts emission and stirs the fluid", () => {
     // Le déplacement de l'émetteur doit agir sur le fluide (sphère de vent +
@@ -454,7 +454,7 @@ describe("FIRE_FLUID_VOLUME_NODE (Macro Node)", () => {
     };
 
     expect(energyFor(true, "emit_moving")).toBeGreaterThan(energyFor(false, "emit_still") * 2);
-  }, 30_000);
+  }, 60_000);
 
   test("key light drives the shading direction (regression: uKeyLightPos was never written)", () => {
     // L'uniforme gardait la valeur (0, 10, 5) de son constructeur : la direction

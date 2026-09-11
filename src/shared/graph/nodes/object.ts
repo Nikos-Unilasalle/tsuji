@@ -363,6 +363,9 @@ export function applyMaterialParams(
   texParams?: TextureParams
 ) {
   if (matParams.customMaterial) {
+    if (typeof (matParams.customMaterial as any).__prepareGeometry === "function" && mesh.geometry) {
+      (matParams.customMaterial as any).__prepareGeometry(mesh.geometry);
+    }
     const customSig = "custom:" + (matParams.customMaterial as THREE.Material).uuid;
     if (appliedMaterialSignatures.get(mesh) === customSig && mesh.material === matParams.customMaterial) return;
     appliedMaterialSignatures.set(mesh, customSig);

@@ -31,6 +31,7 @@ import {
   extractFaces,
 } from "./shared/graph/quadMesh";
 import { extractPointsFromMesh } from "./shared/graph/nodes/pointsGeometry";
+import { findFirstMesh } from "./shared/graph/meshRequired";
 import { freezeObjectToGeometryData, OBJECT_FROZEN_NODE } from "./shared/graph/nodes/frozenGeometry";
 import type { KeyframeDrawing } from "./shared/graph/nodes/greasePencil";
 import { randomId } from "./shared/randomId";
@@ -1325,16 +1326,20 @@ function MainEditor() {
         if (node.params.meshData && typeof node.params.meshData === "object" && Array.isArray((node.params.meshData as QuadMesh).positions)) {
           meshData = node.params.meshData as QuadMesh;
         } else {
-          const inputs = evaluatedResults?.get(nodeId)?.__evaluatedInputs as Record<string, unknown> | undefined;
-          const geomObj = inputs?.geometry;
-          meshData = geomObj instanceof THREE.Mesh && geomObj.geometry
-            ? bufferGeometryToQuadMesh(geomObj.geometry)
-            : createQuadBox(1, 1, 1);
+          const evaluatedObj = evaluatedResults?.get(nodeId)?.geometry;
+          const evaluatedMesh = evaluatedObj instanceof THREE.Object3D ? findFirstMesh(evaluatedObj) : null;
+          if (evaluatedMesh?.geometry?.userData?.quadMesh) {
+            meshData = evaluatedMesh.geometry.userData.quadMesh as QuadMesh;
+          } else if (evaluatedMesh?.geometry) {
+            meshData = bufferGeometryToQuadMesh(evaluatedMesh.geometry);
+          } else {
+            meshData = createQuadBox(1, 1, 1);
+          }
         }
 
         const remainingMesh = deleteFaces(meshData, selectedFaces);
         onParamChange({
-          meshData: remainingMesh,
+          meshData: cloneQuadMesh(remainingMesh),
           selectedFaces: [],
           selectedPoints: [],
         }, nodeId);
@@ -1353,11 +1358,15 @@ function MainEditor() {
         if (node.params.meshData && typeof node.params.meshData === "object" && Array.isArray((node.params.meshData as QuadMesh).positions)) {
           meshData = node.params.meshData as QuadMesh;
         } else {
-          const inputs = evaluatedResults?.get(nodeId)?.__evaluatedInputs as Record<string, unknown> | undefined;
-          const geomObj = inputs?.geometry;
-          meshData = geomObj instanceof THREE.Mesh && geomObj.geometry
-            ? bufferGeometryToQuadMesh(geomObj.geometry)
-            : createQuadBox(1, 1, 1);
+          const evaluatedObj = evaluatedResults?.get(nodeId)?.geometry;
+          const evaluatedMesh = evaluatedObj instanceof THREE.Object3D ? findFirstMesh(evaluatedObj) : null;
+          if (evaluatedMesh?.geometry?.userData?.quadMesh) {
+            meshData = evaluatedMesh.geometry.userData.quadMesh as QuadMesh;
+          } else if (evaluatedMesh?.geometry) {
+            meshData = bufferGeometryToQuadMesh(evaluatedMesh.geometry);
+          } else {
+            meshData = createQuadBox(1, 1, 1);
+          }
         }
 
         const separatedMesh = extractFaces(meshData, selectedFaces);
@@ -1369,7 +1378,7 @@ function MainEditor() {
           type: EDIT_MESH_NODE.type,
           params: {
             ...cloneParams(EDIT_MESH_NODE.defaultParams),
-            meshData: separatedMesh,
+            meshData: cloneQuadMesh(separatedMesh),
             shading: node.params.shading ?? "auto",
             selectMode: "faces",
             selectedFaces: Array.from({ length: separatedMesh.faces.length }, (_, i) => i),
@@ -1391,7 +1400,7 @@ function MainEditor() {
                   ...n,
                   params: {
                     ...n.params,
-                    meshData: remainingMesh,
+                    meshData: cloneQuadMesh(remainingMesh),
                     selectedFaces: [],
                     selectedPoints: [],
                   },

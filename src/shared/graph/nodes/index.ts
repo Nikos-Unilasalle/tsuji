@@ -89,12 +89,14 @@ import { CURVE_SHAPE_KEY_NODE, MESH_SHAPE_KEY_NODE } from "./shapeKey";
 import { LATTICE_DEFORM_NODE } from "./lattice";
 import { BOOLEAN_NODE } from "./boolean";
 import { SUBDIVIDE_NODE } from "./subdivide";
+import { SOLIDIFY_NODE } from "./solidify";
 import { EXTRUDE_MESH_NODE, DELETE_GEOMETRY_NODE, FACE_SELECTION_NODE } from "./meshEdit";
 import { EDIT_MESH_NODE } from "./editMesh";
 import { SHADE_NODE } from "./shade";
 import { VISUAL_SLICE_NODE, CLIP_BOX_NODE } from "./visualSlice";
 import { WIGGLE_NODE, WIGGLE_NUMBER_NODE, WIGGLE_VECTOR_NODE } from "./wiggle";
 import { MATERIAL_NODE, MATERIAL_SHADOW_CATCHER_NODE } from "./material";
+import { MATERIAL_WORN_NODE } from "./materialWorn";
 import {
   MATERIAL_HOLOGRAM_NODE,
   MATERIAL_LIQUID_METAL_NODE,
@@ -325,6 +327,7 @@ export const STARTER_NODES = [
   LATTICE_DEFORM_NODE,
   BOOLEAN_NODE,
   SUBDIVIDE_NODE,
+  SOLIDIFY_NODE,
   EXTRUDE_MESH_NODE,
   EDIT_MESH_NODE,
   DELETE_GEOMETRY_NODE,
@@ -337,6 +340,7 @@ export const STARTER_NODES = [
   WIGGLE_VECTOR_NODE,
   MATERIAL_NODE,
   MATERIAL_SHADOW_CATCHER_NODE,
+  MATERIAL_WORN_NODE,
   MATERIAL_HOLOGRAM_NODE,
   MATERIAL_LIQUID_METAL_NODE,
   MATERIAL_CEL_SHADE_NODE,

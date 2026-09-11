@@ -18,6 +18,7 @@ import {
   createQuadBox,
   quadMeshToBufferGeometry,
   bufferGeometryToQuadMesh,
+  cloneQuadMesh,
 } from "../quadMesh";
 
 export const EDIT_MESH_RESEED_ACTION = "edit-mesh/reseed";
@@ -230,7 +231,7 @@ export const EDIT_MESH_NODE: NodeDefinition = {
     }
 
     state.mesh.userData.nodeId = ctx.nodeId;
-    state.lastQuadMesh = quadMesh;
+    state.lastQuadMesh = cloneQuadMesh(quadMesh);
     state.lastShading = shadeMode;
     state.sourceGeometry = srcGeom ?? null;
 
