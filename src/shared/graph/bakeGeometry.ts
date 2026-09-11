@@ -71,9 +71,19 @@ export function bakeMeshesToGeometry(meshes: THREE.Mesh[]): THREE.BufferGeometry
     return flat;
   });
 
-  const merged = mergeGeometries(normalized, false);
+  // Grouped so a caller that cares about materials (Boolean) can hand back a
+  // per-part material array lined up with these groups' materialIndex; Freeze
+  // ignores groups entirely, so they cost it nothing.
+  const merged = mergeGeometries(normalized, true);
   for (const part of normalized) part.dispose();
   return merged;
+}
+
+/** Each mesh's own material, single or first-of-array, in the same order as
+ * the `meshes` passed to `bakeMeshesToGeometry` — lines up with the groups
+ * (materialIndex 0..n-1) that function's merged geometry carries. */
+export function collectMeshMaterials(meshes: THREE.Mesh[]): THREE.Material[] {
+  return meshes.map((mesh) => (Array.isArray(mesh.material) ? mesh.material[0] : mesh.material));
 }
 
 /** The plain, JSON-serializable form a Frozen Geometry node stores in its params. */

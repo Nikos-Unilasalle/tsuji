@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { Brush, Evaluator, ADDITION, SUBTRACTION, INTERSECTION } from "three-bvh-csg";
-import { bakeMeshesToGeometry } from "../bakeGeometry";
+import { bakeMeshesToGeometry, collectMeshMaterials } from "../bakeGeometry";
 import { createNodeCache, disposeObject3D } from "../nodeCaches";
 import { NodeDefinition } from "../types";
 import { clearMeshWarning, collectMeshes, warnMeshRequired } from "../meshRequired";
@@ -150,10 +150,10 @@ export const BOOLEAN_NODE: NodeDefinition = {
     }
 
     // Each side baked into one world-space geometry — the shapes meet
-    // wherever you actually positioned them. The material comes from each
-    // side's first mesh (an Array's instances all share one anyway), so with
-    // useGroups on the faces that came from object 2 still keep object 2's
-    // material.
+    // wherever you actually positioned them. Each side's geometry carries one
+    // group per source mesh (see bakeMeshesToGeometry), so a per-mesh
+    // material array lines up with those groups and every mesh's own
+    // material/texture survives, not just the first one on each side.
     // Shared with Freeze — see bakeGeometry.ts for why the parts are
     // concatenated rather than unioned.
     const geometryA = bakeMeshesToGeometry(meshesA);
@@ -166,8 +166,10 @@ export const BOOLEAN_NODE: NodeDefinition = {
       console.error("Boolean: could not merge the parts of an input into one shape");
       return primitiveOutputs(inputA);
     }
-    const brushA = new Brush(geometryA, srcA.material);
-    const brushB = new Brush(geometryB, meshesB[0].material);
+    const materialsA = collectMeshMaterials(meshesA);
+    const materialsB = collectMeshMaterials(meshesB);
+    const brushA = new Brush(geometryA, materialsA.length > 1 ? materialsA : materialsA[0]);
+    const brushB = new Brush(geometryB, materialsB.length > 1 ? materialsB : materialsB[0]);
 
     try {
       const evaluator = new Evaluator();

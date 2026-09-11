@@ -252,4 +252,27 @@ describe("BOOLEAN_NODE — multi-mesh inputs (Array, Merge, imported models)", (
 
     expect(secondMax).toBeGreaterThan(firstMax);
   });
+
+  it("keeps each mesh's own material on a multi-mesh side, not just the first one's", () => {
+    // Two differently-coloured boxes on side A, sharing no material — the
+    // fix that groups bakeMeshesToGeometry's parts so each one lines up with
+    // its own material instead of collapsing the whole side to boxAt(0)'s.
+    const red = boxAt(0, new THREE.MeshStandardMaterial({ color: 0xff0000 }));
+    const blue = boxAt(4, new THREE.MeshStandardMaterial({ color: 0x0000ff }));
+    const targets = groupOf(red, blue);
+
+    const cutter = boxAt(-10, new THREE.MeshStandardMaterial({ color: 0x00ff00 }));
+
+    const res = BOOLEAN_NODE.evaluate(
+      { geometry: targets, boolean: cutter, operation: "add" },
+      BOOLEAN_NODE.defaultParams,
+      { ...CTX, nodeId: "bool-multi-materials" },
+    );
+    const mesh = res.geometry as THREE.Mesh;
+    expect(Array.isArray(mesh.material)).toBe(true);
+    const mats = (mesh.material as THREE.Material[]).filter((m): m is THREE.MeshStandardMaterial => m instanceof THREE.MeshStandardMaterial);
+    const hexes = mats.map((m) => m.color.getHex());
+    expect(hexes).toContain(0xff0000);
+    expect(hexes).toContain(0x0000ff);
+  });
 });
