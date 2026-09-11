@@ -638,7 +638,7 @@ export function prefixedMaterialParamFields(prefix: string, group: string): Para
  * scale ahead of everything else: it's the property every other field here
  * is positioned/oriented/sized relative to.
  */
-const NATIVE_TRANSFORM_PARAM_FIELDS: ParamFieldDef[] = [
+export const NATIVE_TRANSFORM_PARAM_FIELDS: ParamFieldDef[] = [
   { id: "visible", label: "Visible", kind: "boolean", group: "Transform" },
   { id: "location", label: "Location", kind: "vector", group: "Transform" },
   { id: "rotation", label: "Rotation (°)", kind: "vector", step: 1, degrees: true, group: "Transform" },

@@ -147,7 +147,9 @@ describe("Disconnection Reactivity", () => {
       expect(meshDisconn.matrix.elements[12]).toBe(0);
       expect(meshDisconn.matrix.elements[13]).toBe(0);
       expect(meshDisconn.matrix.elements[14]).toBe(0);
-      expect(meshDisconn.matrixAutoUpdate).toBe(true);
+      // The node drives its own matrix (its native location/rotation/scale/
+      // pivot pose), so matrixAutoUpdate stays off — connected or not.
+      expect(meshDisconn.matrixAutoUpdate).toBe(false);
       // Material reverts from upstream to default clay
       expect((meshDisconn.material as THREE.MeshStandardMaterial).color.getHex()).toBe(0xcccccc);
     });

@@ -10,8 +10,9 @@ import {
   extractTextureParams,
   TextureParams,
   MaterialParams,
+  NATIVE_TRANSFORM_PARAM_FIELDS,
 } from "./object";
-import { preserveModifierUserData } from "./transform";
+import { composeNativeMatrix, preserveModifierUserData } from "./transform";
 import {
   QuadMesh,
   QuadMeshShading,
@@ -109,6 +110,80 @@ function applyEditMeshMaterial(
 }
 
 /**
+ * The frame this node's own pose is composed on top of: the source mesh's
+ * world matrix (when a Geometry is wired) followed by whatever the Matrix
+ * socket carries.
+ *
+ * matrixWorld, not matrix: for a mesh nested under a posed wrapper group (an
+ * OBJ Model bakes its pose onto the group) the mesh's own .matrix is identity.
+ */
+export function editMeshPoseParent(
+  inputObj: THREE.Object3D | null,
+  srcMesh: THREE.Mesh | null,
+  wiredMatrix: unknown,
+): THREE.Matrix4 {
+  const parent = new THREE.Matrix4();
+  if (inputObj && srcMesh) {
+    inputObj.updateMatrixWorld(true);
+    parent.copy(srcMesh.matrixWorld);
+  }
+  if (wiredMatrix instanceof THREE.Matrix4) parent.multiply(wiredMatrix);
+  return parent;
+}
+
+/**
+ * The node's final matrix: that parent frame, with this node's own
+ * location/rotation/scale/pivot and the two inherit modes as the local pose on
+ * top of it, exactly as a primitive's native pose works. With the default
+ * identity pose this is the source's matrixWorld verbatim — the behaviour Edit
+ * Mesh had before it owned a pose.
+ */
+function composeEditMeshMatrix(
+  inputObj: THREE.Object3D | null,
+  srcMesh: THREE.Mesh | null,
+  wiredMatrix: unknown,
+  params: Record<string, unknown>,
+): { parent: THREE.Matrix4; matrix: THREE.Matrix4 } {
+  const parent = editMeshPoseParent(inputObj, srcMesh, wiredMatrix);
+  return {
+    parent,
+    matrix: composeNativeMatrix(parent, params.location, params.rotation, params.scale, params),
+  };
+}
+
+/**
+ * Writes that matrix onto the output mesh and carries the source object's
+ * metadata across. matrixAutoUpdate is forced off rather than copied from the
+ * source: an OBJ-parsed mesh defaults to true, which would have three's own
+ * render loop recompute (and wipe) this matrix next frame.
+ */
+function applyEditMeshPose(
+  mesh: THREE.Mesh,
+  inputObj: THREE.Object3D | null,
+  srcMesh: THREE.Mesh | null,
+  wiredMatrix: unknown,
+  params: Record<string, unknown>,
+  nodeId: string,
+): void {
+  const { parent, matrix } = composeEditMeshMatrix(inputObj, srcMesh, wiredMatrix, params);
+  mesh.matrixAutoUpdate = false;
+  mesh.matrix.copy(matrix);
+  if (inputObj && srcMesh) {
+    preserveModifierUserData(mesh, inputObj, srcMesh, nodeId);
+  } else {
+    mesh.userData = {};
+  }
+  mesh.userData.nodeId = nodeId;
+  // The gizmo solves `own pose = dragged world pose × parent⁻¹`, and for every
+  // other native-pose node that parent is just whatever is wired into `matrix`
+  // — which the viewport reads straight off the graph. This node's parent also
+  // includes the *source geometry's* world matrix, invisible from the graph, so
+  // it has to publish it or a drag solves against the identity and the mesh
+  // jumps by exactly the source's pose the moment a handle is grabbed.
+  mesh.userData.poseParent = parent;
+}
+
+/**
  * Edit Mesh node — comprehensive polygon / quad mesh editing node.
  * Supports box modeling workflow:
  * - Points and Faces selection modes
@@ -123,6 +198,10 @@ export const EDIT_MESH_NODE: NodeDefinition = {
   category: "transform",
   inputs: [
     { id: "geometry", label: "Geometry", type: "geometry", owns: true },
+    // Same role as a primitive's Matrix socket: a parent pose applied
+    // *outside* this node's own location/rotation/scale, composed on top of
+    // the source geometry's world matrix when one is wired into Geometry.
+    { id: "matrix", label: "Matrix", type: "matrix" },
     { id: "material", label: "Material", type: "material" },
     { id: "texture", label: "Texture Map", type: "texture" },
     { id: "normal", label: "Normal Map", type: "texture" },
@@ -145,8 +224,21 @@ export const EDIT_MESH_NODE: NodeDefinition = {
     insetRatio: 0.25,
     uvScale: [1, 1] as [number, number],
     uvOffset: [0, 0] as [number, number],
+    // The same native pose every geometry node owns (see
+    // NATIVE_TRANSFORM_PARAM_FIELDS / composeNativeMatrix). Defaults are the
+    // identity, so an existing Edit Mesh keeps drawing at exactly the source
+    // mesh's matrix as it did before it had a pose of its own.
+    visible: 1,
+    location: new THREE.Vector3(0, 0, 0),
+    rotation: new THREE.Vector3(0, 0, 0),
+    scale: new THREE.Vector3(1, 1, 1),
+    showPivot: false,
+    pivot: new THREE.Vector3(0, 0, 0),
+    inheritRotation: "parent",
+    inheritScale: "parent",
   },
   paramFields: [
+    ...NATIVE_TRANSFORM_PARAM_FIELDS,
     {
       id: "shading",
       label: "Shading",
@@ -186,21 +278,9 @@ export const EDIT_MESH_NODE: NodeDefinition = {
       state.lastShading === shadeMode &&
       isSameSourceGeom
     ) {
-      if (inputObj && srcMesh) {
-        inputObj.updateMatrixWorld(true);
-        state.mesh.matrixAutoUpdate = false;
-        state.mesh.matrix.copy(srcMesh.matrixWorld);
-        preserveModifierUserData(state.mesh, inputObj, srcMesh, ctx.nodeId);
-      } else {
-        state.mesh.matrixAutoUpdate = true;
-        state.mesh.matrix.identity();
-        state.mesh.position.set(0, 0, 0);
-        state.mesh.quaternion.identity();
-        state.mesh.scale.set(1, 1, 1);
-        state.mesh.userData = { nodeId: ctx.nodeId };
-      }
+      applyEditMeshPose(state.mesh, inputObj, srcMesh, inputs.matrix, params, ctx.nodeId);
       applyEditMeshMaterial(state.mesh, srcMesh, inputs.material, texParams);
-      return primitiveOutputs(state.mesh);
+      return primitiveOutputs(state.mesh, params);
     }
 
     const geometry = quadMeshToBufferGeometry(quadMesh, shadeMode);
@@ -216,25 +296,12 @@ export const EDIT_MESH_NODE: NodeDefinition = {
 
     applyEditMeshMaterial(state.mesh, srcMesh, inputs.material, texParams);
 
-    if (inputObj && srcMesh) {
-      inputObj.updateMatrixWorld(true);
-      state.mesh.matrixAutoUpdate = false;
-      state.mesh.matrix.copy(srcMesh.matrixWorld);
-      preserveModifierUserData(state.mesh, inputObj, srcMesh, ctx.nodeId);
-    } else {
-      state.mesh.matrixAutoUpdate = true;
-      state.mesh.matrix.identity();
-      state.mesh.position.set(0, 0, 0);
-      state.mesh.quaternion.identity();
-      state.mesh.scale.set(1, 1, 1);
-      state.mesh.userData = { nodeId: ctx.nodeId };
-    }
+    applyEditMeshPose(state.mesh, inputObj, srcMesh, inputs.matrix, params, ctx.nodeId);
 
-    state.mesh.userData.nodeId = ctx.nodeId;
     state.lastQuadMesh = cloneQuadMesh(quadMesh);
     state.lastShading = shadeMode;
     state.sourceGeometry = srcGeom ?? null;
 
-    return primitiveOutputs(state.mesh);
+    return primitiveOutputs(state.mesh, params);
   },
 };

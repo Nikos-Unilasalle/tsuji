@@ -97,5 +97,86 @@ describe("EDIT_MESH_NODE", () => {
     const meshSeparated = resSeparated.geometry as THREE.Mesh;
     expect(meshSeparated.geometry.userData.quadMesh.faces.length).toBe(2);
   });
-});
 
+  describe("native pose", () => {
+    const pose = (params: Record<string, unknown>, inputs: Record<string, unknown> = {}, nodeId = "pose-" + Math.random()) => {
+      const res = EDIT_MESH_NODE.evaluate(inputs, { ...EDIT_MESH_NODE.defaultParams, ...params }, { nodeId } as EvalContext);
+      const m = (res.geometry as THREE.Mesh).matrix;
+      const p = new THREE.Vector3();
+      const q = new THREE.Quaternion();
+      const s = new THREE.Vector3();
+      m.decompose(p, q, s);
+      return { matrix: m, pos: p, quat: q, scale: s, out: res };
+    };
+
+    it("applies its own location/rotation/scale like any geometry node", () => {
+      const { pos, scale } = pose({
+        location: new THREE.Vector3(1, 2, 3),
+        scale: new THREE.Vector3(2, 2, 2),
+      });
+      expect(pos.toArray()).toEqual([1, 2, 3]);
+      expect(scale.x).toBeCloseTo(2, 6);
+    });
+
+    it("rotates about its own Pivot Offset, not the node origin", () => {
+      // A pivot one unit down the X axis: a quarter turn about Y swings the
+      // origin round it instead of spinning in place.
+      const { pos } = pose({
+        pivot: new THREE.Vector3(1, 0, 0),
+        rotation: new THREE.Vector3(0, Math.PI / 2, 0),
+      });
+      expect(pos.x).toBeCloseTo(1, 6);
+      expect(pos.z).toBeCloseTo(1, 6);
+    });
+
+    it('inheritRotation "self" spins in place instead of orbiting a wired matrix', () => {
+      const turn = new THREE.Matrix4().makeRotationY(Math.PI / 2);
+      const orbiting = pose({ location: new THREE.Vector3(3, 0, 0) }, { matrix: turn });
+      expect(orbiting.pos.x).toBeCloseTo(0, 6);
+      expect(orbiting.pos.z).toBeCloseTo(-3, 6);
+
+      const spinning = pose(
+        { location: new THREE.Vector3(3, 0, 0), inheritRotation: "self" },
+        { matrix: turn },
+      );
+      expect(spinning.pos.x).toBeCloseTo(3, 6);
+      expect(spinning.pos.z).toBeCloseTo(0, 6);
+    });
+
+    it("composes its pose on top of the source geometry's world matrix", () => {
+      const inputMesh = new THREE.Mesh(quadMeshToBufferGeometry(createQuadBox(1, 1, 1)));
+      inputMesh.position.set(10, 0, 0);
+      inputMesh.updateMatrixWorld(true);
+
+      const passthrough = pose({}, { geometry: inputMesh });
+      expect(passthrough.pos.toArray()).toEqual([10, 0, 0]);
+
+      const offset = pose({ location: new THREE.Vector3(0, 5, 0) }, { geometry: inputMesh });
+      expect(offset.pos.toArray()).toEqual([10, 5, 0]);
+    });
+
+    it("publishes the parent frame the gizmo has to solve against", () => {
+      // The viewport solves `own pose = dragged world matrix × parent⁻¹`. The
+      // source geometry's world matrix is part of this node's parent and is
+      // invisible from the graph, so it is published on the object; feeding
+      // the solve the identity instead is what made a grabbed gizmo jump.
+      const inputMesh = new THREE.Mesh(quadMeshToBufferGeometry(createQuadBox(1, 1, 1)));
+      inputMesh.position.set(10, 0, 0);
+      inputMesh.updateMatrixWorld(true);
+
+      const { matrix, out } = pose({ location: new THREE.Vector3(0, 5, 0) }, { geometry: inputMesh });
+      const parent = (out.geometry as THREE.Mesh).userData.poseParent as THREE.Matrix4;
+      expect(parent).toBeInstanceOf(THREE.Matrix4);
+
+      const solved = matrix.clone().multiply(parent.clone().invert());
+      const solvedPos = new THREE.Vector3();
+      solved.decompose(solvedPos, new THREE.Quaternion(), new THREE.Vector3());
+      expect(solvedPos.toArray()).toEqual([0, 5, 0]); // the node's own location, not 10,5,0
+    });
+
+    it("publishes its pivot on the output object, for the viewport marker and gizmo", () => {
+      const { out } = pose({ pivot: new THREE.Vector3(0, 1, 0) });
+      expect((out.geometry as THREE.Mesh).userData.pivot.toArray()).toEqual([0, 1, 0]);
+    });
+  });
+});

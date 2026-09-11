@@ -1806,7 +1806,20 @@ export function Viewport({
           const deltaConn = graphRef.current.connections.find((c) => c.toNode === targetNodeId && c.toSocket === "matrix");
           const upstreamNodeId = deltaConn ? deltaConn.fromNode : null;
           const upstreamResult = upstreamNodeId ? latestResults?.get(upstreamNodeId)?.matrix : undefined;
-          const upstream = upstreamResult instanceof THREE.Matrix4 ? upstreamResult : new THREE.Matrix4();
+          // A node whose pose sits on top of a parent frame the graph can't
+          // show (Edit Mesh composes its own pose onto the *source geometry's*
+          // world matrix, not just its `matrix` socket) publishes that frame
+          // on the object itself — and it already includes whatever is wired
+          // into `matrix`, so it replaces the graph-derived upstream rather
+          // than multiplying with it. Without it a drag solves against the
+          // identity and the mesh jumps by the source's pose.
+          const publishedParent = gizmoPivotProxyRealObject.userData?.poseParent;
+          const upstream =
+            publishedParent instanceof THREE.Matrix4
+              ? publishedParent.clone()
+              : upstreamResult instanceof THREE.Matrix4
+                ? upstreamResult
+                : new THREE.Matrix4();
           const upstreamInv = upstream.clone().invert();
 
           const worldMatrix = new THREE.Matrix4().compose(gizmoPivotProxy.position, gizmoPivotProxy.quaternion, gizmoPivotProxy.scale);

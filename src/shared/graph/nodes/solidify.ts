@@ -106,14 +106,18 @@ export function solidifyQuadMesh(mesh: QuadMesh, options: SolidifyOptions): Quad
 
     for (const { u, v, count } of edgeCount.values()) {
       if (count === 1) {
-        // Boundary edge running u -> v in front face
-        // Rim quad: [u, v, v + V, u + V]
-        faces.push([u, v, v + V, u + V]);
+        // Boundary edge running u -> v in the front face. The rim quad has to
+        // wind the *other* way round that edge: with the front surface facing
+        // +n, the mesh interior lies to the left of u -> v, so [u, v, v+V, u+V]
+        // produces a normal of (v-u) × (back-front) = -(edge × n) — pointing
+        // back into the solid, i.e. a rim that is entirely backfacing and so
+        // invisible under any single-sided material. Reversed, it faces out.
+        faces.push([u + V, v + V, v, u]);
         faceUVs.push([
-          [0, 0],
-          [1, 0],
-          [1, 1],
           [0, 1],
+          [1, 1],
+          [1, 0],
+          [0, 0],
         ]);
       }
     }
@@ -255,10 +259,10 @@ export function solidifyGeometry(geometry: THREE.BufferGeometry, options: Solidi
 
     for (const { u, v, count } of edgeMap.values()) {
       if (count === 1) {
-        // Boundary edge (u -> v)
-        // Quad connecting front to back: (u, v, v + V, u + V)
-        indices.push(u, v, v + V);
-        indices.push(u, v + V, u + V);
+        // Boundary edge (u -> v). Same outward winding as the QuadMesh path
+        // above: the quad (u+V, v+V, v, u) faces away from the solid.
+        indices.push(u + V, v + V, v);
+        indices.push(u + V, v, u);
       }
     }
   }

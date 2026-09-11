@@ -45,6 +45,7 @@ export const GIZMO_SELECTABLE_TYPES = [
   "calibration/camera",
   "calibration/grid",
   "modifier/lattice",
+  "modifier/edit-mesh",
   "particles/force-field",
   "particles/curl-noise",
   "particles/strange-attractor",
