@@ -44,6 +44,7 @@ export interface MaterialValue {
   opacity: number;
   transmission: number;
   thickness: number;
+  customMaterial?: THREE.Material;
 }
 
 /** The runtime value a socket of each type actually carries during evaluation. */

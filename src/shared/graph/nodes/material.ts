@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { NodeDefinition } from "../types";
-import { COMMON_MATERIAL_PARAM_FIELDS, extractMaterialParams } from "./object";
+import { createNodeCache } from "../nodeCaches";
+import { COMMON_MATERIAL_PARAM_FIELDS, asColor, extractMaterialParams, numberInput } from "./object";
 
 /** Standard Material node — a reusable surface description wired into an object's `material` input. */
 export const MATERIAL_NODE: NodeDefinition = {
@@ -35,3 +36,63 @@ export const MATERIAL_NODE: NodeDefinition = {
   paramFields: [...COMMON_MATERIAL_PARAM_FIELDS],
   evaluate: (inputs, params) => ({ material: extractMaterialParams(inputs, params) }),
 };
+
+const shadowCatcherCache = createNodeCache<THREE.ShadowMaterial>((m) => m.dispose());
+
+/**
+ * Shadow Catcher Material node — renders an invisible surface that only catches and displays
+ * shadows cast upon it (ideal for ground planes, backdrops, and product staging).
+ */
+export const MATERIAL_SHADOW_CATCHER_NODE: NodeDefinition = {
+  type: "material/shadow-catcher",
+  label: "Shadow Catcher",
+  category: "texture",
+  inputs: [
+    { id: "opacity", label: "Shadow Opacity", type: "value" },
+    { id: "color", label: "Shadow Color", type: "color" },
+    { id: "doubleSided", label: "Double Sided", type: "value" },
+  ],
+  outputs: [{ id: "material", label: "Material", type: "material" }],
+  defaultParams: {
+    opacity: 0.6,
+    color: new THREE.Color(0x000000),
+    doubleSided: 1,
+  },
+  paramFields: [
+    { id: "opacity", label: "Shadow Opacity", kind: "number", step: 0.05 },
+    { id: "color", label: "Shadow Color", kind: "color" },
+    { id: "doubleSided", label: "Double Sided", kind: "boolean" },
+  ],
+  evaluate: (inputs, params, ctx) => {
+    let mat = shadowCatcherCache.get(ctx.nodeId);
+    if (!mat) {
+      mat = new THREE.ShadowMaterial({
+        side: THREE.DoubleSide,
+        transparent: true,
+        depthWrite: false,
+        polygonOffset: true,
+        polygonOffsetFactor: -1.0,
+        polygonOffsetUnits: -4.0,
+      });
+      (mat as any).__isSharedCustom = true;
+      shadowCatcherCache.set(ctx.nodeId, mat);
+    }
+
+    const opacity = Math.min(1, Math.max(0, numberInput(inputs.opacity, params.opacity, 0.6)));
+    const color = asColor(inputs.color, asColor(params.color, new THREE.Color(0x000000)));
+    const doubleSided = inputs.doubleSided !== undefined ? Number(inputs.doubleSided) > 0 : Boolean(params.doubleSided ?? true);
+
+    mat.opacity = opacity;
+    mat.color.copy(color);
+    mat.side = doubleSided ? THREE.DoubleSide : THREE.FrontSide;
+
+    return {
+      material: {
+        customMaterial: mat,
+        color,
+        opacity,
+      },
+    };
+  },
+};
+

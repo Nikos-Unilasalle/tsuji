@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 import { EvalContext } from "../types";
 import { MaterialValue } from "../sockets";
-import { MATERIAL_NODE } from "./material";
+import { MATERIAL_NODE, MATERIAL_SHADOW_CATCHER_NODE } from "./material";
 import { extractMaterialParams, OBJECT_BOX_NODE, applyMaterialParams } from "./object";
 
 const CTX: EvalContext = { time: 0, step: 0, nodeId: "test" };
@@ -159,3 +159,60 @@ describe("material input priority", () => {
     expect(mat.version).toBe(appliedVersion + 1);
   });
 });
+
+describe("MATERIAL_SHADOW_CATCHER_NODE", () => {
+  it("outputs a ShadowMaterial with default parameters", () => {
+    const res = MATERIAL_SHADOW_CATCHER_NODE.evaluate(
+      {},
+      MATERIAL_SHADOW_CATCHER_NODE.defaultParams,
+      CTX,
+    ) as { material: MaterialValue };
+    expect(res.material.customMaterial).toBeInstanceOf(THREE.ShadowMaterial);
+    const mat = res.material.customMaterial as THREE.ShadowMaterial;
+    expect(mat.opacity).toBeCloseTo(0.6);
+    expect(mat.color.getHex()).toBe(0x000000);
+    expect(mat.side).toBe(THREE.DoubleSide);
+  });
+
+  it("updates opacity, color, and side from inputs and params", () => {
+    const res = MATERIAL_SHADOW_CATCHER_NODE.evaluate(
+      { opacity: 0.8, color: new THREE.Color(0x223344), doubleSided: 0 },
+      MATERIAL_SHADOW_CATCHER_NODE.defaultParams,
+      CTX,
+    ) as { material: MaterialValue };
+    const mat = res.material.customMaterial as THREE.ShadowMaterial;
+    expect(mat.opacity).toBeCloseTo(0.8);
+    expect(mat.color.getHex()).toBe(0x223344);
+    expect(mat.side).toBe(THREE.FrontSide);
+  });
+
+  it("sets receiveShadow=true and castShadow=false on mesh when applied", () => {
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(10, 10), new THREE.MeshStandardMaterial());
+    mesh.castShadow = true;
+    mesh.receiveShadow = false;
+
+    const shadowMat = new THREE.ShadowMaterial();
+    applyMaterialParams(
+      mesh,
+      {
+        customMaterial: shadowMat,
+        color: new THREE.Color(0x000000),
+        emissive: new THREE.Color(0x000000),
+        emissiveIntensity: 0,
+        shadeless: false,
+        roughness: 1,
+        metalness: 0,
+        wireframe: false,
+        opacity: 1,
+        transmission: 0,
+        thickness: 0,
+      },
+      THREE.DoubleSide,
+    );
+
+    expect(mesh.material).toBe(shadowMat);
+    expect(mesh.receiveShadow).toBe(true);
+    expect(mesh.castShadow).toBe(false);
+  });
+});
+

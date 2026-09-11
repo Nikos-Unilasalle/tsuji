@@ -380,8 +380,15 @@ export function applyMaterialParams(
       }
       mesh.material = matParams.customMaterial;
     }
+    if (matParams.customMaterial instanceof THREE.ShadowMaterial) {
+      mesh.receiveShadow = true;
+      mesh.castShadow = false;
+    } else {
+      mesh.castShadow = true;
+    }
     return;
   }
+  mesh.castShadow = true;
 
   const alpha = texParams?.activeDiffuse ? textureHasAlpha(texParams.activeDiffuse) : false;
   const signature = [
