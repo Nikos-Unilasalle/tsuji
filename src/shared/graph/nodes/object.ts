@@ -374,8 +374,14 @@ export function prepareGeometryForMaterial(mesh: THREE.Mesh, material: THREE.Mat
     const prepare = (m as any)?.__prepareGeometry;
     if (typeof prepare !== "function") continue;
     const prepared = prepare(mesh.geometry);
-    if (prepared instanceof THREE.BufferGeometry && prepared !== mesh.geometry) {
-      mesh.geometry = prepared;
+    // Duck-typed rather than `instanceof THREE.BufferGeometry`: a geometry
+    // built by a third-party library that bundles its own copy of three
+    // (three-bvh-csg's CSG output, notably) fails `instanceof` against ours
+    // even though it's a perfectly good BufferGeometry — a hook's result
+    // getting silently dropped there looked exactly like Worn material "no
+    // longer working" once its input started coming out of a Boolean.
+    if (prepared && prepared !== mesh.geometry && typeof (prepared as THREE.BufferGeometry).getAttribute === "function") {
+      mesh.geometry = prepared as THREE.BufferGeometry;
     }
   }
 }

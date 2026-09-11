@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 import { EvalContext } from "../types";
 import { BOOLEAN_NODE } from "./boolean";
+import { createWornMaterial } from "./materialWorn";
 
 const CTX: EvalContext = { time: 0, step: 0, nodeId: "boolean-test" };
 
@@ -274,5 +275,25 @@ describe("BOOLEAN_NODE — multi-mesh inputs (Array, Merge, imported models)", (
     const hexes = mats.map((m) => m.color.getHex());
     expect(hexes).toContain(0xff0000);
     expect(hexes).toContain(0x0000ff);
+  });
+
+  it("runs a material's __prepareGeometry hook on its own CSG output (e.g. Worn material)", () => {
+    // Boolean assigns `mesh.material` directly rather than through
+    // applyMaterialParams/inheritSourceMaterial, which is the only place that
+    // normally runs a material's __prepareGeometry hook. Without also running
+    // it here, a material like Worn (whose look depends entirely on
+    // attributes that hook computes) reads them as zero and renders as if it
+    // did nothing — indistinguishable from "broken".
+    const worn = createWornMaterial();
+    const a = boxAt(0, worn);
+    const b = boxAt(0.5, new THREE.MeshStandardMaterial());
+    const res = BOOLEAN_NODE.evaluate(
+      { geometry: a, boolean: b, operation: "subtract" },
+      { ...BOOLEAN_NODE.defaultParams, useGroups: false },
+      CTX,
+    );
+    const mesh = res.geometry as THREE.Mesh;
+    expect(mesh.geometry.getAttribute("aEdgeCurvatures")).toBeTruthy();
+    expect(mesh.geometry.getAttribute("aBarycentric")).toBeTruthy();
   });
 });

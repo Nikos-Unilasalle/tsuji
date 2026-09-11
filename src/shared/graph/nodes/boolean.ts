@@ -4,7 +4,7 @@ import { bakeMeshesToGeometry, collectMeshMaterials } from "../bakeGeometry";
 import { createNodeCache, disposeObject3D } from "../nodeCaches";
 import { NodeDefinition } from "../types";
 import { clearMeshWarning, collectMeshes, warnMeshRequired } from "../meshRequired";
-import { primitiveOutputs } from "./object";
+import { prepareGeometryForMaterial, primitiveOutputs } from "./object";
 
 
 interface BooleanState {
@@ -177,8 +177,9 @@ export const BOOLEAN_NODE: NodeDefinition = {
       const result = evaluator.evaluate(brushA, brushB, OPERATIONS[operation] ?? SUBTRACTION);
       const geometry = result.geometry;
 
+      const resultMaterial = useGroups ? result.material : srcA.material;
       if (!state.mesh) {
-        state.mesh = new THREE.Mesh(geometry, useGroups ? result.material : srcA.material);
+        state.mesh = new THREE.Mesh(geometry, resultMaterial);
         state.mesh.castShadow = true;
         state.mesh.receiveShadow = true;
       } else {
@@ -187,8 +188,12 @@ export const BOOLEAN_NODE: NodeDefinition = {
         // useGroups → the library hands back a per-input material array, so
         // faces from object 2 inherit object 2's material; otherwise a single
         // material (object 1's) applies to the whole result.
-        state.mesh.material = useGroups ? result.material : srcA.material;
+        state.mesh.material = resultMaterial;
       }
+      // A bare `mesh.material = ...` skips any material's `__prepareGeometry`
+      // hook (Worn's per-triangle curvature, e.g.) — it needs to run on the
+      // CSG's own output geometry, which exists only from this point on.
+      prepareGeometryForMaterial(state.mesh, resultMaterial);
       // The result is already positioned (both inputs baked) — local identity.
       state.mesh.matrixAutoUpdate = false;
       state.mesh.matrix.identity();
