@@ -125,6 +125,74 @@ describe("MATERIAL_WORN_NODE and Edge Curvature computation", () => {
     expect((res.material as any).customMaterial.__wornUniforms.uNoiseDetail.value).toBe(4);
   });
 
+  describe("per-vertex curvature", () => {
+    const range = (geometry: THREE.BufferGeometry) => {
+      const a = prepareWornGeometry(geometry).getAttribute("aVertexCurvature");
+      let min = Infinity;
+      let max = -Infinity;
+      let sum = 0;
+      for (let i = 0; i < a.count; i++) {
+        const v = a.getX(i);
+        min = Math.min(min, v);
+        max = Math.max(max, v);
+        sum += v;
+      }
+      return { min, max, mean: sum / a.count };
+    };
+
+    it("is zero on a flat surface", () => {
+      // The whole point of the threshold on the dihedral measure — a flat
+      // face's own triangulation must not read as curvature.
+      const flat = range(new THREE.PlaneGeometry(2, 2, 8, 8));
+      expect(Math.abs(flat.min)).toBeLessThan(1e-4);
+      expect(Math.abs(flat.max)).toBeLessThan(1e-4);
+    });
+
+    it("reads 1/radius on a sphere, whatever its tessellation", () => {
+      // A dihedral measure fades out as a mesh is subdivided (every angle
+      // shrinks); this must not, or wear would quietly vanish on a denser
+      // version of the same shape.
+      const coarse = range(new THREE.SphereGeometry(0.5, 24, 16));
+      const fine = range(new THREE.SphereGeometry(0.5, 64, 48));
+      expect(coarse.mean).toBeCloseTo(2, 1);
+      expect(fine.mean).toBeCloseTo(2, 1);
+
+      const big = range(new THREE.SphereGeometry(2, 32, 24));
+      expect(big.mean).toBeCloseTo(0.5, 1);
+    });
+
+    it("is negative inside a concave surface", () => {
+      // A sphere turned inside out: same radius, opposite sign, so it takes
+      // dirt where the convex one takes wear.
+      const bowl = new THREE.SphereGeometry(0.5, 24, 16).toNonIndexed();
+      const pos = bowl.getAttribute("position") as THREE.BufferAttribute;
+      for (let t = 0; t < pos.count / 3; t++) {
+        const i = t * 3;
+        const j = t * 3 + 2;
+        for (const axis of ["X", "Y", "Z"] as const) {
+          const a = pos[`get${axis}`](i);
+          const b = pos[`get${axis}`](j);
+          pos[`set${axis}`](i, b);
+          pos[`set${axis}`](j, a);
+        }
+      }
+      const inside = range(bowl);
+      expect(inside.mean).toBeCloseTo(-2, 1);
+    });
+
+    it("drives the curvature wear/dirt uniforms", () => {
+      const res = MATERIAL_WORN_NODE.evaluate(
+        { curveWear: 0.9, curveDirt: 0.1, curveSensitivity: 2.5 },
+        MATERIAL_WORN_NODE.defaultParams,
+        { time: 0, step: 0, nodeId: "worn-curve" },
+      );
+      const u = (res.material as any).customMaterial.__wornUniforms;
+      expect(u.uCurveWear.value).toBeCloseTo(0.9);
+      expect(u.uCurveDirt.value).toBeCloseTo(0.1);
+      expect(u.uCurveSensitivity.value).toBeCloseTo(2.5);
+    });
+  });
+
   it("survives a modifier that inherits the source mesh's material", () => {
     // A modifier assigning `mesh.material = srcMesh.material` by hand used to
     // skip the material's geometry hook, so the worn shader landed on geometry

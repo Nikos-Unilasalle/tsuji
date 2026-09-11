@@ -13,7 +13,11 @@ import { asColor, materialParamsFromValue, numberInput } from "./object";
  *     = 0 : flat / coplanar surface (takes base material)
  */
 export function prepareWornGeometry(geometry: THREE.BufferGeometry): THREE.BufferGeometry {
-  if (geometry.getAttribute("aBarycentric") && geometry.getAttribute("aEdgeCurvatures")) {
+  if (
+    geometry.getAttribute("aBarycentric") &&
+    geometry.getAttribute("aEdgeCurvatures") &&
+    geometry.getAttribute("aVertexCurvature")
+  ) {
     return geometry;
   }
 
@@ -213,8 +217,104 @@ export function prepareWornGeometry(geometry: THREE.BufferGeometry): THREE.Buffe
   nonIndexed.setAttribute("aBarycentric", new THREE.Float32BufferAttribute(barycentrics, 3));
   nonIndexed.setAttribute("aEdgeAltitudes", new THREE.Float32BufferAttribute(altitudes, 3));
   nonIndexed.setAttribute("aEdgeCurvatures", new THREE.Float32BufferAttribute(edgeCurvatures, 3));
+  nonIndexed.setAttribute(
+    "aVertexCurvature",
+    new THREE.Float32BufferAttribute(computeVertexCurvature(posAttr, triCount, triNormals, hashV), 1),
+  );
 
   return nonIndexed;
+}
+
+/**
+ * Per-vertex signed mean curvature, in units of 1/radius, positive on convex
+ * ridges and negative in concave hollows — the same sign convention as the
+ * per-edge dihedral curvature above.
+ *
+ * The dihedral measure is blind to a smooth curved surface: a finely
+ * tessellated sphere or tube has a tiny angle across every one of its edges,
+ * far below the threshold that keeps wear off a flat face's own triangulation,
+ * so nothing on it ever wears. This is the complementary measure — how the
+ * neighbourhood of a vertex sits relative to its own tangent plane, which a
+ * sphere answers the same way however densely it happens to be tessellated.
+ *
+ *   k = -mean(dot(normalize(neighbour - v), N)) * 2 / mean(|neighbour - v|)
+ *
+ * The mean dot alone is the classic "pointiness": dimensionless, but
+ * proportional to edge length over radius, so subdividing a mesh would quietly
+ * fade its wear away. Dividing by the mean edge length cancels that and leaves
+ * an estimate of 1/R — a sphere of radius 0.5 reads ~2 at any tessellation.
+ *
+ * Vertices are welded by position (`hashV`) rather than by buffer index: the
+ * geometry is non-indexed by this point, and a split-normal seam would
+ * otherwise look like a mesh boundary and report no neighbours at all.
+ */
+function computeVertexCurvature(
+  posAttr: THREE.BufferAttribute | THREE.InterleavedBufferAttribute,
+  triCount: number,
+  triNormals: THREE.Vector3[],
+  hashV: (v: THREE.Vector3) => string,
+): Float32Array {
+  interface WeldedVertex {
+    normal: THREE.Vector3;
+    neighbours: Map<string, THREE.Vector3>;
+    position: THREE.Vector3;
+  }
+  const welded = new Map<string, WeldedVertex>();
+  const p = new THREE.Vector3();
+
+  const touch = (key: string, position: THREE.Vector3): WeldedVertex => {
+    let w = welded.get(key);
+    if (!w) {
+      w = { normal: new THREE.Vector3(), neighbours: new Map(), position: position.clone() };
+      welded.set(key, w);
+    }
+    return w;
+  };
+
+  const corners = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
+  const keys = ["", "", ""];
+  for (let t = 0; t < triCount; t++) {
+    for (let c = 0; c < 3; c++) {
+      corners[c].fromBufferAttribute(posAttr, t * 3 + c);
+      keys[c] = hashV(corners[c]);
+    }
+    for (let c = 0; c < 3; c++) {
+      const w = touch(keys[c], corners[c]);
+      w.normal.add(triNormals[t]);
+      for (const other of [(c + 1) % 3, (c + 2) % 3]) {
+        if (keys[other] !== keys[c]) w.neighbours.set(keys[other], corners[other].clone());
+      }
+    }
+  }
+
+  const curvatureByKey = new Map<string, number>();
+  const toNeighbour = new THREE.Vector3();
+  for (const [key, w] of welded) {
+    if (w.neighbours.size === 0 || w.normal.lengthSq() < 1e-12) {
+      curvatureByKey.set(key, 0);
+      continue;
+    }
+    const normal = w.normal.clone().normalize();
+    let dotSum = 0;
+    let lengthSum = 0;
+    for (const q of w.neighbours.values()) {
+      toNeighbour.subVectors(q, w.position);
+      const length = toNeighbour.length();
+      if (length < 1e-8) continue;
+      dotSum += toNeighbour.dot(normal) / length;
+      lengthSum += length;
+    }
+    const n = w.neighbours.size;
+    const meanLength = lengthSum / n;
+    curvatureByKey.set(key, meanLength > 1e-8 ? (-(dotSum / n) * 2) / meanLength : 0);
+  }
+
+  const out = new Float32Array(triCount * 3);
+  for (let i = 0; i < triCount * 3; i++) {
+    p.fromBufferAttribute(posAttr, i);
+    out[i] = curvatureByKey.get(hashV(p)) ?? 0;
+  }
+  return out;
 }
 
 /**
@@ -266,6 +366,11 @@ export function createWornMaterial(): THREE.MeshStandardMaterial {
     uWearPatch: { value: 0.3 },
     uDirtPatch: { value: 0.3 },
     uPatchScale: { value: 2.5 },
+    // Wear and dirt driven by per-vertex curvature instead of dihedral edges,
+    // which is the only measure that sees a smooth curved surface at all.
+    uCurveWear: { value: 0.35 },
+    uCurveDirt: { value: 0.35 },
+    uCurveSensitivity: { value: 1.0 },
   };
 
   (mat as any).__wornUniforms = uniforms;
@@ -283,7 +388,9 @@ export function createWornMaterial(): THREE.MeshStandardMaterial {
       attribute vec3 aBarycentric;
       attribute vec3 aEdgeAltitudes;
       attribute vec3 aEdgeCurvatures;
+      attribute float aVertexCurvature;
 
+      varying float vWornVertCurv;
       varying vec3 vWornBary;
       varying vec3 vWornAltitudes;
       varying vec3 vWornEdgeCurv;
@@ -298,6 +405,9 @@ export function createWornMaterial(): THREE.MeshStandardMaterial {
       vWornBary = aBarycentric;
       vWornAltitudes = aEdgeAltitudes;
       vWornEdgeCurv = aEdgeCurvatures;
+      // Interpolated across the face, so the curvature reads as a smooth
+      // gradient over a curved surface rather than as flat per-triangle steps.
+      vWornVertCurv = aVertexCurvature;
       vWornWorldPos = (modelMatrix * vec4(transformed, 1.0)).xyz;
       `
     );
@@ -329,7 +439,11 @@ export function createWornMaterial(): THREE.MeshStandardMaterial {
       uniform float uWearPatch;
       uniform float uDirtPatch;
       uniform float uPatchScale;
+      uniform float uCurveWear;
+      uniform float uCurveDirt;
+      uniform float uCurveSensitivity;
 
+      varying float vWornVertCurv;
       varying vec3 vWornBary;
       varying vec3 vWornAltitudes;
       varying vec3 vWornEdgeCurv;
@@ -503,6 +617,27 @@ export function createWornMaterial(): THREE.MeshStandardMaterial {
       // separate offsets: sharing one would have the grime collect in exactly
       // the creases whose neighbouring ridges happen to be worn, which is its
       // own kind of systematic.
+      // Per-vertex curvature, the measure that sees smooth curved surfaces at
+      // all (see computeVertexCurvature). Interpolated, so it is a gradient
+      // over the surface rather than a band hugging one edge — a tube gets
+      // worn along its whole outer flank and grimy in its inner hollow. The
+      // same Organic Breakup noise rides on it, or a sphere would come out
+      // airbrushed.
+      float curv = vWornVertCurv * uCurveSensitivity;
+      // The ramp starts well above zero: curvature is 1/radius, so a broad
+      // surface (a sphere of radius 2 reads 0.5) has to stay clean or the
+      // effect degenerates into tinting every rounded object uniformly —
+      // systematic in exactly the way the patch masks exist to avoid. Only
+      // tight curvature, a radius under roughly a unit, wears.
+      float curveWearF = uCurveWear > 0.001
+        ? smoothstep(0.6, 2.2, curv) * uCurveWear * clamp(noiseMod, 0.0, 2.0)
+        : 0.0;
+      float curveDirtF = uCurveDirt > 0.001
+        ? smoothstep(0.6, 2.2, -curv) * uCurveDirt * clamp(noiseMod, 0.0, 2.0)
+        : 0.0;
+      wearFactor = max(wearFactor, curveWearF);
+      dirtFactor = max(dirtFactor, curveDirtF);
+
       vec3 patchPos = vWornWorldPos * uPatchScale + uSeedOffset;
       wearFactor *= patchMaskWorn(patchPos, uWearPatch);
       dirtFactor *= patchMaskWorn(patchPos + 53.7, uDirtPatch);
@@ -575,6 +710,9 @@ export const MATERIAL_WORN_NODE: NodeDefinition = {
     { id: "wearPatch", label: "Wear Patchiness", type: "value" },
     { id: "dirtPatch", label: "Dirt Patchiness", type: "value" },
     { id: "patchScale", label: "Patch Scale", type: "value" },
+    { id: "curveWear", label: "Curvature Wear", type: "value" },
+    { id: "curveDirt", label: "Curvature Dirt", type: "value" },
+    { id: "curveSensitivity", label: "Curvature Sensitivity", type: "value" },
   ],
   outputs: [{ id: "material", label: "Material", type: "material" }],
   defaultParams: {
@@ -598,6 +736,9 @@ export const MATERIAL_WORN_NODE: NodeDefinition = {
     wearPatch: 0.3,
     dirtPatch: 0.3,
     patchScale: 2.5,
+    curveWear: 0.35,
+    curveDirt: 0.35,
+    curveSensitivity: 1.0,
   },
   paramFields: [
     { id: "wearAmount", label: "Wear Amount", kind: "number", step: 0.05, group: "Wear (Convex)" },
@@ -605,12 +746,14 @@ export const MATERIAL_WORN_NODE: NodeDefinition = {
     { id: "wornRoughness", label: "Worn Roughness", kind: "number", step: 0.05, group: "Wear (Convex)" },
     { id: "wornMetalness", label: "Worn Metalness", kind: "number", step: 0.05, group: "Wear (Convex)" },
     { id: "wearPatch", label: "Wear Patchiness", kind: "number", step: 0.05, group: "Wear (Convex)" },
+    { id: "curveWear", label: "Curvature Wear (Smooth)", kind: "number", step: 0.05, group: "Wear (Convex)" },
 
     { id: "dirtAmount", label: "Dirt Amount", kind: "number", step: 0.05, group: "Dirt (Concave)" },
     { id: "dirtColor", label: "Dirt Color", kind: "color", group: "Dirt (Concave)" },
     { id: "dirtRoughness", label: "Dirt Roughness", kind: "number", step: 0.05, group: "Dirt (Concave)" },
     { id: "dirtMetalness", label: "Dirt Metalness", kind: "number", step: 0.05, group: "Dirt (Concave)" },
     { id: "dirtPatch", label: "Dirt Patchiness", kind: "number", step: 0.05, group: "Dirt (Concave)" },
+    { id: "curveDirt", label: "Curvature Dirt (Smooth)", kind: "number", step: 0.05, group: "Dirt (Concave)" },
 
     { id: "baseColor", label: "Base Color", kind: "color", group: "Base (General)" },
     { id: "baseRoughness", label: "Base Roughness", kind: "number", step: 0.05, group: "Base (General)" },
@@ -622,6 +765,7 @@ export const MATERIAL_WORN_NODE: NodeDefinition = {
     { id: "noiseDetail", label: "Noise Detail (Octaves)", kind: "number", step: 0.25, group: "Tuning" },
     { id: "variation", label: "Surface Variation", kind: "number", step: 0.05, group: "Tuning" },
     { id: "patchScale", label: "Patch Scale", kind: "number", step: 0.25, group: "Tuning" },
+    { id: "curveSensitivity", label: "Curvature Sensitivity", kind: "number", step: 0.1, group: "Tuning" },
     { id: "seed", label: "Seed", kind: "number", step: 1, group: "Tuning" },
   ],
   evaluate: (inputs, params, ctx) => {
@@ -658,6 +802,9 @@ export const MATERIAL_WORN_NODE: NodeDefinition = {
     const wearPatch = Math.max(0, Math.min(1, numberInput(inputs.wearPatch, params.wearPatch, 0.3)));
     const dirtPatch = Math.max(0, Math.min(1, numberInput(inputs.dirtPatch, params.dirtPatch, 0.3)));
     const patchScale = Math.max(0.05, Math.min(50, numberInput(inputs.patchScale, params.patchScale, 2.5)));
+    const curveWear = Math.max(0, Math.min(1, numberInput(inputs.curveWear, params.curveWear, 0.35)));
+    const curveDirt = Math.max(0, Math.min(1, numberInput(inputs.curveDirt, params.curveDirt, 0.35)));
+    const curveSensitivity = Math.max(0.01, Math.min(20, numberInput(inputs.curveSensitivity, params.curveSensitivity, 1.0)));
 
     const u = (mat as any).__wornUniforms;
     if (u) {
@@ -683,6 +830,9 @@ export const MATERIAL_WORN_NODE: NodeDefinition = {
       u.uWearPatch.value = wearPatch;
       u.uDirtPatch.value = dirtPatch;
       u.uPatchScale.value = patchScale;
+      u.uCurveWear.value = curveWear;
+      u.uCurveDirt.value = curveDirt;
+      u.uCurveSensitivity.value = curveSensitivity;
       // Irrational multipliers so consecutive integer seeds land far apart in
       // the noise field on all three axes instead of sliding along one.
       u.uSeedOffset.value.set(seed * 31.4159, seed * 27.1828, seed * 16.1803);
