@@ -4,6 +4,7 @@ import { EvalContext } from "../types";
 import { MATERIAL_WORN_NODE, prepareWornGeometry } from "./materialWorn";
 import { MATERIAL_NODE } from "./material";
 import { SOLIDIFY_NODE } from "./solidify";
+import { BOOLEAN_NODE } from "./boolean";
 import { applyMaterialParams } from "./object";
 
 const CTX: EvalContext = { time: 0, step: 0, nodeId: "worn-test" };
@@ -295,5 +296,66 @@ describe("MATERIAL_WORN_NODE and Edge Curvature computation", () => {
 
     // All internal edges connecting adjacent triangles of the flat plane must be strictly 0
     expect(flatInternalEdgesCount).toBeGreaterThan(0);
+  });
+
+  it("does not streak a flat panel with false wear around a Boolean cutout's retriangulation seams", () => {
+    // A CSG library computes cut-boundary vertices independently on each side
+    // of a re-triangulated region, so two triangles that are geometrically
+    // coplanar can end up a few ULPs apart at a shared corner — enough to
+    // miss the position-hash match. A flat, uncut region of the panel (here,
+    // the *top* face; the cutter only punches through the front) must not
+    // read any of that noise as a convex ridge.
+    function boxAt(x: number, y: number, z: number, sx = 1, sy = 1, sz = 1): THREE.Mesh {
+      const mesh = new THREE.Mesh(new THREE.BoxGeometry(sx, sy, sz), new THREE.MeshStandardMaterial());
+      mesh.matrixAutoUpdate = false;
+      mesh.matrix.makeTranslation(x, y, z);
+      mesh.updateMatrixWorld(true);
+      return mesh;
+    }
+
+    const body = boxAt(0, 0, 0, 6, 2, 3);
+    const cutter = boxAt(0, 0.5, 1.5, 2, 1, 1);
+    const res = BOOLEAN_NODE.evaluate(
+      { geometry: body, boolean: cutter, operation: "subtract" },
+      { ...BOOLEAN_NODE.defaultParams, useGroups: false },
+      { ...CTX, nodeId: "worn-after-boolean" },
+    );
+    const mesh = res.geometry as THREE.Mesh;
+    const prepared = prepareWornGeometry(mesh.geometry);
+    const edgeCurv = prepared.getAttribute("aEdgeCurvatures");
+    const pos = prepared.getAttribute("position");
+    const triCount = pos.count / 3;
+
+    // The only edge that legitimately meets the cutout's vertical inner wall
+    // (real curvature, not noise) runs exactly along the window's near side:
+    // z = 1, x from -1 to 1. Checked per edge, not per triangle — a triangle
+    // merely touching that rim at one corner still has two other edges that
+    // are pure interior seams and must read as flat.
+    const onCutoutRimEdge = (a: number[], b: number[]) =>
+      Math.abs(a[2] - 1) < 1e-3 && Math.abs(b[2] - 1) < 1e-3 && Math.abs(a[0]) <= 1 + 1e-3 && Math.abs(b[0]) <= 1 + 1e-3;
+
+    for (let t = 0; t < triCount; t++) {
+      const pts = [0, 1, 2].map((i) => [pos.getX(t * 3 + i), pos.getY(t * 3 + i), pos.getZ(t * 3 + i)]);
+      // The top face (y = 1) never meets the cutter (which tops out at y = 1
+      // exactly, so its own faces don't lie in this plane) — every edge of a
+      // triangle entirely on it is either the panel's true outer rim
+      // (|x| ≈ 3 or |z| ≈ 1.5), the cutout's near rim, or a purely internal
+      // retriangulation seam.
+      const onTop = pts.every((p) => Math.abs(p[1] - 1) < 1e-4);
+      if (!onTop) continue;
+      const onOuterRim = pts.some((p) => Math.abs(p[0]) > 2.99 || Math.abs(p[2]) > 1.49);
+      if (onOuterRim) continue;
+
+      const k = [edgeCurv.getX(t * 3), edgeCurv.getY(t * 3), edgeCurv.getZ(t * 3)];
+      const edgePairs: [number[], number[]][] = [
+        [pts[0], pts[1]],
+        [pts[1], pts[2]],
+        [pts[2], pts[0]],
+      ];
+      for (let e = 0; e < 3; e++) {
+        if (onCutoutRimEdge(edgePairs[e][0], edgePairs[e][1])) continue;
+        expect(Math.abs(k[e])).toBeLessThan(0.05);
+      }
+    }
   });
 });

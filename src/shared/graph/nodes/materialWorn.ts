@@ -126,15 +126,22 @@ export function prepareWornGeometry(geometry: THREE.BufferGeometry): THREE.Buffe
 
     for (let e = 0; e < 3; e++) {
       const refs = edgeMap.get(keys[e]);
+      // No matching edge found (a genuinely open boundary, or — far more often
+      // in practice — a shared internal edge whose endpoint the hash missed
+      // because a modifier's output computed it independently on each side,
+      // e.g. a CSG/Boolean result: two triangles meeting at what is
+      // geometrically the same point but off by a few ULPs of floating-point
+      // noise). Defaulting a miss to "flat" rather than "maximum convex wear"
+      // means that noise reads as invisible instead of as a bright streak
+      // tracing every internal seam a Boolean's retriangulation leaves behind.
       if (!refs || refs.length <= 1) {
-        // Open boundary edge: treated as convex edge
-        triEdgeCurv[t][e] = 1.0;
+        triEdgeCurv[t][e] = 0.0;
         continue;
       }
 
       const neighbor = refs.find((r) => r.triIdx !== t);
       if (!neighbor) {
-        triEdgeCurv[t][e] = 1.0;
+        triEdgeCurv[t][e] = 0.0;
         continue;
       }
 
