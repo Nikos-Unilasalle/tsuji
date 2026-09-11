@@ -251,6 +251,16 @@ export function createWornMaterial(): THREE.MeshStandardMaterial {
     uContrast: { value: 2.0 },
     uNoise: { value: 0.35 },
     uNoiseScale: { value: 6.0 },
+    // Octave count for the fractal noise, as a float so it can be faded in
+    // fractionally rather than popping a whole octave into existence.
+    uNoiseDetail: { value: 3.0 },
+    // Domain offset derived from the Seed param, so two Worn nodes on two
+    // objects don't wear along identical noise.
+    uSeedOffset: { value: new THREE.Vector3() },
+    // Low-frequency mottling of the base surface itself, independent of the
+    // edge wear: a perfectly uniform flat face is the least convincing part
+    // of the result.
+    uVariation: { value: 0.25 },
   };
 
   (mat as any).__wornUniforms = uniforms;
@@ -308,6 +318,9 @@ export function createWornMaterial(): THREE.MeshStandardMaterial {
       uniform float uContrast;
       uniform float uNoise;
       uniform float uNoiseScale;
+      uniform float uNoiseDetail;
+      uniform vec3 uSeedOffset;
+      uniform float uVariation;
 
       varying vec3 vWornBary;
       varying vec3 vWornAltitudes;
@@ -363,6 +376,27 @@ export function createWornMaterial(): THREE.MeshStandardMaterial {
         m = m * m;
         return 42.0 * dot( m*m, vec4( dot(p0,x0), dot(p1,x1), dot(p2,x2), dot(p3,x3) ) );
       }
+
+      // Fractal sum of the noise above, in [-1, 1]. A single octave gives an
+      // even, soapy breakup; stacking a few is what reads as grime and pitting
+      // rather than a wobbly outline. The loop bound is a constant (GLSL ES 1.0
+      // will not take a uniform there) and the octave count fades each one in,
+      // so raising Detail doesn't pop.
+      float fbmWorn(vec3 p, float detail) {
+        float sum = 0.0;
+        float amp = 0.5;
+        float norm = 0.0;
+        for (int i = 0; i < 4; i++) {
+          // Not named "active" — that is a reserved word in GLSL ES.
+          float octWeight = clamp(detail - float(i), 0.0, 1.0);
+          if (octWeight <= 0.0) break;
+          sum += snoiseWorn(p) * amp * octWeight;
+          norm += amp * octWeight;
+          p *= 2.02;
+          amp *= 0.5;
+        }
+        return norm > 0.0 ? sum / norm : 0.0;
+      }
       `
     );
 
@@ -380,13 +414,24 @@ export function createWornMaterial(): THREE.MeshStandardMaterial {
       float k1 = vWornEdgeCurv.y;
       float k2 = vWornEdgeCurv.z;
 
-      // 3D simplex noise for organic edge breakup. snoiseWorn returns [-1, 1],
-      // so it is remapped to [0, 1] before being centred on 1.0 — reading the
-      // raw value as if it were already [0, 1] biased the modifier down to a
-      // mean of 1 - 0.75 * uNoise, which made raising Organic Breakup shrink
-      // the wear band away to nothing instead of breaking its edge up.
-      float n = snoiseWorn(vWornWorldPos * uNoiseScale) * 0.5 + 0.5;
+      // Fractal noise for organic edge breakup. fbmWorn returns [-1, 1], so it
+      // is remapped to [0, 1] before being centred on 1.0 — reading the raw
+      // value as if it were already [0, 1] biased the modifier down to a mean
+      // of 1 - 0.75 * uNoise, which made raising Organic Breakup shrink the
+      // wear band away to nothing instead of breaking its edge up.
+      vec3 wornNoisePos = vWornWorldPos * uNoiseScale + uSeedOffset;
+      float n = fbmWorn(wornNoisePos, uNoiseDetail) * 0.5 + 0.5;
       float noiseMod = 1.0 + (n - 0.5) * uNoise * 1.5;
+
+      // A separate, much coarser sample: patchy discolouration and roughness
+      // across the body of the surface, where the edge wear never reaches.
+      // 0.5, not a tenth: at Noise Scale 6 that is ~3 patches per world unit,
+      // several across an object-sized mesh. Much coarser and the whole model
+      // sits inside a single noise cell, which reads as a flat tint rather
+      // than as mottling.
+      float wornVariation = uVariation > 0.001
+        ? fbmWorn(wornNoisePos * 0.5 + 11.3, max(2.0, uNoiseDetail)) * uVariation
+        : 0.0;
 
       // Effective radii: multiplied by noiseMod so edge breakup is organic
       // without ever generating wear or dirt on flat faces away from edges
@@ -432,6 +477,11 @@ export function createWornMaterial(): THREE.MeshStandardMaterial {
       blendedCol = mix(blendedCol, uDirtColor, dirtFactor);
       blendedCol = mix(blendedCol, uWornColor, wearFactor);
 
+      // Mottling rides on top of whichever of the three the pixel ended up
+      // with, so a worn edge and a dirty crease break up along with the body
+      // instead of staying flat patches of their own.
+      blendedCol *= clamp(1.0 + wornVariation * 0.45, 0.0, 2.0);
+
       diffuseColor.rgb = blendedCol;
       `
     );
@@ -443,6 +493,7 @@ export function createWornMaterial(): THREE.MeshStandardMaterial {
       float blendedRoughness = uBaseRoughness;
       blendedRoughness = mix(blendedRoughness, uDirtRoughness, dirtFactor);
       blendedRoughness = mix(blendedRoughness, uWornRoughness, wearFactor);
+      blendedRoughness += wornVariation * 0.3;
       roughnessFactor = clamp(blendedRoughness, 0.0, 1.0);
       `
     );
@@ -483,6 +534,9 @@ export const MATERIAL_WORN_NODE: NodeDefinition = {
     { id: "contrast", label: "Contrast", type: "value" },
     { id: "noise", label: "Noise Intensity", type: "value" },
     { id: "noiseScale", label: "Noise Scale", type: "value" },
+    { id: "noiseDetail", label: "Noise Detail", type: "value" },
+    { id: "variation", label: "Surface Variation", type: "value" },
+    { id: "seed", label: "Seed", type: "value" },
   ],
   outputs: [{ id: "material", label: "Material", type: "material" }],
   defaultParams: {
@@ -500,6 +554,9 @@ export const MATERIAL_WORN_NODE: NodeDefinition = {
     contrast: 2.0,
     noise: 0.35,
     noiseScale: 6.0,
+    noiseDetail: 3,
+    variation: 0.25,
+    seed: 1,
   },
   paramFields: [
     { id: "wearAmount", label: "Wear Amount", kind: "number", step: 0.05, group: "Wear (Convex)" },
@@ -519,6 +576,9 @@ export const MATERIAL_WORN_NODE: NodeDefinition = {
     { id: "contrast", label: "Edge Sharpness", kind: "number", step: 0.1, group: "Tuning" },
     { id: "noise", label: "Organic Breakup", kind: "number", step: 0.05, group: "Tuning" },
     { id: "noiseScale", label: "Noise Scale", kind: "number", step: 0.5, group: "Tuning" },
+    { id: "noiseDetail", label: "Noise Detail (Octaves)", kind: "number", step: 0.25, group: "Tuning" },
+    { id: "variation", label: "Surface Variation", kind: "number", step: 0.05, group: "Tuning" },
+    { id: "seed", label: "Seed", kind: "number", step: 1, group: "Tuning" },
   ],
   evaluate: (inputs, params, ctx) => {
     let mat = wornMaterialCache.get(ctx.nodeId);
@@ -547,6 +607,10 @@ export const MATERIAL_WORN_NODE: NodeDefinition = {
     const contrast = Math.max(0.1, Math.min(10, numberInput(inputs.contrast, params.contrast, 2.0)));
     const noise = Math.max(0, Math.min(1, numberInput(inputs.noise, params.noise, 0.35)));
     const noiseScale = Math.max(0.1, Math.min(50, numberInput(inputs.noiseScale, params.noiseScale, 6.0)));
+    // 4 is the octave count the shader's loop is unrolled to.
+    const noiseDetail = Math.max(1, Math.min(4, numberInput(inputs.noiseDetail, params.noiseDetail, 3)));
+    const variation = Math.max(0, Math.min(1, numberInput(inputs.variation, params.variation, 0.25)));
+    const seed = numberInput(inputs.seed, params.seed, 1);
 
     const u = (mat as any).__wornUniforms;
     if (u) {
@@ -567,6 +631,11 @@ export const MATERIAL_WORN_NODE: NodeDefinition = {
       u.uContrast.value = contrast;
       u.uNoise.value = noise;
       u.uNoiseScale.value = noiseScale;
+      u.uNoiseDetail.value = noiseDetail;
+      u.uVariation.value = variation;
+      // Irrational multipliers so consecutive integer seeds land far apart in
+      // the noise field on all three axes instead of sliding along one.
+      u.uSeedOffset.value.set(seed * 31.4159, seed * 27.1828, seed * 16.1803);
     }
 
     mat.color.copy(baseColor);

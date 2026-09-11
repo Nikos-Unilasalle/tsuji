@@ -71,6 +71,37 @@ describe("MATERIAL_WORN_NODE and Edge Curvature computation", () => {
     expect(u.uDirtAmount.value).toBeCloseTo(0.3);
   });
 
+  it("drives the fractal noise, surface variation and seed uniforms", () => {
+    const res = MATERIAL_WORN_NODE.evaluate(
+      { noiseDetail: 4, variation: 0.7, seed: 7 },
+      MATERIAL_WORN_NODE.defaultParams,
+      { time: 0, step: 0, nodeId: "worn-noise" },
+    );
+    const u = (res.material as any).customMaterial.__wornUniforms;
+    expect(u.uNoiseDetail.value).toBe(4);
+    expect(u.uVariation.value).toBeCloseTo(0.7);
+
+    // Two seeds have to land on different parts of the noise field, or every
+    // object in the scene wears along an identical pattern.
+    const offset7 = u.uSeedOffset.value.clone();
+    const res1 = MATERIAL_WORN_NODE.evaluate(
+      { seed: 1 },
+      MATERIAL_WORN_NODE.defaultParams,
+      { time: 0, step: 0, nodeId: "worn-noise-2" },
+    );
+    const offset1 = (res1.material as any).customMaterial.__wornUniforms.uSeedOffset.value;
+    expect(offset7.distanceTo(offset1)).toBeGreaterThan(1);
+  });
+
+  it("clamps Noise Detail to the octave count the shader loop is unrolled to", () => {
+    const res = MATERIAL_WORN_NODE.evaluate(
+      { noiseDetail: 99 },
+      MATERIAL_WORN_NODE.defaultParams,
+      { time: 0, step: 0, nodeId: "worn-detail-clamp" },
+    );
+    expect((res.material as any).customMaterial.__wornUniforms.uNoiseDetail.value).toBe(4);
+  });
+
   it("survives a modifier that inherits the source mesh's material", () => {
     // A modifier assigning `mesh.material = srcMesh.material` by hand used to
     // skip the material's geometry hook, so the worn shader landed on geometry
