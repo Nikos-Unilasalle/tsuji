@@ -11,6 +11,7 @@ import {
   TextureParams,
   MaterialParams,
   NATIVE_TRANSFORM_PARAM_FIELDS,
+  inheritSourceMaterial,
 } from "./object";
 import { composeNativeMatrix, preserveModifierUserData } from "./transform";
 import {
@@ -84,7 +85,7 @@ function applyEditMeshMaterial(
   }
 
   if (srcMesh && srcMesh.material instanceof THREE.Material) {
-    mesh.material = srcMesh.material;
+    inheritSourceMaterial(mesh, srcMesh.material);
     clearAppliedMaterialSignature(mesh);
     (mesh.material as any).__isSharedFromSrc = true;
     delete (mesh.material as any).__isDefaultClay;

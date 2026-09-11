@@ -380,8 +380,12 @@ export function createWornMaterial(): THREE.MeshStandardMaterial {
       float k1 = vWornEdgeCurv.y;
       float k2 = vWornEdgeCurv.z;
 
-      // 3D simplex noise for organic edge breakup
-      float n = snoiseWorn(vWornWorldPos * uNoiseScale);
+      // 3D simplex noise for organic edge breakup. snoiseWorn returns [-1, 1],
+      // so it is remapped to [0, 1] before being centred on 1.0 — reading the
+      // raw value as if it were already [0, 1] biased the modifier down to a
+      // mean of 1 - 0.75 * uNoise, which made raising Organic Breakup shrink
+      // the wear band away to nothing instead of breaking its edge up.
+      float n = snoiseWorn(vWornWorldPos * uNoiseScale) * 0.5 + 0.5;
       float noiseMod = 1.0 + (n - 0.5) * uNoise * 1.5;
 
       // Effective radii: multiplied by noiseMod so edge breakup is organic
@@ -414,10 +418,13 @@ export function createWornMaterial(): THREE.MeshStandardMaterial {
         dirtFactor = max(dirtFactor, smoothstep(dirtRadius, 0.0, d2) * clamp(-k2, 0.0, 1.0));
       }
 
-      // Contrast shaping
+      // Contrast shaping. The field is labelled "Edge Sharpness", so a value
+      // above 1 has to pull the falloff *in* to a tighter edge: pow(f, c).
+      // Raising it to 1/c did the opposite — contrast 2 was a square root,
+      // i.e. a wider, softer band the higher the "sharpness" went.
       if (uContrast > 0.1 && uContrast != 1.0) {
-        wearFactor = pow(wearFactor, 1.0 / max(0.1, uContrast));
-        dirtFactor = pow(dirtFactor, 1.0 / max(0.1, uContrast));
+        wearFactor = pow(wearFactor, uContrast);
+        dirtFactor = pow(dirtFactor, uContrast);
       }
 
       // Base color blending: on flat surfaces, wearFactor == 0 and dirtFactor == 0 -> 100% uBaseColor!

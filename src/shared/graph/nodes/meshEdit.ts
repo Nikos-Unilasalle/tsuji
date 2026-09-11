@@ -4,7 +4,7 @@ import { createNodeCache, disposeObject3D } from "../nodeCaches";
 import { NodeDefinition } from "../types";
 import { clearMeshWarning, findFirstMesh, warnMeshRequired } from "../meshRequired";
 import { createPRNG } from "../../math/random";
-import { applyMaterialParams, materialParamsFromValue, primitiveOutputs } from "./object";
+import { applyMaterialParams, inheritSourceMaterial, materialParamsFromValue, primitiveOutputs } from "./object";
 import { asVector3, preserveModifierUserData } from "./transform";
 
 export type FaceSelectMode = "all" | "normal" | "height";
@@ -383,7 +383,7 @@ function applyExtrudeMaterial(mesh: THREE.Mesh, srcMesh: THREE.Mesh, materialInp
       mesh.material.side = THREE.DoubleSide;
     }
   } else if (srcMat instanceof THREE.Material) {
-    mesh.material = srcMat;
+    inheritSourceMaterial(mesh, srcMat);
     (mesh.material as any).__isSharedFromSrc = true;
   } else if (!mesh.material) {
     mesh.material = new THREE.MeshStandardMaterial({
@@ -727,7 +727,7 @@ export const DELETE_GEOMETRY_NODE: NodeDefinition = {
       // Live material inheritance, same as Extrude: the surviving faces keep
       // the source's material, refreshed on cache hits so upstream animation
       // keeps driving it.
-      state.mesh.material = srcMesh.material;
+      inheritSourceMaterial(state.mesh, srcMesh.material);
       return primitiveOutputs(state.mesh);
     }
 
@@ -755,14 +755,14 @@ export const DELETE_GEOMETRY_NODE: NodeDefinition = {
     geometry.computeBoundingSphere();
 
     if (!state.mesh) {
-      state.mesh = new THREE.Mesh(geometry, srcMesh.material);
+      state.mesh = new THREE.Mesh(geometry);
       state.mesh.castShadow = true;
       state.mesh.receiveShadow = true;
     } else {
       state.mesh.geometry.dispose();
       state.mesh.geometry = geometry;
-      state.mesh.material = srcMesh.material;
     }
+    inheritSourceMaterial(state.mesh, srcMesh.material);
     // See the first occurrence above for why matrixWorld (not matrix) and
     // a forced-false matrixAutoUpdate.
     inputObj.updateMatrixWorld(true);

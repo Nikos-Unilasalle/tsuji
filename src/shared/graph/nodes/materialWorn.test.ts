@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import { EvalContext } from "../types";
 import { MATERIAL_WORN_NODE, prepareWornGeometry } from "./materialWorn";
 import { MATERIAL_NODE } from "./material";
+import { SOLIDIFY_NODE } from "./solidify";
+import { applyMaterialParams } from "./object";
 
 const CTX: EvalContext = { time: 0, step: 0, nodeId: "worn-test" };
 
@@ -67,6 +69,28 @@ describe("MATERIAL_WORN_NODE and Edge Curvature computation", () => {
     expect(u.uDirtColor.value.getHexString()).toBe("111111");
     expect(u.uWearAmount.value).toBeCloseTo(0.6);
     expect(u.uDirtAmount.value).toBeCloseTo(0.3);
+  });
+
+  it("survives a modifier that inherits the source mesh's material", () => {
+    // A modifier assigning `mesh.material = srcMesh.material` by hand used to
+    // skip the material's geometry hook, so the worn shader landed on geometry
+    // with no curvature attributes: every k read as 0, every pixel took the
+    // base colour, and the node looked like it did nothing at all.
+    const res = MATERIAL_WORN_NODE.evaluate({}, MATERIAL_WORN_NODE.defaultParams, CTX);
+    const customMat = (res.material as any).customMaterial as THREE.Material;
+
+    const source = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1));
+    applyMaterialParams(source, res.material as any);
+    expect(source.geometry.getAttribute("aEdgeCurvatures")).toBeDefined();
+
+    const solidified = SOLIDIFY_NODE.evaluate(
+      { geometry: source },
+      { ...SOLIDIFY_NODE.defaultParams },
+      { time: 0, step: 0, nodeId: "worn-solidify" },
+    );
+    const out = solidified.geometry as THREE.Mesh;
+    expect(out.material).toBe(customMat);
+    expect(out.geometry.getAttribute("aEdgeCurvatures")).toBeDefined();
   });
 
   it("prepares geometry with barycentric attributes: outer box edges are convex (k>0) and internal quad diagonals are coplanar flat (k=0)", () => {

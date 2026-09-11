@@ -3,7 +3,7 @@ import { NodeDefinition } from "../types";
 import { clearMeshWarning, findFirstMesh, warnMeshRequired } from "../meshRequired";
 import { createNodeCache, disposeObject3D } from "../nodeCaches";
 import { asVector3, composeNativeMatrix } from "./transform";
-import { COMMON_PRIMITIVE_OUTPUTS, primitiveOutputs } from "./object";
+import { COMMON_PRIMITIVE_OUTPUTS, inheritSourceMaterial, primitiveOutputs } from "./object";
 
 
 export interface LatticeGridConfig {
@@ -809,7 +809,6 @@ export const LATTICE_DEFORM_NODE: NodeDefinition = {
     }
 
     state.deformedMesh.visible = true;
-    state.deformedMesh.material = srcMesh.material;
 
     // Source world transform. It has to be recomputed, not read: a node
     // feeding the lattice is no longer drawn itself — only the deformed
@@ -885,6 +884,9 @@ export const LATTICE_DEFORM_NODE: NodeDefinition = {
 
     state.deformedMesh.geometry.dispose();
     state.deformedMesh.geometry = geom;
+    // After the geometry, not before: a material with a geometry hook has to
+    // prepare the mesh that is actually drawn (see inheritSourceMaterial).
+    inheritSourceMaterial(state.deformedMesh, srcMesh.material);
 
     const deformedPosAttr = geom.attributes.position as THREE.BufferAttribute;
     const points: THREE.Vector3[] = new Array(deformedPosAttr.count);

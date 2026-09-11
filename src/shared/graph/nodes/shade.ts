@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { createNodeCache, disposeObject3D } from "../nodeCaches";
 import { NodeDefinition } from "../types";
 import { clearMeshWarning, findFirstMesh, warnMeshRequired } from "../meshRequired";
-import { primitiveOutputs } from "./object";
+import { inheritSourceMaterial, primitiveOutputs } from "./object";
 import { preserveModifierUserData } from "./transform";
 
 /**
@@ -317,7 +317,7 @@ export const SHADE_NODE: NodeDefinition = {
       state.mesh.matrixAutoUpdate = false;
       state.mesh.matrix.copy(srcMesh.matrixWorld);
       preserveModifierUserData(state.mesh, inputObj, srcMesh, ctx.nodeId);
-      state.mesh.material = srcMesh.material;
+      inheritSourceMaterial(state.mesh, srcMesh.material);
       return primitiveOutputs(state.mesh);
     }
 
@@ -329,12 +329,12 @@ export const SHADE_NODE: NodeDefinition = {
           : buildAutoSmoothGeometry(srcGeom, angleRad);
 
     if (!state.mesh) {
-      state.mesh = new THREE.Mesh(geometry, srcMesh.material);
+      state.mesh = new THREE.Mesh(geometry);
     } else {
       state.mesh.geometry.dispose();
       state.mesh.geometry = geometry;
-      state.mesh.material = srcMesh.material;
     }
+    inheritSourceMaterial(state.mesh, srcMesh.material);
     state.mesh.castShadow = srcMesh.castShadow;
     state.mesh.receiveShadow = srcMesh.receiveShadow;
     // See the cached-return branch above for why matrixWorld (not matrix)

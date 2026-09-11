@@ -3,7 +3,7 @@ import { mergeVertices } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { createNodeCache, disposeObject3D } from "../nodeCaches";
 import { NodeDefinition } from "../types";
 import { clearMeshWarning, findFirstMesh, warnMeshRequired } from "../meshRequired";
-import { numberInput, primitiveOutputs } from "./object";
+import { inheritSourceMaterial, numberInput, primitiveOutputs } from "./object";
 import { preserveModifierUserData } from "./transform";
 import { cloneQuadMesh, computeFaceNormal, QuadMesh, quadMeshToBufferGeometry } from "../quadMesh";
 
@@ -367,14 +367,14 @@ export const SOLIDIFY_NODE: NodeDefinition = {
     const solidifiedGeom = solidifyGeometry(srcGeom, { thickness, offset, rim });
 
     if (!state.mesh) {
-      state.mesh = new THREE.Mesh(solidifiedGeom, srcMesh.material);
+      state.mesh = new THREE.Mesh(solidifiedGeom);
       state.mesh.castShadow = true;
       state.mesh.receiveShadow = true;
     } else {
       state.mesh.geometry.dispose();
       state.mesh.geometry = solidifiedGeom;
-      state.mesh.material = srcMesh.material;
     }
+    inheritSourceMaterial(state.mesh, srcMesh.material);
 
     inputObj.updateMatrixWorld(true);
     state.mesh.matrixAutoUpdate = false;

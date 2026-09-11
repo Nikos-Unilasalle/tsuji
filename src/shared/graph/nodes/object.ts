@@ -356,6 +356,44 @@ export function extractMaterialParams(
  */
 const appliedMaterialSignatures = new WeakMap<THREE.Mesh, string>();
 
+/**
+ * Some materials need geometry attributes only they know how to compute —
+ * Worn's per-triangle curvature is the case in point — and expose a
+ * `__prepareGeometry` hook that returns the geometry to actually draw with.
+ * A material that lands on unprepared geometry reads those attributes as
+ * zero and renders as though it did nothing at all, which is exactly what
+ * the whole node looks like from the outside.
+ *
+ * The hook is idempotent (it returns the geometry untouched once the
+ * attributes are on it), so calling this wherever a material is assigned is
+ * cheap enough to be unconditional.
+ */
+export function prepareGeometryForMaterial(mesh: THREE.Mesh, material: THREE.Material | THREE.Material[] | null | undefined): void {
+  if (!material || !mesh.geometry) return;
+  for (const m of Array.isArray(material) ? material : [material]) {
+    const prepare = (m as any)?.__prepareGeometry;
+    if (typeof prepare !== "function") continue;
+    const prepared = prepare(mesh.geometry);
+    if (prepared instanceof THREE.BufferGeometry && prepared !== mesh.geometry) {
+      mesh.geometry = prepared;
+    }
+  }
+}
+
+/**
+ * A modifier inheriting its material straight off the source mesh, rather
+ * than from a wired Material input. Same as assigning `mesh.material`, but
+ * runs the material's geometry hook — the wired path gets that through
+ * applyMaterialParams, and a bare assignment used to skip it (see
+ * prepareGeometryForMaterial). Call it *after* the output geometry is in
+ * place, so the hook prepares the geometry that will actually be drawn.
+ */
+export function inheritSourceMaterial(mesh: THREE.Mesh, material: THREE.Material | THREE.Material[] | null | undefined): void {
+  if (!material) return;
+  mesh.material = material;
+  prepareGeometryForMaterial(mesh, material);
+}
+
 export function applyMaterialParams(
   mesh: THREE.Mesh,
   matParams: MaterialParams,
@@ -363,12 +401,7 @@ export function applyMaterialParams(
   texParams?: TextureParams
 ) {
   if (matParams.customMaterial) {
-    if (typeof (matParams.customMaterial as any).__prepareGeometry === "function" && mesh.geometry) {
-      const prepared = (matParams.customMaterial as any).__prepareGeometry(mesh.geometry);
-      if (prepared instanceof THREE.BufferGeometry && prepared !== mesh.geometry) {
-        mesh.geometry = prepared;
-      }
-    }
+    prepareGeometryForMaterial(mesh, matParams.customMaterial);
     const customSig = "custom:" + (matParams.customMaterial as THREE.Material).uuid;
     if (appliedMaterialSignatures.get(mesh) === customSig && mesh.material === matParams.customMaterial) return;
     appliedMaterialSignatures.set(mesh, customSig);

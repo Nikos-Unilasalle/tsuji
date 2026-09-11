@@ -4,7 +4,7 @@ import { createNodeCache, disposeObject3D } from "../nodeCaches";
 import { IndexedMesh, subdivide as runSubdivide, SubdivisionMode } from "../subdivision";
 import { NodeDefinition } from "../types";
 import { clearMeshWarning, findFirstMesh, warnMeshRequired } from "../meshRequired";
-import { primitiveOutputs } from "./object";
+import { inheritSourceMaterial, primitiveOutputs } from "./object";
 import { preserveModifierUserData } from "./transform";
 
 
@@ -244,14 +244,14 @@ export const SUBDIVIDE_NODE: NodeDefinition = {
     const geometry = (uvResult && toBufferGeometryWithUV(posResult, uvResult)) || toBufferGeometry(posResult);
 
     if (!state.mesh) {
-      state.mesh = new THREE.Mesh(geometry, srcMesh.material);
+      state.mesh = new THREE.Mesh(geometry);
       state.mesh.castShadow = true;
       state.mesh.receiveShadow = true;
     } else {
       state.mesh.geometry.dispose();
       state.mesh.geometry = geometry;
-      state.mesh.material = srcMesh.material;
     }
+    inheritSourceMaterial(state.mesh, srcMesh.material);
     // Same pose as whatever was plugged in — this node reshapes the
     // surface, it doesn't move it, so it has no location/rotation/scale of
     // its own the way Lattice Deform's cage does. See the cached-return

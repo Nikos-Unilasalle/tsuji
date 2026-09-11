@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { NodeDefinition } from "../types";
 import { clearMeshWarning, findFirstMesh, warnMeshRequired } from "../meshRequired";
 import { createNodeCache, disposeObject3D } from "../nodeCaches";
-import { primitiveOutputs } from "./object";
+import { inheritSourceMaterial, primitiveOutputs } from "./object";
 
 export interface ExtractedPoints {
   points: THREE.Vector3[];
@@ -312,7 +312,7 @@ export function writePointsToMesh(nodeId: string, inputObj: THREE.Object3D, poin
     geometry.computeVertexNormals();
   }
   geometry.computeBoundingSphere();
-  state.mesh.material = srcMesh.material;
+  inheritSourceMaterial(state.mesh, srcMesh.material);
 
   // matrixWorld, not matrix, and forced from the root — same reasoning as
   // extractPointsFromMesh above: srcMesh's own LOCAL matrix is identity when
