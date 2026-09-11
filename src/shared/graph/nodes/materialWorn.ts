@@ -4,128 +4,222 @@ import { NodeDefinition } from "../types";
 import { asColor, materialParamsFromValue, numberInput } from "./object";
 
 /**
- * Computes a normalized curvature attribute [-1..1] for a geometry.
- * Convex corners/ridges bend away from the normal: positive values (+1 = sharp peak/ridge).
- * Concave crevices/cavities bend towards the normal: negative values (-1 = deep crevice).
- * Flat surfaces: 0.
+ * Prepares a BufferGeometry with per-triangle barycentric coordinates and dihedral edge curvatures:
+ * - `aBarycentric`: (1,0,0), (0,1,0), (0,0,1) for each triangle
+ * - `aEdgeAltitudes`: perpendicular heights (h0, h1, h2) from vertices to edges in local units
+ * - `aEdgeCurvatures`: signed dihedral curvature (k0, k1, k2):
+ *     > 0 : convex ridge / outer corner (takes worn material)
+ *     < 0 : concave crease / inner valley (takes dirt material)
+ *     = 0 : flat / coplanar surface (takes base material)
  */
-export function computeGeometryCurvature(geometry: THREE.BufferGeometry): THREE.Float32BufferAttribute {
-  const posAttr = geometry.getAttribute("position");
-  if (!posAttr) return new THREE.Float32BufferAttribute(new Float32Array(0), 1);
+export function prepareWornGeometry(geometry: THREE.BufferGeometry): THREE.BufferGeometry {
+  if (geometry.getAttribute("aBarycentric") && geometry.getAttribute("aEdgeCurvatures")) {
+    return geometry;
+  }
+
+  // Convert to non-indexed so each triangle has unique vertices for barycentric coordinates
+  const nonIndexed = geometry.index ? geometry.toNonIndexed() : geometry.clone();
+  nonIndexed.userData = { ...geometry.userData };
+
+  const posAttr = nonIndexed.getAttribute("position");
+  if (!posAttr || posAttr.count < 3) return geometry;
 
   const count = posAttr.count;
-  const curvatures = new Float32Array(count);
-  const normAttr = geometry.getAttribute("normal");
+  const triCount = Math.floor(count / 3);
 
-  const index = geometry.getIndex();
-  const triCount = index ? index.count / 3 : Math.floor(count / 3);
+  const barycentrics = new Float32Array(count * 3);
+  const altitudes = new Float32Array(count * 3);
+  const edgeCurvatures = new Float32Array(count * 3);
 
-  // Group coincident vertices using spatial hashing (welds split normals/corners)
-  const spatialMap = new Map<string, number[]>();
-  for (let i = 0; i < count; i++) {
-    const x = Math.round(posAttr.getX(i) * 1000);
-    const y = Math.round(posAttr.getY(i) * 1000);
-    const z = Math.round(posAttr.getZ(i) * 1000);
-    const key = `${x}_${y}_${z}`;
-    let list = spatialMap.get(key);
-    if (!list) {
-      list = [];
-      spatialMap.set(key, list);
-    }
-    list.push(i);
+  const p0 = new THREE.Vector3();
+  const p1 = new THREE.Vector3();
+  const p2 = new THREE.Vector3();
+  const e0 = new THREE.Vector3();
+  const e1 = new THREE.Vector3();
+  const e2 = new THREE.Vector3();
+  const cross = new THREE.Vector3();
+
+  const triNormals: THREE.Vector3[] = new Array(triCount);
+  const triAltitudes: [number, number, number][] = new Array(triCount);
+
+  const hashV = (v: THREE.Vector3) =>
+    `${Math.round(v.x * 10000)}_${Math.round(v.y * 10000)}_${Math.round(v.z * 10000)}`;
+  const makeEdgeKey = (k1: string, k2: string) => (k1 < k2 ? `${k1}|${k2}` : `${k2}|${k1}`);
+
+  interface EdgeRef {
+    triIdx: number;
+    edgeIdx: number;
+    oppPos: THREE.Vector3;
   }
-
-  const getCanonical = (idx: number): number => {
-    const x = Math.round(posAttr.getX(idx) * 1000);
-    const y = Math.round(posAttr.getY(idx) * 1000);
-    const z = Math.round(posAttr.getZ(idx) * 1000);
-    const list = spatialMap.get(`${x}_${y}_${z}`);
-    return list && list.length > 0 ? list[0] : idx;
-  };
-
-  const neighbors = new Map<number, Set<number>>();
-  const addEdge = (i1: number, i2: number) => {
-    const c1 = getCanonical(i1);
-    const c2 = getCanonical(i2);
-    if (c1 === c2) return;
-    let s1 = neighbors.get(c1);
-    if (!s1) {
-      s1 = new Set();
-      neighbors.set(c1, s1);
-    }
-    s1.add(c2);
-    let s2 = neighbors.get(c2);
-    if (!s2) {
-      s2 = new Set();
-      neighbors.set(c2, s2);
-    }
-    s2.add(c1);
-  };
+  const edgeMap = new Map<string, EdgeRef[]>();
 
   for (let t = 0; t < triCount; t++) {
-    const i0 = index ? index.getX(t * 3) : t * 3;
-    const i1 = index ? index.getX(t * 3 + 1) : t * 3 + 1;
-    const i2 = index ? index.getX(t * 3 + 2) : t * 3 + 2;
-    addEdge(i0, i1);
-    addEdge(i1, i2);
-    addEdge(i2, i0);
+    p0.fromBufferAttribute(posAttr, t * 3);
+    p1.fromBufferAttribute(posAttr, t * 3 + 1);
+    p2.fromBufferAttribute(posAttr, t * 3 + 2);
+
+    e0.subVectors(p1, p0);
+    e1.subVectors(p2, p1);
+    e2.subVectors(p0, p2);
+
+    cross.crossVectors(e0, e2.clone().negate());
+    const area = cross.length() * 0.5;
+    const normal = area > 1e-8 ? cross.clone().normalize() : new THREE.Vector3(0, 1, 0);
+
+    triNormals[t] = normal;
+
+    const l0 = e0.length();
+    const l1 = e1.length();
+    const l2 = e2.length();
+
+    // Altitudes: perpendicular distance to edge opposite to the vertex
+    const h0 = l0 > 1e-6 ? (2 * area) / l0 : 0.001;
+    const h1 = l1 > 1e-6 ? (2 * area) / l1 : 0.001;
+    const h2 = l2 > 1e-6 ? (2 * area) / l2 : 0.001;
+    triAltitudes[t] = [h0, h1, h2];
+
+    const kP0 = hashV(p0);
+    const kP1 = hashV(p1);
+    const kP2 = hashV(p2);
+
+    const key0 = makeEdgeKey(kP0, kP1);
+    const key1 = makeEdgeKey(kP1, kP2);
+    const key2 = makeEdgeKey(kP2, kP0);
+
+    const addEdgeRef = (key: string, edgeIdx: number, oppPos: THREE.Vector3) => {
+      let list = edgeMap.get(key);
+      if (!list) {
+        list = [];
+        edgeMap.set(key, list);
+      }
+      list.push({ triIdx: t, edgeIdx, oppPos: oppPos.clone() });
+    };
+
+    addEdgeRef(key0, 0, p2);
+    addEdgeRef(key1, 1, p0);
+    addEdgeRef(key2, 2, p1);
   }
 
-  const pA = new THREE.Vector3();
-  const pB = new THREE.Vector3();
-  const nA = new THREE.Vector3();
-  const delta = new THREE.Vector3();
+  const triEdgeCurv: [number, number, number][] = Array.from({ length: triCount }, () => [0, 0, 0]);
 
-  const canonicalCurvature = new Map<number, number>();
-  for (const [c, nbrs] of neighbors.entries()) {
-    pA.fromBufferAttribute(posAttr, c);
-    if (normAttr) {
-      nA.fromBufferAttribute(normAttr, c);
-    } else {
-      nA.set(0, 1, 0);
-    }
+  for (let t = 0; t < triCount; t++) {
+    p0.fromBufferAttribute(posAttr, t * 3);
+    p1.fromBufferAttribute(posAttr, t * 3 + 1);
+    p2.fromBufferAttribute(posAttr, t * 3 + 2);
 
-    if (nbrs.size === 0) {
-      canonicalCurvature.set(c, 0);
-      continue;
-    }
+    const kP0 = hashV(p0);
+    const kP1 = hashV(p1);
+    const kP2 = hashV(p2);
 
-    let sum = 0;
-    for (const nbr of nbrs) {
-      pB.fromBufferAttribute(posAttr, nbr);
-      delta.subVectors(pB, pA);
-      const len = delta.length();
-      if (len > 1e-6) {
-        delta.divideScalar(len);
-        // Convex: neighbor points away from outward normal (delta . nA < 0) -> positive curvature
-        // Concave: neighbor points towards inward cavity (delta . nA > 0) -> negative curvature
-        sum -= delta.dot(nA);
+    const keys = [makeEdgeKey(kP0, kP1), makeEdgeKey(kP1, kP2), makeEdgeKey(kP2, kP0)];
+    const edgeMidpoints = [
+      new THREE.Vector3((p0.x + p1.x) * 0.5, (p0.y + p1.y) * 0.5, (p0.z + p1.z) * 0.5),
+      new THREE.Vector3((p1.x + p2.x) * 0.5, (p1.y + p2.y) * 0.5, (p1.z + p2.z) * 0.5),
+      new THREE.Vector3((p2.x + p0.x) * 0.5, (p2.y + p0.y) * 0.5, (p2.z + p0.z) * 0.5),
+    ];
+
+    const n1 = triNormals[t];
+
+    for (let e = 0; e < 3; e++) {
+      const refs = edgeMap.get(keys[e]);
+      if (!refs || refs.length <= 1) {
+        // Open boundary edge: treated as convex edge
+        triEdgeCurv[t][e] = 1.0;
+        continue;
+      }
+
+      const neighbor = refs.find((r) => r.triIdx !== t);
+      if (!neighbor) {
+        triEdgeCurv[t][e] = 1.0;
+        continue;
+      }
+
+      const n2 = triNormals[neighbor.triIdx];
+      const dot = Math.max(-1, Math.min(1, n1.dot(n2)));
+
+      // If normals are coplanar, curvature is strictly 0 (FLAT SURFACE)
+      if (dot > 0.999) {
+        triEdgeCurv[t][e] = 0.0;
+        continue;
+      }
+
+      // Check whether neighbor bends away from normal (convex) or towards normal (concave)
+      const mid = edgeMidpoints[e];
+      const dirToOpp = neighbor.oppPos.clone().sub(mid);
+      const proj = dirToOpp.dot(n1);
+
+      const angleWeight = Math.max(0, 1.0 - dot);
+
+      if (proj < -1e-5) {
+        // Convex ridge/corner
+        triEdgeCurv[t][e] = angleWeight;
+      } else if (proj > 1e-5) {
+        // Concave crease/valley
+        triEdgeCurv[t][e] = -angleWeight;
+      } else {
+        triEdgeCurv[t][e] = 0.0;
       }
     }
-    const avg = sum / nbrs.size;
-    canonicalCurvature.set(c, Math.max(-1, Math.min(1, avg * 2.0)));
   }
 
-  for (let i = 0; i < count; i++) {
-    const c = getCanonical(i);
-    curvatures[i] = canonicalCurvature.get(c) ?? 0;
+  for (let t = 0; t < triCount; t++) {
+    const [h0, h1, h2] = triAltitudes[t];
+    const [k0, k1, k2] = triEdgeCurv[t];
+
+    const baseIdx = t * 3;
+
+    // Vertex 0: barycentric (1, 0, 0)
+    barycentrics[baseIdx * 3] = 1;
+    barycentrics[baseIdx * 3 + 1] = 0;
+    barycentrics[baseIdx * 3 + 2] = 0;
+
+    altitudes[baseIdx * 3] = h0;
+    altitudes[baseIdx * 3 + 1] = h1;
+    altitudes[baseIdx * 3 + 2] = h2;
+
+    edgeCurvatures[baseIdx * 3] = k0;
+    edgeCurvatures[baseIdx * 3 + 1] = k1;
+    edgeCurvatures[baseIdx * 3 + 2] = k2;
+
+    // Vertex 1: barycentric (0, 1, 0)
+    const idx1 = baseIdx + 1;
+    barycentrics[idx1 * 3] = 0;
+    barycentrics[idx1 * 3 + 1] = 1;
+    barycentrics[idx1 * 3 + 2] = 0;
+
+    altitudes[idx1 * 3] = h0;
+    altitudes[idx1 * 3 + 1] = h1;
+    altitudes[idx1 * 3 + 2] = h2;
+
+    edgeCurvatures[idx1 * 3] = k0;
+    edgeCurvatures[idx1 * 3 + 1] = k1;
+    edgeCurvatures[idx1 * 3 + 2] = k2;
+
+    // Vertex 2: barycentric (0, 0, 1)
+    const idx2 = baseIdx + 2;
+    barycentrics[idx2 * 3] = 0;
+    barycentrics[idx2 * 3 + 1] = 0;
+    barycentrics[idx2 * 3 + 2] = 1;
+
+    altitudes[idx2 * 3] = h0;
+    altitudes[idx2 * 3 + 1] = h1;
+    altitudes[idx2 * 3 + 2] = h2;
+
+    edgeCurvatures[idx2 * 3] = k0;
+    edgeCurvatures[idx2 * 3 + 1] = k1;
+    edgeCurvatures[idx2 * 3 + 2] = k2;
   }
 
-  return new THREE.Float32BufferAttribute(curvatures, 1);
-}
+  nonIndexed.setAttribute("aBarycentric", new THREE.Float32BufferAttribute(barycentrics, 3));
+  nonIndexed.setAttribute("aEdgeAltitudes", new THREE.Float32BufferAttribute(altitudes, 3));
+  nonIndexed.setAttribute("aEdgeCurvatures", new THREE.Float32BufferAttribute(edgeCurvatures, 3));
 
-/**
- * Ensures that a geometry has a precomputed `curvature` vertex attribute.
- */
-export function ensureCurvatureAttribute(geometry: THREE.BufferGeometry): void {
-  if (geometry.getAttribute("curvature")) return;
-  const attr = computeGeometryCurvature(geometry);
-  geometry.setAttribute("curvature", attr);
+  return nonIndexed;
 }
 
 /**
  * Creates an edge-worn, crevice-dirt MeshStandardMaterial powered by PBR lighting,
- * geometry/screen-space curvature, and procedural Simplex 3D noise.
+ * geometry edge curvature, and procedural Simplex 3D noise.
  */
 export function createWornMaterial(): THREE.MeshStandardMaterial {
   const mat = new THREE.MeshStandardMaterial({
@@ -135,9 +229,8 @@ export function createWornMaterial(): THREE.MeshStandardMaterial {
 
   (mat as any).__isSharedCustom = true;
   (mat as any).__isWornMaterial = true;
-  (mat as any).__needsCurvature = true;
   (mat as any).__prepareGeometry = (geometry: THREE.BufferGeometry) => {
-    ensureCurvatureAttribute(geometry);
+    return prepareWornGeometry(geometry);
   };
 
   const uniforms = {
@@ -163,19 +256,22 @@ export function createWornMaterial(): THREE.MeshStandardMaterial {
   (mat as any).__wornUniforms = uniforms;
 
   mat.onBeforeCompile = (shader) => {
-    // Copy active uniforms into shader uniforms
     for (const [k, v] of Object.entries(uniforms)) {
       shader.uniforms[k] = v;
     }
     (mat as any).__shaderUniforms = shader.uniforms;
 
-    // 1. Vertex Shader modifications
     shader.vertexShader = shader.vertexShader.replace(
       "#include <common>",
       `
       #include <common>
-      attribute float curvature;
-      varying float vWornCurvature;
+      attribute vec3 aBarycentric;
+      attribute vec3 aEdgeAltitudes;
+      attribute vec3 aEdgeCurvatures;
+
+      varying vec3 vWornBary;
+      varying vec3 vWornAltitudes;
+      varying vec3 vWornEdgeCurv;
       varying vec3 vWornWorldPos;
       `
     );
@@ -184,12 +280,13 @@ export function createWornMaterial(): THREE.MeshStandardMaterial {
       "#include <begin_vertex>",
       `
       #include <begin_vertex>
-      vWornCurvature = curvature;
+      vWornBary = aBarycentric;
+      vWornAltitudes = aEdgeAltitudes;
+      vWornEdgeCurv = aEdgeCurvatures;
       vWornWorldPos = (modelMatrix * vec4(transformed, 1.0)).xyz;
       `
     );
 
-    // 2. Fragment Shader modifications
     shader.fragmentShader = shader.fragmentShader.replace(
       "#include <common>",
       `
@@ -212,7 +309,9 @@ export function createWornMaterial(): THREE.MeshStandardMaterial {
       uniform float uNoise;
       uniform float uNoiseScale;
 
-      varying float vWornCurvature;
+      varying vec3 vWornBary;
+      varying vec3 vWornAltitudes;
+      varying vec3 vWornEdgeCurv;
       varying vec3 vWornWorldPos;
 
       // 3D Simplex noise
@@ -272,35 +371,56 @@ export function createWornMaterial(): THREE.MeshStandardMaterial {
       `
       #include <color_fragment>
 
-      // Screen-space differential normal curvature fallback
-      vec3 dPdx = dFdx(vViewPosition);
-      vec3 dPdy = dFdy(vViewPosition);
-      vec3 dNdx = dFdx(vNormal);
-      vec3 dNdy = dFdy(vNormal);
-      float screenCurv = (dot(dNdx, dPdx) / (dot(dPdx, dPdx) + 1e-4) + dot(dNdy, dPdy) / (dot(dPdy, dPdy) + 1e-4)) * 0.25;
+      // Distance from pixel to each of the 3 triangle edges in local units
+      float d0 = vWornBary.z * vWornAltitudes.x;
+      float d1 = vWornBary.x * vWornAltitudes.y;
+      float d2 = vWornBary.y * vWornAltitudes.z;
 
-      // Combined curvature (vertex curvature + screen derivative)
-      float totalCurv = clamp(vWornCurvature + screenCurv, -1.0, 1.0);
+      float k0 = vWornEdgeCurv.x;
+      float k1 = vWornEdgeCurv.y;
+      float k2 = vWornEdgeCurv.z;
 
-      // Organic noise modulation
-      float noiseVal = snoiseWorn(vWornWorldPos * uNoiseScale);
-      float noiseMod = noiseVal * uNoise;
+      // 3D simplex noise for organic edge breakup
+      float n = snoiseWorn(vWornWorldPos * uNoiseScale);
+      float noiseMod = 1.0 + (n - 0.5) * uNoise * 1.5;
 
-      // Convex Wear factor (ridges, corners, edges)
-      float wearTarget = clamp((totalCurv * 0.5 + 0.5) + noiseMod, 0.0, 1.0);
-      float wearCutoff = 1.0 - clamp(uWearAmount, 0.0, 0.99);
-      float wearTransition = max(0.01, 0.5 / max(0.1, uContrast));
-      float wearFactor = smoothstep(wearCutoff, min(1.0, wearCutoff + wearTransition), wearTarget);
-      wearFactor *= step(0.001, uWearAmount);
+      // Effective radii: multiplied by noiseMod so edge breakup is organic
+      // without ever generating wear or dirt on flat faces away from edges
+      float wearRadius = max(0.0001, uWearAmount * 0.25) * max(0.05, noiseMod);
+      float dirtRadius = max(0.0001, uDirtAmount * 0.25) * max(0.05, noiseMod);
 
-      // Concave Dirt factor (crevices, cavities, grooves)
-      float dirtTarget = clamp((0.5 - totalCurv * 0.5) + noiseMod, 0.0, 1.0);
-      float dirtCutoff = 1.0 - clamp(uDirtAmount, 0.0, 0.99);
-      float dirtTransition = max(0.01, 0.5 / max(0.1, uContrast));
-      float dirtFactor = smoothstep(dirtCutoff, min(1.0, dirtCutoff + dirtTransition), dirtTarget);
-      dirtFactor *= step(0.001, uDirtAmount);
+      float wearFactor = 0.0;
+      float dirtFactor = 0.0;
 
-      // Color blending
+      // Convex Wear (k > 0): strictly applies to convex edges
+      if (k0 > 0.05 && uWearAmount > 0.001) {
+        wearFactor = max(wearFactor, smoothstep(wearRadius, 0.0, d0) * clamp(k0, 0.0, 1.0));
+      }
+      if (k1 > 0.05 && uWearAmount > 0.001) {
+        wearFactor = max(wearFactor, smoothstep(wearRadius, 0.0, d1) * clamp(k1, 0.0, 1.0));
+      }
+      if (k2 > 0.05 && uWearAmount > 0.001) {
+        wearFactor = max(wearFactor, smoothstep(wearRadius, 0.0, d2) * clamp(k2, 0.0, 1.0));
+      }
+
+      // Concave Dirt (k < 0): strictly applies to concave edges/creases
+      if (k0 < -0.05 && uDirtAmount > 0.001) {
+        dirtFactor = max(dirtFactor, smoothstep(dirtRadius, 0.0, d0) * clamp(-k0, 0.0, 1.0));
+      }
+      if (k1 < -0.05 && uDirtAmount > 0.001) {
+        dirtFactor = max(dirtFactor, smoothstep(dirtRadius, 0.0, d1) * clamp(-k1, 0.0, 1.0));
+      }
+      if (k2 < -0.05 && uDirtAmount > 0.001) {
+        dirtFactor = max(dirtFactor, smoothstep(dirtRadius, 0.0, d2) * clamp(-k2, 0.0, 1.0));
+      }
+
+      // Contrast shaping
+      if (uContrast > 0.1 && uContrast != 1.0) {
+        wearFactor = pow(wearFactor, 1.0 / max(0.1, uContrast));
+        dirtFactor = pow(dirtFactor, 1.0 / max(0.1, uContrast));
+      }
+
+      // Base color blending: on flat surfaces, wearFactor == 0 and dirtFactor == 0 -> 100% uBaseColor!
       vec3 blendedCol = uBaseColor;
       blendedCol = mix(blendedCol, uDirtColor, dirtFactor);
       blendedCol = mix(blendedCol, uWornColor, wearFactor);
@@ -400,19 +520,16 @@ export const MATERIAL_WORN_NODE: NodeDefinition = {
       wornMaterialCache.set(ctx.nodeId, mat);
     }
 
-    // Resolve base material properties
     const baseConn = materialParamsFromValue(inputs.base);
     const baseColor = baseConn ? baseConn.color : asColor(params.baseColor, new THREE.Color(0x3a4a58));
     const baseRoughness = baseConn ? baseConn.roughness : numberInput(undefined, params.baseRoughness, 0.6);
     const baseMetalness = baseConn ? baseConn.metalness : numberInput(undefined, params.baseMetalness, 0.1);
 
-    // Resolve worn material properties
     const wornConn = materialParamsFromValue(inputs.worn);
     const wornColor = wornConn ? wornConn.color : asColor(params.wornColor, new THREE.Color(0xdcdcdc));
     const wornRoughness = wornConn ? wornConn.roughness : numberInput(undefined, params.wornRoughness, 0.25);
     const wornMetalness = wornConn ? wornConn.metalness : numberInput(undefined, params.wornMetalness, 0.9);
 
-    // Resolve dirt material properties
     const dirtConn = materialParamsFromValue(inputs.dirt);
     const dirtColor = dirtConn ? dirtConn.color : asColor(params.dirtColor, new THREE.Color(0x1e1510));
     const dirtRoughness = dirtConn ? dirtConn.roughness : numberInput(undefined, params.dirtRoughness, 0.95);
@@ -424,7 +541,6 @@ export const MATERIAL_WORN_NODE: NodeDefinition = {
     const noise = Math.max(0, Math.min(1, numberInput(inputs.noise, params.noise, 0.35)));
     const noiseScale = Math.max(0.1, Math.min(50, numberInput(inputs.noiseScale, params.noiseScale, 6.0)));
 
-    // Update uniforms
     const u = (mat as any).__wornUniforms;
     if (u) {
       u.uBaseColor.value.copy(baseColor);

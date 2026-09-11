@@ -1,12 +1,12 @@
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 import { EvalContext } from "../types";
-import { MATERIAL_WORN_NODE, computeGeometryCurvature, ensureCurvatureAttribute } from "./materialWorn";
+import { MATERIAL_WORN_NODE, prepareWornGeometry } from "./materialWorn";
 import { MATERIAL_NODE } from "./material";
 
 const CTX: EvalContext = { time: 0, step: 0, nodeId: "worn-test" };
 
-describe("MATERIAL_WORN_NODE and Curvature computation", () => {
+describe("MATERIAL_WORN_NODE and Edge Curvature computation", () => {
   it("evaluates MATERIAL_WORN_NODE and creates a custom MeshStandardMaterial with curvature uniforms", () => {
     const res = MATERIAL_WORN_NODE.evaluate({}, MATERIAL_WORN_NODE.defaultParams, CTX);
     expect(res.material).toBeDefined();
@@ -16,7 +16,6 @@ describe("MATERIAL_WORN_NODE and Curvature computation", () => {
     const customMat = matParams.customMaterial as THREE.MeshStandardMaterial;
 
     expect((customMat as any).__isWornMaterial).toBe(true);
-    expect((customMat as any).__needsCurvature).toBe(true);
 
     const u = (customMat as any).__wornUniforms;
     expect(u).toBeDefined();
@@ -26,19 +25,16 @@ describe("MATERIAL_WORN_NODE and Curvature computation", () => {
   });
 
   it("extracts and blends 3 connected input materials (base, worn, dirt)", () => {
-    // 1. Red base
     const baseMatRes = MATERIAL_NODE.evaluate(
       {},
       { color: new THREE.Color(0xff0000), roughness: 0.7, metalness: 0.2 },
       { time: 0, step: 0, nodeId: "base-mat" }
     );
-    // 2. Gold worn
     const wornMatRes = MATERIAL_NODE.evaluate(
       {},
       { color: new THREE.Color(0xffd700), roughness: 0.1, metalness: 0.95 },
       { time: 0, step: 0, nodeId: "worn-mat" }
     );
-    // 3. Black dirt
     const dirtMatRes = MATERIAL_NODE.evaluate(
       {},
       { color: new THREE.Color(0x111111), roughness: 0.9, metalness: 0.0 },
@@ -60,7 +56,6 @@ describe("MATERIAL_WORN_NODE and Curvature computation", () => {
     const customMat = (res.material as any).customMaterial;
     const u = customMat.__wornUniforms;
 
-    // Check that custom inputs propagated to shader uniforms
     expect(u.uBaseColor.value.getHexString()).toBe("ff0000");
     expect(u.uBaseRoughness.value).toBeCloseTo(0.7);
     expect(u.uBaseMetalness.value).toBeCloseTo(0.2);
@@ -74,23 +69,85 @@ describe("MATERIAL_WORN_NODE and Curvature computation", () => {
     expect(u.uDirtAmount.value).toBeCloseTo(0.3);
   });
 
-  it("computes positive curvature (convex) on outer box corners and near-zero on plane", () => {
-    const plane = new THREE.PlaneGeometry(2, 2, 4, 4);
-    const planeCurv = computeGeometryCurvature(plane);
-    // Interior and boundary plane vertices are flat
-    let maxPlaneCurv = 0;
-    for (let i = 0; i < planeCurv.count; i++) {
-      maxPlaneCurv = Math.max(maxPlaneCurv, Math.abs(planeCurv.getX(i)));
-    }
-    expect(maxPlaneCurv).toBeLessThan(0.01);
-
+  it("prepares geometry with barycentric attributes: outer box edges are convex (k>0) and internal quad diagonals are coplanar flat (k=0)", () => {
     const box = new THREE.BoxGeometry(2, 2, 2);
-    ensureCurvatureAttribute(box);
-    const boxCurv = box.getAttribute("curvature") as THREE.BufferAttribute;
-    expect(boxCurv).toBeDefined();
-    // All corners of a box are strictly convex (positive curvature)
-    for (let i = 0; i < boxCurv.count; i++) {
-      expect(boxCurv.getX(i)).toBeGreaterThan(0.2);
+    const prepared = prepareWornGeometry(box);
+
+    const bary = prepared.getAttribute("aBarycentric");
+    const altitudes = prepared.getAttribute("aEdgeAltitudes");
+    const edgeCurv = prepared.getAttribute("aEdgeCurvatures");
+
+    expect(bary).toBeDefined();
+    expect(altitudes).toBeDefined();
+    expect(edgeCurv).toBeDefined();
+
+    // In a Box, 12 triangles total (36 vertices in non-indexed)
+    expect(prepared.getAttribute("position").count).toBe(36);
+
+    let hasConvexEdge = false;
+    let hasFlatCoplanarEdge = false;
+
+    for (let i = 0; i < edgeCurv.count; i += 3) {
+      const k0 = edgeCurv.getX(i);
+      const k1 = edgeCurv.getY(i);
+      const k2 = edgeCurv.getZ(i);
+
+      if (k0 > 0.5 || k1 > 0.5 || k2 > 0.5) hasConvexEdge = true;
+      if (Math.abs(k0) < 0.01 || Math.abs(k1) < 0.01 || Math.abs(k2) < 0.01) hasFlatCoplanarEdge = true;
     }
+
+    expect(hasConvexEdge).toBe(true);
+    expect(hasFlatCoplanarEdge).toBe(true);
+  });
+
+  it("detects concave inner corner edges (k < 0)", () => {
+    // Construct an L-shaped corner of two perpendicular triangles facing inward
+    // Triangle 1 on floor (facing up): (0,0,0), (1,0,0), (1,0,1)
+    // Triangle 2 on wall (facing left): (0,0,0), (0,1,0), (0,1,1) -> meets floor at edge (0,0,0)-(0,0,1)
+    const geom = new THREE.BufferGeometry();
+    const positions = new Float32Array([
+      // Triangle 1 (floor, normal (0, 1, 0))
+      0, 0, 0,
+      0, 0, 1,
+      1, 0, 0,
+      // Triangle 2 (wall, normal (1, 0, 0))
+      0, 0, 0,
+      0, 1, 0,
+      0, 0, 1,
+    ]);
+    geom.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+
+    const prepared = prepareWornGeometry(geom);
+    const edgeCurv = prepared.getAttribute("aEdgeCurvatures");
+
+    let foundConcave = false;
+    for (let i = 0; i < edgeCurv.count; i++) {
+      if (edgeCurv.getX(i) < -0.5 || edgeCurv.getY(i) < -0.5 || edgeCurv.getZ(i) < -0.5) {
+        foundConcave = true;
+        break;
+      }
+    }
+    expect(foundConcave).toBe(true);
+  });
+
+  it("guarantees internal edges of a flat subdivided plane have strictly zero curvature (k=0)", () => {
+    // 2x2 grid plane (4 quads = 8 triangles)
+    const plane = new THREE.PlaneGeometry(4, 4, 2, 2);
+    const prepared = prepareWornGeometry(plane);
+    const edgeCurv = prepared.getAttribute("aEdgeCurvatures");
+
+    let flatInternalEdgesCount = 0;
+    for (let i = 0; i < edgeCurv.count; i += 3) {
+      const k0 = edgeCurv.getX(i);
+      const k1 = edgeCurv.getY(i);
+      const k2 = edgeCurv.getZ(i);
+
+      if (Math.abs(k0) < 0.001) flatInternalEdgesCount++;
+      if (Math.abs(k1) < 0.001) flatInternalEdgesCount++;
+      if (Math.abs(k2) < 0.001) flatInternalEdgesCount++;
+    }
+
+    // All internal edges connecting adjacent triangles of the flat plane must be strictly 0
+    expect(flatInternalEdgesCount).toBeGreaterThan(0);
   });
 });
