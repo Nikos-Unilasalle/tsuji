@@ -304,20 +304,14 @@ export function VectorFieldControl({
                 const startVal = startSnap[axisKey] ?? 0;
                 const updated = v.clone();
 
-                if (Math.abs(startVal) > 1e-7) {
-                  // Proportional scale to preserve ratio
-                  const factor = next / startVal;
-                  for (const k of axes) {
-                    const disp = k === axisKey ? next : startSnap[k] * factor;
-                    updated[k] = toStoredUnit(disp, field.degrees);
-                  }
-                } else {
-                  // Start value was 0: apply delta uniformly
-                  const delta = next - startVal;
-                  for (const k of axes) {
-                    const disp = k === axisKey ? next : startSnap[k] + delta;
-                    updated[k] = toStoredUnit(disp, field.degrees);
-                  }
+                // Move every axis by the same amount the dragged axis moved,
+                // so they rise together regardless of starting value — a
+                // proportional scale would leave a zero-valued axis stuck at
+                // zero (0 * factor is always 0) even while the others climb.
+                const delta = next - startVal;
+                for (const k of axes) {
+                  const disp = k === axisKey ? next : startSnap[k] + delta;
+                  updated[k] = toStoredUnit(disp, field.degrees);
                 }
 
                 if (is2D) {
