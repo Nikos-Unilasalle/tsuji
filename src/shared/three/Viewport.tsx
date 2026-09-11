@@ -29,6 +29,21 @@ import { applyWeldedPointMoves, EDIT_MESH_POINTS_NODE } from "../graph/nodes/edi
 import { POINTS_INFLUENCE_NODE, POINTS_INFLUENCE_DISCRETE_LEVELS, PointsInfluenceMode } from "../graph/nodes/pointsInfluence";
 import { FACE_SELECTION_NODE } from "../graph/nodes/meshEdit";
 import { createFaceSelectionHandles } from "./faceSelectionHandles";
+import {
+  EDIT_MESH_NODE,
+  EDIT_MESH_EXTRUDE_ACTION,
+  EDIT_MESH_INSET_ACTION,
+  EDIT_MESH_RESEED_ACTION,
+} from "../graph/nodes/editMesh";
+import { createEditMeshHandles } from "./editMeshHandles";
+import {
+  QuadMesh,
+  cloneQuadMesh,
+  createQuadBox,
+  getLoopCutPreviewSegments,
+  loopCut,
+  transformSelection,
+} from "../graph/quadMesh";
 import { createPostProcessChain } from "./postProcessChain";
 import { computeGizmoWriteback, TransformGizmoMode, TransformPatch } from "./gizmoWriteback";
 
@@ -506,7 +521,8 @@ interface ViewportProps {
   keyframes?: KeyframeStore;
   keyframesEnabled?: boolean;
   evaluatedResults?: EvalResult | null;
-  onParamChange?: (paramId: string, value: unknown, targetNodeId?: string) => void;
+  onParamChange?: (paramId: string | Record<string, unknown>, value?: unknown, targetNodeId?: string) => void;
+  onParamAction?: (nodeId: string, action: string) => void;
   onUnpinParam?: (nodeId: string, paramId: string) => void;
   onRenameExposedParam?: (nodeId: string, paramId: string, label: string) => void;
   mode2D?: boolean;
@@ -553,6 +569,7 @@ export function Viewport({
   keyframesEnabled = true,
   evaluatedResults = null,
   onParamChange,
+  onParamAction,
   onUnpinParam,
   onRenameExposedParam,
   mode2D = false,
@@ -653,6 +670,8 @@ export function Viewport({
   // Grease Pencil drawing state
   const onParamChangeRef = useRef(onParamChange);
   onParamChangeRef.current = onParamChange;
+  const onParamActionRef = useRef(onParamAction);
+  onParamActionRef.current = onParamAction;
   const [internalGpTool, setInternalGpTool] = useState<GpToolMode>("pen");
   const gpTool = gpToolProp !== undefined ? gpToolProp : internalGpTool;
   const setGpTool = (action: React.SetStateAction<GpToolMode>) => {
@@ -679,6 +698,20 @@ export function Viewport({
   const gpPressureModifierRef = useRef(1.0);
   const gpWorkingFramesRef = useRef<KeyframeDrawing[] | null>(null);
   const gpSmoothedWorldPosRef = useRef<THREE.Vector3 | null>(null);
+
+  // Edit Mesh modeling state
+  const [editMeshTool, setEditMeshTool] = useState<"select" | "extrude" | "loopcut" | "inset">("select");
+  const editMeshToolRef = useRef<"select" | "extrude" | "loopcut" | "inset">("select");
+  editMeshToolRef.current = editMeshTool;
+  const editMeshHoverFaceRef = useRef<number | null>(null);
+  const editMeshPreviewLoopRef = useRef<[ [number, number, number], [number, number, number] ][] | null>(null);
+  const editMeshRectDragRef = useRef<{ startX: number; startY: number; currentX: number; currentY: number } | null>(null);
+  const editMeshPaintDragRef = useRef<boolean>(false);
+  const [editMeshPaintCursor, setEditMeshPaintCursor] = useState<{ x: number; y: number } | null>(null);
+  const [editMeshLoopCuts, setEditMeshLoopCuts] = useState<number>(1);
+  const editMeshLoopCutsRef = useRef<number>(1);
+  editMeshLoopCutsRef.current = editMeshLoopCuts;
+  const editMeshHoverEdgeRef = useRef<[number, number] | null>(null);
 
   // Terrain sculpting state
   const [terrainBrushTool, setTerrainBrushTool] = useState<TerrainBrushTool>("sculpt");
@@ -1201,6 +1234,13 @@ export function Viewport({
      */
     let lastCommittedFaceKey = "";
 
+    // Edit Mesh editing — box modeling tools (extrude, inset, loop cut)
+    // with pure quad wireframe and centroid-anchored gizmo
+    const editMeshHandles = createEditMeshHandles();
+    const editMeshCentroidProxy = new THREE.Object3D();
+    editMeshCentroidProxy.userData.isEditMeshCentroidProxy = true;
+    let dragStartMeshData: QuadMesh | null = null;
+
     // Points Influence editing — same generic point-cloud handles again, this
     // time colored as a heatmap of a graded 0-1 influence instead of a
     // binary selected/unselected. Three gestures write into the same
@@ -1380,6 +1420,8 @@ export function Viewport({
       // through the object) so it is occluded like the surface it sits on.
       // Empty when no Face Selection node is selected, so it never renders.
       scene.add(faceSelectionHandles.group);
+      scene.add(editMeshHandles.group);
+      editorUiScene.add(editMeshCentroidProxy);
     }
     // Refreshed every tick() — the 'objectChange' listener needs the
     // *current* base matrix for an "offset" target (see below), and this is
@@ -1477,9 +1519,21 @@ export function Viewport({
         return;
       }
 
-      if (e.metaKey || e.ctrlKey || e.altKey) return;
-
       const key = e.key.toLowerCase();
+
+      // Edit Mesh shortcut: Ctrl+R (or Cmd+R) for Loop Cut
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && key === "r") {
+        const activeEditMeshNode = selectedNodeIdRef.current
+          ? graphRef.current.nodes.find((n) => n.id === selectedNodeIdRef.current && n.type === EDIT_MESH_NODE.type)
+          : null;
+        if (activeEditMeshNode) {
+          e.preventDefault();
+          setEditMeshTool((t) => (t === "loopcut" ? "select" : "loopcut"));
+          return;
+        }
+      }
+
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
 
       // Curve control point editing — checked before the gizmo/camera keys so
       // they only take over while a point is picked.
@@ -1490,6 +1544,30 @@ export function Viewport({
       if (key === "d" && editPickedCurvePoint("remove")) {
         e.preventDefault();
         return;
+      }
+
+      // Edit Mesh keyboard shortcuts
+      const activeEditMeshNode = selectedNodeIdRef.current
+        ? graphRef.current.nodes.find((n) => n.id === selectedNodeIdRef.current && n.type === EDIT_MESH_NODE.type)
+        : null;
+      if (activeEditMeshNode) {
+        if (key === "1") {
+          e.preventDefault();
+          onParamChangeRef.current?.("selectMode", "points", activeEditMeshNode.id);
+          return;
+        } else if (key === "3") {
+          e.preventDefault();
+          onParamChangeRef.current?.("selectMode", "faces", activeEditMeshNode.id);
+          return;
+        } else if (key === "e") {
+          e.preventDefault();
+          onParamActionRef.current?.(activeEditMeshNode.id, EDIT_MESH_EXTRUDE_ACTION);
+          return;
+        } else if (key === "i") {
+          e.preventDefault();
+          onParamActionRef.current?.(activeEditMeshNode.id, EDIT_MESH_INSET_ACTION);
+          return;
+        }
       }
 
       // Gizmo mode shortcuts: G (translate), R (rotate), S (scale)
@@ -1587,6 +1665,15 @@ export function Viewport({
               const pos = handle ? handle.position.clone() : asVector3(rawList[idx], new THREE.Vector3());
               dragStartPointPositions.set(idx, pos);
             });
+          }
+          if (transformControls.object?.userData?.isEditMeshCentroidProxy) {
+            const centroid = transformControls.object;
+            dragStartCentroidPos.copy(centroid.position);
+            dragStartCentroidQuat.copy(centroid.quaternion);
+            dragStartCentroidScale.copy(centroid.scale);
+            const node = graphRef.current.nodes.find((n) => n.id === selectedNodeIdRef.current);
+            const rawMesh = node?.params?.meshData as QuadMesh | undefined;
+            dragStartMeshData = rawMesh ? cloneQuadMesh(rawMesh) : createQuadBox(1, 1, 1);
           }
         }
         if (!event.value) suppressNextClick = true;
@@ -1825,6 +1912,63 @@ export function Viewport({
           return;
         }
 
+        // Edit Mesh selection centroid drag: loc/rot/scale
+        if (object.userData?.isEditMeshCentroidProxy) {
+          const node = graphRef.current.nodes.find((n) => n.id === selectedNodeIdRef.current);
+          if (!node || !dragStartMeshData || !onParamChangeRef.current) return;
+
+          const deltaQuat = new THREE.Quaternion().copy(object.quaternion).multiply(dragStartCentroidQuat.clone().invert());
+          const deltaScaleX = dragStartCentroidScale.x !== 0 ? object.scale.x / dragStartCentroidScale.x : 1;
+          const deltaScaleY = dragStartCentroidScale.y !== 0 ? object.scale.y / dragStartCentroidScale.y : 1;
+          const deltaScaleZ = dragStartCentroidScale.z !== 0 ? object.scale.z / dragStartCentroidScale.z : 1;
+          const worldDeltaPos = new THREE.Vector3().subVectors(object.position, dragStartCentroidPos);
+
+          const meshObj = latestResultsRef.current?.get(node.id)?.geometry;
+          const srcMesh = meshObj instanceof THREE.Object3D ? findFirstMesh(meshObj) : null;
+          const meshWorldMat = srcMesh ? srcMesh.matrixWorld : new THREE.Matrix4();
+          const invWorldMat = meshWorldMat.clone().invert();
+
+          const localDeltaPos = worldDeltaPos.clone().applyMatrix4(invWorldMat).sub(new THREE.Vector3().applyMatrix4(invWorldMat));
+
+          const selectMode = (node.params.selectMode as "points" | "faces") || "faces";
+          const selectedIndices = selectMode === "points"
+            ? (Array.isArray(node.params.selectedPoints) ? (node.params.selectedPoints as number[]) : [])
+            : (Array.isArray(node.params.selectedFaces) ? (node.params.selectedFaces as number[]) : []);
+
+          const localCentroid = new THREE.Vector3();
+          const targetVertices = new Set<number>();
+          if (selectMode === "points") {
+            for (const idx of selectedIndices) targetVertices.add(idx);
+          } else {
+            for (const fIdx of selectedIndices) {
+              const face = dragStartMeshData.faces[fIdx];
+              if (face) face.forEach((v) => targetVertices.add(v));
+            }
+          }
+          if (targetVertices.size > 0) {
+            for (const vIdx of targetVertices) {
+              const p = dragStartMeshData.positions[vIdx];
+              if (p) localCentroid.add(new THREE.Vector3(p[0], p[1], p[2]));
+            }
+            localCentroid.divideScalar(targetVertices.size);
+          }
+
+          const updatedMesh = transformSelection(
+            dragStartMeshData,
+            selectMode,
+            selectedIndices,
+            {
+              position: localDeltaPos,
+              rotation: deltaQuat,
+              scale: new THREE.Vector3(deltaScaleX, deltaScaleY, deltaScaleZ),
+            },
+            localCentroid,
+          );
+
+          onParamChangeRef.current("meshData", updatedMesh, node.id);
+          return;
+        }
+
         if (!attachedGizmoTarget || !onTransformChangeRef.current) return;
 
         // Which node id actually owns the params a drag writes into — the
@@ -1958,6 +2102,74 @@ export function Viewport({
       }
 
       pointerDownAt = { x: e.clientX, y: e.clientY };
+
+      // Edit Mesh gestures: Cmd/Ctrl-drag (paint select) & Shift-drag (marquee select / shift-click)
+      const editMeshNodeOnDown = !outputMode && selectedNodeIdRef.current
+        ? graphRef.current.nodes.find((n) => n.id === selectedNodeIdRef.current && n.type === EDIT_MESH_NODE.type)
+        : null;
+
+      if (editMeshNodeOnDown && e.button === 0) {
+        if (e.metaKey || e.ctrlKey) {
+          // Paint selection start
+          editMeshPaintDragRef.current = true;
+          controls.enabled = false;
+          if (host) {
+            const hostRect = host.getBoundingClientRect();
+            setEditMeshPaintCursor({ x: e.clientX - hostRect.left, y: e.clientY - hostRect.top });
+          }
+          const meshObj = latestResultsRef.current?.get(editMeshNodeOnDown.id)?.geometry;
+          const srcMesh = meshObj instanceof THREE.Object3D ? findFirstMesh(meshObj) : null;
+          if (srcMesh && raycaster) {
+            const quadMesh: QuadMesh =
+              (editMeshNodeOnDown.params.meshData as QuadMesh) ||
+              (srcMesh.geometry?.userData?.quadMesh as QuadMesh) ||
+              createQuadBox(1, 1, 1);
+            const selectMode = (editMeshNodeOnDown.params.selectMode as "points" | "faces") || "faces";
+            const rect = renderer.domElement.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+            const mouseNorm = new THREE.Vector2((mouseX / rect.width) * 2 - 1, -(mouseY / rect.height) * 2 + 1);
+            raycaster.setFromCamera(mouseNorm, camera);
+
+            if (selectMode === "points") {
+              const picked = editMeshHandles.pickPointsInRadius(mouseX, mouseY, 28, rect.width, rect.height, camera, quadMesh, srcMesh.matrixWorld);
+              if (picked.length > 0) {
+                const curPoints = new Set<number>(
+                  Array.isArray(editMeshNodeOnDown.params.selectedPoints)
+                    ? (editMeshNodeOnDown.params.selectedPoints as number[])
+                    : [],
+                );
+                picked.forEach((p) => curPoints.add(p));
+                onParamChangeRef.current?.("selectedPoints", Array.from(curPoints), editMeshNodeOnDown.id);
+              }
+            } else {
+              const faceIdx = editMeshHandles.pickFace(raycaster, quadMesh, srcMesh.matrixWorld);
+              if (faceIdx !== null) {
+                const curFaces = new Set<number>(
+                  Array.isArray(editMeshNodeOnDown.params.selectedFaces)
+                    ? (editMeshNodeOnDown.params.selectedFaces as number[])
+                    : [],
+                );
+                curFaces.add(faceIdx);
+                onParamChangeRef.current?.("selectedFaces", Array.from(curFaces), editMeshNodeOnDown.id);
+              }
+            }
+          }
+          e.stopImmediatePropagation();
+          return;
+        } else if (e.shiftKey && editMeshToolRef.current !== "loopcut") {
+          // Shift-drag (marquee) or Shift-click arming
+          editMeshRectDragRef.current = {
+            startX: e.clientX,
+            startY: e.clientY,
+            currentX: e.clientX,
+            currentY: e.clientY,
+          };
+          controls.enabled = false;
+          e.stopImmediatePropagation();
+          return;
+        }
+      }
 
       const isMarqueeModifier = e.metaKey;
       const infActive = pointsInfluenceHandles.count() > 0 && !outputMode;
@@ -2190,6 +2402,126 @@ export function Viewport({
         terrainBrushGizmo.visible = false;
       }
 
+      // Edit Mesh Marquee Dragging (Shift-drag)
+      if (editMeshRectDragRef.current && host) {
+        editMeshRectDragRef.current.currentX = e.clientX;
+        editMeshRectDragRef.current.currentY = e.clientY;
+        const rect = host.getBoundingClientRect();
+        const x1 = Math.min(editMeshRectDragRef.current.startX, e.clientX) - rect.left;
+        const x2 = Math.max(editMeshRectDragRef.current.startX, e.clientX) - rect.left;
+        const y1 = Math.min(editMeshRectDragRef.current.startY, e.clientY) - rect.top;
+        const y2 = Math.max(editMeshRectDragRef.current.startY, e.clientY) - rect.top;
+        setMarqueeBox({
+          left: x1,
+          top: y1,
+          width: Math.max(1, x2 - x1),
+          height: Math.max(1, y2 - y1),
+        });
+        return;
+      }
+
+      // Edit Mesh Paint Selection Dragging (Cmd/Ctrl-drag)
+      if (editMeshPaintDragRef.current && host) {
+        const hostRect = host.getBoundingClientRect();
+        setEditMeshPaintCursor({ x: e.clientX - hostRect.left, y: e.clientY - hostRect.top });
+
+        const activeEditMesh = selectedNodeIdRef.current
+          ? graphRef.current.nodes.find((n) => n.id === selectedNodeIdRef.current && n.type === EDIT_MESH_NODE.type)
+          : null;
+        if (activeEditMesh && raycaster) {
+          const meshObj = latestResultsRef.current?.get(activeEditMesh.id)?.geometry;
+          const srcMesh = meshObj instanceof THREE.Object3D ? findFirstMesh(meshObj) : null;
+          if (srcMesh) {
+            const quadMesh: QuadMesh =
+              (activeEditMesh.params.meshData as QuadMesh) ||
+              (srcMesh.geometry?.userData?.quadMesh as QuadMesh) ||
+              createQuadBox(1, 1, 1);
+            const selectMode = (activeEditMesh.params.selectMode as "points" | "faces") || "faces";
+            const rect = renderer.domElement.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+            const mouseNorm = new THREE.Vector2((mouseX / rect.width) * 2 - 1, -(mouseY / rect.height) * 2 + 1);
+            raycaster.setFromCamera(mouseNorm, camera);
+
+            if (selectMode === "points") {
+              const picked = editMeshHandles.pickPointsInRadius(mouseX, mouseY, 28, rect.width, rect.height, camera, quadMesh, srcMesh.matrixWorld);
+              if (picked.length > 0) {
+                const curPoints = new Set<number>(
+                  Array.isArray(activeEditMesh.params.selectedPoints)
+                    ? (activeEditMesh.params.selectedPoints as number[])
+                    : [],
+                );
+                let changed = false;
+                for (const p of picked) {
+                  if (!curPoints.has(p)) {
+                    curPoints.add(p);
+                    changed = true;
+                  }
+                }
+                if (changed) {
+                  onParamChangeRef.current?.("selectedPoints", Array.from(curPoints), activeEditMesh.id);
+                }
+              }
+            } else {
+              const hitFace = editMeshHandles.pickFace(raycaster, quadMesh, srcMesh.matrixWorld);
+              if (hitFace !== null) {
+                const curFaces = new Set<number>(
+                  Array.isArray(activeEditMesh.params.selectedFaces)
+                    ? (activeEditMesh.params.selectedFaces as number[])
+                    : [],
+                );
+                if (!curFaces.has(hitFace)) {
+                  curFaces.add(hitFace);
+                  onParamChangeRef.current?.("selectedFaces", Array.from(curFaces), activeEditMesh.id);
+                }
+              }
+            }
+          }
+        }
+        return;
+      }
+
+      // Edit Mesh hover and loop cut preview
+      const activeEditMesh = !outputMode && selectedNodeIdRef.current
+        ? graphRef.current.nodes.find((n) => n.id === selectedNodeIdRef.current && n.type === EDIT_MESH_NODE.type)
+        : null;
+      if (activeEditMesh && host && raycaster) {
+        const meshObj = latestResultsRef.current?.get(activeEditMesh.id)?.geometry;
+        const srcMesh = meshObj instanceof THREE.Object3D ? findFirstMesh(meshObj) : null;
+        if (srcMesh) {
+          const quadMesh: QuadMesh =
+            (activeEditMesh.params.meshData as QuadMesh) ||
+            (srcMesh.geometry?.userData?.quadMesh as QuadMesh) ||
+            createQuadBox(1, 1, 1);
+          const rect = renderer.domElement.getBoundingClientRect();
+          const mouseNorm = new THREE.Vector2(
+            ((e.clientX - rect.left) / rect.width) * 2 - 1,
+            -((e.clientY - rect.top) / rect.height) * 2 + 1,
+          );
+          raycaster.setFromCamera(mouseNorm, camera);
+
+          if (editMeshToolRef.current === "loopcut") {
+            const edge = editMeshHandles.pickEdge(raycaster, quadMesh, srcMesh.matrixWorld);
+            editMeshHoverEdgeRef.current = edge;
+            if (edge) {
+              const segments = getLoopCutPreviewSegments(quadMesh, edge, editMeshLoopCutsRef.current);
+              editMeshPreviewLoopRef.current = segments;
+            } else {
+              editMeshPreviewLoopRef.current = null;
+            }
+          } else {
+            editMeshHoverEdgeRef.current = null;
+            editMeshPreviewLoopRef.current = null;
+            const hitFace = editMeshHandles.pickFace(raycaster, quadMesh, srcMesh.matrixWorld);
+            editMeshHoverFaceRef.current = hitFace;
+          }
+        }
+      } else {
+        editMeshHoverEdgeRef.current = null;
+        editMeshPreviewLoopRef.current = null;
+        editMeshHoverFaceRef.current = null;
+      }
+
       const gpNode = selectedNodeIdRef.current
         ? graphRef.current.nodes.find((n) => n.id === selectedNodeIdRef.current && isPaintOrGreaseNode(n))
         : null;
@@ -2336,6 +2668,103 @@ export function Viewport({
     }
 
     function onCanvasPointerUp(e: PointerEvent) {
+      if (editMeshPaintDragRef.current) {
+        editMeshPaintDragRef.current = false;
+        setEditMeshPaintCursor(null);
+        controls.enabled = true;
+        return;
+      }
+
+      if (editMeshRectDragRef.current) {
+        const drag = editMeshRectDragRef.current;
+        editMeshRectDragRef.current = null;
+        setMarqueeBox(null);
+        controls.enabled = true;
+
+        const dist = Math.hypot(e.clientX - drag.startX, e.clientY - drag.startY);
+        const activeEditMesh = selectedNodeIdRef.current
+          ? graphRef.current.nodes.find((n) => n.id === selectedNodeIdRef.current && n.type === EDIT_MESH_NODE.type)
+          : null;
+
+        if (activeEditMesh) {
+          const meshObj = latestResultsRef.current?.get(activeEditMesh.id)?.geometry;
+          const srcMesh = meshObj instanceof THREE.Object3D ? findFirstMesh(meshObj) : null;
+          if (srcMesh && raycaster) {
+            const quadMesh: QuadMesh =
+              (activeEditMesh.params.meshData as QuadMesh) ||
+              (srcMesh.geometry?.userData?.quadMesh as QuadMesh) ||
+              createQuadBox(1, 1, 1);
+            const selectMode = (activeEditMesh.params.selectMode as "points" | "faces") || "faces";
+            const rect = renderer.domElement.getBoundingClientRect();
+
+            if (dist > CLICK_MOVE_THRESHOLD_PX) {
+              // Rectangular marquee selection (Shift-drag)
+              const minX = Math.min(drag.startX, e.clientX) - rect.left;
+              const maxX = Math.max(drag.startX, e.clientX) - rect.left;
+              const minY = Math.min(drag.startY, e.clientY) - rect.top;
+              const maxY = Math.max(drag.startY, e.clientY) - rect.top;
+
+              if (selectMode === "points") {
+                const picked = editMeshHandles.pickPointsInRect(minX, minY, maxX, maxY, rect.width, rect.height, camera, quadMesh, srcMesh.matrixWorld);
+                const curPoints = new Set<number>(
+                  Array.isArray(activeEditMesh.params.selectedPoints)
+                    ? (activeEditMesh.params.selectedPoints as number[])
+                    : [],
+                );
+                picked.forEach((p) => curPoints.add(p));
+                onParamChangeRef.current?.("selectedPoints", Array.from(curPoints), activeEditMesh.id);
+              } else {
+                const picked = editMeshHandles.pickFacesInRect(minX, minY, maxX, maxY, rect.width, rect.height, camera, quadMesh, srcMesh.matrixWorld);
+                const curFaces = new Set<number>(
+                  Array.isArray(activeEditMesh.params.selectedFaces)
+                    ? (activeEditMesh.params.selectedFaces as number[])
+                    : [],
+                );
+                picked.forEach((f) => curFaces.add(f));
+                onParamChangeRef.current?.("selectedFaces", Array.from(curFaces), activeEditMesh.id);
+              }
+              return;
+            } else {
+              // Shift-click individual toggle
+              const mouseX = e.clientX - rect.left;
+              const mouseY = e.clientY - rect.top;
+              const ndc = new THREE.Vector2((mouseX / rect.width) * 2 - 1, -(mouseY / rect.height) * 2 + 1);
+              raycaster.setFromCamera(ndc, camera);
+
+              if (selectMode === "points") {
+                const ptIdx = editMeshHandles.pickPoint(ndc, camera, rect.width, rect.height, quadMesh, srcMesh.matrixWorld);
+                if (ptIdx !== null) {
+                  const curPoints = new Set<number>(
+                    Array.isArray(activeEditMesh.params.selectedPoints)
+                      ? (activeEditMesh.params.selectedPoints as number[])
+                      : [],
+                  );
+                  if (curPoints.has(ptIdx)) curPoints.delete(ptIdx);
+                  else curPoints.add(ptIdx);
+                  onParamChangeRef.current?.("selectedPoints", Array.from(curPoints), activeEditMesh.id);
+                  return;
+                }
+              } else {
+                const faceIdx = editMeshHandles.pickFace(raycaster, quadMesh, srcMesh.matrixWorld);
+                if (faceIdx !== null) {
+                  const curFaces = new Set<number>(
+                    Array.isArray(activeEditMesh.params.selectedFaces)
+                      ? (activeEditMesh.params.selectedFaces as number[])
+                      : [],
+                  );
+                  if (curFaces.has(faceIdx)) curFaces.delete(faceIdx);
+                  else curFaces.add(faceIdx);
+                  onParamChangeRef.current?.("selectedFaces", Array.from(curFaces), activeEditMesh.id);
+                  return;
+                }
+              }
+              return;
+            }
+          }
+        }
+        return;
+      }
+
       if (isTerrainSculptingRef.current) {
         isTerrainSculptingRef.current = false;
         controls.enabled = true;
@@ -2532,6 +2961,108 @@ export function Viewport({
         }
       }
 
+      // Edit Mesh interaction: points/faces selection & loop cut
+      const activeEditMesh = !outputMode && selectedNodeIdRef.current
+        ? graphRef.current.nodes.find((n) => n.id === selectedNodeIdRef.current && n.type === EDIT_MESH_NODE.type)
+        : null;
+      if (activeEditMesh) {
+        const meshObj = latestResultsRef.current?.get(activeEditMesh.id)?.geometry;
+        const srcMesh = meshObj instanceof THREE.Object3D ? findFirstMesh(meshObj) : null;
+        if (srcMesh) {
+          const quadMesh: QuadMesh =
+            (activeEditMesh.params.meshData as QuadMesh) ||
+            (srcMesh.geometry?.userData?.quadMesh as QuadMesh) ||
+            createQuadBox(1, 1, 1);
+          const selectMode = (activeEditMesh.params.selectMode as "points" | "faces") || "faces";
+
+          if (editMeshToolRef.current === "loopcut") {
+            const edge = editMeshHandles.pickEdge(raycaster, quadMesh, srcMesh.matrixWorld);
+            if (edge) {
+              const res = loopCut(quadMesh, edge, editMeshLoopCutsRef.current);
+              editMeshPreviewLoopRef.current = null;
+              editMeshHoverEdgeRef.current = null;
+              setEditMeshTool("select");
+              onParamChangeRef.current?.(
+                {
+                  meshData: res.mesh,
+                  selectMode: "points",
+                  selectedPoints: res.newVertexIndices,
+                },
+                activeEditMesh.id,
+              );
+              return;
+            }
+          }
+
+          if (selectMode === "points") {
+            const ptIdx = editMeshHandles.pickPoint(ndc, camera, rect.width, rect.height, quadMesh, srcMesh.matrixWorld);
+            if (ptIdx !== null) {
+              const curPoints = new Set<number>(
+                Array.isArray(activeEditMesh.params.selectedPoints)
+                  ? (activeEditMesh.params.selectedPoints as number[])
+                  : [],
+              );
+              if (e.shiftKey) {
+                if (curPoints.has(ptIdx)) curPoints.delete(ptIdx);
+                else curPoints.add(ptIdx);
+              } else {
+                curPoints.clear();
+                curPoints.add(ptIdx);
+              }
+              onParamChangeRef.current?.("selectedPoints", Array.from(curPoints), activeEditMesh.id);
+              return;
+            }
+          } else if (selectMode === "faces") {
+            const faceIdx = editMeshHandles.pickFace(raycaster, quadMesh, srcMesh.matrixWorld);
+            if (faceIdx !== null) {
+              const curFaces = new Set<number>(
+                Array.isArray(activeEditMesh.params.selectedFaces)
+                  ? (activeEditMesh.params.selectedFaces as number[])
+                  : [],
+              );
+              if (e.shiftKey) {
+                if (curFaces.has(faceIdx)) curFaces.delete(faceIdx);
+                else curFaces.add(faceIdx);
+              } else {
+                curFaces.clear();
+                curFaces.add(faceIdx);
+              }
+              onParamChangeRef.current?.("selectedFaces", Array.from(curFaces), activeEditMesh.id);
+              return;
+            }
+          }
+
+          // If click did not hit any point or face, check if another object in the scene was hit
+          const sceneHit = raycaster
+            ? raycaster.intersectObjects(scene.children, true).find((i) => {
+                let curr: THREE.Object3D | null = i.object;
+                let taggedNode = false;
+                while (curr) {
+                  if (curr.visible === false) return false;
+                  if (curr.userData?.nodeId && curr.userData.nodeId !== activeEditMesh.id) taggedNode = true;
+                  curr = curr.parent;
+                }
+                return taggedNode;
+              })
+            : undefined;
+
+          if (!sceneHit && !e.shiftKey) {
+            // Check if click was on the transform gizmo helper to prevent clearing selection
+            if (transformControls?.getHelper()) {
+              const gizmoHits = raycaster.intersectObject(transformControls.getHelper(), true);
+              if (gizmoHits.length > 0) return;
+            }
+            // Clicked empty space: clear element selection, keep EditMesh node selected!
+            if (selectMode === "points") {
+              onParamChangeRef.current?.("selectedPoints", [], activeEditMesh.id);
+            } else {
+              onParamChangeRef.current?.("selectedFaces", [], activeEditMesh.id);
+            }
+            return;
+          }
+        }
+      }
+
       // Curve control points win over whatever is behind them — a handle sits
       // on (or inside) the very mesh it shapes, so a raycast against the scene
       // would swallow every click meant for one. tick() does the actual gizmo
@@ -2622,10 +3153,42 @@ export function Viewport({
       onSelectNodeRef.current(hitNodeId);
     }
 
+    const onCanvasWheel = (e: WheelEvent) => {
+      const activeEditMesh = selectedNodeIdRef.current
+        ? graphRef.current.nodes.find((n) => n.id === selectedNodeIdRef.current && n.type === EDIT_MESH_NODE.type)
+        : null;
+      if (activeEditMesh && editMeshToolRef.current === "loopcut") {
+        e.preventDefault();
+        e.stopPropagation();
+        const delta = e.deltaY < 0 ? 1 : -1;
+        const nextCuts = Math.max(1, Math.min(32, editMeshLoopCutsRef.current + delta));
+        if (nextCuts !== editMeshLoopCutsRef.current) {
+          editMeshLoopCutsRef.current = nextCuts;
+          setEditMeshLoopCuts(nextCuts);
+          if (editMeshHoverEdgeRef.current) {
+            const meshObj = latestResultsRef.current?.get(activeEditMesh.id)?.geometry;
+            const srcMesh = meshObj instanceof THREE.Object3D ? findFirstMesh(meshObj) : null;
+            if (srcMesh) {
+              const quadMesh: QuadMesh =
+                (activeEditMesh.params.meshData as QuadMesh) ||
+                (srcMesh.geometry?.userData?.quadMesh as QuadMesh) ||
+                createQuadBox(1, 1, 1);
+              editMeshPreviewLoopRef.current = getLoopCutPreviewSegments(
+                quadMesh,
+                editMeshHoverEdgeRef.current,
+                nextCuts,
+              );
+            }
+          }
+        }
+      }
+    };
+
     let removeContextMenu: (() => void) | null = null;
 
     if (!outputMode) {
       renderer.domElement.addEventListener("pointerdown", onCanvasPointerDown, { capture: true });
+      renderer.domElement.addEventListener("wheel", onCanvasWheel, { passive: false });
       window.addEventListener("pointermove", onCanvasPointerMove);
       window.addEventListener("pointerup", onCanvasPointerUp);
       window.addEventListener("pointercancel", onCanvasPointerUp);
@@ -3479,6 +4042,91 @@ export function Viewport({
         selectedFacesSet.clear();
       }
 
+      // Edit Mesh handling: sync handles and anchor editMeshCentroidProxy
+      let editMeshHasSelection = false;
+      const editMeshNode = !outputMode
+        ? graphRef.current.nodes.find((n) => n.id === selectedNodeIdRef.current && n.type === EDIT_MESH_NODE.type)
+        : undefined;
+      if (editMeshNode) {
+        const srcObj = results.get(editMeshNode.id)?.geometry;
+        const srcMesh = srcObj instanceof THREE.Object3D ? findFirstMesh(srcObj) : null;
+        if (srcMesh) srcMesh.updateMatrixWorld(true);
+
+        const quadMesh: QuadMesh =
+          (editMeshNode.params.meshData as QuadMesh) ||
+          (srcMesh?.geometry?.userData?.quadMesh as QuadMesh) ||
+          createQuadBox(1, 1, 1);
+
+        const selectMode = (editMeshNode.params.selectMode as "points" | "faces") || "faces";
+        const selPoints = new Set<number>(
+          Array.isArray(editMeshNode.params.selectedPoints)
+            ? (editMeshNode.params.selectedPoints as number[])
+            : [],
+        );
+        const selFaces = new Set<number>(
+          Array.isArray(editMeshNode.params.selectedFaces)
+            ? (editMeshNode.params.selectedFaces as number[])
+            : [0],
+        );
+
+        editMeshHandles.sync(
+          srcMesh,
+          quadMesh,
+          selectMode,
+          selPoints,
+          selFaces,
+          editMeshHoverFaceRef.current,
+          editMeshPreviewLoopRef.current,
+        );
+
+        // Position editMeshCentroidProxy at selection centroid
+        if (srcMesh && (!transformControls?.dragging || transformControls.object !== editMeshCentroidProxy)) {
+          const meshMat = srcMesh.matrixWorld;
+          const localCentroid = new THREE.Vector3();
+          const targetVertices = new Set<number>();
+          if (selectMode === "points") {
+            for (const idx of selPoints) targetVertices.add(idx);
+          } else {
+            for (const fIdx of selFaces) {
+              const face = quadMesh.faces[fIdx];
+              if (face) face.forEach((v) => targetVertices.add(v));
+            }
+          }
+          if (targetVertices.size > 0) {
+            editMeshHasSelection = true;
+            for (const vIdx of targetVertices) {
+              const p = quadMesh.positions[vIdx];
+              if (p) localCentroid.add(new THREE.Vector3(p[0], p[1], p[2]));
+            }
+            localCentroid.divideScalar(targetVertices.size);
+            const worldCentroid = localCentroid.clone().applyMatrix4(meshMat);
+            editMeshCentroidProxy.position.copy(worldCentroid);
+            editMeshCentroidProxy.quaternion.identity();
+            editMeshCentroidProxy.scale.set(1, 1, 1);
+            editMeshCentroidProxy.updateMatrixWorld(true);
+
+            if (transformControls && editMeshToolRef.current === "select") {
+              if (transformControls.object !== editMeshCentroidProxy) {
+                transformControls.attach(editMeshCentroidProxy);
+              }
+              transformControls.setMode(transformModeRef.current);
+              transformControls.enabled = true;
+              transformControls.showX = true;
+              transformControls.showY = true;
+              transformControls.showZ = true;
+              transformControls.getHelper().visible = true;
+            }
+          } else if (transformControls?.object === editMeshCentroidProxy) {
+            transformControls.detach();
+          }
+        }
+      } else {
+        editMeshHandles.clear();
+        if (transformControls?.object === editMeshCentroidProxy) {
+          transformControls.detach();
+        }
+      }
+
       // Pivot Transform's single draggable pivot marker — see the comment by
       // pivotHandle's declaration for why it can't ride the normal gizmo.
       const selectedNodeForPivot = graphRef.current.nodes.find((n) => n.id === selectedNodeIdRef.current);
@@ -3657,6 +4305,8 @@ export function Viewport({
           pickedCurveHandle = forceFieldProxy;
         } else if (emitterProxyNodeId) {
           pickedCurveHandle = emitterProxy;
+        } else if (editMeshNode && editMeshToolRef.current === "select" && editMeshHasSelection) {
+          pickedCurveHandle = editMeshCentroidProxy;
         }
       }
 
@@ -3664,6 +4314,11 @@ export function Viewport({
         targetObject = pickedCurveHandle;
         if (transformControls.object !== pickedCurveHandle) transformControls.attach(pickedCurveHandle);
         transformControls.setMode(transformModeRef.current);
+        transformControls.enabled = true;
+        transformControls.showX = true;
+        transformControls.showY = true;
+        transformControls.showZ = true;
+        transformControls.getHelper().visible = true;
         attachedObjectNodeId = null;
         attachedGizmoTarget = null;
         for (const parked of [...gizmoAnchorScene.children]) gizmoAnchorScene.remove(parked);
@@ -4097,6 +4752,7 @@ export function Viewport({
       resizeObserver.disconnect();
       if (!outputMode) {
         renderer.domElement.removeEventListener("pointerdown", onCanvasPointerDown, { capture: true });
+        renderer.domElement.removeEventListener("wheel", onCanvasWheel);
         window.removeEventListener("pointermove", onCanvasPointerMove);
         window.removeEventListener("pointerup", onCanvasPointerUp);
         window.removeEventListener("pointercancel", onCanvasPointerUp);
@@ -4236,6 +4892,23 @@ export function Viewport({
             height: `${marqueeBox.height}px`,
             border: "1.5px dashed #38bdf8",
             backgroundColor: "rgba(56, 189, 248, 0.18)",
+            pointerEvents: "none",
+            zIndex: 40,
+          }}
+        />
+      )}
+      {/* Edit Mesh Paint Cursor Overlay (Cmd+Drag) */}
+      {!outputMode && editMeshPaintCursor && (
+        <div
+          style={{
+            position: "absolute",
+            left: `${editMeshPaintCursor.x - 28}px`,
+            top: `${editMeshPaintCursor.y - 28}px`,
+            width: "56px",
+            height: "56px",
+            borderRadius: "50%",
+            border: "1.5px solid #f97316",
+            backgroundColor: "rgba(249, 115, 22, 0.18)",
             pointerEvents: "none",
             zIndex: 40,
           }}
@@ -4898,6 +5571,206 @@ export function Viewport({
                   <polyline points="19 9 22 12 19 15" />
                   <line x1="2" y1="12" x2="22" y2="12" />
                   <line x1="12" y1="2" x2="12" y2="22" />
+                </svg>
+              </button>
+            </div>
+          );
+        })()}
+      {/* Edit Mesh Floating Toolbar */}
+      {!outputMode &&
+        !elevationView &&
+        selectedNodeId &&
+        (() => {
+          const editMeshNode = graph.nodes.find(
+            (n) => n.id === selectedNodeId && n.type === EDIT_MESH_NODE.type,
+          );
+          if (!editMeshNode) return null;
+          const selectMode = (editMeshNode.params.selectMode as "points" | "faces") || "faces";
+
+          return (
+            <div
+              className="viewport-gp-hud"
+              style={{
+                position: "absolute",
+                bottom: 16,
+                left: "50%",
+                transform: "translateX(-50%)",
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                padding: "6px 14px",
+                background: "rgba(24, 28, 38, 0.95)",
+                backdropFilter: "blur(12px)",
+                border: "1px solid rgba(56, 189, 248, 0.4)",
+                borderRadius: "8px",
+                boxShadow: "0 8px 24px rgba(0, 0, 0, 0.5), 0 0 16px rgba(56, 189, 248, 0.2)",
+                color: "#ffffff",
+                fontSize: "12px",
+                zIndex: 45,
+                pointerEvents: "auto",
+              }}
+            >
+              {/* Node Badge */}
+              <div
+                style={{
+                  fontSize: "11px",
+                  fontWeight: 700,
+                  color: "#38bdf8",
+                  padding: "2px 8px",
+                  background: "rgba(56, 189, 248, 0.15)",
+                  borderRadius: "4px",
+                  letterSpacing: "0.02em",
+                  userSelect: "none",
+                }}
+              >
+                Edit Mesh
+              </div>
+
+              <div style={{ width: 1, height: 16, background: "rgba(255, 255, 255, 0.15)" }} />
+
+              {/* Mode: Points */}
+              <button
+                type="button"
+                className={`viewport-hud-button ${selectMode === "points" ? "viewport-hud-button-active" : ""}`}
+                onClick={() => onParamChange?.("selectMode", "points", editMeshNode.id)}
+                title="Points Mode (Shortcut: 1) — Select and transform vertices"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                  <circle cx="5" cy="5" r="2.5" />
+                  <circle cx="19" cy="5" r="2.5" />
+                  <circle cx="5" cy="19" r="2.5" />
+                  <circle cx="19" cy="19" r="2.5" />
+                  <path d="M5 5h14v14H5z" fill="none" stroke="currentColor" strokeWidth="1.5" strokeDasharray="2 2" />
+                </svg>
+              </button>
+
+              {/* Mode: Faces */}
+              <button
+                type="button"
+                className={`viewport-hud-button ${selectMode === "faces" ? "viewport-hud-button-active" : ""}`}
+                onClick={() => onParamChange?.("selectMode", "faces", editMeshNode.id)}
+                title="Faces Mode (Shortcut: 3) — Select and transform quads"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                  <rect x="4" y="4" width="16" height="16" rx="2" fill="currentColor" fillOpacity="0.3" />
+                </svg>
+              </button>
+
+              <div style={{ width: 1, height: 16, background: "rgba(255, 255, 255, 0.15)" }} />
+
+              {/* Transform Mode: Loc */}
+              <button
+                type="button"
+                className={`viewport-hud-button ${transformMode === "translate" ? "viewport-hud-button-active" : ""}`}
+                onClick={() => setTransformMode("translate")}
+                title="Translate / Move (Shortcut: G / W)"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="5 9 2 12 5 15" />
+                  <polyline points="9 5 12 2 15 5" />
+                  <polyline points="15 19 12 22 9 19" />
+                  <polyline points="19 9 22 12 19 15" />
+                  <line x1="2" y1="12" x2="22" y2="12" />
+                  <line x1="12" y1="2" x2="12" y2="22" />
+                </svg>
+              </button>
+
+              {/* Transform Mode: Rot */}
+              <button
+                type="button"
+                className={`viewport-hud-button ${transformMode === "rotate" ? "viewport-hud-button-active" : ""}`}
+                onClick={() => setTransformMode("rotate")}
+                title="Rotate (Shortcut: R)"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 12a9 9 0 1 1-2.64-6.36L21 8" />
+                  <polyline points="21 3 21 8 16 8" />
+                </svg>
+              </button>
+
+              {/* Transform Mode: Scale */}
+              <button
+                type="button"
+                className={`viewport-hud-button ${transformMode === "scale" ? "viewport-hud-button-active" : ""}`}
+                onClick={() => setTransformMode("scale")}
+                title="Scale (Shortcut: S)"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="15 3 21 3 21 9" />
+                  <polyline points="9 21 3 21 3 15" />
+                  <line x1="21" y1="3" x2="14" y2="10" />
+                  <line x1="3" y1="21" x2="10" y2="14" />
+                </svg>
+              </button>
+
+              <div style={{ width: 1, height: 16, background: "rgba(255, 255, 255, 0.15)" }} />
+
+              {/* Tool: Extrude */}
+              <button
+                type="button"
+                className="viewport-hud-button"
+                onClick={() => onParamAction?.(editMeshNode.id, EDIT_MESH_EXTRUDE_ACTION)}
+                title="Extrude (Shortcut: E) — Extrude selected face(s)"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 19V5M5 12l7-7 7 7" />
+                </svg>
+              </button>
+
+              {/* Tool: Loop Cut */}
+              <button
+                type="button"
+                className={`viewport-hud-button ${editMeshTool === "loopcut" ? "viewport-hud-button-active" : ""}`}
+                onClick={() => setEditMeshTool((t) => (t === "loopcut" ? "select" : "loopcut"))}
+                title={`Loop Cut (Shortcut: Ctrl+R) — Scroll wheel over mesh to set cuts count (${editMeshLoopCuts})`}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <rect x="3" y="3" width="18" height="18" rx="2" />
+                  <line x1="3" y1="12" x2="21" y2="12" strokeDasharray="3 3" />
+                </svg>
+                {editMeshTool === "loopcut" && (
+                  <span
+                    style={{
+                      marginLeft: 4,
+                      fontSize: "10px",
+                      fontWeight: 700,
+                      color: "#facc15",
+                      background: "rgba(250, 204, 21, 0.2)",
+                      padding: "1px 4px",
+                      borderRadius: "3px",
+                      lineHeight: "1",
+                    }}
+                  >
+                    {editMeshLoopCuts}
+                  </span>
+                )}
+              </button>
+
+              {/* Tool: Inset */}
+              <button
+                type="button"
+                className="viewport-hud-button"
+                onClick={() => onParamAction?.(editMeshNode.id, EDIT_MESH_INSET_ACTION)}
+                title="Inset (Shortcut: I) — Inset selected face(s)"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <rect x="3" y="3" width="18" height="18" rx="2" />
+                  <rect x="8" y="8" width="8" height="8" rx="1" />
+                </svg>
+              </button>
+
+              <div style={{ width: 1, height: 16, background: "rgba(255, 255, 255, 0.15)" }} />
+
+              {/* Reset from Input Button */}
+              <button
+                type="button"
+                className="viewport-hud-button"
+                onClick={() => onParamAction?.(editMeshNode.id, EDIT_MESH_RESEED_ACTION)}
+                title="Reset Mesh from Input or default Cube"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                  <path d="M3 3v5h5" />
                 </svg>
               </button>
             </div>

@@ -9,6 +9,23 @@ import { EXPLODE_GLTF_ACTION, ExplodedTexture, explodeGltfToMeshData, gltfSource
 import { isTauri } from "./shared/isTauri";
 import { TOGGLE_POINTS_KEYFRAME_ACTION } from "./shared/graph/nodes/curve";
 import { RESEED_MESH_POINTS_ACTION } from "./shared/graph/nodes/editMeshPoints";
+import {
+  EDIT_MESH_NODE,
+  EDIT_MESH_RESEED_ACTION,
+  EDIT_MESH_EXTRUDE_ACTION,
+  EDIT_MESH_INSET_ACTION,
+  EDIT_MESH_UNWRAP_UVS_ACTION,
+} from "./shared/graph/nodes/editMesh";
+import {
+  QuadMesh,
+  QuadMeshShading,
+  cloneQuadMesh,
+  createQuadBox,
+  boxProjectUVs,
+  bufferGeometryToQuadMesh,
+  extrudeFaces,
+  insetFaces,
+} from "./shared/graph/quadMesh";
 import { extractPointsFromMesh } from "./shared/graph/nodes/pointsGeometry";
 import { freezeObjectToGeometryData, OBJECT_FROZEN_NODE } from "./shared/graph/nodes/frozenGeometry";
 import type { KeyframeDrawing } from "./shared/graph/nodes/greasePencil";
@@ -999,7 +1016,30 @@ function MainEditor() {
     setCurrentFilePath(path);
   };
 
-  const onParamChange = (paramId: string, value: unknown, targetNodeId?: string) => {
+  const onParamChange = (paramId: string | Record<string, unknown>, value?: unknown, targetNodeId?: string) => {
+    if (typeof paramId === "object" && paramId !== null) {
+      const updates = paramId as Record<string, unknown>;
+      const nodeIdToUpdate = (value as string | undefined) ?? selectedNodeId;
+      if (!nodeIdToUpdate) return;
+      setGraphWithHistory((prevGraph) => {
+        const instance = prevGraph.nodes.find((n) => n.id === nodeIdToUpdate);
+        if (!instance) return prevGraph;
+        let nextParams = { ...instance.params };
+        for (const [k, v] of Object.entries(updates)) {
+          nextParams[k] = cloneParamValue(v);
+        }
+        return {
+          ...prevGraph,
+          nodes: prevGraph.nodes.map((n) => {
+            if (n.id === instance.id) {
+              return { ...n, params: nextParams };
+            }
+            return n;
+          }),
+        };
+      }, `${nodeIdToUpdate}:batch`);
+      return;
+    }
     const nodeIdToUpdate = targetNodeId ?? selectedNodeId;
     setGraphWithHistory((prevGraph) => {
       const instance = prevGraph.nodes.find((n) => n.id === nodeIdToUpdate);
@@ -1042,6 +1082,28 @@ function MainEditor() {
       // guard and silently falls back to its default (white for the Color
       // node). cloneParamValue clones the same classes the undo/clipboard
       nextParams[paramId] = cloneParamValue(value);
+
+      if (instance.type === EDIT_MESH_NODE.type && paramId === "shading") {
+        const selectedFaces: number[] = Array.isArray(instance.params.selectedFaces)
+          ? (instance.params.selectedFaces as number[])
+          : [];
+        const rawMesh = (instance.params.meshData as QuadMesh) || createQuadBox(1, 1, 1);
+        const updatedMesh = cloneQuadMesh(rawMesh);
+        const shadeMode = value as QuadMeshShading;
+        if (selectedFaces.length > 0) {
+          const faceShading: QuadMeshShading[] = updatedMesh.faceShading
+            ? [...updatedMesh.faceShading]
+            : new Array(updatedMesh.faces.length).fill(updatedMesh.shading || "auto");
+          for (const f of selectedFaces) {
+            faceShading[f] = shadeMode;
+          }
+          updatedMesh.faceShading = faceShading;
+        } else {
+          updatedMesh.shading = shadeMode;
+          updatedMesh.faceShading = undefined;
+        }
+        nextParams["meshData"] = updatedMesh;
+      }
 
       // When the pivot is moved, compensate location so that the geometry remains
       // completely stationary in world space.
@@ -1187,6 +1249,63 @@ function MainEditor() {
         const extracted = extractPointsFromMesh(basisObj, nodeId, "Edit Mesh Points");
         if (!extracted) return;
         onParamChange("pointsList", extracted.points, nodeId);
+        return;
+      }
+      if (action === EDIT_MESH_RESEED_ACTION) {
+        const inputs = evaluatedResults?.get(nodeId)?.__evaluatedInputs as Record<string, unknown> | undefined;
+        const geomObj = inputs?.geometry;
+        let quadMesh: QuadMesh;
+        if (geomObj instanceof THREE.Mesh && geomObj.geometry) {
+          quadMesh = bufferGeometryToQuadMesh(geomObj.geometry);
+        } else {
+          quadMesh = createQuadBox(1, 1, 1);
+        }
+        onParamChange({
+          meshData: quadMesh,
+          selectMode: "faces",
+          selectedFaces: [0],
+          selectedPoints: [],
+        }, nodeId);
+        return;
+      }
+      if (action === EDIT_MESH_EXTRUDE_ACTION) {
+        const node = graph.nodes.find((n) => n.id === nodeId);
+        if (!node) return;
+        const meshData: QuadMesh = (node.params.meshData as QuadMesh) || createQuadBox(1, 1, 1);
+        const selectedFaces: number[] = Array.isArray(node.params.selectedFaces)
+          ? (node.params.selectedFaces as number[])
+          : [0];
+        const dist = Number(node.params.extrudeDistance) || 0.5;
+        const result = extrudeFaces(meshData, selectedFaces, dist);
+        onParamChange({
+          meshData: result.mesh,
+          selectMode: "faces",
+          selectedFaces: result.newFaces,
+        }, nodeId);
+        return;
+      }
+      if (action === EDIT_MESH_INSET_ACTION) {
+        const node = graph.nodes.find((n) => n.id === nodeId);
+        if (!node) return;
+        const meshData: QuadMesh = (node.params.meshData as QuadMesh) || createQuadBox(1, 1, 1);
+        const selectedFaces: number[] = Array.isArray(node.params.selectedFaces)
+          ? (node.params.selectedFaces as number[])
+          : [0];
+        const ratio = Number(node.params.insetRatio) || 0.25;
+        const result = insetFaces(meshData, selectedFaces, ratio);
+        onParamChange({
+          meshData: result.mesh,
+          selectMode: "faces",
+          selectedFaces: result.newFaces,
+        }, nodeId);
+        return;
+      }
+      if (action === EDIT_MESH_UNWRAP_UVS_ACTION) {
+        const node = graph.nodes.find((n) => n.id === nodeId);
+        if (!node) return;
+        const meshData: QuadMesh = (node.params.meshData as QuadMesh) || createQuadBox(1, 1, 1);
+        const unwrapped = boxProjectUVs(meshData);
+        onParamChange("meshData", unwrapped, nodeId);
         return;
       }
       if (action === EXPLODE_GLTF_ACTION) {
@@ -2119,6 +2238,7 @@ function MainEditor() {
           keyframesEnabled={keyframesEnabled}
           evaluatedResults={evaluatedResults}
           onParamChange={onParamChange}
+          onParamAction={onParamAction}
           onUnpinParam={onToggleExposed}
           onRenameExposedParam={onRenameExposed}
           mode2D={is2DMode}

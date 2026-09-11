@@ -46,7 +46,8 @@ interface SplitViewportProps {
   keyframes?: KeyframeStore;
   keyframesEnabled?: boolean;
   evaluatedResults?: EvalResult | null;
-  onParamChange?: (paramId: string, value: unknown, targetNodeId?: string) => void;
+  onParamChange?: (paramId: string | Record<string, unknown>, value?: unknown, targetNodeId?: string) => void;
+  onParamAction?: (nodeId: string, action: string) => void;
   onUnpinParam?: (nodeId: string, paramId: string) => void;
   onRenameExposedParam?: (nodeId: string, paramId: string, label: string) => void;
   mode2D?: boolean;
@@ -82,6 +83,7 @@ export function SplitViewport({
   keyframesEnabled,
   evaluatedResults,
   onParamChange,
+  onParamAction,
   onUnpinParam,
   onRenameExposedParam,
   mode2D = false,
@@ -237,6 +239,7 @@ export function SplitViewport({
           keyframesEnabled={keyframesEnabled}
           evaluatedResults={evaluatedResults}
           onParamChange={onParamChange}
+          onParamAction={onParamAction}
           onUnpinParam={onUnpinParam}
           onRenameExposedParam={onRenameExposedParam}
           gpTool={gpTool}

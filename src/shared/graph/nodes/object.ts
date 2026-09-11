@@ -6,6 +6,7 @@ import { defaultFont } from "../../three/fonts/helvetikerFont";
 import { BUILTIN_FONTS, FONT_NAMES } from "../../three/fonts/fonts";
 import { createNodeCache, disposeObject3D } from "../nodeCaches";
 import { asVector3, composeNativeMatrix } from "./transform";
+import { createQuadBox, createQuadPlane, quadMeshToBufferGeometry } from "../quadMesh";
 
 export function numberInput(input: unknown, param: unknown, fallback: number): number {
   const raw = input !== undefined ? input : param;
@@ -788,8 +789,9 @@ const meshCache = createNodeCache<THREE.Mesh>(disposeObject3D);
 function boxMesh(nodeId: string): THREE.Mesh {
   const existing = meshCache.get(nodeId);
   if (existing) return existing;
+  const geom = quadMeshToBufferGeometry(createQuadBox(1, 1, 1));
   const mesh = new THREE.Mesh(
-    new THREE.BoxGeometry(1, 1, 1),
+    geom,
     new THREE.MeshStandardMaterial({ color: 0xffffff }),
   );
   mesh.castShadow = true;
@@ -828,8 +830,9 @@ export const OBJECT_BOX_NODE: NodeDefinition = {
 function planeMesh(nodeId: string): THREE.Mesh {
   const existing = meshCache.get(nodeId);
   if (existing) return existing;
+  const geom = quadMeshToBufferGeometry(createQuadPlane(1, 1, 1, 1));
   const mesh = new THREE.Mesh(
-    new THREE.PlaneGeometry(1, 1),
+    geom,
     new THREE.MeshStandardMaterial({ color: 0xffffff, side: THREE.DoubleSide }),
   );
   mesh.castShadow = true;
