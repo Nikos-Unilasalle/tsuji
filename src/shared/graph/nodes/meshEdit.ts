@@ -92,6 +92,15 @@ export function faceSelectionConfigFromParams(params: Record<string, unknown>): 
 interface WeldedMesh {
   positions: Float32Array;
   indices: Uint32Array;
+  /**
+   * UVs per triangle *corner* (`faceCount * 3 * 2`), not per vertex.
+   *
+   * Per-vertex is what the geometry stores and it cannot survive this weld:
+   * the two sides of a UV seam are one welded position with two different
+   * UVs, and picking either smears the texture across the seam. Per-corner
+   * keeps both, at the cost of being re-split at the very end.
+   */
+  cornerUVs?: Float32Array;
 }
 
 /** Position-only weld, same trick as subdivide.ts's toIndexedMesh — extrude's boundary-edge detection needs a shared-vertex mesh (an edge is only "interior" if both its triangles agree it's the same vertex pair). */
@@ -104,10 +113,38 @@ function toWeldedMesh(geometry: THREE.BufferGeometry): WeldedMesh | null {
   const welded = mergeVertices(positionOnly, 1e-4);
   const weldedIndex = welded.index;
   if (!weldedIndex) return null;
+
   return {
     positions: new Float32Array((welded.attributes.position as THREE.BufferAttribute).array),
     indices: new Uint32Array(weldedIndex.array),
+    cornerUVs: sourceCornerUVs(geometry, weldedIndex.count / 3),
   };
+}
+
+/**
+ * The source's UVs, read back per triangle corner.
+ *
+ * Read from the *original* geometry rather than carried through the weld,
+ * which is only possible because mergeVertices merges vertices without ever
+ * reordering triangles — the same guarantee the face selection already relies
+ * on. Triangle t's corners are the source's own, so its UVs come straight off
+ * the source attribute, seams and all.
+ */
+function sourceCornerUVs(geometry: THREE.BufferGeometry, faceCount: number): Float32Array | undefined {
+  const uvAttr = geometry.attributes.uv as THREE.BufferAttribute | undefined;
+  if (!uvAttr) return undefined;
+
+  const index = geometry.getIndex();
+  const out = new Float32Array(faceCount * 6);
+  for (let f = 0; f < faceCount; f++) {
+    for (let corner = 0; corner < 3; corner++) {
+      const source = index ? index.getX(f * 3 + corner) : f * 3 + corner;
+      if (source >= uvAttr.count) continue;
+      out[f * 6 + corner * 2] = uvAttr.getX(source);
+      out[f * 6 + corner * 2 + 1] = uvAttr.getY(source);
+    }
+  }
+  return out;
 }
 
 /**
@@ -161,7 +198,11 @@ function extrudeSelected(mesh: WeldedMesh, selected: boolean[], distance: number
     oldToNew[v] = outPositions.length / 3 - 1;
   }
 
+  const sourceUVs = mesh.cornerUVs;
   const outIndices: number[] = [];
+  const outUVs: number[] = [];
+  // The cap is the selected patch moved, so it keeps the patch's own UVs —
+  // whatever was printed on those faces rides up with them.
   for (let f = 0; f < faceCount; f++) {
     const a = indices[f * 3];
     const b = indices[f * 3 + 1];
@@ -171,12 +212,16 @@ function extrudeSelected(mesh: WeldedMesh, selected: boolean[], distance: number
     } else {
       outIndices.push(a, b, c);
     }
+    if (sourceUVs) for (let i = 0; i < 6; i++) outUVs.push(sourceUVs[f * 6 + i]);
   }
 
   interface EdgeEntry {
     u: number;
     v: number;
     selected: boolean;
+    /** Which triangle corner this edge leaves from, so its UVs can be looked up. */
+    face: number;
+    corner: number;
   }
   const edgeKey = (a: number, b: number) => (a < b ? `${a}_${b}` : `${b}_${a}`);
   const edgeMap = new Map<string, EdgeEntry[]>();
@@ -187,7 +232,7 @@ function extrudeSelected(mesh: WeldedMesh, selected: boolean[], distance: number
       const v = tri[(e + 1) % 3];
       const key = edgeKey(u, v);
       const arr = edgeMap.get(key) ?? [];
-      arr.push({ u, v, selected: selected[f] });
+      arr.push({ u, v, selected: selected[f], face: f, corner: e });
       edgeMap.set(key, arr);
     }
   }
@@ -202,9 +247,63 @@ function extrudeSelected(mesh: WeldedMesh, selected: boolean[], distance: number
     const v2 = oldToNew[v];
     outIndices.push(u, v, v2);
     outIndices.push(u, v2, u2);
+
+    if (!sourceUVs) continue;
+    const base = selEntry.face * 6;
+    const uU = sourceUVs[base + selEntry.corner * 2];
+    const vU = sourceUVs[base + selEntry.corner * 2 + 1];
+    const next = ((selEntry.corner + 1) % 3) * 2;
+    const uV = sourceUVs[base + next];
+    const vV = sourceUVs[base + next + 1];
+
+    // The wall climbs away from the edge, perpendicular to it *in UV space*,
+    // by the extrusion distance converted at the edge's own texel density
+    // (its UV length over its world length). Mapping the wall to a fixed 0..1
+    // instead would make every wall quad show the whole texture, at a scale
+    // that has nothing to do with the surface it grew out of.
+    const [offsetU, offsetV] = wallUVOffset(positions, u, v, uU, vU, uV, vV, distance);
+
+    outUVs.push(uU, vU, uV, vV, uV + offsetU, vV + offsetV);
+    outUVs.push(uU, vU, uV + offsetU, vV + offsetV, uU + offsetU, vU + offsetV);
   }
 
-  return { positions: new Float32Array(outPositions), indices: new Uint32Array(outIndices) };
+  return {
+    positions: new Float32Array(outPositions),
+    indices: new Uint32Array(outIndices),
+    cornerUVs: sourceUVs ? new Float32Array(outUVs) : undefined,
+  };
+}
+
+/**
+ * How far, and which way, a wall's top edge sits from its base in UV space.
+ *
+ * Perpendicular to the edge's own UV direction, scaled so a wall a tenth as
+ * tall as its edge is long covers a tenth as much texture — the texel density
+ * of the cap carried onto the side. Falls back to a plain vertical strip when
+ * the edge has no UV length to measure (a degenerate mapping, or a source with
+ * every UV at the origin), which is arbitrary but at least not zero-area.
+ */
+function wallUVOffset(
+  positions: Float32Array,
+  u: number,
+  v: number,
+  uU: number,
+  vU: number,
+  uV: number,
+  vV: number,
+  distance: number,
+): [number, number] {
+  const duv = Math.hypot(uV - uU, vV - vU);
+  const worldLength = Math.hypot(
+    positions[v * 3] - positions[u * 3],
+    positions[v * 3 + 1] - positions[u * 3 + 1],
+    positions[v * 3 + 2] - positions[u * 3 + 2],
+  );
+  if (duv < 1e-8 || worldLength < 1e-8) return [0, distance];
+
+  const density = duv / worldLength;
+  // Rotate the edge direction a quarter turn: (x, y) -> (y, -x).
+  return [((vV - vU) / duv) * distance * density, (-(uV - uU) / duv) * distance * density];
 }
 
 /**
@@ -402,6 +501,43 @@ function applyExtrudeMaterial(mesh: THREE.Mesh, srcMesh: THREE.Mesh, materialInp
   }
 }
 
+/**
+ * The extruded result as a drawable geometry.
+ *
+ * With UVs it has to go out non-indexed first: the UVs are per *corner*, and
+ * two corners meeting at one position with different UVs are two vertices, not
+ * one. mergeVertices then puts back every vertex that agrees on everything, so
+ * the buffer ends up shared wherever sharing is correct and split exactly on
+ * the seams. Normals computed after that are smooth across the surface and
+ * hard across a seam, which is also what a box wants — the previous
+ * unconditionally-smooth pass rounded a cube's corners.
+ */
+function buildExtrudedGeometry(result: WeldedMesh): THREE.BufferGeometry {
+  let geometry = new THREE.BufferGeometry();
+
+  if (result.cornerUVs) {
+    const corners = result.indices.length;
+    const positions = new Float32Array(corners * 3);
+    for (let i = 0; i < corners; i++) {
+      const source = result.indices[i];
+      positions[i * 3] = result.positions[source * 3];
+      positions[i * 3 + 1] = result.positions[source * 3 + 1];
+      positions[i * 3 + 2] = result.positions[source * 3 + 2];
+    }
+    geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+    geometry.setAttribute("uv", new THREE.BufferAttribute(result.cornerUVs.slice(0, corners * 2), 2));
+    geometry = mergeVertices(geometry, 1e-5);
+  } else {
+    geometry.setAttribute("position", new THREE.BufferAttribute(result.positions, 3));
+    geometry.setIndex(new THREE.BufferAttribute(result.indices, 1));
+  }
+
+  geometry.computeVertexNormals();
+  geometry.computeBoundingBox();
+  geometry.computeBoundingSphere();
+  return geometry;
+}
+
 export const EXTRUDE_MESH_NODE: NodeDefinition = {
   type: "modifier/extrude",
   label: "Extrude Mesh",
@@ -533,12 +669,7 @@ export const EXTRUDE_MESH_NODE: NodeDefinition = {
       seed,
     });
 
-    const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute("position", new THREE.BufferAttribute(result.positions, 3));
-    geometry.setIndex(new THREE.BufferAttribute(result.indices, 1));
-    geometry.computeVertexNormals();
-    geometry.computeBoundingBox();
-    geometry.computeBoundingSphere();
+    const geometry = buildExtrudedGeometry(result);
 
     if (!state.mesh) state.mesh = createModifierMesh();
     state.mesh.geometry?.dispose();

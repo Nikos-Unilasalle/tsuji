@@ -177,14 +177,13 @@ const APPEARANCE_BY_DESIGN: Record<string, string> = {
   render: "the scene root, not a modifier",
 };
 
-const KNOWN_APPEARANCE_VIOLATIONS: Record<string, string> = {
-  "modifier/extrude: uv":
-    "documented in meshEdit.ts: the cap and walls have no UV space of their own, so the attribute is " +
-    "dropped. The material and its map survive, which makes it worse, not better — the texture is still " +
-    "bound and renders as garbage, and every node downstream inherits the loss. The only entry here that " +
-    "is a missing feature rather than a slip: giving it UVs means unwrapping the new geometry, not " +
-    "remembering to copy something.",
-};
+/**
+ * Empty, and it should stay that way. The last entry was Extrude dropping the
+ * UV attribute — the one violation here that was a missing feature rather than
+ * a forgotten line, since the cap and the walls are new surface that has to be
+ * given UVs, not handed them.
+ */
+const KNOWN_APPEARANCE_VIOLATIONS: Record<string, string> = {};
 
 /* -------------------------------------------------------------------------- */
 /* Contract 2 — identity                                                      */
