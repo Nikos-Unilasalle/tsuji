@@ -3,7 +3,7 @@ import { NodeDefinition } from "../types";
 import { clearMeshWarning, findFirstMesh, warnMeshRequired } from "../meshRequired";
 import { createNodeCache, disposeObject3D } from "../nodeCaches";
 import { asVector3, composeNativeMatrix } from "./transform";
-import { COMMON_PRIMITIVE_OUTPUTS, inheritSourceMaterial, primitiveOutputs } from "./object";
+import { COMMON_PRIMITIVE_OUTPUTS, inheritSourceMaterial, primitiveOutputs, recentreGeometry } from "./object";
 
 
 export interface LatticeGridConfig {
@@ -881,6 +881,15 @@ export const LATTICE_DEFORM_NODE: NodeDefinition = {
     geom.computeVertexNormals();
     geom.computeBoundingBox();
     geom.computeBoundingSphere();
+
+    // The deformation evaluates in the cage's space, so the result lands
+    // wherever the cage put it rather than around the mesh's own origin. Give
+    // the mesh that origin back and carry the offset on its matrix: the
+    // picture is identical, and the object now *is* where it says it is — see
+    // recentreGeometry.
+    const centre = recentreGeometry(geom);
+    state.deformedMesh.matrixAutoUpdate = false;
+    state.deformedMesh.matrix.makeTranslation(centre.x, centre.y, centre.z);
 
     state.deformedMesh.geometry.dispose();
     state.deformedMesh.geometry = geom;

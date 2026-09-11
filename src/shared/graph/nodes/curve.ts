@@ -12,6 +12,7 @@ import {
   extractTextureParams,
   prefixedMaterialParamFields,
   primitiveOutputs,
+  recentreGeometry,
 } from "./object";
 import { DEFAULT_PROFILE_POINTS, evalProfileCurve, ProfilePoint } from "../profileCurve";
 import { setCurveNodePose, getCurveNodePose } from "../curvePoseStore";
@@ -1536,9 +1537,20 @@ export const CURVE_DEFORM_NODE: NodeDefinition = {
     // Its own pose on top of the deformed result, same convention as every
     // other object node — without it the node had nothing for the viewport
     // gizmo to drag and could only be placed by moving its source.
+    //
+    // The deformation evaluates in the curve's space, so the result lands
+    // wherever along the curve it was laid down rather than around the mesh's
+    // own origin. Recentring gives the mesh that origin back and rides the
+    // offset on the matrix, inside its own pose: the picture is identical, and
+    // the object now *is* where its Position output says it is — see
+    // recentreGeometry. Skipped while this node is the one being live-edited,
+    // where the matrix below is not written and the shift would show.
     if (ctx.nodeId !== ctx.liveEditNodeId) {
+      const centre = recentreGeometry(defGeom);
       state.mesh.matrixAutoUpdate = false;
-      state.mesh.matrix.copy(composeNativeMatrix(inputs.matrix, params.location, params.rotation, params.scale, params));
+      state.mesh.matrix
+        .copy(composeNativeMatrix(inputs.matrix, params.location, params.rotation, params.scale, params))
+        .multiply(new THREE.Matrix4().makeTranslation(centre.x, centre.y, centre.z));
     }
 
     return primitiveOutputs(state.mesh);

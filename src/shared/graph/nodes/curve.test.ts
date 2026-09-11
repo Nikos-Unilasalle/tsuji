@@ -693,7 +693,11 @@ describe("CURVE_DEFORM_NODE placement", () => {
     const sum = new THREE.Vector3();
     const v = new THREE.Vector3();
     for (let i = 0; i < position.count; i++) sum.add(v.fromBufferAttribute(position, i));
-    return sum.divideScalar(position.count);
+    // Through the mesh's own matrix, which is affine, so the centroid of the
+    // transformed vertices is the transformed centroid. The deformed geometry
+    // is recentred on its own origin with the offset carried on the matrix, so
+    // the vertices alone no longer say where the object is.
+    return sum.divideScalar(position.count).applyMatrix4(mesh.matrix);
   }
 
   it("honours the source object's own transform instead of deforming it as if at the origin", () => {

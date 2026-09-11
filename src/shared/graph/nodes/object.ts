@@ -381,6 +381,47 @@ export function prepareGeometryForMaterial(mesh: THREE.Mesh, material: THREE.Mat
 }
 
 /**
+ * Moves a deformed geometry's vertices so its own bounding box is centred on
+ * the mesh's origin, and returns the offset that has to go back onto the
+ * mesh's matrix to leave the drawn result exactly where it was
+ * (`M' = M · translate(offset)`, since `M · v === M · T(c) · (v - c)`).
+ *
+ * A deformation evaluates in the space of whatever drives it — a lattice cage,
+ * a curve — and writing the result out verbatim leaves the vertices sitting
+ * far from their own mesh origin. Nothing about the picture is wrong, and that
+ * is why it survived: every consumer that reads the *shape* is fine. The ones
+ * that read the object's **position** are not. A rigid body is built at the
+ * mesh's origin with the shape hanging off it, so the body's translation — and
+ * the node's own Position output, and any Distance or Look At reading it — is
+ * a point in empty space metres from the object, and the mass sits somewhere
+ * the body does not claim to be.
+ *
+ * The bounding box centre rather than the vertex centroid: a centroid is
+ * weighted by tessellation, so a mesh with a dense cap and a sparse body
+ * reports its origin somewhere near the cap.
+ */
+export function recentreGeometry(geometry: THREE.BufferGeometry): THREE.Vector3 {
+  const attribute = geometry.getAttribute("position") as THREE.BufferAttribute | undefined;
+  if (!attribute || attribute.count === 0) return new THREE.Vector3();
+
+  // Recomputed, never trusted: a deformed geometry is usually `srcGeom.clone()`
+  // with new positions written into it, and the clone carries the *source's*
+  // bounding box — which for a box at the origin is centred on nothing, so the
+  // recentring silently did nothing at all.
+  geometry.computeBoundingBox();
+  const centre = geometry.boundingBox!.getCenter(new THREE.Vector3());
+  if (centre.lengthSq() < 1e-12) return centre;
+
+  for (let i = 0; i < attribute.count; i++) {
+    attribute.setXYZ(i, attribute.getX(i) - centre.x, attribute.getY(i) - centre.y, attribute.getZ(i) - centre.z);
+  }
+  attribute.needsUpdate = true;
+  geometry.computeBoundingBox();
+  geometry.computeBoundingSphere();
+  return centre;
+}
+
+/**
  * A modifier inheriting its material straight off the source mesh, rather
  * than from a wired Material input. Same as assigning `mesh.material`, but
  * runs the material's geometry hook — the wired path gets that through

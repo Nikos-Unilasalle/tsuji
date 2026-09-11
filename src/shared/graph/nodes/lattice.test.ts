@@ -244,7 +244,10 @@ describe("LATTICE_DEFORM_NODE source transform tracking", () => {
       (c): c is THREE.Mesh => (c as THREE.Mesh).isMesh === true,
     )!;
     mesh.geometry.computeBoundingBox();
-    return mesh.geometry.boundingBox!.getCenter(new THREE.Vector3());
+    // Through the mesh's own matrix: the deformed geometry is recentred on its
+    // own origin and the offset rides on the matrix, so the vertices alone no
+    // longer say where the object is (see recentreGeometry).
+    return mesh.geometry.boundingBox!.getCenter(new THREE.Vector3()).applyMatrix4(mesh.matrix);
   }
 
   it("follows an animated source, whose matrixWorld nothing refreshes once it is consumed", () => {
