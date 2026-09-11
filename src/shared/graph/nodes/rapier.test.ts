@@ -643,6 +643,26 @@ describe("physics/vehicle — a raycast car", () => {
     expect(positions.filter((p) => p.z > out.position.z).length).toBe(2);
   });
 
+  test("wheel matrices do not inherit the chassis's authoring scale", () => {
+    // A chassis authored as a scaled unit Box (the demo's 1.7 × 0.6 × 3.4)
+    // must not smear its non-uniform scale onto the wheels, which are sized
+    // by their own geometry and placed in world units by the controller.
+    const car = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1));
+    car.scale.set(1.7, 0.6, 3.4);
+    car.position.set(0, 1, 0);
+    car.updateMatrixWorld(true);
+
+    const out = drive("v-scale", car, { throttle: 0 }, 180);
+    expect(out.wheels.length).toBe(4);
+    for (const wheel of out.wheels) {
+      const scale = new THREE.Vector3();
+      wheel.decompose(new THREE.Vector3(), new THREE.Quaternion(), scale);
+      expect(scale.x).toBeCloseTo(1, 5);
+      expect(scale.y).toBeCloseTo(1, 5);
+      expect(scale.z).toBeCloseTo(1, 5);
+    }
+  });
+
   test("with no world wired the chassis passes through untouched", () => {
     const car = chassis();
     const out = VEHICLE_NODE.evaluate({ chassis: car }, carParams(), makeContext("v8", 0)) as {

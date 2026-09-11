@@ -1076,6 +1076,14 @@ export const VEHICLE_NODE: NodeDefinition = {
     // Wheel poses, in world space and ready to hang geometry on: mount point,
     // pushed down by however far the suspension is currently extended, turned
     // by its steering angle and rolled by however far it has travelled.
+    //
+    // Built from the body's bare pose, not `chassisMatrix`: the chassis's
+    // authoring scale (a Box sized by transform, e.g. 1.7 × 0.6 × 3.4) is
+    // baked into that matrix so the body renders at full size, but the wheel
+    // mount points and radii Rapier hands back are already in world units.
+    // Multiplying by the scaled matrix would smear the chassis's non-uniform
+    // scale onto every wheel.
+    const chassisPose = bodyMatrix(body);
     const wheels: THREE.Matrix4[] = [];
     for (let i = 0; i < WHEEL_LAYOUT.length; i++) {
       const connection = controller.wheelChassisConnectionPointCs(i);
@@ -1089,7 +1097,7 @@ export const VEHICLE_NODE: NodeDefinition = {
         .multiply(new THREE.Matrix4().makeRotationY(steering))
         .multiply(new THREE.Matrix4().makeRotationX(roll));
 
-      wheels.push(new THREE.Matrix4().multiplyMatrices(chassisMatrix, local));
+      wheels.push(new THREE.Matrix4().multiplyMatrices(chassisPose, local));
     }
 
     return {
