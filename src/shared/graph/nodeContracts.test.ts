@@ -203,14 +203,6 @@ function identityGraph(modifierType: string): Graph {
 }
 
 const KNOWN_IDENTITY_VIOLATIONS: Record<string, string> = {
-  "curve/deform: geometry": "rebuilds the deformed geometry every frame with no cache at all.",
-  "geometry/facet-explode: mesh": "rebuilds mesh and geometry every frame.",
-  "geometry/facet-explode: geometry": "rebuilds mesh and geometry every frame.",
-  "geometry/wave-ripple: mesh": "rebuilds mesh and geometry every frame.",
-  "geometry/wave-ripple: geometry":
-    "displaces vertices from ctx.time, so a rebuild is right when time moves — but this runs at a " +
-    "frozen time, where nothing changed and nothing should be rebuilt.",
-  "modifier/lattice: geometry": "builds a new BufferGeometry per frame unconditionally.",
   "structure/array: mesh": "re-wraps its instances in a fresh Group each frame.",
   "structure/geometry-transform: mesh": "re-wraps in a fresh Group each frame.",
   "structure/get-instance: mesh": "re-wraps in a fresh Group each frame.",

@@ -4,8 +4,18 @@ import { NodeDefinition } from "../types";
 import { clearMeshWarning, collectMeshes, warnMeshRequired } from "../meshRequired";
 import { numberInput } from "./object";
 
+interface DeformTarget {
+  source: THREE.Mesh;
+  output: THREE.Mesh;
+  /** The undeformed positions every frame's deformation starts from. */
+  base: Float32Array;
+}
+
 interface DeformState {
   object?: THREE.Object3D;
+  targets?: DeformTarget[];
+  /** What the cached targets were built from — see reuseDeformTargets. */
+  signature?: string;
 }
 
 /**
@@ -30,6 +40,80 @@ const waveCache = createNodeCache<DeformState>((s) => {
 const explodeCache = createNodeCache<DeformState>((s) => {
   if (s.object) disposeDeformedObject(s.object);
 });
+
+/**
+ * The meshes this deformer writes its result into, reused across frames.
+ *
+ * These nodes used to dispose their whole output and rebuild it from
+ * `srcGeom.clone()` on every single evaluate — a new BufferGeometry, and so a
+ * full GPU re-upload, sixty times a second even while nothing moved. It cost
+ * nothing visible, which is why it survived; it also broke every downstream
+ * cache that keys on geometry identity, physics included, back when physics
+ * did.
+ *
+ * So: one output geometry per source, kept, with the undeformed positions held
+ * alongside it. Each frame copies those back in and deforms them in place —
+ * the deformation is still recomputed from scratch, it just stops reallocating
+ * the buffer it writes into. Rebuilt only when the input is a different set of
+ * meshes, or the same ones with a different topology.
+ */
+function reuseDeformTargets(
+  state: DeformState,
+  meshes: THREE.Mesh[],
+  nonIndexed: boolean,
+): DeformTarget[] {
+  const signature = meshes
+    .map((mesh) => {
+      const geometry = mesh.geometry;
+      return `${geometry.uuid}:${geometry.attributes.position?.count ?? 0}:${geometry.getIndex()?.count ?? -1}`;
+    })
+    .join("|");
+
+  if (state.targets && state.signature === signature) {
+    for (const target of state.targets) {
+      const position = target.output.geometry.attributes.position as THREE.BufferAttribute;
+      (position.array as Float32Array).set(target.base);
+      position.needsUpdate = true;
+    }
+    return state.targets;
+  }
+
+  disposeDeformedObject(state.object);
+  state.object = undefined;
+
+  state.targets = meshes.map((source) => {
+    const geometry = nonIndexed && source.geometry.index ? source.geometry.toNonIndexed() : source.geometry.clone();
+    const output = new THREE.Mesh(geometry, source.material);
+    output.castShadow = source.castShadow;
+    output.receiveShadow = source.receiveShadow;
+    output.renderOrder = source.renderOrder;
+    return {
+      source,
+      output,
+      base: new Float32Array((geometry.attributes.position as THREE.BufferAttribute).array),
+    };
+  });
+  state.signature = signature;
+  return state.targets;
+}
+
+/** The deformed meshes as one object: the mesh itself for a single one, a Group for several. */
+function deformedObject(state: DeformState, targets: DeformTarget[], raw: THREE.Object3D): THREE.Object3D {
+  const single = raw instanceof THREE.Mesh && targets.length === 1;
+  if (state.object && (single ? state.object === targets[0].output : state.object.children.length === targets.length)) {
+    return state.object;
+  }
+
+  if (single) {
+    state.object = targets[0].output;
+    return state.object;
+  }
+
+  const group = new THREE.Group();
+  for (const target of targets) group.add(target.output);
+  state.object = group;
+  return group;
+}
 
 function pseudoRandom(seed: number): number {
   const x = Math.sin(seed * 12.9898 + 78.233) * 43758.5453;
@@ -135,10 +219,7 @@ export const GEOMETRY_TWIST_BEND_TAPER_NODE: NodeDefinition = {
       state = {};
       twistCache.set(ctx.nodeId, state);
     }
-    if (state.object) {
-      disposeDeformedObject(state.object);
-      state.object = undefined;
-    }
+    const targets = reuseDeformTargets(state, meshes, false);
 
     const twistRad = (twistDeg * Math.PI) / 180;
     const bendRad = (bendDeg * Math.PI) / 180;
@@ -165,8 +246,8 @@ export const GEOMETRY_TWIST_BEND_TAPER_NODE: NodeDefinition = {
     const diff = maxAxis - minAxis;
     const height = Math.max(1e-4, diff);
 
-    function deformMesh(srcMesh: THREE.Mesh): THREE.Mesh {
-      const geom = srcMesh.geometry.clone();
+    function deformMesh(target: DeformTarget): THREE.Mesh {
+      const geom = target.output.geometry;
       const pos = geom.attributes.position;
       const count = pos.count;
 
@@ -215,26 +296,12 @@ export const GEOMETRY_TWIST_BEND_TAPER_NODE: NodeDefinition = {
       pos.needsUpdate = true;
       geom.computeVertexNormals();
 
-      const outMesh = new THREE.Mesh(geom, srcMesh.material);
-      outMesh.castShadow = srcMesh.castShadow;
-      outMesh.receiveShadow = srcMesh.receiveShadow;
-      outMesh.renderOrder = srcMesh.renderOrder;
-      return outMesh;
+      return target.output;
     }
 
-    let resultObject: THREE.Object3D;
-    if (raw instanceof THREE.Mesh) {
-      resultObject = deformMesh(raw);
-    } else {
-      const group = new THREE.Group();
-      for (const mesh of meshes) {
-        group.add(deformMesh(mesh));
-      }
-      resultObject = group;
-    }
-
+    for (const target of targets) deformMesh(target);
+    const resultObject = deformedObject(state, targets, raw);
     applyResultTransform(resultObject, objMatrix, ctx.nodeId, raw);
-    state.object = resultObject;
 
     return {
       geometry: resultObject,
@@ -333,17 +400,14 @@ export const GEOMETRY_WAVE_RIPPLE_NODE: NodeDefinition = {
       state = {};
       waveCache.set(ctx.nodeId, state);
     }
-    if (state.object) {
-      disposeDeformedObject(state.object);
-      state.object = undefined;
-    }
+    const targets = reuseDeformTargets(state, meshes, false);
 
     const invMatrix = space === "world" ? objMatrix.clone().invert() : null;
     const sx = Math.abs(objScale.x) > 1e-4 ? objScale.x : 1;
     const sz = Math.abs(objScale.z) > 1e-4 ? objScale.z : 1;
 
-    function deformMesh(srcMesh: THREE.Mesh): THREE.Mesh {
-      const geom = srcMesh.geometry.clone();
+    function deformMesh(target: DeformTarget): THREE.Mesh {
+      const geom = target.output.geometry;
       const pos = geom.attributes.position;
       const count = pos.count;
 
@@ -385,26 +449,12 @@ export const GEOMETRY_WAVE_RIPPLE_NODE: NodeDefinition = {
       pos.needsUpdate = true;
       geom.computeVertexNormals();
 
-      const outMesh = new THREE.Mesh(geom, srcMesh.material);
-      outMesh.castShadow = srcMesh.castShadow;
-      outMesh.receiveShadow = srcMesh.receiveShadow;
-      outMesh.renderOrder = srcMesh.renderOrder;
-      return outMesh;
+      return target.output;
     }
 
-    let resultObject: THREE.Object3D;
-    if (raw instanceof THREE.Mesh) {
-      resultObject = deformMesh(raw);
-    } else {
-      const group = new THREE.Group();
-      for (const mesh of meshes) {
-        group.add(deformMesh(mesh));
-      }
-      resultObject = group;
-    }
-
+    for (const target of targets) deformMesh(target);
+    const resultObject = deformedObject(state, targets, raw);
     applyResultTransform(resultObject, objMatrix, ctx.nodeId, raw);
-    state.object = resultObject;
 
     return {
       geometry: resultObject,
@@ -468,14 +518,12 @@ export const GEOMETRY_FACET_EXPLODE_NODE: NodeDefinition = {
       state = {};
       explodeCache.set(ctx.nodeId, state);
     }
-    if (state.object) {
-      disposeDeformedObject(state.object);
-      state.object = undefined;
-    }
+    // Non-indexed: every face has to move away from its neighbours, which
+    // means no vertex may be shared with one.
+    const targets = reuseDeformTargets(state, meshes, true);
 
-    function deformMesh(srcMesh: THREE.Mesh): THREE.Mesh {
-      const srcGeom = srcMesh.geometry;
-      const nonIndexed = srcGeom.index ? srcGeom.toNonIndexed() : srcGeom.clone();
+    function deformMesh(target: DeformTarget): THREE.Mesh {
+      const nonIndexed = target.output.geometry;
       const pos = nonIndexed.attributes.position;
       const faceCount = Math.floor(pos.count / 3);
 
@@ -517,27 +565,12 @@ export const GEOMETRY_FACET_EXPLODE_NODE: NodeDefinition = {
 
       pos.needsUpdate = true;
       nonIndexed.computeVertexNormals();
-
-      const outMesh = new THREE.Mesh(nonIndexed, srcMesh.material);
-      outMesh.castShadow = srcMesh.castShadow;
-      outMesh.receiveShadow = srcMesh.receiveShadow;
-      outMesh.renderOrder = srcMesh.renderOrder;
-      return outMesh;
+      return target.output;
     }
 
-    let resultObject: THREE.Object3D;
-    if (raw instanceof THREE.Mesh) {
-      resultObject = deformMesh(raw);
-    } else {
-      const group = new THREE.Group();
-      for (const mesh of meshes) {
-        group.add(deformMesh(mesh));
-      }
-      resultObject = group;
-    }
-
+    for (const target of targets) deformMesh(target);
+    const resultObject = deformedObject(state, targets, raw);
     applyResultTransform(resultObject, objMatrix, ctx.nodeId, raw);
-    state.object = resultObject;
 
     return {
       geometry: resultObject,

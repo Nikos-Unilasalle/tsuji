@@ -523,6 +523,10 @@ interface LatticeState {
   deformedMesh?: THREE.Mesh;
   cageLines?: THREE.LineSegments;
   lastSignature?: string;
+  /** The deformed output geometry, kept across frames and written into. */
+  deformedGeometry?: THREE.BufferGeometry;
+  /** The source topology `deformedGeometry` was built for. */
+  deformedFrom?: string;
 }
 
 const latticeCache = createNodeCache<LatticeState>((s) => {
@@ -867,16 +871,25 @@ export const LATTICE_DEFORM_NODE: NodeDefinition = {
       deformedPositions[i * 3 + 2] = deformed.z;
     }
 
-    const geom = new THREE.BufferGeometry();
-    geom.setAttribute("position", new THREE.BufferAttribute(deformedPositions, 3));
+    // Built once per source topology and then written into. A fresh
+    // BufferGeometry per evaluate is a full GPU re-upload sixty times a second
+    // even while nothing moves, and it breaks every downstream cache that keys
+    // on geometry identity.
+    const sourceSignature = `${srcGeom.uuid}:${vertexCount}:${srcGeom.getIndex()?.count ?? -1}`;
+    if (!state.deformedGeometry || state.deformedFrom !== sourceSignature) {
+      state.deformedGeometry?.dispose();
+      const built = new THREE.BufferGeometry();
+      built.setAttribute("position", new THREE.BufferAttribute(new Float32Array(vertexCount * 3), 3));
+      if (srcGeom.attributes.uv) built.setAttribute("uv", srcGeom.attributes.uv.clone());
+      if (srcGeom.index) built.setIndex(srcGeom.index.clone());
+      state.deformedGeometry = built;
+      state.deformedFrom = sourceSignature;
+    }
 
-    // Copy UVs, Normals, and Indices if present
-    if (srcGeom.attributes.uv) {
-      geom.setAttribute("uv", srcGeom.attributes.uv.clone());
-    }
-    if (srcGeom.index) {
-      geom.setIndex(srcGeom.index.clone());
-    }
+    const geom = state.deformedGeometry;
+    const geomPos = geom.getAttribute("position") as THREE.BufferAttribute;
+    (geomPos.array as Float32Array).set(deformedPositions);
+    geomPos.needsUpdate = true;
 
     geom.computeVertexNormals();
     geom.computeBoundingBox();
@@ -891,8 +904,10 @@ export const LATTICE_DEFORM_NODE: NodeDefinition = {
     state.deformedMesh.matrixAutoUpdate = false;
     state.deformedMesh.matrix.makeTranslation(centre.x, centre.y, centre.z);
 
-    state.deformedMesh.geometry.dispose();
-    state.deformedMesh.geometry = geom;
+    if (state.deformedMesh.geometry !== geom) {
+      state.deformedMesh.geometry.dispose();
+      state.deformedMesh.geometry = geom;
+    }
     // After the geometry, not before: a material with a geometry hook has to
     // prepare the mesh that is actually drawn (see inheritSourceMaterial).
     inheritSourceMaterial(state.deformedMesh, srcMesh.material);

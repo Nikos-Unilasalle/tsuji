@@ -47,6 +47,10 @@ interface CurveNodeState {
    */
   ownMaterial?: THREE.Material;
   surfaceMaterial?: THREE.Material;
+  /** Curve Deform's output geometry, kept across frames and written into. */
+  deformed?: THREE.BufferGeometry;
+  /** The source topology `deformed` was cloned from. */
+  deformedFrom?: string;
   /** Everything the cached geometry was built from, serialized — see the rebuild guard in Curve to Mesh. */
   geometrySignature?: string;
   surfaceSignature?: string;
@@ -1507,8 +1511,24 @@ export const CURVE_DEFORM_NODE: NodeDefinition = {
       deformedPositions[i * 3 + 2] = defZ;
     }
 
-    const defGeom = srcGeom.clone();
-    defGeom.setAttribute("position", new THREE.BufferAttribute(deformedPositions, 3));
+    // Cloned once per source topology and then written into, rather than
+    // cloned every frame: a fresh BufferGeometry per evaluate is a full GPU
+    // re-upload sixty times a second, and it breaks every downstream cache
+    // that keys on geometry identity.
+    const sourceSignature = `${srcGeom.uuid}:${count}:${srcGeom.getIndex()?.count ?? -1}`;
+    if (!state.deformed || state.deformedFrom !== sourceSignature) {
+      state.deformed?.dispose();
+      state.deformed = srcGeom.clone();
+      state.deformedFrom = sourceSignature;
+    }
+    const defGeom = state.deformed;
+    const defPos = defGeom.getAttribute("position") as THREE.BufferAttribute | undefined;
+    if (defPos && defPos.array.length === deformedPositions.length) {
+      (defPos.array as Float32Array).set(deformedPositions);
+      defPos.needsUpdate = true;
+    } else {
+      defGeom.setAttribute("position", new THREE.BufferAttribute(deformedPositions, 3));
+    }
     defGeom.computeVertexNormals();
 
     // The material stays the input's — a deformed object should keep its own
@@ -1529,8 +1549,12 @@ export const CURVE_DEFORM_NODE: NodeDefinition = {
       state.mesh.receiveShadow = true;
       state.mesh.userData.nodeId = ctx.nodeId;
     } else {
-      state.mesh.geometry.dispose();
-      state.mesh.geometry = defGeom;
+      // Only when the geometry object itself changed — the usual case now is
+      // the same one, rewritten in place.
+      if (state.mesh.geometry !== defGeom) {
+        state.mesh.geometry.dispose();
+        state.mesh.geometry = defGeom;
+      }
       state.mesh.material = mat;
     }
 
