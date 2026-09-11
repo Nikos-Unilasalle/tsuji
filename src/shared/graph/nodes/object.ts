@@ -357,6 +357,20 @@ export function extractMaterialParams(
 const appliedMaterialSignatures = new WeakMap<THREE.Mesh, string>();
 
 /**
+ * A material owned and cached by another node (Worn's shared instance, e.g.)
+ * rather than one this function created for `mesh` itself. Reusing it as a
+ * "standard material already in place" — mutating its color/roughness in
+ * place — would both fail to remove whatever custom look it draws (its shader
+ * hook lives outside the PBR uniforms this code touches) and corrupt the
+ * cached instance for every other mesh sharing it. Disposing it on the way
+ * out would be worse still. It must always be replaced with a fresh material,
+ * never reused or disposed, once the socket that supplied it is gone.
+ */
+function isForeignSharedMaterial(material: THREE.Material | THREE.Material[] | null | undefined): boolean {
+  return !Array.isArray(material) && !!(material as any)?.__isSharedCustom;
+}
+
+/**
  * Some materials need geometry attributes only they know how to compute —
  * Worn's per-triangle curvature is the case in point — and expose a
  * `__prepareGeometry` hook that returns the geometry to actually draw with.
@@ -465,10 +479,10 @@ export function applyMaterialParams(
   const isTransparent = matParams.opacity < 0.999 || alpha;
 
   if (matParams.shadeless) {
-    if (!(mesh.material instanceof THREE.MeshBasicMaterial)) {
+    if (!(mesh.material instanceof THREE.MeshBasicMaterial) || isForeignSharedMaterial(mesh.material)) {
       if (Array.isArray(mesh.material)) {
         mesh.material.forEach((m) => m.dispose());
-      } else if (mesh.material) {
+      } else if (mesh.material && !isForeignSharedMaterial(mesh.material)) {
         mesh.material.dispose();
       }
       mesh.material = new THREE.MeshBasicMaterial({ side: defaultSide });
@@ -506,10 +520,10 @@ export function applyMaterialParams(
   } else {
     const wantPhysical = matParams.transmission > 0;
     if (wantPhysical) {
-      if (!(mesh.material instanceof THREE.MeshPhysicalMaterial)) {
+      if (!(mesh.material instanceof THREE.MeshPhysicalMaterial) || isForeignSharedMaterial(mesh.material)) {
         if (Array.isArray(mesh.material)) {
           mesh.material.forEach((m) => m.dispose());
-        } else if (mesh.material) {
+        } else if (mesh.material && !isForeignSharedMaterial(mesh.material)) {
           mesh.material.dispose();
         }
         mesh.material = new THREE.MeshPhysicalMaterial({ side: defaultSide });
@@ -517,14 +531,14 @@ export function applyMaterialParams(
     } else if (mesh.material instanceof THREE.MeshPhysicalMaterial) {
       if (Array.isArray(mesh.material)) {
         mesh.material.forEach((m) => m.dispose());
-      } else if (mesh.material) {
+      } else if (mesh.material && !isForeignSharedMaterial(mesh.material)) {
         mesh.material.dispose();
       }
       mesh.material = new THREE.MeshStandardMaterial({ side: defaultSide });
-    } else if (!(mesh.material instanceof THREE.MeshStandardMaterial)) {
+    } else if (!(mesh.material instanceof THREE.MeshStandardMaterial) || isForeignSharedMaterial(mesh.material)) {
       if (Array.isArray(mesh.material)) {
         mesh.material.forEach((m) => m.dispose());
-      } else if (mesh.material) {
+      } else if (mesh.material && !isForeignSharedMaterial(mesh.material)) {
         mesh.material.dispose();
       }
       mesh.material = new THREE.MeshStandardMaterial({ side: defaultSide });
