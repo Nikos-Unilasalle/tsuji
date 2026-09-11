@@ -66,5 +66,36 @@ describe("EDIT_MESH_NODE", () => {
     expect(mesh.geometry.attributes.uv).toBeDefined();
     expect(mesh.geometry.attributes.uv.count).toBe(mesh.geometry.attributes.position.count);
   });
+
+  it("exports EDIT_MESH_DELETE_FACES_ACTION and EDIT_MESH_SEPARATE_FACES_ACTION", async () => {
+    const { EDIT_MESH_DELETE_FACES_ACTION, EDIT_MESH_SEPARATE_FACES_ACTION } = await import("./editMesh");
+    expect(EDIT_MESH_DELETE_FACES_ACTION).toBe("edit-mesh/delete-faces");
+    expect(EDIT_MESH_SEPARATE_FACES_ACTION).toBe("edit-mesh/separate-faces");
+  });
+
+  it("evaluates a mesh after face deletion and face separation", async () => {
+    const { deleteFaces, extractFaces } = await import("../quadMesh");
+    const box = createQuadBox(1, 1, 1);
+    const selectedFaces = [0, 2];
+
+    const remainingMesh = deleteFaces(box, selectedFaces);
+    const separatedMesh = extractFaces(box, selectedFaces);
+
+    const resRemaining = EDIT_MESH_NODE.evaluate(
+      {},
+      { ...EDIT_MESH_NODE.defaultParams, meshData: remainingMesh },
+      { nodeId: "remaining-mesh-test" } as EvalContext,
+    );
+    const meshRemaining = resRemaining.geometry as THREE.Mesh;
+    expect(meshRemaining.geometry.userData.quadMesh.faces.length).toBe(4);
+
+    const resSeparated = EDIT_MESH_NODE.evaluate(
+      {},
+      { ...EDIT_MESH_NODE.defaultParams, meshData: separatedMesh },
+      { nodeId: "separated-mesh-test" } as EvalContext,
+    );
+    const meshSeparated = resSeparated.geometry as THREE.Mesh;
+    expect(meshSeparated.geometry.userData.quadMesh.faces.length).toBe(2);
+  });
 });
 

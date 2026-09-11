@@ -12,6 +12,8 @@ import {
   getLoopCutPreviewSegments,
   boxProjectUVs,
   transformSelection,
+  deleteFaces,
+  extractFaces,
 } from "./quadMesh";
 
 describe("QuadMesh", () => {
@@ -204,6 +206,34 @@ describe("QuadMesh", () => {
     // The slice UV span must be ~0.25, NOT 1.0 (which would squish the texture)
     expect(uSpan).toBeCloseTo(0.25, 2);
   });
+
+  it("deletes selected faces and compacts vertices", () => {
+    const box = createQuadBox(1, 1, 1);
+    // Delete faces 0 and 1
+    const remaining = deleteFaces(box, [0, 1]);
+    expect(remaining.faces.length).toBe(4);
+    // Remaining faces indices should be within valid bounds of remaining positions
+    for (const f of remaining.faces) {
+      for (const v of f) {
+        expect(v).toBeGreaterThanOrEqual(0);
+        expect(v).toBeLessThan(remaining.positions.length);
+      }
+    }
+    // Deleting all faces returns empty mesh cleanly
+    const empty = deleteFaces(box, [0, 1, 2, 3, 4, 5]);
+    expect(empty.faces.length).toBe(0);
+    expect(empty.positions.length).toBe(0);
+  });
+
+  it("extracts selected faces into a standalone mesh with valid topology", () => {
+    const box = createQuadBox(1, 1, 1);
+    // Extract top face (face 2)
+    const separated = extractFaces(box, [2]);
+    expect(separated.faces.length).toBe(1);
+    expect(separated.positions.length).toBe(4);
+    expect(new Set(separated.faces[0])).toEqual(new Set([0, 1, 2, 3]));
+  });
 });
+
 
 

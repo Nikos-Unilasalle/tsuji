@@ -15,6 +15,8 @@ import {
   EDIT_MESH_EXTRUDE_ACTION,
   EDIT_MESH_INSET_ACTION,
   EDIT_MESH_UNWRAP_UVS_ACTION,
+  EDIT_MESH_DELETE_FACES_ACTION,
+  EDIT_MESH_SEPARATE_FACES_ACTION,
 } from "./shared/graph/nodes/editMesh";
 import {
   QuadMesh,
@@ -25,6 +27,8 @@ import {
   bufferGeometryToQuadMesh,
   extrudeFaces,
   insetFaces,
+  deleteFaces,
+  extractFaces,
 } from "./shared/graph/quadMesh";
 import { extractPointsFromMesh } from "./shared/graph/nodes/pointsGeometry";
 import { freezeObjectToGeometryData, OBJECT_FROZEN_NODE } from "./shared/graph/nodes/frozenGeometry";
@@ -1306,6 +1310,102 @@ function MainEditor() {
         const meshData: QuadMesh = (node.params.meshData as QuadMesh) || createQuadBox(1, 1, 1);
         const unwrapped = boxProjectUVs(meshData);
         onParamChange("meshData", unwrapped, nodeId);
+        return;
+      }
+      if (action === EDIT_MESH_DELETE_FACES_ACTION) {
+        const node = graph.nodes.find((n) => n.id === nodeId);
+        if (!node) return;
+        if (node.params.selectMode === "points") return;
+        const selectedFaces: number[] = Array.isArray(node.params.selectedFaces)
+          ? (node.params.selectedFaces as number[])
+          : [];
+        if (selectedFaces.length === 0) return;
+
+        let meshData: QuadMesh;
+        if (node.params.meshData && typeof node.params.meshData === "object" && Array.isArray((node.params.meshData as QuadMesh).positions)) {
+          meshData = node.params.meshData as QuadMesh;
+        } else {
+          const inputs = evaluatedResults?.get(nodeId)?.__evaluatedInputs as Record<string, unknown> | undefined;
+          const geomObj = inputs?.geometry;
+          meshData = geomObj instanceof THREE.Mesh && geomObj.geometry
+            ? bufferGeometryToQuadMesh(geomObj.geometry)
+            : createQuadBox(1, 1, 1);
+        }
+
+        const remainingMesh = deleteFaces(meshData, selectedFaces);
+        onParamChange({
+          meshData: remainingMesh,
+          selectedFaces: [],
+          selectedPoints: [],
+        }, nodeId);
+        return;
+      }
+      if (action === EDIT_MESH_SEPARATE_FACES_ACTION) {
+        const node = graph.nodes.find((n) => n.id === nodeId);
+        if (!node) return;
+        if (node.params.selectMode === "points") return;
+        const selectedFaces: number[] = Array.isArray(node.params.selectedFaces)
+          ? (node.params.selectedFaces as number[])
+          : [];
+        if (selectedFaces.length === 0) return;
+
+        let meshData: QuadMesh;
+        if (node.params.meshData && typeof node.params.meshData === "object" && Array.isArray((node.params.meshData as QuadMesh).positions)) {
+          meshData = node.params.meshData as QuadMesh;
+        } else {
+          const inputs = evaluatedResults?.get(nodeId)?.__evaluatedInputs as Record<string, unknown> | undefined;
+          const geomObj = inputs?.geometry;
+          meshData = geomObj instanceof THREE.Mesh && geomObj.geometry
+            ? bufferGeometryToQuadMesh(geomObj.geometry)
+            : createQuadBox(1, 1, 1);
+        }
+
+        const separatedMesh = extractFaces(meshData, selectedFaces);
+        const remainingMesh = deleteFaces(meshData, selectedFaces);
+
+        const newNodeId = randomId();
+        const newNode = {
+          id: newNodeId,
+          type: EDIT_MESH_NODE.type,
+          params: {
+            ...cloneParams(EDIT_MESH_NODE.defaultParams),
+            meshData: separatedMesh,
+            shading: node.params.shading ?? "auto",
+            selectMode: "faces",
+            selectedFaces: Array.from({ length: separatedMesh.faces.length }, (_, i) => i),
+            selectedPoints: [],
+            name: typeof node.params.name === "string" && node.params.name ? `${node.params.name} (Separated)` : "Separated Mesh",
+          },
+          position: {
+            x: node.position.x + 280,
+            y: node.position.y + 60,
+          },
+        };
+
+        const materialConn = graph.connections.find((c) => c.toNode === nodeId && c.toSocket === "material");
+
+        setGraphWithHistory((prevGraph) => {
+          const updatedNodes = prevGraph.nodes.map((n) =>
+            n.id === nodeId
+              ? {
+                  ...n,
+                  params: {
+                    ...n.params,
+                    meshData: remainingMesh,
+                    selectedFaces: [],
+                    selectedPoints: [],
+                  },
+                }
+              : n,
+          );
+          return {
+            ...prevGraph,
+            nodes: [...updatedNodes, newNode],
+            connections: materialConn
+              ? [...prevGraph.connections, { id: randomId(), fromNode: materialConn.fromNode, fromSocket: materialConn.fromSocket, toNode: newNodeId, toSocket: "material" }]
+              : prevGraph.connections,
+          };
+        }, `separate:${nodeId}`);
         return;
       }
       if (action === EXPLODE_GLTF_ACTION) {

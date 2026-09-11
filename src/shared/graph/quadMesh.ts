@@ -1006,3 +1006,144 @@ export function transformSelection(
 
   return next;
 }
+
+/**
+ * Deletes the specified faces from a QuadMesh, reindexing vertices and
+ * cleaning up any orphaned vertices, UVs, and per-face shading attributes.
+ */
+export function deleteFaces(mesh: QuadMesh, faceIndices: number[]): QuadMesh {
+  if (faceIndices.length === 0) return cloneQuadMesh(mesh);
+  const toDelete = new Set(faceIndices);
+
+  const remainingFaces: number[][] = [];
+  const remainingFaceUVs: [number, number][][] = [];
+  const remainingFaceShading: QuadMeshShading[] = [];
+
+  for (let i = 0; i < mesh.faces.length; i++) {
+    if (!toDelete.has(i)) {
+      remainingFaces.push([...mesh.faces[i]]);
+      if (mesh.faceUVs && mesh.faceUVs[i]) {
+        remainingFaceUVs.push(mesh.faceUVs[i].map((uv) => [uv[0], uv[1]]));
+      }
+      if (mesh.faceShading && mesh.faceShading[i]) {
+        remainingFaceShading.push(mesh.faceShading[i]);
+      }
+    }
+  }
+
+  if (remainingFaces.length === 0) {
+    return {
+      positions: [],
+      faces: [],
+      uvs: [],
+      faceUVs: [],
+      shading: mesh.shading,
+      faceShading: [],
+    };
+  }
+
+  const usedVertexIndices = new Set<number>();
+  for (const face of remainingFaces) {
+    for (const vIdx of face) {
+      usedVertexIndices.add(vIdx);
+    }
+  }
+
+  const oldToNew = new Map<number, number>();
+  const newPositions: [number, number, number][] = [];
+  const newUVs: [number, number][] = [];
+
+  for (let oldIdx = 0; oldIdx < mesh.positions.length; oldIdx++) {
+    if (usedVertexIndices.has(oldIdx)) {
+      oldToNew.set(oldIdx, newPositions.length);
+      const p = mesh.positions[oldIdx];
+      newPositions.push([p[0], p[1], p[2]]);
+      if (mesh.uvs && mesh.uvs[oldIdx]) {
+        newUVs.push([mesh.uvs[oldIdx][0], mesh.uvs[oldIdx][1]]);
+      }
+    }
+  }
+
+  const remappedFaces = remainingFaces.map((face) =>
+    face.map((v) => oldToNew.get(v) ?? 0),
+  );
+
+  return {
+    positions: newPositions,
+    faces: remappedFaces,
+    uvs: mesh.uvs ? newUVs : undefined,
+    faceUVs: mesh.faceUVs ? remainingFaceUVs : undefined,
+    shading: mesh.shading,
+    faceShading: mesh.faceShading ? remainingFaceShading : undefined,
+  };
+}
+
+/**
+ * Extracts the specified faces from a QuadMesh into a new QuadMesh,
+ * preserving their geometry, UVs, and shading with compact vertex indexing.
+ */
+export function extractFaces(mesh: QuadMesh, faceIndices: number[]): QuadMesh {
+  if (faceIndices.length === 0) {
+    return {
+      positions: [],
+      faces: [],
+      uvs: [],
+      faceUVs: [],
+      shading: mesh.shading,
+      faceShading: [],
+    };
+  }
+  const toExtract = new Set(faceIndices);
+
+  const extractedFaces: number[][] = [];
+  const extractedFaceUVs: [number, number][][] = [];
+  const extractedFaceShading: QuadMeshShading[] = [];
+
+  for (let i = 0; i < mesh.faces.length; i++) {
+    if (toExtract.has(i)) {
+      extractedFaces.push([...mesh.faces[i]]);
+      if (mesh.faceUVs && mesh.faceUVs[i]) {
+        extractedFaceUVs.push(mesh.faceUVs[i].map((uv) => [uv[0], uv[1]]));
+      }
+      if (mesh.faceShading && mesh.faceShading[i]) {
+        extractedFaceShading.push(mesh.faceShading[i]);
+      }
+    }
+  }
+
+  const usedVertexIndices = new Set<number>();
+  for (const face of extractedFaces) {
+    for (const vIdx of face) {
+      usedVertexIndices.add(vIdx);
+    }
+  }
+
+  const oldToNew = new Map<number, number>();
+  const newPositions: [number, number, number][] = [];
+  const newUVs: [number, number][] = [];
+
+  for (let oldIdx = 0; oldIdx < mesh.positions.length; oldIdx++) {
+    if (usedVertexIndices.has(oldIdx)) {
+      oldToNew.set(oldIdx, newPositions.length);
+      const p = mesh.positions[oldIdx];
+      newPositions.push([p[0], p[1], p[2]]);
+      if (mesh.uvs && mesh.uvs[oldIdx]) {
+        newUVs.push([mesh.uvs[oldIdx][0], mesh.uvs[oldIdx][1]]);
+      }
+    }
+  }
+
+  const remappedFaces = extractedFaces.map((face) =>
+    face.map((v) => oldToNew.get(v) ?? 0),
+  );
+
+  return {
+    positions: newPositions,
+    faces: remappedFaces,
+    uvs: mesh.uvs ? newUVs : undefined,
+    faceUVs: mesh.faceUVs ? extractedFaceUVs : undefined,
+    shading: mesh.shading,
+    faceShading: mesh.faceShading ? extractedFaceShading : undefined,
+  };
+}
+

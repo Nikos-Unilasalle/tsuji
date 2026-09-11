@@ -34,6 +34,8 @@ import {
   EDIT_MESH_EXTRUDE_ACTION,
   EDIT_MESH_INSET_ACTION,
   EDIT_MESH_RESEED_ACTION,
+  EDIT_MESH_DELETE_FACES_ACTION,
+  EDIT_MESH_SEPARATE_FACES_ACTION,
 } from "../graph/nodes/editMesh";
 import { createEditMeshHandles } from "./editMeshHandles";
 import {
@@ -1569,6 +1571,20 @@ export function Viewport({
           e.preventDefault();
           onParamActionRef.current?.(activeEditMeshNode.id, EDIT_MESH_INSET_ACTION);
           return;
+        } else if ((key === "delete" || key === "backspace") && activeEditMeshNode.params.selectMode === "faces") {
+          const faces = Array.isArray(activeEditMeshNode.params.selectedFaces) ? (activeEditMeshNode.params.selectedFaces as number[]) : [];
+          if (faces.length > 0) {
+            e.preventDefault();
+            onParamActionRef.current?.(activeEditMeshNode.id, EDIT_MESH_DELETE_FACES_ACTION);
+            return;
+          }
+        } else if (key === "p" && activeEditMeshNode.params.selectMode === "faces") {
+          const faces = Array.isArray(activeEditMeshNode.params.selectedFaces) ? (activeEditMeshNode.params.selectedFaces as number[]) : [];
+          if (faces.length > 0) {
+            e.preventDefault();
+            onParamActionRef.current?.(activeEditMeshNode.id, EDIT_MESH_SEPARATE_FACES_ACTION);
+            return;
+          }
         }
       }
 
@@ -5588,6 +5604,10 @@ export function Viewport({
           );
           if (!editMeshNode) return null;
           const selectMode = (editMeshNode.params.selectMode as "points" | "faces") || "faces";
+          const selectedFaces = Array.isArray(editMeshNode.params.selectedFaces)
+            ? (editMeshNode.params.selectedFaces as number[])
+            : [];
+          const isFacesActive = selectMode === "faces" && selectedFaces.length > 0;
 
           return (
             <div
@@ -5758,6 +5778,82 @@ export function Viewport({
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <rect x="3" y="3" width="18" height="18" rx="2" />
                   <rect x="8" y="8" width="8" height="8" rx="1" />
+                </svg>
+              </button>
+
+              {/* Tool: Delete Face Selection */}
+              <button
+                type="button"
+                className="viewport-hud-button"
+                disabled={!isFacesActive}
+                style={
+                  !isFacesActive
+                    ? { opacity: 0.35, cursor: "not-allowed", pointerEvents: "auto" }
+                    : undefined
+                }
+                onClick={() => {
+                  if (isFacesActive) {
+                    onParamAction?.(editMeshNode.id, EDIT_MESH_DELETE_FACES_ACTION);
+                  }
+                }}
+                title={
+                  isFacesActive
+                    ? "Delete Face Selection (Shortcut: X / Delete) — Remove selected face(s)"
+                    : "Delete Face Selection (Disabled in Points mode or when no faces selected)"
+                }
+              >
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M3 6h18" />
+                  <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+                  <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+                  <line x1="10" y1="11" x2="10" y2="17" />
+                  <line x1="14" y1="11" x2="14" y2="17" />
+                </svg>
+              </button>
+
+              {/* Tool: Separate Face Selection */}
+              <button
+                type="button"
+                className="viewport-hud-button"
+                disabled={!isFacesActive}
+                style={
+                  !isFacesActive
+                    ? { opacity: 0.35, cursor: "not-allowed", pointerEvents: "auto" }
+                    : undefined
+                }
+                onClick={() => {
+                  if (isFacesActive) {
+                    onParamAction?.(editMeshNode.id, EDIT_MESH_SEPARATE_FACES_ACTION);
+                  }
+                }}
+                title={
+                  isFacesActive
+                    ? "Separate Face Selection (Shortcut: P) — Create a new object node from selected face(s)"
+                    : "Separate Face Selection (Disabled in Points mode or when no faces selected)"
+                }
+              >
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <rect x="3" y="9" width="11" height="11" rx="2" />
+                  <path d="M9 3h10a2 2 0 0 1 2 2v10" strokeDasharray="2.5 2.5" />
+                  <path d="M14 10l6-6m0 0h-4m4 0v4" />
                 </svg>
               </button>
 

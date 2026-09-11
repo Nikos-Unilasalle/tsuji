@@ -24,6 +24,8 @@ export const EDIT_MESH_RESEED_ACTION = "edit-mesh/reseed";
 export const EDIT_MESH_EXTRUDE_ACTION = "edit-mesh/extrude";
 export const EDIT_MESH_INSET_ACTION = "edit-mesh/inset";
 export const EDIT_MESH_UNWRAP_UVS_ACTION = "edit-mesh/unwrap-uvs";
+export const EDIT_MESH_DELETE_FACES_ACTION = "edit-mesh/delete-faces";
+export const EDIT_MESH_SEPARATE_FACES_ACTION = "edit-mesh/separate-faces";
 
 interface EditMeshState {
   mesh?: THREE.Mesh;
