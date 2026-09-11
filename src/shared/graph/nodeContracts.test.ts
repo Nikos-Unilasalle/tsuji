@@ -202,14 +202,26 @@ function identityGraph(modifierType: string): Graph {
   } as never as Graph;
 }
 
+/**
+ * Four left of the original fourteen, and all four are the same node family in
+ * instance.ts: one copy of the source, re-cloned per frame.
+ *
+ * Left deliberately. Measured cost per frame on a plain box — Geometry
+ * Transform 0.053 ms, Instance Transform 0.050 ms, Instance Color 0.043 ms,
+ * Get Instance 0.036 ms — against a 16.7 ms budget, and nothing downstream
+ * keys on their identity any more now that a rigid body does not. Instance
+ * Color in particular patches materials on its copy and carries a note about
+ * wanting a fresh clone when the upstream material is rebuilt, so reusing it
+ * trades a measured nothing for a real risk.
+ *
+ * The ones that were worth it were the ones that scale: Array at 200 copies
+ * went from 1.09 ms a frame to 0.26, Hex Grid from 0.32 to 0.08.
+ */
 const KNOWN_IDENTITY_VIOLATIONS: Record<string, string> = {
-  "structure/array: mesh": "re-wraps its instances in a fresh Group each frame.",
-  "structure/geometry-transform: mesh": "re-wraps in a fresh Group each frame.",
-  "structure/get-instance: mesh": "re-wraps in a fresh Group each frame.",
-  "structure/hex-grid: mesh": "re-wraps in a fresh Group each frame.",
-  "structure/instance-color: mesh": "re-wraps in a fresh Group each frame.",
-  "structure/instance-transform: mesh": "re-wraps in a fresh Group each frame.",
-  "transform/look-at: mesh": "re-wraps in a fresh Group each frame.",
+  "structure/geometry-transform: mesh": "0.053 ms/frame — one clone, re-cloned each frame.",
+  "structure/get-instance: mesh": "0.036 ms/frame — one clone, re-cloned each frame.",
+  "structure/instance-color: mesh": "0.043 ms/frame, and its clone is where the per-instance material patching lands.",
+  "structure/instance-transform: mesh": "0.050 ms/frame — one clone, re-cloned each frame.",
 };
 
 /* -------------------------------------------------------------------------- */

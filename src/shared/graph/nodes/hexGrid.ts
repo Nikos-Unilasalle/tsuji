@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { NodeDefinition } from "../types";
 import { createNodeCache, disposeObject3D } from "../nodeCaches";
 import { InstancedItemSpec, renderInstanced } from "./instancedRender";
-import { getSourcePivot } from "./transform";
+import { acquireInstance, instancePoolCache } from "./instancePool";
 
 const groupCache = createNodeCache<THREE.Group>(disposeObject3D);
 
@@ -85,6 +85,14 @@ export const HEX_GRID_NODE: NodeDefinition = {
     const group = getGroup(ctx.nodeId);
     group.clear();
 
+    let instancePool = instancePoolCache.get(ctx.nodeId);
+    if (!instancePool) {
+      instancePool = new Map();
+      instancePoolCache.set(ctx.nodeId, instancePool);
+    }
+    // Reset per frame: the pool persists, the hand-out counter does not.
+    const handedOut = new Map<string, number>();
+
     const cols = Math.max(1, Math.min(200, Math.floor(numberInput(inputs.cols, params.cols, 8))));
     const rows = Math.max(1, Math.min(200, Math.floor(numberInput(inputs.rows, params.rows, 8))));
     const radius = Math.max(0.001, numberInput(inputs.radius, params.radius, 1.0));
@@ -123,9 +131,6 @@ export const HEX_GRID_NODE: NodeDefinition = {
 
     const instancedItems: InstancedItemSpec[] = [];
     const itemSource = inputs.geometry instanceof THREE.Object3D ? inputs.geometry : null;
-    const sourcePivot = itemSource ? getSourcePivot(itemSource) : null;
-    const hasPivot = Boolean(sourcePivot && sourcePivot.lengthSq() > 1e-9);
-    const pivotInv = hasPivot && sourcePivot ? new THREE.Matrix4().makeTranslation(-sourcePivot.x, -sourcePivot.y, -sourcePivot.z) : null;
 
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < cols; c++) {
@@ -166,17 +171,7 @@ export const HEX_GRID_NODE: NodeDefinition = {
           if (gpuInstancing) {
             instancedItems.push({ template: itemSource, matrix: instanceMatrix });
           } else {
-            const clone = itemSource.clone(true);
-            if (pivotInv) {
-              clone.matrixAutoUpdate = false;
-              clone.matrix.copy(itemSource.matrix).multiply(pivotInv);
-            }
-            const wrapper = new THREE.Group();
-            wrapper.matrixAutoUpdate = false;
-            wrapper.matrix.copy(instanceMatrix);
-            if (hasPivot && sourcePivot) wrapper.userData.pivot = sourcePivot.clone();
-            wrapper.add(clone);
-            group.add(wrapper);
+            group.add(acquireInstance(instancePool, handedOut, itemSource, instanceMatrix));
           }
         }
       }
