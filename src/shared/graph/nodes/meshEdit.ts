@@ -4,8 +4,15 @@ import { createNodeCache, disposeObject3D } from "../nodeCaches";
 import { NodeDefinition } from "../types";
 import { clearMeshWarning, findFirstMesh, warnMeshRequired } from "../meshRequired";
 import { createPRNG } from "../../math/random";
-import { applyMaterialParams, inheritSourceMaterial, materialParamsFromValue, primitiveOutputs } from "./object";
-import { asVector3, preserveModifierUserData } from "./transform";
+import {
+  applyMaterialParams,
+  createModifierMesh,
+  emitModifiedMesh,
+  inheritSourceMaterial,
+  materialParamsFromValue,
+  primitiveOutputs,
+} from "./object";
+import { asVector3 } from "./transform";
 
 export type FaceSelectMode = "all" | "normal" | "height";
 
@@ -492,21 +499,8 @@ export const EXTRUDE_MESH_NODE: NodeDefinition = {
       : `${growRotation.toArray().map((n) => n.toFixed(4)).join(",")}:${growScale.toArray().map((n) => n.toFixed(4)).join(",")}:${growLocation.toArray().map((n) => n.toFixed(4)).join(",")}`;
     const signature = `${distance}:${passes}:${transformPart}:${random}:${seed}:${selection.mode}:${selection.axis}:${selection.threshold}:${selection.invert}:${rawSelection ? rawSelection.map(Number).join("") : ""}:${srcGeom.attributes.position.count}:${srcGeom.index?.count ?? -1}`;
     if (state.mesh && state.lastSignature === signature) {
-      // srcMesh.matrix is only its LOCAL pose — correct for a mesh that
-      // directly carries its own transform (Box, Sphere, ...), but wrong for
-      // one nested under a posed wrapper group (OBJ Model bakes its Location/
-      // Rotation/Scale/Pivot onto the group, not the mesh inside it), where
-      // .matrix alone is identity and this would silently reset the pose.
-      // matrixWorld is correct either way. Also force matrixAutoUpdate off
-      // rather than copying the source's flag: an OBJ-parsed mesh defaults to
-      // true, which would have three's own render loop recompute (and wipe)
-      // this matrix from its untouched position/quaternion/scale next frame.
-      inputObj.updateMatrixWorld(true);
-      state.mesh.matrixAutoUpdate = false;
-      state.mesh.matrix.copy(srcMesh.matrixWorld);
-      preserveModifierUserData(state.mesh, inputObj, srcMesh, ctx.nodeId);
       applyExtrudeMaterial(state.mesh, srcMesh, inputs.material);
-      return primitiveOutputs(state.mesh);
+      return emitModifiedMesh(state.mesh, { inputObj, srcMesh, nodeId: ctx.nodeId, material: state.mesh.material });
     }
 
     const welded = toWeldedMesh(srcGeom);
@@ -546,25 +540,16 @@ export const EXTRUDE_MESH_NODE: NodeDefinition = {
     geometry.computeBoundingBox();
     geometry.computeBoundingSphere();
 
-    if (!state.mesh) {
-      state.mesh = new THREE.Mesh(geometry);
-      state.mesh.castShadow = true;
-      state.mesh.receiveShadow = true;
-    } else {
-      state.mesh.geometry.dispose();
-      state.mesh.geometry = geometry;
-    }
+    if (!state.mesh) state.mesh = createModifierMesh();
+    state.mesh.geometry?.dispose();
+    state.mesh.geometry = geometry;
+    // Picks the wired material, or adapts the source's — so what it settles on
+    // is what emitModifiedMesh is told to keep, rather than the source's raw
+    // material overwriting it a line later.
     applyExtrudeMaterial(state.mesh, srcMesh, inputs.material);
-
-    // See the first occurrence above for why matrixWorld (not matrix) and
-    // a forced-false matrixAutoUpdate.
-    inputObj.updateMatrixWorld(true);
-    state.mesh.matrixAutoUpdate = false;
-    state.mesh.matrix.copy(srcMesh.matrixWorld);
-    preserveModifierUserData(state.mesh, inputObj, srcMesh, ctx.nodeId);
     state.lastSignature = signature;
 
-    return primitiveOutputs(state.mesh);
+    return emitModifiedMesh(state.mesh, { inputObj, srcMesh, nodeId: ctx.nodeId, material: state.mesh.material });
   },
 };
 
@@ -718,17 +703,7 @@ export const DELETE_GEOMETRY_NODE: NodeDefinition = {
     const state = getState(meshEditCache, ctx.nodeId);
     const signature = `${selection.mode}:${selection.axis}:${selection.threshold}:${selection.invert}:${srcGeom.attributes.position.count}:${srcGeom.index?.count ?? -1}`;
     if (state.mesh && state.lastSignature === signature) {
-      // See the first occurrence above for why matrixWorld (not matrix) and
-      // a forced-false matrixAutoUpdate.
-      inputObj.updateMatrixWorld(true);
-      state.mesh.matrixAutoUpdate = false;
-      state.mesh.matrix.copy(srcMesh.matrixWorld);
-      preserveModifierUserData(state.mesh, inputObj, srcMesh, ctx.nodeId);
-      // Live material inheritance, same as Extrude: the surviving faces keep
-      // the source's material, refreshed on cache hits so upstream animation
-      // keeps driving it.
-      inheritSourceMaterial(state.mesh, srcMesh.material);
-      return primitiveOutputs(state.mesh);
+      return emitModifiedMesh(state.mesh, { inputObj, srcMesh, nodeId: ctx.nodeId });
     }
 
     const posAttr = srcGeom.attributes.position;
@@ -754,23 +729,9 @@ export const DELETE_GEOMETRY_NODE: NodeDefinition = {
     geometry.computeBoundingBox();
     geometry.computeBoundingSphere();
 
-    if (!state.mesh) {
-      state.mesh = new THREE.Mesh(geometry);
-      state.mesh.castShadow = true;
-      state.mesh.receiveShadow = true;
-    } else {
-      state.mesh.geometry.dispose();
-      state.mesh.geometry = geometry;
-    }
-    inheritSourceMaterial(state.mesh, srcMesh.material);
-    // See the first occurrence above for why matrixWorld (not matrix) and
-    // a forced-false matrixAutoUpdate.
-    inputObj.updateMatrixWorld(true);
-    state.mesh.matrixAutoUpdate = false;
-    state.mesh.matrix.copy(srcMesh.matrixWorld);
-    preserveModifierUserData(state.mesh, inputObj, srcMesh, ctx.nodeId);
+    if (!state.mesh) state.mesh = createModifierMesh();
     state.lastSignature = signature;
 
-    return primitiveOutputs(state.mesh);
+    return emitModifiedMesh(state.mesh, { inputObj, srcMesh, geometry, nodeId: ctx.nodeId });
   },
 };

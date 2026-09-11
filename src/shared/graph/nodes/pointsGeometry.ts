@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { NodeDefinition } from "../types";
 import { clearMeshWarning, findFirstMesh, warnMeshRequired } from "../meshRequired";
 import { createNodeCache, disposeObject3D } from "../nodeCaches";
-import { inheritSourceMaterial, primitiveOutputs } from "./object";
+import { emitModifiedMesh, primitiveOutputs } from "./object";
 
 export interface ExtractedPoints {
   points: THREE.Vector3[];
@@ -312,16 +312,8 @@ export function writePointsToMesh(nodeId: string, inputObj: THREE.Object3D, poin
     geometry.computeVertexNormals();
   }
   geometry.computeBoundingSphere();
-  inheritSourceMaterial(state.mesh, srcMesh.material);
 
-  // matrixWorld, not matrix, and forced from the root — same reasoning as
-  // extractPointsFromMesh above: srcMesh's own LOCAL matrix is identity when
-  // it's nested under a posed wrapper group (OBJ Model), which would
-  // silently drop the object's real pose.
-  inputObj.updateMatrixWorld(true);
-  state.mesh.matrixAutoUpdate = false;
-  state.mesh.matrix.copy(srcMesh.matrixWorld);
-
+  emitModifiedMesh(state.mesh, { inputObj, srcMesh, nodeId });
   return state.mesh;
 }
 

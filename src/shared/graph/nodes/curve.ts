@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { NodeDefinition, ParamFieldDef } from "../types";
 import { createNodeCache } from "../nodeCaches";
-import { asVector3, composeNativeMatrix } from "./transform";
+import { asVector3, composeNativeMatrix, preserveModifierUserData } from "./transform";
 import {
   applyMaterialParams,
   COMMON_MATERIAL_PARAM_FIELDS,
@@ -1552,6 +1552,12 @@ export const CURVE_DEFORM_NODE: NodeDefinition = {
         .copy(composeNativeMatrix(inputs.matrix, params.location, params.rotation, params.scale, params))
         .multiply(new THREE.Matrix4().makeTranslation(centre.x, centre.y, centre.z));
     }
+
+    // The bent object is still the same object downstream, so it keeps the
+    // source's pivot and Show Pivot. Not emitModifiedMesh: this node owns its
+    // pose (composed just above), where a plain modifier inherits the
+    // source's.
+    preserveModifierUserData(state.mesh, inputObj, srcMesh, ctx.nodeId);
 
     return primitiveOutputs(state.mesh);
   },

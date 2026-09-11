@@ -2,8 +2,7 @@ import * as THREE from "three";
 import { createNodeCache, disposeObject3D } from "../nodeCaches";
 import { NodeDefinition } from "../types";
 import { clearMeshWarning, findFirstMesh, warnMeshRequired } from "../meshRequired";
-import { inheritSourceMaterial, primitiveOutputs } from "./object";
-import { preserveModifierUserData } from "./transform";
+import { createModifierMesh, emitModifiedMesh, primitiveOutputs } from "./object";
 
 /**
  * The three shading modes, in Blender's vocabulary. "auto" is Blender's
@@ -295,58 +294,28 @@ export const SHADE_NODE: NodeDefinition = {
     const posAttr = srcGeom.attributes.position as THREE.BufferAttribute;
     const signature = `${mode}:${angleRad.toFixed(4)}:${srcGeom.uuid}`;
     const srcChanged = state.srcPosArray !== posAttr.array || state.srcPosCount !== posAttr.count;
-    if (state.mesh && state.signature === signature && !srcChanged) {
-      // srcMesh.matrix is only its LOCAL pose — correct for a mesh that
-      // directly carries its own transform (Box, Sphere, ...), but wrong for
-      // one nested under a posed wrapper group (OBJ Model bakes its Location/
-      // Rotation/Scale/Pivot onto the group, not the mesh inside it), where
-      // .matrix alone is identity and this would silently reset the pose.
-      // matrixWorld is correct either way — computed by forcing it from
-      // inputObj (the root), not srcMesh itself: three's own
-      // `mesh.updateWorldMatrix(true, false, true)` only forwards `force` to
-      // the mesh, not to the parents it climbs to recompute, so a wrapper
-      // group whose matrixWorldNeedsUpdate flag was never set (true here,
-      // since OBJ Model writes `.matrix` directly rather than through
-      // position/rotation/scale) silently stayed at its stale/identity
-      // matrixWorld regardless. updateMatrixWorld(true) from the root
-      // correctly cascades force down through every descendant instead.
-      // Also force matrixAutoUpdate off rather than copying the source's
-      // flag: an OBJ-parsed mesh defaults it true, which would have three's
-      // own render loop recompute (and wipe) this matrix next frame.
-      inputObj.updateMatrixWorld(true);
-      state.mesh.matrixAutoUpdate = false;
-      state.mesh.matrix.copy(srcMesh.matrixWorld);
-      preserveModifierUserData(state.mesh, inputObj, srcMesh, ctx.nodeId);
-      inheritSourceMaterial(state.mesh, srcMesh.material);
-      return primitiveOutputs(state.mesh);
+    const rebuild = !state.mesh || state.signature !== signature || srcChanged;
+
+    let geometry: THREE.BufferGeometry | undefined;
+    if (rebuild) {
+      geometry =
+        mode === "smooth"
+          ? buildSmoothGeometry(srcGeom)
+          : mode === "flat"
+            ? buildFlatGeometry(srcGeom)
+            : buildAutoSmoothGeometry(srcGeom, angleRad);
+      state.signature = signature;
+      state.srcPosArray = posAttr.array;
+      state.srcPosCount = posAttr.count;
     }
 
-    const geometry =
-      mode === "smooth"
-        ? buildSmoothGeometry(srcGeom)
-        : mode === "flat"
-          ? buildFlatGeometry(srcGeom)
-          : buildAutoSmoothGeometry(srcGeom, angleRad);
-
-    if (!state.mesh) {
-      state.mesh = new THREE.Mesh(geometry);
-    } else {
-      state.mesh.geometry.dispose();
-      state.mesh.geometry = geometry;
-    }
-    inheritSourceMaterial(state.mesh, srcMesh.material);
+    if (!state.mesh) state.mesh = createModifierMesh();
+    // Shadow flags follow the source here rather than taking emitModifiedMesh's
+    // default: re-shading a mesh must not quietly enrol it in shadows it was
+    // deliberately kept out of.
     state.mesh.castShadow = srcMesh.castShadow;
     state.mesh.receiveShadow = srcMesh.receiveShadow;
-    // See the cached-return branch above for why matrixWorld (not matrix)
-    // and a forced-false matrixAutoUpdate.
-    inputObj.updateMatrixWorld(true);
-    state.mesh.matrixAutoUpdate = false;
-    state.mesh.matrix.copy(srcMesh.matrixWorld);
-    preserveModifierUserData(state.mesh, inputObj, srcMesh, ctx.nodeId);
-    state.signature = signature;
-    state.srcPosArray = posAttr.array;
-    state.srcPosCount = posAttr.count;
 
-    return primitiveOutputs(state.mesh);
+    return emitModifiedMesh(state.mesh, { inputObj, srcMesh, geometry, nodeId: ctx.nodeId });
   },
 };

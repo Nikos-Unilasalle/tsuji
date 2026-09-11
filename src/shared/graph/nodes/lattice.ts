@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { NodeDefinition } from "../types";
 import { clearMeshWarning, findFirstMesh, warnMeshRequired } from "../meshRequired";
 import { createNodeCache, disposeObject3D } from "../nodeCaches";
-import { asVector3, composeNativeMatrix } from "./transform";
+import { asVector3, composeNativeMatrix, preserveModifierUserData } from "./transform";
 import { COMMON_PRIMITIVE_OUTPUTS, inheritSourceMaterial, primitiveOutputs, recentreGeometry } from "./object";
 
 
@@ -896,6 +896,13 @@ export const LATTICE_DEFORM_NODE: NodeDefinition = {
     // After the geometry, not before: a material with a geometry hook has to
     // prepare the mesh that is actually drawn (see inheritSourceMaterial).
     inheritSourceMaterial(state.deformedMesh, srcMesh.material);
+    // The deformed result is still the same object as far as the rest of the
+    // graph is concerned, so it keeps the source's pivot and Show Pivot — the
+    // marker used to vanish the moment a lattice was wired in. Not
+    // emitModifiedMesh: this node owns the pose (the cage's, on the group) and
+    // the mesh's own matrix is the recentring offset, neither of which is the
+    // source's world matrix.
+    preserveModifierUserData(state.deformedMesh, inputObj, srcMesh, ctx.nodeId);
 
     const deformedPosAttr = geom.attributes.position as THREE.BufferAttribute;
     const points: THREE.Vector3[] = new Array(deformedPosAttr.count);

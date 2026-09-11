@@ -179,17 +179,11 @@ const APPEARANCE_BY_DESIGN: Record<string, string> = {
 
 const KNOWN_APPEARANCE_VIOLATIONS: Record<string, string> = {
   "modifier/extrude: uv":
-    "documented in meshEdit.ts: the cap and walls have no UV space of their own, so the attribute is dropped. " +
-    "The material and its map survive, which makes it worse, not better — the texture is still bound and " +
-    "renders as garbage, and every node downstream inherits the loss.",
-  "curve/deform: pivot":
-    "the deformed copy is built from scratch and never carries userData across.",
-  "modifier/lattice: pivot":
-    "the deformed mesh is rebuilt each frame and userData is not carried over.",
-  "modifier/edit-mesh: pivot":
-    "owns a native pose since the Edit Mesh pivot work, and overwrites the upstream pivot with its own " +
-    "default of (0,0,0) — which preserveModifierUserData then drops as empty. A node with its own pivot " +
-    "legitimately replaces the source's, but it should publish it, not erase it.",
+    "documented in meshEdit.ts: the cap and walls have no UV space of their own, so the attribute is " +
+    "dropped. The material and its map survive, which makes it worse, not better — the texture is still " +
+    "bound and renders as garbage, and every node downstream inherits the loss. The only entry here that " +
+    "is a missing feature rather than a slip: giving it UVs means unwrapping the new geometry, not " +
+    "remembering to copy something.",
 };
 
 /* -------------------------------------------------------------------------- */
@@ -217,9 +211,6 @@ const KNOWN_IDENTITY_VIOLATIONS: Record<string, string> = {
   "geometry/wave-ripple: geometry":
     "displaces vertices from ctx.time, so a rebuild is right when time moves — but this runs at a " +
     "frozen time, where nothing changed and nothing should be rebuilt.",
-  "modifier/edit-mesh: geometry":
-    "state.lastQuadMesh is stored as a clone and then compared with ===, so the cache can never hit. " +
-    "30 rebuilds over 30 identical frames.",
   "modifier/lattice: geometry": "builds a new BufferGeometry per frame unconditionally.",
   "structure/array: mesh": "re-wraps its instances in a fresh Group each frame.",
   "structure/geometry-transform: mesh": "re-wraps in a fresh Group each frame.",
