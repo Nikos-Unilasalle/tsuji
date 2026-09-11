@@ -963,7 +963,16 @@ export const VEHICLE_NODE: NodeDefinition = {
         };
       }
 
-      object.updateWorldMatrix(true, false);
+      // Forced and top-down, not `object.updateWorldMatrix(true, false)`:
+      // that call is bottom-up and only recomputes matrixWorld when
+      // `matrixWorldNeedsUpdate` is already set, which a chassis coming from
+      // a Merge (whose group has `matrixAutoUpdate = false` and writes
+      // `.matrix` directly, never flagging that itself) never is past its
+      // first-ever frame — so the vehicle's starting pose silently read a
+      // stale (usually identity) matrixWorld instead of wherever the chassis
+      // was actually authored. Same bug and fix as Boolean's world-matrix
+      // refresh — see the comment there.
+      object.updateMatrixWorld(true);
       const start = new THREE.Vector3();
       const rotation = new THREE.Quaternion();
       const scale = new THREE.Vector3();

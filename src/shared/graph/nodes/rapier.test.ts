@@ -663,6 +663,37 @@ describe("physics/vehicle — a raycast car", () => {
     }
   });
 
+  test("a chassis wired through a Merge starts at its authored pose, not the origin", () => {
+    // A Merge's group has matrixAutoUpdate off and writes `.matrix` directly
+    // (see structure/merge.ts), never flagging matrixWorldNeedsUpdate itself.
+    // Once some earlier, unrelated traversal has already consumed that flag
+    // (matrixWorldNeedsUpdate starts true on a fresh Group, exactly like a
+    // real one that's already been through a render pass or two), a later
+    // `.matrix` write is invisible to a *bottom-up*, unforced
+    // `updateWorldMatrix(true, false)` — it only recomputes when the dirty
+    // flag is set. Reproduces the regression: plugging a chassis coming from
+    // a Merge into Vehicle moved it to the origin instead of where it was
+    // authored.
+    const group = new THREE.Group();
+    const box = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.6, 3));
+    group.add(box);
+    group.matrixAutoUpdate = false;
+    group.matrix.identity();
+    group.updateMatrixWorld(true); // consumes matrixWorldNeedsUpdate, like a prior frame's render pass
+    // The authored pose, written the same way Merge writes it: straight onto
+    // `.matrix`, with nothing re-flagging matrixWorldNeedsUpdate.
+    group.matrix.compose(new THREE.Vector3(0, 1.64, 0), new THREE.Quaternion(), new THREE.Vector3(1, 1, 1));
+
+    const world = PHYSICS_WORLD_NODE.evaluate({}, worldParams(), makeContext("v-merge-w", 0)) as { world: unknown };
+    const out = VEHICLE_NODE.evaluate(
+      { world: world.world, chassis: group },
+      carParams(),
+      makeContext("v-merge-car", 0),
+    ) as { position: THREE.Vector3 };
+
+    expect(out.position.y).toBeCloseTo(1.64, 3);
+  });
+
   test("with no world wired the chassis passes through untouched", () => {
     const car = chassis();
     const out = VEHICLE_NODE.evaluate({ chassis: car }, carParams(), makeContext("v8", 0)) as {
