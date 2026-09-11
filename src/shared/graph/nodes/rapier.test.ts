@@ -789,6 +789,31 @@ describe("physics/vehicle — a raycast car", () => {
     expect(out.position.toArray()).toEqual([5, 3, -1]);
   });
 
+  test("while not playing, the wheels still come out at their rest pose under the chassis", () => {
+    // Without this the wheel meshes an author wires into an Instance
+    // Transform have no matrices to sit on while the editor is idle, and
+    // scatter to whatever layout their Array gives them — you cannot line a
+    // car's wheels up with its body if they only appear once it drives.
+    const car = chassis(); // a 1.6 × 0.6 × 3 box at (0, 1, 0)
+    const world = PHYSICS_WORLD_NODE.evaluate({}, worldParams(), makeContext("v-rest-w", 0, false)) as { world: unknown };
+    const out = VEHICLE_NODE.evaluate(
+      { world: world.world, chassis: car },
+      carParams({ trackWidth: 1.5, wheelBase: 2.4, wheelHeight: -0.2, suspensionRest: 0.4 }),
+      makeContext("v-rest-car", 0, false),
+    ) as { wheels: THREE.Matrix4[] };
+
+    expect(out.wheels.length).toBe(4);
+    const at = (i: number) => new THREE.Vector3().setFromMatrixPosition(out.wheels[i]);
+    // Chassis sits at y = 1; mount is 0.2 below it, dropped a further 0.4 by
+    // the resting suspension.
+    for (let i = 0; i < 4; i++) expect(at(i).y).toBeCloseTo(1 - 0.2 - 0.4, 5);
+    // Two either side of the centre line, two fore and two aft.
+    expect(out.wheels.filter((_, i) => at(i).x > 0).length).toBe(2);
+    expect(out.wheels.filter((_, i) => at(i).z > 0).length).toBe(2);
+    expect(Math.abs(at(0).x)).toBeCloseTo(1.5 / 2, 5);
+    expect(Math.abs(at(0).z)).toBeCloseTo(2.4 / 2, 5);
+  });
+
   test("with no world wired the chassis passes through untouched", () => {
     const car = chassis();
     const out = VEHICLE_NODE.evaluate({ chassis: car }, carParams(), makeContext("v8", 0)) as {

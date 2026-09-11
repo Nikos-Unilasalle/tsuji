@@ -876,6 +876,40 @@ const WHEEL_LAYOUT = [
 ] as const;
 
 /**
+ * Where the four wheels sit with no solver running: the mount points the
+ * controller would be given, dropped by a fully extended suspension, in the
+ * chassis's own authored frame.
+ *
+ * The authoring scale is dropped the same way the simulated wheels drop it
+ * (see the note on `chassisPose` further down) — a chassis sized by its
+ * transform must not smear that scale onto wheels measured in world units.
+ */
+function restWheelMatrices(
+  chassisWorld: THREE.Matrix4,
+  trackWidth: number,
+  wheelBase: number,
+  mountHeight: number,
+  suspensionRest: number,
+): THREE.Matrix4[] {
+  const position = new THREE.Vector3();
+  const rotation = new THREE.Quaternion();
+  const scale = new THREE.Vector3();
+  chassisWorld.decompose(position, rotation, scale);
+  const pose = new THREE.Matrix4().compose(position, rotation, new THREE.Vector3(1, 1, 1));
+
+  return WHEEL_LAYOUT.map((wheel) =>
+    new THREE.Matrix4().multiplyMatrices(
+      pose,
+      new THREE.Matrix4().makeTranslation(
+        wheel.side * (trackWidth / 2),
+        mountHeight - suspensionRest,
+        wheel.front ? wheelBase / 2 : -wheelBase / 2,
+      ),
+    ),
+  );
+}
+
+/**
  * Vehicle — a four-wheeled car on Rapier's raycast vehicle controller.
  *
  * Not four rigid-body wheels with joints: a raycast vehicle casts a ray down
@@ -973,10 +1007,21 @@ export const VEHICLE_NODE: NodeDefinition = {
       };
     }
 
+    const wheelRadius = Math.max(0.02, numberInput(undefined, params.wheelRadius, 0.35));
+    const wheelBase = Math.max(0.1, numberInput(undefined, params.wheelBase, 1.3));
+    const trackWidth = Math.max(0.1, numberInput(undefined, params.trackWidth, 0.8));
+    const mountHeight = numberInput(undefined, params.wheelHeight, -0.25);
+    const suspensionRest = Math.max(0.01, numberInput(undefined, params.suspensionRest, 0.35));
+
     // Same reasoning as Rigid Body: not actually running means tear down any
     // body from a previous run and hand the authored chassis pose straight
     // through, so it stays hand-editable and the next Play starts from
     // wherever it was just dragged to rather than a stale settled pose.
+    //
+    // The wheels still come out, placed from the authored chassis pose with
+    // the suspension at rest: they are what the author is *aiming* with when
+    // setting wheelbase, track width and mount height, and a car whose wheels
+    // only appear once it's driving cannot be lined up with its own body.
     if (!isSimulating(ctx)) {
       const stale = vehicleCache.get(ctx.nodeId);
       if (stale && stale.worldNodeId === handle.nodeId && stale.generation === handle.generation) {
@@ -985,21 +1030,16 @@ export const VEHICLE_NODE: NodeDefinition = {
         handle.world.removeRigidBody(stale.body);
       }
       vehicleCache.delete(ctx.nodeId);
+      object.updateMatrixWorld(true);
       return {
         geometry: object,
         matrix: object.matrix.clone(),
         position: object.position.clone(),
-        wheels: [],
+        wheels: restWheelMatrices(object.matrixWorld, trackWidth, wheelBase, mountHeight, suspensionRest),
         speed: 0,
         grounded: 0,
       };
     }
-
-    const wheelRadius = Math.max(0.02, numberInput(undefined, params.wheelRadius, 0.35));
-    const wheelBase = Math.max(0.1, numberInput(undefined, params.wheelBase, 1.3));
-    const trackWidth = Math.max(0.1, numberInput(undefined, params.trackWidth, 0.8));
-    const mountHeight = numberInput(undefined, params.wheelHeight, -0.25);
-    const suspensionRest = Math.max(0.01, numberInput(undefined, params.suspensionRest, 0.35));
 
     const signature = `${wheelRadius}|${wheelBase}|${trackWidth}|${mountHeight}|${suspensionRest}|${numberInput(undefined, params.mass, 800)}|${numberInput(undefined, params.centerOfMass, -0.3)}|${handle.generation}`;
 
