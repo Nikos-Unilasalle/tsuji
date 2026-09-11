@@ -17,8 +17,8 @@ import {
   worldMatrixOf,
 } from "../../three/physics/rapierRuntime";
 
-function makeContext(nodeId: string, time: number): EvalContext {
-  return { nodeId, time, step: Math.round(time * 60) };
+function makeContext(nodeId: string, time: number, isPlaying?: boolean): EvalContext {
+  return { nodeId, time, step: Math.round(time * 60), isPlaying };
 }
 
 describe("fixed timestep planning", () => {
@@ -316,6 +316,74 @@ describe("simulation", () => {
       worldParams({ paused: 1 }),
     );
     expect((out["ball-7"].position as THREE.Vector3).y).toBeCloseTo(10, 5);
+  });
+
+  test("while not playing, a dynamic body does not fall and stays fully hand-editable", () => {
+    const box = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1));
+    box.position.set(0, 10, 0);
+    box.updateMatrixWorld(true);
+
+    const params = bodyParams({ shape: "box" });
+    const world = worldParams();
+
+    for (let frame = 0; frame < 90; frame++) {
+      const time = frame / 60;
+      const w = PHYSICS_WORLD_NODE.evaluate({}, world, makeContext("w-idle", time, false)) as { world: unknown };
+      RIGID_BODY_NODE.evaluate({ world: w.world, geometry: box }, params, makeContext("body-idle", time, false));
+    }
+    // No gravity fall while idle...
+    expect(box.position.y).toBeCloseTo(10, 5);
+
+    // ...and a hand-authored move (the gizmo, a Location field) is not fought
+    // — the node must not have overwritten the mesh at all.
+    box.position.set(3, 5, -2);
+    box.updateMatrixWorld(true);
+    const w = PHYSICS_WORLD_NODE.evaluate({}, world, makeContext("w-idle", 91 / 60, false)) as { world: unknown };
+    const out = RIGID_BODY_NODE.evaluate(
+      { world: w.world, geometry: box },
+      params,
+      makeContext("body-idle", 91 / 60, false),
+    ) as { position: THREE.Vector3 };
+    expect(out.position.toArray()).toEqual([3, 5, -2]);
+  });
+
+  test("pressing Play picks physics up from wherever the body was last hand-positioned, not a stale pose", () => {
+    const box = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1));
+    box.position.set(0, 10, 0);
+    box.updateMatrixWorld(true);
+
+    const params = bodyParams({ shape: "box" });
+    const world = worldParams();
+
+    // Play, fall and settle onto nothing in particular for a while...
+    let w: any;
+    for (let frame = 0; frame < 60; frame++) {
+      w = PHYSICS_WORLD_NODE.evaluate({}, world, makeContext("w-resume", frame / 60, true));
+      RIGID_BODY_NODE.evaluate({ world: w.world, geometry: box }, params, makeContext("body-resume", frame / 60, true));
+    }
+    expect(box.position.y).toBeLessThan(10);
+
+    // ...stop, and hand-place it somewhere specific while idle. Written the
+    // same way an authoring node (Box, etc.) writes a position — straight
+    // onto `.matrix` — since the physics write-back above already flipped
+    // `matrixAutoUpdate` off, and a plain `.position.set()` would silently
+    // no-op against that stale matrix otherwise.
+    w = PHYSICS_WORLD_NODE.evaluate({}, world, makeContext("w-resume", 61 / 60, false));
+    RIGID_BODY_NODE.evaluate({ world: w.world, geometry: box }, params, makeContext("body-resume", 61 / 60, false));
+    box.matrixAutoUpdate = false;
+    box.matrix.identity().setPosition(0, 20, 0);
+    box.matrixWorldNeedsUpdate = true;
+    box.updateMatrixWorld(true);
+
+    // Play again: the very first simulated frame must start from (0, 20, 0),
+    // not from wherever the earlier fall had left the (still-cached) body.
+    w = PHYSICS_WORLD_NODE.evaluate({}, world, makeContext("w-resume", 62 / 60, true));
+    const out = RIGID_BODY_NODE.evaluate(
+      { world: w.world, geometry: box },
+      params,
+      makeContext("body-resume", 62 / 60, true),
+    ) as { position: THREE.Vector3 };
+    expect(out.position.y).toBeCloseTo(20, 1);
   });
 
   test("scrubbing the timeline backwards rebuilds the world and re-seeds the bodies", () => {
@@ -692,6 +760,33 @@ describe("physics/vehicle — a raycast car", () => {
     ) as { position: THREE.Vector3 };
 
     expect(out.position.y).toBeCloseTo(1.64, 3);
+  });
+
+  test("while not playing, the chassis does not fall and stays hand-editable", () => {
+    const car = chassis();
+    const world = worldParams();
+
+    for (let frame = 0; frame < 90; frame++) {
+      const time = frame / 60;
+      const w = PHYSICS_WORLD_NODE.evaluate({}, world, makeContext("v-idle-w", time, false)) as { world: unknown };
+      VEHICLE_NODE.evaluate({ world: w.world, chassis: car }, carParams(), makeContext("v-idle-car", time, false));
+    }
+    // No gravity fall while idle...
+    expect(car.position.y).toBeCloseTo(1, 5);
+
+    // ...and a hand-authored move is not fought. This car was never played,
+    // so — unlike a body that already had a physics write-back flip
+    // `matrixAutoUpdate` off — it's still at its default `true`, and a plain
+    // `.position.set()` keeps `.matrix` in sync on its own.
+    car.position.set(5, 3, -1);
+    car.updateMatrixWorld(true);
+    const w = PHYSICS_WORLD_NODE.evaluate({}, world, makeContext("v-idle-w", 91 / 60, false)) as { world: unknown };
+    const out = VEHICLE_NODE.evaluate(
+      { world: w.world, chassis: car },
+      carParams(),
+      makeContext("v-idle-car", 91 / 60, false),
+    ) as { position: THREE.Vector3 };
+    expect(out.position.toArray()).toEqual([5, 3, -1]);
   });
 
   test("with no world wired the chassis passes through untouched", () => {

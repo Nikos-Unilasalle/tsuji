@@ -3538,6 +3538,7 @@ export function Viewport({
           currentFrame: capture ? exportFrameIndex : currentFrameRef.current,
           keyframes: graphRef.current.keyframes,
           simulationEpoch: getSimulationEpoch(),
+          isPlaying: isPlayingRef.current,
           scene,
         });
       } catch (err) {

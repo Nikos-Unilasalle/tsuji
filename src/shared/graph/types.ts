@@ -131,6 +131,26 @@ export interface EvalContext {
    * undefined (treated as 0), and two viewports on one graph cannot disagree.
    */
   simulationEpoch?: number;
+  /**
+   * Whether the scene is actually running (Play pressed) right now, as
+   * opposed to sitting idle in the editor. The graph evaluates every node
+   * every frame either way (see evaluate.ts) — this is for a node whose
+   * *simulation* would otherwise run continuously regardless, and fight the
+   * author trying to hand-position something it owns. A physics rigid body
+   * is the case in point: without this, it free-falls and settles from the
+   * moment it's wired up, editor idle or not, so dragging it in the
+   * viewport gets silently overwritten by wherever the (never-paused)
+   * solver has it — and unplugging then re-plugging it "snaps back" to
+   * that stale settled pose rather than wherever it was just dragged to.
+   * Left undefined by anything that predates this concept — a headless
+   * `evaluate()` call, a unit test — which such a node reads as "not opted
+   * in" and simulates unconditionally (its old behavior), rather than
+   * silently going idle for a caller that never asked to be gated. The live
+   * viewport always sets a real boolean, including `false` while idle, and
+   * an export frame counts as playing too (see `capturing`) even though
+   * `isPlaying` itself may be false during one.
+   */
+  isPlaying?: boolean;
   /** The graph's timeline markers — see the Marker node in nodes/marker.ts. */
   markers?: Marker[];
   /**

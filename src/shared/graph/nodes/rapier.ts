@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import type RAPIER from "@dimforge/rapier3d-compat";
-import { NodeDefinition } from "../types";
+import { EvalContext, NodeDefinition } from "../types";
 import { createNodeCache } from "../nodeCaches";
 import { clockInput, numberInput } from "./object";
 import { asVector3 } from "./transform";
@@ -28,6 +28,20 @@ import {
 
 /** Same scrub threshold the integrators, Spring and the capsule controller use. */
 const REWIND_THRESHOLD = 0.5;
+
+/**
+ * Whether this evaluate call is part of an actually-running simulation
+ * (Play pressed, or an export frame being captured) rather than the editor
+ * idling — see `EvalContext.isPlaying`. A caller that never set either field
+ * (every existing headless test, and any other code that predates this
+ * concept) gets the old always-on behavior: gating only kicks in once a
+ * caller actually opts in by setting one of them, which today only the live
+ * viewport does.
+ */
+function isSimulating(ctx: EvalContext): boolean {
+  if (ctx.isPlaying === undefined && ctx.capturing === undefined) return true;
+  return Boolean(ctx.isPlaying) || Boolean(ctx.capturing);
+}
 
 /* -------------------------------------------------------------------------- */
 /* World                                                                      */
@@ -135,10 +149,16 @@ export const PHYSICS_WORLD_NODE: NodeDefinition = {
     const timestep = Math.max(1 / 480, numberInput(undefined, params.timestep, 1 / 60));
     const maxSteps = Math.max(0, Math.min(16, Math.floor(numberInput(undefined, params.maxSteps, 4))));
 
+    // The graph re-evaluates every node every frame regardless of Play state
+    // (see evaluate.ts), so without this a dynamic body would free-fall from
+    // the moment it's wired up even while the editor sits idle — leaving
+    // nothing to hand-position and, once it settles, nowhere to go back to.
+    const halted = paused || !isSimulating(ctx);
+
     // Stepped before the bodies read their poses back, so what they publish is
     // the state the solver just produced.
-    const steps = paused ? 0 : stepPhysicsWorld(state.handle, time, timestep, maxSteps);
-    if (paused) state.handle.lastTime = time;
+    const steps = halted ? 0 : stepPhysicsWorld(state.handle, time, timestep, maxSteps);
+    if (halted) state.handle.lastTime = time;
 
     return {
       world: state.handle,
@@ -362,6 +382,25 @@ export const RIGID_BODY_NODE: NodeDefinition = {
     // No world, no engine, or nothing to simulate: hand the geometry straight
     // back so the scene still renders while physics warms up.
     if (!object || !handle || !api || !isRapierReady()) return idle();
+
+    // Not actually running (Play isn't pressed, and this isn't an export
+    // frame either): tear down any body from a previous run and hand the
+    // authored geometry straight through, same as the "no world" case above.
+    // Otherwise the graph's own eager per-frame re-evaluation (see
+    // evaluate.ts) would keep this node stepping and writing the solver's
+    // pose back onto the mesh — a dynamic body free-falls the instant it's
+    // wired up, editor idle or not, fighting any attempt to hand-position it
+    // — and leaving the body cached means the *next* Play resumes from
+    // wherever it last settled rather than wherever it was just dragged to.
+    if (!isSimulating(ctx)) {
+      const stale = bodyCache.get(ctx.nodeId);
+      if (stale && stale.worldNodeId === handle.nodeId && stale.generation === handle.generation) {
+        for (const entry of stale.entries) handle.world.removeRigidBody(entry.body);
+        handle.bodies.delete(ctx.nodeId);
+      }
+      bodyCache.delete(ctx.nodeId);
+      return idle();
+    }
 
     const bodyType = asBodyType(params.bodyType);
     const isDynamic = bodyType === "dynamic";
@@ -928,6 +967,28 @@ export const VEHICLE_NODE: NodeDefinition = {
         geometry: object,
         matrix: object ? object.matrix.clone() : new THREE.Matrix4(),
         position: object ? object.position.clone() : new THREE.Vector3(),
+        wheels: [],
+        speed: 0,
+        grounded: 0,
+      };
+    }
+
+    // Same reasoning as Rigid Body: not actually running means tear down any
+    // body from a previous run and hand the authored chassis pose straight
+    // through, so it stays hand-editable and the next Play starts from
+    // wherever it was just dragged to rather than a stale settled pose.
+    if (!isSimulating(ctx)) {
+      const stale = vehicleCache.get(ctx.nodeId);
+      if (stale && stale.worldNodeId === handle.nodeId && stale.generation === handle.generation) {
+        handle.preStep.delete(ctx.nodeId);
+        handle.world.removeVehicleController(stale.controller);
+        handle.world.removeRigidBody(stale.body);
+      }
+      vehicleCache.delete(ctx.nodeId);
+      return {
+        geometry: object,
+        matrix: object.matrix.clone(),
+        position: object.position.clone(),
         wheels: [],
         speed: 0,
         grounded: 0,
