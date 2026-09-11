@@ -852,6 +852,11 @@ export const SVG_TO_MESH_NODE: NodeDefinition = {
         applyMaterialParams(mesh, matParams, THREE.DoubleSide, texParams);
       }
     } else {
+      for (let i = 0; i < state.meshRefs.length; i++) {
+        if (state.meshRefs[i].material !== state.faithful[i]?.mat && state.faithful[i]?.mat) {
+          state.meshRefs[i].material = state.faithful[i].mat;
+        }
+      }
       const opacity = Math.min(1, Math.max(0, num(inputs.opacity, params.opacity)));
       const wireframe = Boolean(inputs.wireframe !== undefined ? inputs.wireframe : params.wireframe);
       const sig = `${opacity}|${wireframe}`;

@@ -4,6 +4,7 @@ import { createNodeCache, disposeObject3D } from "../nodeCaches";
 import { findFirstMesh } from "../meshRequired";
 import {
   applyMaterialParams,
+  clearAppliedMaterialSignature,
   materialParamsFromValue,
   primitiveOutputs,
   extractTextureParams,
@@ -28,7 +29,7 @@ interface EditMeshState {
   mesh?: THREE.Mesh;
   lastQuadMesh?: QuadMesh;
   lastShading?: string;
-  sourceGeometry?: THREE.BufferGeometry;
+  sourceGeometry?: THREE.BufferGeometry | null;
 }
 
 const editMeshCache = createNodeCache<EditMeshState>((s) => {
@@ -53,6 +54,8 @@ function applyEditMeshMaterial(
   const matParams = materialParamsFromValue(materialInput);
   if (matParams) {
     applyMaterialParams(mesh, matParams, THREE.DoubleSide, texParams);
+    delete (mesh.material as any).__isDefaultClay;
+    delete (mesh.material as any).__isSharedFromSrc;
     return;
   }
 
@@ -71,21 +74,35 @@ function applyEditMeshMaterial(
       thickness: 0.5,
     };
     applyMaterialParams(mesh, baseParams, THREE.DoubleSide, texParams);
+    delete (mesh.material as any).__isDefaultClay;
+    delete (mesh.material as any).__isSharedFromSrc;
     return;
   }
 
   if (srcMesh && srcMesh.material instanceof THREE.Material) {
     mesh.material = srcMesh.material;
+    clearAppliedMaterialSignature(mesh);
     (mesh.material as any).__isSharedFromSrc = true;
-  } else if (!(mesh.material instanceof THREE.MeshStandardMaterial) || (mesh.material as any).__isDefaultClay) {
-    mesh.material = new THREE.MeshStandardMaterial({
-      color: 0xcccccc,
-      roughness: 0.5,
-      metalness: 0.05,
-      side: THREE.DoubleSide,
-    });
-    (mesh.material as any).__isDefaultClay = true;
+    delete (mesh.material as any).__isDefaultClay;
+    return;
   }
+
+  // Fallback: Default neutral clay material without any textures
+  const defaultParams: MaterialParams = {
+    color: new THREE.Color(0xcccccc),
+    emissive: new THREE.Color(0x000000),
+    emissiveIntensity: 1.0,
+    shadeless: false,
+    roughness: 0.5,
+    metalness: 0.05,
+    wireframe: false,
+    opacity: 1.0,
+    transmission: 0,
+    thickness: 0.5,
+  };
+  applyMaterialParams(mesh, defaultParams, THREE.DoubleSide, undefined);
+  (mesh.material as any).__isDefaultClay = true;
+  delete (mesh.material as any).__isSharedFromSrc;
 }
 
 /**
@@ -158,17 +175,26 @@ export const EDIT_MESH_NODE: NodeDefinition = {
     const shadeMode = (params.shading as QuadMeshShading) || "auto";
     const texParams = extractTextureParams(inputs, params, ctx.nodeId);
 
+    const isSameSourceGeom = state.sourceGeometry === (srcGeom ?? null);
+
     if (
       state.mesh &&
       state.lastQuadMesh === quadMesh &&
       state.lastShading === shadeMode &&
-      (!srcGeom || state.sourceGeometry === srcGeom)
+      isSameSourceGeom
     ) {
       if (inputObj && srcMesh) {
         inputObj.updateMatrixWorld(true);
         state.mesh.matrixAutoUpdate = false;
         state.mesh.matrix.copy(srcMesh.matrixWorld);
         preserveModifierUserData(state.mesh, inputObj, srcMesh, ctx.nodeId);
+      } else {
+        state.mesh.matrixAutoUpdate = true;
+        state.mesh.matrix.identity();
+        state.mesh.position.set(0, 0, 0);
+        state.mesh.quaternion.identity();
+        state.mesh.scale.set(1, 1, 1);
+        state.mesh.userData = { nodeId: ctx.nodeId };
       }
       applyEditMeshMaterial(state.mesh, srcMesh, inputs.material, texParams);
       return primitiveOutputs(state.mesh);
@@ -194,12 +220,17 @@ export const EDIT_MESH_NODE: NodeDefinition = {
       preserveModifierUserData(state.mesh, inputObj, srcMesh, ctx.nodeId);
     } else {
       state.mesh.matrixAutoUpdate = true;
+      state.mesh.matrix.identity();
+      state.mesh.position.set(0, 0, 0);
+      state.mesh.quaternion.identity();
+      state.mesh.scale.set(1, 1, 1);
+      state.mesh.userData = { nodeId: ctx.nodeId };
     }
 
     state.mesh.userData.nodeId = ctx.nodeId;
     state.lastQuadMesh = quadMesh;
     state.lastShading = shadeMode;
-    state.sourceGeometry = srcGeom;
+    state.sourceGeometry = srcGeom ?? null;
 
     return primitiveOutputs(state.mesh);
   },

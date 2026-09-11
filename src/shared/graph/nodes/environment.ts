@@ -226,15 +226,23 @@ export const ENVIRONMENT_NODE: NodeDefinition = {
   ],
   evaluate: (inputs, params, ctx) => {
     const state = getOrCreateEnvState(ctx.nodeId);
-    if (typeof params.filePath === "string" && params.filePath && params.filePath !== state.lastPath) {
-      loadEnvTexture(ctx.nodeId, params.filePath);
+    if (typeof params.filePath === "string") {
+      if (!params.filePath && state.texture) {
+        state.texture.dispose();
+        state.texture = undefined;
+        state.lastPath = "";
+      } else if (params.filePath && params.filePath !== state.lastPath) {
+        loadEnvTexture(ctx.nodeId, params.filePath);
+      }
     }
-    if (
-      typeof params.backgroundImagePath === "string" &&
-      params.backgroundImagePath &&
-      params.backgroundImagePath !== state.lastBackgroundImagePath
-    ) {
-      loadBackgroundImageTexture(ctx.nodeId, params.backgroundImagePath);
+    if (typeof params.backgroundImagePath === "string") {
+      if (!params.backgroundImagePath && state.backgroundImage) {
+        state.backgroundImage.dispose();
+        state.backgroundImage = undefined;
+        state.lastBackgroundImagePath = "";
+      } else if (params.backgroundImagePath && params.backgroundImagePath !== state.lastBackgroundImagePath) {
+        loadBackgroundImageTexture(ctx.nodeId, params.backgroundImagePath);
+      }
     }
 
     const color = asColor(inputs.color, asColor(params.color, new THREE.Color(0x3f4956)));

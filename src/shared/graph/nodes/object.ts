@@ -206,6 +206,25 @@ export function extractTextureParams(
   const state = getOrCreatePrimitiveTextureState(nodeId);
   const p = (key: string) => prefixedParamKey(prefix, key);
 
+  const texPath = typeof params[p("texturePath")] === "string" ? (params[p("texturePath")] as string) : "";
+  if (!texPath && state.textureMap) {
+    state.textureMap.dispose();
+    state.textureMap = undefined;
+    state.lastTexturePath = "";
+  }
+  const normPath = typeof params[p("normalMapPath")] === "string" ? (params[p("normalMapPath")] as string) : "";
+  if (!normPath && state.normalMap) {
+    state.normalMap.dispose();
+    state.normalMap = undefined;
+    state.lastNormalPath = "";
+  }
+  const roughPath = typeof params[p("roughnessMapPath")] === "string" ? (params[p("roughnessMapPath")] as string) : "";
+  if (!roughPath && state.roughnessMap) {
+    state.roughnessMap.dispose();
+    state.roughnessMap = undefined;
+    state.lastRoughnessPath = "";
+  }
+
   const diffuseVal = inputs[p("texture")];
   const normalVal = inputs[p("normal")];
   const roughnessVal = inputs[p("roughnessMap")];
@@ -388,7 +407,7 @@ export function applyMaterialParams(
     alpha,
   ].join("|");
 
-  if (appliedMaterialSignatures.get(mesh) === signature) return;
+  if (appliedMaterialSignatures.get(mesh) === signature && (mesh.material as any)?.__appliedSig === signature) return;
   appliedMaterialSignatures.set(mesh, signature);
 
   const isTransparent = matParams.opacity < 0.999 || alpha;
@@ -403,6 +422,7 @@ export function applyMaterialParams(
       mesh.material = new THREE.MeshBasicMaterial({ side: defaultSide });
     }
     const mat = mesh.material as THREE.MeshBasicMaterial;
+    (mat as any).__appliedSig = signature;
     const prevMap = mat.map ?? null;
     const prevTransparent = mat.transparent;
     mat.color.copy(matParams.color);
@@ -520,6 +540,18 @@ export function applyMaterialParams(
       mat.transparent !== prevTransparent
     ) {
       mat.needsUpdate = true;
+    }
+    (mat as any).__appliedSig = signature;
+  }
+}
+
+export function clearAppliedMaterialSignature(mesh: THREE.Mesh): void {
+  appliedMaterialSignatures.delete(mesh);
+  if (mesh.material) {
+    if (Array.isArray(mesh.material)) {
+      mesh.material.forEach((m) => delete (m as any).__appliedSig);
+    } else {
+      delete (mesh.material as any).__appliedSig;
     }
   }
 }
