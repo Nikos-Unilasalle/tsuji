@@ -2,7 +2,7 @@
 """Generate Tsuji demo .tsuji graphs: shared setup nodes + per-demo subject nodes."""
 import json, os, sys
 
-ROOT = "/Users/nikos/Desktop/OpenVMap3D"
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DEMOS = os.path.join(ROOT, "public/demos")
 
 BLUE, PINK, MID = 0x38BDF8, 0xEC4899, 0x8B5CF6
@@ -1209,6 +1209,118 @@ def _():
     # three white key lights bury the probe's coloured bounce under white,
     # which is the whole thing this demo exists to show.
     return n, [], {"light/point": {"intensity": 6}}
+
+
+@demo("texture_stylized_water")
+def _():
+    # The water reads the terrain's own heightmap, so the two have to agree on
+    # their framing: same width/depth, and the material's Depth Elevation is the
+    # terrain's Height Offset — its lowest point, which is where the deep blue is.
+    n = [
+        node("relief", "texture/procedural", -1320, 60, type="perlin", colorA=0x000000, colorB=0xFFFFFF,
+             scale=3, seed=7, octaves=4, resolution=256),
+        node("land", "object/terrain", -1020, 60, width=10, depth=10, resolution="128x128",
+             heightScale=6.3, heightOffset=-1.87, slopeShading=False, flatShading=True,
+             color=0xE9A867, roughness=0.9, metalness=0),
+        node("weather", "animation/oscillator", -1320, 420, type="sine", frequency=0.08,
+             phase=0, amplitude=0.5, offset=0.5),
+        node("water", "material/stylized-water", -700, 240, terrainWidth=10, terrainDepth=10,
+             surfaceElevation=-0.35, depthElevation=-1.3, temperature=18),
+        node("surface", "object/plane", -380, 240, location=v3(0, -0.35, 0),
+             rotation=v3(1.5707963267948966, 0, 0), scale=v3(10, 10, 1)),
+    ]
+    c = [
+        wire("relief", "texture", "land", "heightmap"),
+        wire("land", "heightmap", "water", "shoreMap"),
+        wire("weather", "out", "water", "rain"),
+        wire("water", "material", "surface", "material"),
+    ]
+    # The stock floor would sit inside the terrain and show through the water.
+    return n, c, {"object/plane": {"visible": 0}}
+
+
+@demo("physics_explosion")
+def _():
+    # Reworked by hand in the app, then ported back here. One key press drives both halves of the
+    # original's explosion: the fireball you see and the impulse that throws the crates. Explosion
+    # Impulse sits between the world and the bodies it kicks — threading the world socket through
+    # it is how the order is stated in a graph.
+    n = [
+        node("key", "io/keyboard", -1729, 46, key="b"),
+        node("fuse", "logic/trigger", -1442, 69),
+        node("sign", "object/text", -1781, 172, text="Hit b to blast !", fontPreset="Bangers",
+             fontSize=64, depth=0.1, location=v3(0, 0.55, -6.47), rotation=v3(-1.1385, 0, 0),
+             scale=v3(2.075, 2.075, 2.075), color=0x857070, roughness=0.4, metalness=0.1),
+        node("world", "physics/world", -1500, 300, gravity=v3(0, -9.81, 0)),
+        # radius 7 clears the grid's 4.2-unit half-diagonal, so the corner crates still get a
+        # usable share of the blast instead of the tail end of the falloff.
+        node("blast", "physics/explosion", -1180, 300, location=v3(0, 0.4, 0),
+             radius=7, strength=22),
+        node("fire", "object/explosion", -1158, 33, location=v3(0, 0.3, 0), fireRadius=8.775,
+             loop=0, floorLevel=0, floorFade=1.15, lifetime=2, burnDuration=1,
+             emissiveStrength=6, glowThreshold=0.4, gooColor=0x604343, gooEdge=0.04,
+             noiseScale=6.375),
+        node("ground_geo", "object/box", -1500, 540, location=v3(0, -0.5, 0),
+             scale=v3(24, 1, 24), color=0x4A5568, roughness=0.9, metalness=0),
+        node("ground", "physics/rigid-body", -1180, 540, bodyType="fixed", shape="trimesh",
+             friction=0.9, restitution=0),
+        node("crate_geo", "object/box", -1500, 760, location=v3(0, 0.4, 0), scale=v3(0.7, 0.7, 0.7),
+             color=0xD98E4A, roughness=0.8, metalness=0),
+        node("crates", "structure/array", -1180, 760, mode="grid", plane="XZ", centerGrid=True,
+             gridCols=5, gridRows=5, spacingX=1.5, spacingY=1.5),
+        node("crate_body", "physics/rigid-body", -860, 760, bodyType="dynamic", shape="box",
+             mass=1, friction=0.6, restitution=0.1, angularDamping=0.15),
+        node("group", "structure/merge", -560, 400),
+        # Same threshold reasoning as object_explosion: only the fireball's deliberately
+        # overbright core crosses it, so the crates and floor stay out of the bloom.
+        node("glow", "postprocess/bloom", 226, 404, strength=0.3, radius=0.5, threshold=1.8),
+    ]
+    c = [
+        wire("key", "pressed", "fuse", "in"),
+        wire("fuse", "trigger", "blast", "trigger"),
+        wire("fuse", "trigger", "fire", "trigger"),
+        wire("world", "world", "blast", "world"),
+        wire("ground_geo", "geometry", "ground", "geometry"),
+        wire("blast", "world", "ground", "world"),
+        wire("crate_geo", "geometry", "crates", "geometry"),
+        wire("crates", "geometry", "crate_body", "geometry"),
+        wire("blast", "world", "crate_body", "world"),
+        wire("ground", "geometry", "group", "in0"),
+        wire("crate_body", "geometry", "group", "in1"),
+        wire("fire", "geometry", "group", "in2"),
+        wire("glow", "effect", RENDER, "postprocess"),
+    ]
+    # Its own floor, so the stock one would z-fight with it. And 300 frames, because a blast the
+    # user fires by hand needs room to be fired more than once.
+    return n, c, {"object/plane": {"visible": 0}, "render": {"frameCount": 300}}
+
+
+@demo("object_explosion")
+def _():
+    # Three fireballs on the same 3s loop, half a second apart, so they go off one after the
+    # other. Floor Level matches the ground plane: the fireball is flattened against it rather
+    # than sinking half a sphere below.
+    n = [
+        node("blastA", "object/explosion", -1180, 60, location=v3(-1.8, 0, 0), fireRadius=1.7,
+             loop=3, loopOffset=0, floorLevel=0),
+        node("blastB", "object/explosion", -1180, 300, location=v3(0.3, 0, 0.7), fireRadius=2.2,
+             loop=3, loopOffset=0.5, floorLevel=0),
+        node("blastC", "object/explosion", -1180, 540, location=v3(2.0, 0, -0.5), fireRadius=1.3,
+             loop=3, loopOffset=1.0, floorLevel=0,
+             emissiveColorA=0xB3123C, emissiveColorB=0xFFD166),
+        node("group", "structure/merge", -820, 300),
+        # threshold 1.6, not the usual 0.3, for the same reason as postprocess_bloom: the setup's
+        # white checker floor has lit hotspots past 1, and anything lower blooms the whole stage
+        # instead of the fire. The fireball's core is pushed to roughly 3x on purpose, so it is
+        # the only thing that crosses.
+        node("glow", "postprocess/bloom", -820, 60, strength=0.9, radius=0.5, threshold=1.6),
+    ]
+    c = [wire(s, "geometry", "group", f"in{i}") for i, s in enumerate(["blastA", "blastB", "blastC"])]
+    c.append(wire("glow", "effect", RENDER, "postprocess"))
+    # The stock stage fights this one: its white checker floor, lit by three lights at intensity
+    # 50, sits far above any bloom threshold that would still catch the fire, so the whole frame
+    # blooms instead of the explosions. A dark empty stage is also what a fireball wants.
+    return n, c, {"object/plane": {"visible": 0}, "light/point": {"intensity": 18}}
 
 
 @demo("object_raccoon")

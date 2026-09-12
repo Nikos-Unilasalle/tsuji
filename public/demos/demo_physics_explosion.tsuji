@@ -1,0 +1,580 @@
+{
+  "canvases": [
+    {
+      "nodes": [
+        {
+          "id": "setup_0",
+          "type": "object/plane",
+          "position": {
+            "x": 599,
+            "y": 160
+          },
+          "params": {
+            "visible": 0,
+            "location": {
+              "x": 0,
+              "y": -0.5,
+              "z": 0
+            },
+            "rotation": {
+              "x": 1.5707963267948966,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 10,
+              "y": 10,
+              "z": 1
+            },
+            "texturePath": "",
+            "normalMapPath": "",
+            "roughnessMapPath": "",
+            "uvScaleX": 1,
+            "uvScaleY": 1,
+            "uvOffsetX": 0,
+            "uvOffsetY": 0,
+            "color": 16777215,
+            "emissive": 0,
+            "emissiveIntensity": 1,
+            "shadeless": 0,
+            "roughness": 0.1,
+            "metalness": 0.1,
+            "wireframe": 0,
+            "opacity": 1,
+            "transmission": 0,
+            "thickness": 0.5
+          }
+        },
+        {
+          "id": "setup_1",
+          "type": "texture/procedural",
+          "position": {
+            "x": 375,
+            "y": 223
+          },
+          "params": {
+            "type": "checker",
+            "colorA": 16777215,
+            "colorB": 2236962,
+            "scale": 8,
+            "seed": 1,
+            "octaves": 3,
+            "resolution": 256,
+            "uvScaleX": 1,
+            "uvScaleY": 1,
+            "uvOffsetX": 0,
+            "uvOffsetY": 0
+          }
+        },
+        {
+          "id": "setup_2",
+          "type": "light/point",
+          "position": {
+            "x": 857,
+            "y": 193
+          },
+          "params": {
+            "location": {
+              "x": 0,
+              "y": 2.185514752224622,
+              "z": -4.5179526088705275
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "color": 16768110,
+            "intensity": 50,
+            "distance": 15,
+            "decay": 2,
+            "castShadow": 1
+          }
+        },
+        {
+          "id": "setup_3",
+          "type": "light/point",
+          "position": {
+            "x": 1043,
+            "y": 187
+          },
+          "params": {
+            "location": {
+              "x": 0,
+              "y": 2.185514752224622,
+              "z": 4.487400919453167
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "color": 440020,
+            "intensity": 50,
+            "distance": 15,
+            "decay": 2,
+            "castShadow": 1
+          }
+        },
+        {
+          "id": "setup_4",
+          "type": "render",
+          "position": {
+            "x": 610,
+            "y": 393
+          },
+          "params": {
+            "frameCount": 300,
+            "fps": 30,
+            "motionBlur": 0,
+            "resolutionPreset": "16:9 (1920x1080)",
+            "width": 1920,
+            "height": 1080,
+            "holdout": false
+          }
+        },
+        {
+          "id": "setup_5",
+          "type": "lighting/environment",
+          "position": {
+            "x": 340,
+            "y": 406
+          },
+          "params": {
+            "color": 4147542,
+            "intensity": 1,
+            "background": 1,
+            "blurriness": 0,
+            "filePath": "",
+            "backgroundImagePath": "",
+            "backgroundFit": "cover",
+            "backgroundScale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "backgroundOffset": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "backgroundRotation": 0,
+            "ambientIntensity": 0,
+            "sunIntensity": 0
+          }
+        },
+        {
+          "id": "setup_6",
+          "type": "light/point",
+          "position": {
+            "x": 860,
+            "y": 389
+          },
+          "params": {
+            "location": {
+              "x": 3.583607412619263,
+              "y": 2.185514752224622,
+              "z": -0.48624947478730096
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "color": 16777215,
+            "intensity": 50,
+            "distance": 15,
+            "decay": 2,
+            "castShadow": 1
+          }
+        },
+        {
+          "id": "key",
+          "type": "io/keyboard",
+          "position": {
+            "x": -1729,
+            "y": 46
+          },
+          "params": {
+            "key": "b"
+          }
+        },
+        {
+          "id": "fuse",
+          "type": "logic/trigger",
+          "position": {
+            "x": -1442,
+            "y": 69
+          },
+          "params": {}
+        },
+        {
+          "id": "sign",
+          "type": "object/text",
+          "position": {
+            "x": -1781,
+            "y": 172
+          },
+          "params": {
+            "text": "Hit b to blast !",
+            "fontPreset": "Bangers",
+            "fontSize": 64,
+            "depth": 0.1,
+            "location": {
+              "x": 0,
+              "y": 0.55,
+              "z": -6.47
+            },
+            "rotation": {
+              "x": -1.1385,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 2.075,
+              "y": 2.075,
+              "z": 2.075
+            },
+            "color": 8745072,
+            "roughness": 0.4,
+            "metalness": 0.1
+          }
+        },
+        {
+          "id": "world",
+          "type": "physics/world",
+          "position": {
+            "x": -1500,
+            "y": 300
+          },
+          "params": {
+            "gravity": {
+              "x": 0,
+              "y": -9.81,
+              "z": 0
+            }
+          }
+        },
+        {
+          "id": "blast",
+          "type": "physics/explosion",
+          "position": {
+            "x": -1180,
+            "y": 300
+          },
+          "params": {
+            "location": {
+              "x": 0,
+              "y": 0.4,
+              "z": 0
+            },
+            "radius": 7,
+            "strength": 22
+          }
+        },
+        {
+          "id": "fire",
+          "type": "object/explosion",
+          "position": {
+            "x": -1158,
+            "y": 33
+          },
+          "params": {
+            "location": {
+              "x": 0,
+              "y": 0.3,
+              "z": 0
+            },
+            "fireRadius": 8.775,
+            "loop": 0,
+            "floorLevel": 0,
+            "floorFade": 1.15,
+            "lifetime": 2,
+            "burnDuration": 1,
+            "emissiveStrength": 6,
+            "glowThreshold": 0.4,
+            "gooColor": 6308675,
+            "gooEdge": 0.04,
+            "noiseScale": 6.375
+          }
+        },
+        {
+          "id": "ground_geo",
+          "type": "object/box",
+          "position": {
+            "x": -1500,
+            "y": 540
+          },
+          "params": {
+            "location": {
+              "x": 0,
+              "y": -0.5,
+              "z": 0
+            },
+            "scale": {
+              "x": 24,
+              "y": 1,
+              "z": 24
+            },
+            "color": 4871528,
+            "roughness": 0.9,
+            "metalness": 0
+          }
+        },
+        {
+          "id": "ground",
+          "type": "physics/rigid-body",
+          "position": {
+            "x": -1180,
+            "y": 540
+          },
+          "params": {
+            "bodyType": "fixed",
+            "shape": "trimesh",
+            "friction": 0.9,
+            "restitution": 0
+          }
+        },
+        {
+          "id": "crate_geo",
+          "type": "object/box",
+          "position": {
+            "x": -1500,
+            "y": 760
+          },
+          "params": {
+            "location": {
+              "x": 0,
+              "y": 0.4,
+              "z": 0
+            },
+            "scale": {
+              "x": 0.7,
+              "y": 0.7,
+              "z": 0.7
+            },
+            "color": 14257738,
+            "roughness": 0.8,
+            "metalness": 0
+          }
+        },
+        {
+          "id": "crates",
+          "type": "structure/array",
+          "position": {
+            "x": -1180,
+            "y": 760
+          },
+          "params": {
+            "mode": "grid",
+            "plane": "XZ",
+            "centerGrid": true,
+            "gridCols": 5,
+            "gridRows": 5,
+            "spacingX": 1.5,
+            "spacingY": 1.5
+          }
+        },
+        {
+          "id": "crate_body",
+          "type": "physics/rigid-body",
+          "position": {
+            "x": -860,
+            "y": 760
+          },
+          "params": {
+            "bodyType": "dynamic",
+            "shape": "box",
+            "mass": 1,
+            "friction": 0.6,
+            "restitution": 0.1,
+            "angularDamping": 0.15
+          }
+        },
+        {
+          "id": "group",
+          "type": "structure/merge",
+          "position": {
+            "x": -560,
+            "y": 400
+          },
+          "params": {}
+        },
+        {
+          "id": "glow",
+          "type": "postprocess/bloom",
+          "position": {
+            "x": 226,
+            "y": 404
+          },
+          "params": {
+            "strength": 0.3,
+            "radius": 0.5,
+            "threshold": 1.8
+          }
+        }
+      ],
+      "connections": [
+        {
+          "id": "setup_c0",
+          "fromNode": "setup_1",
+          "fromSocket": "texture",
+          "toNode": "setup_0",
+          "toSocket": "texture"
+        },
+        {
+          "id": "setup_c1",
+          "fromNode": "setup_5",
+          "fromSocket": "environment",
+          "toNode": "setup_4",
+          "toSocket": "environment"
+        },
+        {
+          "id": "key.pressed->fuse.in",
+          "fromNode": "key",
+          "fromSocket": "pressed",
+          "toNode": "fuse",
+          "toSocket": "in"
+        },
+        {
+          "id": "fuse.trigger->blast.trigger",
+          "fromNode": "fuse",
+          "fromSocket": "trigger",
+          "toNode": "blast",
+          "toSocket": "trigger"
+        },
+        {
+          "id": "fuse.trigger->fire.trigger",
+          "fromNode": "fuse",
+          "fromSocket": "trigger",
+          "toNode": "fire",
+          "toSocket": "trigger"
+        },
+        {
+          "id": "world.world->blast.world",
+          "fromNode": "world",
+          "fromSocket": "world",
+          "toNode": "blast",
+          "toSocket": "world"
+        },
+        {
+          "id": "ground_geo.geometry->ground.geometry",
+          "fromNode": "ground_geo",
+          "fromSocket": "geometry",
+          "toNode": "ground",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "blast.world->ground.world",
+          "fromNode": "blast",
+          "fromSocket": "world",
+          "toNode": "ground",
+          "toSocket": "world"
+        },
+        {
+          "id": "crate_geo.geometry->crates.geometry",
+          "fromNode": "crate_geo",
+          "fromSocket": "geometry",
+          "toNode": "crates",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "crates.geometry->crate_body.geometry",
+          "fromNode": "crates",
+          "fromSocket": "geometry",
+          "toNode": "crate_body",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "blast.world->crate_body.world",
+          "fromNode": "blast",
+          "fromSocket": "world",
+          "toNode": "crate_body",
+          "toSocket": "world"
+        },
+        {
+          "id": "ground.geometry->group.in0",
+          "fromNode": "ground",
+          "fromSocket": "geometry",
+          "toNode": "group",
+          "toSocket": "in0"
+        },
+        {
+          "id": "crate_body.geometry->group.in1",
+          "fromNode": "crate_body",
+          "fromSocket": "geometry",
+          "toNode": "group",
+          "toSocket": "in1"
+        },
+        {
+          "id": "fire.geometry->group.in2",
+          "fromNode": "fire",
+          "fromSocket": "geometry",
+          "toNode": "group",
+          "toSocket": "in2"
+        },
+        {
+          "id": "glow.effect->setup_4.postprocess",
+          "fromNode": "glow",
+          "fromSocket": "effect",
+          "toNode": "setup_4",
+          "toSocket": "postprocess"
+        }
+      ],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    },
+    {
+      "nodes": [],
+      "connections": [],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    },
+    {
+      "nodes": [],
+      "connections": [],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    },
+    {
+      "nodes": [],
+      "connections": [],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    },
+    {
+      "nodes": [],
+      "connections": [],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    },
+    {
+      "nodes": [],
+      "connections": [],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    }
+  ],
+  "activeCanvas": 0
+}

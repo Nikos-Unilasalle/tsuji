@@ -40,6 +40,11 @@ export const DEMO_CATALOG: DemoCategory[] = [
         description: "A frame-driven reveal: length, trim, random and case chained onto a Text object.",
       },
       {
+        file: "demo_object_explosion.tsuji",
+        label: "Explosion",
+        description: "Three fireballs on a loop: a noise sphere burning away from the inside out.",
+      },
+      {
         file: "demo_object_empty_lookat.tsuji",
         label: "Empty & Look At",
         description: "A cone aiming at an orbiting Empty.",
@@ -223,6 +228,11 @@ export const DEMO_CATALOG: DemoCategory[] = [
         file: "demo_physics_rolling.tsuji",
         label: "Rolling Cube",
         description: "A square prism tumbling as it rolls — rotation coupled to its bob.",
+      },
+      {
+        file: "demo_physics_explosion.tsuji",
+        label: "Explosion Impulse",
+        description: "Press b: a fireball and a blast wave off one trigger, throwing a grid of crates.",
       },
       {
         file: "demo_physics_scatter.tsuji",
@@ -423,6 +433,11 @@ export const DEMO_CATALOG: DemoCategory[] = [
         file: "demo_texture_to_geometry.tsuji",
         label: "Texture to Geometry",
         description: "A texture's pixels spawning objects.",
+      },
+      {
+        file: "demo_texture_stylized_water.tsuji",
+        label: "Stylized Water",
+        description: "A lake reading the terrain's heightmap: shore foam, depth gradient, ripples and rain.",
       },
       {
         file: "demo_texture_decal_wall.tsuji",
