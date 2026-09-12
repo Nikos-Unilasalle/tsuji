@@ -41,7 +41,7 @@ import { cloneGraph, cloneParams, cloneParamValue } from "./shared/graph/cloneGr
 import { consumeCameraHandoffRequest } from "./shared/graph/cameraHandoffStore";
 import { consumeCanvasSwitchRequest } from "./shared/graph/canvasSwitchStore";
 import { isGraphZone } from "./shared/graph/inputZoneStore";
-import { resetSimulations } from "./shared/graph/simulationEpoch";
+import { onSimulationReset, resetSimulations } from "./shared/graph/simulationEpoch";
 import {
   collectKeyboardBindings,
   isKeyReservedForPlayback,
@@ -491,8 +491,14 @@ function MainEditor() {
    */
   const handleResetSimulations = useCallback(() => {
     resetSimulations();
-    setCurrentFrame(0);
-  }, [setCurrentFrame]);
+  }, []);
+
+  /**
+   * The rewind half lives here rather than in the button, so that whoever asks for a reset gets
+   * both halves — the toolbar, the shortcut, and the Reset Simulations node, which can only reach
+   * the epoch and has no way to move the playhead itself.
+   */
+  useEffect(() => onSimulationReset(() => setCurrentFrame(0)), [setCurrentFrame]);
 
   useEffect(() => {
     setGraphKeyBindings(collectKeyboardBindings(graph.nodes));
