@@ -14,6 +14,7 @@ import {
   latticeEvaluatedPoints,
   latticeParamsWithRebuiltGrid,
   LatticeGridConfig,
+  cageWeight,
 } from "./lattice";
 
 const CTX: EvalContext = { time: 0, step: 0, nodeId: "lattice-test-node" };
@@ -28,6 +29,8 @@ describe("LATTICE DEFORM NODE", () => {
     subdivW: 2,
     interpolation: "linear",
     strength: 1.0,
+    clipToCage: false,
+    clipFalloff: 0.15,
     deformAxis: "y",
     bulge: 0.0,
     twist: 0.0,
@@ -414,5 +417,109 @@ describe("lattice handle positions under modulators", () => {
     const target = new THREE.Vector3(0.3, -0.7, 0.9);
 
     expect(latticeBasePointForTarget(plain, 3, target).distanceTo(target)).toBeLessThan(1e-9);
+  });
+
+  describe("clip to cage", () => {
+    it("weights nothing outside the cage and everything well inside it", () => {
+      expect(cageWeight(-0.2, 0.5, 0.5, 0.15)).toBe(0);
+      expect(cageWeight(1.2, 0.5, 0.5, 0.15)).toBe(0);
+      expect(cageWeight(0, 0.5, 0.5, 0.15)).toBe(0);
+      expect(cageWeight(1, 0.5, 0.5, 0.15)).toBe(0);
+      expect(cageWeight(0.5, 0.5, 0.5, 0.15)).toBe(1);
+    });
+
+    it("ramps smoothly across the falloff margin", () => {
+      const quarter = cageWeight(0.15 * 0.25, 0.5, 0.5, 0.15);
+      const half = cageWeight(0.15 * 0.5, 0.5, 0.5, 0.15);
+      const threeQuarters = cageWeight(0.15 * 0.75, 0.5, 0.5, 0.15);
+
+      expect(half).toBeCloseTo(0.5, 6);
+      expect(quarter).toBeGreaterThan(0);
+      expect(quarter).toBeLessThan(half);
+      expect(threeQuarters).toBeGreaterThan(half);
+      expect(threeQuarters).toBeLessThan(1);
+    });
+
+    it("takes the tightest axis, so a point near any wall is at the edge", () => {
+      // Dead centre on two axes, hard against the wall on the third.
+      expect(cageWeight(0.5, 0.5, 0.01, 0.15)).toBeLessThan(0.2);
+      expect(cageWeight(0.5, 0.5, 0.99, 0.15)).toBeLessThan(0.2);
+    });
+
+    it("cuts hard with no falloff", () => {
+      expect(cageWeight(0.001, 0.5, 0.5, 0)).toBe(1);
+      expect(cageWeight(0, 0.5, 0.5, 0)).toBe(0);
+    });
+
+    it("leaves the part of a mesh sticking out of the cage alone", () => {
+      // A bar four times longer than the cage, so most of it is outside.
+      const bar = new THREE.Mesh(new THREE.BoxGeometry(8, 0.4, 0.4, 64, 1, 1), new THREE.MeshBasicMaterial());
+      const params = {
+        ...LATTICE_DEFORM_NODE.defaultParams,
+        sizeX: 2,
+        sizeY: 2,
+        sizeZ: 2,
+        clipToCage: true,
+        clipFalloff: 0.15,
+        bulge: 0.8,
+        twist: 40,
+        pointsList: [],
+      };
+
+      const out = LATTICE_DEFORM_NODE.evaluate({ geometry: bar }, params, CTX) as { geometry: THREE.Object3D };
+      const mesh = out.geometry.children.find((c) => (c as THREE.Mesh).isMesh) as THREE.Mesh;
+      const before = bar.geometry.getAttribute("position");
+      const after = mesh.geometry.getAttribute("position");
+      // The deform recentres its result and carries the offset on the matrix, so compare in world.
+      const offset = new THREE.Vector3().setFromMatrixPosition(mesh.matrix);
+
+      let movedInside = 0;
+      const a = new THREE.Vector3();
+      const b = new THREE.Vector3();
+      for (let i = 0; i < before.count; i++) {
+        a.fromBufferAttribute(before, i);
+        b.fromBufferAttribute(after, i).add(offset);
+
+        if (Math.abs(a.x) > 1.0) {
+          // Past the cage wall at x = ±1: untouched, to the last decimal.
+          expect(b.x).toBeCloseTo(a.x, 4);
+          expect(b.y).toBeCloseTo(a.y, 4);
+          expect(b.z).toBeCloseTo(a.z, 4);
+        } else if (Math.abs(a.x) < 0.5 && b.distanceTo(a) > 1e-4) {
+          movedInside++;
+        }
+      }
+
+      expect(movedInside).toBeGreaterThan(0);
+    });
+
+    it("still flattens the overhang when clipping is off", () => {
+      const bar = new THREE.Mesh(new THREE.BoxGeometry(8, 0.4, 0.4, 64, 1, 1), new THREE.MeshBasicMaterial());
+      const params = {
+        ...LATTICE_DEFORM_NODE.defaultParams,
+        sizeX: 2,
+        sizeY: 2,
+        sizeZ: 2,
+        clipToCage: false,
+        bulge: 0.8,
+        pointsList: [],
+      };
+
+      const out = LATTICE_DEFORM_NODE.evaluate({ geometry: bar }, params, { ...CTX, nodeId: "lattice-unclipped" }) as {
+        geometry: THREE.Object3D;
+      };
+      const mesh = out.geometry.children.find((c) => (c as THREE.Mesh).isMesh) as THREE.Mesh;
+      const after = mesh.geometry.getAttribute("position");
+      const offset = new THREE.Vector3().setFromMatrixPosition(mesh.matrix);
+
+      // Everything past the wall is clamped onto it: the far end collapses to a single x.
+      const far: number[] = [];
+      const b = new THREE.Vector3();
+      for (let i = 0; i < after.count; i++) {
+        b.fromBufferAttribute(after, i).add(offset);
+        if (b.x > 1.0) far.push(b.x);
+      }
+      expect(far.length).toBe(0);
+    });
   });
 });
