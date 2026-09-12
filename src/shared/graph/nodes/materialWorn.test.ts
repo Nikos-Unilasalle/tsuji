@@ -296,4 +296,26 @@ describe("MATERIAL_WORN_NODE and Edge Curvature computation", () => {
     // All internal edges connecting adjacent triangles of the flat plane must be strictly 0
     expect(flatInternalEdgesCount).toBeGreaterThan(0);
   });
+
+  it("samples the wear in object space by default, so it travels with the mesh", () => {
+    const res = MATERIAL_WORN_NODE.evaluate({}, MATERIAL_WORN_NODE.defaultParams, {
+      time: 0,
+      step: 0,
+      nodeId: "worn-space",
+    }) as { material: { customMaterial: THREE.Material } };
+    const u = (res.material.customMaterial as any).__wornUniforms;
+
+    expect(MATERIAL_WORN_NODE.defaultParams.noiseSpace).toBe("object");
+    expect(u.uNoiseSpace.value).toBe(0);
+  });
+
+  it("switches to world space on request", () => {
+    const res = MATERIAL_WORN_NODE.evaluate(
+      {},
+      { ...MATERIAL_WORN_NODE.defaultParams, noiseSpace: "world" },
+      { time: 0, step: 0, nodeId: "worn-space-world" },
+    ) as { material: { customMaterial: THREE.Material } };
+
+    expect((res.material.customMaterial as any).__wornUniforms.uNoiseSpace.value).toBe(1);
+  });
 });

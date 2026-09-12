@@ -357,6 +357,7 @@ export function createWornMaterial(): THREE.MeshStandardMaterial {
     // Domain offset derived from the Seed param, so two Worn nodes on two
     // objects don't wear along identical noise.
     uSeedOffset: { value: new THREE.Vector3() },
+    uNoiseSpace: { value: 0 },
     // Low-frequency mottling of the base surface itself, independent of the
     // edge wear: a perfectly uniform flat face is the least convincing part
     // of the result.
@@ -394,7 +395,8 @@ export function createWornMaterial(): THREE.MeshStandardMaterial {
       varying vec3 vWornBary;
       varying vec3 vWornAltitudes;
       varying vec3 vWornEdgeCurv;
-      varying vec3 vWornWorldPos;
+      varying vec3 vWornNoisePos;
+      uniform float uNoiseSpace;
       `
     );
 
@@ -408,7 +410,14 @@ export function createWornMaterial(): THREE.MeshStandardMaterial {
       // Interpolated across the face, so the curvature reads as a smooth
       // gradient over a curved surface rather than as flat per-triangle steps.
       vWornVertCurv = aVertexCurvature;
-      vWornWorldPos = (modelMatrix * vec4(transformed, 1.0)).xyz;
+      // Object space by default, so the wear is glued to the mesh and travels with it. In world
+      // space it stays put and the object slides through it — which is what a row of instances
+      // wants (each copy weathered differently) and what a moving object never does.
+      vec4 wornLocal = vec4(transformed, 1.0);
+      #ifdef USE_INSTANCING
+        wornLocal = instanceMatrix * wornLocal;
+      #endif
+      vWornNoisePos = uNoiseSpace > 0.5 ? (modelMatrix * wornLocal).xyz : transformed;
       `
     );
 
@@ -447,7 +456,7 @@ export function createWornMaterial(): THREE.MeshStandardMaterial {
       varying vec3 vWornBary;
       varying vec3 vWornAltitudes;
       varying vec3 vWornEdgeCurv;
-      varying vec3 vWornWorldPos;
+      varying vec3 vWornNoisePos;
 
       // 3D Simplex noise
       vec4 permuteWorn(vec4 x) { return mod(((x*34.0)+1.0)*x, 289.0); }
@@ -559,7 +568,7 @@ export function createWornMaterial(): THREE.MeshStandardMaterial {
       // value as if it were already [0, 1] biased the modifier down to a mean
       // of 1 - 0.75 * uNoise, which made raising Organic Breakup shrink the
       // wear band away to nothing instead of breaking its edge up.
-      vec3 wornNoisePos = vWornWorldPos * uNoiseScale + uSeedOffset;
+      vec3 wornNoisePos = vWornNoisePos * uNoiseScale + uSeedOffset;
       float n = fbmWorn(wornNoisePos, uNoiseDetail) * 0.5 + 0.5;
       float noiseMod = 1.0 + (n - 0.5) * uNoise * 1.5;
 
@@ -638,7 +647,7 @@ export function createWornMaterial(): THREE.MeshStandardMaterial {
       wearFactor = max(wearFactor, curveWearF);
       dirtFactor = max(dirtFactor, curveDirtF);
 
-      vec3 patchPos = vWornWorldPos * uPatchScale + uSeedOffset;
+      vec3 patchPos = vWornNoisePos * uPatchScale + uSeedOffset;
       wearFactor *= patchMaskWorn(patchPos, uWearPatch);
       dirtFactor *= patchMaskWorn(patchPos + 53.7, uDirtPatch);
 
@@ -730,6 +739,7 @@ export const MATERIAL_WORN_NODE: NodeDefinition = {
     contrast: 2.0,
     noise: 0.35,
     noiseScale: 6.0,
+    noiseSpace: "object",
     noiseDetail: 3,
     variation: 0.25,
     seed: 1,
@@ -762,6 +772,22 @@ export const MATERIAL_WORN_NODE: NodeDefinition = {
     { id: "contrast", label: "Edge Sharpness", kind: "number", step: 0.1, group: "Tuning" },
     { id: "noise", label: "Organic Breakup", kind: "number", step: 0.05, group: "Tuning" },
     { id: "noiseScale", label: "Noise Scale", kind: "number", step: 0.5, group: "Tuning" },
+    {
+      id: "noiseSpace",
+      label: "Noise Space",
+      kind: "select",
+      options: ["object", "world"],
+      group: "Tuning",
+    },
+    {
+      id: "noiseSpaceNote",
+      label:
+        "object: the wear is glued to the mesh and moves with it. world: it stays put in the "
+        + "scene and the object slides through it, which weathers every copy of an Array "
+        + "differently but swims on anything that moves.",
+      kind: "note",
+      group: "Tuning",
+    },
     { id: "noiseDetail", label: "Noise Detail (Octaves)", kind: "number", step: 0.25, group: "Tuning" },
     { id: "variation", label: "Surface Variation", kind: "number", step: 0.05, group: "Tuning" },
     { id: "patchScale", label: "Patch Scale", kind: "number", step: 0.25, group: "Tuning" },
@@ -825,6 +851,7 @@ export const MATERIAL_WORN_NODE: NodeDefinition = {
       u.uContrast.value = contrast;
       u.uNoise.value = noise;
       u.uNoiseScale.value = noiseScale;
+      u.uNoiseSpace.value = String(params.noiseSpace ?? "object") === "world" ? 1 : 0;
       u.uNoiseDetail.value = noiseDetail;
       u.uVariation.value = variation;
       u.uWearPatch.value = wearPatch;
