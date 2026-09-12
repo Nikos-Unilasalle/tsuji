@@ -415,6 +415,11 @@ export const DEMO_CATALOG: DemoCategory[] = [
         description: "The eight growth habits side by side: oak, clumped cherry, conifer, willow, birch, palm, bush and a bare winter tree.",
       },
       {
+        file: "demo_vegetation_leaves.tsuji",
+        label: "Leaves on a Terrain",
+        description: "Grass and leaves standing on the same terrain mesh. Hold b to blow the leaves away.",
+      },
+      {
         file: "demo_vegetation_wind.tsuji",
         label: "Grass & Trees in the Wind",
         description: "One Wind Field driving grass and trees, plus an Interaction Map that flattens the grass in a moving object's wake.",

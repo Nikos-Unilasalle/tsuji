@@ -1239,6 +1239,58 @@ def _():
     return n, c, {"object/plane": {"visible": 0}}
 
 
+@demo("vegetation_leaves")
+def _():
+    # Reworked by hand in the app, then ported back here. Terrain first, then everything stands on
+    # it: Grass Field and Leaves both take the same mesh on their Ground input and sample its
+    # surface, so neither needs to know it is a terrain. Holding b blasts the leaves off it.
+    n = [
+        node("relief", "texture/procedural", -1720, 60, type="perlin", colorA=0x000000,
+             colorB=0xFFFFFF, scale=3, seed=7, octaves=4, resolution=256),
+        # A second, much finer perlin as the terrain's colour map: the relief alone reads as a
+        # flat wash under all that grass.
+        node("dirt", "texture/procedural", -1689, 249, type="perlin", colorA=0xFFFFFF,
+             colorB=0x222222, scale=38, seed=1, octaves=3, resolution=256),
+        node("land", "object/terrain", -1442, 73, width=30, depth=30, resolution="128x128",
+             heightScale=4, heightOffset=-1.2, slopeShading=False, flatShading=True,
+             color=0xD89CBA, roughness=0.95, metalness=0),
+        node("wind", "physics/wind-field", -1440, 320, strength=5, gustiness=1, timeFrequency=0.35),
+        node("grass", "structure/grass-field", -1080, 60, subdivisions=200, size=30,
+             bladeHeight=1.488, bladeWidth=0.506, heightRandomness=0.625, windInfluence=0.188,
+             baseColor=0x8B7C4C, tipColor=0xB37393),
+        # Floor Offset above the blade height, so the leaves ride on top of the grass rather than
+        # disappearing into it.
+        node("leaves", "object/leaves", -1080, 360, count=1500, size=30, scale=0.135,
+             upwardMultiplier=1.026, floorOffset=1.845, colorA=0xEF4444, colorB=0xEC4899,
+             roughness=0, metalness=0.012),
+        node("key", "io/keyboard", -1718, 576, key="b"),
+        node("fuse", "logic/trigger", -1458, 653),
+        node("group", "structure/merge", -720, 240),
+        node("glow", "postprocess/bloom", 357, 616, strength=0.8, radius=0.5, threshold=1.6),
+    ]
+    c = [
+        wire("relief", "texture", "land", "heightmap"),
+        wire("dirt", "texture", "land", "texture"),
+        wire("land", "geometry", "grass", "ground"),
+        wire("land", "geometry", "leaves", "ground"),
+        wire("wind", "field", "grass", "wind"),
+        wire("wind", "field", "leaves", "wind"),
+        wire("key", "isDown", "fuse", "in"),
+        wire("fuse", "trigger", "leaves", "blastTrigger"),
+        wire("land", "geometry", "group", "in0"),
+        wire("grass", "geometry", "group", "in1"),
+        wire("leaves", "geometry", "group", "in2"),
+        wire("glow", "effect", RENDER, "postprocess"),
+    ]
+    # The terrain is the ground here, so the stock floor would sit inside it. The stock lights are
+    # aimed at a small stage and leave a 30-unit field of grass murky.
+    return n, c, {
+        "object/plane": {"visible": 0},
+        "render": {"frameCount": 300},
+        "lighting/environment": {"ambientIntensity": 1.388, "sunIntensity": 2.9},
+    }
+
+
 @demo("physics_explosion")
 def _():
     # Reworked by hand in the app, then ported back here. One key press drives both halves of the

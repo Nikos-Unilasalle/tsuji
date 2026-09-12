@@ -16,6 +16,7 @@ import {
   buildGroundShadowCanvas,
   createGrassMaterial,
 } from "../../three/vegetation/grassField";
+import { GroundHeightField, bakeGroundHeight, groundSignature } from "../../three/vegetation/groundHeight";
 import { drawSourceToCanvas, replaceCanvasTexture } from "./texture";
 import {
   DEFAULT_TREE_PARAMS,
@@ -63,7 +64,7 @@ function asVector(value: unknown, fallback: THREE.Vector3): THREE.Vector3 {
  * rather than nothing. Wire a Wind Field in and the whole scene agrees on one
  * wind instead of each node inventing its own.
  */
-function resolveWind(input: unknown, time: number): WindFieldDescriptor {
+export function resolveWind(input: unknown, time: number): WindFieldDescriptor {
   if (isWindField(input)) return input;
   return { ...DEFAULT_WIND, direction: DEFAULT_WIND.direction.clone(), phase: time * 0.1 };
 }
@@ -196,12 +197,15 @@ interface GrassState {
   shadowCanvas?: HTMLCanvasElement;
   shadowTexture?: THREE.CanvasTexture;
   shadowSignature?: string;
+  /** Height field baked off the Ground input, rebuilt only when that mesh moves or changes. */
+  ground?: GroundHeightField;
 }
 
 const grassCache = createNodeCache<GrassState>((state) => {
   state.mesh.geometry.dispose();
   state.material.dispose();
   state.shadowTexture?.dispose();
+  state.ground?.texture.dispose();
 });
 
 /**
@@ -223,6 +227,7 @@ export const GRASS_FIELD_NODE: NodeDefinition = {
   category: "structure",
   inputs: [
     { id: "wind", label: "Wind Field", type: "any" },
+    { id: "ground", label: "Ground", type: "geometry" },
     { id: "matrix", label: "Matrix", type: "matrix" },
     { id: "center", label: "Center (Follow)", type: "vector" },
     { id: "densityMap", label: "Density Map", type: "texture" },
@@ -254,6 +259,7 @@ export const GRASS_FIELD_NODE: NodeDefinition = {
     trampleStrength: 1,
     trampleSize: 40,
     trampleCenter: new THREE.Vector3(0, 0, 0),
+    groundResolution: 128,
     baseColor: new THREE.Color(0x2f5d2a),
     tipColor: new THREE.Color(0xa8c34a),
     lightDirection: new THREE.Vector3(0.5, 1, 0.3),
@@ -307,6 +313,17 @@ export const GRASS_FIELD_NODE: NodeDefinition = {
       group: "Trample Map",
     },
     { id: "trampleCenter", label: "Map Center", kind: "vector", group: "Trample Map" },
+    { id: "groundResolution", label: "Height Samples (n²)", kind: "number", step: 32, group: "Ground" },
+    {
+      id: "groundNote",
+      label:
+        "Wire a mesh into Ground and the blades stand on it instead of on the zero plane. Its "
+        + "surface is sampled once into a height field, and again only when it moves or changes "
+        + "shape — so a sculpted terrain is free to animate, at the cost of a rebake. Blades "
+        + "falling outside the mesh do not grow.",
+      kind: "note",
+      group: "Ground",
+    },
   ],
   evaluate: (inputs, params, ctx) => {
     const subdivisions = Math.max(1, Math.min(400, Math.floor(numberInput(undefined, params.subdivisions, 160))));
@@ -388,6 +405,27 @@ export const GRASS_FIELD_NODE: NodeDefinition = {
     material.uniforms.uTrampleMap.value = trampleMap;
     material.uniforms.uHasTrampleMap.value = trampleMap ? 1 : 0;
     material.uniforms.uTrampleStrength.value = numberInput(undefined, params.trampleStrength, 1);
+
+    // Baking is a raycast per texel, so it happens only when the ground mesh itself changes.
+    const groundObject = inputs.ground instanceof THREE.Object3D ? inputs.ground : null;
+    const groundResolution = Math.max(2, Math.min(512, Math.floor(numberInput(undefined, params.groundResolution, 128))));
+
+    if (!groundObject) {
+      state.ground?.texture.dispose();
+      state.ground = undefined;
+    } else if (!state.ground || state.ground.signature !== groundSignature(groundObject, groundResolution)) {
+      const baked = bakeGroundHeight(groundObject, groundResolution, state.ground);
+      if (baked) state.ground = baked;
+    }
+
+    const ground = state.ground;
+    material.uniforms.uHasGround.value = ground ? 1 : 0;
+    material.uniforms.uGroundMap.value = ground ? ground.texture : null;
+    if (ground) {
+      (material.uniforms.uGroundCenter.value as THREE.Vector2).copy(ground.center);
+      (material.uniforms.uGroundSize.value as THREE.Vector2).copy(ground.size);
+      material.uniforms.uGroundResolution.value = ground.texture.image.width;
+    }
 
     const trampleFallback = asVector(params.trampleCenter, new THREE.Vector3());
     const tramplePlacement = readMapPlacement(
@@ -565,6 +603,7 @@ export const TREE_NODE: NodeDefinition = {
   category: "object",
   inputs: [
     { id: "wind", label: "Wind Field", type: "any" },
+    { id: "ground", label: "Ground", type: "geometry" },
     { id: "matrix", label: "Matrix", type: "matrix" },
     { id: "seed", label: "Seed", type: "value" },
     { id: "sizeScale", label: "Size", type: "value" },
