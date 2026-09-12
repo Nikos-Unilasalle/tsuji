@@ -115,6 +115,7 @@ import { MATERIAL_STYLIZED_WATER_NODE } from "./materialWater";
 import { OBJECT_EXPLOSION_NODE } from "./explosion";
 import { OBJECT_LEAVES_NODE } from "./leaves";
 import { TIME_RESET_SIMULATIONS_NODE } from "./resetSimulations";
+import { PHYSICS_SPAWNER_NODE } from "./spawner";
 import { PHYSICS_EXPLOSION_NODE } from "./explosionImpulse";
 import {
   GEOMETRY_TWIST_BEND_TAPER_NODE,
@@ -360,6 +361,7 @@ export const STARTER_NODES = [
   OBJECT_EXPLOSION_NODE,
   OBJECT_LEAVES_NODE,
   TIME_RESET_SIMULATIONS_NODE,
+  PHYSICS_SPAWNER_NODE,
   PHYSICS_EXPLOSION_NODE,
   GEOMETRY_TWIST_BEND_TAPER_NODE,
   GEOMETRY_WAVE_RIPPLE_NODE,

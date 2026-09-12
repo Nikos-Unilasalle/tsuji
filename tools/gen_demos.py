@@ -1291,6 +1291,54 @@ def _():
     }
 
 
+@demo("physics_spawner")
+def _():
+    # The cookie launcher: one biscuit per press of b. The pool is fixed, so the
+    # twenty-first cookie recycles the first rather than growing the scene — which is why the
+    # launcher can run all day. r throws the whole simulation away and puts the timeline back to
+    # frame 0, the same thing the toolbar's reset button does.
+    n = [
+        node("world", "physics/world", -1560, 320, gravity=v3(0, -9.81, 0)),
+        node("launchKey", "io/keyboard", -1560, 40, key="b"),
+        node("launchFuse", "logic/trigger", -1300, 40),
+        node("resetKey", "io/keyboard", -1560, 700, key="r"),
+        node("resetFuse", "logic/trigger", -1300, 700),
+        node("reset", "time/reset-simulations", -1040, 700),
+        node("cookie", "object/box", -1560, 520, scale=v3(0.6, 0.22, 0.6),
+             color=0xC98A3D, roughness=0.75, metalness=0),
+        node("launcher", "physics/spawner", -1040, 320, count=20, shape="box", mass=0.6,
+             position=v3(0, 1.5, -2), direction=v3(0, 0.4, 1), speed=7,
+             spread=0.22, jitter=0.3, spin=0.5, restitution=0.25, friction=0.7),
+        node("floor_geo", "object/box", -1560, 900, location=v3(0, -0.5, 4),
+             scale=v3(16, 1, 26), color=0x49525F, roughness=0.9, metalness=0),
+        node("floor", "physics/rigid-body", -1040, 900, bodyType="fixed", shape="box",
+             friction=0.9, restitution=0),
+        node("sign", "object/text", -1560, 180, text="b = launch   r = reset",
+             fontPreset="Bangers", fontSize=64, depth=0.1, location=v3(0, 0.6, -5.5),
+             rotation=v3(-1.1, 0, 0), scale=v3(1.6, 1.6, 1.6), color=0x857070,
+             roughness=0.4, metalness=0.1),
+        node("group", "structure/merge", -700, 500),
+    ]
+    c = [
+        # `pressed`, not `isDown`: the spawner fires on a rising edge, so holding the key would
+        # launch exactly one cookie and look broken.
+        wire("launchKey", "pressed", "launchFuse", "in"),
+        wire("launchFuse", "trigger", "launcher", "trigger"),
+        wire("resetKey", "pressed", "resetFuse", "in"),
+        wire("resetFuse", "trigger", "reset", "trigger"),
+        wire("world", "world", "launcher", "world"),
+        # The spawner passes the world through, so the floor is built after its pool: the order
+        # a graph states is the order the world is touched in.
+        wire("launcher", "world", "floor", "world"),
+        wire("floor_geo", "geometry", "floor", "geometry"),
+        wire("cookie", "geometry", "launcher", "prototype"),
+        wire("launcher", "geometry", "group", "in0"),
+        wire("floor", "geometry", "group", "in1"),
+    ]
+    # Its own floor, so the stock one would sit inside it.
+    return n, c, {"object/plane": {"visible": 0}, "render": {"frameCount": 300}}
+
+
 @demo("physics_explosion")
 def _():
     # Reworked by hand in the app, then ported back here. One key press drives both halves of the

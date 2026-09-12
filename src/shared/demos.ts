@@ -230,6 +230,11 @@ export const DEMO_CATALOG: DemoCategory[] = [
         description: "A square prism tumbling as it rolls — rotation coupled to its bob.",
       },
       {
+        file: "demo_physics_spawner.tsuji",
+        label: "Spawner",
+        description: "A cookie launcher: press b to fire from a fixed pool of bodies, r to reset.",
+      },
+      {
         file: "demo_physics_explosion.tsuji",
         label: "Explosion Impulse",
         description: "Press b: a fireball and a blast wave off one trigger, throwing a grid of crates.",
