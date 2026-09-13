@@ -14,7 +14,9 @@ import { BokehPass } from "three/examples/jsm/postprocessing/BokehPass.js";
 import { FXAAPass } from "three/examples/jsm/postprocessing/FXAAPass.js";
 import { ColorCorrectionShader } from "three/examples/jsm/shaders/ColorCorrectionShader.js";
 import { KaleidoShader } from "three/examples/jsm/shaders/KaleidoShader.js";
+import { HalftonePass } from "three/examples/jsm/postprocessing/HalftonePass.js";
 import { PostProcessConfig } from "../graph/nodes/postprocessing";
+import { DryBrushShader, DuotoneShader, FilmTextureShader, Super8Shader } from "./postShaders";
 import { createMotionBlur } from "./motionBlur";
 import { VolumetricPass, VolumetricSettings } from "./volumetricPass";
 
@@ -88,6 +90,16 @@ function instantiatePass(
       return new ShaderPass(ColorCorrectionShader);
     case "antialias":
       return new FXAAPass();
+    case "duotone":
+      return new ShaderPass(DuotoneShader);
+    case "halftone":
+      return new HalftonePass({});
+    case "film-texture":
+      return new ShaderPass(FilmTextureShader);
+    case "super8":
+      return new ShaderPass(Super8Shader);
+    case "dry-brush":
+      return new ShaderPass(DryBrushShader);
     default:
       return null;
   }
@@ -191,6 +203,74 @@ function configurePass(
       if (pass.uniforms["powRGB"]) pass.uniforms["powRGB"].value.set(contrast, contrast, contrast);
       if (pass.uniforms["mulRGB"]) pass.uniforms["mulRGB"].value.set(saturation, saturation, saturation);
       if (pass.uniforms["addRGB"]) pass.uniforms["addRGB"].value.set(brightness, brightness, brightness);
+      break;
+    }
+    case "duotone": {
+      const shadow = cfg.params.shadowColor instanceof THREE.Color ? cfg.params.shadowColor : new THREE.Color(0x1b2a4a);
+      const highlight =
+        cfg.params.highlightColor instanceof THREE.Color ? cfg.params.highlightColor : new THREE.Color(0xffd9a0);
+      pass.uniforms["shadowColor"].value.copy(shadow);
+      pass.uniforms["highlightColor"].value.copy(highlight);
+      pass.uniforms["balance"].value = Number(cfg.params.balance) ?? 0.5;
+      pass.uniforms["softness"].value = Number(cfg.params.softness) ?? 0.5;
+      pass.uniforms["amount"].value = Number(cfg.params.amount) ?? 1.0;
+      break;
+    }
+    case "halftone": {
+      const rotation = Number(cfg.params.rotation) || 0;
+      const shape = String(cfg.params.shape || "dot");
+      // HalftoneShader numbers its shapes 1..4 in this order.
+      pass.uniforms["shape"].value = ["dot", "ellipse", "line", "square"].indexOf(shape) + 1 || 1;
+      pass.uniforms["radius"].value = Math.max(1, Number(cfg.params.radius) || 4);
+      // The three screens sit 30° apart from the one the node sets, the
+      // classic offsets that keep the grids from beating into a moiré.
+      pass.uniforms["rotateR"].value = rotation;
+      pass.uniforms["rotateG"].value = rotation + Math.PI / 6;
+      pass.uniforms["rotateB"].value = rotation + Math.PI / 3;
+      pass.uniforms["scatter"].value = Math.max(0, Number(cfg.params.scatter) || 0);
+      pass.uniforms["blending"].value = Number(cfg.params.amount) ?? 1;
+      pass.uniforms["greyscale"].value = Boolean(cfg.params.greyscale);
+      pass.uniforms["width"].value = width;
+      pass.uniforms["height"].value = height;
+      break;
+    }
+    case "film-texture": {
+      pass.uniforms["time"].value = time;
+      pass.uniforms["rate"].value = Math.max(1, Number(cfg.params.rate) || 16);
+      pass.uniforms["grain"].value = Number(cfg.params.grain) ?? 0.12;
+      pass.uniforms["dust"].value = Number(cfg.params.dust) ?? 0.2;
+      pass.uniforms["scratches"].value = Number(cfg.params.scratches) ?? 0.15;
+      pass.uniforms["blotches"].value = Number(cfg.params.blotches) ?? 0.15;
+      pass.uniforms["seed"].value = Number(cfg.params.seed) || 0;
+      pass.uniforms["resolution"].value.set(width, height);
+      break;
+    }
+    case "super8": {
+      pass.uniforms["time"].value = time;
+      pass.uniforms["rate"].value = Math.max(1, Number(cfg.params.rate) || 18);
+      pass.uniforms["softness"].value = Number(cfg.params.softness) ?? 1.2;
+      pass.uniforms["flicker"].value = Number(cfg.params.flicker) ?? 0.12;
+      pass.uniforms["weave"].value = Number(cfg.params.weave) ?? 0.35;
+      pass.uniforms["warmth"].value = Number(cfg.params.warmth) ?? 0.35;
+      pass.uniforms["vignette"].value = Number(cfg.params.vignette) ?? 0.45;
+      pass.uniforms["seed"].value = Number(cfg.params.seed) || 0;
+      pass.uniforms["resolution"].value.set(width, height);
+      break;
+    }
+    case "dry-brush": {
+      const paper = cfg.params.paperColor instanceof THREE.Color ? cfg.params.paperColor : new THREE.Color(0xffffff);
+      pass.uniforms["time"].value = time;
+      pass.uniforms["rate"].value = Math.max(1, Number(cfg.params.rate) || 12);
+      pass.uniforms["animate"].value = cfg.params.animate ? 1 : 0;
+      pass.uniforms["coverage"].value = Number(cfg.params.coverage) ?? 0.25;
+      pass.uniforms["scale"].value = Math.max(1, Number(cfg.params.scale) || 200);
+      pass.uniforms["softness"].value = Number(cfg.params.softness) ?? 0.25;
+      pass.uniforms["stretch"].value = Math.max(0.1, Number(cfg.params.stretch) || 1);
+      pass.uniforms["angle"].value = Number(cfg.params.angle) || 0;
+      pass.uniforms["followInk"].value = cfg.params.followInk ? 1 : 0;
+      pass.uniforms["paperColor"].value.copy(paper);
+      pass.uniforms["resolution"].value.set(width, height);
+      pass.uniforms["seed"].value = Number(cfg.params.seed) || 0;
       break;
     }
     case "antialias": {

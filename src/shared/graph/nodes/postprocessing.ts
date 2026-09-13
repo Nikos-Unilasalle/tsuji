@@ -9,7 +9,12 @@ export interface PostProcessConfig {
   params: Record<string, unknown>;
 }
 
-function accumulateEffect(inputs: Record<string, unknown>, config: PostProcessConfig): PostProcessConfig[] {
+/**
+ * The effect chain is built by each node appending itself to whatever arrived
+ * on its `effect` input, so the wire order *is* the pass order. Exported for
+ * postprocessingFilm.ts, which holds the same kind of node in another file.
+ */
+export function accumulateEffect(inputs: Record<string, unknown>, config: PostProcessConfig): PostProcessConfig[] {
   const upstream = Array.isArray(inputs.effect) ? (inputs.effect as PostProcessConfig[]) : [];
   return [...upstream, config];
 }

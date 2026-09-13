@@ -77,6 +77,13 @@ import {
   POSTPROCESS_VIGNETTE_NODE,
   POSTPROCESS_FOG_NODE,
 } from "./postprocessing";
+import {
+  POSTPROCESS_DRY_BRUSH_NODE,
+  POSTPROCESS_DUOTONE_NODE,
+  POSTPROCESS_FILM_TEXTURE_NODE,
+  POSTPROCESS_HALFTONE_NODE,
+  POSTPROCESS_SUPER8_NODE,
+} from "./postprocessingFilm";
 
 import { CURVE_ARRAY_NODE, CURVE_DEFORM_NODE, CURVE_FROM_POINTS_NODE, CURVE_PRIMITIVE_NODE, CURVE_TO_MESH_NODE, CURVES_TO_MESH_NODE, SAMPLE_CURVE_NODE } from "./curve";
 import { CURVE_TO_LINE_NODE } from "./line";
@@ -328,6 +335,11 @@ export const STARTER_NODES = [
   POSTPROCESS_ANTIALIAS_NODE,
   POSTPROCESS_FOG_NODE,
   POSTPROCESS_AMBIENT_OCCLUSION_NODE,
+  POSTPROCESS_DUOTONE_NODE,
+  POSTPROCESS_HALFTONE_NODE,
+  POSTPROCESS_FILM_TEXTURE_NODE,
+  POSTPROCESS_SUPER8_NODE,
+  POSTPROCESS_DRY_BRUSH_NODE,
   LIST_GROUP_NODE,
   SPAWN_NODE,
   CURVE_TO_LINE_NODE,
@@ -472,6 +484,7 @@ export * from "./geometryToPoints";
 export * from "./particlesToPoints";
 export * from "./particleInstances";
 export * from "./postprocessing";
+export * from "./postprocessingFilm";
 export * from "./environment";
 export * from "./listGroup";
 export * from "./spawn";
