@@ -20,6 +20,37 @@ export interface EvalContext {
    */
   nodeId: string;
   /**
+   * The whole instance being evaluated, when there is one.
+   *
+   * `nodeId` covers what nodes normally need (a key into their own cache);
+   * this exists for the one node whose behaviour depends on something carried
+   * *on* the instance rather than in its params — a `structure/group`, which
+   * has to reach the subgraph it holds in order to evaluate it. Absent in a
+   * direct `evaluate()` call from a test.
+   */
+  instance?: NodeInstance;
+  /**
+   * The values the parent graph is feeding this subgraph's boundary, by port
+   * id — set by a group node when it evaluates its interior, read by the
+   * `structure/group-input` node inside it. Absent at the top level.
+   */
+  groupInputs?: Record<string, unknown>;
+  /**
+   * Which nesting level within the session is being evaluated (a group node's
+   * id, empty at the top). The evaluator carries one frame of state forward
+   * per session; a subgraph is a second pass on the same session, so without
+   * this it would overwrite the parent's — see evaluate.ts.
+   */
+  evalScope?: string;
+  /**
+   * The registry the current pass is running against, set by the evaluator
+   * itself. Only a `structure/group` reads it — it has a whole graph of its
+   * own to evaluate and needs the definitions to do it. Importing the default
+   * registry from inside a node file would work too, and would make the node
+   * files import each other in a circle.
+   */
+  registry?: NodeRegistry;
+  /**
    * The node whose mesh is currently being dragged by the viewport's
    * TransformControls gizmo, if any — the one narrow, documented exception
    * to `evaluate` being otherwise pure. The graph re-evaluates every node
@@ -276,6 +307,24 @@ export interface NodeInstance {
   params: Record<string, unknown>;
   /** Editor-only — the evaluator never reads this. */
   position: { x: number; y: number };
+  /**
+   * The graph *inside* this node — present only on a `structure/group`.
+   *
+   * A group is a real subgraph, not a decorative frame: it is evaluated
+   * recursively, and its sockets come from the `structure/group-input` and
+   * `structure/group-output` nodes living in here rather than from its type
+   * (see groups.ts). Which is why anything that used to resolve a definition
+   * with `registry.get(instance.type)` has to go through `resolveDefinition`
+   * instead — the type alone can no longer describe an instance.
+   *
+   * The nodes in here keep globally unique ids, exactly as they had before
+   * being grouped. That is what lets keyframes, the per-node-id GPU caches
+   * (nodeCaches.ts), exposed HUD params and undo keep working across a
+   * grouping with no migration at all — grouping only re-parents instances.
+   * The price is that duplicating a group deep-copies it with fresh ids
+   * rather than producing a linked instance.
+   */
+  subgraph?: Graph;
 }
 
 export interface Connection {

@@ -1,3 +1,4 @@
+import { resolveDefinition } from "./groups";
 import { Graph, NodeDefinition, NodeRegistry } from "./types";
 
 /**
@@ -68,7 +69,7 @@ function isOwnedDownstream(
     if (connection.fromNode !== nodeId) return false;
     const consumer = graph.nodes.find((n) => n.id === connection.toNode);
     if (!consumer) return false;
-    const consumerDef = registry.get(consumer.type);
+    const consumerDef = resolveDefinition(consumer, registry);
     if (!consumerDef) return false;
     const socket = inputSocketsOf(consumerDef, graph, connection.toNode).find((s) => s.id === connection.toSocket);
     if (!socket) return false;
@@ -76,7 +77,7 @@ function isOwnedDownstream(
     // Direct ownership claim on the receiving socket
     if (socket.owns) {
       const producer = graph.nodes.find((n) => n.id === connection.fromNode);
-      const producerDef = producer ? registry.get(producer.type) : undefined;
+      const producerDef = resolveDefinition(producer, registry);
       const fromSocket = producerDef?.outputs.find((s) => s.id === connection.fromSocket);
       if (
         fromSocket &&
@@ -112,7 +113,7 @@ function isOwnedDownstream(
 export function resolveSceneRoots(graph: Graph, registry: NodeRegistry): string[] {
   return graph.nodes
     .filter((node) => {
-      const def = registry.get(node.type);
+      const def = resolveDefinition(node, registry);
       if (!def || SELF_MANAGED_CATEGORIES.has(def.category)) return false;
       if (!producesGeometry(def)) return false;
       return !isOwnedDownstream(graph, registry, node.id);

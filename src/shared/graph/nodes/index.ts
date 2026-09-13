@@ -32,6 +32,7 @@ import { INSTANCE_POSITIONS_NODE } from "./instancePositions";
 import { LIST_GROUP_NODE } from "./listGroup";
 import { SPAWN_NODE } from "./spawn";
 import { REROUTE_NODE } from "./reroute";
+import { GROUP_INPUT_NODE, GROUP_NODE, GROUP_OUTPUT_NODE } from "./group";
 import { GET_VARIABLE_NODE, SET_VARIABLE_NODE } from "./variable";
 import { GEOMETRY_TRANSFORM_NODE, GET_INSTANCE_NODE, INSTANCES_TO_LIST_NODE, SET_INSTANCE_COLOR_NODE, SET_INSTANCE_TRANSFORM_NODE } from "./instance";
 import { LIGHT_AMBIENT_NODE, LIGHT_DIRECTIONAL_NODE, LIGHT_POINT_NODE, LIGHT_SPOT_NODE } from "./light";
@@ -162,6 +163,12 @@ import { PHYSICS_WORLD_NODE, RIGID_BODY_NODE, PHYSICS_CHARACTER_NODE, VEHICLE_NO
 /** The starter catalogue — grows node by node; BIBLE.md has the full target list. */
 export const STARTER_NODES = [
   REROUTE_NODE,
+  // Never picked from the palette: Cmd+G builds the group and its boundary
+  // nodes together. Registered because every graph pass resolves a definition
+  // by type, files included.
+  GROUP_NODE,
+  GROUP_INPUT_NODE,
+  GROUP_OUTPUT_NODE,
   SET_VARIABLE_NODE,
   GET_VARIABLE_NODE,
   TIME_NODE,
@@ -469,6 +476,7 @@ export * from "./environment";
 export * from "./listGroup";
 export * from "./spawn";
 export * from "./reroute";
+export * from "./group";
 export * from "./curve";
 export * from "./shapeKey";
 export * from "./curveFromPointLists";

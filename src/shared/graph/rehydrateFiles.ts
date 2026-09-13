@@ -1,4 +1,5 @@
 import { readFile, readTextFile } from "@tauri-apps/plugin-fs";
+import { walkNodes } from "./groups";
 import { DEFAULT_REGISTRY } from "./nodes";
 import { isTauri } from "./storage";
 import { Graph } from "./types";
@@ -51,7 +52,9 @@ export async function rehydrateFileNodesFromDisk(graph: Graph): Promise<Rehydrat
   if (!isTauri()) return empty;
 
   const jobs: Promise<boolean>[] = [];
-  for (const node of graph.nodes) {
+  // Interiors included: a CSV Reader or a GLTF loader inside a group has the
+  // same path in its params and the same nothing-in-memory problem on load.
+  for (const node of walkNodes(graph)) {
     const def = DEFAULT_REGISTRY.get(node.type);
     const fields = def?.dynamicParamFields?.(node) ?? [];
     for (const field of fields) {

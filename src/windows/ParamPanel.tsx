@@ -5,12 +5,84 @@ import { readFile, readTextFile } from "@tauri-apps/plugin-fs";
 import * as THREE from "three";
 import { isTauri } from "../shared/graph/storage";
 import { CATEGORY_COLOR, NodeCategory, UNKNOWN_CATEGORY_COLOR } from "../shared/graph/categories";
+import { GroupPort, portsOf } from "../shared/graph/groups";
+import { SOCKET_COLOR } from "../shared/graph/sockets";
 import { KeyframeStore, ParamFieldDef } from "../shared/graph/types";
 import { ColorPickerInput } from "./ColorPickerInput";
 import { CurveProfileEditor } from "./CurveProfileEditor";
 import { ColorRampEditor } from "./ColorRampEditor";
 import { DragNumberInput } from "./DragNumberInput";
 import "./param-panel.css";
+
+/**
+ * The ports of a group's boundary, edited from the boundary node itself —
+ * the way Blender does it, and the reason a group's sockets need no separate
+ * editor: `ports` is an ordinary param on an ordinary node, so it saves,
+ * undoes and travels with the group like everything else.
+ *
+ * A port's *id* is fixed once created: every wire on both sides of the
+ * boundary refers to it, and renaming it would silently drop them. The label
+ * is what shows on the socket, so that is what is editable here.
+ */
+function GroupPortsEditor({
+  ports,
+  onChange,
+}: {
+  ports: GroupPort[];
+  onChange: (next: GroupPort[]) => void;
+}) {
+  const move = (index: number, delta: number) => {
+    const target = index + delta;
+    if (target < 0 || target >= ports.length) return;
+    const next = [...ports];
+    [next[index], next[target]] = [next[target], next[index]];
+    onChange(next);
+  };
+
+  return (
+    <div className="param-group">
+      <div className="param-group-header" style={{ cursor: "default" }}>
+        <span className="param-group-title">Ports</span>
+        <span className="param-group-count">({ports.length})</span>
+      </div>
+      <div className="param-group-body">
+        {ports.length === 0 && <div className="param-panel-empty">No ports on this boundary.</div>}
+        {ports.map((port, index) => (
+          <div className="param-row param-port-row" key={port.id}>
+            <span className="param-port-swatch" style={{ background: SOCKET_COLOR[port.type] }} title={port.type} />
+            <input
+              type="text"
+              className="param-text-input"
+              value={port.label}
+              title={`Socket id: ${port.id} (fixed — wires refer to it)`}
+              onChange={(e) =>
+                onChange(ports.map((p, i) => (i === index ? { ...p, label: e.target.value } : p)))
+              }
+            />
+            <button type="button" title="Move up" disabled={index === 0} onClick={() => move(index, -1)}>
+              ↑
+            </button>
+            <button
+              type="button"
+              title="Move down"
+              disabled={index === ports.length - 1}
+              onClick={() => move(index, 1)}
+            >
+              ↓
+            </button>
+            <button
+              type="button"
+              title="Remove this port — the wires on both sides of it go with it"
+              onClick={() => onChange(ports.filter((_, i) => i !== index))}
+            >
+              ✕
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 interface ParamPanelProps {
   nodeId: string;
@@ -583,7 +655,16 @@ export function ParamPanel({
           </div>
         </div>
 
-        {fields.length === 0 && <div className="param-panel-empty">No other editable parameters.</div>}
+        {Array.isArray(params.ports) && (
+          <GroupPortsEditor
+            ports={portsOf({ id: nodeId, type: "", params, position: { x: 0, y: 0 } })}
+            onChange={(next) => onChange("ports", next)}
+          />
+        )}
+
+        {fields.length === 0 && !Array.isArray(params.ports) && (
+          <div className="param-panel-empty">No other editable parameters.</div>
+        )}
 
       {groups.map(([groupName, groupFields]) => {
         const isOpen =

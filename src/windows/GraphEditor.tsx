@@ -21,6 +21,16 @@ import "@xyflow/react/dist/style.css";
 import { DEFAULT_PICKS } from "../shared/graph/calibration/picks";
 import { getGraphClipboard, setGraphClipboard } from "../shared/graph/clipboard";
 import { cloneKeyframes, cloneParams, cloneParamValue } from "../shared/graph/cloneGraph";
+import { groupSelection, materializeNewPort, ungroupNode } from "../shared/graph/groupSelection";
+import {
+  GROUP_INPUT_TYPE,
+  GROUP_OUTPUT_TYPE,
+  GROUP_TYPE,
+  graphAtPath,
+  isGroupInstance,
+  replaceGraphAtPath,
+  resolveDefinition,
+} from "../shared/graph/groups";
 import { findCompatibleSocket, segmentIntersectsRect } from "../shared/graph/insertOnWire";
 import { getInputZone, isGraphZone, isTimelineZone, isViewportZone, setInputZone } from "../shared/graph/inputZoneStore";
 import { isKeyReservedForPlayback } from "../shared/graph/playbackKeys";
@@ -64,13 +74,15 @@ function SpawnCursorMarker({ position }: { position: { x: number; y: number } })
 }
 
 const NODE_TYPES = { graphNode: GraphNode };
+/** Node types that only ever exist because a group put them there. */
+const GROUP_INTERNAL_TYPES = new Set([GROUP_TYPE, GROUP_INPUT_TYPE, GROUP_OUTPUT_TYPE]);
 const EDGE_STROKE_WIDTH = 3;
 const DEFAULT_NODE_WIDTH = 160;
 const DEFAULT_NODE_HEIGHT = 90;
 
 function toFlowNodes(graph: Graph, registry: NodeRegistry, selectedIds?: Set<string>): Node<GraphNodeData>[] {
   return graph.nodes.map((instance) => {
-    const def = registry.get(instance.type);
+    const def = resolveDefinition(instance, registry);
     return {
       id: instance.id,
       type: "graphNode",
@@ -84,6 +96,7 @@ function toFlowNodes(graph: Graph, registry: NodeRegistry, selectedIds?: Set<str
         category: def?.category,
         inputs: def?.inputs ?? [],
         outputs: def?.outputs ?? [],
+        ...(instance.subgraph ? { groupSize: instance.subgraph.nodes.length } : {}),
       },
     };
   });
@@ -113,7 +126,7 @@ function refreshDynamicSockets(
 ): Node<GraphNodeData>[] {
   return flowNodes.map((flowNode) => {
     const instance = baseNodes.find((n) => n.id === flowNode.id);
-    const def = instance && registry.get(instance.type);
+    const def = resolveDefinition(instance, registry);
     if (!def?.dynamicInputs && !def?.dynamicOutputs) return flowNode;
 
     const nodeIncomingConnections = flowEdges.filter((e) => e.target === flowNode.id);
@@ -212,9 +225,9 @@ interface GraphEditorProps {
 }
 
 function GraphEditorContent({
-  graph,
+  graph: rootGraph,
   registry,
-  onGraphChange,
+  onGraphChange: onRootGraphChange,
   onSelectNode,
   selectedNodeId,
   onSelectNodes,
@@ -225,6 +238,46 @@ function GraphEditorContent({
   onSelectCanvas,
 }: GraphEditorProps) {
   const { screenToFlowPosition } = useReactFlow();
+
+  /**
+   * Which group the canvas is showing the inside of — a path of group node
+   * ids, empty at the top level.
+   *
+   * Diving into a group is an editor state, not a document one: the rest of
+   * the app (the viewport, the timeline, undo) goes on working with the whole
+   * root graph, and every edit made down here is lifted back into it before
+   * it leaves this component. That is what keeps a group from needing its own
+   * evaluation pass, its own history stack or its own selection model.
+   */
+  const [graphPath, setGraphPath] = useState<string[]>([]);
+  const graph = useMemo(() => graphAtPath(rootGraph, graphPath) ?? rootGraph, [rootGraph, graphPath]);
+
+  // The group being edited can vanish under us — deleted from a second pane,
+  // or undone away. Surfacing at the root beats drawing a level that no
+  // longer exists.
+  useEffect(() => {
+    if (graphPath.length > 0 && !graphAtPath(rootGraph, graphPath)) setGraphPath([]);
+  }, [rootGraph, graphPath]);
+
+  const onGraphChange = useCallback(
+    (next: Graph) => {
+      onRootGraphChange?.(graphPath.length === 0 ? next : replaceGraphAtPath(rootGraph, graphPath, next));
+    },
+    [onRootGraphChange, rootGraph, graphPath],
+  );
+
+  const breadcrumb = useMemo(() => {
+    const trail: { id: string; label: string }[] = [];
+    let level: Graph | undefined = rootGraph;
+    for (const nodeId of graphPath) {
+      const node: NodeInstance | undefined = level?.nodes.find((n) => n.id === nodeId);
+      const name = typeof node?.params?.name === "string" && node.params.name ? node.params.name : "Group";
+      trail.push({ id: nodeId, label: name });
+      level = node?.subgraph;
+    }
+    return trail;
+  }, [rootGraph, graphPath]);
+
 
   const initialSelectedIds = useMemo(() => {
     const set = new Set<string>();
@@ -447,6 +500,30 @@ function GraphEditorContent({
     (connection) => {
       connectFiredRef.current = true;
       if (!connection.source || !connection.target || !connection.sourceHandle || !connection.targetHandle) return;
+
+      // Dropped on a boundary's empty socket: the port has to exist before
+      // the wire can point at it, and both live in the graph rather than in
+      // the flow nodes — so this path writes the graph directly and lets the
+      // sync effect rebuild the canvas from it.
+      const materialized = materializeNewPort(
+        graph,
+        {
+          fromNode: connection.source,
+          fromSocket: connection.sourceHandle,
+          toNode: connection.target,
+          toSocket: connection.targetHandle,
+        },
+        registry,
+        randomId,
+      );
+      if (materialized) {
+        const kept = materialized.graph.connections.filter(
+          (c) => !(c.toNode === materialized.connection.toNode && c.toSocket === materialized.connection.toSocket),
+        );
+        onGraphChange?.({ ...materialized.graph, connections: [...kept, materialized.connection] });
+        return;
+      }
+
       const withoutConflict = edges.filter(
         (e) => !(e.target === connection.target && e.targetHandle === connection.targetHandle),
       );
@@ -464,7 +541,7 @@ function GraphEditorContent({
       setEdges(nextEdges);
       commit(nextNodes, nextEdges);
     },
-    [commit, edges, graph.nodes, nodes, registry, setEdges, setNodes],
+    [commit, edges, graph, nodes, onGraphChange, registry, setEdges, setNodes],
   );
 
   const edgeReconnectSuccessful = useRef(true);
@@ -749,6 +826,19 @@ function GraphEditorContent({
     },
     [onSelectNode, onSelectNodes],
   );
+  /** Double-clicking a group opens it — the canvas shows its interior, the breadcrumb the way back. */
+  const onNodeDoubleClick = useCallback(
+    (_: React.MouseEvent, node: Node<GraphNodeData>) => {
+      const instance = graph.nodes.find((n) => n.id === node.id);
+      if (!isGroupInstance(instance)) return;
+      selectedIdsRef.current = new Set();
+      onSelectNode(null);
+      onSelectNodes?.([]);
+      setGraphPath((path) => [...path, node.id]);
+    },
+    [graph.nodes, onSelectNode, onSelectNodes],
+  );
+
   const onPaneClick = useCallback(
     (event: React.MouseEvent) => {
       selectedIdsRef.current = new Set();
@@ -996,7 +1086,7 @@ function GraphEditorContent({
     }
 
     const newFlowNodes: Node<GraphNodeData>[] = newInstances.map((instance) => {
-      const def = registry.get(instance.type);
+      const def = resolveDefinition(instance, registry);
       return {
         id: instance.id,
         type: "graphNode",
@@ -1060,6 +1150,35 @@ function GraphEditorContent({
     pasteClipboard(24);
   }, [copySelected, pasteClipboard]);
 
+  /** Cmd+G — the selection becomes one group node, which then becomes the selection. */
+  const groupSelected = useCallback(() => {
+    const selected = getSelectedNodeInstances();
+    if (selected.length === 0) return;
+
+    const result = groupSelection(graph, selected.map((n) => n.id), registry, randomId);
+    if (!result) return;
+
+    selectedIdsRef.current = new Set([result.groupId]);
+    onGraphChange?.(result.graph);
+    onSelectNode(result.groupId);
+    onSelectNodes?.([result.groupId]);
+  }, [getSelectedNodeInstances, graph, onGraphChange, onSelectNode, onSelectNodes, registry]);
+
+  /** Cmd+Shift+G — every selected group spills its contents back into this level. */
+  const ungroupSelected = useCallback(() => {
+    const groups = getSelectedNodeInstances().filter(isGroupInstance);
+    if (groups.length === 0) return;
+
+    let next = graph;
+    for (const group of groups) next = ungroupNode(next, group.id) ?? next;
+    if (next === graph) return;
+
+    selectedIdsRef.current = new Set();
+    onGraphChange?.(next);
+    onSelectNode(null);
+    onSelectNodes?.([]);
+  }, [getSelectedNodeInstances, graph, onGraphChange, onSelectNode, onSelectNodes]);
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const activeEl = document.activeElement;
@@ -1103,7 +1222,11 @@ function GraphEditorContent({
       // Node shortcuts only apply when not over the timeline
       if (isTimelineZone()) return;
 
-      if (isCmdOrCtrl && isShift && code === "KeyM") {
+      if (isCmdOrCtrl && code === "KeyG") {
+        e.preventDefault();
+        if (isShift) ungroupSelected();
+        else groupSelected();
+      } else if (isCmdOrCtrl && isShift && code === "KeyM") {
         e.preventDefault();
         addNode("merge");
       } else if (isCmdOrCtrl && isShift && code === "KeyT") {
@@ -1143,6 +1266,8 @@ function GraphEditorContent({
     addNode,
     copySelected,
     duplicateSelected,
+    groupSelected,
+    ungroupSelected,
     edges,
     nodes,
     onEdgesDelete,
@@ -1160,6 +1285,18 @@ function GraphEditorContent({
     }, 60);
     return () => clearTimeout(timer);
   }, [fitView]);
+
+  // Diving into a group (or climbing back out) swaps the whole content of the
+  // canvas while the pan and zoom stay where they were — which lands you
+  // looking at empty space next to the level you asked for. Frame it instead.
+  const framedPathRef = useRef<string>("");
+  useEffect(() => {
+    const key = graphPath.join("/");
+    if (framedPathRef.current === key) return;
+    framedPathRef.current = key;
+    const timer = setTimeout(() => fitView({ padding: 0.25, duration: 300 }), 30);
+    return () => clearTimeout(timer);
+  }, [graphPath, fitView]);
 
   // "F" frames the selected node — only while the mouse is actually over
   // this canvas, so pressing F with the cursor over the 3D viewport (its own
@@ -1186,7 +1323,13 @@ function GraphEditorContent({
     return () => window.removeEventListener("keydown", handleFrameKey);
   }, [selectedNodeId, graph.nodes, setCenter]);
 
-  const paletteNodes = useMemo(() => [...registry.values()], [registry]);
+  // Group nodes are built by Cmd+G, boundary nodes by the group that owns
+  // them — placing either by hand would produce a node with no interior and
+  // no ports, so they stay out of the palette and the search.
+  const paletteNodes = useMemo(
+    () => [...registry.values()].filter((def) => !GROUP_INTERNAL_TYPES.has(def.type)),
+    [registry],
+  );
 
   return (
     <div
@@ -1224,6 +1367,7 @@ function GraphEditorContent({
           onEdgeClick={onEdgeClick}
           onNodeDragStop={onNodeDragStop}
           onNodeClick={onNodeClick}
+          onNodeDoubleClick={onNodeDoubleClick}
           onPaneClick={onPaneClick}
           onSelectionChange={onSelectionChange}
           selectionOnDrag
@@ -1242,6 +1386,25 @@ function GraphEditorContent({
           <Background color="#5b6572" gap={20} />
           <SpawnCursorMarker position={spawnCursorPos} />
         </ReactFlow>
+        {breadcrumb.length > 0 && (
+          <div className="graph-breadcrumb">
+            <button type="button" onClick={() => setGraphPath([])}>
+              Root
+            </button>
+            {breadcrumb.map((crumb, index) => (
+              <span key={crumb.id}>
+                <span className="graph-breadcrumb-sep">/</span>
+                <button
+                  type="button"
+                  disabled={index === breadcrumb.length - 1}
+                  onClick={() => setGraphPath((path) => path.slice(0, index + 1))}
+                >
+                  {crumb.label}
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
         {canvasCount && onSelectCanvas ? (
           <div className="canvas-selector">
             {Array.from({ length: canvasCount }, (_, index) => (

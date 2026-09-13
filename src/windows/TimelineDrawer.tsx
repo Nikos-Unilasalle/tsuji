@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CATEGORY_COLOR, UNKNOWN_CATEGORY_COLOR } from "../shared/graph/categories";
+import { resolveDefinition } from "../shared/graph/groups";
 import { isTimelineZone, setInputZone } from "../shared/graph/inputZoneStore";
 import { EasingType, Graph, Marker, NodeRegistry } from "../shared/graph/types";
 import {
@@ -941,7 +942,7 @@ export const TimelineDrawer: React.FC<TimelineDrawerProps> = ({
               </div>
             ) : (
               displayedNodes.map((nodeInstance) => {
-                const def = registry.get(nodeInstance.type);
+                const def = resolveDefinition(nodeInstance, registry);
                 const categoryColor = def?.category ? CATEGORY_COLOR[def.category] : UNKNOWN_CATEGORY_COLOR;
                 const isCollapsed = collapsedNodes.has(nodeInstance.id);
                 const isSelected = selectedNodeIds.includes(nodeInstance.id);

@@ -48,6 +48,7 @@ import {
   setGraphKeyBindings,
   setPlaybackActive,
 } from "./shared/graph/playbackKeys";
+import { collectAllNodeIds, findNodeDeep, resolveDefinition, updateNodeDeep } from "./shared/graph/groups";
 import { disposeNodeCaches } from "./shared/graph/nodeCaches";
 import { AutosaveRecord, projectHasContent, readAutosave, writeAutosave } from "./shared/graph/autosave";
 import { rehydrateGraphParams } from "./shared/graph/rehydrateParams";
@@ -680,7 +681,9 @@ function MainEditor() {
     // active canvas alone would free the meshes of all five others the
     // moment you switched — the exact opposite of what makes switching
     // instant.
-    const currentIds = new Set(canvases.flatMap((canvas) => canvas.nodes.map((n) => n.id)));
+    // Interiors included: a group holds real nodes owning real meshes, and
+    // deleting the group is the only thing that ever removes them.
+    const currentIds = new Set(canvases.flatMap((canvas) => collectAllNodeIds(canvas)));
     const departed = [...knownNodeIdsRef.current].filter((id) => !currentIds.has(id));
     if (departed.length > 0) disposeNodeCaches(departed);
     knownNodeIdsRef.current = currentIds;
@@ -691,8 +694,11 @@ function MainEditor() {
   // MainEditor's whole tree on every orbit tick for no visual benefit.
   const previewCameraRef = useRef<PreviewCameraPose | null>(null);
 
-  const selectedInstance = graph.nodes.find((n) => n.id === selectedNodeId) ?? null;
-  const selectedDef = selectedInstance ? DEFAULT_REGISTRY.get(selectedInstance.type) : undefined;
+  // Deep: the selection can be a node inside a group the editor has dived
+  // into, and the param panel has to reach it the same way it reaches any
+  // other node.
+  const selectedInstance = (selectedNodeId ? findNodeDeep(graph, selectedNodeId) : undefined) ?? null;
+  const selectedDef = resolveDefinition(selectedInstance ?? undefined, DEFAULT_REGISTRY);
   // Which node's calibration handles the output window should draw, if any —
   // broadcast alongside the graph so the operator can align against the
   // real room through the actual projection, not just the editor preview.
@@ -1033,27 +1039,19 @@ function MainEditor() {
       const nodeIdToUpdate = (value as string | undefined) ?? selectedNodeId;
       if (!nodeIdToUpdate) return;
       setGraphWithHistory((prevGraph) => {
-        const instance = prevGraph.nodes.find((n) => n.id === nodeIdToUpdate);
+        const instance = findNodeDeep(prevGraph, nodeIdToUpdate);
         if (!instance) return prevGraph;
-        let nextParams = { ...instance.params };
+        const nextParams = { ...instance.params };
         for (const [k, v] of Object.entries(updates)) {
           nextParams[k] = cloneParamValue(v);
         }
-        return {
-          ...prevGraph,
-          nodes: prevGraph.nodes.map((n) => {
-            if (n.id === instance.id) {
-              return { ...n, params: nextParams };
-            }
-            return n;
-          }),
-        };
+        return updateNodeDeep(prevGraph, instance.id, (n) => ({ ...n, params: nextParams }));
       }, `${nodeIdToUpdate}:batch`);
       return;
     }
     const nodeIdToUpdate = targetNodeId ?? selectedNodeId;
     setGraphWithHistory((prevGraph) => {
-      const instance = prevGraph.nodes.find((n) => n.id === nodeIdToUpdate);
+      const instance = nodeIdToUpdate ? findNodeDeep(prevGraph, nodeIdToUpdate) : undefined;
       if (!instance) return prevGraph;
 
       const isActivatingCamera =
@@ -1158,18 +1156,22 @@ function MainEditor() {
         nextParams = latticeParamsWithRebuiltGrid(nextParams);
       }
 
+      // Only one camera is active at a time, and that rule is about the
+      // document, not a level of it — a camera inside a group counts.
+      const withCamerasOff = isActivatingCamera
+        ? {
+            ...prevGraph,
+            nodes: prevGraph.nodes.map((n) =>
+              n.type === CAMERA_NODE.type || n.type === CAMERA_FLY_TO_NODE.type
+                ? { ...n, params: { ...n.params, active: false } }
+                : n,
+            ),
+          }
+        : prevGraph;
+
       return {
-        ...prevGraph,
+        ...updateNodeDeep(withCamerasOff, instance.id, (n) => ({ ...n, params: nextParams })),
         keyframes: nextKeyframes,
-        nodes: prevGraph.nodes.map((n) => {
-          if (n.id === instance.id) {
-            return { ...n, params: nextParams };
-          }
-          if (isActivatingCamera && (n.type === CAMERA_NODE.type || n.type === CAMERA_FLY_TO_NODE.type)) {
-            return { ...n, params: { ...n.params, active: false } };
-          }
-          return n;
-        }),
       };
     }, `${nodeIdToUpdate}:${paramId}`);
   };
@@ -1226,7 +1228,7 @@ function MainEditor() {
       if (isInput || e.key !== "Tab" || e.metaKey || e.ctrlKey || e.altKey || !selectedNodeId || !isGraphZone()) return;
 
       const instance = graph.nodes.find((n) => n.id === selectedNodeId);
-      const def = instance ? DEFAULT_REGISTRY.get(instance.type) : undefined;
+      const def = resolveDefinition(instance, DEFAULT_REGISTRY);
       if (!instance || !def || !("visible" in def.defaultParams)) return;
 
       e.preventDefault();

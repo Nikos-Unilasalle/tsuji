@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { resolveDefinition } from "./groups";
 import { Graph, NodeRegistry } from "./types";
 
 /**
@@ -55,7 +56,12 @@ export function rehydrateGraphParams(graph: Graph, registry: NodeRegistry): Grap
   return {
     ...graph,
     nodes: graph.nodes.map((instance) => {
-      const def = registry.get(instance.type);
+      // A group's interior crossed the same IPC boundary and lost the same
+      // THREE instances on the way — rehydrate it before its own params.
+      if (instance.subgraph) {
+        instance = { ...instance, subgraph: rehydrateGraphParams(instance.subgraph, registry) };
+      }
+      const def = resolveDefinition(instance, registry);
       if (!def) return instance;
 
       let changed = false;

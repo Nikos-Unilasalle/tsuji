@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { CATEGORY_COLOR, CATEGORY_LABEL } from "../shared/graph/categories";
+import { GROUP_INPUT_TYPE, GROUP_OUTPUT_TYPE, GROUP_TYPE } from "../shared/graph/groups";
 import { NodeRegistry } from "../shared/graph/types";
 import "./node-search-modal.css";
 
@@ -20,7 +21,11 @@ export function NodeSearchModal({ registry, onSelectNodeType, onClose }: NodeSea
   const selectedItemRef = useRef<HTMLDivElement>(null);
 
   const availableNodes = useMemo(() => {
-    return Array.from(registry.values());
+    // A group and its boundary nodes are made by Cmd+G, never placed by hand
+    // — one dropped from here would have no interior and no ports.
+    return Array.from(registry.values()).filter(
+      (def) => def.type !== GROUP_TYPE && def.type !== GROUP_INPUT_TYPE && def.type !== GROUP_OUTPUT_TYPE,
+    );
   }, [registry]);
 
   const filteredNodes = useMemo(() => {

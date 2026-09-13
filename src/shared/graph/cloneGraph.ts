@@ -85,6 +85,10 @@ function cloneNode(node: NodeInstance): NodeInstance {
     type: node.type,
     position: { x: node.position.x, y: node.position.y },
     params: cloneParams(node.params),
+    // A group's subgraph is part of the node, so a snapshot that shared it by
+    // reference would let an edit inside the group reach into every undo entry
+    // taken before it.
+    ...(node.subgraph ? { subgraph: cloneGraph(node.subgraph) } : {}),
   };
 }
 
