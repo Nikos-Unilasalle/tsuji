@@ -114,6 +114,33 @@ describe("structure/group", () => {
     expect((results.get("g3")?.geometry as THREE.Group).children).toHaveLength(0);
   });
 
+  it("places its container from its own pose, so the gizmo has something to drag", () => {
+    const subgraph: Graph = { ...emptyGraph(), nodes: [node("box", "object/box")] };
+    const graph: Graph = {
+      ...emptyGraph(),
+      nodes: [{ ...node("posed", GROUP_TYPE), subgraph, params: { location: new THREE.Vector3(2, 3, 4) } }],
+    };
+
+    const container = evaluateGraph(graph, DEFAULT_REGISTRY, CTX).get("posed")?.geometry as THREE.Group;
+    expect(new THREE.Vector3().setFromMatrixPosition(container.matrix)).toEqual(new THREE.Vector3(2, 3, 4));
+    // Tagged, so a click on the box inside resolves to the group.
+    expect(container.userData.nodeId).toBe("posed");
+  });
+
+  it("leaves the container alone on the frame the gizmo is holding it", () => {
+    const subgraph: Graph = { ...emptyGraph(), nodes: [node("box", "object/box")] };
+    const graph: Graph = {
+      ...emptyGraph(),
+      nodes: [{ ...node("dragged", GROUP_TYPE), subgraph, params: { location: new THREE.Vector3(5, 0, 0) } }],
+    };
+
+    const container = evaluateGraph(graph, DEFAULT_REGISTRY, CTX).get("dragged")?.geometry as THREE.Group;
+    container.matrix.setPosition(9, 9, 9); // stand in for what TransformControls just set
+
+    evaluateGraph(graph, DEFAULT_REGISTRY, { ...CTX, liveEditNodeId: "dragged" });
+    expect(new THREE.Vector3().setFromMatrixPosition(container.matrix)).toEqual(new THREE.Vector3(9, 9, 9));
+  });
+
   it("survives a save/load round trip, interior included", () => {
     const graph: Graph = {
       ...emptyGraph(),

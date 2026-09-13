@@ -37,6 +37,12 @@ const GROUP: NodeDefinition = {
 
 const REGISTRY = createRegistry([PASSTHROUGH, GROUP]);
 
+/** What every group has before the author declares a single port of their own. */
+const OWN_INPUTS = [
+  { id: "visible", label: "Visible", type: "value" },
+  { id: "matrix", label: "Matrix", type: "matrix" },
+];
+
 function node(id: string, type: string, params: Record<string, unknown> = {}): NodeInstance {
   return { id, type, params, position: { x: 0, y: 0 } };
 }
@@ -66,7 +72,11 @@ describe("resolveDefinition", () => {
     const group = { ...node("g", GROUP_TYPE), subgraph: subgraphWithPorts() };
     const def = resolveDefinition(group, REGISTRY)!;
 
-    expect(def.inputs).toEqual([{ id: "amount", label: "Amount", type: "value" }, NEW_PORT_SOCKET_DEF]);
+    expect(def.inputs).toEqual([
+      ...OWN_INPUTS,
+      { id: "amount", label: "Amount", type: "value" },
+      NEW_PORT_SOCKET_DEF,
+    ]);
     expect(def.outputs).toEqual([
       { id: "result", label: "Result", type: "value" },
       GROUP_SCENE_OUTPUT,
@@ -94,7 +104,7 @@ describe("resolveDefinition", () => {
 
   it("gives a group with no boundary nodes nothing but the empty socket to grow from", () => {
     const def = resolveDefinition({ ...node("g", GROUP_TYPE), subgraph: emptyGraph() }, REGISTRY)!;
-    expect(def.inputs).toEqual([NEW_PORT_SOCKET_DEF]);
+    expect(def.inputs).toEqual([...OWN_INPUTS, NEW_PORT_SOCKET_DEF]);
     expect(def.outputs).toEqual([GROUP_SCENE_OUTPUT, NEW_PORT_SOCKET_DEF]);
   });
 
@@ -111,7 +121,7 @@ describe("resolveDefinition", () => {
       ),
     };
     const after = resolveDefinition({ ...group, subgraph: renamed }, REGISTRY)!;
-    expect(after.inputs[0].label).toBe("Strength");
+    expect(after.inputs.find((s) => s.id === "amount")!.label).toBe("Strength");
   });
 });
 

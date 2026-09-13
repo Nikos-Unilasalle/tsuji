@@ -1,3 +1,4 @@
+import { GROUP_TYPE, groupRendersOwnContainer } from "./groups";
 import { MATRIX_TRANSFORM_NODE, TRANSFORM_NODE } from "./nodes/transform";
 import { Graph } from "./types";
 
@@ -54,6 +55,9 @@ export const GIZMO_SELECTABLE_TYPES = [
   "object/laser-beam",
   "curve/grease-pencil",
   "curve/paint-on-geometry",
+  // A group, but only while it renders its own container — see the guard in
+  // resolveGizmoTarget, which is the part a flat type list cannot express.
+  GROUP_TYPE,
 ];
 
 /**
@@ -136,6 +140,11 @@ export function resolveGizmoTarget(graph: Graph, objectNodeId: string, depth = 0
 
   const objectNode = graph.nodes.find((n) => n.id === objectNodeId);
   if (objectNode && NATIVE_TRANSFORM_TYPES.has(objectNode.type)) {
+    // A group that forwards an interior node's object through a declared
+    // `geometry` port owns no pose: the object is placed by the node that
+    // built it, and dragging the group would fight that node's own matrix
+    // every frame. No gizmo is better than one that argues.
+    if (objectNode.subgraph && !groupRendersOwnContainer(objectNode.subgraph)) return null;
     return { kind: "native", objectNodeId, deltaSourceNodeId: connection?.fromNode ?? null };
   }
 

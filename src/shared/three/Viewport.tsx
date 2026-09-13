@@ -78,6 +78,37 @@ function isPaintOrGreaseNode(node: { type: string } | null | undefined): boolean
   return node.type === GREASE_PENCIL_NODE.type || node.type === PAINT_ON_GEOMETRY_NODE.type;
 }
 
+/**
+ * Which node a click on this object selects.
+ *
+ * Objects carry their owner's id in `userData.nodeId`, and the nearest tagged
+ * ancestor used to win outright. That answer stopped being right once groups
+ * existed: a mesh inside a group is tagged with the id of the node that built
+ * it, and that node lives in the group's *subgraph* — not in the graph this
+ * viewport draws. Selecting it left the whole app pointing at something the
+ * canvas has no node for: no gizmo, nothing to frame.
+ *
+ * So the walk keeps going until it finds a tag the current graph actually
+ * knows, which for grouped geometry is the group's own container. Clicking a
+ * thing inside a group selects the group — the same as Blender, and the same
+ * as what the graph shows you at this level. Falls back to the nearest tag
+ * when nothing matches, so an object whose node has just been deleted behaves
+ * as it did before.
+ */
+function selectableNodeIdFor(object: THREE.Object3D, graph: Graph): string | null {
+  let nearest: string | null = null;
+  let curr: THREE.Object3D | null = object;
+  while (curr) {
+    const nodeId = curr.userData?.nodeId;
+    if (typeof nodeId === "string" && nodeId) {
+      if (nearest === null) nearest = nodeId;
+      if (graph.nodes.some((n) => n.id === nodeId)) return nodeId;
+    }
+    curr = curr.parent;
+  }
+  return nearest;
+}
+
 import {
   applySculptStroke,
   SculptStrokeParams,
@@ -3170,18 +3201,7 @@ export function Viewport({
           })
         : undefined;
 
-      let hitNodeId: string | null = null;
-      if (hit) {
-        let curr: THREE.Object3D | null = hit.object;
-        while (curr) {
-          if (curr.userData?.nodeId) {
-            hitNodeId = curr.userData.nodeId;
-            break;
-          }
-          curr = curr.parent;
-        }
-      }
-      onSelectNodeRef.current(hitNodeId);
+      onSelectNodeRef.current(hit ? selectableNodeIdFor(hit.object, graphRef.current) : null);
     }
 
     const onCanvasWheel = (e: WheelEvent) => {

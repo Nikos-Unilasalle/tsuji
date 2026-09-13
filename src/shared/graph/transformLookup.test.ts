@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { Connection, Graph, NodeInstance } from "./types";
+import { GROUP_OUTPUT_TYPE, GROUP_TYPE } from "./groups";
 import { GIZMO_SELECTABLE_TYPES, resolveGizmoTarget } from "./transformLookup";
 
 function node(id: string, type: string): NodeInstance {
@@ -216,6 +217,7 @@ describe("GIZMO_SELECTABLE_TYPES", () => {
       "object/laser-beam",
       "curve/grease-pencil",
       "curve/paint-on-geometry",
+      "structure/group",
     ]);
   });
 });
@@ -271,6 +273,40 @@ describe("resolveGizmoTarget — pure geometry modifiers defer to their source",
 
     expect(() => resolveGizmoTarget(graph, "sub1")).not.toThrow();
     expect(resolveGizmoTarget(graph, "sub1")).toBeNull();
+  });
+
+  it("a group that renders its own container has a pose to drag", () => {
+    const group: NodeInstance = {
+      ...node("g", GROUP_TYPE),
+      subgraph: { nodes: [], connections: [] },
+    };
+
+    expect(resolveGizmoTarget({ nodes: [group], connections: [] }, "g")).toEqual({
+      kind: "native",
+      objectNodeId: "g",
+      deltaSourceNodeId: null,
+    });
+  });
+
+  it("a group that forwards an interior object through a geometry port has none", () => {
+    // The object belongs to the node inside that built it, which rewrites its
+    // matrix every frame — a group pose on top would just fight it.
+    const group: NodeInstance = {
+      ...node("g", GROUP_TYPE),
+      subgraph: {
+        nodes: [
+          {
+            id: "go",
+            type: GROUP_OUTPUT_TYPE,
+            params: { ports: [{ id: "geometry", label: "Geometry", type: "geometry" }] },
+            position: { x: 0, y: 0 },
+          },
+        ],
+        connections: [],
+      },
+    };
+
+    expect(resolveGizmoTarget({ nodes: [group], connections: [] }, "g")).toBeNull();
   });
 
   it("a node with no geometry input wired and no native pose still resolves to nothing", () => {

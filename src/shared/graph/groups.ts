@@ -114,6 +114,19 @@ export function groupOutputPorts(subgraph: Graph): GroupPort[] {
 }
 
 /**
+ * Whether the group draws through a container of its own, rather than handing
+ * out an interior node's object through a declared `geometry` port.
+ *
+ * This is what decides whether the group has a pose to drag. A container it
+ * built is its to place; an object it merely forwards belongs to the node
+ * inside that made it — and that node rewrites the object's matrix from its
+ * own params every frame, so a second writer would just fight it.
+ */
+export function groupRendersOwnContainer(subgraph: Graph): boolean {
+  return !groupOutputPorts(subgraph).some((port) => port.id === GROUP_SCENE_OUTPUT.id);
+}
+
+/**
  * Derived definitions are memoized on the subgraph object itself.
  *
  * Graph state is replaced immutably on every edit (App.tsx), so a new
@@ -132,12 +145,26 @@ function deriveGroupDefinition(instance: NodeInstance, base: NodeDefinition): No
   const outputs = toSockets(groupOutputPorts(subgraph));
   if (!outputs.some((socket) => socket.id === GROUP_SCENE_OUTPUT.id)) outputs.push(GROUP_SCENE_OUTPUT);
 
+  // The two sockets every object-like node has, in front of the author's own
+  // ports: `visible` is the evaluator's generic hide (evaluate.ts), `matrix`
+  // is what lets a Transform node drive the container the group renders. A
+  // port declared with either id wins — the author asked for that name.
+  const ports = groupInputPorts(subgraph);
+  const inputs = toSockets(ports);
+  const own: SocketDef[] = ([
+    { id: "visible", label: "Visible", type: "value" },
+    // Only when the group renders its own container: a group that forwards an
+    // interior object owns no matrix to compose one into, so offering the
+    // socket would be offering something that quietly does nothing.
+    ...(groupRendersOwnContainer(subgraph) ? [{ id: "matrix", label: "Matrix", type: "matrix" }] : []),
+  ] as SocketDef[]).filter((socket) => !inputs.some((port) => port.id === socket.id));
+
   const derived: NodeDefinition = {
     ...base,
     // Both sides end in the empty socket: a group gains an input from the
     // outside (it shows up on Group Input inside) and an output by dragging
     // out of it (it shows up on Group Output inside).
-    inputs: [...toSockets(groupInputPorts(subgraph)), NEW_PORT_SOCKET_DEF],
+    inputs: [...own, ...inputs, NEW_PORT_SOCKET_DEF],
     outputs: [...outputs, NEW_PORT_SOCKET_DEF],
   };
   derivedDefinitions.set(subgraph, derived);

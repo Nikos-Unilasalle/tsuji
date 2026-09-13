@@ -1,9 +1,10 @@
 import * as THREE from "three";
 import { evaluateGraph } from "../evaluate";
-import { boundaryNodes, GROUP_INPUT_TYPE, GROUP_OUTPUT_TYPE, GROUP_TYPE, portsOf } from "../groups";
+import { composeNativeMatrix } from "./transform";
+import { boundaryNodes, GROUP_INPUT_TYPE, GROUP_OUTPUT_TYPE, GROUP_TYPE, groupRendersOwnContainer, portsOf } from "../groups";
 import { createNodeCache } from "../nodeCaches";
 import { resolveSceneRoots } from "../sceneRoots";
-import { EvalContext, Graph, NodeDefinition } from "../types";
+import { EvalContext, Graph, NodeDefinition, ParamFieldDef } from "../types";
 
 /**
  * A group: a whole graph, evaluated as one node.
@@ -52,6 +53,14 @@ function syncContainer(container: THREE.Group, objects: THREE.Object3D[]): void 
   }
 }
 
+const POSED_PARAM_FIELDS: ParamFieldDef[] = [
+  { id: "name", label: "Name", kind: "text" },
+  { id: "visible", label: "Visible", kind: "boolean", group: "Transform" },
+  { id: "location", label: "Location", kind: "vector", group: "Transform" },
+  { id: "rotation", label: "Rotation (°)", kind: "vector", step: 1, degrees: true, group: "Transform" },
+  { id: "scale", label: "Scale", kind: "vector", group: "Transform" },
+];
+
 export const GROUP_NODE: NodeDefinition = {
   type: GROUP_TYPE,
   label: "Group",
@@ -60,9 +69,39 @@ export const GROUP_NODE: NodeDefinition = {
   // boundary's ports. What is declared here is what an *empty* group has.
   inputs: [],
   outputs: [],
-  defaultParams: { name: "Group" },
-  paramFields: [{ id: "name", label: "Name", kind: "text" }],
-  evaluate: (inputs, _params, ctx) => {
+  defaultParams: {
+    name: "Group",
+    visible: 1,
+    // A native pose, the same one Merge owns and for the same reason: the
+    // group's container is one object holding everything the interior built,
+    // so the viewport gizmo can move, rotate and scale the whole set at once
+    // instead of the author diving in to nudge each node. Only meaningful
+    // while the group renders its own container — see resolveGizmoTarget.
+    location: new THREE.Vector3(0, 0, 0),
+    rotation: new THREE.Vector3(0, 0, 0),
+    scale: new THREE.Vector3(1, 1, 1),
+  },
+  paramFields: POSED_PARAM_FIELDS,
+  /**
+   * The pose is only real while the group renders its own container. A group
+   * that hands an interior object out through a `geometry` port doesn't place
+   * anything — showing Location/Rotation/Scale there would be three knobs
+   * that move nothing, which is worse than not showing them.
+   */
+  dynamicParamFields: (instance) =>
+    !instance.subgraph || groupRendersOwnContainer(instance.subgraph)
+      ? POSED_PARAM_FIELDS
+      : [
+          { id: "name", label: "Name", kind: "text" },
+          { id: "visible", label: "Visible", kind: "boolean" },
+          {
+            id: "forwarded",
+            label:
+              "This group's Geometry output comes from a node inside it, which places itself — move that node, or remove the port to let the group hold its own contents.",
+            kind: "note",
+          },
+        ],
+  evaluate: (inputs, params, ctx) => {
     const subgraph = ctx.instance?.subgraph;
     if (!subgraph || !ctx.registry) return {};
 
@@ -98,12 +137,28 @@ export const GROUP_NODE: NodeDefinition = {
         container.name = `group:${ctx.nodeId}`;
         containers.set(ctx.nodeId, container);
       }
+      // Tagged so a click on anything inside resolves to the group: from
+      // outside, the group is the thing you selected (Viewport.tsx walks up
+      // to the outermost tag that the graph it is drawing actually knows).
+      container.userData.nodeId = ctx.nodeId;
+
       const objects: THREE.Object3D[] = [];
       for (const rootId of sceneRootsOf(subgraph, ctx)) {
         const geometry = results.get(rootId)?.geometry;
         if (geometry instanceof THREE.Object3D) objects.push(geometry);
       }
       syncContainer(container, objects);
+
+      // The pose the gizmo drags. Skipped for the frame the gizmo is holding
+      // this node, exactly as Merge does: the evaluator would otherwise
+      // overwrite the matrix TransformControls just set, 60 times a second.
+      if (ctx.nodeId !== ctx.liveEditNodeId) {
+        container.matrixAutoUpdate = false;
+        container.matrix.copy(
+          composeNativeMatrix(inputs.matrix, params.location, params.rotation, params.scale, params),
+        );
+      }
+
       outputs.geometry = container;
     }
 
