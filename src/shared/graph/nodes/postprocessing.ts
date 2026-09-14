@@ -96,7 +96,7 @@ export const POSTPROCESS_RGB_SHIFT_NODE: NodeDefinition = {
   defaultParams: { amount: 0.005, angle: 0 },
   paramFields: [
     { id: "amount", label: "Amount", kind: "number", step: 0.001 },
-    { id: "angle", label: "Angle (°)", kind: "number", step: 5 },
+    { id: "angle", label: "Angle (°)", kind: "number", step: 5, group: "General" },
   ],
   evaluate: (inputs, params, ctx) => {
     const amount = numberInput(inputs.amount, params.amount, 0.005);
@@ -311,7 +311,7 @@ export const POSTPROCESS_KALEIDOSCOPE_NODE: NodeDefinition = {
   defaultParams: { sides: 6, angle: 0 },
   paramFields: [
     { id: "sides", label: "Sides / Mirrors", kind: "number", step: 1 },
-    { id: "angle", label: "Angle (°)", kind: "number", step: 5 },
+    { id: "angle", label: "Angle (°)", kind: "number", step: 5, group: "General" },
   ],
   evaluate: (inputs, params, ctx) => {
     const sides = Math.max(1, numberInput(inputs.sides, params.sides, 6));
@@ -474,10 +474,10 @@ export const POSTPROCESS_FOG_NODE: NodeDefinition = {
     density: 0.02,
   },
   paramFields: [
-    { id: "color", label: "Fog Color", kind: "color" },
+    { id: "color", label: "Fog Color", kind: "color", group: "General" },
     { id: "mode", label: "Fog Mode", kind: "select", options: ["linear", "exponential"] },
-    { id: "near", label: "Near Distance", kind: "number", step: 0.5 },
-    { id: "far", label: "Far Distance", kind: "number", step: 1.0 },
+    { id: "near", label: "Near Distance", kind: "number", step: 0.5, group: "General" },
+    { id: "far", label: "Far Distance", kind: "number", step: 1.0, group: "General" },
     { id: "density", label: "Exp Density", kind: "number", step: 0.005 },
   ],
   evaluate: (inputs, params, ctx) => {

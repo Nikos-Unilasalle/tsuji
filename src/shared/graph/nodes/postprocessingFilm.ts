@@ -11,8 +11,16 @@ import { accumulateEffect } from "./postprocessing";
  * optical/technical passes (bloom, DOF, AO, antialiasing) — same `effect`
  * chain, same accumulation, they just belong to different jobs.
  *
- * All four are pure descriptions: the node hands the chain a type and a bag
+ * All five are pure descriptions: the node hands the chain a type and a bag
  * of numbers, and postProcessChain.ts owns the pass that reads them.
+ *
+ * One naming rule worth knowing before renaming anything here: the param
+ * panel *infers* a collapsible section from a field's id when the field
+ * doesn't name one (getGroupName in ParamPanel.tsx). `scale` and `rotation`
+ * land in "Transform", `angle` in "Light Settings" — and "Light Settings" is
+ * collapsed by default, so a field called `angle` on a post-process node is
+ * simply not on screen. Hence `speckSize`, `strokeAngle` and `screenAngle`:
+ * ids chosen to stay out of those buckets, not for verbosity.
  */
 
 /** Dual Tone — the whole image graded onto a ramp between two colours. */
@@ -41,7 +49,7 @@ export const POSTPROCESS_DUOTONE_NODE: NodeDefinition = {
     { id: "highlightColor", label: "Highlight Color", kind: "color" },
     { id: "balance", label: "Balance", kind: "number", step: 0.02 },
     { id: "softness", label: "Softness", kind: "number", step: 0.02 },
-    { id: "amount", label: "Amount", kind: "number", percent: true, step: 0.05 },
+    { id: "amount", label: "Amount", kind: "number", percent: true, step: 5 },
   ],
   evaluate: (inputs, params, ctx) => {
     const shadowColor = asColor(inputs.shadowColor, asColor(params.shadowColor, new THREE.Color(0x1b2a4a)));
@@ -77,14 +85,14 @@ export const POSTPROCESS_HALFTONE_NODE: NodeDefinition = {
   inputs: [
     { id: "effect", label: "Post-Process", type: "postprocess" },
     { id: "radius", label: "Dot Radius (px)", type: "value" },
-    { id: "rotation", label: "Rotation (°)", type: "value" },
+    { id: "screenAngle", label: "Screen Angle (°)", type: "value" },
     { id: "scatter", label: "Scatter", type: "value" },
     { id: "amount", label: "Amount", type: "value" },
   ],
   outputs: [{ id: "effect", label: "Post-Process", type: "postprocess" }],
   defaultParams: {
     radius: 4,
-    rotation: 15,
+    screenAngle: 15,
     scatter: 0,
     amount: 1.0,
     shape: "dot",
@@ -93,14 +101,14 @@ export const POSTPROCESS_HALFTONE_NODE: NodeDefinition = {
   paramFields: [
     { id: "shape", label: "Shape", kind: "select", options: HALFTONE_SHAPES },
     { id: "radius", label: "Dot Radius (px)", kind: "number", step: 1 },
-    { id: "rotation", label: "Rotation (°)", kind: "number", step: 5 },
+    { id: "screenAngle", label: "Screen Angle (°)", kind: "number", step: 5 },
     { id: "scatter", label: "Scatter", kind: "number", step: 0.05 },
-    { id: "amount", label: "Amount", kind: "number", percent: true, step: 0.05 },
+    { id: "amount", label: "Amount", kind: "number", percent: true, step: 5 },
     { id: "greyscale", label: "Greyscale (one screen)", kind: "boolean" },
   ],
   evaluate: (inputs, params, ctx) => {
     const radius = Math.max(1, numberInput(inputs.radius, params.radius, 4));
-    const rotation = numberInput(inputs.rotation, params.rotation, 15);
+    const screenAngle = numberInput(inputs.screenAngle, params.screenAngle, 15);
     const scatter = Math.max(0, numberInput(inputs.scatter, params.scatter, 0));
     const amount = Math.max(0, Math.min(1, numberInput(inputs.amount, params.amount, 1.0)));
     const shape = HALFTONE_SHAPES.includes(String(params.shape)) ? String(params.shape) : "dot";
@@ -112,7 +120,7 @@ export const POSTPROCESS_HALFTONE_NODE: NodeDefinition = {
         nodeId: ctx.nodeId,
         // Radians here, as the pass wants them — degrees are the panel's unit
         // only, same convention as RGB Shift's angle.
-        params: { radius, rotation: (rotation * Math.PI) / 180, scatter, amount, shape, greyscale },
+        params: { radius, rotation: (screenAngle * Math.PI) / 180, scatter, amount, shape, greyscale },
       }),
     };
   },
@@ -193,19 +201,19 @@ export const POSTPROCESS_DRY_BRUSH_NODE: NodeDefinition = {
   inputs: [
     { id: "effect", label: "Post-Process", type: "postprocess" },
     { id: "coverage", label: "Coverage", type: "value" },
-    { id: "scale", label: "Speck Size", type: "value" },
+    { id: "speckSize", label: "Speck Size", type: "value" },
     { id: "softness", label: "Softness", type: "value" },
     { id: "stretch", label: "Stroke Length", type: "value" },
-    { id: "angle", label: "Stroke Angle (°)", type: "value" },
+    { id: "strokeAngle", label: "Stroke Angle (°)", type: "value" },
     { id: "paperColor", label: "Paper Color", type: "color" },
   ],
   outputs: [{ id: "effect", label: "Post-Process", type: "postprocess" }],
   defaultParams: {
     coverage: 0.25,
-    scale: 60,
+    speckSize: 60,
     softness: 0.25,
     stretch: 3,
-    angle: 0,
+    strokeAngle: 0,
     paperColor: new THREE.Color(0xffffff),
     followInk: 1,
     animate: 0,
@@ -213,11 +221,11 @@ export const POSTPROCESS_DRY_BRUSH_NODE: NodeDefinition = {
     seed: 0,
   },
   paramFields: [
-    { id: "coverage", label: "Coverage", kind: "number", percent: true, step: 0.05 },
-    { id: "scale", label: "Speck Size", kind: "number", step: 5 },
+    { id: "coverage", label: "Coverage", kind: "number", percent: true, step: 2 },
+    { id: "speckSize", label: "Speck Size", kind: "number", step: 5 },
     { id: "softness", label: "Softness", kind: "number", step: 0.05 },
     { id: "stretch", label: "Stroke Length", kind: "number", step: 0.5 },
-    { id: "angle", label: "Stroke Angle (°)", kind: "number", step: 5 },
+    { id: "strokeAngle", label: "Stroke Angle (°)", kind: "number", step: 5 },
     { id: "paperColor", label: "Paper Color", kind: "color" },
     { id: "followInk", label: "Only Where Painted", kind: "boolean" },
     { id: "animate", label: "Animate (boil)", kind: "boolean" },
@@ -229,10 +237,10 @@ export const POSTPROCESS_DRY_BRUSH_NODE: NodeDefinition = {
     // Speck Size reads as "how big", the shader wants "how many per screen" —
     // so the panel's number is inverted here rather than asking the author to
     // think backwards.
-    const size = Math.max(1, Math.min(400, numberInput(inputs.scale, params.scale, 60)));
+    const size = Math.max(1, Math.min(400, numberInput(inputs.speckSize, params.speckSize, 60)));
     const softness = Math.max(0, Math.min(1, numberInput(inputs.softness, params.softness, 0.25)));
     const stretch = Math.max(0.1, Math.min(20, numberInput(inputs.stretch, params.stretch, 3)));
-    const angle = numberInput(inputs.angle, params.angle, 0);
+    const strokeAngle = numberInput(inputs.strokeAngle, params.strokeAngle, 0);
     const paperColor = asColor(inputs.paperColor, asColor(params.paperColor, new THREE.Color(0xffffff)));
     const followInk = toBoolean(params.followInk ?? 1);
     const animate = toBoolean(params.animate ?? 0);
@@ -250,7 +258,7 @@ export const POSTPROCESS_DRY_BRUSH_NODE: NodeDefinition = {
           scale: 3000 / size,
           softness,
           stretch,
-          angle: (angle * Math.PI) / 180,
+          angle: (strokeAngle * Math.PI) / 180,
           paperColor,
           followInk,
           animate,
@@ -298,7 +306,7 @@ export const POSTPROCESS_SUPER8_NODE: NodeDefinition = {
     { id: "softness", label: "Softness (px)", kind: "number", step: 0.1 },
     { id: "flicker", label: "Flicker", kind: "number", step: 0.02 },
     { id: "weave", label: "Gate Weave", kind: "number", step: 0.05 },
-    { id: "warmth", label: "Warmth", kind: "number", percent: true, step: 0.05 },
+    { id: "warmth", label: "Warmth", kind: "number", percent: true, step: 5 },
     { id: "vignette", label: "Vignette", kind: "number", step: 0.05 },
     { id: "rate", label: "Rate (fps)", kind: "number", step: 1 },
     { id: "seed", label: "Seed", kind: "number", step: 1 },

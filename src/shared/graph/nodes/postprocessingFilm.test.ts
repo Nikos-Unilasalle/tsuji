@@ -80,7 +80,7 @@ describe("POSTPROCESS_DUOTONE_NODE", () => {
 
 describe("POSTPROCESS_HALFTONE_NODE", () => {
   test("rotation is handed over in radians, the unit the pass wants", () => {
-    expect(run(POSTPROCESS_HALFTONE_NODE, { rotation: 180 }).params.rotation).toBeCloseTo(Math.PI);
+    expect(run(POSTPROCESS_HALFTONE_NODE, { screenAngle: 180 }).params.rotation).toBeCloseTo(Math.PI);
   });
 
   test("a radius below one pixel would collapse the screen — clamped", () => {
@@ -119,19 +119,19 @@ describe("POSTPROCESS_DRY_BRUSH_NODE", () => {
   });
 
   test("Speck Size is inverted into the shader's frequency — bigger specks, fewer of them", () => {
-    const small = run(POSTPROCESS_DRY_BRUSH_NODE, { scale: 20 }).params.scale as number;
-    const big = run(POSTPROCESS_DRY_BRUSH_NODE, { scale: 200 }).params.scale as number;
+    const small = run(POSTPROCESS_DRY_BRUSH_NODE, { speckSize: 20 }).params.scale as number;
+    const big = run(POSTPROCESS_DRY_BRUSH_NODE, { speckSize: 200 }).params.scale as number;
     expect(big).toBeLessThan(small);
     expect(big).toBeGreaterThan(0);
   });
 
   test("a Speck Size of zero would divide by nothing — clamped, and still finite", () => {
-    const cfg = run(POSTPROCESS_DRY_BRUSH_NODE, { scale: 0 });
+    const cfg = run(POSTPROCESS_DRY_BRUSH_NODE, { speckSize: 0 });
     expect(Number.isFinite(cfg.params.scale as number)).toBe(true);
   });
 
   test("stroke angle crosses over in radians, like every other angle on a socket", () => {
-    expect(run(POSTPROCESS_DRY_BRUSH_NODE, { angle: 90 }).params.angle).toBeCloseTo(Math.PI / 2);
+    expect(run(POSTPROCESS_DRY_BRUSH_NODE, { strokeAngle: 90 }).params.angle).toBeCloseTo(Math.PI / 2);
   });
 
   test("still by default: the pattern only boils when Animate is on", () => {

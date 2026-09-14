@@ -6,6 +6,7 @@ import * as THREE from "three";
 import { isTauri } from "../shared/graph/storage";
 import { CATEGORY_COLOR, NodeCategory, UNKNOWN_CATEGORY_COLOR } from "../shared/graph/categories";
 import { GroupPort, portsOf } from "../shared/graph/groups";
+import { getGroupName } from "./paramGroups";
 import { SOCKET_COLOR } from "../shared/graph/sockets";
 import { KeyframeStore, ParamFieldDef } from "../shared/graph/types";
 import { ColorPickerInput } from "./ColorPickerInput";
@@ -443,40 +444,6 @@ export function vectorField(
   );
 }
 
-/** Assign a logical group name for parameter fields if none is explicitly specified */
-function getGroupName(field: ParamFieldDef): string {
-  if (field.group) return field.group;
-
-  const id = field.id.toLowerCase();
-  if (["location", "rotation", "scale", "position", "transform"].includes(id)) {
-    return "Transform";
-  }
-  if (
-    [
-      "color",
-      "emissive",
-      "emissiveintensity",
-      "shadeless",
-      "roughness",
-      "metalness",
-      "wireframe",
-      "wireframelinewidth",
-      "opacity",
-    ].includes(id)
-  ) {
-    return "Material";
-  }
-  if (id.includes("uv") || id.includes("texture") || id.includes("normal") || field.kind === "file") {
-    return "Texture & Files";
-  }
-  if (["fov", "near", "far"].includes(id)) {
-    return "Lens & Optics";
-  }
-  if (["intensity", "distance", "decay", "angle", "penumbra", "castshadow"].includes(id)) {
-    return "Light Settings";
-  }
-  return "General";
-}
 
 export function ParamPanel({
   nodeId,
