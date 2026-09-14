@@ -166,6 +166,7 @@ import { WIND_FIELD_NODE, GRASS_FIELD_NODE, TREE_NODE, WIND_SWAY_NODE, INTERACTI
 import { GAMEPAD_NODE, ACTION_MAP_NODE, MOVE_INPUT_NODE } from "./input";
 import { INTEGRATE_NODE, INTEGRATE_VECTOR_NODE } from "./integrate";
 import { CAPSULE_CONTROLLER_NODE } from "./character";
+import { CLOTH_NODE } from "./cloth";
 import { PHYSICS_WORLD_NODE, RIGID_BODY_NODE, PHYSICS_CHARACTER_NODE, VEHICLE_NODE } from "./rapier";
 
 /** The starter catalogue — grows node by node; BIBLE.md has the full target list. */
@@ -439,6 +440,7 @@ export const STARTER_NODES = [
   INTEGRATE_NODE,
   INTEGRATE_VECTOR_NODE,
   CAPSULE_CONTROLLER_NODE,
+  CLOTH_NODE,
   PHYSICS_WORLD_NODE,
   RIGID_BODY_NODE,
   PHYSICS_CHARACTER_NODE,
@@ -528,6 +530,7 @@ export * from "./vegetation";
 export * from "./input";
 export * from "./integrate";
 export * from "./character";
+export * from "./cloth";
 export * from "./rapier";
 export * from "./terrain";
 
