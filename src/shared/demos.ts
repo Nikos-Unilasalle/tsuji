@@ -45,6 +45,11 @@ export const DEMO_CATALOG: DemoCategory[] = [
         description: "Three fireballs on a loop: a noise sphere burning away from the inside out.",
       },
       {
+        file: "demo_object_metaballs.tsuji",
+        label: "Metaballs",
+        description: "Five wandering centres meshed as one gooey surface that fuses and splits.",
+      },
+      {
         file: "demo_object_empty_lookat.tsuji",
         label: "Empty & Look At",
         description: "A cone aiming at an orbiting Empty.",

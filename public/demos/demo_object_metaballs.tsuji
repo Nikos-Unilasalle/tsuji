@@ -1,0 +1,618 @@
+{
+  "canvases": [
+    {
+      "nodes": [
+        {
+          "id": "setup_0",
+          "type": "object/plane",
+          "position": {
+            "x": 599,
+            "y": 160
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 0,
+              "y": -0.5,
+              "z": 0
+            },
+            "rotation": {
+              "x": 1.5707963267948966,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 10,
+              "y": 10,
+              "z": 1
+            },
+            "texturePath": "",
+            "normalMapPath": "",
+            "roughnessMapPath": "",
+            "uvScaleX": 1,
+            "uvScaleY": 1,
+            "uvOffsetX": 0,
+            "uvOffsetY": 0,
+            "color": 16777215,
+            "emissive": 0,
+            "emissiveIntensity": 1,
+            "shadeless": 0,
+            "roughness": 0.1,
+            "metalness": 0.1,
+            "wireframe": 0,
+            "opacity": 1,
+            "transmission": 0,
+            "thickness": 0.5
+          }
+        },
+        {
+          "id": "setup_1",
+          "type": "texture/procedural",
+          "position": {
+            "x": 375,
+            "y": 223
+          },
+          "params": {
+            "type": "checker",
+            "colorA": 16777215,
+            "colorB": 2236962,
+            "scale": 8,
+            "seed": 1,
+            "octaves": 3,
+            "resolution": 256,
+            "uvScaleX": 1,
+            "uvScaleY": 1,
+            "uvOffsetX": 0,
+            "uvOffsetY": 0
+          }
+        },
+        {
+          "id": "setup_2",
+          "type": "light/point",
+          "position": {
+            "x": 857,
+            "y": 193
+          },
+          "params": {
+            "location": {
+              "x": 0,
+              "y": 2.185514752224622,
+              "z": -4.5179526088705275
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "color": 16768110,
+            "intensity": 50,
+            "distance": 15,
+            "decay": 2,
+            "castShadow": 1
+          }
+        },
+        {
+          "id": "setup_3",
+          "type": "light/point",
+          "position": {
+            "x": 1043,
+            "y": 187
+          },
+          "params": {
+            "location": {
+              "x": 0,
+              "y": 2.185514752224622,
+              "z": 4.487400919453167
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "color": 440020,
+            "intensity": 50,
+            "distance": 15,
+            "decay": 2,
+            "castShadow": 1
+          }
+        },
+        {
+          "id": "setup_4",
+          "type": "render",
+          "position": {
+            "x": 610,
+            "y": 393
+          },
+          "params": {
+            "frameCount": 120,
+            "fps": 30,
+            "motionBlur": 0,
+            "resolutionPreset": "16:9 (1920x1080)",
+            "width": 1920,
+            "height": 1080,
+            "holdout": false
+          }
+        },
+        {
+          "id": "setup_5",
+          "type": "lighting/environment",
+          "position": {
+            "x": 340,
+            "y": 406
+          },
+          "params": {
+            "color": 4147542,
+            "intensity": 1,
+            "background": 1,
+            "blurriness": 0,
+            "filePath": "",
+            "backgroundImagePath": "",
+            "backgroundFit": "cover",
+            "backgroundScale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "backgroundOffset": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "backgroundRotation": 0,
+            "ambientIntensity": 0,
+            "sunIntensity": 0
+          }
+        },
+        {
+          "id": "setup_6",
+          "type": "light/point",
+          "position": {
+            "x": 860,
+            "y": 389
+          },
+          "params": {
+            "location": {
+              "x": 3.583607412619263,
+              "y": 2.185514752224622,
+              "z": -0.48624947478730096
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "color": 16777215,
+            "intensity": 50,
+            "distance": 15,
+            "decay": 2,
+            "castShadow": 1
+          }
+        },
+        {
+          "id": "wiggle_a",
+          "type": "animation/wiggle",
+          "position": {
+            "x": 200,
+            "y": 620
+          },
+          "params": {
+            "speed": 0.32,
+            "amplitude": 1.0,
+            "seed": 1,
+            "amplitudeVector": {
+              "x": 1.5,
+              "y": 0.75,
+              "z": 1.3
+            },
+            "rotationAmplitude": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scaleAmplitude": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            }
+          }
+        },
+        {
+          "id": "ball_a",
+          "type": "object/sphere",
+          "position": {
+            "x": 470,
+            "y": 620
+          },
+          "params": {
+            "location": {
+              "x": -1.1,
+              "y": 1.15,
+              "z": 0.2
+            },
+            "scale": {
+              "x": 0.5,
+              "y": 0.5,
+              "z": 0.5
+            },
+            "color": 16742959
+          }
+        },
+        {
+          "id": "wiggle_b",
+          "type": "animation/wiggle",
+          "position": {
+            "x": 200,
+            "y": 770
+          },
+          "params": {
+            "speed": 0.27,
+            "amplitude": 1.0,
+            "seed": 5,
+            "amplitudeVector": {
+              "x": 1.4,
+              "y": 0.9,
+              "z": 1.4
+            },
+            "rotationAmplitude": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scaleAmplitude": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            }
+          }
+        },
+        {
+          "id": "ball_b",
+          "type": "object/sphere",
+          "position": {
+            "x": 470,
+            "y": 770
+          },
+          "params": {
+            "location": {
+              "x": 1.15,
+              "y": 1.35,
+              "z": -0.3
+            },
+            "scale": {
+              "x": 0.5,
+              "y": 0.5,
+              "z": 0.5
+            },
+            "color": 16742959
+          }
+        },
+        {
+          "id": "wiggle_c",
+          "type": "animation/wiggle",
+          "position": {
+            "x": 200,
+            "y": 920
+          },
+          "params": {
+            "speed": 0.36,
+            "amplitude": 1.0,
+            "seed": 9,
+            "amplitudeVector": {
+              "x": 1.3,
+              "y": 0.8,
+              "z": 1.2
+            },
+            "rotationAmplitude": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scaleAmplitude": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            }
+          }
+        },
+        {
+          "id": "ball_c",
+          "type": "object/sphere",
+          "position": {
+            "x": 470,
+            "y": 920
+          },
+          "params": {
+            "location": {
+              "x": 0.25,
+              "y": 1.9,
+              "z": 1.0
+            },
+            "scale": {
+              "x": 0.5,
+              "y": 0.5,
+              "z": 0.5
+            },
+            "color": 16742959
+          }
+        },
+        {
+          "id": "wiggle_d",
+          "type": "animation/wiggle",
+          "position": {
+            "x": 200,
+            "y": 1070
+          },
+          "params": {
+            "speed": 0.22,
+            "amplitude": 1.0,
+            "seed": 14,
+            "amplitudeVector": {
+              "x": 1.6,
+              "y": 0.7,
+              "z": 1.5
+            },
+            "rotationAmplitude": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scaleAmplitude": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            }
+          }
+        },
+        {
+          "id": "ball_d",
+          "type": "object/sphere",
+          "position": {
+            "x": 470,
+            "y": 1070
+          },
+          "params": {
+            "location": {
+              "x": 0.1,
+              "y": 0.75,
+              "z": -1.1
+            },
+            "scale": {
+              "x": 0.5,
+              "y": 0.5,
+              "z": 0.5
+            },
+            "color": 16742959
+          }
+        },
+        {
+          "id": "ball_core",
+          "type": "object/sphere",
+          "position": {
+            "x": 470,
+            "y": 1220
+          },
+          "params": {
+            "location": {
+              "x": 0,
+              "y": 1.25,
+              "z": 0
+            },
+            "scale": {
+              "x": 0.5,
+              "y": 0.5,
+              "z": 0.5
+            },
+            "color": 16742959
+          }
+        },
+        {
+          "id": "centres",
+          "type": "structure/merge",
+          "position": {
+            "x": 760,
+            "y": 760
+          },
+          "params": {}
+        },
+        {
+          "id": "blob",
+          "type": "object/metaballs",
+          "position": {
+            "x": 990,
+            "y": 760
+          },
+          "params": {
+            "radius": 0.5,
+            "smooth": 1.7,
+            "resolution": 64,
+            "autoFit": true,
+            "fieldSize": 8,
+            "location": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "color": 16738847,
+            "emissive": 3346432,
+            "emissiveIntensity": 0.4,
+            "roughness": 0.15,
+            "metalness": 0.25,
+            "opacity": 1,
+            "shadeless": 0,
+            "wireframe": 0
+          }
+        },
+        {
+          "id": "glow",
+          "type": "postprocess/bloom",
+          "position": {
+            "x": 1250,
+            "y": 620
+          },
+          "params": {
+            "strength": 0.35,
+            "radius": 0.4,
+            "threshold": 1.5
+          }
+        }
+      ],
+      "connections": [
+        {
+          "id": "setup_c0",
+          "fromNode": "setup_1",
+          "fromSocket": "texture",
+          "toNode": "setup_0",
+          "toSocket": "texture"
+        },
+        {
+          "id": "setup_c1",
+          "fromNode": "setup_5",
+          "fromSocket": "environment",
+          "toNode": "setup_4",
+          "toSocket": "environment"
+        },
+        {
+          "id": "c_wa",
+          "fromNode": "wiggle_a",
+          "fromSocket": "matrix",
+          "toNode": "ball_a",
+          "toSocket": "matrix"
+        },
+        {
+          "id": "c_ma",
+          "fromNode": "ball_a",
+          "fromSocket": "geometry",
+          "toNode": "centres",
+          "toSocket": "in0"
+        },
+        {
+          "id": "c_wb",
+          "fromNode": "wiggle_b",
+          "fromSocket": "matrix",
+          "toNode": "ball_b",
+          "toSocket": "matrix"
+        },
+        {
+          "id": "c_mb",
+          "fromNode": "ball_b",
+          "fromSocket": "geometry",
+          "toNode": "centres",
+          "toSocket": "in1"
+        },
+        {
+          "id": "c_wc",
+          "fromNode": "wiggle_c",
+          "fromSocket": "matrix",
+          "toNode": "ball_c",
+          "toSocket": "matrix"
+        },
+        {
+          "id": "c_mc",
+          "fromNode": "ball_c",
+          "fromSocket": "geometry",
+          "toNode": "centres",
+          "toSocket": "in2"
+        },
+        {
+          "id": "c_wd",
+          "fromNode": "wiggle_d",
+          "fromSocket": "matrix",
+          "toNode": "ball_d",
+          "toSocket": "matrix"
+        },
+        {
+          "id": "c_md",
+          "fromNode": "ball_d",
+          "fromSocket": "geometry",
+          "toNode": "centres",
+          "toSocket": "in3"
+        },
+        {
+          "id": "c_mcore",
+          "fromNode": "ball_core",
+          "fromSocket": "geometry",
+          "toNode": "centres",
+          "toSocket": "in4"
+        },
+        {
+          "id": "c_centres",
+          "fromNode": "centres",
+          "fromSocket": "geometry",
+          "toNode": "blob",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "c_glow",
+          "fromNode": "glow",
+          "fromSocket": "effect",
+          "toNode": "setup_4",
+          "toSocket": "postprocess"
+        }
+      ],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    },
+    {
+      "nodes": [],
+      "connections": [],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    },
+    {
+      "nodes": [],
+      "connections": [],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    },
+    {
+      "nodes": [],
+      "connections": [],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    },
+    {
+      "nodes": [],
+      "connections": [],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    },
+    {
+      "nodes": [],
+      "connections": [],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    }
+  ],
+  "activeCanvas": 0
+}

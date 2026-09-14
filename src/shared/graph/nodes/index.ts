@@ -95,6 +95,7 @@ import { CURVE_SUBDIVIDE_NODE } from "./curveSubdivide";
 import { CURVE_TO_POINTS_NODE } from "./curveToPoints";
 import { CURVE_SHAPE_KEY_NODE, MESH_SHAPE_KEY_NODE } from "./shapeKey";
 import { LATTICE_DEFORM_NODE } from "./lattice";
+import { METABALLS_NODE } from "./metaballs";
 import { BOOLEAN_NODE } from "./boolean";
 import { SUBDIVIDE_NODE } from "./subdivide";
 import { SOLIDIFY_NODE } from "./solidify";
@@ -350,6 +351,7 @@ export const STARTER_NODES = [
   CURVE_SUBDIVIDE_NODE,
   CURVE_TO_POINTS_NODE,
   LATTICE_DEFORM_NODE,
+  METABALLS_NODE,
   BOOLEAN_NODE,
   SUBDIVIDE_NODE,
   SOLIDIFY_NODE,
@@ -494,6 +496,7 @@ export * from "./curve";
 export * from "./shapeKey";
 export * from "./curveFromPointLists";
 export * from "./lattice";
+export * from "./metaballs";
 export * from "./subdivide";
 export * from "./meshEdit";
 export * from "./shade";

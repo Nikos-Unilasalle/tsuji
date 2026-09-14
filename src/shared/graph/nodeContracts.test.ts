@@ -70,7 +70,7 @@ const NOT_A_MESH_PIPELINE = new Set(["texture/pixel-spawner", "object/decal", "v
  * the three contracts is about it: wiring a rigid body behind one is a
  * nonsense graph, not a bug to record.
  */
-const EMITS_ITS_OWN_GEOMETRY = new Set(["physics/ray-burst"]);
+const EMITS_ITS_OWN_GEOMETRY = new Set(["physics/ray-burst", "object/metaballs"]);
 
 function defaultParams(def: NodeDefinition): Record<string, unknown> {
   const raw = typeof def.defaultParams === "function" ? (def.defaultParams as () => unknown)() : def.defaultParams;
@@ -174,6 +174,7 @@ const APPEARANCE_BY_DESIGN: Record<string, string> = {
   "structure/instance-color": "replaces the colour per instance — that is the node",
   "geometry/wind-sway": "clones the material to patch its vertex shader; the clone keeps every map",
   "physics/ray-burst": "emits its own line material, it does not pass the source mesh along",
+  "object/metaballs": "reads the input only for ball centres — the surface it meshes is its own, with its own material",
   render: "the scene root, not a modifier",
 };
 
