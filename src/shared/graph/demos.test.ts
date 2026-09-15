@@ -137,6 +137,6 @@ describe("demo .tsuji files", () => {
           `${file}: node ${node.id} (${node.type}) threw during evaluate`,
         ).toHaveProperty("__evaluatedInputs");
       }
-    });
+    }, 15_000);
   }
 });

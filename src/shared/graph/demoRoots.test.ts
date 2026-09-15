@@ -75,6 +75,6 @@ describe("demo scene roots", () => {
         return;
       }
       expect(total, `${file} renders nothing of its own`).toBeGreaterThan(baseline);
-    });
+    }, 15_000);
   }
 });

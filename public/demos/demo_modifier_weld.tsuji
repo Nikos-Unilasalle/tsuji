@@ -317,7 +317,7 @@
      "params": {
       "operation": "add",
       "blend": 0.3,
-      "resolution": 80,
+      "resolution": 40,
       "relax": 1
      }
     },

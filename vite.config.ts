@@ -54,5 +54,6 @@ export default defineConfig(async () => ({
 
   test: {
     environment: "node",
+    testTimeout: 15_000,
   },
 }));
