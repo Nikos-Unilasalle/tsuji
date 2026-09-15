@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { ImprovedNoise } from "three/examples/jsm/math/ImprovedNoise.js";
 
 /**
  * A Verlet mass-spring cloth, on the CPU.
@@ -60,6 +61,26 @@ export interface ClothCollider {
   radius: number;
 }
 
+/**
+ * One Blender-style force field, structurally identical to the particle
+ * system's `ForceFieldDescriptor` and the fluid solver's `FluidForceField` —
+ * declared here rather than imported because `three/physics` is a runtime
+ * layer below the graph, and a `ForceFieldDescriptor` passes through as-is.
+ */
+export interface ClothForceField {
+  type: "attractor" | "vortex" | "wind" | "turbulence";
+  position: THREE.Vector3;
+  /** Rotation axis (vortex) or push direction (wind); unused by attractor/turbulence. */
+  axis: THREE.Vector3;
+  strength: number;
+  /** 0 = infinite reach, else linear falloff to 0 at this distance. */
+  radius: number;
+  /** Turbulence only — noise scale. */
+  scale: number;
+  /** Turbulence only — noise drift speed. */
+  speed: number;
+}
+
 export interface ClothStepParams {
   dt: number;
   time: number;
@@ -76,6 +97,8 @@ export interface ClothStepParams {
   restWorld: Float32Array;
   pins: ClothPin[];
   colliders: ClothCollider[];
+  /** Blender-style force fields, summed alongside gravity/wind. Absent = none. */
+  forces?: ClothForceField[];
 }
 
 function edgeKey(a: number, b: number): number {
@@ -205,6 +228,70 @@ function flutter(index: number, time: number): number {
   return Math.sin(index * 1.7 + time * 3.1) * Math.sin(index * 0.31 + time * 1.7);
 }
 
+const _fieldPoint = new THREE.Vector3();
+const _fieldAccel = new THREE.Vector3();
+const _fieldDelta = new THREE.Vector3();
+const _fieldRadial = new THREE.Vector3();
+const _fieldTangent = new THREE.Vector3();
+const fieldPerlin = new ImprovedNoise();
+
+/**
+ * Accumulates the world-space acceleration a set of Blender-style force fields
+ * produces at a point — the same attractor/vortex/wind/turbulence semantics as
+ * the particle velocity shader and the fluid solver's CPU accumulator, so a
+ * field wired into cloth pushes in the same direction and strength as one wired
+ * into particles or fluid.
+ */
+export function accumulateClothForceFields(
+  worldPos: THREE.Vector3,
+  forces: ClothForceField[],
+  time: number,
+  out: THREE.Vector3,
+): void {
+  out.set(0, 0, 0);
+  if (forces.length === 0) return;
+
+  for (const f of forces) {
+    _fieldDelta.subVectors(f.position, worldPos);
+    const dist = _fieldDelta.length();
+
+    let falloff = 1;
+    if (f.radius > 0) {
+      if (dist >= f.radius) continue;
+      falloff = 1 - dist / f.radius;
+    }
+    const gain = f.strength * falloff;
+
+    switch (f.type) {
+      case "attractor": {
+        if (dist < 1e-4) break;
+        out.addScaledVector(_fieldDelta, gain / dist);
+        break;
+      }
+      case "vortex": {
+        _fieldRadial.subVectors(worldPos, f.position);
+        _fieldRadial.addScaledVector(f.axis, -_fieldRadial.dot(f.axis));
+        if (_fieldRadial.lengthSq() < 1e-8) break;
+        _fieldTangent.crossVectors(f.axis, _fieldRadial).normalize();
+        out.addScaledVector(_fieldTangent, gain);
+        break;
+      }
+      case "wind": {
+        out.addScaledVector(f.axis, gain);
+        break;
+      }
+      case "turbulence": {
+        const s = Math.max(1e-3, f.scale);
+        const drift = time * f.speed;
+        out.x += fieldPerlin.noise(worldPos.x * s + drift, worldPos.y * s, worldPos.z * s) * gain;
+        out.y += fieldPerlin.noise(worldPos.x * s, worldPos.y * s + drift, worldPos.z * s + 41.3) * gain;
+        out.z += fieldPerlin.noise(worldPos.x * s + 17.7, worldPos.y * s, worldPos.z * s + drift) * gain;
+        break;
+      }
+    }
+  }
+}
+
 export function stepCloth(state: ClothState, params: ClothStepParams): void {
   const { topology, position, previous } = state;
   const { dt, restWorld } = params;
@@ -213,6 +300,7 @@ export function stepCloth(state: ClothState, params: ClothStepParams): void {
   const count = topology.count;
   const damping = Math.min(1, Math.max(0, params.damping));
   const stiffness = Math.min(1, Math.max(0, params.stiffness));
+  const forces = params.forces ?? [];
   const dtSq = dt * dt;
 
   const pinned = new Uint8Array(count);
@@ -231,13 +319,21 @@ export function stepCloth(state: ClothState, params: ClothStepParams): void {
     if (pinned[p]) continue;
     const i = p * 3;
     const gust = 1 + flutter(p, params.time) * params.windFlutter;
-    const ax = params.gravity.x + params.wind.x * gust;
-    const ay = params.gravity.y + params.wind.y * gust;
-    const az = params.gravity.z + params.wind.z * gust;
-
     const px = position[i];
     const py = position[i + 1];
     const pz = position[i + 2];
+
+    let ax = params.gravity.x + params.wind.x * gust;
+    let ay = params.gravity.y + params.wind.y * gust;
+    let az = params.gravity.z + params.wind.z * gust;
+
+    if (forces.length > 0) {
+      _fieldPoint.set(px, py, pz);
+      accumulateClothForceFields(_fieldPoint, forces, params.time, _fieldAccel);
+      ax += _fieldAccel.x;
+      ay += _fieldAccel.y;
+      az += _fieldAccel.z;
+    }
 
     position[i] = px + (px - previous[i]) * damping + ax * dtSq;
     position[i + 1] = py + (py - previous[i + 1]) * damping + ay * dtSq;

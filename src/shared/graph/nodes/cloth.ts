@@ -9,6 +9,7 @@ import { worldMatrixOf } from "../objectPosition";
 import {
   CLOTH_SHADE_MODES,
   ClothCollider,
+  ClothForceField,
   ClothOutput,
   ClothPin,
   ClothShade,
@@ -24,6 +25,7 @@ import {
 
 const PIN_PREFIX = "pin";
 const COLLIDER_PREFIX = "collider";
+const FIELD_PREFIX = "field";
 
 /** Same scrub threshold the integrators, Spring and Capsule Controller use. */
 const REWIND_THRESHOLD = 0.5;
@@ -89,6 +91,20 @@ function collectPrefixed(inputs: Record<string, unknown>, prefix: string): { soc
   return found;
 }
 
+/**
+ * The force fields wired into the growing `fieldN` sockets, sorted by socket
+ * index — object key order does not guarantee "field10" sorts after "field9".
+ * A particles/force-field output is a plain descriptor bundle, so only a
+ * descriptor with a Vector3 position counts.
+ */
+function collectForceFields(inputs: Record<string, unknown>): ClothForceField[] {
+  return Object.entries(inputs)
+    .filter(([key, value]) => key.startsWith(FIELD_PREFIX) && value)
+    .sort(([a], [b]) => Number(a.slice(FIELD_PREFIX.length)) - Number(b.slice(FIELD_PREFIX.length)))
+    .map(([, value]) => value as ClothForceField)
+    .filter((f) => f && typeof f === "object" && f.position instanceof THREE.Vector3);
+}
+
 const CLOTH_PARAM_FIELDS: ParamFieldDef[] = [
   { id: "shade", label: "Shade", kind: "select", options: [...CLOTH_SHADE_MODES], group: "Shading" },
   { id: "gravity", label: "Gravity", kind: "vector", step: 0.5, group: "Forces" },
@@ -135,6 +151,7 @@ export const CLOTH_NODE: NodeDefinition = {
     { id: "reset", label: "Reset", type: "value" },
     { id: `${PIN_PREFIX}0`, label: "Pin 1", type: "geometry" },
     { id: `${COLLIDER_PREFIX}0`, label: "Collider 1", type: "geometry" },
+    { id: `${FIELD_PREFIX}0`, label: "Force Field 1", type: "any" },
   ],
   dynamicInputs: (connections) => [
     { id: "geometry", label: "Geometry", type: "geometry" as const, owns: true },
@@ -154,6 +171,11 @@ export const CLOTH_NODE: NodeDefinition = {
       id: `${COLLIDER_PREFIX}${i}`,
       label: `Collider ${i + 1}`,
       type: "geometry",
+    })),
+    ...growingSockets(connections, FIELD_PREFIX, (i) => ({
+      id: `${FIELD_PREFIX}${i}`,
+      label: `Force Field ${i + 1}`,
+      type: "any",
     })),
   ],
   outputs: [
@@ -282,6 +304,7 @@ export const CLOTH_NODE: NodeDefinition = {
       restWorld,
       pins,
       colliders,
+      forces: collectForceFields(inputs),
     });
 
     if (!state.mesh) state.mesh = createModifierMesh();

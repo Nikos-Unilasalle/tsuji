@@ -4,7 +4,7 @@ import { CLOTH_NODE } from "./cloth";
 import { DEFAULT_REGISTRY } from "./index";
 import { evaluateGraph } from "../evaluate";
 import { EvalContext, Graph } from "../types";
-import { buildClothTopology, createClothState, nearestParticle, stepCloth } from "../../three/physics/clothSolver";
+import { buildClothTopology, ClothForceField, createClothState, nearestParticle, stepCloth } from "../../three/physics/clothSolver";
 
 function ctx(time: number, step: number): EvalContext {
   return { time, step, nodeId: `cloth-${Math.random()}`, simulationEpoch: 0 };
@@ -146,6 +146,52 @@ describe("cloth solver", () => {
       stepCloth(state, { ...baseParams, time: f / 60, restWorld, stiffness: 1 });
     }
     for (let i = 0; i < restWorld.length; i++) expect(state.position[i]).toBeCloseTo(restWorld[i], 2);
+  });
+
+  test("a wind force field pushes the cloth sideways", () => {
+    const { state, restWorld } = freshState();
+    const wind: ClothForceField = {
+      type: "wind",
+      position: new THREE.Vector3(),
+      axis: new THREE.Vector3(1, 0, 0),
+      strength: 20,
+      radius: 0,
+      scale: 1,
+      speed: 0,
+    };
+    const centroidX = () => {
+      let x = 0;
+      for (let p = 0; p < state.topology.count; p++) x += state.position[p * 3];
+      return x / state.topology.count;
+    };
+    const before = centroidX();
+    for (let f = 0; f < 30; f++) {
+      stepCloth(state, { ...baseParams, time: f / 60, restWorld, gravity: new THREE.Vector3(), forces: [wind] });
+    }
+    expect(centroidX()).toBeGreaterThan(before);
+  });
+
+  test("an attractor force field pulls the cloth toward it", () => {
+    const { state, restWorld } = freshState();
+    const attractor: ClothForceField = {
+      type: "attractor",
+      position: new THREE.Vector3(0, 5, 0),
+      axis: new THREE.Vector3(0, 1, 0),
+      strength: 50,
+      radius: 0,
+      scale: 1,
+      speed: 0,
+    };
+    const centroidY = () => {
+      let y = 0;
+      for (let p = 0; p < state.topology.count; p++) y += state.position[p * 3 + 1];
+      return y / state.topology.count;
+    };
+    const before = centroidY();
+    for (let f = 0; f < 30; f++) {
+      stepCloth(state, { ...baseParams, time: f / 60, restWorld, gravity: new THREE.Vector3(), forces: [attractor] });
+    }
+    expect(centroidY()).toBeGreaterThan(before);
   });
 });
 
@@ -320,5 +366,12 @@ describe("CLOTH_NODE", () => {
     ]);
     expect(sockets.filter((s) => s.id.startsWith("pin")).map((s) => s.id)).toEqual(["pin0", "pin1"]);
     expect(sockets.filter((s) => s.id.startsWith("collider")).map((s) => s.id)).toEqual(["collider0"]);
+  });
+
+  test("force field sockets grow as they are wired", () => {
+    const sockets = CLOTH_NODE.dynamicInputs!([
+      { id: "c", fromNode: "a", fromSocket: "field", toNode: "b", toSocket: "field0" },
+    ]);
+    expect(sockets.filter((s) => s.id.startsWith("field")).map((s) => s.id)).toEqual(["field0", "field1"]);
   });
 });
