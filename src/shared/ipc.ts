@@ -167,3 +167,64 @@ export function onOutputClosed(callback: () => void): () => void {
     void listenPromise.then((unlisten) => unlisten());
   };
 }
+
+/**
+ * Fills the whole screen: the browser Fullscreen API in a plain browser, the
+ * native window's fullscreen flag under Tauri — `requestFullscreen()` exists
+ * in WebKitGTK but is gated behind user-gesture plumbing the native call
+ * sidesteps, and the native one also drops the window chrome, which is the
+ * point.
+ */
+export async function toggleFullscreen(): Promise<void> {
+  if (!isTauri()) {
+    if (document.fullscreenElement) {
+      await document.exitFullscreen();
+    } else {
+      await document.documentElement.requestFullscreen();
+    }
+    return;
+  }
+  const appWindow = getCurrentWindow();
+  await appWindow.setFullscreen(!(await appWindow.isFullscreen()));
+}
+
+/**
+ * Reports the current fullscreen state to `callback` now and whenever it
+ * changes. The browser's `fullscreenchange` event covers the web build; under
+ * Tauri there is no DOM event for a native window toggle (Esc included), so
+ * the resize signal — which every fullscreen transition fires — re-reads the
+ * window's flag instead.
+ */
+export function watchFullscreen(callback: (fullscreen: boolean) => void): () => void {
+  if (!isTauri()) {
+    const sync = () => callback(Boolean(document.fullscreenElement));
+    document.addEventListener("fullscreenchange", sync);
+    sync();
+    return () => document.removeEventListener("fullscreenchange", sync);
+  }
+
+  let disposed = false;
+  let unlisten: (() => void) | null = null;
+  const appWindow = getCurrentWindow();
+  const sync = () => {
+    if (disposed) return;
+    void appWindow
+      .isFullscreen()
+      .then((value) => {
+        if (!disposed) callback(value);
+      })
+      .catch(() => {});
+  };
+  void appWindow
+    .onResized(() => sync())
+    .then((fn) => {
+      if (disposed) fn();
+      else unlisten = fn;
+    })
+    .catch(() => {});
+  sync();
+  return () => {
+    disposed = true;
+    unlisten?.();
+  };
+}

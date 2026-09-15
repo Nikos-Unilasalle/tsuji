@@ -6,7 +6,14 @@ import {
   saveProjectToPath,
 } from "../shared/graph/storage";
 import { Project } from "../shared/graph/types";
-import { closeOutputWindow, listMonitors, onOutputClosed, openOutputWindow } from "../shared/ipc";
+import {
+  closeOutputWindow,
+  listMonitors,
+  onOutputClosed,
+  openOutputWindow,
+  toggleFullscreen,
+  watchFullscreen,
+} from "../shared/ipc";
 import { ConnectedGamepad, subscribeGamepads } from "../shared/graph/gamepadRuntime";
 import logoUrl from "../assets/logo.png";
 import { ShortcutsModal } from "./ShortcutsModal";
@@ -66,6 +73,7 @@ export const TopBar: React.FC<TopBarProps> = ({
   const [isOutputOpen, setIsOutputOpen] = useState(false);
   const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
   const [gamepads, setGamepads] = useState<ConnectedGamepad[]>([]);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   // Owned so a second toast doesn't get cut short by the first's leftover
   // timer, and cleared on unmount to avoid a setState on a dead component.
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -90,6 +98,17 @@ export const TopBar: React.FC<TopBarProps> = ({
 
   // Tracks the OS-level close (red X on the output window), not just our own button.
   useEffect(() => onOutputClosed(() => setIsOutputOpen(false)), []);
+
+  // Keeps the Full Screen button's icon honest — Esc leaves fullscreen too,
+  // not just this button, so the state is watched rather than flipped.
+  useEffect(() => watchFullscreen(setIsFullscreen), []);
+
+  const handleToggleFullscreen = () => {
+    void toggleFullscreen().catch((err) => {
+      console.warn("fullscreen toggle failed:", err);
+      showToast("Fullscreen is not available in this window", true);
+    });
+  };
 
   // The projector: opens fullscreen on the second monitor when there is one,
   // otherwise the only one there is. "Il faudrait une fenêtre plein écran
@@ -321,6 +340,21 @@ export const TopBar: React.FC<TopBarProps> = ({
           </button>
         )}
 
+
+        {/* FULL SCREEN — whole-window fullscreen toggle (browser API or native window flag) */}
+        <button
+          className="top-bar-button top-bar-button-icon-only"
+          onClick={handleToggleFullscreen}
+          title={isFullscreen ? "Exit Full Screen" : "Full Screen"}
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            {isFullscreen ? (
+              <path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3" />
+            ) : (
+              <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
+            )}
+          </svg>
+        </button>
 
         {/* SHORTCUTS — keyboard shortcuts reference popup */}
         <button
