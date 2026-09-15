@@ -1,3 +1,7 @@
+import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
+import { isTauri } from "../isTauri";
+
 /**
  * Gamepad reading, split so the parts worth testing are pure.
  *
@@ -183,7 +187,128 @@ export function clearSimulatedGamepads(): void {
 
 /** What the nodes actually call — the simulated pad wins when one is set. */
 export function getGamepadSnapshot(index: number): GamepadSnapshot {
-  const override = simulated?.get(Math.max(0, Math.floor(index)));
+  const i = Math.max(0, Math.floor(index));
+  const override = simulated?.get(i);
   if (override) return override;
-  return readGamepadSnapshot(index);
+  // Self-starting: the output window renders the graph without a TopBar, so
+  // nothing there would otherwise call `subscribeGamepads` and open the native
+  // bridge — the pad would read as unplugged on the projector. Both guards
+  // inside are plain booleans, so this costs nothing on the per-frame path.
+  ensureConnectionEvents();
+  if (nativeActive) return nativeSnapshots.get(i) ?? EMPTY_GAMEPAD;
+  return readGamepadSnapshot(i);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Native bridge — Tauri's WebView on Linux ships without the Web Gamepad API */
+/* (WebKitGTK is built without libmanette), so `navigator.getGamepads()` stays */
+/* empty there. The Rust side reads controllers with gilrs and streams them   */
+/* here as `gamepad:state` events instead.                                    */
+/* -------------------------------------------------------------------------- */
+
+let nativeActive = false;
+let nativeInitStarted = false;
+const nativeSnapshots = new Map<number, GamepadSnapshot>();
+
+function applyNativeState(snapshots: readonly GamepadSnapshot[]): void {
+  nativeSnapshots.clear();
+  snapshots.forEach((snapshot, i) => nativeSnapshots.set(i, snapshot));
+  nativeActive = true;
+  console.log(`gamepad: native state received (${snapshots.length} pad(s))`);
+  notifyGamepadConnections();
+}
+
+function ensureNativeGamepad(): void {
+  if (nativeInitStarted || !isTauri()) return;
+  nativeInitStarted = true;
+
+  void listen<GamepadSnapshot[]>("gamepad:state", (event) => applyNativeState(event.payload))
+    .then(() => invoke<GamepadSnapshot[]>("list_gamepads"))
+    .then((snapshots) => applyNativeState(snapshots))
+    .catch((err) => {
+      console.warn("native gamepad bridge unavailable:", err);
+    });
+}
+
+/* -------------------------------------------------------------------------- */
+/* Connection tracking — the UI's "is a pad plugged in" indicator             */
+/* -------------------------------------------------------------------------- */
+
+export interface ConnectedGamepad {
+  index: number;
+  id: string;
+}
+
+type GamepadConnectionListener = (gamepads: ConnectedGamepad[]) => void;
+
+const connectionListeners = new Set<GamepadConnectionListener>();
+let connectionEventsRegistered = false;
+
+/** Every pad `getGamepads()` currently reports as connected, index and all. */
+function scanConnectedGamepads(): ConnectedGamepad[] {
+  if (nativeActive) {
+    const connected: ConnectedGamepad[] = [];
+    for (const [index, pad] of nativeSnapshots) {
+      if (pad.connected) connected.push({ index, id: pad.id || `Gamepad ${index + 1}` });
+    }
+    return connected;
+  }
+
+  const nav = typeof navigator !== "undefined" ? (navigator as Navigator) : undefined;
+  if (!nav || typeof nav.getGamepads !== "function") return [];
+  const pads = nav.getGamepads();
+  if (!pads) return [];
+
+  const connected: ConnectedGamepad[] = [];
+  for (let i = 0; i < pads.length; i++) {
+    const pad = pads[i];
+    if (pad && pad.connected) connected.push({ index: i, id: pad.id || `Gamepad ${i + 1}` });
+  }
+  return connected;
+}
+
+function notifyGamepadConnections(): void {
+  const pads = scanConnectedGamepads();
+  for (const listener of connectionListeners) {
+    try {
+      listener(pads);
+    } catch {
+      // A listener that throws must not silence the rest.
+    }
+  }
+}
+
+/**
+ * Registers `gamepadconnected`/`gamepaddisconnected` and does one scan up
+ * front for a pad that was already plugged in when the page loaded.
+ *
+ * Registering the listeners is itself part of detection: some WebViews only
+ * begin exposing a pad through `getGamepads()` once a connection handler
+ * exists, so an app that only ever polls may never see a pad that has not
+ * sent a button press. This is also what the graph's polling leans on —
+ * without a listener the browser hides the pad from `readGamepadSnapshot`.
+ */
+function ensureConnectionEvents(): void {
+  if (connectionEventsRegistered || typeof window === "undefined") return;
+  connectionEventsRegistered = true;
+  ensureNativeGamepad();
+  window.addEventListener("gamepadconnected", notifyGamepadConnections);
+  window.addEventListener("gamepaddisconnected", notifyGamepadConnections);
+  notifyGamepadConnections();
+}
+
+/** Subscribes to the connected-pad set, delivering the current set immediately. */
+export function subscribeGamepads(listener: GamepadConnectionListener): () => void {
+  ensureConnectionEvents();
+  connectionListeners.add(listener);
+  listener(scanConnectedGamepads());
+  return () => {
+    connectionListeners.delete(listener);
+  };
+}
+
+/** The pads `getGamepads()` reports as connected right now. */
+export function getConnectedGamepads(): ConnectedGamepad[] {
+  ensureConnectionEvents();
+  return scanConnectedGamepads();
 }

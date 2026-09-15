@@ -7,6 +7,7 @@ import {
 } from "../shared/graph/storage";
 import { Project } from "../shared/graph/types";
 import { closeOutputWindow, listMonitors, onOutputClosed, openOutputWindow } from "../shared/ipc";
+import { ConnectedGamepad, subscribeGamepads } from "../shared/graph/gamepadRuntime";
 import logoUrl from "../assets/logo.png";
 import { ShortcutsModal } from "./ShortcutsModal";
 import { DemosMenu } from "./DemosMenu";
@@ -64,9 +65,15 @@ export const TopBar: React.FC<TopBarProps> = ({
   const [filenameInput, setFilenameInput] = useState(currentFilename);
   const [isOutputOpen, setIsOutputOpen] = useState(false);
   const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
+  const [gamepads, setGamepads] = useState<ConnectedGamepad[]>([]);
   // Owned so a second toast doesn't get cut short by the first's leftover
   // timer, and cleared on unmount to avoid a setState on a dead component.
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Live set of plugged-in controllers, for the indicator chip. Registering
+  // the subscription is also what installs the browser's `gamepadconnected`
+  // handlers — the hint some WebViews need before they expose a pad.
+  useEffect(() => subscribeGamepads(setGamepads), []);
 
   const showToast = (msg: string, error = false) => {
     setToastMessage(msg);
@@ -280,6 +287,19 @@ export const TopBar: React.FC<TopBarProps> = ({
 
       {/* Right area: Toast + Timeline + Shortcuts + Filename + Download + Share */}
       <div className="top-bar-right">
+        <div
+          className={`top-bar-gamepad${gamepads.length > 0 ? " top-bar-gamepad-connected" : ""}`}
+          title={
+            gamepads.length > 0
+              ? `${gamepads.length} gamepad${gamepads.length > 1 ? "s" : ""} connected:\n${gamepads
+                  .map((g) => `• ${g.id}`)
+                  .join("\n")}`
+              : "No gamepad detected — press a button on your controller to connect it"
+          }
+        >
+          🎮{gamepads.length > 0 ? ` ${gamepads.length}` : ""}
+        </div>
+
         {toastMessage && (
           <div className={`top-bar-toast${toastError ? " top-bar-toast-error" : ""}`}>
             {toastError ? "⚠ " : "✓ "}{toastMessage}
