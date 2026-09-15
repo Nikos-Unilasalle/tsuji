@@ -13,14 +13,13 @@ import {
   NATIVE_TRANSFORM_PARAM_FIELDS,
   inheritSourceMaterial,
 } from "./object";
-import { composeNativeMatrix, preserveModifierUserData } from "./transform";
+import { asVector3, composeNativeMatrix, preserveModifierUserData } from "./transform";
 import {
   QuadMesh,
   QuadMeshShading,
   createQuadBox,
   quadMeshToBufferGeometry,
   bufferGeometryToQuadMesh,
-  cloneQuadMesh,
 } from "../quadMesh";
 
 export const EDIT_MESH_RESEED_ACTION = "edit-mesh/reseed";
@@ -32,7 +31,7 @@ export const EDIT_MESH_SEPARATE_FACES_ACTION = "edit-mesh/separate-faces";
 
 interface EditMeshState {
   mesh?: THREE.Mesh;
-  lastQuadMesh?: QuadMesh;
+  lastQuadMesh?: string;
   lastShading?: string;
   sourceGeometry?: THREE.BufferGeometry | null;
 }
@@ -185,6 +184,65 @@ function applyEditMeshPose(
 }
 
 /**
+ * A content fingerprint of the edited mesh, because identity cannot be used
+ * here and equality would be a full deep compare every frame.
+ *
+ * The cache used to hold `cloneQuadMesh(quadMesh)` and then test
+ * `state.lastQuadMesh === quadMesh` — a clone is never identical to what it
+ * was cloned from, so the comparison was false every single time and the
+ * geometry was rebuilt (and re-uploaded to the GPU) on every frame, 30 out of
+ * 30 at rest. It cost nothing visible and broke nothing, which is exactly why
+ * it lasted; it also made every rigid body downstream reset itself, back when
+ * physics keyed on geometry identity.
+ *
+ * Positions are quantised to 1e-5 rather than hashed as floats: the viewport
+ * writes them back from a drag, and a bit of float noise below what a pixel
+ * can express should not force a rebuild. Face UVs are in the hash because
+ * Recalculate UVs changes nothing else, and leaving them out made that button
+ * do nothing.
+ */
+function quadMeshSignature(mesh: QuadMesh): string {
+  let hash = 0x811c9dc5;
+  const mix = (n: number) => {
+    hash = Math.imul(hash ^ (n | 0), 16777619) >>> 0;
+  };
+
+  for (const [x, y, z] of mesh.positions) {
+    mix(Math.round(x * 1e5));
+    mix(Math.round(y * 1e5));
+    mix(Math.round(z * 1e5));
+  }
+  for (const face of mesh.faces) {
+    mix(face.length);
+    for (const index of face) mix(index);
+  }
+  if (mesh.faceUVs) {
+    for (const face of mesh.faceUVs) {
+      for (const [u, v] of face) {
+        mix(Math.round(u * 1e5));
+        mix(Math.round(v * 1e5));
+      }
+    }
+  }
+  return `${mesh.positions.length}:${mesh.faces.length}:${hash.toString(36)}`;
+}
+
+/**
+ * This node owns a Pivot Offset of its own, and a node that has one
+ * legitimately replaces the source's — but only once it has actually been
+ * set. Left at its default of (0, 0, 0) it used to erase whatever the source
+ * carried, so inserting an Edit Mesh silently moved the pivot marker, the
+ * gizmo anchor and every downstream node's idea of the pivot back to the
+ * object's origin.
+ */
+function pivotParams(params: Record<string, unknown>, mesh: THREE.Mesh): Record<string, unknown> {
+  const own = asVector3(params.pivot, new THREE.Vector3());
+  if (own.lengthSq() > 1e-9) return params;
+  const inherited = mesh.userData?.pivot;
+  return inherited ? { ...params, pivot: inherited } : params;
+}
+
+/**
  * Edit Mesh node — comprehensive polygon / quad mesh editing node.
  * Supports box modeling workflow:
  * - Points and Faces selection modes
@@ -272,16 +330,17 @@ export const EDIT_MESH_NODE: NodeDefinition = {
     const texParams = extractTextureParams(inputs, params, ctx.nodeId);
 
     const isSameSourceGeom = state.sourceGeometry === (srcGeom ?? null);
+    const signature = quadMeshSignature(quadMesh);
 
     if (
       state.mesh &&
-      state.lastQuadMesh === quadMesh &&
+      state.lastQuadMesh === signature &&
       state.lastShading === shadeMode &&
       isSameSourceGeom
     ) {
       applyEditMeshPose(state.mesh, inputObj, srcMesh, inputs.matrix, params, ctx.nodeId);
       applyEditMeshMaterial(state.mesh, srcMesh, inputs.material, texParams);
-      return primitiveOutputs(state.mesh, params);
+      return primitiveOutputs(state.mesh, pivotParams(params, state.mesh));
     }
 
     const geometry = quadMeshToBufferGeometry(quadMesh, shadeMode);
@@ -299,10 +358,10 @@ export const EDIT_MESH_NODE: NodeDefinition = {
 
     applyEditMeshPose(state.mesh, inputObj, srcMesh, inputs.matrix, params, ctx.nodeId);
 
-    state.lastQuadMesh = cloneQuadMesh(quadMesh);
+    state.lastQuadMesh = signature;
     state.lastShading = shadeMode;
     state.sourceGeometry = srcGeom ?? null;
 
-    return primitiveOutputs(state.mesh, params);
+    return primitiveOutputs(state.mesh, pivotParams(params, state.mesh));
   },
 };

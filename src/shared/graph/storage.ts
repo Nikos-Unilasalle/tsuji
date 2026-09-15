@@ -63,6 +63,9 @@ function cleanGraph(graph: Graph): Graph {
       type: n.type,
       position: { x: Math.round(n.position?.x ?? 0), y: Math.round(n.position?.y ?? 0) },
       params: n.params ? JSON.parse(JSON.stringify(n.params)) : {},
+      // A group's interior is part of the document, cleaned by the same rules
+      // at every depth rather than dumped as raw params.
+      ...(n.subgraph ? { subgraph: cleanGraph(n.subgraph) } : {}),
     })),
     connections: (graph.connections || []).map((c) => ({
       id: c.id,
@@ -120,6 +123,10 @@ function validateGraphShape(data: { nodes?: unknown; connections?: unknown }, wh
         `Invalid node structure in graph${where}: missing required fields on node ${n?.id || "unknown"}.`,
       );
     }
+    // A group carries a graph, which has to hold up as one: a malformed
+    // interior would otherwise only surface once something tried to evaluate
+    // it, several frames into a file that had already loaded "successfully".
+    if (n.subgraph) validateGraphShape(n.subgraph, `${where} (inside group ${n.id})`);
   }
 
   for (const c of data.connections) {

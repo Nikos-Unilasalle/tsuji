@@ -32,6 +32,7 @@ import { INSTANCE_POSITIONS_NODE } from "./instancePositions";
 import { LIST_GROUP_NODE } from "./listGroup";
 import { SPAWN_NODE } from "./spawn";
 import { REROUTE_NODE } from "./reroute";
+import { GROUP_INPUT_NODE, GROUP_NODE, GROUP_OUTPUT_NODE } from "./group";
 import { GET_VARIABLE_NODE, SET_VARIABLE_NODE } from "./variable";
 import { GEOMETRY_TRANSFORM_NODE, GET_INSTANCE_NODE, INSTANCES_TO_LIST_NODE, SET_INSTANCE_COLOR_NODE, SET_INSTANCE_TRANSFORM_NODE } from "./instance";
 import { LIGHT_AMBIENT_NODE, LIGHT_DIRECTIONAL_NODE, LIGHT_POINT_NODE, LIGHT_SPOT_NODE } from "./light";
@@ -76,6 +77,13 @@ import {
   POSTPROCESS_VIGNETTE_NODE,
   POSTPROCESS_FOG_NODE,
 } from "./postprocessing";
+import {
+  POSTPROCESS_DRY_BRUSH_NODE,
+  POSTPROCESS_DUOTONE_NODE,
+  POSTPROCESS_FILM_TEXTURE_NODE,
+  POSTPROCESS_HALFTONE_NODE,
+  POSTPROCESS_SUPER8_NODE,
+} from "./postprocessingFilm";
 
 import { CURVE_ARRAY_NODE, CURVE_DEFORM_NODE, CURVE_FROM_POINTS_NODE, CURVE_PRIMITIVE_NODE, CURVE_TO_MESH_NODE, CURVES_TO_MESH_NODE, SAMPLE_CURVE_NODE } from "./curve";
 import { CURVE_TO_LINE_NODE } from "./line";
@@ -87,6 +95,7 @@ import { CURVE_SUBDIVIDE_NODE } from "./curveSubdivide";
 import { CURVE_TO_POINTS_NODE } from "./curveToPoints";
 import { CURVE_SHAPE_KEY_NODE, MESH_SHAPE_KEY_NODE } from "./shapeKey";
 import { LATTICE_DEFORM_NODE } from "./lattice";
+import { METABALLS_NODE } from "./metaballs";
 import { BOOLEAN_NODE } from "./boolean";
 import { SUBDIVIDE_NODE } from "./subdivide";
 import { SOLIDIFY_NODE } from "./solidify";
@@ -111,6 +120,12 @@ import {
   MATERIAL_STYLIZED_FIRE_NODE,
   MATERIAL_MIYAZAKI_CLOUD_NODE,
 } from "./materialShadersVol2";
+import { MATERIAL_STYLIZED_WATER_NODE } from "./materialWater";
+import { OBJECT_EXPLOSION_NODE } from "./explosion";
+import { OBJECT_LEAVES_NODE } from "./leaves";
+import { TIME_RESET_SIMULATIONS_NODE } from "./resetSimulations";
+import { PHYSICS_SPAWNER_NODE } from "./spawner";
+import { PHYSICS_EXPLOSION_NODE } from "./explosionImpulse";
 import {
   GEOMETRY_TWIST_BEND_TAPER_NODE,
   GEOMETRY_WAVE_RIPPLE_NODE,
@@ -151,11 +166,18 @@ import { WIND_FIELD_NODE, GRASS_FIELD_NODE, TREE_NODE, WIND_SWAY_NODE, INTERACTI
 import { GAMEPAD_NODE, ACTION_MAP_NODE, MOVE_INPUT_NODE } from "./input";
 import { INTEGRATE_NODE, INTEGRATE_VECTOR_NODE } from "./integrate";
 import { CAPSULE_CONTROLLER_NODE } from "./character";
+import { CLOTH_NODE } from "./cloth";
 import { PHYSICS_WORLD_NODE, RIGID_BODY_NODE, PHYSICS_CHARACTER_NODE, VEHICLE_NODE } from "./rapier";
 
 /** The starter catalogue — grows node by node; BIBLE.md has the full target list. */
 export const STARTER_NODES = [
   REROUTE_NODE,
+  // Never picked from the palette: Cmd+G builds the group and its boundary
+  // nodes together. Registered because every graph pass resolves a definition
+  // by type, files included.
+  GROUP_NODE,
+  GROUP_INPUT_NODE,
+  GROUP_OUTPUT_NODE,
   SET_VARIABLE_NODE,
   GET_VARIABLE_NODE,
   TIME_NODE,
@@ -315,6 +337,11 @@ export const STARTER_NODES = [
   POSTPROCESS_ANTIALIAS_NODE,
   POSTPROCESS_FOG_NODE,
   POSTPROCESS_AMBIENT_OCCLUSION_NODE,
+  POSTPROCESS_DUOTONE_NODE,
+  POSTPROCESS_HALFTONE_NODE,
+  POSTPROCESS_FILM_TEXTURE_NODE,
+  POSTPROCESS_SUPER8_NODE,
+  POSTPROCESS_DRY_BRUSH_NODE,
   LIST_GROUP_NODE,
   SPAWN_NODE,
   CURVE_TO_LINE_NODE,
@@ -325,6 +352,7 @@ export const STARTER_NODES = [
   CURVE_SUBDIVIDE_NODE,
   CURVE_TO_POINTS_NODE,
   LATTICE_DEFORM_NODE,
+  METABALLS_NODE,
   BOOLEAN_NODE,
   SUBDIVIDE_NODE,
   SOLIDIFY_NODE,
@@ -351,6 +379,12 @@ export const STARTER_NODES = [
   MATERIAL_ENERGY_SHIELD_NODE,
   MATERIAL_STYLIZED_FIRE_NODE,
   MATERIAL_MIYAZAKI_CLOUD_NODE,
+  MATERIAL_STYLIZED_WATER_NODE,
+  OBJECT_EXPLOSION_NODE,
+  OBJECT_LEAVES_NODE,
+  TIME_RESET_SIMULATIONS_NODE,
+  PHYSICS_SPAWNER_NODE,
+  PHYSICS_EXPLOSION_NODE,
   GEOMETRY_TWIST_BEND_TAPER_NODE,
   GEOMETRY_WAVE_RIPPLE_NODE,
   GEOMETRY_FACET_EXPLODE_NODE,
@@ -406,6 +440,7 @@ export const STARTER_NODES = [
   INTEGRATE_NODE,
   INTEGRATE_VECTOR_NODE,
   CAPSULE_CONTROLLER_NODE,
+  CLOTH_NODE,
   PHYSICS_WORLD_NODE,
   RIGID_BODY_NODE,
   PHYSICS_CHARACTER_NODE,
@@ -453,14 +488,17 @@ export * from "./geometryToPoints";
 export * from "./particlesToPoints";
 export * from "./particleInstances";
 export * from "./postprocessing";
+export * from "./postprocessingFilm";
 export * from "./environment";
 export * from "./listGroup";
 export * from "./spawn";
 export * from "./reroute";
+export * from "./group";
 export * from "./curve";
 export * from "./shapeKey";
 export * from "./curveFromPointLists";
 export * from "./lattice";
+export * from "./metaballs";
 export * from "./subdivide";
 export * from "./meshEdit";
 export * from "./shade";
@@ -492,6 +530,7 @@ export * from "./vegetation";
 export * from "./input";
 export * from "./integrate";
 export * from "./character";
+export * from "./cloth";
 export * from "./rapier";
 export * from "./terrain";
 

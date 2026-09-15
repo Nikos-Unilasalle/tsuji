@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { describe, expect, test } from "vitest";
-import { evaluateGraph, topoSort } from "./evaluate";
+import { disposeEvalSession, evaluateGraph, topoSort } from "./evaluate";
 import { Connection, EvalContext, Graph, NodeDefinition, NodeInstance, createRegistry } from "./types";
 
 const CTX: EvalContext = { time: 0, step: 0, nodeId: "" };
@@ -337,5 +337,63 @@ describe("evaluator sessions", () => {
     evaluateGraph(graphEmitting(7, 1), registry, { ...CTX, sessionId: "solo" });
     const res = evaluateGraph(graphEmitting(7, 0), registry, { ...CTX, sessionId: "solo" });
     expect(res.get("sink")?.out).toBe(7);
+  });
+
+  /**
+   * A group evaluates its subgraph through a nested evaluateGraph call on the
+   * same session — the scope is what keeps that inner pass from becoming the
+   * outer graph's "previous frame".
+   */
+  test("a nested scope does not overwrite its parent's carried-over frame", () => {
+    evaluateGraph(graphEmitting(10, 1), registry, { ...CTX, sessionId: "nested" });
+    evaluateGraph(graphEmitting(99, 1), registry, { ...CTX, sessionId: "nested", evalScope: "group-1" });
+
+    const outer = evaluateGraph(graphEmitting(10, 0), registry, { ...CTX, sessionId: "nested" });
+    expect(outer.get("sink")?.out).toBe(10);
+
+    const inner = evaluateGraph(graphEmitting(99, 0), registry, {
+      ...CTX,
+      sessionId: "nested",
+      evalScope: "group-1",
+    });
+    expect(inner.get("sink")?.out).toBe(99);
+  });
+
+  test("disposing a session drops its nested scopes too", () => {
+    evaluateGraph(graphEmitting(42, 1), registry, { ...CTX, sessionId: "doomed", evalScope: "group-1" });
+    disposeEvalSession("doomed");
+
+    const res = evaluateGraph(graphEmitting(42, 0), registry, {
+      ...CTX,
+      sessionId: "doomed",
+      evalScope: "group-1",
+    });
+    expect(res.get("sink")?.out).toBeUndefined();
+  });
+});
+
+describe("structural cache", () => {
+  /**
+   * The cache used to be a single "last graph" slot, which a group's nested
+   * pass would evict on every frame. Alternating between two graphs is the
+   * cheap stand-in for that: both must keep answering correctly, and neither
+   * may pick up the other's topology.
+   */
+  const registry = createRegistry([CONST, ADD]);
+
+  const graphA: Graph = {
+    nodes: [node("a", "test/const", { value: 1 }), node("sum", "test/add")],
+    connections: [edge("a", "out", "sum", "a")],
+  };
+  const graphB: Graph = {
+    nodes: [node("a", "test/const", { value: 100 }), node("sum", "test/add")],
+    connections: [edge("a", "out", "sum", "b")],
+  };
+
+  test("two graphs evaluated alternately keep their own topology", () => {
+    for (let i = 0; i < 3; i++) {
+      expect(evaluateGraph(graphA, registry, CTX).get("sum")?.out).toBe(1);
+      expect(evaluateGraph(graphB, registry, CTX).get("sum")?.out).toBe(100);
+    }
   });
 });

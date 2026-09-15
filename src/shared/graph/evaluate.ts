@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { resolveDefinition } from "./groups";
 import { Connection, EasingType, EvalContext, Graph, Keyframe, KeyframeStore, NodeInstance, NodeRegistry } from "./types";
 
 export interface TopoResult {
@@ -398,13 +399,31 @@ function applyVisibility(geometry: unknown, value: unknown): void {
 // export viewport), each on its own clock. Sharing one slot meant a real-time
 // preview frame became "last frame" for the deterministic export frame that
 // followed it.
+// Keyed by session *and* scope: a group evaluates its subgraph through a
+// nested evaluateGraph call on the same session, and a single slot per session
+// meant the inner pass overwrote the outer graph's carried-over frame with the
+// subgraph's — so every node in the parent lost its "last value" the moment a
+// group existed anywhere in the document.
 const previousFrameOutputsBySession = new Map<string, EvalResult>();
 
 const DEFAULT_SESSION = "default";
 
-/** Forgets a session's carried-over frame — call when its viewport unmounts. */
+function frameSlotKey(ctx: EvalContext): string {
+  const sessionId = ctx.sessionId ?? DEFAULT_SESSION;
+  return ctx.evalScope ? `${sessionId}::${ctx.evalScope}` : sessionId;
+}
+
+/**
+ * Forgets a session's carried-over frames — call when its viewport unmounts.
+ * Drops the nested scopes belonging to it too (one per group instance), which
+ * would otherwise outlive the viewport that created them.
+ */
 export function disposeEvalSession(sessionId: string): void {
   previousFrameOutputsBySession.delete(sessionId);
+  const prefix = `${sessionId}::`;
+  for (const key of previousFrameOutputsBySession.keys()) {
+    if (key.startsWith(prefix)) previousFrameOutputsBySession.delete(key);
+  }
 }
 
 // Cache the topological order and structural lookups by graph reference: playback
@@ -417,13 +436,16 @@ interface GraphStructuralCache {
   connectionByToNodeSocket: Map<string, Connection>;
 }
 
-let lastGraphRef: Graph | null = null;
-let lastStructuralCache: GraphStructuralCache | null = null;
+// One entry per live graph rather than a single "last graph" slot: a group
+// evaluates its subgraph in the middle of the parent's pass, so with one slot
+// the parent and every subgraph evicted each other and the order was
+// recomputed from scratch on every graph, every frame. A WeakMap also lets a
+// canvas that is no longer being evaluated drop its entry on its own.
+const structuralCaches = new WeakMap<Graph, GraphStructuralCache>();
 
 function getGraphStructuralCache(graph: Graph): GraphStructuralCache {
-  if (lastGraphRef === graph && lastStructuralCache) {
-    return lastStructuralCache;
-  }
+  const cached = structuralCaches.get(graph);
+  if (cached) return cached;
   const topo = topoSort(graph);
   const nodesById = new Map<string, NodeInstance>();
   for (let i = 0; i < graph.nodes.length; i++) {
@@ -445,14 +467,14 @@ function getGraphStructuralCache(graph: Graph): GraphStructuralCache {
     connectionByToNodeSocket.set(`${conn.toNode}:${conn.toSocket}`, conn);
   }
 
-  lastGraphRef = graph;
-  lastStructuralCache = {
+  const cache: GraphStructuralCache = {
     topo,
     nodesById,
     connectionsByToNode,
     connectionByToNodeSocket,
   };
-  return lastStructuralCache;
+  structuralCaches.set(graph, cache);
+  return cache;
 }
 
 const mutableKeysCache = new WeakMap<Record<string, unknown>, string[]>();
@@ -487,15 +509,17 @@ const EMPTY_CONNECTIONS: Connection[] = [];
 export function evaluateGraph(graph: Graph, registry: NodeRegistry, ctx: EvalContext): EvalResult {
   const { topo, nodesById, connectionsByToNode, connectionByToNodeSocket } = getGraphStructuralCache(graph);
   const { order, cyclic } = topo;
-  const sessionId = ctx.sessionId ?? DEFAULT_SESSION;
-  const previousFrameOutputs = previousFrameOutputsBySession.get(sessionId) ?? null;
+  const slotKey = frameSlotKey(ctx);
+  const previousFrameOutputs = previousFrameOutputsBySession.get(slotKey) ?? null;
   const results: EvalResult = new Map();
 
   for (const nodeId of [...order, ...cyclic]) {
     const instance = nodesById.get(nodeId);
     if (!instance) continue;
 
-    const def = registry.get(instance.type);
+    // Not registry.get: a group's sockets come from the subgraph it carries,
+    // not from its type — see groups.ts.
+    const def = resolveDefinition(instance, registry);
     if (!def) {
       console.error(`unknown node type "${instance.type}" on node ${nodeId} — skipped`);
       continue;
@@ -536,15 +560,25 @@ export function evaluateGraph(graph: Graph, registry: NodeRegistry, ctx: EvalCon
     const socketDefs = def.dynamicInputs ? def.dynamicInputs(nodeConnections) : def.inputs;
     const inputs: Record<string, unknown> = {};
 
-    pooledConnectedInputs.clear();
-    pooledInputSources.clear();
+    // The pooled Set/Map are reused across nodes to keep the 60 fps loop from
+    // allocating — safe as long as a node's evaluate is done with them before
+    // the next node starts. A group breaks that: it re-enters evaluateGraph
+    // for its subgraph, whose own loop would clear the very objects the group
+    // is still holding. Groups are rare and already paying for a whole nested
+    // pass, so they get their own.
+    const nested = instance.subgraph !== undefined;
+    const connectedInputs = nested ? new Set<string>() : pooledConnectedInputs;
+    const inputSources = nested ? new Map<string, string>() : pooledInputSources;
+
+    connectedInputs.clear();
+    inputSources.clear();
 
     for (let i = 0; i < socketDefs.length; i++) {
       const socket = socketDefs[i];
       const conn = connectionByToNodeSocket.get(`${nodeId}:${socket.id}`);
       if (conn) {
-        pooledConnectedInputs.add(socket.id);
-        pooledInputSources.set(socket.id, conn.fromNode);
+        connectedInputs.add(socket.id);
+        inputSources.set(socket.id, conn.fromNode);
         // Priority rule: Node connection l'emporte toujours sur les keyframes!
         const fresh = results.get(conn.fromNode)?.[conn.fromSocket];
         inputs[socket.id] =
@@ -567,8 +601,10 @@ export function evaluateGraph(graph: Graph, registry: NodeRegistry, ctx: EvalCon
         def.evaluate(inputs, params, {
           ...ctx,
           nodeId,
-          connectedInputs: pooledConnectedInputs,
-          inputSources: pooledInputSources,
+          instance,
+          registry,
+          connectedInputs,
+          inputSources,
           markers: ctx.markers || graph.markers,
         }) || {};
       applyVisibility(outputs.geometry, inputs[VISIBILITY_SOCKET]);
@@ -582,6 +618,6 @@ export function evaluateGraph(graph: Graph, registry: NodeRegistry, ctx: EvalCon
     }
   }
 
-  previousFrameOutputsBySession.set(sessionId, results);
+  previousFrameOutputsBySession.set(slotKey, results);
   return results;
 }

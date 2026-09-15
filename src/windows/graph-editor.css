@@ -233,3 +233,76 @@ input, textarea, [contenteditable="true"], .drag-number-editing, .param-text-inp
   outline: 1.5px solid #38bdf8 !important;
   outline-offset: 1px;
 }
+
+/*
+ * Breadcrumb — the way back out of a group. Mirrors the canvas selector's
+ * chrome, opposite corner: one says which tree is open, the other how deep
+ * into it the canvas is looking. Absent entirely at the top level, where
+ * there is nothing to climb back to.
+ */
+.graph-breadcrumb {
+  position: absolute;
+  /* Below the quick-add toolbar, which owns the top-left corner. */
+  top: 56px;
+  left: 12px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 8px;
+  background: rgba(59, 67, 79, 0.88);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  font-family: system-ui, -apple-system, sans-serif;
+  font-size: 11px;
+  z-index: 10;
+}
+
+.graph-breadcrumb button {
+  background: none;
+  border: none;
+  padding: 2px 4px;
+  color: #cbd5e1;
+  font: inherit;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.graph-breadcrumb button:hover:not(:disabled) {
+  background: rgba(56, 189, 248, 0.25);
+  color: #ffffff;
+}
+
+/* The level actually on screen — a destination, not a link. */
+.graph-breadcrumb button:disabled {
+  color: #ffffff;
+  font-weight: 600;
+  cursor: default;
+}
+
+.graph-breadcrumb-sep {
+  color: #64748b;
+}
+
+/* Group node — the count stands in for the interior the parent can't show. */
+.graph-node-group-badge {
+  margin: 2px 6px 4px;
+  padding: 2px 6px;
+  border: 1px dashed rgba(255, 255, 255, 0.25);
+  border-radius: 4px;
+  color: #94a3b8;
+  font-size: 9px;
+  text-align: center;
+  letter-spacing: 0.04em;
+}
+
+/* The empty socket that grows a port — a hint, not a value, so it reads dimmer. */
+.graph-node-socket-new span {
+  color: #64748b;
+  font-style: italic;
+}
+
+.graph-node-socket-new:hover span {
+  color: #cbd5e1;
+}

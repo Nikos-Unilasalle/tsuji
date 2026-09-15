@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { NodeDefinition, ParamFieldDef } from "../types";
 import { createNodeCache } from "../nodeCaches";
-import { asVector3, composeNativeMatrix } from "./transform";
+import { asVector3, composeNativeMatrix, preserveModifierUserData } from "./transform";
 import {
   applyMaterialParams,
   COMMON_MATERIAL_PARAM_FIELDS,
@@ -12,6 +12,7 @@ import {
   extractTextureParams,
   prefixedMaterialParamFields,
   primitiveOutputs,
+  recentreGeometry,
 } from "./object";
 import { DEFAULT_PROFILE_POINTS, evalProfileCurve, ProfilePoint } from "../profileCurve";
 import { setCurveNodePose, getCurveNodePose } from "../curvePoseStore";
@@ -46,6 +47,10 @@ interface CurveNodeState {
    */
   ownMaterial?: THREE.Material;
   surfaceMaterial?: THREE.Material;
+  /** Curve Deform's output geometry, kept across frames and written into. */
+  deformed?: THREE.BufferGeometry;
+  /** The source topology `deformed` was cloned from. */
+  deformedFrom?: string;
   /** Everything the cached geometry was built from, serialized — see the rebuild guard in Curve to Mesh. */
   geometrySignature?: string;
   surfaceSignature?: string;
@@ -1506,8 +1511,24 @@ export const CURVE_DEFORM_NODE: NodeDefinition = {
       deformedPositions[i * 3 + 2] = defZ;
     }
 
-    const defGeom = srcGeom.clone();
-    defGeom.setAttribute("position", new THREE.BufferAttribute(deformedPositions, 3));
+    // Cloned once per source topology and then written into, rather than
+    // cloned every frame: a fresh BufferGeometry per evaluate is a full GPU
+    // re-upload sixty times a second, and it breaks every downstream cache
+    // that keys on geometry identity.
+    const sourceSignature = `${srcGeom.uuid}:${count}:${srcGeom.getIndex()?.count ?? -1}`;
+    if (!state.deformed || state.deformedFrom !== sourceSignature) {
+      state.deformed?.dispose();
+      state.deformed = srcGeom.clone();
+      state.deformedFrom = sourceSignature;
+    }
+    const defGeom = state.deformed;
+    const defPos = defGeom.getAttribute("position") as THREE.BufferAttribute | undefined;
+    if (defPos && defPos.array.length === deformedPositions.length) {
+      (defPos.array as Float32Array).set(deformedPositions);
+      defPos.needsUpdate = true;
+    } else {
+      defGeom.setAttribute("position", new THREE.BufferAttribute(deformedPositions, 3));
+    }
     defGeom.computeVertexNormals();
 
     // The material stays the input's — a deformed object should keep its own
@@ -1528,18 +1549,39 @@ export const CURVE_DEFORM_NODE: NodeDefinition = {
       state.mesh.receiveShadow = true;
       state.mesh.userData.nodeId = ctx.nodeId;
     } else {
-      state.mesh.geometry.dispose();
-      state.mesh.geometry = defGeom;
+      // Only when the geometry object itself changed — the usual case now is
+      // the same one, rewritten in place.
+      if (state.mesh.geometry !== defGeom) {
+        state.mesh.geometry.dispose();
+        state.mesh.geometry = defGeom;
+      }
       state.mesh.material = mat;
     }
 
     // Its own pose on top of the deformed result, same convention as every
     // other object node — without it the node had nothing for the viewport
     // gizmo to drag and could only be placed by moving its source.
+    //
+    // The deformation evaluates in the curve's space, so the result lands
+    // wherever along the curve it was laid down rather than around the mesh's
+    // own origin. Recentring gives the mesh that origin back and rides the
+    // offset on the matrix, inside its own pose: the picture is identical, and
+    // the object now *is* where its Position output says it is — see
+    // recentreGeometry. Skipped while this node is the one being live-edited,
+    // where the matrix below is not written and the shift would show.
     if (ctx.nodeId !== ctx.liveEditNodeId) {
+      const centre = recentreGeometry(defGeom);
       state.mesh.matrixAutoUpdate = false;
-      state.mesh.matrix.copy(composeNativeMatrix(inputs.matrix, params.location, params.rotation, params.scale, params));
+      state.mesh.matrix
+        .copy(composeNativeMatrix(inputs.matrix, params.location, params.rotation, params.scale, params))
+        .multiply(new THREE.Matrix4().makeTranslation(centre.x, centre.y, centre.z));
     }
+
+    // The bent object is still the same object downstream, so it keeps the
+    // source's pivot and Show Pivot. Not emitModifiedMesh: this node owns its
+    // pose (composed just above), where a plain modifier inherits the
+    // source's.
+    preserveModifierUserData(state.mesh, inputObj, srcMesh, ctx.nodeId);
 
     return primitiveOutputs(state.mesh);
   },

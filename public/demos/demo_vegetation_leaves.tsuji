@@ -1,0 +1,494 @@
+{
+  "canvases": [
+    {
+      "nodes": [
+        {
+          "id": "setup_0",
+          "type": "object/plane",
+          "position": {
+            "x": 599,
+            "y": 160
+          },
+          "params": {
+            "visible": 0,
+            "location": {
+              "x": 0,
+              "y": -0.5,
+              "z": 0
+            },
+            "rotation": {
+              "x": 1.5707963267948966,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 10,
+              "y": 10,
+              "z": 1
+            },
+            "texturePath": "",
+            "normalMapPath": "",
+            "roughnessMapPath": "",
+            "uvScaleX": 1,
+            "uvScaleY": 1,
+            "uvOffsetX": 0,
+            "uvOffsetY": 0,
+            "color": 16777215,
+            "emissive": 0,
+            "emissiveIntensity": 1,
+            "shadeless": 0,
+            "roughness": 0.1,
+            "metalness": 0.1,
+            "wireframe": 0,
+            "opacity": 1,
+            "transmission": 0,
+            "thickness": 0.5
+          }
+        },
+        {
+          "id": "setup_1",
+          "type": "texture/procedural",
+          "position": {
+            "x": 375,
+            "y": 223
+          },
+          "params": {
+            "type": "checker",
+            "colorA": 16777215,
+            "colorB": 2236962,
+            "scale": 8,
+            "seed": 1,
+            "octaves": 3,
+            "resolution": 256,
+            "uvScaleX": 1,
+            "uvScaleY": 1,
+            "uvOffsetX": 0,
+            "uvOffsetY": 0
+          }
+        },
+        {
+          "id": "setup_2",
+          "type": "light/point",
+          "position": {
+            "x": 857,
+            "y": 193
+          },
+          "params": {
+            "location": {
+              "x": 0,
+              "y": 2.185514752224622,
+              "z": -4.5179526088705275
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "color": 16768110,
+            "intensity": 50,
+            "distance": 15,
+            "decay": 2,
+            "castShadow": 1
+          }
+        },
+        {
+          "id": "setup_3",
+          "type": "light/point",
+          "position": {
+            "x": 1043,
+            "y": 187
+          },
+          "params": {
+            "location": {
+              "x": 0,
+              "y": 2.185514752224622,
+              "z": 4.487400919453167
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "color": 440020,
+            "intensity": 50,
+            "distance": 15,
+            "decay": 2,
+            "castShadow": 1
+          }
+        },
+        {
+          "id": "setup_4",
+          "type": "render",
+          "position": {
+            "x": 610,
+            "y": 393
+          },
+          "params": {
+            "frameCount": 300,
+            "fps": 30,
+            "motionBlur": 0,
+            "resolutionPreset": "16:9 (1920x1080)",
+            "width": 1920,
+            "height": 1080,
+            "holdout": false
+          }
+        },
+        {
+          "id": "setup_5",
+          "type": "lighting/environment",
+          "position": {
+            "x": 340,
+            "y": 406
+          },
+          "params": {
+            "color": 4147542,
+            "intensity": 1,
+            "background": 1,
+            "blurriness": 0,
+            "filePath": "",
+            "backgroundImagePath": "",
+            "backgroundFit": "cover",
+            "backgroundScale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "backgroundOffset": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "backgroundRotation": 0,
+            "ambientIntensity": 1.388,
+            "sunIntensity": 2.9
+          }
+        },
+        {
+          "id": "setup_6",
+          "type": "light/point",
+          "position": {
+            "x": 860,
+            "y": 389
+          },
+          "params": {
+            "location": {
+              "x": 3.583607412619263,
+              "y": 2.185514752224622,
+              "z": -0.48624947478730096
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "color": 16777215,
+            "intensity": 50,
+            "distance": 15,
+            "decay": 2,
+            "castShadow": 1
+          }
+        },
+        {
+          "id": "relief",
+          "type": "texture/procedural",
+          "position": {
+            "x": -1720,
+            "y": 60
+          },
+          "params": {
+            "type": "perlin",
+            "colorA": 0,
+            "colorB": 16777215,
+            "scale": 3,
+            "seed": 7,
+            "octaves": 4,
+            "resolution": 256
+          }
+        },
+        {
+          "id": "dirt",
+          "type": "texture/procedural",
+          "position": {
+            "x": -1689,
+            "y": 249
+          },
+          "params": {
+            "type": "perlin",
+            "colorA": 16777215,
+            "colorB": 2236962,
+            "scale": 38,
+            "seed": 1,
+            "octaves": 3,
+            "resolution": 256
+          }
+        },
+        {
+          "id": "land",
+          "type": "object/terrain",
+          "position": {
+            "x": -1442,
+            "y": 73
+          },
+          "params": {
+            "width": 30,
+            "depth": 30,
+            "resolution": "128x128",
+            "heightScale": 4,
+            "heightOffset": -1.2,
+            "slopeShading": false,
+            "flatShading": true,
+            "color": 14195898,
+            "roughness": 0.95,
+            "metalness": 0
+          }
+        },
+        {
+          "id": "wind",
+          "type": "physics/wind-field",
+          "position": {
+            "x": -1440,
+            "y": 320
+          },
+          "params": {
+            "strength": 5,
+            "gustiness": 1,
+            "timeFrequency": 0.35
+          }
+        },
+        {
+          "id": "grass",
+          "type": "structure/grass-field",
+          "position": {
+            "x": -1080,
+            "y": 60
+          },
+          "params": {
+            "subdivisions": 200,
+            "size": 30,
+            "bladeHeight": 1.488,
+            "bladeWidth": 0.506,
+            "heightRandomness": 0.625,
+            "windInfluence": 0.188,
+            "baseColor": 9141324,
+            "tipColor": 11760531
+          }
+        },
+        {
+          "id": "leaves",
+          "type": "object/leaves",
+          "position": {
+            "x": -1080,
+            "y": 360
+          },
+          "params": {
+            "count": 1500,
+            "size": 30,
+            "scale": 0.135,
+            "upwardMultiplier": 1.026,
+            "floorOffset": 1.845,
+            "colorA": 15680580,
+            "colorB": 15485081,
+            "roughness": 0,
+            "metalness": 0.012
+          }
+        },
+        {
+          "id": "key",
+          "type": "io/keyboard",
+          "position": {
+            "x": -1718,
+            "y": 576
+          },
+          "params": {
+            "key": "b"
+          }
+        },
+        {
+          "id": "fuse",
+          "type": "logic/trigger",
+          "position": {
+            "x": -1458,
+            "y": 653
+          },
+          "params": {}
+        },
+        {
+          "id": "group",
+          "type": "structure/merge",
+          "position": {
+            "x": -720,
+            "y": 240
+          },
+          "params": {}
+        },
+        {
+          "id": "glow",
+          "type": "postprocess/bloom",
+          "position": {
+            "x": 357,
+            "y": 616
+          },
+          "params": {
+            "strength": 0.8,
+            "radius": 0.5,
+            "threshold": 1.6
+          }
+        }
+      ],
+      "connections": [
+        {
+          "id": "setup_c0",
+          "fromNode": "setup_1",
+          "fromSocket": "texture",
+          "toNode": "setup_0",
+          "toSocket": "texture"
+        },
+        {
+          "id": "setup_c1",
+          "fromNode": "setup_5",
+          "fromSocket": "environment",
+          "toNode": "setup_4",
+          "toSocket": "environment"
+        },
+        {
+          "id": "relief.texture->land.heightmap",
+          "fromNode": "relief",
+          "fromSocket": "texture",
+          "toNode": "land",
+          "toSocket": "heightmap"
+        },
+        {
+          "id": "dirt.texture->land.texture",
+          "fromNode": "dirt",
+          "fromSocket": "texture",
+          "toNode": "land",
+          "toSocket": "texture"
+        },
+        {
+          "id": "land.geometry->grass.ground",
+          "fromNode": "land",
+          "fromSocket": "geometry",
+          "toNode": "grass",
+          "toSocket": "ground"
+        },
+        {
+          "id": "land.geometry->leaves.ground",
+          "fromNode": "land",
+          "fromSocket": "geometry",
+          "toNode": "leaves",
+          "toSocket": "ground"
+        },
+        {
+          "id": "wind.field->grass.wind",
+          "fromNode": "wind",
+          "fromSocket": "field",
+          "toNode": "grass",
+          "toSocket": "wind"
+        },
+        {
+          "id": "wind.field->leaves.wind",
+          "fromNode": "wind",
+          "fromSocket": "field",
+          "toNode": "leaves",
+          "toSocket": "wind"
+        },
+        {
+          "id": "key.isDown->fuse.in",
+          "fromNode": "key",
+          "fromSocket": "isDown",
+          "toNode": "fuse",
+          "toSocket": "in"
+        },
+        {
+          "id": "fuse.trigger->leaves.blastTrigger",
+          "fromNode": "fuse",
+          "fromSocket": "trigger",
+          "toNode": "leaves",
+          "toSocket": "blastTrigger"
+        },
+        {
+          "id": "land.geometry->group.in0",
+          "fromNode": "land",
+          "fromSocket": "geometry",
+          "toNode": "group",
+          "toSocket": "in0"
+        },
+        {
+          "id": "grass.geometry->group.in1",
+          "fromNode": "grass",
+          "fromSocket": "geometry",
+          "toNode": "group",
+          "toSocket": "in1"
+        },
+        {
+          "id": "leaves.geometry->group.in2",
+          "fromNode": "leaves",
+          "fromSocket": "geometry",
+          "toNode": "group",
+          "toSocket": "in2"
+        },
+        {
+          "id": "glow.effect->setup_4.postprocess",
+          "fromNode": "glow",
+          "fromSocket": "effect",
+          "toNode": "setup_4",
+          "toSocket": "postprocess"
+        }
+      ],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    },
+    {
+      "nodes": [],
+      "connections": [],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    },
+    {
+      "nodes": [],
+      "connections": [],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    },
+    {
+      "nodes": [],
+      "connections": [],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    },
+    {
+      "nodes": [],
+      "connections": [],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    },
+    {
+      "nodes": [],
+      "connections": [],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    }
+  ],
+  "activeCanvas": 0
+}

@@ -40,6 +40,16 @@ export const DEMO_CATALOG: DemoCategory[] = [
         description: "A frame-driven reveal: length, trim, random and case chained onto a Text object.",
       },
       {
+        file: "demo_object_explosion.tsuji",
+        label: "Explosion",
+        description: "Three fireballs on a loop: a noise sphere burning away from the inside out.",
+      },
+      {
+        file: "demo_object_metaballs.tsuji",
+        label: "Metaballs",
+        description: "Five wandering centres meshed as one gooey surface that fuses and splits.",
+      },
+      {
         file: "demo_object_empty_lookat.tsuji",
         label: "Empty & Look At",
         description: "A cone aiming at an orbiting Empty.",
@@ -225,6 +235,16 @@ export const DEMO_CATALOG: DemoCategory[] = [
         description: "A square prism tumbling as it rolls — rotation coupled to its bob.",
       },
       {
+        file: "demo_physics_spawner.tsuji",
+        label: "Spawner",
+        description: "A cookie launcher: press b to fire from a fixed pool of bodies, r to reset.",
+      },
+      {
+        file: "demo_physics_explosion.tsuji",
+        label: "Explosion Impulse",
+        description: "Press b: a fireball and a blast wave off one trigger, throwing a grid of crates.",
+      },
+      {
         file: "demo_physics_scatter.tsuji",
         label: "Surface Scatter",
         description: "Sample points on a mesh, spawn objects on them.",
@@ -405,6 +425,11 @@ export const DEMO_CATALOG: DemoCategory[] = [
         description: "The eight growth habits side by side: oak, clumped cherry, conifer, willow, birch, palm, bush and a bare winter tree.",
       },
       {
+        file: "demo_vegetation_leaves.tsuji",
+        label: "Leaves on a Terrain",
+        description: "Grass and leaves standing on the same terrain mesh. Hold b to blow the leaves away.",
+      },
+      {
         file: "demo_vegetation_wind.tsuji",
         label: "Grass & Trees in the Wind",
         description: "One Wind Field driving grass and trees, plus an Interaction Map that flattens the grass in a moving object's wake.",
@@ -423,6 +448,11 @@ export const DEMO_CATALOG: DemoCategory[] = [
         file: "demo_texture_to_geometry.tsuji",
         label: "Texture to Geometry",
         description: "A texture's pixels spawning objects.",
+      },
+      {
+        file: "demo_texture_stylized_water.tsuji",
+        label: "Stylized Water",
+        description: "A lake reading the terrain's heightmap: shore foam, depth gradient, ripples and rain.",
       },
       {
         file: "demo_texture_decal_wall.tsuji",

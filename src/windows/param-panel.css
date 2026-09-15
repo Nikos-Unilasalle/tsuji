@@ -436,3 +436,47 @@
   width: 13px;
   height: 13px;
 }
+
+/* Group boundary ports — a row per socket, reorderable, label editable. */
+.param-port-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.param-port-row .param-text-input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.param-port-row button {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 4px;
+  color: #cbd5e1;
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.param-port-row button:hover:not(:disabled) {
+  background: rgba(56, 189, 248, 0.25);
+  color: #ffffff;
+}
+
+.param-port-row button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+/* The socket's own type colour, same key the node handles and wires use. */
+.param-port-swatch {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}

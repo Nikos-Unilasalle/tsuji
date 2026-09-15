@@ -4,8 +4,7 @@ import { createNodeCache, disposeObject3D } from "../nodeCaches";
 import { IndexedMesh, subdivide as runSubdivide, SubdivisionMode } from "../subdivision";
 import { NodeDefinition } from "../types";
 import { clearMeshWarning, findFirstMesh, warnMeshRequired } from "../meshRequired";
-import { inheritSourceMaterial, primitiveOutputs } from "./object";
-import { preserveModifierUserData } from "./transform";
+import { createModifierMesh, emitModifiedMesh, primitiveOutputs } from "./object";
 
 
 interface SubdivideState {
@@ -212,57 +211,30 @@ export const SUBDIVIDE_NODE: NodeDefinition = {
     const state = getState(ctx.nodeId);
 
     const signature = `${mode}:${levels}:${srcGeom.attributes.position.count}:${srcGeom.index?.count ?? -1}:${srcGeom.attributes.uv?.count ?? -1}`;
-    if (state.mesh && state.lastSignature === signature) {
-      // Topology unchanged since last run — skip re-subdividing, but the
-      // source's pose still needs copying every call: an upstream animation
-      // moves srcMesh.matrix every frame without ever touching its geometry,
-      // so signature alone would stay stable and this early return used to
-      // leave state.mesh frozen at whatever pose it last recomputed at.
-      // srcMesh.matrix is only its LOCAL pose — correct for a mesh that
-      // directly carries its own transform (Box, Sphere, ...), but wrong for
-      // one nested under a posed wrapper group (OBJ Model bakes its Location/
-      // Rotation/Scale/Pivot onto the group, not the mesh inside it), where
-      // .matrix alone is identity and this would silently reset the pose.
-      // matrixWorld is correct either way. Also force matrixAutoUpdate off
-      // rather than copying the source's flag: an OBJ-parsed mesh defaults to
-      // true, which would have three's own render loop recompute (and wipe)
-      // this matrix from its untouched position/quaternion/scale next frame.
-      inputObj.updateMatrixWorld(true);
-      state.mesh.matrixAutoUpdate = false;
-      state.mesh.matrix.copy(srcMesh.matrixWorld);
-      preserveModifierUserData(state.mesh, inputObj, srcMesh, ctx.nodeId);
-      return primitiveOutputs(state.mesh);
+    // Topology unchanged since last run means the subdivision is skipped —
+    // but everything else emitModifiedMesh does still has to happen every
+    // call. An upstream animation moves the source every frame without ever
+    // touching its geometry, so a signature hit that returned early used to
+    // leave the output frozen at whatever pose it last rebuilt at.
+    const rebuild = !state.mesh || state.lastSignature !== signature;
+
+    let geometry: THREE.BufferGeometry | undefined;
+    if (rebuild) {
+      const indexedMesh = toIndexedMesh(srcGeom);
+      if (!indexedMesh) return primitiveOutputs(inputObj);
+
+      const posResult = runSubdivide(indexedMesh, mode, levels);
+      const uvIndexedMesh = toIndexedUVMesh(srcGeom);
+      const uvResult = uvIndexedMesh ? runSubdivide(uvIndexedMesh, mode, levels) : null;
+      geometry = (uvResult && toBufferGeometryWithUV(posResult, uvResult)) || toBufferGeometry(posResult);
+      state.lastSignature = signature;
     }
 
-    const indexedMesh = toIndexedMesh(srcGeom);
-    if (!indexedMesh) return primitiveOutputs(inputObj);
+    if (!state.mesh) state.mesh = createModifierMesh();
 
-    const posResult = runSubdivide(indexedMesh, mode, levels);
-
-    const uvIndexedMesh = toIndexedUVMesh(srcGeom);
-    const uvResult = uvIndexedMesh ? runSubdivide(uvIndexedMesh, mode, levels) : null;
-    const geometry = (uvResult && toBufferGeometryWithUV(posResult, uvResult)) || toBufferGeometry(posResult);
-
-    if (!state.mesh) {
-      state.mesh = new THREE.Mesh(geometry);
-      state.mesh.castShadow = true;
-      state.mesh.receiveShadow = true;
-    } else {
-      state.mesh.geometry.dispose();
-      state.mesh.geometry = geometry;
-    }
-    inheritSourceMaterial(state.mesh, srcMesh.material);
-    // Same pose as whatever was plugged in — this node reshapes the
-    // surface, it doesn't move it, so it has no location/rotation/scale of
-    // its own the way Lattice Deform's cage does. See the cached-return
-    // branch above for why matrixWorld (not matrix) and a forced-false
-    // matrixAutoUpdate.
-    inputObj.updateMatrixWorld(true);
-    state.mesh.matrixAutoUpdate = false;
-    state.mesh.matrix.copy(srcMesh.matrixWorld);
-    preserveModifierUserData(state.mesh, inputObj, srcMesh, ctx.nodeId);
-    state.lastSignature = signature;
-
-    return primitiveOutputs(state.mesh);
+    // This node reshapes the surface, it doesn't move it, so it has no
+    // location/rotation/scale of its own the way Lattice Deform's cage does:
+    // the source's pose is the output's, which is emitModifiedMesh's default.
+    return emitModifiedMesh(state.mesh, { inputObj, srcMesh, geometry, nodeId: ctx.nodeId });
   },
 };

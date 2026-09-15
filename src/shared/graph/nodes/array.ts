@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { NodeDefinition, ParamFieldDef } from "../types";
 import { createNodeCache, disposeObject3D } from "../nodeCaches";
 import { InstancedItemSpec, renderInstanced } from "./instancedRender";
-import { getSourcePivot } from "./transform";
+import { acquireInstance, InstancePool, instancePoolCache } from "./instancePool";
 
 const groupCache = createNodeCache<THREE.Group>(disposeObject3D);
 
@@ -12,28 +12,15 @@ function attachInstance(
   gpuInstancing: boolean,
   instancedItems: InstancedItemSpec[],
   group: THREE.Group,
+  pool: InstancePool,
+  handedOut: Map<string, number>,
 ): void {
   if (gpuInstancing) {
     instancedItems.push({ template: itemSource, matrix: instanceMatrix });
     return;
   }
 
-  const sourcePivot = getSourcePivot(itemSource);
-  const hasPivot = sourcePivot.lengthSq() > 1e-9;
-  const pivotInv = hasPivot ? new THREE.Matrix4().makeTranslation(-sourcePivot.x, -sourcePivot.y, -sourcePivot.z) : null;
-
-  const clone = itemSource.clone(true);
-  if (pivotInv) {
-    clone.matrixAutoUpdate = false;
-    clone.matrix.copy(itemSource.matrix).multiply(pivotInv);
-  }
-  const wrapper = new THREE.Group();
-  wrapper.matrixAutoUpdate = false;
-  wrapper.matrix.copy(instanceMatrix);
-  if (hasPivot) wrapper.userData.pivot = sourcePivot.clone();
-  wrapper.add(clone);
-
-  group.add(wrapper);
+  group.add(acquireInstance(pool, handedOut, itemSource, instanceMatrix));
 }
 
 function getGroup(nodeId: string): THREE.Group {
@@ -222,6 +209,14 @@ export const ARRAY_NODE: NodeDefinition = {
     const group = getGroup(ctx.nodeId);
     group.clear();
 
+    let instancePool = instancePoolCache.get(ctx.nodeId);
+    if (!instancePool) {
+      instancePool = new Map();
+      instancePoolCache.set(ctx.nodeId, instancePool);
+    }
+    // Reset per frame: the pool persists, the hand-out counter does not.
+    const handedOut = new Map<string, number>();
+
     const source = inputs.geometry instanceof THREE.Object3D ? inputs.geometry : null;
     const pool = Array.isArray(inputs.geometries)
       ? (inputs.geometries.filter((g) => g instanceof THREE.Object3D) as THREE.Object3D[])
@@ -305,7 +300,7 @@ export const ARRAY_NODE: NodeDefinition = {
             stepPower = new THREE.Matrix4().multiplyMatrices(stepMatrix, stepPower);
           }
 
-          attachInstance(itemSource, instanceMatrix, gpuInstancing, instancedItems, group);
+          attachInstance(itemSource, instanceMatrix, gpuInstancing, instancedItems, group, instancePool, handedOut);
         }
       }
       if (gpuInstancing) renderInstanced(ctx.nodeId, group, instancedItems);
@@ -344,7 +339,7 @@ export const ARRAY_NODE: NodeDefinition = {
               stepPower = new THREE.Matrix4().multiplyMatrices(stepMatrix, stepPower);
             }
 
-            attachInstance(itemSource, instanceMatrix, gpuInstancing, instancedItems, group);
+            attachInstance(itemSource, instanceMatrix, gpuInstancing, instancedItems, group, instancePool, handedOut);
           }
         }
       }
@@ -455,7 +450,7 @@ export const ARRAY_NODE: NodeDefinition = {
         stepPower = new THREE.Matrix4().multiplyMatrices(stepMatrix, stepPower);
       }
 
-      attachInstance(itemSource, instanceMatrix, gpuInstancing, instancedItems, group);
+      attachInstance(itemSource, instanceMatrix, gpuInstancing, instancedItems, group, instancePool, handedOut);
     }
 
     if (gpuInstancing) renderInstanced(ctx.nodeId, group, instancedItems);

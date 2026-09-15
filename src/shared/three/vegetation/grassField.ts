@@ -121,6 +121,11 @@ const GRASS_VERTEX = /* glsl */ `
   uniform vec2 uTrampleCenter;
   uniform float uTrampleSize;
   uniform float uTrampleStrength;
+  uniform float uHasGround;
+  uniform sampler2D uGroundMap;
+  uniform vec2 uGroundCenter;
+  uniform vec2 uGroundSize;
+  uniform float uGroundResolution;
 
   attribute float aCorner;
   attribute float aRandom;
@@ -132,6 +137,34 @@ const GRASS_VERTEX = /* glsl */ `
 
   ${WIND_GLSL}
   ${MAP_UV_GLSL}
+
+  vec2 groundUv(vec2 worldXZ) {
+    return (worldXZ - uGroundCenter) / uGroundSize + 0.5;
+  }
+
+  /**
+   * The ground's height and whether there is any ground there at all, bilinear by hand: the
+   * height field is nearest-filtered, and sampling it raw terraces the lawn into steps.
+   * A blade only grows where all four texels around it hit, so the field stops at the edge of
+   * the mesh instead of trailing off down an interpolated cliff.
+   */
+  vec2 sampleGround(vec2 uv) {
+    vec2 res = vec2(uGroundResolution);
+    vec2 texel = 1.0 / res;
+    vec2 coord = clamp(uv, 0.0, 1.0) * res - 0.5;
+    vec2 base = floor(coord);
+    vec2 f = fract(coord);
+
+    vec4 h00 = texture2D(uGroundMap, (base + vec2(0.5, 0.5)) * texel);
+    vec4 h10 = texture2D(uGroundMap, (base + vec2(1.5, 0.5)) * texel);
+    vec4 h01 = texture2D(uGroundMap, (base + vec2(0.5, 1.5)) * texel);
+    vec4 h11 = texture2D(uGroundMap, (base + vec2(1.5, 1.5)) * texel);
+
+    float height = mix(mix(h00.r, h10.r, f.x), mix(h01.r, h11.r, f.x), f.y);
+    float hit = min(min(h00.g, h10.g), min(h01.g, h11.g));
+
+    return vec2(height, hit);
+  }
 
   void main() {
     vec4 base = modelMatrix * vec4(position, 1.0);
@@ -148,6 +181,16 @@ const GRASS_VERTEX = /* glsl */ `
       density = texture2D(uDensityMap, clamp(densityUv, 0.0, 1.0)).r * mapInside(densityUv);
     }
     density = smoothstep(uDensityThreshold, uDensityThreshold + 0.15, density);
+
+    // Planted on the ground mesh rather than on the zero plane. The blade's own base height is
+    // kept as an offset, so moving the node up lifts the whole lawn off the terrain.
+    float groundY = base.y;
+    if (uHasGround > 0.5) {
+      vec2 groundCoord = groundUv(world);
+      vec2 ground = sampleGround(groundCoord);
+      groundY += ground.x;
+      density *= ground.y * mapInside(groundCoord);
+    }
 
     // Whatever has passed through here flattens the blade rather than
     // deleting it: trampled grass is bent, not absent.
@@ -172,7 +215,7 @@ const GRASS_VERTEX = /* glsl */ `
 
     vec2 wind = windOffset(world) * uWindInfluence;
 
-    vec3 finalPosition = vec3(world.x, base.y, world.y);
+    vec3 finalPosition = vec3(world.x, groundY, world.y);
     float isTip = step(aCorner, 0.5);
     vTipness = isTip;
     vRandom = aRandom;
@@ -256,6 +299,11 @@ export function createGrassMaterial(): THREE.ShaderMaterial {
       uTrampleCenter: { value: new THREE.Vector2() },
       uTrampleSize: { value: 60 },
       uTrampleStrength: { value: 1 },
+      uHasGround: { value: 0 },
+      uGroundMap: { value: null },
+      uGroundCenter: { value: new THREE.Vector2() },
+      uGroundSize: { value: new THREE.Vector2(1, 1) },
+      uGroundResolution: { value: 128 },
       uBaseColor: { value: new THREE.Color(0x2f5d2a) },
       uTipColor: { value: new THREE.Color(0xa8c34a) },
       uLightDirection: { value: new THREE.Vector3(0.5, 1, 0.3).normalize() },

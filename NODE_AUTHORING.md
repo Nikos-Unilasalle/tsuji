@@ -234,6 +234,47 @@ describe("MY_NODE", () => {
 });
 ```
 
+## 9b. If your node takes geometry in and hands geometry out
+
+Three contracts apply on top of everything above, and
+`src/shared/graph/nodeContracts.test.ts` checks all three across the whole
+registry — your node is in that sweep whether you read this section or not.
+
+Do not hand-roll them. `emitModifiedMesh()` (object.ts) is the one way a
+mesh modifier hands its result back, and it does all three in the right
+order — geometry, then material (so a material with a geometry hook prepares
+what will be drawn), then pose, then userData:
+
+```ts
+if (!state.mesh) state.mesh = createModifierMesh();
+return emitModifiedMesh(state.mesh, { inputObj, srcMesh, geometry, nodeId: ctx.nodeId });
+```
+
+Pass `geometry` only when you rebuilt it — omit it on a cache hit and the
+existing one is kept, which is contract 2 below. A node that owns a pose of
+its own (Lattice Deform's cage, Curve Deform) cannot use it, since the pose
+is the one thing it does differently; those still call
+`preserveModifierUserData()` by hand.
+
+- **Appearance.** A node that isn't about materials passes the source's
+  material *by reference*, plus its texture maps, UVs, `userData.pivot` and
+  shadow flags. Never `mesh.material = srcMesh.material` by hand — that skips
+  the material's own geometry hook, which is how the Worn node came to look
+  like it did nothing at all.
+- **Identity.** Same inputs in, *the same object* back — not an equal one.
+  Downstream caches key on `geometry.uuid` and `mesh.uuid`, so a node that
+  mints a fresh `BufferGeometry` every frame silently breaks them. Cache on
+  a signature and return the cached mesh.
+- **Pose.** Read a source's world matrix with `worldMatrixOf()`, never from
+  `matrixWorld` — that value is stale mid-evaluation. Write your output's
+  matrix with `matrixAutoUpdate = false`.
+
+Contract 2 is the one nobody guesses, and it used to be the expensive one:
+a rigid body's rebuild signature keyed on the source geometry's uuid, so an
+identity leak in a *modelling* node froze physics two nodes downstream.
+Physics no longer keys on identity, but plenty of other things still do — and
+rebuilding a mesh sixty times a second is wasteful even when nothing breaks.
+
 ## 10. Before you say you're done
 
 Run both, from the repo root, and both must be clean:

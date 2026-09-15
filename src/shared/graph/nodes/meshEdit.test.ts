@@ -302,6 +302,109 @@ describe("EXTRUDE_MESH_NODE", () => {
   });
 });
 
+describe("EXTRUDE_MESH_NODE — UVs", () => {
+  /** Every triangle's UV area, so a degenerate mapping (all of them zero) is visible. */
+  function uvAreas(mesh: THREE.Mesh): number[] {
+    const uv = mesh.geometry.getAttribute("uv") as THREE.BufferAttribute;
+    const index = mesh.geometry.getIndex()!;
+    const areas: number[] = [];
+    for (let t = 0; t < index.count / 3; t++) {
+      const [a, b, c] = [0, 1, 2].map((k) => index.getX(t * 3 + k));
+      const abx = uv.getX(b) - uv.getX(a);
+      const aby = uv.getY(b) - uv.getY(a);
+      const acx = uv.getX(c) - uv.getX(a);
+      const acy = uv.getY(c) - uv.getY(a);
+      areas.push(Math.abs(abx * acy - aby * acx) / 2);
+    }
+    return areas;
+  }
+
+  it("gives the extruded result UVs at all", () => {
+    // A textured box through Extrude used to come out with its material and
+    // its map intact and no UVs to sample them with, which renders as garbage
+    // rather than as nothing — and every node downstream inherited the loss.
+    const box = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1));
+    const res = EXTRUDE_MESH_NODE.evaluate(
+      { geometry: box, distance: 0.4 },
+      { ...EXTRUDE_MESH_NODE.defaultParams, selectMode: "normal", axis: "y", threshold: 0.9 },
+      { time: 0, step: 0, nodeId: "uv-basic" } as never,
+    );
+    const mesh = res.geometry as THREE.Mesh;
+    const uv = mesh.geometry.getAttribute("uv");
+    expect(uv).toBeDefined();
+    expect(uv.count).toBe(mesh.geometry.getAttribute("position").count);
+  });
+
+  it("keeps every UV inside the source's own range — the cap carries the patch's mapping", () => {
+    const box = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1));
+    const res = EXTRUDE_MESH_NODE.evaluate(
+      { geometry: box, distance: 0.3 },
+      { ...EXTRUDE_MESH_NODE.defaultParams, selectMode: "normal", axis: "y", threshold: 0.9 },
+      { time: 0, step: 0, nodeId: "uv-range" } as never,
+    );
+    const uv = (res.geometry as THREE.Mesh).geometry.getAttribute("uv") as THREE.BufferAttribute;
+    // BoxGeometry maps every face to the full 0..1 square. The walls climb out
+    // of it by the extrusion's share of an edge, so a little overshoot is
+    // expected; a wild one means the mapping lost its scale.
+    for (let i = 0; i < uv.count; i++) {
+      expect(uv.getX(i)).toBeGreaterThan(-0.5);
+      expect(uv.getX(i)).toBeLessThan(1.5);
+      expect(uv.getY(i)).toBeGreaterThan(-0.5);
+      expect(uv.getY(i)).toBeLessThan(1.5);
+    }
+  });
+
+  it("gives the walls real UV area rather than a smear", () => {
+    // The cheap way out is to hand the wall its edge's two UVs twice, which
+    // costs nothing and maps the whole side to a line of texels.
+    const box = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1));
+    const res = EXTRUDE_MESH_NODE.evaluate(
+      { geometry: box, distance: 0.5 },
+      { ...EXTRUDE_MESH_NODE.defaultParams, selectMode: "normal", axis: "y", threshold: 0.9 },
+      { time: 0, step: 0, nodeId: "uv-walls" } as never,
+    );
+    const areas = uvAreas(res.geometry as THREE.Mesh);
+    expect(areas.every((area) => area > 1e-6)).toBe(true);
+  });
+
+  it("scales the wall's UVs with the extrusion, not with the quad", () => {
+    // Half the distance, half the texture on the side: the texel density of
+    // the cap, carried onto the wall.
+    const uvSpan = (distance: number) => {
+      const box = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1));
+      const res = EXTRUDE_MESH_NODE.evaluate(
+        { geometry: box, distance },
+        { ...EXTRUDE_MESH_NODE.defaultParams, selectMode: "normal", axis: "y", threshold: 0.9 },
+        { time: 0, step: 0, nodeId: `uv-scale-${distance}` } as never,
+      );
+      const uv = (res.geometry as THREE.Mesh).geometry.getAttribute("uv") as THREE.BufferAttribute;
+      let min = Infinity;
+      let max = -Infinity;
+      for (let i = 0; i < uv.count; i++) {
+        min = Math.min(min, uv.getY(i));
+        max = Math.max(max, uv.getY(i));
+      }
+      return max - min;
+    };
+    // Each overshoots the source's 0..1 by its own extrusion; the bigger one
+    // has to overshoot more.
+    expect(uvSpan(0.6)).toBeGreaterThan(uvSpan(0.2));
+  });
+
+  it("still works on a source with no UVs at all", () => {
+    const bare = new THREE.BufferGeometry();
+    bare.setAttribute("position", new THREE.BufferAttribute(new Float32Array([0, 0, 0, 1, 0, 0, 0, 0, 1]), 3));
+    const res = EXTRUDE_MESH_NODE.evaluate(
+      { geometry: new THREE.Mesh(bare), distance: 0.2 },
+      { ...EXTRUDE_MESH_NODE.defaultParams },
+      { time: 0, step: 0, nodeId: "uv-none" } as never,
+    );
+    const mesh = res.geometry as THREE.Mesh;
+    expect(mesh.geometry.getAttribute("position").count).toBeGreaterThan(0);
+    expect(mesh.geometry.getAttribute("uv")).toBeUndefined();
+  });
+});
+
 describe("EXTRUDE_MESH_NODE — grow passes", () => {
   // Extruding the top faces of a unit box repeatedly: each pass raises the cap
   // by `distance` (the cap's averaged normal is exactly +Y — the side faces

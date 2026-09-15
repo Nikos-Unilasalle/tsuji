@@ -2,8 +2,8 @@ import * as THREE from "three";
 import { NodeDefinition } from "../types";
 import { clearMeshWarning, findFirstMesh, warnMeshRequired } from "../meshRequired";
 import { createNodeCache, disposeObject3D } from "../nodeCaches";
-import { asVector3, composeNativeMatrix } from "./transform";
-import { COMMON_PRIMITIVE_OUTPUTS, inheritSourceMaterial, primitiveOutputs } from "./object";
+import { asVector3, composeNativeMatrix, preserveModifierUserData } from "./transform";
+import { COMMON_PRIMITIVE_OUTPUTS, inheritSourceMaterial, primitiveOutputs, recentreGeometry } from "./object";
 
 
 export interface LatticeGridConfig {
@@ -15,6 +15,8 @@ export interface LatticeGridConfig {
   subdivW: number;
   interpolation: "linear" | "smooth";
   strength: number;
+  clipToCage: boolean;
+  clipFalloff: number;
   deformAxis: "x" | "y" | "z";
   bulge: number;
   twist: number; // in degrees
@@ -79,6 +81,28 @@ export const LATTICE_GRID_PARAM_IDS = [
  * has no meaningful correspondence to them — the same thing Blender does
  * when a lattice's resolution changes.
  */
+/**
+ * How much of the cage's deformation a point takes, from its normalised position in the cage.
+ *
+ * Zero outside — that is the whole point of clipping — rising to one over a `falloff` margin just
+ * inside each wall. Without that margin the weight would jump from 0 to 1 across one triangle and
+ * put a crease where the mesh crosses the cage; with it, the mesh eases into the deformation.
+ * The three axes combine with a min rather than a product: a point hugging one wall is at the
+ * edge of the cage whatever the other two axes say.
+ */
+export function cageWeight(u: number, v: number, w: number, falloff: number): number {
+  const axis = (t: number): number => {
+    if (t <= 0 || t >= 1) return 0;
+    if (falloff <= 0) return 1;
+    const depth = Math.min(t, 1 - t) / falloff;
+    if (depth >= 1) return 1;
+    // smoothstep, so the mesh has no kink where the ramp starts or ends either.
+    return depth * depth * (3 - 2 * depth);
+  };
+
+  return Math.min(axis(u), axis(v), axis(w));
+}
+
 export function latticeParamsWithRebuiltGrid(params: Record<string, unknown>): Record<string, unknown> {
   return {
     ...params,
@@ -108,6 +132,8 @@ export function latticeConfigFromParams(params: Record<string, unknown>): Lattic
     subdivW: Math.max(2, Math.min(16, Math.round(asNumber(params.subdivisionsW, 2)))),
     interpolation: String(params.interpolation) === "smooth" ? "smooth" : "linear",
     strength: Math.max(0, Math.min(1, asNumber(params.strength, 1.0))),
+    clipToCage: Boolean(params.clipToCage ?? false),
+    clipFalloff: Math.max(0, Math.min(0.5, asNumber(params.clipFalloff, 0.15))),
     deformAxis: (String(params.deformAxis || "y").toLowerCase() as "x" | "y" | "z") || "y",
     bulge: asNumber(params.bulge, 0),
     twist: asNumber(params.twist, 0),
@@ -523,6 +549,10 @@ interface LatticeState {
   deformedMesh?: THREE.Mesh;
   cageLines?: THREE.LineSegments;
   lastSignature?: string;
+  /** The deformed output geometry, kept across frames and written into. */
+  deformedGeometry?: THREE.BufferGeometry;
+  /** The source topology `deformedGeometry` was built for. */
+  deformedFrom?: string;
 }
 
 const latticeCache = createNodeCache<LatticeState>((s) => {
@@ -609,6 +639,8 @@ export const LATTICE_DEFORM_NODE: NodeDefinition = {
     subdivisionsW: 2,
     interpolation: "linear",
     strength: 1.0,
+    clipToCage: false,
+    clipFalloff: 0.15,
     showCage: true,
     deformAxis: "y",
     bulge: 0.0,
@@ -636,6 +668,19 @@ export const LATTICE_DEFORM_NODE: NodeDefinition = {
     // still stored as the 0-1 fraction `strength` already was, so existing
     // saved .tsuji scenes render identically.
     { id: "strength", label: "Influence (%)", kind: "number", step: 5, percent: true, group: "Lattice Grid" },
+    { id: "clipToCage", label: "Deform Only Inside the Cage", kind: "boolean", group: "Lattice Grid" },
+    { id: "clipFalloff", label: "Cage Edge Falloff", kind: "number", step: 0.01, group: "Lattice Grid" },
+    {
+      id: "clipNote",
+      label:
+        "Off, the cage behaves as lattices normally do: anything past its walls is clamped onto "
+        + "them and flattened. On, the deformation stops at the walls and the rest of the mesh "
+        + "passes through unchanged — so a fish can swim in one end and out the other. The "
+        + "falloff is the margin, as a fraction of each side, over which the deformation fades "
+        + "in; at 0 the mesh creases where it crosses the wall.",
+      kind: "note",
+      group: "Lattice Grid",
+    },
     { id: "showCage", label: "Show Cage", kind: "boolean", group: "Lattice Grid" },
 
     { id: "deformAxis", label: "Deform Axis", kind: "select", options: ["x", "y", "z"], group: "Deformations" },
@@ -685,6 +730,9 @@ export const LATTICE_DEFORM_NODE: NodeDefinition = {
       basePoints = defaultLatticePoints(sizeX, sizeY, sizeZ, subdivU, subdivV, subdivW);
     }
 
+    const clipToCage = Boolean(params.clipToCage ?? false);
+    const clipFalloff = Math.max(0, Math.min(0.5, asNumber(params.clipFalloff, 0.15)));
+
     const config: LatticeGridConfig = {
       sizeX,
       sizeY,
@@ -694,6 +742,8 @@ export const LATTICE_DEFORM_NODE: NodeDefinition = {
       subdivW,
       interpolation,
       strength,
+      clipToCage,
+      clipFalloff,
       deformAxis,
       bulge,
       twist,
@@ -854,12 +904,24 @@ export const LATTICE_DEFORM_NODE: NodeDefinition = {
       const wV = sizeY > 0 ? (v.y + halfY) / sizeY : 0.5;
       const w = sizeZ > 0 ? (v.z + halfZ) / sizeZ : 0.5;
 
-      // Evaluate Free-Form Deformation point
+      // How much of the cage's deformation this vertex takes. Without clipping that is simply
+      // the Influence, which is what every lattice does: coordinates outside the cage are clamped
+      // onto its faces, so a long mesh gets everything past the cage flattened against the end.
+      // Clipped, the weight falls to zero at the cage's walls and the rest of the mesh passes
+      // through untouched — a fish swims in one end and out the other.
+      const weight = clipToCage ? strength * cageWeight(u, wV, w, clipFalloff) : strength;
+
+      if (weight <= 0) {
+        deformedPositions[i * 3] = origLocal.x;
+        deformedPositions[i * 3 + 1] = origLocal.y;
+        deformedPositions[i * 3 + 2] = origLocal.z;
+        continue;
+      }
+
       const deformed = evaluateFFDPoint(grid, u, wV, w, interpolation);
 
-      // Blend with original position according to strength
-      if (strength < 1.0) {
-        deformed.lerp(origLocal, 1.0 - strength);
+      if (weight < 1.0) {
+        deformed.lerp(origLocal, 1.0 - weight);
       }
 
       deformedPositions[i * 3] = deformed.x;
@@ -867,26 +929,53 @@ export const LATTICE_DEFORM_NODE: NodeDefinition = {
       deformedPositions[i * 3 + 2] = deformed.z;
     }
 
-    const geom = new THREE.BufferGeometry();
-    geom.setAttribute("position", new THREE.BufferAttribute(deformedPositions, 3));
+    // Built once per source topology and then written into. A fresh
+    // BufferGeometry per evaluate is a full GPU re-upload sixty times a second
+    // even while nothing moves, and it breaks every downstream cache that keys
+    // on geometry identity.
+    const sourceSignature = `${srcGeom.uuid}:${vertexCount}:${srcGeom.getIndex()?.count ?? -1}`;
+    if (!state.deformedGeometry || state.deformedFrom !== sourceSignature) {
+      state.deformedGeometry?.dispose();
+      const built = new THREE.BufferGeometry();
+      built.setAttribute("position", new THREE.BufferAttribute(new Float32Array(vertexCount * 3), 3));
+      if (srcGeom.attributes.uv) built.setAttribute("uv", srcGeom.attributes.uv.clone());
+      if (srcGeom.index) built.setIndex(srcGeom.index.clone());
+      state.deformedGeometry = built;
+      state.deformedFrom = sourceSignature;
+    }
 
-    // Copy UVs, Normals, and Indices if present
-    if (srcGeom.attributes.uv) {
-      geom.setAttribute("uv", srcGeom.attributes.uv.clone());
-    }
-    if (srcGeom.index) {
-      geom.setIndex(srcGeom.index.clone());
-    }
+    const geom = state.deformedGeometry;
+    const geomPos = geom.getAttribute("position") as THREE.BufferAttribute;
+    (geomPos.array as Float32Array).set(deformedPositions);
+    geomPos.needsUpdate = true;
 
     geom.computeVertexNormals();
     geom.computeBoundingBox();
     geom.computeBoundingSphere();
 
-    state.deformedMesh.geometry.dispose();
-    state.deformedMesh.geometry = geom;
+    // The deformation evaluates in the cage's space, so the result lands
+    // wherever the cage put it rather than around the mesh's own origin. Give
+    // the mesh that origin back and carry the offset on its matrix: the
+    // picture is identical, and the object now *is* where it says it is — see
+    // recentreGeometry.
+    const centre = recentreGeometry(geom);
+    state.deformedMesh.matrixAutoUpdate = false;
+    state.deformedMesh.matrix.makeTranslation(centre.x, centre.y, centre.z);
+
+    if (state.deformedMesh.geometry !== geom) {
+      state.deformedMesh.geometry.dispose();
+      state.deformedMesh.geometry = geom;
+    }
     // After the geometry, not before: a material with a geometry hook has to
     // prepare the mesh that is actually drawn (see inheritSourceMaterial).
     inheritSourceMaterial(state.deformedMesh, srcMesh.material);
+    // The deformed result is still the same object as far as the rest of the
+    // graph is concerned, so it keeps the source's pivot and Show Pivot — the
+    // marker used to vanish the moment a lattice was wired in. Not
+    // emitModifiedMesh: this node owns the pose (the cage's, on the group) and
+    // the mesh's own matrix is the recentring offset, neither of which is the
+    // source's world matrix.
+    preserveModifierUserData(state.deformedMesh, inputObj, srcMesh, ctx.nodeId);
 
     const deformedPosAttr = geom.attributes.position as THREE.BufferAttribute;
     const points: THREE.Vector3[] = new Array(deformedPosAttr.count);

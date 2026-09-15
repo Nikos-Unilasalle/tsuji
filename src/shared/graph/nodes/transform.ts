@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { createNodeCache, disposeObject3D } from "../nodeCaches";
 import { getUnusedAxes } from "./vector";
+import { acquireInstance, instancePoolCache } from "./instancePool";
 import { NodeDefinition } from "../types";
 
 const ZERO = new THREE.Vector3(0, 0, 0);
@@ -338,14 +339,6 @@ function getGroup(nodeId: string): THREE.Group {
   return group;
 }
 
-function cloneObject(source: THREE.Object3D): THREE.Object3D {
-  const clone = source.clone(true);
-  clone.matrixAutoUpdate = source.matrixAutoUpdate;
-  clone.matrix.copy(source.matrix);
-  clone.matrixWorldNeedsUpdate = true;
-  return clone;
-}
-
 const DEFAULT_TARGET = new THREE.Vector3(0, 0, -1);
 const DEFAULT_UP = new THREE.Vector3(0, 1, 0);
 
@@ -384,12 +377,15 @@ export const LOOK_AT_NODE: NodeDefinition = {
     matrix.setPosition(eye);
 
     if (source) {
-      const clone = cloneObject(source);
-      const wrapper = new THREE.Group();
-      wrapper.matrixAutoUpdate = false;
-      wrapper.matrix.copy(matrix);
-      wrapper.add(clone);
-      group.add(wrapper);
+      // Pooled rather than re-cloned each frame: the copy is the same object
+      // from one evaluate to the next, so a downstream cache keyed on mesh
+      // identity keeps hitting (see instancePool).
+      let pool = instancePoolCache.get(ctx.nodeId);
+      if (!pool) {
+        pool = new Map();
+        instancePoolCache.set(ctx.nodeId, pool);
+      }
+      group.add(acquireInstance(pool, new Map(), source, matrix));
     }
 
     return { geometry: group, matrix };

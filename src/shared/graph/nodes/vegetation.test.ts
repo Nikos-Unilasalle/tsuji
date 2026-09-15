@@ -19,6 +19,7 @@ import {
   sampleWind,
 } from "../../three/vegetation/windField";
 import { blurMask, buildGrassGeometry, createRandom } from "../../three/vegetation/grassField";
+import { initBvhRaycast } from "../../three/bvh";
 import {
   DEFAULT_TREE_PARAMS,
   FOLIAGE_MODE_OPTIONS,
@@ -217,6 +218,82 @@ describe("grass geometry", () => {
 
 describe("structure/grass-field node", () => {
   const params = () => ({ ...GRASS_FIELD_NODE.defaultParams, subdivisions: 8, size: 10 });
+
+  /** A flat plate at `y`, standing in for a terrain. */
+  const groundPlate = (y: number, size = 10) => {
+    const geometry = new THREE.PlaneGeometry(size, size);
+    geometry.rotateX(-Math.PI / 2);
+    const mesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial());
+    mesh.position.y = y;
+    mesh.updateMatrix();
+    return mesh;
+  };
+
+  const uniformsOf = (out: { geometry: THREE.Mesh }) =>
+    (out.geometry.material as THREE.ShaderMaterial).uniforms;
+
+  test("stands the blades on a Ground mesh when one is wired", () => {
+    initBvhRaycast();
+    const ground = groundPlate(3.5);
+    const out = GRASS_FIELD_NODE.evaluate(
+      { ground },
+      { ...params(), groundResolution: 16 },
+      makeContext("grass-ground"),
+    ) as { geometry: THREE.Mesh };
+    const u = uniformsOf(out);
+
+    expect(u.uHasGround.value).toBe(1);
+    expect(u.uGroundResolution.value).toBe(16);
+    expect((u.uGroundSize.value as THREE.Vector2).x).toBeCloseTo(10, 3);
+
+    const data = (u.uGroundMap.value as THREE.DataTexture).image.data as Float32Array;
+    // Every texel of a flat plate reads the same height, and every one is a hit.
+    expect(data[0]).toBeCloseTo(3.5, 3);
+    expect(data[1]).toBe(1);
+  });
+
+  test("leaves the field flat when no Ground is wired", () => {
+    const out = GRASS_FIELD_NODE.evaluate({}, params(), makeContext("grass-flat")) as { geometry: THREE.Mesh };
+
+    expect(uniformsOf(out).uHasGround.value).toBe(0);
+    expect(uniformsOf(out).uGroundMap.value).toBeNull();
+  });
+
+  test("rebakes only when the ground actually changes", () => {
+    initBvhRaycast();
+    const ground = groundPlate(1);
+    const ctx = makeContext("grass-rebake");
+    const evaluate = () =>
+      GRASS_FIELD_NODE.evaluate({ ground }, { ...params(), groundResolution: 16 }, ctx) as { geometry: THREE.Mesh };
+
+    const first = uniformsOf(evaluate()).uGroundMap.value as THREE.DataTexture;
+    const again = uniformsOf(evaluate()).uGroundMap.value as THREE.DataTexture;
+    expect(again).toBe(first);
+
+    ground.position.y = 6;
+    ground.updateMatrix();
+    const moved = uniformsOf(evaluate());
+    // The texture object is reused; what it holds is not.
+    expect(moved.uGroundMap.value).toBe(first);
+    expect((first.image.data as Float32Array)[0]).toBeCloseTo(6, 3);
+  });
+
+  test("drops the height field when the ground is unwired again", () => {
+    initBvhRaycast();
+    const ctx = makeContext("grass-unwire");
+    GRASS_FIELD_NODE.evaluate({ ground: groundPlate(2) }, { ...params(), groundResolution: 16 }, ctx);
+    const out = GRASS_FIELD_NODE.evaluate({}, params(), ctx) as { geometry: THREE.Mesh };
+
+    expect(uniformsOf(out).uHasGround.value).toBe(0);
+  });
+
+  test("ignores a Ground input that is not an object", () => {
+    const out = GRASS_FIELD_NODE.evaluate({ ground: "terrain" }, params(), makeContext("grass-junk")) as {
+      geometry: THREE.Mesh;
+    };
+
+    expect(uniformsOf(out).uHasGround.value).toBe(0);
+  });
 
   test("outputs a mesh, a matrix and the blade count", () => {
     const out = GRASS_FIELD_NODE.evaluate({}, params(), makeContext("grass-1")) as {

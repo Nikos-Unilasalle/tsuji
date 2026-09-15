@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Handle, Position } from "@xyflow/react";
 import * as THREE from "three";
 import { CATEGORY_COLOR, NodeCategory, UNKNOWN_CATEGORY_COLOR } from "../shared/graph/categories";
+import { NEW_PORT_SOCKET } from "../shared/graph/groups";
 import { getInspectorValue, subscribeInspector } from "../shared/graph/inspectorStore";
 import { SOCKET_COLOR, SocketDef } from "../shared/graph/sockets";
 
@@ -13,6 +14,8 @@ export interface GraphNodeData {
   category?: NodeCategory;
   inputs: SocketDef[];
   outputs: SocketDef[];
+  /** How many nodes a group holds — absent on every other kind of node. */
+  groupSize?: number;
   [key: string]: unknown;
 }
 
@@ -152,7 +155,11 @@ export function GraphNode({ data, selected }: { data: GraphNodeData; selected?: 
       <div className="graph-node-body">
         <div className="graph-node-column">
           {data.inputs.map((socket) => (
-            <div className="graph-node-socket" key={socket.id}>
+            <div
+              className={"graph-node-socket" + (socket.id === NEW_PORT_SOCKET ? " graph-node-socket-new" : "")}
+              key={socket.id}
+              title={socket.id === NEW_PORT_SOCKET ? "Drop a wire here to add a port" : undefined}
+            >
               <Handle
                 type="target"
                 position={Position.Left}
@@ -165,7 +172,14 @@ export function GraphNode({ data, selected }: { data: GraphNodeData; selected?: 
         </div>
         <div className="graph-node-column graph-node-column-right">
           {data.outputs.map((socket) => (
-            <div className="graph-node-socket graph-node-socket-out" key={socket.id}>
+            <div
+              className={
+                "graph-node-socket graph-node-socket-out" +
+                (socket.id === NEW_PORT_SOCKET ? " graph-node-socket-new" : "")
+              }
+              key={socket.id}
+              title={socket.id === NEW_PORT_SOCKET ? "Drag from here to add a port" : undefined}
+            >
               <span>{socket.label}</span>
               <Handle
                 type="source"
@@ -177,6 +191,13 @@ export function GraphNode({ data, selected }: { data: GraphNodeData; selected?: 
           ))}
         </div>
       </div>
+      {/* A group is worth telling apart at a glance: what is inside is not
+          visible from here, and double-click is the only way in. */}
+      {typeof data.groupSize === "number" && (
+        <div className="graph-node-group-badge" title="Double-click to open">
+          {data.groupSize} node{data.groupSize === 1 ? "" : "s"} ⏎
+        </div>
+      )}
       {data.nodeType === "io/inspector" && (
         <div className="graph-node-inspector">{renderValuePreview(inspectorVal)}</div>
       )}

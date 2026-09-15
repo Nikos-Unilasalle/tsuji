@@ -39,6 +39,33 @@ const terrainCache = createNodeCache<TerrainNodeState>((s) => {
   if (s.mesh) disposeObject3D(s.mesh);
 });
 
+function syncOutputHeightmap(
+  state: TerrainNodeState,
+  cols: number,
+  rows: number,
+  heights: Float32Array,
+): THREE.DataTexture {
+  const vertexCount = cols * rows;
+  if (!state.outputTexture || state.outputTexture.image.width !== cols || state.outputTexture.image.height !== rows) {
+    if (state.outputTexture) state.outputTexture.dispose();
+    const data = new Float32Array(vertexCount * 4);
+    state.outputTexture = new THREE.DataTexture(data, cols, rows, THREE.RGBAFormat, THREE.FloatType);
+    state.outputTexture.minFilter = THREE.NearestFilter;
+    state.outputTexture.magFilter = THREE.NearestFilter;
+    state.outputTexture.wrapS = THREE.ClampToEdgeWrapping;
+    state.outputTexture.wrapT = THREE.ClampToEdgeWrapping;
+  }
+  const data = state.outputTexture.image.data as Float32Array;
+  for (let i = 0; i < vertexCount; i++) {
+    data[i * 4] = heights[i];
+    data[i * 4 + 1] = 0;
+    data[i * 4 + 2] = 0;
+    data[i * 4 + 3] = 1.0;
+  }
+  state.outputTexture.needsUpdate = true;
+  return state.outputTexture;
+}
+
 export const TERRAIN_RESOLUTION_OPTIONS: TerrainResolution[] = ["32x32", "64x64", "128x128", "256x256"];
 export const TERRAIN_BRUSH_TOOLS: TerrainBrushTool[] = ["sculpt", "smooth", "flatten", "noise", "erode"];
 export const TERRAIN_BRUSH_FALLOFFS: TerrainBrushFalloff[] = ["smooth", "linear", "sphere", "flat"];
@@ -176,7 +203,7 @@ export const TERRAIN_NODE: NodeDefinition = {
       mesh.userData.isTerrain = true;
 
       const heightmapPixels = inputHeightmap ? getTexturePixels(inputHeightmap) : null;
-      updateTerrainHeightsAndNormals(geometry, config, heightmapPixels, sculptOffsets);
+      const initialHeights = updateTerrainHeightsAndNormals(geometry, config, heightmapPixels, sculptOffsets);
 
       state = {
         mesh,
@@ -189,6 +216,7 @@ export const TERRAIN_NODE: NodeDefinition = {
         sculptOffsets,
         outputTexture: null,
       };
+      syncOutputHeightmap(state, segmentsX + 1, segmentsZ + 1, initialHeights);
       terrainCache.set(ctx.nodeId, state);
     } else {
       // Re-create geometry if grid dimensions or segment counts changed
@@ -217,7 +245,8 @@ export const TERRAIN_NODE: NodeDefinition = {
         state.material.wireframe = wireframe;
         state.material.vertexColors = slopeShading;
         state.material.needsUpdate = true;
-        updateTerrainHeightsAndNormals(state.geometry, config, state.heightmapPixels, sculptOffsets);
+        const updatedHeights = updateTerrainHeightsAndNormals(state.geometry, config, state.heightmapPixels, sculptOffsets);
+        syncOutputHeightmap(state, segmentsX + 1, segmentsZ + 1, updatedHeights);
       }
     }
 
@@ -242,7 +271,7 @@ export const TERRAIN_NODE: NodeDefinition = {
     const outputs = primitiveOutputs(state.mesh, params);
     return {
       ...outputs,
-      heightmap: state.heightmapTexture ?? null,
+      heightmap: state.outputTexture ?? state.heightmapTexture ?? null,
     };
   },
 };

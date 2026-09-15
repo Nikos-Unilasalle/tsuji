@@ -21,18 +21,30 @@ import * as THREE from "three";
  *    pins whatever asked to the origin.
  */
 
-/** World matrix walked from local matrices, since the cached `matrixWorld` is stale mid-evaluation. */
-export function worldMatrixOf(object: THREE.Object3D): THREE.Matrix4 {
+/**
+ * World matrix walked from local matrices, since the cached `matrixWorld` is
+ * stale mid-evaluation.
+ *
+ * The one implementation in the project, and the physics runtime re-exports
+ * it: there used to be a second copy there that skipped the `updateMatrix()`
+ * below, so an object posed through `.position`/`.quaternion` rather than by
+ * writing `.matrix` — anything out of the OBJ loader, anything three itself
+ * built — reported (0, 0, 0) and had its rigid body created at the origin.
+ *
+ * `target` is for the physics loop, which does this per body per frame and
+ * would rather not allocate.
+ */
+export function worldMatrixOf(object: THREE.Object3D, target = new THREE.Matrix4()): THREE.Matrix4 {
   const chain: THREE.Object3D[] = [];
   for (let current: THREE.Object3D | null = object; current; current = current.parent) chain.push(current);
 
-  const world = new THREE.Matrix4();
+  target.identity();
   for (let i = chain.length - 1; i >= 0; i--) {
     const node = chain[i];
     if (node.matrixAutoUpdate) node.updateMatrix();
-    world.multiply(node.matrix);
+    target.multiply(node.matrix);
   }
-  return world;
+  return target;
 }
 
 /**

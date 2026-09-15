@@ -150,6 +150,9 @@ OpenVMap this session, including real collision detection (not proximity
 guessing) via nape-js's InteractionListener BEGIN/END events.
 `Physics World` (gravity, deterministic epoch — see Time below) ·
 `Physics Body` (role static/dynamic, elasticity/friction/density) ·
+`Cloth` (a mesh whose edges become distance constraints — gravity, wind,
+pinned Empties and sphere colliders; the red vertex-color channel masks which
+parts are free cloth, see nodes/cloth.ts) ·
 `Collision Event` (outputs a Boolean while two bodies touch — this alone
 generalizes OpenVMap's hardcoded two-state Normal/Collision appearance system
 into "wire a collision into literally any parameter," strictly more capable

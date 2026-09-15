@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { EvalResult } from "../shared/graph/evaluate";
+import { findNodeWithGraph, resolveDefinition } from "../shared/graph/groups";
 import { paramPanelValues } from "../shared/graph/paramPanelValues";
 import { Graph, KeyframeStore, NodeRegistry, ParamFieldDef } from "../shared/graph/types";
 import {
@@ -74,12 +75,17 @@ export function ViewportParamHUD({
       {!collapsed && (
         <div className="viewport-param-hud-body">
           {Array.from(byNode.entries()).map(([nodeId, nodeRefs]) => {
-            const instance = graph.nodes.find((n) => n.id === nodeId);
-            if (!instance) return null;
-            const def = registry.get(instance.type);
+            // Deep: a param stays pinned when its node is grouped — the pin
+            // is on the node, and grouping doesn't move the node anywhere the
+            // HUD can't follow. The level that holds it supplies the
+            // connections paramPanelValues reads.
+            const found = findNodeWithGraph(graph, nodeId);
+            if (!found) return null;
+            const { instance, graph: owningGraph } = found;
+            const def = resolveDefinition(instance, registry);
             if (!def) return null;
             const fields = def.dynamicParamFields ? def.dynamicParamFields(instance) : (def.paramFields ?? []);
-            const values = paramPanelValues(graph, instance, def, evaluatedResults, frame);
+            const values = paramPanelValues(owningGraph, instance, def, evaluatedResults, frame);
             const showNodeHeader = nodeRefs.length > 1;
 
             return (

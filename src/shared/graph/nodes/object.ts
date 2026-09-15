@@ -5,7 +5,8 @@ import { toBoolean } from "../sockets";
 import { defaultFont } from "../../three/fonts/helvetikerFont";
 import { BUILTIN_FONTS, FONT_NAMES } from "../../three/fonts/fonts";
 import { createNodeCache, disposeObject3D } from "../nodeCaches";
-import { asVector3, composeNativeMatrix } from "./transform";
+import { asVector3, composeNativeMatrix, preserveModifierUserData } from "./transform";
+import { worldMatrixOf } from "../objectPosition";
 import { createQuadBox, createQuadPlane, quadMeshToBufferGeometry } from "../quadMesh";
 
 export function numberInput(input: unknown, param: unknown, fallback: number): number {
@@ -401,6 +402,47 @@ export function prepareGeometryForMaterial(mesh: THREE.Mesh, material: THREE.Mat
 }
 
 /**
+ * Moves a deformed geometry's vertices so its own bounding box is centred on
+ * the mesh's origin, and returns the offset that has to go back onto the
+ * mesh's matrix to leave the drawn result exactly where it was
+ * (`M' = M · translate(offset)`, since `M · v === M · T(c) · (v - c)`).
+ *
+ * A deformation evaluates in the space of whatever drives it — a lattice cage,
+ * a curve — and writing the result out verbatim leaves the vertices sitting
+ * far from their own mesh origin. Nothing about the picture is wrong, and that
+ * is why it survived: every consumer that reads the *shape* is fine. The ones
+ * that read the object's **position** are not. A rigid body is built at the
+ * mesh's origin with the shape hanging off it, so the body's translation — and
+ * the node's own Position output, and any Distance or Look At reading it — is
+ * a point in empty space metres from the object, and the mass sits somewhere
+ * the body does not claim to be.
+ *
+ * The bounding box centre rather than the vertex centroid: a centroid is
+ * weighted by tessellation, so a mesh with a dense cap and a sparse body
+ * reports its origin somewhere near the cap.
+ */
+export function recentreGeometry(geometry: THREE.BufferGeometry): THREE.Vector3 {
+  const attribute = geometry.getAttribute("position") as THREE.BufferAttribute | undefined;
+  if (!attribute || attribute.count === 0) return new THREE.Vector3();
+
+  // Recomputed, never trusted: a deformed geometry is usually `srcGeom.clone()`
+  // with new positions written into it, and the clone carries the *source's*
+  // bounding box — which for a box at the origin is centred on nothing, so the
+  // recentring silently did nothing at all.
+  geometry.computeBoundingBox();
+  const centre = geometry.boundingBox!.getCenter(new THREE.Vector3());
+  if (centre.lengthSq() < 1e-12) return centre;
+
+  for (let i = 0; i < attribute.count; i++) {
+    attribute.setXYZ(i, attribute.getX(i) - centre.x, attribute.getY(i) - centre.y, attribute.getZ(i) - centre.z);
+  }
+  attribute.needsUpdate = true;
+  geometry.computeBoundingBox();
+  geometry.computeBoundingSphere();
+  return centre;
+}
+
+/**
  * A modifier inheriting its material straight off the source mesh, rather
  * than from a wired Material input. Same as assigning `mesh.material`, but
  * runs the material's geometry hook — the wired path gets that through
@@ -412,6 +454,74 @@ export function inheritSourceMaterial(mesh: THREE.Mesh, material: THREE.Material
   if (!material) return;
   mesh.material = material;
   prepareGeometryForMaterial(mesh, material);
+}
+
+export interface ModifiedMeshOptions {
+  /** What arrived on the geometry input: the root, which may be a posed wrapper Group. */
+  inputObj: THREE.Object3D;
+  /** The mesh inside it this modifier read — the one whose pose and look the output inherits. */
+  srcMesh: THREE.Mesh;
+  /** The geometry the modifier produced. Omit to keep the one already on the cached mesh. */
+  geometry?: THREE.BufferGeometry;
+  /** This node's id, for `userData.nodeId` — viewport picking and the gizmo both read it. */
+  nodeId: string;
+  /**
+   * A material from the node's own Material input, when it has one. Falls back
+   * to the source's, which is what a modifier unrelated to materials wants.
+   */
+  material?: THREE.Material | THREE.Material[] | null;
+}
+
+/**
+ * The one way a mesh modifier hands its result back.
+ *
+ * Every modifier owes its output the same four things, and each was being
+ * written out by hand in every node that needed them — 44 files carrying the
+ * same `matrixAutoUpdate = false` incantation, 6 of 30-odd remembering
+ * `preserveModifierUserData`, and a material assignment that skipped the
+ * material's geometry hook in ten places at once (which is how the Worn node
+ * came to look like it did nothing at all). A node that forgot one of the four
+ * did not fail; it produced something subtly wrong, usually far downstream.
+ *
+ * In order, because the order matters:
+ *
+ *  1. **Geometry**, first, so everything after it acts on what will be drawn.
+ *     Assigning the same object back is free — the caller's cache decides
+ *     whether anything was rebuilt, and identity is itself a contract (see
+ *     nodeContracts.test.ts).
+ *  2. **Material**, through inheritSourceMaterial, so a material that needs
+ *     attributes computed for it gets to prepare the geometry from step 1.
+ *  3. **Pose**, via worldMatrixOf rather than the source's `matrixWorld`,
+ *     which is stale mid-evaluation, and rather than its `.matrix`, which is
+ *     identity for a mesh nested under a posed wrapper. `matrixAutoUpdate` is
+ *     forced off instead of copied: an OBJ-parsed mesh defaults it to true,
+ *     and three's render loop would recompute this matrix away next frame.
+ *  4. **userData** — pivot, showPivot, and this node's id.
+ */
+export function emitModifiedMesh(mesh: THREE.Mesh, options: ModifiedMeshOptions): Record<string, unknown> {
+  const { inputObj, srcMesh, geometry, nodeId, material } = options;
+
+  if (geometry && geometry !== mesh.geometry) {
+    mesh.geometry?.dispose();
+    mesh.geometry = geometry;
+  }
+
+  inheritSourceMaterial(mesh, material ?? srcMesh.material);
+
+  mesh.matrixAutoUpdate = false;
+  mesh.matrix.copy(worldMatrixOf(srcMesh));
+
+  preserveModifierUserData(mesh, inputObj, srcMesh, nodeId);
+
+  return primitiveOutputs(mesh);
+}
+
+/** A shadow-casting mesh for a modifier's output, created once and kept in the node's cache. */
+export function createModifierMesh(geometry?: THREE.BufferGeometry): THREE.Mesh {
+  const mesh = new THREE.Mesh(geometry);
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  return mesh;
 }
 
 export function applyMaterialParams(

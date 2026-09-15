@@ -1,3 +1,4 @@
+import { resolveDefinition } from "./groups";
 import { Connection, Graph, NodeDefinition, NodeRegistry } from "./types";
 
 /**
@@ -39,8 +40,8 @@ function isLive(connection: Connection, graph: Graph, registry: NodeRegistry): b
   const to = graph.nodes.find((n) => n.id === connection.toNode);
   if (!from || !to) return false;
 
-  const fromDef = registry.get(from.type);
-  const toDef = registry.get(to.type);
+  const fromDef = resolveDefinition(from, registry);
+  const toDef = resolveDefinition(to, registry);
   // An unknown node type is left alone on purpose: its definition may simply
   // not be registered in this window, and dropping its wires would quietly
   // rewrite a graph we don't understand.
@@ -52,10 +53,26 @@ function isLive(connection: Connection, graph: Graph, registry: NodeRegistry): b
   );
 }
 
-/** The same graph with dead connections removed, or the graph itself when there are none. */
+/**
+ * The same graph with dead connections removed, or the graph itself when
+ * there are none — at every depth: a wire inside a group is as saved, as
+ * loaded and as capable of outliving its socket as one at the top level.
+ */
 export function pruneDanglingConnections(graph: Graph, registry: NodeRegistry): Graph {
   const live = graph.connections.filter((connection) => isLive(connection, graph, registry));
-  if (live.length === graph.connections.length) return graph;
+
+  let nodesChanged = false;
+  const nodes = graph.nodes.map((node) => {
+    if (!node.subgraph) return node;
+    const subgraph = pruneDanglingConnections(node.subgraph, registry);
+    if (subgraph === node.subgraph) return node;
+    nodesChanged = true;
+    return { ...node, subgraph };
+  });
+
+  if (live.length === graph.connections.length) {
+    return nodesChanged ? { ...graph, nodes } : graph;
+  }
 
   for (const connection of graph.connections) {
     if (live.includes(connection)) continue;
@@ -64,5 +81,5 @@ export function pruneDanglingConnections(graph: Graph, registry: NodeRegistry): 
     );
   }
 
-  return { ...graph, connections: live };
+  return { ...graph, nodes, connections: live };
 }

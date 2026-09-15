@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import * as THREE from "three";
 import { EDIT_MESH_NODE } from "./editMesh";
 import { EvalContext } from "../types";
-import { createQuadBox, quadMeshToBufferGeometry } from "../quadMesh";
+import { cloneQuadMesh, createQuadBox, quadMeshToBufferGeometry } from "../quadMesh";
 
 describe("EDIT_MESH_NODE", () => {
   it("defaults to a quad box when no geometry is wired", () => {
@@ -96,6 +96,38 @@ describe("EDIT_MESH_NODE", () => {
     );
     const meshSeparated = resSeparated.geometry as THREE.Mesh;
     expect(meshSeparated.geometry.userData.quadMesh.faces.length).toBe(2);
+  });
+
+  describe("geometry cache", () => {
+    const evaluate = (meshData: unknown, nodeId: string) =>
+      EDIT_MESH_NODE.evaluate({}, { ...EDIT_MESH_NODE.defaultParams, meshData }, { nodeId } as EvalContext)
+        .geometry as THREE.Mesh;
+
+    it("reuses its geometry when nothing changed, and rebuilds when something did", () => {
+      // Both halves matter. The cache used to store a clone and compare it with
+      // ===, so it never hit: the geometry was rebuilt and re-uploaded every
+      // frame. A signature that is too coarse would be the opposite bug — an
+      // edit that never reaches the screen.
+      const box = createQuadBox(1, 1, 1);
+      const first = evaluate(box, "cache-node").geometry;
+      const second = evaluate(box, "cache-node").geometry;
+      expect(second).toBe(first);
+
+      const moved = cloneQuadMesh(box);
+      moved.positions[0] = [moved.positions[0][0] + 0.25, moved.positions[0][1], moved.positions[0][2]];
+      const third = evaluate(moved, "cache-node").geometry;
+      expect(third).not.toBe(first);
+    });
+
+    it("rebuilds when only the UVs changed, which is all Recalculate UVs touches", () => {
+      const box = createQuadBox(1, 1, 1);
+      const withUVs = cloneQuadMesh(box);
+      withUVs.faceUVs = withUVs.faces.map((face) => face.map((_, i) => [i * 0.1, 0] as [number, number]));
+
+      const before = evaluate(box, "uv-node").geometry;
+      const after = evaluate(withUVs, "uv-node").geometry;
+      expect(after).not.toBe(before);
+    });
   });
 
   describe("native pose", () => {
