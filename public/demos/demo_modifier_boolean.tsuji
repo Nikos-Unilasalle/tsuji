@@ -130,8 +130,8 @@
           "id": "setup_4",
           "type": "render",
           "position": {
-            "x": 610,
-            "y": 393
+            "x": 620,
+            "y": 492
           },
           "params": {
             "frameCount": 120,
@@ -207,8 +207,8 @@
           "id": "box",
           "type": "object/box",
           "position": {
-            "x": -900,
-            "y": 60
+            "x": -1304,
+            "y": 67
           },
           "params": {
             "location": {
@@ -230,32 +230,105 @@
           "id": "cut",
           "type": "object/sphere",
           "position": {
-            "x": -900,
-            "y": 300
+            "x": -1311,
+            "y": 546
           },
           "params": {
             "location": {
-              "x": 0.6,
-              "y": 1.4,
-              "z": 0.6
+              "x": 0.6350704188208357,
+              "y": 1.2851550692971858,
+              "z": 0.042577905128330484
             },
             "scale": {
               "x": 1.1,
               "y": 1.1,
               "z": 1.1
             },
-            "color": 15485081
+            "color": 15485081,
+            "emissive": 16714250
           }
         },
         {
           "id": "bool",
           "type": "modifier/boolean",
           "position": {
-            "x": -560,
-            "y": 160
+            "x": -924,
+            "y": 188
           },
           "params": {
             "operation": "subtract"
+          }
+        },
+        {
+          "id": "430c18ea-4bba-4b1b-b17f-15b1c4f19db2",
+          "type": "animation/wiggle",
+          "position": {
+            "x": -1644,
+            "y": 295
+          },
+          "params": {
+            "speed": 0.575,
+            "amplitude": 1,
+            "amplitudeVector": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "rotationAmplitude": {
+              "x": 45,
+              "y": 45,
+              "z": 45
+            },
+            "scaleAmplitude": {
+              "x": 0.2,
+              "y": 0.2,
+              "z": 0.2
+            },
+            "seed": 0,
+            "octaves": 1,
+            "persistance": 0.038,
+            "lacunarity": 2,
+            "offset": 0,
+            "baseVector": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            }
+          }
+        },
+        {
+          "id": "f850680f-c5a7-47dc-b25b-768c47642435",
+          "type": "object/sphere",
+          "position": {
+            "x": -1308,
+            "y": 299
+          },
+          "params": {
+            "location": {
+              "x": 0.6350704188208357,
+              "y": 1.2851550692971858,
+              "z": 0.042577905128330484
+            },
+            "scale": {
+              "x": 2.075,
+              "y": 2.075,
+              "z": 2.075
+            },
+            "color": 15680580,
+            "emissive": 11032055
+          }
+        },
+        {
+          "id": "6cb4cde0-dc9b-44bc-b418-b8d11b5b00dd",
+          "type": "postprocess/bloom",
+          "position": {
+            "x": 255,
+            "y": 645
+          },
+          "params": {
+            "strength": 0.025,
+            "radius": 0.4,
+            "threshold": 0.85
           }
         }
       ],
@@ -282,11 +355,32 @@
           "toSocket": "geometry"
         },
         {
-          "id": "cut.geometry->bool.boolean",
-          "fromNode": "cut",
+          "id": "430c18ea-4bba-4b1b-b17f-15b1c4f19db2.matrix->cut.matrix",
+          "fromNode": "430c18ea-4bba-4b1b-b17f-15b1c4f19db2",
+          "fromSocket": "matrix",
+          "toNode": "cut",
+          "toSocket": "matrix"
+        },
+        {
+          "id": "430c18ea-4bba-4b1b-b17f-15b1c4f19db2.matrix->f850680f-c5a7-47dc-b25b-768c47642435.matrix",
+          "fromNode": "430c18ea-4bba-4b1b-b17f-15b1c4f19db2",
+          "fromSocket": "matrix",
+          "toNode": "f850680f-c5a7-47dc-b25b-768c47642435",
+          "toSocket": "matrix"
+        },
+        {
+          "id": "f850680f-c5a7-47dc-b25b-768c47642435.geometry->bool.boolean",
+          "fromNode": "f850680f-c5a7-47dc-b25b-768c47642435",
           "fromSocket": "geometry",
           "toNode": "bool",
           "toSocket": "boolean"
+        },
+        {
+          "id": "6cb4cde0-dc9b-44bc-b418-b8d11b5b00dd.effect->setup_4.postprocess",
+          "fromNode": "6cb4cde0-dc9b-44bc-b418-b8d11b5b00dd",
+          "fromSocket": "effect",
+          "toNode": "setup_4",
+          "toSocket": "postprocess"
         }
       ],
       "keyframes": {},
