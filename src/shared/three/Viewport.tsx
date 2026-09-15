@@ -1381,19 +1381,20 @@ export function Viewport({
     decalProxy.visible = false;
     let decalProxyNodeId: string | null = null;
 
-    // Force Field 3D proxy: shows interactive position & direction helper for particles/force-field
+    // Force Field 3D proxy: shows interactive position & direction helper for
+    // particles/force-field — same structure as the Particle Emitter proxy
+    // (core + one ring + arrow) so the editor's helper markers read as one
+    // visual family.
     const forceFieldProxy = new THREE.Object3D();
     const forceFieldCoreGeo = new THREE.SphereGeometry(0.18, 16, 16);
     const forceFieldCoreMat = new THREE.MeshBasicMaterial({ color: 0xec4899, depthWrite: false });
     const forceFieldCore = new THREE.Mesh(forceFieldCoreGeo, forceFieldCoreMat);
-    const forceFieldRingGeo = new THREE.RingGeometry(0.4, 0.45, 32);
+    const forceFieldRingGeo = new THREE.RingGeometry(0.35, 0.4, 32);
     const forceFieldRingMat = new THREE.MeshBasicMaterial({ color: 0xec4899, side: THREE.DoubleSide, depthWrite: false });
-    const forceFieldRing1 = new THREE.Mesh(forceFieldRingGeo, forceFieldRingMat);
-    forceFieldRing1.rotation.x = Math.PI / 2;
-    const forceFieldRing2 = new THREE.Mesh(forceFieldRingGeo, forceFieldRingMat);
-    forceFieldRing2.rotation.y = Math.PI / 2;
-    const forceFieldArrow = new THREE.ArrowHelper(new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, 0), 1.2, 0xec4899, 0.3, 0.15);
-    forceFieldProxy.add(forceFieldCore, forceFieldRing1, forceFieldRing2, forceFieldArrow);
+    const forceFieldRing = new THREE.Mesh(forceFieldRingGeo, forceFieldRingMat);
+    forceFieldRing.rotation.x = Math.PI / 2;
+    const forceFieldArrow = new THREE.ArrowHelper(new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, 0), 1.0, 0xec4899, 0.25, 0.12);
+    forceFieldProxy.add(forceFieldCore, forceFieldRing, forceFieldArrow);
     forceFieldProxy.visible = false;
     let forceFieldProxyNodeId: string | null = null;
 
