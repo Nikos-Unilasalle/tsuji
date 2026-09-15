@@ -1,0 +1,433 @@
+{
+ "canvases": [
+  {
+   "nodes": [
+    {
+     "id": "setup_0",
+     "type": "object/plane",
+     "position": {
+      "x": 599,
+      "y": 160
+     },
+     "params": {
+      "visible": 1,
+      "location": {
+       "x": 0,
+       "y": -0.5,
+       "z": 0
+      },
+      "rotation": {
+       "x": 1.5707963267948966,
+       "y": 0,
+       "z": 0
+      },
+      "scale": {
+       "x": 10,
+       "y": 10,
+       "z": 1
+      },
+      "texturePath": "",
+      "normalMapPath": "",
+      "roughnessMapPath": "",
+      "uvScaleX": 1,
+      "uvScaleY": 1,
+      "uvOffsetX": 0,
+      "uvOffsetY": 0,
+      "color": 16777215,
+      "emissive": 0,
+      "emissiveIntensity": 1,
+      "shadeless": 0,
+      "roughness": 0.1,
+      "metalness": 0.1,
+      "wireframe": 0,
+      "opacity": 1,
+      "transmission": 0,
+      "thickness": 0.5
+     }
+    },
+    {
+     "id": "setup_1",
+     "type": "texture/procedural",
+     "position": {
+      "x": 375,
+      "y": 223
+     },
+     "params": {
+      "type": "checker",
+      "colorA": 16777215,
+      "colorB": 2236962,
+      "scale": 8,
+      "seed": 1,
+      "octaves": 3,
+      "resolution": 256,
+      "uvScaleX": 1,
+      "uvScaleY": 1,
+      "uvOffsetX": 0,
+      "uvOffsetY": 0
+     }
+    },
+    {
+     "id": "setup_2",
+     "type": "light/point",
+     "position": {
+      "x": 857,
+      "y": 193
+     },
+     "params": {
+      "location": {
+       "x": 0,
+       "y": 2.185514752224622,
+       "z": -4.5179526088705275
+      },
+      "rotation": {
+       "x": 0,
+       "y": 0,
+       "z": 0
+      },
+      "scale": {
+       "x": 1,
+       "y": 1,
+       "z": 1
+      },
+      "color": 16768110,
+      "intensity": 50,
+      "distance": 15,
+      "decay": 2,
+      "castShadow": 1
+     }
+    },
+    {
+     "id": "setup_3",
+     "type": "light/point",
+     "position": {
+      "x": 1043,
+      "y": 187
+     },
+     "params": {
+      "location": {
+       "x": 0,
+       "y": 2.185514752224622,
+       "z": 4.487400919453167
+      },
+      "rotation": {
+       "x": 0,
+       "y": 0,
+       "z": 0
+      },
+      "scale": {
+       "x": 1,
+       "y": 1,
+       "z": 1
+      },
+      "color": 440020,
+      "intensity": 50,
+      "distance": 15,
+      "decay": 2,
+      "castShadow": 1
+     }
+    },
+    {
+     "id": "setup_4",
+     "type": "render",
+     "position": {
+      "x": 610,
+      "y": 393
+     },
+     "params": {
+      "frameCount": 120,
+      "fps": 30,
+      "motionBlur": 0,
+      "resolutionPreset": "16:9 (1920x1080)",
+      "width": 1920,
+      "height": 1080,
+      "holdout": false
+     }
+    },
+    {
+     "id": "setup_5",
+     "type": "lighting/environment",
+     "position": {
+      "x": 340,
+      "y": 406
+     },
+     "params": {
+      "color": 4147542,
+      "intensity": 1,
+      "background": 1,
+      "blurriness": 0,
+      "filePath": "",
+      "backgroundImagePath": "",
+      "backgroundFit": "cover",
+      "backgroundScale": {
+       "x": 1,
+       "y": 1,
+       "z": 1
+      },
+      "backgroundOffset": {
+       "x": 0,
+       "y": 0,
+       "z": 0
+      },
+      "backgroundRotation": 0,
+      "ambientIntensity": 0,
+      "sunIntensity": 0
+     }
+    },
+    {
+     "id": "setup_6",
+     "type": "light/point",
+     "position": {
+      "x": 860,
+      "y": 389
+     },
+     "params": {
+      "location": {
+       "x": 3.583607412619263,
+       "y": 2.185514752224622,
+       "z": -0.48624947478730096
+      },
+      "rotation": {
+       "x": 0,
+       "y": 0,
+       "z": 0
+      },
+      "scale": {
+       "x": 1,
+       "y": 1,
+       "z": 1
+      },
+      "color": 16777215,
+      "intensity": 50,
+      "distance": 15,
+      "decay": 2,
+      "castShadow": 1
+     }
+    },
+    {
+     "id": "hard_box",
+     "type": "object/box",
+     "position": {
+      "x": 260,
+      "y": 640
+     },
+     "params": {
+      "location": {
+       "x": -2.0,
+       "y": 0.7,
+       "z": 0
+      },
+      "scale": {
+       "x": 1.2,
+       "y": 1.2,
+       "z": 1.2
+      },
+      "color": 3718648,
+      "roughness": 0.25,
+      "metalness": 0.35
+     }
+    },
+    {
+     "id": "hard_ball",
+     "type": "object/sphere",
+     "position": {
+      "x": 260,
+      "y": 760
+     },
+     "params": {
+      "location": {
+       "x": -1.15,
+       "y": 1.15,
+       "z": 0
+      },
+      "scale": {
+       "x": 1.1,
+       "y": 1.1,
+       "z": 1.1
+      },
+      "color": 15485081,
+      "roughness": 0.25,
+      "metalness": 0.35
+     }
+    },
+    {
+     "id": "hard",
+     "type": "modifier/boolean",
+     "position": {
+      "x": 560,
+      "y": 690
+     },
+     "params": {
+      "operation": "add",
+      "useGroups": false
+     }
+    },
+    {
+     "id": "soft_box",
+     "type": "object/box",
+     "position": {
+      "x": 260,
+      "y": 930
+     },
+     "params": {
+      "location": {
+       "x": 1.2,
+       "y": 0.7,
+       "z": 0
+      },
+      "scale": {
+       "x": 1.2,
+       "y": 1.2,
+       "z": 1.2
+      },
+      "color": 3718648,
+      "roughness": 0.25,
+      "metalness": 0.35
+     }
+    },
+    {
+     "id": "soft_ball",
+     "type": "object/sphere",
+     "position": {
+      "x": 260,
+      "y": 1050
+     },
+     "params": {
+      "location": {
+       "x": 2.05,
+       "y": 1.15,
+       "z": 0
+      },
+      "scale": {
+       "x": 1.1,
+       "y": 1.1,
+       "z": 1.1
+      },
+      "color": 15485081,
+      "roughness": 0.25,
+      "metalness": 0.35
+     }
+    },
+    {
+     "id": "soft",
+     "type": "modifier/weld",
+     "position": {
+      "x": 560,
+      "y": 980
+     },
+     "params": {
+      "operation": "add",
+      "blend": 0.3,
+      "resolution": 80,
+      "relax": 1
+     }
+    },
+    {
+     "id": "label_hard",
+     "type": "object/text",
+     "position": {
+      "x": 880,
+      "y": 660
+     },
+     "params": {
+      "text": "BOOLEAN",
+      "location": {
+       "x": -1.75,
+       "y": -0.2,
+       "z": 2.05
+      },
+      "fontSize": 34,
+      "depth": 0.06,
+      "fontPreset": "Nova Mono",
+      "color": 13421772,
+      "emissive": 6710886,
+      "emissiveIntensity": 0.55,
+      "roughness": 0.35,
+      "metalness": 0.3,
+      "rotation": {
+       "x": 0,
+       "y": 0.45,
+       "z": 0
+      }
+     }
+    },
+    {
+     "id": "label_soft",
+     "type": "object/text",
+     "position": {
+      "x": 880,
+      "y": 950
+     },
+     "params": {
+      "text": "WELD",
+      "location": {
+       "x": 1.65,
+       "y": -0.2,
+       "z": 2.25
+      },
+      "fontSize": 34,
+      "depth": 0.06,
+      "fontPreset": "Nova Mono",
+      "color": 16745665,
+      "emissive": 16745665,
+      "emissiveIntensity": 0.55,
+      "roughness": 0.35,
+      "metalness": 0.3,
+      "rotation": {
+       "x": 0,
+       "y": 0.1,
+       "z": 0
+      }
+     }
+    }
+   ],
+   "connections": [
+    {
+     "id": "setup_c0",
+     "fromNode": "setup_1",
+     "fromSocket": "texture",
+     "toNode": "setup_0",
+     "toSocket": "texture"
+    },
+    {
+     "id": "setup_c1",
+     "fromNode": "setup_5",
+     "fromSocket": "environment",
+     "toNode": "setup_4",
+     "toSocket": "environment"
+    },
+    {
+     "id": "hard_box.geometry->hard.geometry",
+     "fromNode": "hard_box",
+     "fromSocket": "geometry",
+     "toNode": "hard",
+     "toSocket": "geometry"
+    },
+    {
+     "id": "hard_ball.geometry->hard.boolean",
+     "fromNode": "hard_ball",
+     "fromSocket": "geometry",
+     "toNode": "hard",
+     "toSocket": "boolean"
+    },
+    {
+     "id": "soft_box.geometry->soft.geometry",
+     "fromNode": "soft_box",
+     "fromSocket": "geometry",
+     "toNode": "soft",
+     "toSocket": "geometry"
+    },
+    {
+     "id": "soft_ball.geometry->soft.weld",
+     "fromNode": "soft_ball",
+     "fromSocket": "geometry",
+     "toNode": "soft",
+     "toSocket": "weld"
+    }
+   ],
+   "keyframes": {},
+   "markers": [],
+   "exposedParams": []
+  }
+ ],
+ "activeCanvas": 0
+}

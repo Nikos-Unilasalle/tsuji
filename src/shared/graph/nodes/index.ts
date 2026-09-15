@@ -97,6 +97,7 @@ import { CURVE_SHAPE_KEY_NODE, MESH_SHAPE_KEY_NODE } from "./shapeKey";
 import { LATTICE_DEFORM_NODE } from "./lattice";
 import { METABALLS_NODE } from "./metaballs";
 import { BOOLEAN_NODE } from "./boolean";
+import { WELD_NODE } from "./weld";
 import { SUBDIVIDE_NODE } from "./subdivide";
 import { SOLIDIFY_NODE } from "./solidify";
 import { EXTRUDE_MESH_NODE, DELETE_GEOMETRY_NODE, FACE_SELECTION_NODE } from "./meshEdit";
@@ -354,6 +355,7 @@ export const STARTER_NODES = [
   LATTICE_DEFORM_NODE,
   METABALLS_NODE,
   BOOLEAN_NODE,
+  WELD_NODE,
   SUBDIVIDE_NODE,
   SOLIDIFY_NODE,
   EXTRUDE_MESH_NODE,

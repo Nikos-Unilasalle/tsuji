@@ -75,6 +75,11 @@ export const DEMO_CATALOG: DemoCategory[] = [
         description: "A sphere subtracted from a box.",
       },
       {
+        file: "demo_modifier_weld.tsuji",
+        label: "Weld",
+        description: "The same box and sphere twice: unioned hard on the left, welded with a soft fillet on the right.",
+      },
+      {
         file: "demo_modifier_subdivide_shade.tsuji",
         label: "Subdivide & Shade",
         description: "Catmull-Clark subdivision then auto-smooth shading.",

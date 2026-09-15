@@ -3,6 +3,7 @@ import { Brush, Evaluator, ADDITION, SUBTRACTION, INTERSECTION } from "three-bvh
 import { bakeMeshesToGeometry, collectMeshMaterials } from "../bakeGeometry";
 import { createNodeCache, disposeObject3D } from "../nodeCaches";
 import { NodeDefinition } from "../types";
+import { sideSignature } from "../geometrySignature";
 import { clearMeshWarning, collectMeshes, warnMeshRequired } from "../meshRequired";
 import { prepareGeometryForMaterial, primitiveOutputs } from "./object";
 
@@ -32,51 +33,7 @@ function disposeGeometry(g: THREE.BufferGeometry): void {
   g.dispose();
 }
 
-/**
- * A cheap FNV-1a over the raw bytes of a position attribute. Animating a source
- * mesh at the *vertex* level (a deform feeding this node) mutates positions in
- * place and keeps the same geometry uuid, so a uuid-only cache signature would
- * wrongly reuse the stale CSG result and freeze the animation. Hashing the
- * positions detects that change for a small per-evaluate cost (still far
- * cheaper than re-running the CSG).
- */
-function hashPositions(attr: THREE.BufferAttribute | THREE.InterleavedBufferAttribute | undefined): string {
-  const arr = attr?.array as ArrayLike<number> | undefined;
-  if (!arr) return "none";
-  const view = new DataView(
-    (arr as Float32Array).buffer,
-    (arr as Float32Array).byteOffset,
-    (arr as Float32Array).byteLength,
-  );
-  let hash = 0x811c9dc5;
-  for (let i = 0; i < view.byteLength; i++) {
-    hash ^= view.getUint8(i);
-    hash = Math.imul(hash, 0x01000193) >>> 0;
-  }
-  return hash.toString(16);
-}
-
 const OPERATIONS: Record<string, number> = { add: ADDITION, subtract: SUBTRACTION, intersect: INTERSECTION };
-
-/**
- * Per-evaluate memo for hashPositions. Array instances are clones that SHARE
- * one geometry, so a side of 200 instances would otherwise hash the same
- * buffer 200 times every frame. Scoped to a single evaluate call, never
- * across frames — positions mutate in place under a stable uuid (the whole
- * reason hashPositions exists), so a longer-lived cache would go stale.
- */
-function sideSignature(meshes: THREE.Mesh[]): unknown[] {
-  const hashes = new Map<string, string>();
-  return meshes.map((mesh) => {
-    const geometry = mesh.geometry;
-    let hash = hashes.get(geometry.uuid);
-    if (hash === undefined) {
-      hash = hashPositions(geometry.attributes.position);
-      hashes.set(geometry.uuid, hash);
-    }
-    return [geometry.uuid, hash, [...mesh.matrixWorld.elements]];
-  });
-}
 
 /**
  * Boolean (CSG) modifier — combines two closed meshes via union / subtraction /
