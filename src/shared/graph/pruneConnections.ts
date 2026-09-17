@@ -27,11 +27,12 @@ function socketIds(
   graph: Graph,
   nodeId: string,
 ): Set<string> {
+  const node = graph.nodes.find((n) => n.id === nodeId);
   const connections = graph.connections.filter((c) =>
     side === "inputs" ? c.toNode === nodeId : c.fromNode === nodeId,
   );
   const dynamic = side === "inputs" ? def.dynamicInputs : def.dynamicOutputs;
-  const sockets = dynamic ? (dynamic(connections) ?? def[side]) : def[side];
+  const sockets = dynamic ? (dynamic(connections, undefined, node?.params) ?? def[side]) : def[side];
   return new Set(sockets.map((socket) => socket.id));
 }
 

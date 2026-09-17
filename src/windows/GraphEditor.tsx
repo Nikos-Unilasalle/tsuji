@@ -83,6 +83,14 @@ const DEFAULT_NODE_HEIGHT = 90;
 function toFlowNodes(graph: Graph, registry: NodeRegistry, selectedIds?: Set<string>): Node<GraphNodeData>[] {
   return graph.nodes.map((instance) => {
     const def = resolveDefinition(instance, registry);
+    let inputs = def?.inputs ?? [];
+    if (def?.dynamicInputs) {
+      inputs = def.dynamicInputs([], [], instance.params);
+    }
+    let outputs = def?.outputs ?? [];
+    if (def?.dynamicOutputs) {
+      outputs = def.dynamicOutputs([], [], instance.params);
+    }
     return {
       id: instance.id,
       type: "graphNode",
@@ -94,8 +102,8 @@ function toFlowNodes(graph: Graph, registry: NodeRegistry, selectedIds?: Set<str
         label: def?.label ?? `${instance.type} (unknown)`,
         customName: typeof instance.params?.name === "string" ? instance.params.name : "",
         category: def?.category,
-        inputs: def?.inputs ?? [],
-        outputs: def?.outputs ?? [],
+        inputs,
+        outputs,
         ...(instance.subgraph ? { groupSize: instance.subgraph.nodes.length } : {}),
       },
     };
@@ -149,12 +157,12 @@ function refreshDynamicSockets(
 
     let nextInputs = flowNode.data.inputs;
     if (def.dynamicInputs) {
-      nextInputs = def.dynamicInputs(connList, nodeConnectionsWithTypes);
+      nextInputs = def.dynamicInputs(connList, nodeConnectionsWithTypes, instance?.params);
     }
 
     let nextOutputs = flowNode.data.outputs;
     if (def.dynamicOutputs) {
-      nextOutputs = def.dynamicOutputs(connList, nodeConnectionsWithTypes);
+      nextOutputs = def.dynamicOutputs(connList, nodeConnectionsWithTypes, instance?.params);
     }
 
     return {

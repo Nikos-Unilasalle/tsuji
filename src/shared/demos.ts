@@ -94,6 +94,11 @@ export const DEMO_CATALOG: DemoCategory[] = [
         label: "Clip Box",
         description: "A sphere cut down to a box volume.",
       },
+      {
+        file: "demo_modifier_contour_scan.tsuji",
+        label: "Contour Scan",
+        description: "Radial BVH slicing and morphing between a sphere and a box, with outward bulge wave (inspired by Makio64).",
+      },
     ],
   },
   {

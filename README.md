@@ -122,6 +122,7 @@ Les prises de connexion (sockets) sont identifiées par des codes couleur normal
 | :--- | :--- | :--- |
 | **Boolean CSG** | `geometry/boolean` | Opérations booléennes 3D (Union, Difference, Intersection) via BVH-CSG. |
 | **Weld** | `modifier/weld` | Soudure douce de deux formes : champ de distance voxelisé, smooth-min, remaillage Surface Nets. Un congé au lieu de l'arête d'un Boolean. |
+| **Contour Scan** | `modifier/contour-scan` | Découpe procédurale en anneaux par raycast radial BVH et morphing ondulatoire avec renflement entre deux formes (inspiré de Makio64 *venus.js*). Sorties maillage (rubans, lignes, tubes) et courbes. |
 | **Subdivide** | `geometry/subdivide` | Subdivise le maillage pour augmenter la résolution des sommets. |
 | **Extrude Mesh** | `geometry/extrude` | Extrude les faces ou arêtes d'une géométrie selon un vecteur ou une normale. |
 | **Delete Geometry** | `geometry/delete` | Supprime des sommets/faces selon des critères ou des masques de sélection. |

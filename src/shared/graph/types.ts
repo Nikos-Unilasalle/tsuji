@@ -294,15 +294,17 @@ export interface NodeDefinition {
   dynamicInputs?: (
     connections: Connection[],
     connectionTypes?: { connection: Connection; sourceSocketType: import("./sockets").SocketType }[],
+    params?: Record<string, unknown>,
   ) => SocketDef[];
   /**
    * When present, overrides `outputs` for a specific instance based on its
-   * own current connections — for a node like Logic Bridge whose output type
-   * adapts to match its connected input type.
+   * own current connections or params — for a node like Logic Bridge whose
+   * output type adapts, or Contour Scan whose curves socket appears on demand.
    */
   dynamicOutputs?: (
     connections: Connection[],
     connectionTypes?: { connection: Connection; sourceSocketType: import("./sockets").SocketType }[],
+    params?: Record<string, unknown>,
   ) => SocketDef[];
   evaluate: (
     inputs: Record<string, unknown>,
