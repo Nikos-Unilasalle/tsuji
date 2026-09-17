@@ -223,4 +223,21 @@ describe("CONTOUR_SCAN_NODE", () => {
     expect(result.geometry).toBeNull();
     expect(result.curves).toEqual([]);
   });
+
+  test("dynamicOutputs reveals curves and curve sockets when style is 'curves'", () => {
+    const defaultOutputs = CONTOUR_SCAN_NODE.dynamicOutputs!([], [], { style: "ribbons" });
+    expect(defaultOutputs.map((s) => s.id)).toEqual(["geometry", "matrix"]);
+
+    const curveOutputs = CONTOUR_SCAN_NODE.dynamicOutputs!([], [], { style: "curves" });
+    expect(curveOutputs.map((s) => s.id)).toEqual(["geometry", "curves", "curve", "matrix"]);
+  });
+
+  test("dynamicOutputs reveals curves socket when connected as curves or curve", () => {
+    const connOutputs = CONTOUR_SCAN_NODE.dynamicOutputs!(
+      [{ id: "e1", fromNode: "scan", fromSocket: "curves", toNode: "other", toSocket: "in" }],
+      [],
+      { style: "ribbons" },
+    );
+    expect(connOutputs.map((s) => s.id)).toEqual(["geometry", "curves", "curve", "matrix"]);
+  });
 });

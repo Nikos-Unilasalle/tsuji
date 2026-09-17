@@ -138,7 +138,7 @@ function refreshDynamicSockets(
     if (!def?.dynamicInputs && !def?.dynamicOutputs) return flowNode;
 
     const nodeIncomingConnections = flowEdges.filter((e) => e.target === flowNode.id);
-    const nodeConnectionsWithTypes = nodeIncomingConnections.map((e) => {
+    const nodeIncomingWithTypes = nodeIncomingConnections.map((e) => {
       const sourceNode = flowNodes.find((n) => n.id === e.source);
       const sourceSocketDef = sourceNode?.data.outputs.find((s) => s.id === e.sourceHandle);
       return {
@@ -153,16 +153,33 @@ function refreshDynamicSockets(
       };
     });
 
-    const connList = nodeConnectionsWithTypes.map((ct) => ct.connection);
+    const nodeAllConnections = flowEdges.filter((e) => e.target === flowNode.id || e.source === flowNode.id);
+    const nodeAllWithTypes = nodeAllConnections.map((e) => {
+      const sourceNode = flowNodes.find((n) => n.id === e.source);
+      const sourceSocketDef = sourceNode?.data.outputs.find((s) => s.id === e.sourceHandle);
+      return {
+        connection: {
+          id: e.id,
+          fromNode: e.source,
+          fromSocket: e.sourceHandle ?? "",
+          toNode: e.target,
+          toSocket: e.targetHandle ?? "",
+        },
+        sourceSocketType: sourceSocketDef?.type || ("any" as const),
+      };
+    });
+
+    const incomingConnList = nodeIncomingWithTypes.map((ct) => ct.connection);
+    const allConnList = nodeAllWithTypes.map((ct) => ct.connection);
 
     let nextInputs = flowNode.data.inputs;
     if (def.dynamicInputs) {
-      nextInputs = def.dynamicInputs(connList, nodeConnectionsWithTypes, instance?.params);
+      nextInputs = def.dynamicInputs(incomingConnList, nodeIncomingWithTypes, instance?.params);
     }
 
     let nextOutputs = flowNode.data.outputs;
     if (def.dynamicOutputs) {
-      nextOutputs = def.dynamicOutputs(connList, nodeConnectionsWithTypes, instance?.params);
+      nextOutputs = def.dynamicOutputs(allConnList, nodeAllWithTypes, instance?.params);
     }
 
     return {
@@ -357,6 +374,7 @@ function GraphEditorContent({
       return prevNodes.map((fn) => {
         const graphNode = graph.nodes.find((gn) => gn.id === fn.id);
         if (!graphNode) return fn;
+        const nextNode = nextNodes.find((n) => n.id === fn.id);
         return {
           ...fn,
           // Sourced from the ref, not `fn.selected` off `prevNodes`: this
@@ -370,6 +388,7 @@ function GraphEditorContent({
           position: graphNode.position,
           data: {
             ...fn.data,
+            ...(nextNode ? nextNode.data : {}),
             params: graphNode.params,
             customName: typeof graphNode.params?.name === "string" ? graphNode.params.name : "",
           },

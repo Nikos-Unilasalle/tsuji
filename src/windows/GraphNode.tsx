@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Handle, Position } from "@xyflow/react";
+import { Handle, Position, useUpdateNodeInternals } from "@xyflow/react";
 import * as THREE from "three";
 import { CATEGORY_COLOR, NodeCategory, UNKNOWN_CATEGORY_COLOR } from "../shared/graph/categories";
 import { NEW_PORT_SOCKET } from "../shared/graph/groups";
@@ -104,6 +104,14 @@ export function GraphNode({ data, selected }: { data: GraphNodeData; selected?: 
   // invokes may not depend on `data.nodeType`. For a reroute the value is always
   // undefined and simply unused.
   const inspectorVal = useInspectorValue(data.nodeId);
+  const updateNodeInternals = useUpdateNodeInternals();
+
+  const socketSignature = `${data.inputs?.map((s) => s.id).join(",") ?? ""}|${data.outputs?.map((s) => s.id).join(",") ?? ""}`;
+  useEffect(() => {
+    if (data.nodeId) {
+      updateNodeInternals(data.nodeId);
+    }
+  }, [data.nodeId, socketSignature, updateNodeInternals]);
 
   if (data.nodeType === "utility/reroute") {
     const socketType = data.inputs[0]?.type || "any";
