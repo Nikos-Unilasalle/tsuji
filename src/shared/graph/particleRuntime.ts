@@ -618,7 +618,7 @@ export function initialAge(index: number, capacity: number, lifetimeGuess: numbe
  * a burst-spawned Point Emitter (From Points) shows its actual cloud shape
  * from frame 0, not a pile at the origin.
  */
-export function initialPosition(index: number, emitter: EmitterConfig, capacity?: number): [number, number, number] {
+export function initialPosition(index: number, emitter: EmitterConfig, capacity?: number, size?: number): [number, number, number] {
   const seedPositions = emitter.seedPositions;
   const seedCount = seedPositions ? Math.floor(seedPositions.length / 3) : 0;
   if (seedCount > 0 && seedPositions) {
@@ -632,7 +632,44 @@ export function initialPosition(index: number, emitter: EmitterConfig, capacity?
         : index % seedCount;
     return [seedPositions[seedIdx * 3], seedPositions[seedIdx * 3 + 1], seedPositions[seedIdx * 3 + 2]];
   }
+  if (emitter.diameter > 0 && size !== undefined && size > 0) {
+    const u = ((index % size) + 0.5) / size;
+    const v = (Math.floor(index / size) + 0.5) / size;
+    const dotVal = u * 12.9898 + v * 78.233;
+    const seed = ((Math.sin(dotVal) * 43758.5453) % 1 + 1) % 1;
+    const s1 = seed;
+    const s2 = ((seed * 7.0) % 1 + 1) % 1;
+    const s3 = ((seed * 13.0) % 1 + 1) % 1;
+    return [
+      emitter.position.x + (s1 - 0.5) * emitter.diameter,
+      emitter.position.y + (s2 - 0.5) * emitter.diameter,
+      emitter.position.z + (s3 - 0.5) * emitter.diameter,
+    ];
+  }
   return [emitter.position.x, emitter.position.y, emitter.position.z];
+}
+
+/**
+ * Initial velocity for burst-spawned particles — matches VELOCITY_SHADER's
+ * own jitter pattern so burst particles start moving with emitter.velocity
+ * immediately instead of sitting stationary until their first respawn.
+ */
+export function initialVelocity(index: number, emitter: EmitterConfig, size?: number): [number, number, number] {
+  if (size !== undefined && size > 0) {
+    const u = ((index % size) + 0.5) / size;
+    const v = (Math.floor(index / size) + 0.5) / size;
+    const dotVal = u * 93.9898 + v * 47.233;
+    const seed = ((Math.sin(dotVal) * 24634.6345) % 1 + 1) % 1;
+    const s1 = seed;
+    const s2 = ((seed * 5.0) % 1 + 1) % 1;
+    const s3 = ((seed * 11.0) % 1 + 1) % 1;
+    return [
+      emitter.velocity.x + (s1 - 0.5) * 0.5,
+      emitter.velocity.y + (s2 - 0.5) * 0.5,
+      emitter.velocity.z + (s3 - 0.5) * 0.5,
+    ];
+  }
+  return [emitter.velocity.x, emitter.velocity.y, emitter.velocity.z];
 }
 
 /**
@@ -640,22 +677,29 @@ export function initialPosition(index: number, emitter: EmitterConfig, capacity?
  * (spawnNow=true shape of initialAge/initialPosition above) — shared by
  * createSimulation's initial texture (the gate was already open when the
  * sim was built) and maybeBurstOnEmitRisingEdge's later re-seed (the gate
- * just opened on a live sim). Velocity resets to zero alongside it: a
- * newly-triggered burst shouldn't inherit whatever velocity happened to be
- * sitting in a texel that was previously dead/waiting.
+ * just opened on a live sim). Velocity resets to the emitter's initial velocity
+ * with jitter alongside it.
  */
 function buildBurstTextures(gpuCompute: GPUComputationRenderer, size: number, emitter: EmitterConfig): { position: THREE.DataTexture; velocity: THREE.DataTexture } {
   const position = gpuCompute.createTexture();
   const positionData = position.image.data as Float32Array;
+  const velocity = gpuCompute.createTexture();
+  const velocityData = velocity.image.data as Float32Array;
   const capacity = size * size;
   for (let i = 0; i < capacity; i++) {
-    const [x, y, z] = initialPosition(i, emitter, capacity);
+    const [x, y, z] = initialPosition(i, emitter, capacity, size);
     positionData[i * 4] = x;
     positionData[i * 4 + 1] = y;
     positionData[i * 4 + 2] = z;
     positionData[i * 4 + 3] = 0;
+
+    const [vx, vy, vz] = initialVelocity(i, emitter, size);
+    velocityData[i * 4] = vx;
+    velocityData[i * 4 + 1] = vy;
+    velocityData[i * 4 + 2] = vz;
+    velocityData[i * 4 + 3] = 0;
   }
-  return { position, velocity: gpuCompute.createTexture() };
+  return { position, velocity };
 }
 
 function initialPositionTexture(
@@ -672,10 +716,32 @@ function initialPositionTexture(
   for (let i = 0; i < capacity; i++) {
     data[i * 4 + 3] = initialAge(i, capacity, lifetimeGuess, burstSpawn, spawnNow);
     if (burstSpawn && spawnNow) {
-      const [x, y, z] = initialPosition(i, emitter, capacity);
+      const [x, y, z] = initialPosition(i, emitter, capacity, size);
       data[i * 4] = x;
       data[i * 4 + 1] = y;
       data[i * 4 + 2] = z;
+    }
+  }
+  return texture;
+}
+
+function initialVelocityTexture(
+  gpuCompute: GPUComputationRenderer,
+  size: number,
+  burstSpawn: boolean,
+  spawnNow: boolean,
+  emitter: EmitterConfig,
+): THREE.DataTexture {
+  const texture = gpuCompute.createTexture();
+  if (burstSpawn && spawnNow) {
+    const data = texture.image.data as Float32Array;
+    const capacity = size * size;
+    for (let i = 0; i < capacity; i++) {
+      const [vx, vy, vz] = initialVelocity(i, emitter, size);
+      data[i * 4] = vx;
+      data[i * 4 + 1] = vy;
+      data[i * 4 + 2] = vz;
+      data[i * 4 + 3] = 0;
     }
   }
   return texture;
@@ -750,7 +816,7 @@ function createSimulation(
   const gpuCompute = new GPUComputationRenderer(size, size, renderer);
   const spawnNow = emitter.emit && !emitter.killSignal;
   const position0 = initialPositionTexture(gpuCompute, size, lifetimeGuess, burstSpawn, spawnNow, emitter);
-  const velocity0 = gpuCompute.createTexture();
+  const velocity0 = initialVelocityTexture(gpuCompute, size, burstSpawn, spawnNow, emitter);
 
   const positionVar = gpuCompute.addVariable("texturePosition", POSITION_SHADER, position0);
   const velocityVar = gpuCompute.addVariable("textureVelocity", VELOCITY_SHADER, velocity0);
@@ -919,7 +985,9 @@ export function getOrCreateSimulation(
   const active =
     emitter.pointCount !== undefined
       ? Math.min(size * size, Math.max(0, Math.floor(emitter.pointCount)))
-      : activeParticleCount(emitter.spawnRate, lifetime, size * size);
+      : effectiveBurst
+        ? Math.min(size * size, Math.max(0, emitter.spawnRate > 0 ? Math.round(emitter.spawnRate) : size * size))
+        : activeParticleCount(emitter.spawnRate, lifetime, size * size);
   for (const uniforms of [sim.positionVar.material.uniforms, sim.velocityVar.material.uniforms]) {
     uniforms.lifetime.value = lifetime;
     uniforms.lifetimeVariance.value = Math.max(0, Math.min(1, lifetimeVariance));

@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { describe, expect, test } from "vitest";
-import { EmitterConfig, activeParticleCount, buildEmitterConfig, initialAge, initialPosition, textureSizeFor } from "./particleRuntime";
+import { EmitterConfig, activeParticleCount, buildEmitterConfig, initialAge, initialPosition, initialVelocity, textureSizeFor } from "./particleRuntime";
 
 describe("textureSizeFor", () => {
   test("returns the smallest square covering the requested capacity", () => {
@@ -151,7 +151,7 @@ describe("initialPosition", () => {
     expect(initialPosition(3, emitter, 4)[0]).toBeLessThan(10);
   });
 
-  test("falls back to the emitter's own position when there's no seed set (a plain point emitter, not From Points)", () => {
+  test("falls back to the emitter's own position when there's no seed set and no size", () => {
     const emitter: EmitterConfig = {
       position: new THREE.Vector3(10, 20, 30),
       velocity: new THREE.Vector3(),
@@ -161,5 +161,37 @@ describe("initialPosition", () => {
       emit: true,
     };
     expect(initialPosition(0, emitter)).toEqual([10, 20, 30]);
+  });
+
+  test("applies diameter jitter around emitter position when size is provided", () => {
+    const emitter: EmitterConfig = {
+      position: new THREE.Vector3(10, 20, 30),
+      velocity: new THREE.Vector3(),
+      spawnRate: 200,
+      diameter: 2,
+      randomSpawnPick: false,
+      emit: true,
+    };
+    const [x, y, z] = initialPosition(0, emitter, 100, 10);
+    expect(Math.abs(x - 10)).toBeLessThanOrEqual(1);
+    expect(Math.abs(y - 20)).toBeLessThanOrEqual(1);
+    expect(Math.abs(z - 30)).toBeLessThanOrEqual(1);
+  });
+});
+
+describe("initialVelocity", () => {
+  test("returns emitter velocity with jitter when size is provided", () => {
+    const emitter: EmitterConfig = {
+      position: new THREE.Vector3(),
+      velocity: new THREE.Vector3(0, 8, 0),
+      spawnRate: 200,
+      diameter: 0.25,
+      randomSpawnPick: false,
+      emit: true,
+    };
+    const [vx, vy, vz] = initialVelocity(0, emitter, 10);
+    expect(Math.abs(vx)).toBeLessThanOrEqual(0.5);
+    expect(Math.abs(vy - 8)).toBeLessThanOrEqual(0.5);
+    expect(Math.abs(vz)).toBeLessThanOrEqual(0.5);
   });
 });
