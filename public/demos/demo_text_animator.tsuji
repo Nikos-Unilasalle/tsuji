@@ -1,0 +1,324 @@
+{
+  "canvases": [
+    {
+      "nodes": [
+        {
+          "id": "floor_plane",
+          "type": "object/plane",
+          "position": {
+            "x": 600,
+            "y": 160
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 0,
+              "y": -0.5,
+              "z": 0
+            },
+            "rotation": {
+              "x": 1.5707963267948966,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 16,
+              "y": 16,
+              "z": 1
+            },
+            "texturePath": "",
+            "normalMapPath": "",
+            "roughnessMapPath": "",
+            "uvScaleX": 1,
+            "uvScaleY": 1,
+            "uvOffsetX": 0,
+            "uvOffsetY": 0,
+            "color": 16777215,
+            "emissive": 0,
+            "emissiveIntensity": 1,
+            "shadeless": 0,
+            "roughness": 0.15,
+            "metalness": 0.1,
+            "wireframe": 0,
+            "opacity": 1,
+            "transmission": 0,
+            "thickness": 0.5
+          }
+        },
+        {
+          "id": "checker_tex",
+          "type": "texture/procedural",
+          "position": {
+            "x": 360,
+            "y": 200
+          },
+          "params": {
+            "type": "checker",
+            "colorA": 16777215,
+            "colorB": 2236962,
+            "scale": 8,
+            "seed": 1,
+            "octaves": 3,
+            "resolution": 256,
+            "uvScaleX": 1,
+            "uvScaleY": 1,
+            "uvOffsetX": 0,
+            "uvOffsetY": 0
+          }
+        },
+        {
+          "id": "light_key",
+          "type": "light/point",
+          "position": {
+            "x": 860,
+            "y": 180
+          },
+          "params": {
+            "location": {
+              "x": 0,
+              "y": 3,
+              "z": -4.5
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "color": 16768110,
+            "intensity": 60,
+            "distance": 20,
+            "decay": 2,
+            "castShadow": 1
+          }
+        },
+        {
+          "id": "light_fill",
+          "type": "light/point",
+          "position": {
+            "x": 1050,
+            "y": 180
+          },
+          "params": {
+            "location": {
+              "x": 0,
+              "y": 2.5,
+              "z": 4.5
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "color": 440020,
+            "intensity": 50,
+            "distance": 20,
+            "decay": 2,
+            "castShadow": 1
+          }
+        },
+        {
+          "id": "render_setup",
+          "type": "render",
+          "position": {
+            "x": 610,
+            "y": 400
+          },
+          "params": {
+            "frameCount": 240,
+            "fps": 60,
+            "motionBlur": 0,
+            "resolutionPreset": "16:9 (1920x1080)",
+            "width": 1920,
+            "height": 1080,
+            "holdout": false
+          }
+        },
+        {
+          "id": "env_setup",
+          "type": "lighting/environment",
+          "position": {
+            "x": 340,
+            "y": 400
+          },
+          "params": {
+            "color": 3158064,
+            "intensity": 1,
+            "background": 1,
+            "blurriness": 0,
+            "filePath": "",
+            "backgroundImagePath": "",
+            "backgroundFit": "cover",
+            "backgroundScale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "backgroundOffset": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "backgroundRotation": 0,
+            "ambientIntensity": 0,
+            "sunIntensity": 0
+          }
+        },
+        {
+          "id": "oscillator_wave",
+          "type": "animation/oscillator",
+          "position": {
+            "x": -450,
+            "y": 200
+          },
+          "params": {
+            "type": "sine",
+            "frequency": 0.35,
+            "phase": 0,
+            "amplitude": 1.2,
+            "offset": 0,
+            "curve": "easeInOut",
+            "curveStrength": 1
+          }
+        },
+        {
+          "id": "kinetic_text_node",
+          "type": "text/animator",
+          "position": {
+            "x": -100,
+            "y": 180
+          },
+          "params": {
+            "text": "KINETIC TYPE",
+            "fontPreset": "Nova Mono",
+            "fontSize": 52,
+            "depth": 0.2,
+            "bevelEnabled": true,
+            "tracking": 2,
+            "lineHeight": 1.2,
+            "align": "center",
+            "anchor": "glyph_center",
+            "basedOn": "characters",
+            "selectorShape": "smooth",
+            "start": 0,
+            "end": 0.45,
+            "offset": 0,
+            "invert": false,
+            "randomize": false,
+            "randomSeed": 42,
+            "easeHigh": 0.3,
+            "easeLow": -0.3,
+            "wiggleAmount": 0.05,
+            "wiggleSpeed": 2,
+            "positionDelta": {
+              "x": 0,
+              "y": 1.4,
+              "z": 0
+            },
+            "rotationDelta": {
+              "x": 0.6,
+              "y": 0,
+              "z": 0
+            },
+            "scaleDelta": {
+              "x": 0.2,
+              "y": 0.2,
+              "z": 0.2
+            },
+            "location": {
+              "x": 0,
+              "y": 0.6,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "color": 16745665,
+            "roughness": 0.2,
+            "metalness": 0.7,
+            "emissive": 3718648,
+            "emissiveIntensity": 0.2
+          }
+        }
+      ],
+      "connections": [
+        {
+          "id": "checker_tex.texture->floor_plane.texture",
+          "fromNode": "checker_tex",
+          "fromSocket": "texture",
+          "toNode": "floor_plane",
+          "toSocket": "texture"
+        },
+        {
+          "id": "env_setup.environment->render_setup.environment",
+          "fromNode": "env_setup",
+          "fromSocket": "environment",
+          "toNode": "render_setup",
+          "toSocket": "environment"
+        },
+        {
+          "id": "oscillator_wave.out->kinetic_text_node.progress",
+          "fromNode": "oscillator_wave",
+          "fromSocket": "out",
+          "toNode": "kinetic_text_node",
+          "toSocket": "progress"
+        }
+      ],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    },
+    {
+      "nodes": [],
+      "connections": [],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    },
+    {
+      "nodes": [],
+      "connections": [],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    },
+    {
+      "nodes": [],
+      "connections": [],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    },
+    {
+      "nodes": [],
+      "connections": [],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    },
+    {
+      "nodes": [],
+      "connections": [],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    }
+  ],
+  "activeCanvas": 0
+}

@@ -40,6 +40,11 @@ export const DEMO_CATALOG: DemoCategory[] = [
         description: "A frame-driven reveal: length, trim, random and case chained onto a Text object.",
       },
       {
+        file: "demo_text_animator.tsuji",
+        label: "Kinetic Text Animator",
+        description: "Range Selector per-character animation with wave offset, 3D typography, and custom deltas.",
+      },
+      {
         file: "demo_object_explosion.tsuji",
         label: "Explosion",
         description: "Three fireballs on a loop: a noise sphere burning away from the inside out.",

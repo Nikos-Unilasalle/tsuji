@@ -87,7 +87,8 @@ Bienvenue dans le coffre de connaissances (Obsidian Vault). Ce système est stru
 
 ### 🧩 Nœuds & Création
 - [[Node Creation Guide]] — Guide auteur et contrat de développement.
-- [[Node Catalog]] — Inventaire des 272 nœuds disponibles (fluide 3D, Rapier, végétation, variables, groupes, metaballs, weld, cloth, vintage film).
+- [[Node Catalog]] — Inventaire des 276 nœuds disponibles (typographie cinétique 3D, fluide 3D, Rapier, végétation, variables, groupes, metaballs, weld, cloth, vintage film).
+- [[Kinetic Typography and Text Animation]] — Spécification complète de la typographie 3D cinétique, Range Selector, typeset multi-lignes et conforming sur splines 3D.
 - [[Cloth Simulation and Soft Bodies]] — Simulation physique de tissu par solveur masse-ressort CPU, épinglage et couplage avec les champs de force.
 - [[Vintage Film Post Processing]] — Passes de post-traitement rétro (Dual Tone, Halftone, Film Texture, Super 8, Dry Brush).
 - [[Parametric Geometry and Modifiers]] — Modificateurs de maillage (Weld SDF Surface Nets, Contour Scan, Metaballs, Treillis, CSG, sync dynamique).

@@ -63,6 +63,12 @@ import {
   TEXT_TRIM_NODE,
 } from "./text";
 import {
+  TEXT_ANIMATOR_NODE,
+  TEXT_DECOMPOSE_NODE,
+  TEXT_RANGE_SELECTOR_NODE,
+  CURVE_TEXT_ON_PATH_NODE,
+} from "./kineticText";
+import {
   POSTPROCESS_AMBIENT_OCCLUSION_NODE,
   POSTPROCESS_ANTIALIAS_NODE,
   POSTPROCESS_BLOOM_NODE,
@@ -213,6 +219,10 @@ export const STARTER_NODES = [
   TEXT_TRIM_NODE,
   TEXT_RANDOM_NODE,
   TEXT_COMPARE_NODE,
+  TEXT_ANIMATOR_NODE,
+  TEXT_DECOMPOSE_NODE,
+  TEXT_RANGE_SELECTOR_NODE,
+  CURVE_TEXT_ON_PATH_NODE,
   TRANSFORM_NODE,
   PIVOT_TRANSFORM_NODE,
   DECOMPOSE_MATRIX_NODE,
@@ -537,4 +547,5 @@ export * from "./character";
 export * from "./cloth";
 export * from "./rapier";
 export * from "./terrain";
+export * from "./kineticText";
 
