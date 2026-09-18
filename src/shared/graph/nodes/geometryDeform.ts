@@ -71,6 +71,19 @@ function reuseDeformTargets(
 
   if (state.targets && state.signature === signature) {
     for (const target of state.targets) {
+      // `base` isn't frozen at build time: the source mesh can be another
+      // deformer's output, mutated in place every frame without ever
+      // changing its geometry uuid (so the signature above never trips a
+      // rebuild). Re-syncing from the live source here is what lets an
+      // upstream animated deformer (e.g. Wave) keep animating once chained
+      // into a downstream one (e.g. Twist) — skipping it silently freezes
+      // the upstream effect at whatever frame this cache was first built.
+      const sourceArr = (target.source.geometry.attributes.position as THREE.BufferAttribute | undefined)?.array as
+        | Float32Array
+        | undefined;
+      if (sourceArr && sourceArr.length === target.base.length) {
+        target.base.set(sourceArr);
+      }
       const position = target.output.geometry.attributes.position as THREE.BufferAttribute;
       (position.array as Float32Array).set(target.base);
       position.needsUpdate = true;

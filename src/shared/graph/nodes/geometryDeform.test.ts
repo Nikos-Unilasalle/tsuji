@@ -150,6 +150,58 @@ describe("GEOMETRY_WAVE_RIPPLE_NODE", () => {
   });
 });
 
+describe("chained deformers", () => {
+  it("Wave -> Twist keeps animating Wave's ripple frame to frame", () => {
+    const plane = OBJECT_PLANE_NODE.evaluate(
+      {},
+      { ...OBJECT_PLANE_NODE.defaultParams, segmentsX: 10, segmentsY: 10 },
+      CTX,
+    );
+
+    const waveParams = { ...GEOMETRY_WAVE_RIPPLE_NODE.defaultParams, amplitude: 0.5, frequency: 4.0 };
+    const twistParams = { ...GEOMETRY_TWIST_BEND_TAPER_NODE.defaultParams, twist: 30 };
+
+    // Same node ids across frames — same DeformTarget cache reused, uuid unchanged.
+    const frame1Wave = GEOMETRY_WAVE_RIPPLE_NODE.evaluate({ geometry: plane.geometry }, waveParams, {
+      ...CTX,
+      nodeId: "wave",
+      time: 1.0,
+    }) as any;
+    const frame1Twist = GEOMETRY_TWIST_BEND_TAPER_NODE.evaluate({ geometry: frame1Wave.geometry }, twistParams, {
+      ...CTX,
+      nodeId: "twist",
+      time: 1.0,
+    }) as any;
+    // Twist (axis "y", no bend) never rewrites the Y component itself — it only
+    // reads it to compute the cross-section rotation angle, then writes it back
+    // unchanged. So the ripple's height survives into Twist's output exactly as
+    // handed to it: frozen pre-fix, live post-fix. That makes Y the one signal
+    // immune to the incidental X/Z drift Twist's own live bounds recompute would
+    // otherwise introduce every frame regardless of this bug.
+    const yOf = (mesh: THREE.Mesh) => {
+      const pos = mesh.geometry.attributes.position;
+      const ys: number[] = [];
+      for (let i = 0; i < pos.count; i++) ys.push(pos.getY(i));
+      return ys;
+    };
+    const snapshot1 = yOf(frame1Twist.geometry as THREE.Mesh);
+
+    const frame2Wave = GEOMETRY_WAVE_RIPPLE_NODE.evaluate({ geometry: plane.geometry }, waveParams, {
+      ...CTX,
+      nodeId: "wave",
+      time: 2.0,
+    }) as any;
+    const frame2Twist = GEOMETRY_TWIST_BEND_TAPER_NODE.evaluate({ geometry: frame2Wave.geometry }, twistParams, {
+      ...CTX,
+      nodeId: "twist",
+      time: 2.0,
+    }) as any;
+    const snapshot2 = yOf(frame2Twist.geometry as THREE.Mesh);
+
+    expect(snapshot2).not.toEqual(snapshot1);
+  });
+});
+
 describe("GEOMETRY_FACET_EXPLODE_NODE", () => {
   it("explodes faces along normals and preserves object matrix", () => {
     const loc = new THREE.Vector3(-2, 1, 4);
