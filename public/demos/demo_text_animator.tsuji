@@ -3,155 +3,75 @@
     {
       "nodes": [
         {
-          "id": "floor_plane",
-          "type": "object/plane",
+          "id": "camera_1",
+          "type": "calibration/camera",
           "position": {
-            "x": 600,
-            "y": 160
-          },
-          "params": {
-            "visible": 1,
-            "location": {
-              "x": 0,
-              "y": -0.5,
-              "z": 0
-            },
-            "rotation": {
-              "x": 1.5707963267948966,
-              "y": 0,
-              "z": 0
-            },
-            "scale": {
-              "x": 16,
-              "y": 16,
-              "z": 1
-            },
-            "texturePath": "",
-            "normalMapPath": "",
-            "roughnessMapPath": "",
-            "uvScaleX": 1,
-            "uvScaleY": 1,
-            "uvOffsetX": 0,
-            "uvOffsetY": 0,
-            "color": 16777215,
-            "emissive": 0,
-            "emissiveIntensity": 1,
-            "shadeless": 0,
-            "roughness": 0.15,
-            "metalness": 0.1,
-            "wireframe": 0,
-            "opacity": 1,
-            "transmission": 0,
-            "thickness": 0.5
-          }
-        },
-        {
-          "id": "checker_tex",
-          "type": "texture/procedural",
-          "position": {
-            "x": 360,
-            "y": 200
-          },
-          "params": {
-            "type": "checker",
-            "colorA": 16777215,
-            "colorB": 2236962,
-            "scale": 8,
-            "seed": 1,
-            "octaves": 3,
-            "resolution": 256,
-            "uvScaleX": 1,
-            "uvScaleY": 1,
-            "uvOffsetX": 0,
-            "uvOffsetY": 0
-          }
-        },
-        {
-          "id": "light_key",
-          "type": "light/point",
-          "position": {
-            "x": 860,
-            "y": 180
+            "x": 80,
+            "y": 140
           },
           "params": {
             "location": {
               "x": 0,
-              "y": 3,
-              "z": -4.5
+              "y": 5,
+              "z": 12
             },
             "rotation": {
+              "x": -0.3,
+              "y": 0,
+              "z": 0
+            },
+            "useTarget": true,
+            "target": {
               "x": 0,
               "y": 0,
               "z": 0
             },
-            "scale": {
-              "x": 1,
+            "up": {
+              "x": 0,
               "y": 1,
-              "z": 1
-            },
-            "color": 16768110,
-            "intensity": 60,
-            "distance": 20,
-            "decay": 2,
-            "castShadow": 1
-          }
-        },
-        {
-          "id": "light_fill",
-          "type": "light/point",
-          "position": {
-            "x": 1050,
-            "y": 180
-          },
-          "params": {
-            "location": {
-              "x": 0,
-              "y": 2.5,
-              "z": 4.5
-            },
-            "rotation": {
-              "x": 0,
-              "y": 0,
               "z": 0
             },
-            "scale": {
-              "x": 1,
-              "y": 1,
-              "z": 1
-            },
-            "color": 440020,
-            "intensity": 50,
-            "distance": 20,
-            "decay": 2,
-            "castShadow": 1
+            "fov": 50,
+            "active": true,
+            "mode": "manual",
+            "projectionType": "perspective",
+            "calibrationPicks": {
+              "corner-floor": {
+                "x": 0.5,
+                "y": 0.78
+              },
+              "corner-ceiling": {
+                "x": 0.5,
+                "y": 0.22
+              },
+              "wallA-floor": {
+                "x": 0.92,
+                "y": 0.88
+              },
+              "wallA-ceiling": {
+                "x": 0.92,
+                "y": 0.12
+              },
+              "wallB-floor": {
+                "x": 0.08,
+                "y": 0.88
+              },
+              "wallB-ceiling": {
+                "x": 0.08,
+                "y": 0.12
+              }
+            }
           }
         },
         {
-          "id": "render_setup",
-          "type": "render",
-          "position": {
-            "x": 610,
-            "y": 400
-          },
-          "params": {
-            "frameCount": 240,
-            "fps": 60,
-            "motionBlur": 0,
-            "resolutionPreset": "16:9 (1920x1080)",
-            "width": 1920,
-            "height": 1080,
-            "holdout": false
-          }
-        },
-        {
-          "id": "env_setup",
+          "id": "env_1",
           "type": "lighting/environment",
           "position": {
-            "x": 340,
-            "y": 400
+            "x": 80,
+            "y": 340
           },
           "params": {
-            "color": 3158064,
+            "color": 3026478,
             "intensity": 1,
             "background": 1,
             "blurriness": 0,
@@ -169,74 +89,80 @@
               "z": 0
             },
             "backgroundRotation": 0,
-            "ambientIntensity": 0,
-            "sunIntensity": 0
+            "ambientIntensity": 0.65,
+            "sunIntensity": 1.2
           }
         },
         {
-          "id": "oscillator_wave",
-          "type": "animation/oscillator",
+          "id": "render_1",
+          "type": "render",
           "position": {
-            "x": -450,
-            "y": 200
+            "x": 608,
+            "y": 215
           },
           "params": {
-            "type": "sine",
-            "frequency": 0.35,
-            "phase": 0,
-            "amplitude": 1.2,
-            "offset": 0,
-            "curve": "easeInOut",
-            "curveStrength": 1
+            "frameCount": 120,
+            "fps": 30,
+            "motionBlur": 0.976,
+            "resolutionPreset": "16:9 (1920x1080)",
+            "width": 1920,
+            "height": 1080,
+            "holdout": false,
+            "timelineEnabled": true
           }
         },
         {
-          "id": "kinetic_text_node",
+          "id": "50e91dc2-7f8c-4221-9e4b-b8573b7e6867",
           "type": "text/animator",
           "position": {
-            "x": -100,
-            "y": 180
+            "x": -724,
+            "y": 189
           },
           "params": {
-            "text": "KINETIC TYPE",
-            "fontPreset": "Nova Mono",
-            "fontSize": 52,
-            "depth": 0.2,
+            "text": "TSUJI",
+            "fontPreset": "Bangers",
+            "fontPath": "",
+            "fontSize": 199,
+            "depth": 0.15,
             "bevelEnabled": true,
-            "tracking": 2,
+            "tracking": 13.125,
             "lineHeight": 1.2,
             "align": "center",
-            "anchor": "glyph_center",
+            "anchor": "top_center",
             "basedOn": "characters",
-            "selectorShape": "smooth",
-            "start": 0,
-            "end": 0.45,
+            "selectorShape": "triangle",
+            "start": 0.014499999999999999,
+            "end": 1,
             "offset": 0,
             "invert": false,
             "randomize": false,
             "randomSeed": 42,
-            "easeHigh": 0.3,
-            "easeLow": -0.3,
-            "wiggleAmount": 0.05,
-            "wiggleSpeed": 2,
+            "easeHigh": 0.425,
+            "easeLow": 0.625,
+            "wiggleAmount": 0,
+            "wiggleSpeed": 1,
             "positionDelta": {
               "x": 0,
-              "y": 1.4,
+              "y": 1.475,
               "z": 0
             },
             "rotationDelta": {
-              "x": 0.6,
-              "y": 0,
+              "x": 0,
+              "y": 3.141592653589793,
               "z": 0
             },
             "scaleDelta": {
-              "x": 0.2,
-              "y": 0.2,
-              "z": 0.2
+              "x": 0,
+              "y": 0.425,
+              "z": 0
             },
+            "alignToPath": true,
+            "pathOffset": 0,
+            "fitToCurve": false,
+            "visible": 1,
             "location": {
               "x": 0,
-              "y": 0.6,
+              "y": 0,
               "z": 0
             },
             "rotation": {
@@ -249,35 +175,384 @@
               "y": 1,
               "z": 1
             },
-            "color": 16745665,
-            "roughness": 0.2,
-            "metalness": 0.7,
-            "emissive": 3718648,
-            "emissiveIntensity": 0.2
+            "showPivot": false,
+            "pivot": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "inheritRotation": "parent",
+            "inheritScale": "parent",
+            "texturePath": "",
+            "normalMapPath": "",
+            "roughnessMapPath": "",
+            "uvScaleX": 1,
+            "uvScaleY": 1,
+            "uvOffsetX": 0,
+            "uvOffsetY": 0,
+            "color": 16777215,
+            "emissive": 0,
+            "emissiveIntensity": 1,
+            "shadeless": 0,
+            "roughness": 0.4,
+            "metalness": 0.1,
+            "wireframe": 0,
+            "opacity": 1,
+            "transmission": 0,
+            "thickness": 0.5
+          }
+        },
+        {
+          "id": "75959750-ea74-4c5b-af67-919d42cc7729",
+          "type": "animation/oscillator",
+          "position": {
+            "x": -1486,
+            "y": 305
+          },
+          "params": {
+            "type": "sine",
+            "frequency": 0.352,
+            "phase": 0,
+            "amplitude": 1,
+            "offset": 0,
+            "curve": "linear",
+            "curveStrength": 1
+          }
+        },
+        {
+          "id": "44ee688a-e0b5-423f-8eb5-8fedeca1303c",
+          "type": "transform",
+          "position": {
+            "x": -976,
+            "y": 431
+          },
+          "params": {
+            "location": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "useLOCATION": true,
+            "useROTATION": true,
+            "useSCALE": true
+          }
+        },
+        {
+          "id": "97d4b74d-23cf-4931-88c2-2a0891e4bbe3",
+          "type": "vector/compose",
+          "position": {
+            "x": -1163,
+            "y": 427
+          },
+          "params": {
+            "x": 0,
+            "y": 0,
+            "z": -1.125,
+            "useX": true,
+            "useY": true,
+            "useZ": true
+          }
+        },
+        {
+          "id": "9e1c6559-3451-42f3-a265-62f27ae23423",
+          "type": "material/standard",
+          "position": {
+            "x": -1214,
+            "y": 627
+          },
+          "params": {
+            "color": 16777215,
+            "emissive": 16711422,
+            "emissiveIntensity": 1,
+            "shadeless": 0,
+            "roughness": 0.4,
+            "metalness": 0.1,
+            "wireframe": 0,
+            "opacity": 1,
+            "transmission": 0,
+            "thickness": 0.5
+          }
+        },
+        {
+          "id": "d62b7f07-7ba6-45bb-8fed-1ad302c18e73",
+          "type": "postprocess/bloom",
+          "position": {
+            "x": 76,
+            "y": 556
+          },
+          "params": {
+            "strength": 0.025,
+            "radius": 0.4,
+            "threshold": 0.85
+          }
+        },
+        {
+          "id": "97f31d64-70e9-49aa-a518-62acdcac4b69",
+          "type": "text/animator",
+          "position": {
+            "x": -483,
+            "y": 270
+          },
+          "params": {
+            "text": "TSUJI",
+            "fontPreset": "Bangers",
+            "fontPath": "",
+            "fontSize": 199,
+            "depth": 0.15,
+            "bevelEnabled": true,
+            "tracking": 13.125,
+            "lineHeight": 1.2,
+            "align": "center",
+            "anchor": "top_center",
+            "basedOn": "characters",
+            "selectorShape": "triangle",
+            "start": 0.014499999999999999,
+            "end": 1,
+            "offset": 0,
+            "invert": false,
+            "randomize": false,
+            "randomSeed": 42,
+            "easeHigh": 0.425,
+            "easeLow": 0.625,
+            "wiggleAmount": 0,
+            "wiggleSpeed": 1,
+            "positionDelta": {
+              "x": 0,
+              "y": 1.475,
+              "z": 0
+            },
+            "rotationDelta": {
+              "x": 0,
+              "y": 3.141592653589793,
+              "z": 0
+            },
+            "scaleDelta": {
+              "x": 0,
+              "y": 0.425,
+              "z": 0
+            },
+            "alignToPath": true,
+            "pathOffset": 0,
+            "fitToCurve": false,
+            "visible": 1,
+            "location": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "showPivot": false,
+            "pivot": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "inheritRotation": "parent",
+            "inheritScale": "parent",
+            "texturePath": "",
+            "normalMapPath": "",
+            "roughnessMapPath": "",
+            "uvScaleX": 1,
+            "uvScaleY": 1,
+            "uvOffsetX": 0,
+            "uvOffsetY": 0,
+            "color": 16777215,
+            "emissive": 0,
+            "emissiveIntensity": 1,
+            "shadeless": 0,
+            "roughness": 0.4,
+            "metalness": 0.1,
+            "wireframe": 0,
+            "opacity": 1,
+            "transmission": 0,
+            "thickness": 0.5
+          }
+        },
+        {
+          "id": "638218a9-8b44-4ca8-a51a-5ddd1a3eacdd",
+          "type": "material/standard",
+          "position": {
+            "x": -975,
+            "y": 627
+          },
+          "params": {
+            "color": 440020,
+            "emissive": 0,
+            "emissiveIntensity": 1,
+            "shadeless": 0,
+            "roughness": 0.4,
+            "metalness": 0.1,
+            "wireframe": 0,
+            "opacity": 1,
+            "transmission": 0,
+            "thickness": 0.5
+          }
+        },
+        {
+          "id": "1c40ea49-6bc3-46cc-ac73-e053ebd73cc4",
+          "type": "transform",
+          "position": {
+            "x": -698,
+            "y": 684
+          },
+          "params": {
+            "location": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "useLOCATION": true,
+            "useROTATION": true,
+            "useSCALE": true
+          }
+        },
+        {
+          "id": "e59a465f-5cb1-42d2-ac8d-e156d12a63a5",
+          "type": "vector/compose",
+          "position": {
+            "x": -697,
+            "y": 795
+          },
+          "params": {
+            "x": 0,
+            "y": 0,
+            "z": -1.425,
+            "useX": true,
+            "useY": true,
+            "useZ": true
+          }
+        },
+        {
+          "id": "5e978766-7078-493a-9d40-239c3148815f",
+          "type": "postprocess/super8",
+          "position": {
+            "x": 78,
+            "y": 683
+          },
+          "params": {
+            "softness": 1.2,
+            "flicker": 0.025,
+            "weave": 0.35,
+            "warmth": 0.35,
+            "vignette": 0.45,
+            "rate": 18,
+            "seed": 0
           }
         }
       ],
       "connections": [
         {
-          "id": "checker_tex.texture->floor_plane.texture",
-          "fromNode": "checker_tex",
-          "fromSocket": "texture",
-          "toNode": "floor_plane",
-          "toSocket": "texture"
-        },
-        {
-          "id": "env_setup.environment->render_setup.environment",
-          "fromNode": "env_setup",
+          "id": "conn_env_render",
+          "fromNode": "env_1",
           "fromSocket": "environment",
-          "toNode": "render_setup",
+          "toNode": "render_1",
           "toSocket": "environment"
         },
         {
-          "id": "oscillator_wave.out->kinetic_text_node.progress",
-          "fromNode": "oscillator_wave",
+          "id": "75959750-ea74-4c5b-af67-919d42cc7729.out->50e91dc2-7f8c-4221-9e4b-b8573b7e6867.progress",
+          "fromNode": "75959750-ea74-4c5b-af67-919d42cc7729",
           "fromSocket": "out",
-          "toNode": "kinetic_text_node",
+          "toNode": "50e91dc2-7f8c-4221-9e4b-b8573b7e6867",
           "toSocket": "progress"
+        },
+        {
+          "id": "44ee688a-e0b5-423f-8eb5-8fedeca1303c.matrix->50e91dc2-7f8c-4221-9e4b-b8573b7e6867.matrix",
+          "fromNode": "44ee688a-e0b5-423f-8eb5-8fedeca1303c",
+          "fromSocket": "matrix",
+          "toNode": "50e91dc2-7f8c-4221-9e4b-b8573b7e6867",
+          "toSocket": "matrix"
+        },
+        {
+          "id": "97d4b74d-23cf-4931-88c2-2a0891e4bbe3.out->44ee688a-e0b5-423f-8eb5-8fedeca1303c.rotation",
+          "fromNode": "97d4b74d-23cf-4931-88c2-2a0891e4bbe3",
+          "fromSocket": "out",
+          "toNode": "44ee688a-e0b5-423f-8eb5-8fedeca1303c",
+          "toSocket": "rotation"
+        },
+        {
+          "id": "75959750-ea74-4c5b-af67-919d42cc7729.out->97d4b74d-23cf-4931-88c2-2a0891e4bbe3.z",
+          "fromNode": "75959750-ea74-4c5b-af67-919d42cc7729",
+          "fromSocket": "out",
+          "toNode": "97d4b74d-23cf-4931-88c2-2a0891e4bbe3",
+          "toSocket": "z"
+        },
+        {
+          "id": "9e1c6559-3451-42f3-a265-62f27ae23423.material->50e91dc2-7f8c-4221-9e4b-b8573b7e6867.material",
+          "fromNode": "9e1c6559-3451-42f3-a265-62f27ae23423",
+          "fromSocket": "material",
+          "toNode": "50e91dc2-7f8c-4221-9e4b-b8573b7e6867",
+          "toSocket": "material"
+        },
+        {
+          "id": "d62b7f07-7ba6-45bb-8fed-1ad302c18e73.effect->render_1.postprocess",
+          "fromNode": "d62b7f07-7ba6-45bb-8fed-1ad302c18e73",
+          "fromSocket": "effect",
+          "toNode": "render_1",
+          "toSocket": "postprocess"
+        },
+        {
+          "id": "75959750-ea74-4c5b-af67-919d42cc7729.out->97f31d64-70e9-49aa-a518-62acdcac4b69.progress",
+          "fromNode": "75959750-ea74-4c5b-af67-919d42cc7729",
+          "fromSocket": "out",
+          "toNode": "97f31d64-70e9-49aa-a518-62acdcac4b69",
+          "toSocket": "progress"
+        },
+        {
+          "id": "638218a9-8b44-4ca8-a51a-5ddd1a3eacdd.material->97f31d64-70e9-49aa-a518-62acdcac4b69.material",
+          "fromNode": "638218a9-8b44-4ca8-a51a-5ddd1a3eacdd",
+          "fromSocket": "material",
+          "toNode": "97f31d64-70e9-49aa-a518-62acdcac4b69",
+          "toSocket": "material"
+        },
+        {
+          "id": "1c40ea49-6bc3-46cc-ac73-e053ebd73cc4.matrix->97f31d64-70e9-49aa-a518-62acdcac4b69.matrix",
+          "fromNode": "1c40ea49-6bc3-46cc-ac73-e053ebd73cc4",
+          "fromSocket": "matrix",
+          "toNode": "97f31d64-70e9-49aa-a518-62acdcac4b69",
+          "toSocket": "matrix"
+        },
+        {
+          "id": "e59a465f-5cb1-42d2-ac8d-e156d12a63a5.out->1c40ea49-6bc3-46cc-ac73-e053ebd73cc4.location",
+          "fromNode": "e59a465f-5cb1-42d2-ac8d-e156d12a63a5",
+          "fromSocket": "out",
+          "toNode": "1c40ea49-6bc3-46cc-ac73-e053ebd73cc4",
+          "toSocket": "location"
+        },
+        {
+          "id": "5e978766-7078-493a-9d40-239c3148815f.effect->d62b7f07-7ba6-45bb-8fed-1ad302c18e73.effect",
+          "fromNode": "5e978766-7078-493a-9d40-239c3148815f",
+          "fromSocket": "effect",
+          "toNode": "d62b7f07-7ba6-45bb-8fed-1ad302c18e73",
+          "toSocket": "effect"
         }
       ],
       "keyframes": {},
