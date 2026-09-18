@@ -196,6 +196,81 @@ describe("TEXT_ANIMATOR_NODE", () => {
     const group = res.geometry as THREE.Group;
     expect(group.children.length).toBe(5);
   });
+
+  it("interprets all material parameters including emissive, shadeless, transmission and custom material", () => {
+    // Standard PBR parameters with emissive and opacity
+    const resPbr = TEXT_ANIMATOR_NODE.evaluate(
+      {
+        text: "PBR",
+        color: "#ff0000",
+        emissive: "#00ff00",
+        emissiveIntensity: 2.5,
+        roughness: 0.1,
+        metalness: 0.9,
+        wireframe: true,
+        opacity: 0.7,
+      },
+      {
+        ...TEXT_ANIMATOR_NODE.defaultParams,
+        text: "PBR",
+        color: "#ff0000",
+        emissive: "#00ff00",
+        emissiveIntensity: 2.5,
+        roughness: 0.1,
+        metalness: 0.9,
+        wireframe: true,
+        opacity: 0.7,
+      },
+      { ...CTX, nodeId: "animator-mat-1" }
+    );
+    const groupPbr = resPbr.geometry as THREE.Group;
+    const meshPbr = groupPbr.children[0] as THREE.Mesh;
+    const matPbr = meshPbr.material as THREE.MeshStandardMaterial;
+    expect(matPbr).toBeInstanceOf(THREE.MeshStandardMaterial);
+    expect(matPbr.color.getHexString()).toBe("ff0000");
+    expect(matPbr.emissive.getHexString()).toBe("00ff00");
+    expect(matPbr.emissiveIntensity).toBe(2.5);
+    expect(matPbr.roughness).toBe(0.1);
+    expect(matPbr.metalness).toBe(0.9);
+    expect(matPbr.wireframe).toBe(true);
+    expect(matPbr.opacity).toBe(0.7);
+    expect(matPbr.transparent).toBe(true);
+
+    // Shadeless mode -> MeshBasicMaterial
+    const resBasic = TEXT_ANIMATOR_NODE.evaluate(
+      { text: "FLAT", shadeless: true, color: "#123456" },
+      { ...TEXT_ANIMATOR_NODE.defaultParams, text: "FLAT", shadeless: true, color: "#123456" },
+      { ...CTX, nodeId: "animator-mat-2" }
+    );
+    const groupBasic = resBasic.geometry as THREE.Group;
+    const meshBasic = groupBasic.children[0] as THREE.Mesh;
+    expect(meshBasic.material).toBeInstanceOf(THREE.MeshBasicMaterial);
+    expect((meshBasic.material as THREE.MeshBasicMaterial).color.getHexString()).toBe("123456");
+
+    // Glass / transmission mode -> MeshPhysicalMaterial
+    const resGlass = TEXT_ANIMATOR_NODE.evaluate(
+      { text: "GLASS", transmission: 0.85, thickness: 1.5 },
+      { ...TEXT_ANIMATOR_NODE.defaultParams, text: "GLASS", transmission: 0.85, thickness: 1.5 },
+      { ...CTX, nodeId: "animator-mat-3" }
+    );
+    const groupGlass = resGlass.geometry as THREE.Group;
+    const meshGlass = groupGlass.children[0] as THREE.Mesh;
+    const matGlass = meshGlass.material as THREE.MeshPhysicalMaterial;
+    expect(matGlass).toBeInstanceOf(THREE.MeshPhysicalMaterial);
+    expect(matGlass.transmission).toBe(0.85);
+    expect(matGlass.thickness).toBe(1.5);
+
+    // Custom material input
+    const customMat = new THREE.MeshToonMaterial({ color: 0x336699 });
+    const resCustom = TEXT_ANIMATOR_NODE.evaluate(
+      { text: "TOON", material: customMat },
+      { ...TEXT_ANIMATOR_NODE.defaultParams, text: "TOON" },
+      { ...CTX, nodeId: "animator-mat-4" }
+    );
+    const groupCustom = resCustom.geometry as THREE.Group;
+    const meshCustom = groupCustom.children[0] as THREE.Mesh;
+    expect(meshCustom.material).toBe(customMat);
+  });
 });
 
 describe("TEXT_DECOMPOSE_NODE", () => {
@@ -248,5 +323,32 @@ describe("CURVE_TEXT_ON_PATH_NODE", () => {
     expect(res.geometry).toBeInstanceOf(THREE.Group);
     expect((res.matrices as THREE.Matrix4[]).length).toBe(6);
     expect((res.positions as THREE.Vector3[]).length).toBe(6);
+  });
+
+  it("applies full material parameters on curved text meshes", () => {
+    const spline = new THREE.LineCurve3(new THREE.Vector3(0, 0, 0), new THREE.Vector3(10, 0, 0));
+    const res = CURVE_TEXT_ON_PATH_NODE.evaluate(
+      {
+        text: "ARC",
+        curve: spline,
+        emissive: "#330000",
+        emissiveIntensity: 1.8,
+        wireframe: true,
+      },
+      {
+        ...CURVE_TEXT_ON_PATH_NODE.defaultParams,
+        text: "ARC",
+        emissive: "#330000",
+        emissiveIntensity: 1.8,
+        wireframe: true,
+      },
+      { ...CTX, nodeId: "curve-text-mat-1" }
+    );
+    const group = res.geometry as THREE.Group;
+    const mesh = group.children[0] as THREE.Mesh;
+    const mat = mesh.material as THREE.MeshStandardMaterial;
+    expect(mat.emissive.getHexString()).toBe("330000");
+    expect(mat.emissiveIntensity).toBe(1.8);
+    expect(mat.wireframe).toBe(true);
   });
 });

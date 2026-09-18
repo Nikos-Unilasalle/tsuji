@@ -2,14 +2,19 @@ import * as THREE from "three";
 import { Font, FontLoader } from "three/examples/jsm/loaders/FontLoader.js";
 import { BUILTIN_FONTS, FONT_NAMES } from "../../three/fonts/fonts";
 import { createNodeCache, disposeObject3D } from "../nodeCaches";
-import { NodeDefinition } from "../types";
+import { NodeDefinition, ParamFieldDef } from "../types";
 import { composeNativeMatrix } from "./transform";
 import {
   applyMaterialParams,
+  buildPrimitiveDynamicParamFields,
   COMMON_DEFAULT_PARAMS,
   COMMON_PRIMITIVE_INPUTS,
   extractMaterialParams,
+  extractTextureParams,
+  MaterialParams,
   numberInput,
+  prepareGeometryForMaterial,
+  TextureParams,
 } from "./object";
 import {
   computeRangeWeights,
@@ -38,7 +43,7 @@ interface TextAnimatorState {
   lastBevelEnabled?: boolean;
   charGeometries: THREE.BufferGeometry[];
   charMeshes: THREE.Mesh[];
-  sharedMaterial: THREE.MeshStandardMaterial;
+  dummyMesh: THREE.Mesh;
 }
 
 const animatorCache = createNodeCache<TextAnimatorState>((s) => disposeObject3D(s.group));
@@ -48,15 +53,19 @@ function getOrCreateAnimatorState(nodeId: string): TextAnimatorState {
   if (!state) {
     const group = new THREE.Group();
     group.name = `TextAnimator_${nodeId}`;
+    const dummyMesh = new THREE.Mesh(
+      new THREE.BufferGeometry(),
+      new THREE.MeshStandardMaterial({
+        color: 0xffffff,
+        roughness: 0.4,
+        metalness: 0.1,
+      })
+    );
     state = {
       group,
       charGeometries: [],
       charMeshes: [],
-      sharedMaterial: new THREE.MeshStandardMaterial({
-        color: 0xffffff,
-        roughness: 0.4,
-        metalness: 0.1,
-      }),
+      dummyMesh,
     };
     animatorCache.set(nodeId, state);
   }
@@ -92,22 +101,23 @@ function applyAnchorToGeometry(geom: THREE.BufferGeometry, anchor: TextAnchor): 
 
 function updateCharMeshesMaterial(
   meshes: THREE.Mesh[],
-  sharedMat: THREE.MeshStandardMaterial,
-  matParams: ReturnType<typeof extractMaterialParams>
+  dummyMesh: THREE.Mesh,
+  matParams: MaterialParams,
+  texParams?: TextureParams
 ): void {
-  if (matParams.customMaterial) {
-    for (const m of meshes) {
-      applyMaterialParams(m, matParams);
+  const primary = meshes.length > 0 ? meshes[0] : dummyMesh;
+  applyMaterialParams(primary, matParams, THREE.FrontSide, texParams);
+  const activeMat = primary.material;
+
+  for (let i = 0; i < meshes.length; i++) {
+    const m = meshes[i];
+    if (m.material !== activeMat) {
+      m.material = activeMat;
     }
-  } else {
-    sharedMat.color.copy(matParams.color);
-    sharedMat.roughness = matParams.roughness;
-    sharedMat.metalness = matParams.metalness;
-    sharedMat.wireframe = matParams.wireframe;
-    for (const m of meshes) {
-      if (m.material !== sharedMat) {
-        m.material = sharedMat;
-      }
+    m.castShadow = true;
+    m.receiveShadow = true;
+    if (matParams.customMaterial) {
+      prepareGeometryForMaterial(m, matParams.customMaterial);
     }
   }
 }
@@ -125,6 +135,83 @@ function parseVec3(v: unknown, fallback: [number, number, number]): [number, num
   }
   return fallback;
 }
+
+export const TEXT_ANIMATOR_PARAM_FIELDS: ParamFieldDef[] = [
+  // Text and Typography Group
+  { id: "text", label: "Text", kind: "text", group: "Typography" },
+  { id: "fontPreset", label: "Font", kind: "select", options: FONT_NAMES, group: "Typography" },
+  {
+    id: "fontPath",
+    label: "Custom Font (.json)",
+    kind: "file",
+    accept: [".json"],
+    group: "Typography",
+    onLoaded: (nodeId, _path, content) => {
+      const state = getOrCreateAnimatorState(nodeId);
+      try {
+        state.font = new FontLoader().parse(JSON.parse(String(content)));
+      } catch (err) {
+        console.error("Failed to parse font:", err);
+        state.font = undefined;
+      }
+    },
+  },
+  { id: "fontSize", label: "Font Size (px)", kind: "number", step: 4, group: "Typography" },
+  { id: "depth", label: "Depth / Relief", kind: "number", step: 0.05, group: "Typography" },
+  { id: "bevelEnabled", label: "Bevel Edge", kind: "boolean", group: "Typography" },
+  { id: "tracking", label: "Tracking (Spacing)", kind: "number", step: 0.5, group: "Typography" },
+  { id: "lineHeight", label: "Line Height", kind: "number", step: 0.1, group: "Typography" },
+  {
+    id: "align",
+    label: "Align",
+    kind: "select",
+    options: ["center", "left", "right"],
+    group: "Typography",
+  },
+  {
+    id: "anchor",
+    label: "Glyph Anchor",
+    kind: "select",
+    options: ["glyph_center", "baseline_center", "bottom_center", "top_center"],
+    group: "Typography",
+  },
+
+  // Range Selector Group
+  {
+    id: "basedOn",
+    label: "Based On",
+    kind: "select",
+    options: ["characters", "words", "lines"],
+    group: "Range Selector",
+  },
+  {
+    id: "selectorShape",
+    label: "Shape",
+    kind: "select",
+    options: RANGE_SELECTOR_SHAPES,
+    group: "Range Selector",
+  },
+  { id: "start", label: "Start", kind: "number", step: 0.05, percent: true, group: "Range Selector" },
+  { id: "end", label: "End", kind: "number", step: 0.05, percent: true, group: "Range Selector" },
+  { id: "offset", label: "Offset", kind: "number", step: 0.05, group: "Range Selector" },
+  { id: "invert", label: "Invert Selection", kind: "boolean", group: "Range Selector" },
+  { id: "randomize", label: "Randomize Order", kind: "boolean", group: "Range Selector" },
+  { id: "randomSeed", label: "Random Seed", kind: "number", step: 1, group: "Range Selector" },
+  { id: "easeHigh", label: "Ease High", kind: "number", step: 0.1, group: "Range Selector" },
+  { id: "easeLow", label: "Ease Low", kind: "number", step: 0.1, group: "Range Selector" },
+  { id: "wiggleAmount", label: "Wiggle Amount", kind: "number", step: 0.05, group: "Range Selector" },
+  { id: "wiggleSpeed", label: "Wiggle Speed", kind: "number", step: 0.2, group: "Range Selector" },
+
+  // Transform Deltas
+  { id: "positionDelta", label: "Position Δ", kind: "vector", group: "Transform Deltas" },
+  { id: "rotationDelta", label: "Rotation Δ (°)", kind: "vector", degrees: true, step: 5, group: "Transform Deltas" },
+  { id: "scaleDelta", label: "Scale Δ", kind: "vector", group: "Transform Deltas" },
+
+  // Path Options
+  { id: "alignToPath", label: "Align to Path", kind: "boolean", group: "Path Options" },
+  { id: "pathOffset", label: "Path Offset", kind: "number", step: 0.02, group: "Path Options" },
+  { id: "fitToCurve", label: "Fit to Curve", kind: "boolean", group: "Path Options" },
+];
 
 // ---------------------------------------------------------------------------
 // 1. TEXT ANIMATOR NODE (Kinetic 3D Typography)
@@ -190,82 +277,8 @@ export const TEXT_ANIMATOR_NODE: NodeDefinition = {
     fitToCurve: false,
     ...COMMON_DEFAULT_PARAMS,
   },
-  paramFields: [
-    // Text and Typography Group
-    { id: "text", label: "Text", kind: "text", group: "Typography" },
-    { id: "fontPreset", label: "Font", kind: "select", options: FONT_NAMES, group: "Typography" },
-    {
-      id: "fontPath",
-      label: "Custom Font (.json)",
-      kind: "file",
-      accept: [".json"],
-      group: "Typography",
-      onLoaded: (nodeId, _path, content) => {
-        const state = getOrCreateAnimatorState(nodeId);
-        try {
-          state.font = new FontLoader().parse(JSON.parse(String(content)));
-        } catch (err) {
-          console.error("Failed to parse font:", err);
-          state.font = undefined;
-        }
-      },
-    },
-    { id: "fontSize", label: "Font Size (px)", kind: "number", step: 4, group: "Typography" },
-    { id: "depth", label: "Depth / Relief", kind: "number", step: 0.05, group: "Typography" },
-    { id: "bevelEnabled", label: "Bevel Edge", kind: "boolean", group: "Typography" },
-    { id: "tracking", label: "Tracking (Spacing)", kind: "number", step: 0.5, group: "Typography" },
-    { id: "lineHeight", label: "Line Height", kind: "number", step: 0.1, group: "Typography" },
-    {
-      id: "align",
-      label: "Align",
-      kind: "select",
-      options: ["center", "left", "right"],
-      group: "Typography",
-    },
-    {
-      id: "anchor",
-      label: "Glyph Anchor",
-      kind: "select",
-      options: ["glyph_center", "baseline_center", "bottom_center", "top_center"],
-      group: "Typography",
-    },
-
-    // Range Selector Group
-    {
-      id: "basedOn",
-      label: "Based On",
-      kind: "select",
-      options: ["characters", "words", "lines"],
-      group: "Range Selector",
-    },
-    {
-      id: "selectorShape",
-      label: "Shape",
-      kind: "select",
-      options: RANGE_SELECTOR_SHAPES,
-      group: "Range Selector",
-    },
-    { id: "start", label: "Start", kind: "number", step: 0.05, percent: true, group: "Range Selector" },
-    { id: "end", label: "End", kind: "number", step: 0.05, percent: true, group: "Range Selector" },
-    { id: "offset", label: "Offset", kind: "number", step: 0.05, group: "Range Selector" },
-    { id: "invert", label: "Invert Selection", kind: "boolean", group: "Range Selector" },
-    { id: "randomize", label: "Randomize Order", kind: "boolean", group: "Range Selector" },
-    { id: "randomSeed", label: "Random Seed", kind: "number", step: 1, group: "Range Selector" },
-    { id: "easeHigh", label: "Ease High", kind: "number", step: 0.1, group: "Range Selector" },
-    { id: "easeLow", label: "Ease Low", kind: "number", step: 0.1, group: "Range Selector" },
-    { id: "wiggleAmount", label: "Wiggle Amount", kind: "number", step: 0.05, group: "Range Selector" },
-    { id: "wiggleSpeed", label: "Wiggle Speed", kind: "number", step: 0.2, group: "Range Selector" },
-
-    // Transform Deltas
-    { id: "positionDelta", label: "Position Δ", kind: "vector", group: "Transform Deltas" },
-    { id: "rotationDelta", label: "Rotation Δ (°)", kind: "vector", degrees: true, step: 5, group: "Transform Deltas" },
-    { id: "scaleDelta", label: "Scale Δ", kind: "vector", group: "Transform Deltas" },
-
-    // Path Options
-    { id: "alignToPath", label: "Align to Path", kind: "boolean", group: "Path Options" },
-    { id: "pathOffset", label: "Path Offset", kind: "number", step: 0.02, group: "Path Options" },
-    { id: "fitToCurve", label: "Fit to Curve", kind: "boolean", group: "Path Options" },
-  ],
+  paramFields: buildPrimitiveDynamicParamFields(TEXT_ANIMATOR_PARAM_FIELDS)(),
+  dynamicParamFields: buildPrimitiveDynamicParamFields(TEXT_ANIMATOR_PARAM_FIELDS),
   evaluate: (inputs, params, ctx) => {
     const state = getOrCreateAnimatorState(ctx.nodeId);
     const group = state.group;
@@ -348,7 +361,7 @@ export const TEXT_ANIMATOR_NODE: NodeDefinition = {
 
         state.charGeometries.push(geom);
 
-        const charMesh = new THREE.Mesh(geom, state.sharedMaterial);
+        const charMesh = new THREE.Mesh(geom, state.dummyMesh.material);
         charMesh.name = `Glyph_${i}_${gInfo.char}`;
         charMesh.matrixAutoUpdate = false;
         group.add(charMesh);
@@ -366,9 +379,10 @@ export const TEXT_ANIMATOR_NODE: NodeDefinition = {
       state.lastBevelEnabled = bevelEnabled;
     }
 
-    // Material updates
+    // Material and texture updates
     const matParams = extractMaterialParams(inputs, params);
-    updateCharMeshesMaterial(state.charMeshes, state.sharedMaterial, matParams);
+    const texParams = extractTextureParams(inputs, params, ctx.nodeId);
+    updateCharMeshesMaterial(state.charMeshes, state.dummyMesh, matParams, texParams);
 
     // Apply native group root transform
     const baseRootMatrix = composeNativeMatrix(
@@ -662,7 +676,7 @@ interface TextOnPathState {
   group: THREE.Group;
   charGeometries: THREE.BufferGeometry[];
   charMeshes: THREE.Mesh[];
-  sharedMaterial: THREE.MeshStandardMaterial;
+  dummyMesh: THREE.Mesh;
   lastText?: string;
   lastFont?: Font;
   lastFontSize?: number;
@@ -670,6 +684,16 @@ interface TextOnPathState {
 }
 
 const pathTextCache = createNodeCache<TextOnPathState>((s) => disposeObject3D(s.group));
+
+export const CURVE_TEXT_PARAM_FIELDS: ParamFieldDef[] = [
+  { id: "text", label: "Text", kind: "text", group: "Typography" },
+  { id: "fontPreset", label: "Font", kind: "select", options: FONT_NAMES, group: "Typography" },
+  { id: "fontSize", label: "Font Size (px)", kind: "number", step: 4, group: "Typography" },
+  { id: "depth", label: "Depth / Relief", kind: "number", step: 0.05, group: "Typography" },
+  { id: "offset", label: "Path Offset (0..1)", kind: "number", step: 0.02, percent: true, group: "Path" },
+  { id: "tracking", label: "Tracking", kind: "number", step: 0.5, group: "Typography" },
+  { id: "fitToCurve", label: "Fit to Curve Length", kind: "boolean", group: "Path" },
+];
 
 export const CURVE_TEXT_ON_PATH_NODE: NodeDefinition = {
   type: "curve/text-on-path",
@@ -701,29 +725,26 @@ export const CURVE_TEXT_ON_PATH_NODE: NodeDefinition = {
     fitToCurve: false,
     ...COMMON_DEFAULT_PARAMS,
   },
-  paramFields: [
-    { id: "text", label: "Text", kind: "text" },
-    { id: "fontPreset", label: "Font", kind: "select", options: FONT_NAMES },
-    { id: "fontSize", label: "Font Size (px)", kind: "number", step: 4 },
-    { id: "depth", label: "Depth / Relief", kind: "number", step: 0.05 },
-    { id: "offset", label: "Path Offset (0..1)", kind: "number", step: 0.02, percent: true },
-    { id: "tracking", label: "Tracking", kind: "number", step: 0.5 },
-    { id: "fitToCurve", label: "Fit to Curve Length", kind: "boolean" },
-  ],
+  paramFields: buildPrimitiveDynamicParamFields(CURVE_TEXT_PARAM_FIELDS)(),
+  dynamicParamFields: buildPrimitiveDynamicParamFields(CURVE_TEXT_PARAM_FIELDS),
   evaluate: (inputs, params, ctx) => {
     let state = pathTextCache.get(ctx.nodeId);
     if (!state) {
       const group = new THREE.Group();
       group.name = `TextOnPath_${ctx.nodeId}`;
+      const dummyMesh = new THREE.Mesh(
+        new THREE.BufferGeometry(),
+        new THREE.MeshStandardMaterial({
+          color: 0xffffff,
+          roughness: 0.3,
+          metalness: 0.2,
+        })
+      );
       state = {
         group,
         charGeometries: [],
         charMeshes: [],
-        sharedMaterial: new THREE.MeshStandardMaterial({
-          color: 0xffffff,
-          roughness: 0.3,
-          metalness: 0.2,
-        }),
+        dummyMesh,
       };
       pathTextCache.set(ctx.nodeId, state);
     }
@@ -786,7 +807,7 @@ export const CURVE_TEXT_ON_PATH_NODE: NodeDefinition = {
         }
 
         state.charGeometries.push(geom);
-        const mesh = new THREE.Mesh(geom, state.sharedMaterial);
+        const mesh = new THREE.Mesh(geom, state.dummyMesh.material);
         mesh.matrixAutoUpdate = false;
         group.add(mesh);
         state.charMeshes.push(mesh);
@@ -798,9 +819,10 @@ export const CURVE_TEXT_ON_PATH_NODE: NodeDefinition = {
       state.lastDepth = depth;
     }
 
-    // Material
+    // Material and texture updates
     const matParams = extractMaterialParams(inputs, params);
-    updateCharMeshesMaterial(state.charMeshes, state.sharedMaterial, matParams);
+    const texParams = extractTextureParams(inputs, params, ctx.nodeId);
+    updateCharMeshesMaterial(state.charMeshes, state.dummyMesh, matParams, texParams);
 
     // Root pose
     const baseRootMatrix = composeNativeMatrix(
