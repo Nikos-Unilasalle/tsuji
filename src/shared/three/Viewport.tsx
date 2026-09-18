@@ -4424,13 +4424,22 @@ export function Viewport({
 
         if (targetObject && gizmoTarget) {
           if (gizmoTarget.kind === "native") {
-            gizmoPivotProxyNodeId = selectedNodeIdRef.current;
+            // The node whose params a drag writes into — the object
+            // resolveGizmoTarget actually resolved to, which for a pure
+            // geometry modifier (Twist, Wave, ...) is one or more hops
+            // upstream of the *selected* node. Using the selected node's id
+            // here instead silently wrote drags into a modifier node with no
+            // location/rotation/scale params of its own: the gizmo dragged
+            // and rendered fine (it's keyed off `targetObject`, the modifier's
+            // own mesh) but nothing ever moved, because the write landed on
+            // a node that ignores it.
+            gizmoPivotProxyNodeId = gizmoTarget.objectNodeId;
             gizmoPivotProxyRealObject = targetObject;
             gizmoPivotProxy.visible = true;
 
             if (!transformControls?.dragging || transformControls.object !== gizmoPivotProxy) {
               targetObject.updateWorldMatrix(true, false);
-              const node = graphRef.current.nodes.find((n) => n.id === selectedNodeIdRef.current);
+              const node = graphRef.current.nodes.find((n) => n.id === gizmoTarget.objectNodeId);
               const pivOffset =
                 targetObject.userData && targetObject.userData.pivot
                   ? asVector3(targetObject.userData.pivot, new THREE.Vector3())
