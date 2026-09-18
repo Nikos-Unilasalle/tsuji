@@ -182,7 +182,7 @@ function fileField(nodeId: string, field: ParamFieldDef & { kind: "file" }, valu
               const ext = path.split(".").pop()?.toLowerCase() ?? "";
               const isBinary = [
                 "png", "jpg", "jpeg", "webp", "bmp", "hdr", "exr", "tif", "tiff",
-                "mp3", "wav", "ogg", "flac", "m4a", "aac", "glb", "ply",
+                "mp3", "wav", "ogg", "flac", "m4a", "aac", "glb", "ply", "mp4",
               ].includes(ext);
 
               if (isBinary) {
@@ -208,7 +208,7 @@ function fileField(nodeId: string, field: ParamFieldDef & { kind: "file" }, valu
             const ext = path.split(".").pop()?.toLowerCase() ?? "";
             const isBinary = [
               "png", "jpg", "jpeg", "webp", "bmp", "hdr", "exr", "tif", "tiff",
-              "mp3", "wav", "ogg", "flac", "m4a", "aac", "glb", "ply",
+              "mp3", "wav", "ogg", "flac", "m4a", "aac", "glb", "ply", "mp4",
             ].includes(ext);
 
             if (isBinary) {
@@ -231,7 +231,7 @@ function fileField(nodeId: string, field: ParamFieldDef & { kind: "file" }, valu
               const ext = path.split(".").pop()?.toLowerCase() ?? "";
               const isBinary = [
                 "png", "jpg", "jpeg", "webp", "bmp", "hdr", "exr", "tif", "tiff",
-                "mp3", "wav", "ogg", "flac", "m4a", "aac", "glb", "ply",
+                "mp3", "wav", "ogg", "flac", "m4a", "aac", "glb", "ply", "mp4",
               ].includes(ext);
 
               if (isBinary) {

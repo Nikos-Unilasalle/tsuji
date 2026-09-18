@@ -42,9 +42,20 @@ interface TextureNodeState {
   lastPath?: string;
   /** Last wrap/repeat/offset signature — avoid re-uploading the texture every frame. */
   lastSig?: string;
+  /** Backing <video> element when the loaded file is a video — kept alive so the VideoTexture keeps decoding frames. */
+  videoEl?: HTMLVideoElement;
 }
 
-const textureCache = createNodeCache<TextureNodeState>((s) => s.texture?.dispose());
+const VIDEO_EXTENSIONS = new Set(["mp4"]);
+
+const textureCache = createNodeCache<TextureNodeState>((s) => {
+  s.texture?.dispose();
+  if (s.videoEl) {
+    s.videoEl.pause();
+    s.videoEl.removeAttribute("src");
+    s.videoEl.load();
+  }
+});
 
 const textureTransformCache = createNodeCache<{ texture?: THREE.Texture; lastSig?: string }>((s) => s.texture?.dispose());
 
@@ -66,9 +77,100 @@ function createTextureBlob(content: unknown, path: string): Blob {
     webp: "image/webp",
     bmp: "image/bmp",
     svg: "image/svg+xml",
+    mp4: "video/mp4",
   };
   const mime = mimeMap[ext] || "image/png";
   return content instanceof Uint8Array ? new Blob([content], { type: mime }) : new Blob([content as any], { type: mime });
+}
+
+/**
+ * Loads an image or video file into `state.texture`, calling `onReady` once the
+ * source's dimensions are known (so callers can refresh aspect-ratio-dependent
+ * geometry). Video files decode into a looping, muted `<video>` element wrapped
+ * in a `THREE.VideoTexture`, which uploads a fresh frame each render.
+ */
+function loadTextureFile(path: string, content: unknown, state: TextureNodeState, onReady?: () => void): void {
+  const ext = path.split(".").pop()?.toLowerCase() ?? "";
+  const blob = createTextureBlob(content, path);
+  const url = URL.createObjectURL(blob);
+
+  state.texture?.dispose();
+  if (state.videoEl) {
+    state.videoEl.pause();
+    state.videoEl.removeAttribute("src");
+    state.videoEl.load();
+    state.videoEl = undefined;
+  }
+
+  if (VIDEO_EXTENSIONS.has(ext)) {
+    const video = document.createElement("video");
+    video.muted = true;
+    video.loop = true;
+    video.playsInline = true;
+    video.autoplay = true;
+    video.addEventListener("loadedmetadata", () => {
+      if (video.videoWidth && video.videoHeight) {
+        state.aspectRatio = video.videoWidth / video.videoHeight;
+      }
+      onReady?.();
+    });
+    video.src = url;
+    video.play().catch(() => {});
+
+    const texture = new THREE.VideoTexture(video);
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.wrapT = THREE.RepeatWrapping;
+    texture.colorSpace = THREE.SRGBColorSpace;
+    state.videoEl = video;
+    state.texture = texture;
+    return;
+  }
+
+  const texture = new THREE.TextureLoader().load(
+    url,
+    (loaded) => {
+      URL.revokeObjectURL(url);
+      if (loaded.image?.width && loaded.image?.height) {
+        state.aspectRatio = loaded.image.width / loaded.image.height;
+      }
+      loaded.needsUpdate = true;
+      onReady?.();
+    },
+    undefined,
+    () => URL.revokeObjectURL(url)
+  );
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.RepeatWrapping;
+  texture.colorSpace = THREE.SRGBColorSpace;
+  state.texture = texture;
+}
+
+/**
+ * Anchors a loaded video's playback to the timeline playhead, same scheme as
+ * the Audio Player node: `startFrame` < 0 leaves the video free-running
+ * (autoplay/loop from load), `startFrame` >= 0 makes it start on that frame,
+ * scrub with the playhead, and land on the same frame on export. Only
+ * corrects `currentTime` when it has actually drifted — writing it every
+ * frame restarts the decoder and stutters playback.
+ */
+function syncVideoToTimeline(video: HTMLVideoElement, startFrame: number, loop: boolean, ctx: { fps?: number; currentFrame?: number }): void {
+  if (startFrame < 0) return;
+
+  const fps = Math.max(1, Number(ctx.fps) || 30);
+  const frame = ctx.currentFrame ?? -1;
+  const offsetSeconds = (frame - startFrame) / fps;
+  const clipLength = isNaN(video.duration) ? 0 : video.duration;
+  const withinClip = frame >= startFrame && (loop || clipLength <= 0 || offsetSeconds < clipLength);
+
+  if (frame >= 0 && withinClip && video.src) {
+    const target = loop && clipLength > 0 ? offsetSeconds % clipLength : offsetSeconds;
+    if (Math.abs(video.currentTime - target) > 0.25) {
+      video.currentTime = Math.max(0, target);
+    }
+    if (video.paused) video.play().catch(() => {});
+  } else if (!video.paused) {
+    video.pause();
+  }
 }
 
 function asColor(v: unknown, fallback: THREE.Color): THREE.Color {
@@ -104,38 +206,20 @@ export const TEXTURE_IMAGE_NODE: NodeDefinition = {
     filePath: "",
     wrapS: "repeat",
     wrapT: "repeat",
+    loop: true,
+    startFrame: -1,
   },
   dynamicParamFields: () => [
     {
       id: "filePath",
-      label: "Image File",
+      label: "Image / Video File",
       kind: "file",
-      accept: [".png", ".jpg", ".jpeg", ".webp", ".bmp", ".svg"],
+      accept: [".png", ".jpg", ".jpeg", ".webp", ".bmp", ".svg", ".mp4"],
       onLoaded: (nodeId, path, content) => {
         const state = getState(nodeId);
         state.lastPath = path;
         try {
-          const blob = createTextureBlob(content, path);
-          const url = URL.createObjectURL(blob);
-          const texture = new THREE.TextureLoader().load(
-            url,
-            (loaded) => {
-              URL.revokeObjectURL(url);
-              if (loaded.image?.width && loaded.image?.height) {
-                state.aspectRatio = loaded.image.width / loaded.image.height;
-              }
-              loaded.needsUpdate = true;
-            },
-            undefined,
-            () => URL.revokeObjectURL(url)
-          );
-          texture.wrapS = THREE.RepeatWrapping;
-          texture.wrapT = THREE.RepeatWrapping;
-          texture.colorSpace = THREE.SRGBColorSpace;
-          // Re-picking a file used to strand the previous texture's GPU upload:
-          // the cache disposer only ever sees the last one.
-          state.texture?.dispose();
-          state.texture = texture;
+          loadTextureFile(path, content, state);
         } catch (err) {
           console.error("Failed to load image texture:", err);
         }
@@ -143,10 +227,18 @@ export const TEXTURE_IMAGE_NODE: NodeDefinition = {
     },
     { id: "wrapS", label: "Wrap S", kind: "select", options: ["repeat", "clamp", "mirror"] },
     { id: "wrapT", label: "Wrap T", kind: "select", options: ["repeat", "clamp", "mirror"] },
+    { id: "loop", label: "Loop (video)", kind: "boolean" },
+    { id: "startFrame", label: "Start Frame (video, -1 = free-running)", kind: "number", step: 1 },
   ],
   evaluate: (inputs, params, ctx) => {
     const state = getState(ctx.nodeId);
     const texture = state.texture;
+
+    if (state.videoEl) {
+      const loop = params.loop !== undefined ? Boolean(params.loop) : true;
+      state.videoEl.loop = loop;
+      syncVideoToTimeline(state.videoEl, Math.round(Number(params.startFrame) ?? -1), loop, ctx);
+    }
 
     if (texture) {
       const wrapMap: Record<string, THREE.Wrapping> = {
@@ -212,6 +304,8 @@ export const TEXTURE_PLANE_NODE: NodeDefinition = {
     keepAspect: true,
     roughness: 0.5,
     metalness: 0.1,
+    loop: true,
+    startFrame: -1,
   },
   dynamicParamFields: () => [
     { id: "visible", label: "Visible", kind: "boolean", group: "Transform" },
@@ -220,37 +314,18 @@ export const TEXTURE_PLANE_NODE: NodeDefinition = {
     { id: "scale", label: "Scale", kind: "vector", group: "Transform" },
     {
       id: "filePath",
-      label: "Image File (Fallback)",
+      label: "Image / Video File (Fallback)",
       kind: "file",
-      accept: [".png", ".jpg", ".jpeg", ".webp", ".bmp", ".svg"],
+      accept: [".png", ".jpg", ".jpeg", ".webp", ".bmp", ".svg", ".mp4"],
       onLoaded: (nodeId, path, content) => {
         const state = getState(nodeId);
         state.lastPath = path;
         try {
-          const blob = createTextureBlob(content, path);
-          const url = URL.createObjectURL(blob);
-          const texture = new THREE.TextureLoader().load(
-            url,
-            (loaded) => {
-              URL.revokeObjectURL(url);
-              if (loaded.image?.width && loaded.image?.height) {
-                state.aspectRatio = loaded.image.width / loaded.image.height;
-              }
-              loaded.needsUpdate = true;
-              if (state.mesh?.material) {
-                (state.mesh.material as THREE.Material).needsUpdate = true;
-              }
-            },
-            undefined,
-            () => URL.revokeObjectURL(url)
-          );
-          texture.wrapS = THREE.RepeatWrapping;
-          texture.wrapT = THREE.RepeatWrapping;
-          texture.colorSpace = THREE.SRGBColorSpace;
-          // Re-picking a file used to strand the previous texture's GPU upload:
-          // the cache disposer only ever sees the last one.
-          state.texture?.dispose();
-          state.texture = texture;
+          loadTextureFile(path, content, state, () => {
+            if (state.mesh?.material) {
+              (state.mesh.material as THREE.Material).needsUpdate = true;
+            }
+          });
         } catch (err) {
           console.error("Failed to load texture for plane:", err);
         }
@@ -263,9 +338,17 @@ export const TEXTURE_PLANE_NODE: NodeDefinition = {
     { id: "keepAspect", label: "Keep Aspect Ratio", kind: "boolean" },
     { id: "roughness", label: "Roughness", kind: "number", step: 0.05 },
     { id: "metalness", label: "Metalness", kind: "number", step: 0.05 },
+    { id: "loop", label: "Loop (video)", kind: "boolean" },
+    { id: "startFrame", label: "Start Frame (video, -1 = free-running)", kind: "number", step: 1 },
   ],
   evaluate: (inputs, params, ctx) => {
     const state = getState(ctx.nodeId);
+
+    if (state.videoEl) {
+      const videoLoop = params.loop !== undefined ? Boolean(params.loop) : true;
+      state.videoEl.loop = videoLoop;
+      syncVideoToTimeline(state.videoEl, Math.round(Number(params.startFrame) ?? -1), videoLoop, ctx);
+    }
 
     // Create or retrieve 3D Plane Mesh
     if (!state.mesh) {
