@@ -46,6 +46,8 @@ Le sélecteur de plage convertit un intervalle normalisé $[s, e] = [\text{start
 - **Triangle** : Pic symétrique en chapeau au centre de l'intervalle.
 - **Round** : Demi-ellipse douce $\sqrt{1 - (2u - 1)^2}$.
 - **Square** : Échelon binaire net ($u \ge 0.5$).
+- **Elastic** : Dépassement oscillant élastique amorti avec recul (*spring recoil / overshoot*), conférant aux lettres un ressort dynamique très percutant.
+- **Bounce** : Rebond parabolique décroissant à trois impacts successifs avant immobilisation stabilisée.
 
 #### Easing Asymétrique (`easeHigh` & `easeLow`)
 Modulation non linéaire des poids sans altérer les bornes :

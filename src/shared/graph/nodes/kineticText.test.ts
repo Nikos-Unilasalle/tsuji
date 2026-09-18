@@ -65,6 +65,25 @@ describe("Range Selector Mathematics", () => {
     expect(wiggly.length).toBe(5);
     expect(wiggly).not.toEqual(baseWeights);
   });
+
+  it("computes elastic weights with spring recoil overshoot", () => {
+    const weights = computeRangeWeights(11, { start: 0, end: 1, shape: "elastic" });
+    expect(weights.length).toBe(11);
+    expect(weights[0]).toBe(0);
+    expect(weights[10]).toBe(1);
+    // Elastic overshoot: some intermediate values should exceed 1.0
+    const hasOvershoot = weights.some((w) => w > 1.0);
+    expect(hasOvershoot).toBe(true);
+  });
+
+  it("computes bounce weights with decaying parabolic rebounds", () => {
+    const weights = computeRangeWeights(11, { start: 0, end: 1, shape: "bounce" });
+    expect(weights.length).toBe(11);
+    expect(weights[0]).toBe(0);
+    expect(weights[10]).toBe(1);
+    // At u ~ 0.5 (middle), bounce is already in its rebounds (> 0.5)
+    expect(weights[5]).toBeGreaterThan(0.6);
+  });
 });
 
 describe("Text Layout Engine", () => {

@@ -58,7 +58,7 @@ Ce document référence l'ensemble des **276 nœuds** disponibles dans le moteur
 
 ## 2.bis. Typographie Cinétique & Animation de Texte Avancée
 *(Voir spécification détaillée : [[Kinetic Typography and Text Animation]])*
-- **`text/animator`** (*Text Animator*) : Moteur complet d'animation typographique 3D par caractère/mot/ligne. Équivalent nodale After Effects Text Animator avec Range Selector (smooth, linear, ramp, triangle, round, square), deltas de transformation (position, rotation, échelle), offset glissant, easing non-linéaire, gigue procédurale harmonique (wiggly) et projection conforme sur courbe 3D.
+- **`text/animator`** (*Text Animator*) : Moteur complet d'animation typographique 3D par caractère/mot/ligne. Équivalent nodale After Effects Text Animator avec Range Selector (smooth, linear, ramp, triangle, round, square, elastic, bounce), deltas de transformation (position, rotation, échelle), offset glissant, easing non-linéaire, gigue procédurale harmonique (wiggly) et projection conforme sur courbe 3D.
 - **`text/decompose`** (*Text Decompose*) : Décompose une chaîne de texte en glyphes, mots et lignes avec positions d'ancrage 3D et matrices individuelles.
 - **`text/range-selector`** (*Text Range Selector*) : Calculateur de poids de sélection autonome pour $N$ éléments ou listes, avec forme de transition paramétrable, inversion et permutation pseudo-aléatoire déterministe.
 - **`curve/text-on-path`** (*Text on Path*) : Conforme un texte extrudé 3D le long d'une courbe spline avec tangentes lissées et repères de Frenet sans distorsion d'axe.

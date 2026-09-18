@@ -10,7 +10,21 @@ export type RangeSelectorShape =
   | "ramp_down"
   | "triangle"
   | "round"
-  | "square";
+  | "square"
+  | "elastic"
+  | "bounce";
+
+export const RANGE_SELECTOR_SHAPES: RangeSelectorShape[] = [
+  "smooth",
+  "linear",
+  "ramp_up",
+  "ramp_down",
+  "triangle",
+  "round",
+  "square",
+  "elastic",
+  "bounce",
+];
 
 export interface RangeSelectorOptions {
   /** Start point of the active selection (0 to 1). Default: 0 */
@@ -46,6 +60,29 @@ function clamp(v: number, min: number, max: number): number {
 function smoothstep(min: number, max: number, value: number): number {
   const x = Math.max(0, Math.min(1, (value - min) / (max - min)));
   return x * x * (3 - 2 * x);
+}
+
+export function bounceEaseOut(p: number): number {
+  const n1 = 7.5625;
+  const d1 = 2.75;
+  let x = p;
+  if (x < 1 / d1) {
+    return n1 * x * x;
+  }
+  if (x < 2 / d1) {
+    return n1 * (x -= 1.5 / d1) * x + 0.75;
+  }
+  if (x < 2.5 / d1) {
+    return n1 * (x -= 2.25 / d1) * x + 0.9375;
+  }
+  return n1 * (x -= 2.625 / d1) * x + 0.984375;
+}
+
+export function elasticEaseOut(p: number): number {
+  if (p <= 0) return 0;
+  if (p >= 1) return 1;
+  const c4 = (2 * Math.PI) / 3;
+  return Math.pow(2, -10 * p) * Math.sin((p * 10 - 0.75) * c4) + 1;
 }
 
 /** Returns a deterministic shuffled permutation of [0, 1, ..., count - 1]. */
@@ -148,13 +185,47 @@ export function computeRangeWeights(count: number, options: RangeSelectorOptions
         case "square":
           w = t >= s && t <= e ? 1 : 0;
           break;
+        case "elastic":
+          w = t <= s ? 0 : t >= e ? 1 : elasticEaseOut(u);
+          break;
+        case "bounce":
+          w = t <= s ? 0 : t >= e ? 1 : bounceEaseOut(u);
+          break;
         default:
           w = smoothstep(0, 1, u);
       }
     } else {
       // Inverted range where start > end
       const u = clamp((t - e) / -range, 0, 1);
-      w = 1 - smoothstep(0, 1, u);
+      switch (shape) {
+        case "smooth":
+          w = 1 - smoothstep(0, 1, u);
+          break;
+        case "linear":
+        case "ramp_up":
+          w = 1 - u;
+          break;
+        case "ramp_down":
+          w = u;
+          break;
+        case "triangle":
+          w = u < 0.5 ? 2 * u : 2 * (1 - u);
+          break;
+        case "round":
+          w = Math.sin(u * Math.PI);
+          break;
+        case "square":
+          w = t >= e && t <= s ? 1 : 0;
+          break;
+        case "elastic":
+          w = t <= e ? 1 : t >= s ? 0 : 1 - elasticEaseOut(u);
+          break;
+        case "bounce":
+          w = t <= e ? 1 : t >= s ? 0 : 1 - bounceEaseOut(u);
+          break;
+        default:
+          w = 1 - smoothstep(0, 1, u);
+      }
     }
 
     // Apply easing

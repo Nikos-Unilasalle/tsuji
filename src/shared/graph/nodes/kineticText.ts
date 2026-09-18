@@ -14,6 +14,7 @@ import {
 import {
   computeRangeWeights,
   RangeSelectorShape,
+  RANGE_SELECTOR_SHAPES,
 } from "../../three/typography/rangeSelector";
 import {
   computeTextLayout,
@@ -241,7 +242,7 @@ export const TEXT_ANIMATOR_NODE: NodeDefinition = {
       id: "selectorShape",
       label: "Shape",
       kind: "select",
-      options: ["smooth", "linear", "ramp_up", "ramp_down", "triangle", "round", "square"],
+      options: RANGE_SELECTOR_SHAPES,
       group: "Range Selector",
     },
     { id: "start", label: "Start", kind: "number", step: 0.05, percent: true, group: "Range Selector" },
@@ -604,7 +605,7 @@ export const TEXT_RANGE_SELECTOR_NODE: NodeDefinition = {
       id: "shape",
       label: "Shape",
       kind: "select",
-      options: ["smooth", "linear", "ramp_up", "ramp_down", "triangle", "round", "square"],
+      options: RANGE_SELECTOR_SHAPES,
     },
     { id: "start", label: "Start (0..1)", kind: "number", step: 0.05, percent: true },
     { id: "end", label: "End (0..1)", kind: "number", step: 0.05, percent: true },
