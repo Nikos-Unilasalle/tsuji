@@ -14,7 +14,11 @@ Les champs de réglage sont décrits par des types unions dans `types.ts` :
 - `color` (avec palette HSV/Hex)
 - `color_ramp` (dégradé multi-points)
 - `curve_profile` (courbe Bézier interactive)
-- `file` (avec callback `onLoaded`)
+- `file` (avec callback `onLoaded` et gestion binaire sécurisée)
+
+### 1.1 Ingestion de Fichiers Binaires & Vidéos (`.mp4`)
+- Le sélecteur de fichiers gère une liste blanche stricte de formats binaires (`.glb`, `.gltf`, `.ply`, `.obj`, audio et désormais vidéo **`.mp4`** pour les nœuds `texture/image` et `object/texture-plane`).
+- Les fichiers binaires sont lus directement sous forme d'ArrayBuffer / Blob URL afin d'éviter la corruption fatale par conversion textuelle UTF-8.
 
 ---
 
@@ -23,7 +27,14 @@ Les champs de réglage sont décrits par des types unions dans `types.ts` :
 
 ---
 
+## 3. Paramètres de Groupes & Épinglage HUD
+- Les nœuds de type `structure/group` exposent dynamiquement dans l'inspecteur les paramètres publiés par leurs nœuds internes.
+- Prise en charge intégrale de l'épinglage HUD (`ViewportParamHUD.tsx`) pour piloter des paramètres de groupe directement dans la vue 3D.
+
+---
+
 ## 🔗 Notes Associées
 - [[Keyframe Store and Timeline]]
 - [[Graph Editor and Canvas]]
 - [[Node Creation Guide]]
+- [[Node_Groups_Implementation_Plan]]

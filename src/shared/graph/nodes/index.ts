@@ -503,6 +503,8 @@ export * from "./shapeKey";
 export * from "./curveFromPointLists";
 export * from "./lattice";
 export * from "./metaballs";
+export * from "./weld";
+export * from "./contourScan";
 export * from "./subdivide";
 export * from "./meshEdit";
 export * from "./shade";

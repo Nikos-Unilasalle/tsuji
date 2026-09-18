@@ -24,9 +24,8 @@ Ce document détaille le pipeline de rendu Three.js, la gestion des vues multipl
 ## 3. Chaîne de Post-Traitement (`postProcessChain.ts`)
 
 Passe de rendu en espace écran combinant :
-- Bloom (`postprocess/bloom`)
-- Profondeur de champ DOF (`postprocess/dof`)
-- Vignettage, grain argentique, aberrations chromatiques (RGB shift) et occlusion ambiante SSAO.
+- Passes Optiques : Bloom (`postprocess/bloom`), Profondeur de champ DOF (`postprocess/dof`), Vignettage, aberrations chromatiques (RGB shift) et occlusion ambiante SSAO.
+- Passes Pellicule & Imprimerie : Dual Tone (`postprocess/duotone`), Trame d'imprimerie (`postprocess/halftone`), Grain argentique (`postprocess/film-texture`), Super 8 (`postprocess/super8`), Brosse sèche (`postprocess/dry-brush`). Voir [[Vintage Film Post Processing]].
 
 ---
 
@@ -39,6 +38,16 @@ Passe de rendu en espace écran combinant :
     3. Réinitialisation complète des coordonnées et de la cible de la caméra 3D (`resetCameraRef.current()`).
 - **Initialisation de la Timeline** :
   - La timeline démarre en mode **Pause** par défaut (`isPlaying = false`) afin de préserver les cycles GPU/CPU lors de l'ouverture d'un projet volumineux ou de la conception d'un graphe complexe.
+- **Bascule Plein Écran (`Fullscreen`)** :
+  - Intégration d'un bouton de passage en plein écran natif / web à l'extrême droite de la barre supérieure, maximisant la visibilité scénographique en régie ou lors de tests de projection.
+
+---
+
+## 5. Résolution Ciblée du Gizmo de Transformation (`resolveGizmoTarget`)
+
+Lors de la sélection d'un nœud dans l'éditeur de graphe :
+- **Modificateurs Purs (Twist, Wave, Subdivide, etc.)** : Le gizmo est physiquement positionné sur l'objet affiché, mais ses deltas d'interaction sont réinjectés vers l'amont sur le nœud générateur d'origine (`objectNodeId`) qui détient les propriétés `location`, `rotation`, `scale`.
+- **Sous-Graphes et Groupes (`structure/group`)** : Prise en charge native du gizmo de manipulation 3D pour translater et orienter un groupe entier comme un conteneur unique.
 
 ---
 
@@ -46,4 +55,7 @@ Passe de rendu en espace écran combinant :
 - [[ThreeJS Optimization and Performance Guide]]
 - [[Projective Geometry and DLT Calibration]]
 - [[State Management and Multi-Canvas]]
+- [[P4_Gizmo_Modifier_Resolution_and_Deform_Sync]]
+- [[Vintage Film Post Processing]]
+- [[Parametric Geometry and Modifiers]]
 

@@ -32,10 +32,14 @@ Sur les sockets d'entrée `geometry`, la propriété `owns: true` indique que le
 
 ---
 
-## 3. Sockets Dynamiques
+## 3. Sockets Dynamiques & Réactivité Immédiate
 
-- `dynamicInputs` : Permet l'auto-génération de nouveaux ports libres au fur et à mesure des branchements (ex. `Merge`).
-- `dynamicOutputs` : Permet d'adapter le type de sortie au type branché en entrée (ex. `Logic Bridge`).
+- **`dynamicInputs`** : Permet l'auto-génération de nouveaux ports libres au fur et à mesure des branchements (ex. `Merge`, `Force Fields`).
+- **`dynamicOutputs`** : Permet d'adapter le type de sortie au type branché en entrée (ex. `Logic Bridge`).
+- **Ports Frontières de Sous-Graphes (`Group Input` / `Group Output`)** : Présentent un port `+` terminal. Déposer une connexion sur ce connecteur matérialise instantanément une prise typée sur le bloc groupe parent.
+- **Enregistrement Réactif React Flow (`useUpdateNodeInternals`)** :
+  - Dès qu'un socket dynamique apparaît, disparaît ou change de type, le composant invoque `useUpdateNodeInternals(node.id)`.
+  - Cela force la mise à jour immédiate du cache de positionnement des poignées (*handles*) dans le DOM virtuel de React Flow, permettant à l'utilisateur de cliquer et glisser un câble instantanément sans devoir zoomer ou déplacer la vue.
 
 ---
 
@@ -43,3 +47,5 @@ Sur les sockets d'entrée `geometry`, la propriété `owns: true` indique que le
 - [[Graph Evaluation Runtime]]
 - [[Node Creation Guide]]
 - [[Parametric Geometry and Modifiers]]
+- [[P4_Gizmo_Modifier_Resolution_and_Deform_Sync]]
+- [[Node_Groups_Implementation_Plan]]

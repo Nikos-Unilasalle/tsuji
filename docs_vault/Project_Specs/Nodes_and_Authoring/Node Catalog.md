@@ -2,7 +2,7 @@
 
 *Emplacement dans le code : `src/shared/graph/nodes/index.ts`*
 
-Ce document référence l'ensemble des plus de 135 nœuds disponibles dans le moteur Tsuji, classés par domaine fonctionnel.
+Ce document référence l'ensemble des plus de 145 nœuds disponibles dans le moteur Tsuji, classés par domaine fonctionnel.
 
 ---
 
@@ -18,8 +18,20 @@ Ce document référence l'ensemble des plus de 135 nœuds disponibles dans le mo
 - **`variable/get`** (*Get Variable*) : Lit la valeur écrite par le `Set Variable` correspondant via une liste déroulante dynamique de tous les noms enregistrés. Global à la session et multi-canvas (survit à `Go To Canvas`). Renvoie la valeur zéro de son type si non encore évalué, ou `undefined` si inexistant.
 - **`routing/reroute`** (*Reroute*) : Nœud passe-plat de routage filaire pour clarifier les faisceaux de connexions complexes sans modifier la donnée.
 
+## 1.ter. Sous-Graphes & Groupes de Nœuds (`structure/group`)
+- **`structure/group`** (*Group*) : Encapsule une sélection de nœuds dans un sous-graphe hiérarchique réutilisable (`Cmd+G` pour grouper, `Cmd+Shift+G` pour dissocier).
+  - **Navigation & Vue** : Double-clic pour plonger dans le sous-graphe avec cadrage automatique du niveau, barre de fil d'Ariane (*breadcrumb*) pour remonter à l'arbre parent.
+  - **Intégrité de Session** : Les nœuds groupés conservent leurs identifiants uniques (`node.id`), préservant les pistes d'animation `KeyframeStore`, les caches GPU par nœud, les paramètres épinglés au HUD et la pile Undo/Redo.
+  - **Gizmo de Groupe** : Support interactif complet du gizmo de manipulation 3D au niveau du groupe.
+- **`structure/group-input`** (*Group Input*) & **`structure/group-output`** (*Group Output*) : Bornes d'interface interne du sous-graphe. Chaque borne présente un connecteur dynamique `+` : déposer un fil matérialise instantanément un port typé correspondant sur le nœud groupe extérieur.
+
 ## 2. Géométrie 3D & Modificateurs
 - **Primitives 3D** : Box, Sphere, Cylinder, Cone, Disc, Plane, Polygon, Text 3D, Empty, **`object/raccoon`** *(avec Gizmo interactif)*.
+- **Surfaces Implicites** :
+  - **`object/metaballs`** (*Metaballs*) : Générateur de surface implicite fluide par échantillonnage Marching Cubes sur un nuage de centres.
+    - **Entrées Polyvalentes** : Accepte une liste explicite de points (`Mesh to Points`, `Instance Positions`) ou directement un maillage géométrique (`geometry`, avec `owns: true`) dont il extrait les centres de chaque enfant et de chaque instance d'`InstancedMesh` (permettant de brancher directement un `structure/array` ou `spawner`).
+    - **Paramètres Clés** : Rayon (`radius`), lissage d'influence (`smooth`), résolution de grille (`resolution` 16 à 128) et matériau.
+    - **Optimisation** : Le résultat du sampler Marching Cubes est copié dans la géométrie en cache du nœud hors de la boîte unité $[-1, 1]$ (évitant l'empreinte du buffer scratch de 60k polys), et une porte de signature skip le recalcul tant que les centres demeurent immobiles (7.4 ms/frame à résolution 64).
 - **`object/terrain`** (*Terrain Maker*) : Générateur de terrain optimisé pour jeux vidéo et simulations physiques (compatible Rapier / `physics/rigid-body`).
   - **Entrées** : `heightmap` (texture de relief), `material`, `texture` (albedo), `normal`, `roughnessMap`, `matrix`, `visible`.
   - **Sorties** : `geometry` (Mesh Three.js sur le plan XZ avec Y pour hauteur), `matrix`, `heightmap` (Texture générée / mise à jour).
@@ -34,18 +46,22 @@ Ce document référence l'ensemble des plus de 135 nœuds disponibles dans le mo
     - Attributs configurés en `THREE.DynamicDrawUsage` pour un streaming GPU sans saccade.
     - Compatibilité directe avec Rapier (`physics/rigid-body`) : dérivation automatique en collider trimesh statique pour véhicules (`physics/vehicle`), personnages (`physics/character`) et corps rigides.
 - **Importateurs** : OBJ (`objLoader.ts`), GLTF (`gltfLoader.ts`), PLY (`plyLoader.ts`).
-- **Modificateurs Paramétriques** :
+- **Modificateurs Paramétriques & Topologiques** :
+  - **`geometry/weld`** (*Weld / Soft Fillet*) : Fusion booléenne douce et congé de raccordement par champ de distance signé (SDF) volumique 3D voxelisé et extraction Surface Nets. Fusionne des maillages en intersection en un solide continu et lisse avec rayon de congé (`filletRadius`) et résolution paramétrables.
+  - **`geometry/contour-scan`** (*Contour Scan*) : Tranchage de maillage 3D par plans parallèles réguliers selon l'axe X, Y ou Z. Génère des rubans polygonaux orientés avec normales stables ou un ensemble de courbes splines (`curves`) pour effets de balayage topographique, morphing et rendu vectoriel.
   - **`geometry/twist-bend-taper`** : Torsion axiale (*Twist*), flexion circulaire (*Bend*) et effilement conique (*Taper*).
   - **`geometry/wave-ripple`** : Ondulations concentriques (*Ripple* avec point d'impact $X/Z$) et ondes planes (*Linear*).
   - **`geometry/facet-explode`** : Éclatement polygonal le long des normales de faces.
-  - `lattice/deform`, `subdivide`, `mesh/extrude`, `mesh/delete`, `boolean`, `shade`, `visualSlice`, `squash`.
+  - **Synchronisation Dynamique des Déformateurs Chaînés** : Les déformateurs successifs (ex. Wave $\rightarrow$ Twist) synchronisent leur géométrie de base (`base`) depuis le buffer de positions live du maillage source à chaque frame en cache-hit, garantissant la propagation continue de l'animation d'onde.
+  - `lattice/deform`, `subdivide`, `solidify`, `mesh/extrude`, `mesh/delete`, `boolean`, `shade`, `visualSlice`, `squash`.
 - **Courbes & Lignes** : Catmull-Rom splines, SVG import, shape keys, curve to mesh, curve deform.
 
-## 3. Particules & Simulation GPGPU / Chaos
+### 3. Particules & Simulation GPGPU / Chaos
 - **Émetteurs** : `particles/emitter`, `emitter-from-points`, `emitter-from-surface`.
+  - **Améliorations Émetteurs & Rafales** : Support de la vélocité initiale (`initialVelocity`), gigue de diamètre (`diameterJitter`), et émission en rafale complète (`burstPopulation`) assurant le peuplement immédiat de la population voulue sans sous-échantillonnage de frame.
 - **Moteur GPU & Champs de Force** :
   - `particles/simulate` (shaders de turbulence, gravité, vortex, rebond sol).
-  - `particles/force-field` : attracteur, vortex, vent, turbulence.
+  - `particles/force-field` : attracteur, vortex, vent, turbulence. Proxy de sélection 3D dans le viewport aligné sur le design visuel des émetteurs.
   - **`particles/curl-noise`** : champ de force vectoriel à rotationnel incompressible (volutes de fumée / encre) avec proxy Gizmo 3D dans le viewport.
 - **Dynamique Chaotique** :
   - **`particles/strange-attractor`** : solveur RK4 de systèmes non-linéaires (**Lorenz**, **Aizawa**, **Thomas**) avec transform, gizmo natif et sortie points list.
@@ -72,13 +88,22 @@ Tous ces matériaux se branchent directement sur la prise `material` des maillag
 - **`sound/audio-player`**, **`sound/spectrum`**, **`sound/peak-detector`**, **`sound/synth`**, **`sound/microphone`**.
 - **`keyboard`**, **`mouse`**, **`click`**, **`csv-reader`**.
 
-## 7. Rendu & Post-Traitement
+## 7. Rendu, Textures & Post-Traitement
 - **`render`** (*Render*) : Nœud terminal du pipeline de rendu de la scène.
   - Sockets : `geometry` (`owns: true`), `environment`, `postprocess`, `motionBlur`.
   - Sorties : `geometry`, `environment`, `postprocess`.
   - **`timelineEnabled` (*Timeline / Frame Count*)** : Bascule permettant de désactiver la durée fixe et la barre de scrub pour les scènes interactives, jeux et simulations physiques infinies. Si décoché, la tête de lecture ne défile plus automatiquement et la réinitialisation se fait via `Shift+Space` (voir [[Simulation Reset and Epoch Architecture]]).
   - Paramètres de format : `resolutionPreset`, `width`, `height`, `fps`, `frameCount`, `motionBlur`.
-- **Post-Process** : Bloom, DOF, RGB Shift, Vignette, Outline, Grain & CRT Scanlines (animés à 60 FPS), Glitch, SSAO, Fog.
+- **Textures Vidéo MP4 (`texture/image`, `object/texture-plane`)** :
+  - Décodage et streaming GPU via `THREE.VideoTexture` pour fichiers vidéo `.mp4`.
+  - Modes de lecture synchronisés : `startFrame` et `loop` permettant la lecture libre (*free-run*) ou asservie à la tête de lecture de la timeline (reproductibilité d'export), avec prise en charge binaire directe dans `ParamPanel`.
+- **Post-Process Optique Standard** : Bloom, DOF, RGB Shift, Vignette, Outline, Grain & CRT Scanlines (animés à 60 FPS), Glitch, SSAO, Fog.
+- **Post-Process Vintage & Look Pellicule / Imprimerie (`src/shared/graph/nodes/postprocessingFilm.ts`)** :
+  - **`postprocess/duotone`** (*Dual Tone*) : Rampe chromatique bicolore mappant les ombres et hautes lumières vers deux teintes d'encrage personnalisées (`shadowColor`, `highlightColor`, `contrast`).
+  - **`postprocess/halftone`** (*Halftone Print*) : Simulation de trame d'imprimerie offset / sérigraphie avec points en grille orientée (`angle`), fréquence (`scale`) et netteté (`softness`).
+  - **`postprocess/film-texture`** (*Film Texture*) : Grain argentique et poussières quantifiés temporellement par un paramètre `rate` (cadence pellicule 16 ou 18 fps évitant le bruit numérique à 60 Hz) et hachage spatial déterministe identique en export et prévisualisation.
+  - **`postprocess/super8`** (*Super 8 Projector*) : Émulation complète de projecteur argentique combinant saut d'obturateur (*gate weave*), scintillement d'intensité (*flicker*) et salissures avec cadence cadencée.
+  - **`postprocess/dry-brush`** (*Dry Brush*) : Effet de brosse sèche et estompe où la couleur du papier sous-jacent transparaît dans les creux de la matière en fonction de l'encre déposée (`followInk`).
 
 ## 8. Simulation Fluide 3D & Volumes (Chantier 1 Three.js r185)
 Nœuds universels de simulation eulérienne 3D et de raymarching volumétrique pour feu, fumée et fluides :
@@ -98,62 +123,47 @@ Briques atomiques de végétation temps réel, conçues autour d'**un seul champ
 - **`texture/interaction-map`** (*Interaction Map*) : Carte top-down de ce qui est passé par là — caméra orthographique zénithale, cible de rendu persistante en ping-pong, estompage exprimé en **demi-vie (secondes)** et non en facteur par frame, afin qu'une trace dure le même temps réel à 30 comme à 144 fps. La carte **défile avec son centre** : câblez la position d'un personnage et elle le suit, son contenu se décalant d'autant en UV pour que les marques restent fixes dans le monde. Rien n'y est spécifique à l'herbe : neige, sable, chaleur, humidité, effacement.
 - **`geometry/wind-sway`** (*Wind Sway*) : Ployage de n'importe quelle géométrie du graphe **par injection shader** (`onBeforeCompile`) et non par déformation de sommets — donc applicable à un import de 200 k sommets. Le matériau amont est cloné avant patch, jamais modifié en place.
 
-## 10. Entrées Interactives (Chantier 3 — amorce FPS)
+## 10. Entrées Interactives & Physique Rigide (Rapier)
 Briques d'entrée conçues pour que le reste du graphe **ignore d'où vient la commande** :
-- **`physics/world`** (*Physics World*) : Monde de corps rigides **Rapier**. Pourquoi un moteur et pas un solveur maison : empilement, contacts au repos, frottement et articulations sont chacun individuellement difficiles et collectivement un projet de recherche. Le contrôleur à capsule couvre déjà le seul cas où un solveur est le mauvais outil (un personnage, qui veut du contrôle exact plutôt que de l'inertie) ; celui-ci est pour tout le reste — caisses, débris, ragdolls, véhicules.
-  - **Pas de temps fixe** avec report du reste entre les frames. Un pas variable fait qu'une pile de caisses se stabilise différemment à 60 et à 144 fps, et qu'un export ne ressemble pas à la preview dans laquelle il a été composé.
-  - **Plafond de sous-pas** : cinq secondes d'onglet en arrière-plan valent 300 pas ; le surplus est **abandonné et non mis en banque**, car le mettre en banque garantit que la frame suivante dépasse aussi son budget, en spirale.
-  - Build **`-compat`** délibéré : il embarque le WASM et s'initialise de façon asynchrone — pas de `vite-plugin-wasm`, pas de top-level await dans le bundle, pas d'asset séparé à égarer dans un build Tauri. Tant qu'il compile, `Ready` vaut 0 et les corps laissent passer leur géométrie : rien ne bloque, rien ne lève.
-- **`physics/rigid-body`** (*Rigid Body*) : Confie une géométrie au monde. **`Split: per-child` par défaut** — chaque maillage descendant devient son propre corps, et **chaque instance d'un `InstancedMesh` aussi**. L'alternative était un nœud Rigid Body par caisse : le graphe dispose déjà de `structure/merge` pour rassembler N géométries, donc vingt caisses doivent être un Merge et **un** Rigid Body, pas vingt de chaque. Le traitement des instances est ce qui rend un Array de cent boîtes utilisable — sans lui, l'instanciation, qui les rend économiques à dessiner, les rendrait impossibles à simuler. `whole` couvre le cas inverse : un châssis fait de plusieurs maillages doit être **un** corps, sinon ses morceaux se repoussent dès la première frame.
-  - Une forme de collision est calculée **une fois par maillage source** et réutilisée par ses instances ; l'échelle propre de chaque instance est appliquée à une copie de cette forme, un collider Rapier n'ayant pas d'échelle.
-  - Reconstruction sur changement de l'**ensemble** (forme, type, split, apparition d'un maillage), pas sur les poses : les reconstruire parce que le solveur les a déplacés redémarrerait la simulation à chaque frame. Forme par défaut selon le type : **enveloppe convexe** pour un corps dynamique (économique, toujours fermée, s'empile de façon prévisible), **maillage de triangles** pour un corps fixe (la seule forme qui représente un niveau exactement, et son absence de volume ne gêne que ce qui bouge). Le corps est reconstruit quand sa *forme* change et laissé tranquille sinon, donc régler le frottement ne redémarre jamais la simulation.
-  - **Dérivation des matrices monde par chaîne locale (`worldMatrixOf`)** : Au lieu de lire un cache `matrixWorld` non rafraîchi (les nœuds désactivent `matrixAutoUpdate`), les poses de départ et l'extraction des colliders parcourent explicitement la hiérarchie des matrices locales (`parent.matrix`). Cela élimine l'anomalie où des corps rigides derrière un `structure/merge` ou un `structure/array` s'effondraient à l'origine ou recevaient un collider unitaire non mis à l'échelle.
-  - **Identité par géométrie** : La signature des corps est indexée sur la géométrie et non sur l'UUID du mesh, évitant les destructions/reconstructions destructrices lors du recyclage des clones par `structure/array`.
-- **`physics/vehicle`** (*Vehicle*) : Voiture à quatre roues sur le contrôleur **raycast** de Rapier. Pas quatre roues en corps rigides articulés : un rayon part de chaque ancrage et applique suspension, motricité et frottement latéral au châssis depuis le point d'impact. C'est ce que font presque tous les jeux de conduite, parce que des roues simulées vibrent à l'arrêt, accrochent sur les jointures entre triangles et exigent un réglage de tolérance de solveur que personne ne veut faire. Ici le châssis est **un seul corps rigide** et les roues sont du calcul.
-  - **La hauteur du centre de gravité est le réglage qui décide si la voiture marche.** Laissé au centre du châssis, une accélération franche cabre la voiture sur deux roues, qui n'ont alors plus d'adhérence, et elle n'avance pas. Le nœud le place bas par défaut et l'expose ; l'inertie est celle d'un pavé aux dimensions du châssis, suffisamment juste pour quelque chose dont la tenue de route se règle au ressenti.
-  - **Rapier n'avance pas un véhicule dans `world.step()`** : il faut appeler `updateVehicle` juste avant chaque pas. Un nœud évalué une fois par frame ne peut pas suivre une frame qui exécute trois pas, alors il dépose une fermeture dans le hook de pré-pas du monde.
-  - Sortie `wheels` : une liste de matrices monde plutôt que des maillages, donc l'allure de la voiture reste l'affaire de l'auteur — à brancher sur un Array + Set Instance Transform avec la géométrie voulue. Braquage et rotation de roulement y sont déjà.
-- **`physics/character`** (*Character (Physics)*) : Le frère du contrôleur à capsule, et celui vers lequel se tourner dès qu'un Physics World est dans le graphe. Les deux sont cinématiques — un personnage veut du contrôle exact, pas de l'inertie — mais celui-ci est déplacé par le contrôleur de personnage de Rapier, qui apporte trois choses qu'un balayage maison n'obtient pas gratuitement :
-  - **Marche automatique** : escaliers et bordures franchis au lieu de bloquer, sans que l'auteur modélise une rampe invisible par-dessus chaque marche.
-  - **Accrochage au sol** : descendre une pente garde le contact au lieu de partir en petite parabole à chaque rupture de surface.
-  - **Impulsions aux corps dynamiques** : le personnage bouscule les caisses, ce qui est tout l'intérêt d'avoir un solveur dans la scène.
-  - Il entre en collision avec **tout ce qui est dans le monde**, donc son niveau est simplement l'ensemble des `physics/rigid-body` ajoutés : pas d'entrée collider séparée à garder synchronisée avec ce qui est à l'écran.
-- **`physics/capsule-controller`** (*Capsule Controller*) : Personnage cinématique à capsule. Transforme « dans quelle direction on pousse » en « où on est » — ce qu'aucune combinaison des nœuds existants ne sait faire, un intégrateur accumulant un déplacement sans rien connaître du monde traversé. Marche sur les sols, glisse le long des murs, tombe des rebords. Collision CPU contre un BVH (`three-mesh-bvh`) : coût nul sur le GPU, résultat identique en export et dans le viewport.
-  - **Cinématique et non corps rigide** : un solveur donnerait l'inertie gratuitement au prix du contrôle exact, or le déplacement de personnage est précisément l'endroit où l'auteur veut du contrôle exact — cette vitesse, ce saut, aucun rebond sur les murs, aucun basculement.
-  - **Test de collision en espace monde**, chaque triangle candidat y étant amené. L'alternative tentante — emmener la capsule dans l'espace local du mesh, une transformation au lieu de trois par triangle — casse silencieusement sur tout collider à **échelle non uniforme**, c'est-à-dire la plupart : un sol `object/box` est un cube unité mis à l'échelle 16 × 1 × 16 par sa matrice. Dans cet espace la capsule n'est plus une capsule, aucun rayon unique ne la décrit, et le personnage traverse le sol.
-  - Pas de reconstruction du BVH par frame (voir `getBoundsTree`), pas de solveur, et un `dt` borné pour qu'une frame longue ne téléporte jamais le personnage à travers un mur.
-- **`io/gamepad`** (*Gamepad*) : Manette lue par **polling** (`navigator.getGamepads()` rend un instantané, pas un objet vivant — ce qui correspond exactement au modèle d'évaluation par frame du graphe, donc aucun état global à resynchroniser, contrairement au nœud Keyboard). Mapping standard W3C. Sticks disponibles en scalaires bruts **et** en vecteurs pré-mappés dans le plan XZ `(x, 0, y)` : dans un monde Y-up / −Z-avant, pousser le stick vers le haut fait avancer, ce qui évite de refaire l'erreur de signe à chaque câblage. Gâchettes lues par `value` (donc analogiques, pas binaires), D-pad plié en vecteur pour être interchangeable avec un stick.
-  - **Zone morte radiale, pas par axe** : une zone morte appliquée séparément à X et Y découpe un carré dans un stick rond, et une diagonale douce ne déclenche alors ni l'un ni l'autre — le personnage refuse de marcher en diagonale. La magnitude est traitée d'abord, puis le vecteur entier est remis à l'échelle.
-  - **Remise à l'échelle après seuil** : annuler simplement sous le seuil laisse une marche à la sortie de la zone morte (rien, puis un saut à 0.15), ce qui se ressent comme un contrôle nerveux.
-- **`math/integrate`** / **`vector/integrate`** (*Integrate*, *Integrate Vector*) : **La moitié manquante de tout schéma de contrôle.** Un nœud d'entrée dit à quelle force on pousse *maintenant* ; le câbler directement dans une position fait du stick une coordonnée absolue — on relâche, l'objet retourne à l'origine, puisque « pousser zéro » veut dire « position zéro ». Ce qu'il faut, c'est l'accumulation dans le temps : `position += vitesse × dt`. Générique par construction : la même brique intègre une accélération en vitesse, un taux en angle, un débit en niveau.
-  - **Amortissement par seconde, pas par frame** — sinon un objet roule plus loin sur une machine lente que sur une rapide.
-  - **Attention au sens de l'amortissement** : il fait décroître *la valeur accumulée*. Sur une vitesse c'est du frottement ; sur une position, c'est un aimant vers l'origine. Chaîner deux intégrateurs — amorti pour la vitesse, non amorti pour la position — donne à la fois de la traînée et un endroit où s'arrêter.
-  - **Réinitialisation au scrub arrière et à l'Epoch** : ce que l'intégrateur contient est la somme de tout ce qui s'est passé depuis son démarrage, réinitialisé à `Initial` lors d'un scrub ou d'un `Shift+Space`.
-  - `Max Length` borne le vecteur accumulé **radialement**, pour qu'une zone de jeu limitée soit ronde et non carrée.
-- **`io/move-input`** (*Move Input*) : **Un schéma de contrôle complet en un nœud.** La chaîne qu'il remplace comptait cinq nœuds Keyboard, deux Action Map et un Compose Vector pour piloter un personnage : huit nœuds pour exprimer « l'arrangement habituel », à chaque fois. Beaucoup de graphe pour ce dont presque toute scène interactive a besoin.
-  - **Préréglages d'agencement (`layout`)** : `zqsd`, `wasd`, `arrows`, `zqsd+arrows`, `wasd+arrows`, `custom`.
-  - **Entrées** : `speed` (multiplicateur), `enabled` (activation).
-  - **Sorties riches** : `move` (vecteur XZ orienté sol, avant = $-Z$), `x` (axe droit), `z` (axe $-Z$), `forward` ($+1$ = avance, idéal pour papillon de véhicule sans inverseur), `magnitude`, `jump` (maintien), `jumpPressed` (impulsion frame), `sprint`.
-  - **Fusion Clavier + Manette** : repli automatique stick gauche avec zone morte radiale et règle du plus fort (pas d'addition).
-  - **Réservation de touches en lecture** : revendique ses touches auprès du moteur pour inhiber les raccourcis éditeur pendant le jeu (voir [[Input Subsystem and Playback Keys]]).
-- **`io/action-map`** (*Action Map*) : Plusieurs sources → une action nommée. C'est la brique qui **sort le schéma de contrôle du reste du graphe** : « avancer » est un seul fil, et savoir si ça vient de Z, du stick gauche, du D-pad ou d'un contrôle tactile ne regarde que ce nœud. Sans lui, chaque consommateur doit connaître chaque périphérique, et ajouter une manette veut dire éditer tout le graphe au lieu d'un nœud.
-  - Sockets **Positive** et **Negative** croissants, parce que la plupart des actions sont en réalité des axes : avancer *moins* reculer. Câbler D en positif et Q en négatif donne un axe −1…1 à partir de deux touches numériques — le cas qu'un nœud « additionne les entrées » ne sait pas exprimer.
-  - Combinaison par défaut **le plus fort** : tenir Z *et* pousser le stick doit marcher à une seule vitesse, pas à deux.
-  - **Lissage exprimé en secondes** (comme la demi-vie de l'Interaction Map), donc indépendant du framerate : un lerp par frame rend un contrôle plus vif sur une machine rapide, bug qui n'apparaît que sur le matériel de quelqu'un d'autre.
-  - Ne lit aucun matériel : il ne fait que combiner, et marche donc aussi bien sur un oscillateur, un pic audio ou un flux réseau.
+- **`physics/world`** (*Physics World*) : Monde de corps rigides **Rapier**.
+  - Pas de temps fixe avec report du reste entre les frames.
+  - Plafond de sous-pas : évite les spirales de lag après suspension d'onglet.
+  - Intégration WASM `-compat` asynchrone sans top-level await.
+- **`physics/rigid-body`** (*Rigid Body*) : Confie une géométrie au monde.
+  - `Split: per-child` par défaut (corps par maillage et par instance `InstancedMesh`).
+  - Dérivation des matrices monde par chaîne locale (`worldMatrixOf`) éliminant les effondrements à l'origine.
+  - Édition manuelle de pose préservée en mode pause (`isPlaying === false`).
+- **`physics/vehicle`** (*Vehicle*) : Véhicule à quatre roues sur le contrôleur raycast de Rapier.
+  - Centre de gravité ajustable, publication continue des poses de roues (`wheels`) même à l'arrêt, et préservation d'échelle locale.
+- **`physics/character`** (*Character (Physics)*) : Personnage cinématique Rapier avec franchissement automatique de marches, accrochage au sol et poussée sur corps dynamiques.
+- **`physics/capsule-controller`** (*Capsule Controller*) : Contrôleur cinématique CPU contre arbre BVH (`three-mesh-bvh`) insensible aux échelles non uniformes.
+- **`io/gamepad`** (*Gamepad*) : Manette multi-plateforme.
+  - **Passerelle Native Desktop (`gilrs`)** : Bridge Tauri en Rust pour capture matérielle directe des manettes sous Windows/macOS/Linux avec réactivité maximale, et repli transparent sur l'API HTML5 `navigator.getGamepads()` dans le navigateur.
+  - Zone morte radiale, gâchettes analogiques et D-pad en vecteur.
+- **`math/integrate`** / **`vector/integrate`** (*Integrate*, *Integrate Vector*) : Accumulation continue $v \times dt$ avec amortissement par seconde et remise à zéro à l'époque de simulation.
+- **`io/move-input`** (*Move Input*) : Schéma de contrôle complet en un nœud (ZQSD, WASD, flèches, manette, sprint, saut).
+- **`io/action-map`** (*Action Map*) : Multiplexeur d'axes et de boutons vers actions nommées avec lissage temporel invariant.
+
+## 11. Simulation Physique Souple & Tissus (`physics/cloth`)
+- **`physics/cloth`** (*Cloth Simulation*) : Solveur de tissu physique masse-ressort-amortisseur haute performance sur CPU (`clothSolver.ts`).
+  - **Comportement & Dynamique** : Simulation réaliste de drapé, gravité, amortissement d'air (`airResistance`), rigidité structurelle et de cisaillement (`stiffness`, `iterations`).
+  - **Épinglage & Contraintes (`pins`)** : Fixation de sommets par sélection explicite, bordures ou seuil de coordonnées pour drapeaux, rideaux, bannières et voiles.
+  - **Collisions Intégrées** : Détection et répulsion continue contre des obstacles géométriques (sphères d'évitement, plans et sol).
+  - **Couplage avec les Champs de Force** : Les forces environnementales du graphe (**`particles/force-field`**, vent, vortex, turbulence curl noise) sont sommées directement dans l'accélération de chaque particule de tissu.
+  - **Shading & Intégrité Visuelle** : Respecte scrupuleusement le matériau d'origine du maillage amont (`owns: true`). Mode `smooth` calculant la moyenne des normales par particule plutôt que par index Three.js (éliminant la cicatrice visuelle sur les coutures UV) ou mode `flat` non-indexé pour maillages low-poly.
+  - **Cycle de Vie & Reset** : Réinitialisation instantanée de l'état particulaire lors d'un saut de tête de lecture ou d'un `Shift+Space` (Epoch reset).
 
 ---
 
 ## 🔗 Notes Associées
-- [[Creative FX and Stage Nodes]]
-- [[Creative WebGL Shaders and Distortion Techniques]]
-- [[Node Creation Guide]]
+- [[Cloth Simulation and Soft Bodies]]
+- [[Vintage Film Post Processing]]
 - [[Parametric Geometry and Modifiers]]
-- [[Socket Type System and Ownership]]
-- [[WebGPU Volumetric Fire Simulation and 3D Fluid Dynamics]]
+- [[Node_Groups_Implementation_Plan]]
+- [[Input Subsystem and Playback Keys]]
+- [[ThreeJS Viewport and Calibration Pipeline]]
+- [[Simulation Reset and Epoch Architecture]]
+- [[Creative FX and Stage Nodes]]
 - [[Universal_Nodes_Catalog_3_Chantiers]]
-- [[Strategic_Roadmap_3_Chantiers_Fire_Lighting_FPS]]
 - [[Vegetation_and_Wind_Nodes_Catalog]]
 - [[Named Variables System]]
-- [[Simulation Reset and Epoch Architecture]]
-- [[Input Subsystem and Playback Keys]]

@@ -93,8 +93,23 @@ Si `useGamepad` est activé, le stick gauche de la manette (avec zone morte radi
 
 ---
 
+## 4. Passerelle Manette Multi-Plateforme (`io/gamepad` & `gamepadRuntime.ts`)
+
+Pour garantir un contrôle fluide des installations interactives et des démonstrations physiques :
+- **Pont Natif Desktop (`src-tauri/src/gamepad.rs`)** :
+  - Sur application de bureau compilée (Tauri), la bibliothèque Rust **`gilrs`** capture directement les contrôleurs USB et Bluetooth au niveau de l'OS.
+  - Évite les retards d'inactivité et les déconnexions aléatoires de la couche navigateur.
+  - Les axes et boutons sont transmis directement via IPC sans latence.
+- **Repli Web Transparent (`navigator.getGamepads()`)** :
+  - Lorsque Tsuji s'exécute dans un navigateur web standard, le runtime bascule automatiquement sur l'API HTML5 Gamepad.
+- **Retour Visuel en Temps Réel** :
+  - La barre supérieure (`TopBar.tsx`) affiche une icône dynamique indiquant la connexion et l'état actif d'une manette de jeu.
+
+---
+
 ## 🔗 Notes Associées
 - [[Simulation Reset and Epoch Architecture]]
 - [[Graph Evaluation Runtime]]
 - [[Node Catalog]]
 - [[Unreal FPS Camera and Kinematic Capsule Controller]]
+- [[P4_Gizmo_Modifier_Resolution_and_Deform_Sync]]

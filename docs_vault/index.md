@@ -87,17 +87,19 @@ Bienvenue dans le coffre de connaissances (Obsidian Vault). Ce système est stru
 
 ### 🧩 Nœuds & Création
 - [[Node Creation Guide]] — Guide auteur et contrat de développement.
-- [[Node Catalog]] — Inventaire des plus de 135 nœuds disponibles (fluide 3D, Rapier, végétation, variables).
+- [[Node Catalog]] — Inventaire des plus de 145 nœuds disponibles (fluide 3D, Rapier, végétation, variables, groupes, metaballs, weld, cloth, vintage film).
+- [[Cloth Simulation and Soft Bodies]] — Simulation physique de tissu par solveur masse-ressort CPU, épinglage et couplage avec les champs de force.
+- [[Vintage Film Post Processing]] — Passes de post-traitement rétro (Dual Tone, Halftone, Film Texture, Super 8, Dry Brush).
+- [[Parametric Geometry and Modifiers]] — Modificateurs de maillage (Weld SDF Surface Nets, Contour Scan, Metaballs, Treillis, CSG, sync dynamique).
 - [[Named Variables System]] — Variables globales typées (`variable/set`, `variable/get`), double-buffering par step et communication multi-canvas.
 - [[Universal_Nodes_Catalog_3_Chantiers]] — Spécification complète des nœuds pour les 3 chantiers (Fluide 3D, Éclairage, Entrées & Moteur Rapier).
 - [[Vegetation_and_Wind_Nodes_Catalog]] — Catalogue complet de végétation et vent temps réel (champ de vent, herbe torique, arbres, interaction, sway).
 - [[Creative FX and Stage Nodes]] — Shaders créatifs (Hologram, Iridescent, Cel-Shade, Fire SDF, Ghibli Clouds) et nœuds scéniques.
-- [[Parametric Geometry and Modifiers]] — Modificateurs de maillage (Lattice, Subdivide, Boolean CSG).
 
 
 ### 🖥️ Composants UI & UX
-- [[Graph Editor and Canvas]] — Éditeur de graphe `@xyflow/react` et câblage SVG.
-- [[Param Panel and Inspector]] — Panneau d'inspection déclaratif et widgets interactifs.
+- [[Graph Editor and Canvas]] — Éditeur de graphe `@xyflow/react`, câblage SVG, sous-graphes `Cmd+G`, poignées réactives et commandes TopBar.
+- [[Param Panel and Inspector]] — Panneau d'inspection déclaratif, widgets interactifs, formats binaires vidéo MP4 et paramètres de groupes.
 
 ### 🛠️ Maintenance & Qualité
 - [[System Invariants and Coding Rules]] — Invariants de pureté et conventions TypeScript.
@@ -150,7 +152,7 @@ Bienvenue dans le coffre de connaissances (Obsidian Vault). Ce système est stru
 ## 🗺️ 4. ⚠️ Audit Critique du Codebase (`Audits_and_Flaws/`)
 
 - [[Audit Overview and Executive Summary]] — Matrice d'évaluation, statuts et synthèse de sévérité.
-- 📁 **Plans de Correctifs Appliqués :** [[P0_VRAM_Leak_Remediation_Plan]] · [[P1_Evaluation_Loop_GC_Remediation_Plan]] · [[P2_Geometry_Ownership_and_Clone_Integrity_Plan]] · [[P3_Dynamic_Sockets_and_Math_Consolidation_Plan]]
+- 📁 **Plans de Correctifs Appliqués :** [[P0_VRAM_Leak_Remediation_Plan]] · [[P1_Evaluation_Loop_GC_Remediation_Plan]] · [[P2_Geometry_Ownership_and_Clone_Integrity_Plan]] · [[P3_Dynamic_Sockets_and_Math_Consolidation_Plan]] · [[P4_Gizmo_Modifier_Resolution_and_Deform_Sync]]
 
 ### 🔴 Fuites Mémoire & Caches GPU *(🟢 RÉSOLU - P0)*
 - [[FLAW-01a_Unmanaged Camera Group Cache in camera.ts]] — *(🟢 Résolu)* Fuite du cache de groupe caméra.
