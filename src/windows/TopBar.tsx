@@ -14,7 +14,6 @@ import {
   toggleFullscreen,
   watchFullscreen,
 } from "../shared/ipc";
-import { ConnectedGamepad, subscribeGamepads } from "../shared/graph/gamepadRuntime";
 import logoUrl from "../assets/logo.png";
 import { ShortcutsModal } from "./ShortcutsModal";
 import { DemosMenu } from "./DemosMenu";
@@ -45,6 +44,10 @@ export interface TopBarProps {
   onToggleTimeline?: () => void;
   is2DMode?: boolean;
   onToggle2DMode?: () => void;
+  isPlaying?: boolean;
+  onTogglePlay?: () => void;
+  /** Discards every simulation's accumulated state and returns to frame 0. */
+  onResetSimulations?: () => void;
 }
 
 export const TopBar: React.FC<TopBarProps> = ({
@@ -65,6 +68,9 @@ export const TopBar: React.FC<TopBarProps> = ({
   onToggleTimeline,
   is2DMode = false,
   onToggle2DMode,
+  isPlaying = false,
+  onTogglePlay,
+  onResetSimulations,
 }) => {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [toastError, setToastError] = useState(false);
@@ -72,16 +78,10 @@ export const TopBar: React.FC<TopBarProps> = ({
   const [filenameInput, setFilenameInput] = useState(currentFilename);
   const [isOutputOpen, setIsOutputOpen] = useState(false);
   const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
-  const [gamepads, setGamepads] = useState<ConnectedGamepad[]>([]);
   const [isFullscreen, setIsFullscreen] = useState(false);
   // Owned so a second toast doesn't get cut short by the first's leftover
   // timer, and cleared on unmount to avoid a setState on a dead component.
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // Live set of plugged-in controllers, for the indicator chip. Registering
-  // the subscription is also what installs the browser's `gamepadconnected`
-  // handlers — the hint some WebViews need before they expose a pad.
-  useEffect(() => subscribeGamepads(setGamepads), []);
 
   const showToast = (msg: string, error = false) => {
     setToastMessage(msg);
@@ -275,6 +275,26 @@ export const TopBar: React.FC<TopBarProps> = ({
           </svg>
         </button>
 
+        {onTogglePlay && (
+          <>
+            <div className="top-bar-divider" />
+            <button
+              className="top-bar-button top-bar-button-icon-only"
+              onClick={onTogglePlay}
+              title={isPlaying ? "Pause (Space)" : "Play (Space) — runs the live scene even with no Render node or Frame Count off"}
+            >
+              {isPlaying ? "⏸" : "▶"}
+            </button>
+            <button
+              className="top-bar-button top-bar-button-icon-only"
+              onClick={onResetSimulations}
+              title="Reset simulations (Shift + Space) — rebuild physics, fluids and integrators, and return to frame 0"
+            >
+              ⟲
+            </button>
+          </>
+        )}
+
         {onToggle2DMode && (
           <>
             <div className="top-bar-divider" />
@@ -306,19 +326,6 @@ export const TopBar: React.FC<TopBarProps> = ({
 
       {/* Right area: Toast + Timeline + Shortcuts + Filename + Download + Share */}
       <div className="top-bar-right">
-        <div
-          className={`top-bar-gamepad${gamepads.length > 0 ? " top-bar-gamepad-connected" : ""}`}
-          title={
-            gamepads.length > 0
-              ? `${gamepads.length} gamepad${gamepads.length > 1 ? "s" : ""} connected:\n${gamepads
-                  .map((g) => `• ${g.id}`)
-                  .join("\n")}`
-              : "No gamepad detected — press a button on your controller to connect it"
-          }
-        >
-          🎮{gamepads.length > 0 ? ` ${gamepads.length}` : ""}
-        </div>
-
         {toastMessage && (
           <div className={`top-bar-toast${toastError ? " top-bar-toast-error" : ""}`}>
             {toastError ? "⚠ " : "✓ "}{toastMessage}
@@ -340,21 +347,6 @@ export const TopBar: React.FC<TopBarProps> = ({
           </button>
         )}
 
-
-        {/* FULL SCREEN — whole-window fullscreen toggle (browser API or native window flag) */}
-        <button
-          className="top-bar-button top-bar-button-icon-only"
-          onClick={handleToggleFullscreen}
-          title={isFullscreen ? "Exit Full Screen" : "Full Screen"}
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            {isFullscreen ? (
-              <path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3" />
-            ) : (
-              <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
-            )}
-          </svg>
-        </button>
 
         {/* SHORTCUTS — keyboard shortcuts reference popup */}
         <button
@@ -407,6 +399,21 @@ export const TopBar: React.FC<TopBarProps> = ({
           exportMode={exportMode}
           exportProgress={exportProgress}
         />
+
+        {/* FULL SCREEN — whole-window fullscreen toggle (browser API or native window flag) */}
+        <button
+          className="top-bar-button top-bar-button-icon-only"
+          onClick={handleToggleFullscreen}
+          title={isFullscreen ? "Exit Full Screen" : "Full Screen"}
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            {isFullscreen ? (
+              <path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3" />
+            ) : (
+              <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
+            )}
+          </svg>
+        </button>
       </div>
 
       <ShortcutsModal isOpen={isShortcutsOpen} onClose={() => setIsShortcutsOpen(false)} />

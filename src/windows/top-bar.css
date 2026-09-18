@@ -267,27 +267,6 @@
   border-color: #38bdf8;
 }
 
-.top-bar-gamepad {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
-  background: var(--chrome-bg);
-  border: 1px solid var(--chrome-border);
-  border-radius: 6px;
-  font-family: inherit;
-  font-size: 11px;
-  color: #94a3b8;
-  transition: border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
-  white-space: pre;
-}
-
-.top-bar-gamepad-connected {
-  color: #76c560;
-  border-color: #76c560;
-  box-shadow: 0 0 6px rgba(118, 197, 96, 0.3);
-}
-
 .top-bar-filename-edit-input {
   background: var(--chrome-bg);
   border: 1px solid #38bdf8;

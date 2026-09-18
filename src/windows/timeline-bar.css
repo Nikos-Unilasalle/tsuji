@@ -44,44 +44,10 @@
   box-sizing: border-box;
 }
 
-/* Play/Pause button directly touching the left edge, protruding on both sides */
-.timeline-play-btn {
-  position: absolute;
-  left: 0;
-  top: 50%;
-  transform: translateY(-50%);
-  background: #1e293b;
-  border: 1px solid #334155;
-  color: #ffffff;
-  border-radius: 0 4px 4px 0;
-  width: 22px;
-  height: 20px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-family: inherit;
-  font-size: 11px;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  z-index: 30;
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.4);
-}
-
-.timeline-play-btn:hover:not(.disabled) {
-  background: #38bdf8;
-  color: #0f172a;
-  border-color: #38bdf8;
-}
-
-.timeline-play-btn.disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
 /* Scrubbing Track Line: 20px tall hit region for easy grabbing, visual line 1px centered */
 .timeline-track {
   position: absolute;
-  left: 28px;
+  left: 6px;
   right: 42px;
   top: 50%;
   transform: translateY(-50%);
@@ -192,15 +158,15 @@
   filter: none;
 }
 
-/* 1px narrow white playhead cursor visually, with 24px wide invisible grab hit box */
+/* Playhead cursor: fully transparent, with 24px wide invisible grab hit box */
 .timeline-playhead-cursor {
   position: absolute;
   top: 50%;
   transform: translate(-50%, -50%);
   width: 1px;
   height: 15px;
-  background: #ffffff;
-  box-shadow: 0 0 4px rgba(255, 255, 255, 0.9);
+  background: transparent;
+  box-shadow: none;
   pointer-events: auto;
   cursor: row-resize;
   z-index: 28;

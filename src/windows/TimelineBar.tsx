@@ -32,9 +32,6 @@ interface TimelineBarProps {
   onUpdateKeyframeEasing?: (frame: number, easeIn: EasingType, easeStrength?: number, easeBezier?: [number, number, number, number]) => void;
   onDeleteKeyframe?: (frame: number) => void;
   onFrameChange: (frame: number) => void;
-  onTogglePlay: () => void;
-  /** Discards every simulation's accumulated state and returns to frame 0. */
-  onResetSimulations?: () => void;
   onSplitHandleMouseDown: (e: React.MouseEvent) => void;
   isDrawerOpen?: boolean;
   onToggleDrawer?: () => void;
@@ -172,8 +169,6 @@ export function TimelineBar({
   onUpdateKeyframeEasing,
   onDeleteKeyframe,
   onFrameChange,
-  onTogglePlay,
-  onResetSimulations,
   onSplitHandleMouseDown,
   isDrawerOpen = false,
   onToggleDrawer,
@@ -498,24 +493,6 @@ export function TimelineBar({
       />
 
       <div className="timeline-bar-inner">
-        <button
-          type="button"
-          className="timeline-play-btn"
-          onClick={onTogglePlay}
-          title={isPlaying ? "Pause (Space)" : "Play (Space) — runs the live scene even with no Render node or Frame Count off"}
-        >
-          {isPlaying ? "⏸" : "▶"}
-        </button>
-
-        <button
-          type="button"
-          className="timeline-play-btn"
-          onClick={onResetSimulations}
-          title="Reset simulations (Shift + Space) — rebuild physics, fluids and integrators, and return to frame 0"
-        >
-          ⟲
-        </button>
-
         <div
           ref={trackRef}
           className={`timeline-track ${!keyframesEnabled ? "disabled" : ""}`}

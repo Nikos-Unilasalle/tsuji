@@ -2323,6 +2323,9 @@ function MainEditor() {
         onToggleTimeline={keyframesEnabled ? () => setIsTimelineDrawerOpen((prev) => !prev) : undefined}
         is2DMode={is2DMode}
         onToggle2DMode={toggle2DMode}
+        isPlaying={isPlaying}
+        onTogglePlay={() => setIsPlaying((p) => !p)}
+        onResetSimulations={handleResetSimulations}
       />
       {isExporting && (
         // Off-screen (not display:none, which some webviews suspend rAF
@@ -2435,8 +2438,6 @@ function MainEditor() {
             onUpdateKeyframeEasing={onUpdateKeyframeEasing}
             onDeleteKeyframe={onDeleteKeyframe}
             onFrameChange={setCurrentFrame}
-            onTogglePlay={() => setIsPlaying((p) => !p)}
-            onResetSimulations={handleResetSimulations}
             onSplitHandleMouseDown={onSplitHandleMouseDown}
             isDrawerOpen={isTimelineDrawerOpen}
             onToggleDrawer={() => setIsTimelineDrawerOpen((prev) => !prev)}
