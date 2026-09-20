@@ -13,6 +13,9 @@ export interface ThemeColors {
   chromeTextMuted: string;
   // Canvas / Graph
   canvasBg: string;
+  canvasNodeList: string;
+  canvasSceneBg: string;
+  canvasSceneActive: string;
   canvasNode: string;
   canvasNodeRaised: string;
   // Accent & Highlights
@@ -43,6 +46,9 @@ export const PRESET_THEMES: ThemeDefinition[] = [
       chromeText: "#eef2f6",
       chromeTextMuted: "#b3bdc9",
       canvasBg: "#3c4552",
+      canvasNodeList: "#353d49",
+      canvasSceneBg: "#343d4a",
+      canvasSceneActive: "#38bdf8",
       canvasNode: "#4c5561",
       canvasNodeRaised: "#58626f",
       accentColor: "#38bdf8",
@@ -63,6 +69,9 @@ export const PRESET_THEMES: ThemeDefinition[] = [
       chromeText: "#f0f0f0",
       chromeTextMuted: "#9e9e9e",
       canvasBg: "#2b2b2b",
+      canvasNodeList: "#262626",
+      canvasSceneBg: "#252525",
+      canvasSceneActive: "#47a2f5",
       canvasNode: "#363636",
       canvasNodeRaised: "#444444",
       accentColor: "#47a2f5",
@@ -83,6 +92,9 @@ export const PRESET_THEMES: ThemeDefinition[] = [
       chromeText: "#e8effc",
       chromeTextMuted: "#8da0c0",
       canvasBg: "#151b26",
+      canvasNodeList: "#121721",
+      canvasSceneBg: "#141a24",
+      canvasSceneActive: "#38bdf8",
       canvasNode: "#1e2736",
       canvasNodeRaised: "#293549",
       accentColor: "#38bdf8",
@@ -103,6 +115,9 @@ export const PRESET_THEMES: ThemeDefinition[] = [
       chromeText: "#eaf0f8",
       chromeTextMuted: "#a0afc4",
       canvasBg: "#2e3745",
+      canvasNodeList: "#29313e",
+      canvasSceneBg: "#2b3442",
+      canvasSceneActive: "#67e8f9",
       canvasNode: "#3c4759",
       canvasNodeRaised: "#4a576d",
       accentColor: "#67e8f9",
@@ -123,6 +138,9 @@ export const PRESET_THEMES: ThemeDefinition[] = [
       chromeText: "#f4f4f5",
       chromeTextMuted: "#9ca3af",
       canvasBg: "#121316",
+      canvasNodeList: "#0e0f12",
+      canvasSceneBg: "#111215",
+      canvasSceneActive: "#38bdf8",
       canvasNode: "#1c1e24",
       canvasNodeRaised: "#292c34",
       accentColor: "#38bdf8",
@@ -131,10 +149,34 @@ export const PRESET_THEMES: ThemeDefinition[] = [
       viewportGrid: "#31353e",
     },
   },
+  {
+    id: "london-parchment",
+    name: "London Parchment",
+    isPreset: true,
+    colors: {
+      chromeBg: "#ece8e1",
+      chromeSurface: "#f5f2eb",
+      chromeSurfaceRaised: "#ffffff",
+      chromeBorder: "#d5cfc4",
+      chromeText: "#2d3238",
+      chromeTextMuted: "#767b83",
+      canvasBg: "#e0dbd1",
+      canvasNodeList: "#e5e0d6",
+      canvasSceneBg: "#e4dfd5",
+      canvasSceneActive: "#38b8ce",
+      canvasNode: "#f8f6f0",
+      canvasNodeRaised: "#eae5db",
+      accentColor: "#38b8ce",
+      viewportBgTop: "#e2ded4",
+      viewportBgBottom: "#f2efe7",
+      viewportGrid: "#c5bfb2",
+    },
+  },
 ];
 
 const STORAGE_KEY_ACTIVE = "tsuji_active_theme";
 const STORAGE_KEY_CUSTOM = "tsuji_custom_themes";
+const STORAGE_KEY_CURRENT_COLORS = "tsuji_current_colors";
 
 /**
  * Ensures all required color keys exist, filling missing ones with default preset colors.
@@ -150,6 +192,9 @@ export function normalizeThemeColors(colors: Partial<ThemeColors> | undefined): 
     chromeText: colors.chromeText || fallback.chromeText,
     chromeTextMuted: colors.chromeTextMuted || fallback.chromeTextMuted,
     canvasBg: colors.canvasBg || fallback.canvasBg,
+    canvasNodeList: colors.canvasNodeList || colors.canvasBg || fallback.canvasNodeList || fallback.canvasBg,
+    canvasSceneBg: colors.canvasSceneBg || colors.chromeSurface || fallback.canvasSceneBg || fallback.chromeSurface,
+    canvasSceneActive: colors.canvasSceneActive || colors.accentColor || fallback.canvasSceneActive || fallback.accentColor,
     canvasNode: colors.canvasNode || fallback.canvasNode,
     canvasNodeRaised: colors.canvasNodeRaised || fallback.canvasNodeRaised,
     accentColor: colors.accentColor || fallback.accentColor,
@@ -160,10 +205,35 @@ export function normalizeThemeColors(colors: Partial<ThemeColors> | undefined): 
 }
 
 /**
- * Apply the given theme colors as CSS root variables in the document and dispatch window event.
+ * Retrieve current applied colors from localStorage, or fallback to active theme colors.
+ */
+export function getCurrentColors(): ThemeColors {
+  if (typeof localStorage === "undefined") return PRESET_THEMES[0].colors;
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_CURRENT_COLORS);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed) return normalizeThemeColors(parsed);
+    }
+  } catch {
+    // fallback
+  }
+  return getActiveTheme().colors;
+}
+
+/**
+ * Apply the given theme colors as CSS root variables in the document, persist to localStorage, and dispatch window event.
  */
 export function applyThemeColors(colors: ThemeColors): void {
   const normalized = normalizeThemeColors(colors);
+  if (typeof localStorage !== "undefined") {
+    try {
+      localStorage.setItem(STORAGE_KEY_CURRENT_COLORS, JSON.stringify(normalized));
+    } catch (err) {
+      console.warn("Failed to persist current colors to localStorage", err);
+    }
+  }
+
   if (typeof document !== "undefined") {
     const root = document.documentElement;
     root.style.setProperty("--chrome-bg", normalized.chromeBg);
@@ -173,8 +243,14 @@ export function applyThemeColors(colors: ThemeColors): void {
     root.style.setProperty("--chrome-text", normalized.chromeText);
     root.style.setProperty("--chrome-text-muted", normalized.chromeTextMuted);
     root.style.setProperty("--canvas-bg", normalized.canvasBg);
+    root.style.setProperty("--canvas-node-list", normalized.canvasNodeList);
+    root.style.setProperty("--canvas-scene-bg", normalized.canvasSceneBg);
+    root.style.setProperty("--canvas-scene-active", normalized.canvasSceneActive);
     root.style.setProperty("--canvas-node", normalized.canvasNode);
     root.style.setProperty("--canvas-node-raised", normalized.canvasNodeRaised);
+    root.style.setProperty("--canvas-text", normalized.chromeText);
+    root.style.setProperty("--canvas-text-muted", normalized.chromeTextMuted);
+    root.style.setProperty("--canvas-dot", normalized.chromeBorder);
     root.style.setProperty("--accent-color", normalized.accentColor);
     root.style.setProperty("--viewport-bg-top", normalized.viewportBgTop);
     root.style.setProperty("--viewport-bg-bottom", normalized.viewportBgBottom);
@@ -343,6 +419,10 @@ export function importThemeFromJSON(jsonText: string): ThemeDefinition {
  */
 export function initTheme(): ThemeDefinition {
   const theme = getActiveTheme();
-  applyThemeColors(theme.colors);
-  return theme;
+  const colors = getCurrentColors();
+  applyThemeColors(colors);
+  return {
+    ...theme,
+    colors,
+  };
 }

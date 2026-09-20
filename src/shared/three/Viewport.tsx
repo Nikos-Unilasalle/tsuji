@@ -237,7 +237,7 @@ import {
   GIZMO_Y_COLOR,
   GIZMO_Z_COLOR,
 } from "./viewportScenery";
-import { getActiveTheme, ThemeColors } from "../theme/themeStore";
+import { getCurrentColors, ThemeColors } from "../theme/themeStore";
 import { disposeObject3D } from "../graph/nodeCaches";
 import { registerPointerViewport } from "../graph/pointerStore";
 import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
@@ -985,10 +985,10 @@ export function Viewport({
     const exportCanvas = document.createElement("canvas");
     const exportCtx = exportCanvas.getContext("2d");
 
-    const currentTheme = getActiveTheme();
+    const currentColors = getCurrentColors();
     const viewportBackground = createViewportBackground(
-      currentTheme.colors.viewportBgTop,
-      currentTheme.colors.viewportBgBottom,
+      currentColors.viewportBgTop,
+      currentColors.viewportBgBottom,
     );
     const scene = new THREE.Scene();
     const bgScene = new THREE.Scene();
@@ -1005,7 +1005,7 @@ export function Viewport({
 
     // Grid & Origin Axes Helper — editor-only, never baked into the projected output
     if (!outputMode) {
-      gridAndAxes = buildMainSceneGridAndAxes(currentTheme.colors.viewportGrid);
+      gridAndAxes = buildMainSceneGridAndAxes(currentColors.viewportGrid);
       editorUiScene.add(gridAndAxes);
     }
     const elevationHUD = createElevationHUD();

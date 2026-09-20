@@ -6,7 +6,7 @@
   /* Was a hard-coded #10151c, darker than any theme token and untouched by
      it — the "left list background too dark" this fixes. Matches the node
      canvas it sits beside rather than the darker top-bar/panel chrome. */
-  background: var(--canvas-bg);
+  background: var(--canvas-node-list, var(--canvas-bg));
   border-right: 1px solid var(--chrome-border);
   padding: 8px 0;
   scrollbar-width: none; /* Firefox */

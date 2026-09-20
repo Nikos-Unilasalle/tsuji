@@ -2,6 +2,8 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import {
   PRESET_THEMES,
   applyThemeColors,
+  getCurrentColors,
+  initTheme,
   loadCustomThemes,
   getAllThemes,
   getActiveTheme,
@@ -83,6 +85,8 @@ describe("themeStore", () => {
     const preset = PRESET_THEMES[0];
     applyThemeColors(preset.colors);
     expect(mocks.cssProperties.get("--chrome-bg")).toBe(preset.colors.chromeBg);
+    expect(mocks.cssProperties.get("--canvas-scene-bg")).toBe(preset.colors.canvasSceneBg);
+    expect(mocks.cssProperties.get("--canvas-scene-active")).toBe(preset.colors.canvasSceneActive);
     expect(mocks.cssProperties.get("--accent-color")).toBe(preset.colors.accentColor);
     expect(mocks.cssProperties.get("--viewport-bg-top")).toBe(preset.colors.viewportBgTop);
     expect(mocks.cssProperties.get("--viewport-bg-bottom")).toBe(preset.colors.viewportBgBottom);
@@ -148,5 +152,56 @@ describe("themeStore", () => {
     expect(imported.colors.accentColor).toBe(theme.colors.accentColor);
     expect(imported.colors.viewportBgTop).toBe(theme.colors.viewportBgTop);
     expect(imported.colors.viewportGrid).toBe(theme.colors.viewportGrid);
+  });
+
+  it("persists modified colors in localStorage without requiring a saved custom theme", () => {
+    const defaultColors = PRESET_THEMES[0].colors;
+    expect(getCurrentColors().accentColor).toBe(defaultColors.accentColor);
+
+    // User modifies colors in preferences without saving a theme
+    const modifiedColors = {
+      ...defaultColors,
+      accentColor: "#ff0077",
+      viewportBgTop: "#223344",
+    };
+    applyThemeColors(modifiedColors);
+
+    // Current colors must reflect the modifications
+    const current = getCurrentColors();
+    expect(current.accentColor).toBe("#ff0077");
+    expect(current.viewportBgTop).toBe("#223344");
+
+    // CSS variables and window event must also have the modified values
+    expect(mocks.cssProperties.get("--accent-color")).toBe("#ff0077");
+    expect(mocks.cssProperties.get("--viewport-bg-top")).toBe("#223344");
+
+    // Active theme name/id remains unchanged, but colors are preserved
+    expect(getActiveTheme().id).toBe("tsuji-slate");
+  });
+
+  it("restores modified colors upon initTheme", () => {
+    const customPalette = {
+      ...PRESET_THEMES[0].colors,
+      accentColor: "#abcdef",
+    };
+    applyThemeColors(customPalette);
+
+    const initialized = initTheme();
+    expect(initialized.colors.accentColor).toBe("#abcdef");
+    expect(mocks.cssProperties.get("--accent-color")).toBe("#abcdef");
+  });
+
+  it("includes the London Parchment light theme preset", () => {
+    const londonTheme = PRESET_THEMES.find((t) => t.id === "london-parchment");
+    expect(londonTheme).toBeDefined();
+    expect(londonTheme?.name).toBe("London Parchment");
+    expect(londonTheme?.isPreset).toBe(true);
+
+    setActiveTheme(londonTheme!);
+    expect(getActiveTheme().id).toBe("london-parchment");
+    expect(mocks.cssProperties.get("--chrome-bg")).toBe(londonTheme!.colors.chromeBg);
+    expect(mocks.cssProperties.get("--chrome-text")).toBe(londonTheme!.colors.chromeText);
+    expect(mocks.cssProperties.get("--accent-color")).toBe(londonTheme!.colors.accentColor);
+    expect(mocks.cssProperties.get("--canvas-text")).toBe(londonTheme!.colors.chromeText);
   });
 });

@@ -49,7 +49,7 @@
   font-weight: 800;
   font-size: 14px;
   letter-spacing: 0.05em;
-  color: #ffffff;
+  color: var(--chrome-text, #ffffff);
 }
 
 .top-bar-logo-img {
@@ -61,11 +61,10 @@
 
 .top-bar-logo-text {
   position: relative;
-  text-shadow: 0 0 6px rgba(255, 255, 255, 0.3);
 }
 
 .top-bar-logo-v {
-  color: #ffffff;
+  color: var(--chrome-text-muted, #94a3b8);
 }
 
 .top-bar-divider {
@@ -124,7 +123,7 @@
 }
 
 .top-bar-button:hover svg {
-  color: #ffffff;
+  color: var(--chrome-text, #ffffff);
   transform: translateY(-1px);
 }
 
@@ -219,12 +218,12 @@
 }
 
 .top-bar-mode-btn:hover:not(.active) {
-  color: #ffffff;
-  background: rgba(255, 255, 255, 0.08);
+  color: var(--chrome-text, #ffffff);
+  background: var(--chrome-surface-raised, rgba(255, 255, 255, 0.08));
 }
 
 .top-bar-mode-btn:hover:not(.active) svg {
-  color: #ffffff;
+  color: var(--chrome-text, #ffffff);
 }
 
 /* Pressed and Active states: No contour / border / outline, only icon/text blue */
@@ -271,7 +270,7 @@
   background: var(--chrome-bg);
   border: 1px solid var(--accent-color, #38bdf8);
   border-radius: 4px;
-  color: #ffffff;
+  color: var(--chrome-text, #ffffff);
   font-family: inherit;
   font-size: 11px;
   padding: 2px 6px;
@@ -343,12 +342,12 @@
 }
 
 .top-bar-space-btn:hover:not(.active) {
-  color: #ffffff;
-  background: rgba(255, 255, 255, 0.08);
+  color: var(--chrome-text, #ffffff);
+  background: var(--chrome-surface-raised, rgba(255, 255, 255, 0.08));
 }
 
 .top-bar-space-btn:hover:not(.active) svg {
-  color: #ffffff;
+  color: var(--chrome-text, #ffffff);
 }
 
 /* Pressed and Active states: No contour / border / outline, only icon/text blue */

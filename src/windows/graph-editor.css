@@ -181,11 +181,11 @@ input, textarea, [contenteditable="true"], .drag-number-editing, .param-text-inp
   align-items: center;
   gap: 4px;
   padding: 6px;
-  background: rgba(59, 67, 79, 0.88);
+  background: var(--canvas-scene-bg, var(--chrome-surface, rgba(59, 67, 79, 0.88)));
   backdrop-filter: blur(8px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--chrome-border, rgba(255, 255, 255, 0.1));
   border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
   z-index: 10;
 }
 
@@ -195,9 +195,9 @@ input, textarea, [contenteditable="true"], .drag-number-editing, .param-text-inp
   justify-content: center;
   width: 24px;
   height: 24px;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  color: #cbd5e1;
+  background: var(--chrome-bg, rgba(255, 255, 255, 0.08));
+  border: 1px solid var(--chrome-border, rgba(255, 255, 255, 0.15));
+  color: var(--chrome-text-muted, #cbd5e1);
   border-radius: 5px;
   padding: 0;
   font-family: system-ui, -apple-system, sans-serif;
@@ -208,21 +208,22 @@ input, textarea, [contenteditable="true"], .drag-number-editing, .param-text-inp
 }
 
 .canvas-selector-tab:hover {
-  background: color-mix(in srgb, var(--accent-color, #38bdf8) 25%, transparent);
-  border-color: var(--accent-color, #38bdf8);
-  color: #ffffff;
+  background: color-mix(in srgb, var(--canvas-scene-active, var(--accent-color, #38bdf8)) 25%, transparent);
+  border-color: var(--canvas-scene-active, var(--accent-color, #38bdf8));
+  color: var(--chrome-text, #ffffff);
 }
 
 /* An untouched slot reads as available rather than as another built scene. */
 .canvas-selector-tab-empty {
-  color: #64748b;
+  color: var(--chrome-text-muted, #64748b);
+  opacity: 0.7;
   border-style: dashed;
 }
 
 .canvas-selector-tab-active {
-  background: var(--accent-color, #38bdf8);
-  border-color: var(--accent-color, #38bdf8);
-  color: #0b1220;
+  background: var(--canvas-scene-active, var(--accent-color, #38bdf8));
+  border-color: var(--canvas-scene-active, var(--accent-color, #38bdf8));
+  color: #ffffff;
 }
 
 /* Selection Box & Selected Nodes Highlight */
@@ -245,8 +246,10 @@ input, textarea, [contenteditable="true"], .drag-number-editing, .param-text-inp
 }
 
 /*
- * Breadcrumb — the way back out of a group. Mirrors the canvas selector's
- * chrome, opposite corner: one says which tree is open, the other how deep
+ * Group navigation breadcrumb: lets the user see how deeply nested inside
+ * a node group they are (e.g. "Root > ParticleFX > EmitterCore"), and jump back
+ * to parent containers by clicking. Appears only when the root tree isn't what's
+ * on screen, so its presence is the main visual indicator of which sub-network
  * into it the canvas is looking. Absent entirely at the top level, where
  * there is nothing to climb back to.
  */
@@ -259,11 +262,11 @@ input, textarea, [contenteditable="true"], .drag-number-editing, .param-text-inp
   align-items: center;
   gap: 2px;
   padding: 6px 8px;
-  background: rgba(59, 67, 79, 0.88);
+  background: var(--canvas-scene-bg, var(--chrome-surface, rgba(59, 67, 79, 0.88)));
   backdrop-filter: blur(8px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--chrome-border, rgba(255, 255, 255, 0.1));
   border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
   font-family: system-ui, -apple-system, sans-serif;
   font-size: 11px;
   z-index: 10;
@@ -273,26 +276,26 @@ input, textarea, [contenteditable="true"], .drag-number-editing, .param-text-inp
   background: none;
   border: none;
   padding: 2px 4px;
-  color: #cbd5e1;
+  color: var(--chrome-text-muted, #cbd5e1);
   font: inherit;
   cursor: pointer;
   border-radius: 4px;
 }
 
 .graph-breadcrumb button:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--accent-color, #38bdf8) 25%, transparent);
-  color: #ffffff;
+  background: color-mix(in srgb, var(--canvas-scene-active, var(--accent-color, #38bdf8)) 25%, transparent);
+  color: var(--chrome-text, #ffffff);
 }
 
 /* The level actually on screen — a destination, not a link. */
 .graph-breadcrumb button:disabled {
-  color: #ffffff;
+  color: var(--chrome-text, #ffffff);
   font-weight: 600;
   cursor: default;
 }
 
 .graph-breadcrumb-sep {
-  color: #64748b;
+  color: var(--chrome-text-muted, #64748b);
 }
 
 /* Group node — the count stands in for the interior the parent can't show. */

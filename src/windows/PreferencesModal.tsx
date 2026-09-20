@@ -6,6 +6,7 @@ import {
   PRESET_THEMES,
   getAllThemes,
   getActiveTheme,
+  getCurrentColors,
   setActiveTheme,
   saveCustomTheme,
   deleteCustomTheme,
@@ -13,6 +14,7 @@ import {
   importThemeFromJSON,
   applyThemeColors,
 } from "../shared/theme/themeStore";
+import { extractThemeFromFile } from "../shared/theme/themeFromImage";
 import "./preferences-modal.css";
 
 interface PreferencesModalProps {
@@ -117,6 +119,9 @@ const COLOR_CATEGORIES: ColorCategory[] = [
     category: "Node Graph Canvas",
     fields: [
       { key: "canvasBg", label: "Graph Background", desc: "Node graph workspace background" },
+      { key: "canvasNodeList", label: "Node List (Palette)", desc: "Left sidebar node list background on the canvas" },
+      { key: "canvasSceneBg", label: "Scenes Bar Background", desc: "Top-right canvas scenes selector bar background" },
+      { key: "canvasSceneActive", label: "Active Scene Slot", desc: "Active scene number slot highlight color" },
       { key: "canvasNode", label: "Node Body", desc: "Node cards background color" },
       { key: "canvasNodeRaised", label: "Node Header", desc: "Node title bars and highlighted headers" },
     ],
@@ -128,12 +133,20 @@ export const PreferencesModal: React.FC<PreferencesModalProps> = ({ isOpen, onCl
 
   // Themes state
   const [themesList, setThemesList] = useState<ThemeDefinition[]>([]);
-  const [activeTheme, setActiveThemeState] = useState<ThemeDefinition>(PRESET_THEMES[0]);
-  const [editColors, setEditColors] = useState<ThemeColors>(PRESET_THEMES[0].colors);
+  const [activeTheme, setActiveThemeState] = useState<ThemeDefinition>(() => getActiveTheme());
+  const [editColors, setEditColors] = useState<ThemeColors>(() => getCurrentColors());
   const [customNameInput, setCustomNameInput] = useState("");
   const [isSavingCustom, setIsSavingCustom] = useState(false);
   const [importStatus, setImportStatus] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Image Theme Generator state
+  const [imageMode, setImageMode] = useState<"light" | "dark">("dark");
+  const [selectedImageFile, setSelectedImageFile] = useState<File | null>(null);
+  const [imageThumbnail, setImageThumbnail] = useState<string | null>(null);
+  const [isExtractingImage, setIsExtractingImage] = useState(false);
+  const [imageThemeError, setImageThemeError] = useState<string | null>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
 
   // Ergonomics state loaded from localStorage
   const [tabletMode, setTabletMode] = useState(() => {
@@ -153,9 +166,10 @@ export const PreferencesModal: React.FC<PreferencesModalProps> = ({ isOpen, onCl
     if (isOpen) {
       const all = getAllThemes();
       const current = getActiveTheme();
+      const currentColors = getCurrentColors();
       setThemesList(all);
       setActiveThemeState(current);
-      setEditColors({ ...current.colors });
+      setEditColors({ ...currentColors });
       setImportStatus(null);
     }
   }, [isOpen]);
@@ -203,7 +217,7 @@ export const PreferencesModal: React.FC<PreferencesModalProps> = ({ isOpen, onCl
     setThemesList(updatedList);
     const active = getActiveTheme();
     setActiveThemeState(active);
-    setEditColors({ ...active.colors });
+    setEditColors({ ...getCurrentColors() });
   };
 
   const handleExportTheme = () => {
@@ -240,6 +254,45 @@ export const PreferencesModal: React.FC<PreferencesModalProps> = ({ isOpen, onCl
     };
     reader.readAsText(file);
     e.target.value = "";
+  };
+
+  const handleProcessImage = async (file: File, mode: "light" | "dark") => {
+    setIsExtractingImage(true);
+    setImageThemeError(null);
+    try {
+      const generated = await extractThemeFromFile(file, mode);
+      applyThemeColors(generated.colors);
+      setEditColors({ ...generated.colors });
+      setActiveThemeState(generated);
+      setCustomNameInput(generated.name);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to generate theme from image.";
+      setImageThemeError(msg);
+    } finally {
+      setIsExtractingImage(false);
+    }
+  };
+
+  const handleImageFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setSelectedImageFile(file);
+
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      setImageThumbnail(ev.target?.result as string);
+    };
+    reader.readAsDataURL(file);
+
+    handleProcessImage(file, imageMode);
+    e.target.value = "";
+  };
+
+  const handleModeToggle = (newMode: "light" | "dark") => {
+    setImageMode(newMode);
+    if (selectedImageFile) {
+      handleProcessImage(selectedImageFile, newMode);
+    }
   };
 
   const handleResetToDefault = () => {
@@ -493,9 +546,99 @@ export const PreferencesModal: React.FC<PreferencesModalProps> = ({ isOpen, onCl
                 </div>
               )}
 
+              {/* Image Theme Generator Card */}
+              <div className="prefs-image-theme-card">
+                <div className="prefs-image-theme-header">
+                  <div className="prefs-image-theme-meta">
+                    <span className="prefs-section-label">Theme from Image</span>
+                    <span className="prefs-option-hint">Extracts a calibrated, high-contrast palette from any photo or artwork</span>
+                  </div>
+                  <div className="prefs-mode-segmented-control">
+                    <button
+                      type="button"
+                      className={`prefs-mode-segment ${imageMode === "light" ? "active" : ""}`}
+                      onClick={() => handleModeToggle("light")}
+                    >
+                      ☀ Clair
+                    </button>
+                    <button
+                      type="button"
+                      className={`prefs-mode-segment ${imageMode === "dark" ? "active" : ""}`}
+                      onClick={() => handleModeToggle("dark")}
+                    >
+                      ☾ Sombre
+                    </button>
+                  </div>
+                </div>
+
+                <div className="prefs-image-theme-dropzone">
+                  <input
+                    type="file"
+                    ref={imageInputRef}
+                    accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                    style={{ display: "none" }}
+                    onChange={handleImageFileChange}
+                  />
+                  {imageThumbnail ? (
+                    <div className="prefs-image-thumb-preview">
+                      <img src={imageThumbnail} alt="Source" className="prefs-image-thumb-img" />
+                      <div className="prefs-image-thumb-info">
+                        <span className="prefs-image-thumb-name">{selectedImageFile?.name || "Image source"}</span>
+                        <div className="prefs-image-thumb-swatches">
+                          <span style={{ backgroundColor: editColors.chromeBg }} title="Chrome Background" />
+                          <span style={{ backgroundColor: editColors.chromeSurface }} title="Panels & Surface" />
+                          <span style={{ backgroundColor: editColors.accentColor }} title="Accent Color" />
+                          <span style={{ backgroundColor: editColors.canvasNodeList }} title="Node List Palette" />
+                          <span style={{ backgroundColor: editColors.canvasSceneActive }} title="Active Scene Slot" />
+                          <span style={{ backgroundColor: editColors.viewportBgTop }} title="3D Viewport Top" />
+                        </div>
+                      </div>
+                      <div className="prefs-image-thumb-actions">
+                        <button
+                          type="button"
+                          className="prefs-action-btn"
+                          onClick={() => imageInputRef.current?.click()}
+                          disabled={isExtractingImage}
+                        >
+                          Change Image...
+                        </button>
+                        <button
+                          type="button"
+                          className="prefs-btn-confirm"
+                          onClick={() => setIsSavingCustom(true)}
+                          title="Save this generated theme with a custom name"
+                        >
+                          Save Theme
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      className="prefs-image-upload-btn"
+                      onClick={() => imageInputRef.current?.click()}
+                      disabled={isExtractingImage}
+                    >
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                        <circle cx="8.5" cy="8.5" r="1.5" />
+                        <polyline points="21 15 16 10 5 21" />
+                      </svg>
+                      <span>{isExtractingImage ? "Analyzing Image..." : "Upload Image to Extract Palette (PNG, JPG, WebP)"}</span>
+                    </button>
+                  )}
+                </div>
+
+                {imageThemeError && (
+                  <div className="prefs-image-error-banner">
+                    {imageThemeError}
+                  </div>
+                )}
+              </div>
+
               {/* Color Customizer Section */}
               <div className="prefs-section-header" style={{ marginTop: 20 }}>
-                <span className="prefs-section-label">Interface Colors (Live Customization)</span>
+                <span className="prefs-section-label">Interface Colors</span>
                 <span className="prefs-option-hint">Changes apply immediately to the workspace</span>
               </div>
 
