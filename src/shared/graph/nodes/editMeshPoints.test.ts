@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 import { EvalContext } from "../types";
+import { createQuadBox, quadMeshToBufferGeometry, QuadMesh } from "../quadMesh";
 import { applyWeldedPointMoves, EDIT_MESH_POINTS_NODE } from "./editMeshPoints";
 
 const CTX: EvalContext = { time: 0, step: 0, nodeId: "edit-points-test" };
@@ -25,6 +26,29 @@ describe("EDIT_MESH_POINTS_NODE", () => {
     const outPos = outMesh.geometry.attributes.position;
     expect(outPos.getX(0)).toBeCloseTo(points[0].x);
     expect(outPos.getX(1)).toBeCloseTo(posAttr.getX(1));
+  });
+
+  it("synchronizes geometry.userData.quadMesh positions when basis geometry carries a quadMesh", () => {
+    const quadBox = createQuadBox(2, 2, 2);
+    const geom = quadMeshToBufferGeometry(quadBox);
+    const basis = new THREE.Mesh(geom);
+    const posAttr = basis.geometry.attributes.position;
+    const points: THREE.Vector3[] = [];
+    for (let i = 0; i < posAttr.count; i++) points.push(new THREE.Vector3().fromBufferAttribute(posAttr, i));
+
+    const targetIdx = 0;
+    const origPos = points[targetIdx].clone();
+    const moves = new Map([[targetIdx, origPos.clone().add(new THREE.Vector3(5, 0, 0))]]);
+    const movedPoints = applyWeldedPointMoves(points, moves);
+
+    const res = EDIT_MESH_POINTS_NODE.evaluate({ basis }, { pointsList: movedPoints }, CTX);
+    const outMesh = res.geometry as THREE.Mesh;
+    expect(outMesh.geometry.userData.quadMesh).toBeDefined();
+    const updatedQuad = outMesh.geometry.userData.quadMesh as QuadMesh;
+    const matching = updatedQuad.positions.some(
+      (p) => Math.abs(p[0] - (origPos.x + 5)) < 1e-4 && Math.abs(p[1] - origPos.y) < 1e-4 && Math.abs(p[2] - origPos.z) < 1e-4,
+    );
+    expect(matching).toBe(true);
   });
 
   it("passes through unchanged (with a warning, not a crash) when pointsList no longer matches the basis's vertex count", () => {

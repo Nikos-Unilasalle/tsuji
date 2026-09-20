@@ -8,7 +8,7 @@ import { BAKE_INSTANCES_ACTION, bakeInstancesToGeometryData } from "./shared/gra
 import { EXPLODE_GLTF_ACTION, ExplodedTexture, explodeGltfToMeshData, gltfSourceDirectory } from "./shared/graph/nodes/gltfLoader";
 import { isTauri } from "./shared/isTauri";
 import { TOGGLE_POINTS_KEYFRAME_ACTION } from "./shared/graph/nodes/curve";
-import { RESEED_MESH_POINTS_ACTION } from "./shared/graph/nodes/editMeshPoints";
+import { EDIT_MESH_POINTS_NODE, RESEED_MESH_POINTS_ACTION } from "./shared/graph/nodes/editMeshPoints";
 import {
   EDIT_MESH_NODE,
   EDIT_MESH_RESEED_ACTION,
@@ -76,7 +76,7 @@ import { broadcastGraph, maximizeMainWindow, PreviewCameraPose, startBroadcastin
 import { exportVideo, mimeToExtension, saveVideoBlob } from "./shared/export/videoExport";
 import { exportPngSequence, saveZipBlob } from "./shared/export/imageSequenceExport";
 import { TransformPatch, Viewport, ViewportExportHandle } from "./shared/three/Viewport";
-import { SplitViewport, SplitViewMode } from "./shared/three/SplitViewport";
+import { SplitViewport } from "./shared/three/SplitViewport";
 import "./shared/three/viewport.css";
 import { GIZMO_SELECTABLE_TYPES, resolveGizmoTarget } from "./shared/graph/transformLookup";
 import { CalibrationOverlay } from "./windows/CalibrationOverlay";
@@ -87,6 +87,13 @@ import { TimelineBar } from "./windows/TimelineBar";
 import { TimelineDrawer } from "./windows/TimelineDrawer";
 import { KeyframeClipboardItem } from "./windows/timelineUtils";
 import { TopBar } from "./windows/TopBar";
+
+export interface WorkspaceSpaces {
+  view3D: boolean;
+  camera: boolean;
+  canvas: boolean;
+  timeline: boolean;
+}
 
 
 /**
@@ -216,25 +223,66 @@ function MainEditor() {
   const selectedNodeIdRef = useRef<string | null>(null);
   selectedNodeIdRef.current = selectedNodeId;
   const selectedNodeIdsRef = useRef<string[]>([]);
-  selectedNodeIdsRef.current = selectedNodeIds;
-  const [isTimelineDrawerOpen, setIsTimelineDrawerOpen] = useState(false);
   const [timelineDrawerHeight, setTimelineDrawerHeight] = useState(280);
   const [splitPercent, setSplitPercent] = useState(50);
   const [is2DMode, setIs2DMode] = useState(false);
   const [snapElevation, setSnapElevation] = useState(false);
   const toggle2DMode = useCallback(() => setIs2DMode((prev) => !prev), []);
   const toggleSnapElevation = useCallback(() => setSnapElevation((prev) => !prev), []);
-  // Shift+Tab cycle — see SplitViewport.tsx's SplitViewMode doc comment for
-  // why this lives here rather than inside SplitViewport itself.
-  const [viewMode, setViewMode] = useState<SplitViewMode>("viewport");
-  const cycleViewMode = useCallback(() => {
-    setViewMode((m) => (m === "viewport" ? "split" : m === "split" ? "camera" : m === "camera" ? "graph" : "viewport"));
+
+  // Workspaces state (3D View, Camera, Canvas, Timeline) — persisted in localStorage
+  const [spaces, setSpaces] = useState<WorkspaceSpaces>(() => {
+    try {
+      const saved = localStorage.getItem("tsuji_active_spaces_v1");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (
+          typeof parsed.view3D === "boolean" &&
+          typeof parsed.camera === "boolean" &&
+          typeof parsed.canvas === "boolean"
+        ) {
+          if (parsed.view3D || parsed.camera || parsed.canvas || parsed.timeline) {
+            return {
+              view3D: parsed.view3D,
+              camera: parsed.camera,
+              canvas: parsed.canvas,
+              timeline: parsed.timeline !== undefined ? Boolean(parsed.timeline) : true,
+            };
+          }
+        }
+      }
+    } catch {}
+    return { view3D: true, camera: false, canvas: true, timeline: true };
+  });
+
+  const toggleSpace = useCallback((space: keyof WorkspaceSpaces) => {
+    setSpaces((prev) => {
+      const next = { ...prev, [space]: !prev[space] };
+      // Prevent disabling all spaces: at least one space must remain active!
+      if (!next.view3D && !next.camera && !next.canvas && !next.timeline) {
+        return prev;
+      }
+      try {
+        localStorage.setItem("tsuji_active_spaces_v1", JSON.stringify(next));
+      } catch {}
+      return next;
+    });
   }, []);
   const [currentFilename, setCurrentFilename] = useState(recovered?.filename ?? "project_v1.tsuji");
   const [currentFilePath, setCurrentFilePath] = useState<string | null>(null);
   const [editorKey, setEditorKey] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
   const draggingSplit = useRef(false);
+  const [isDraggingSplit, setIsDraggingSplit] = useState(false);
+  const ghostLineRef = useRef<HTMLDivElement>(null);
+  const lastClampedYRef = useRef<number>(0);
+
+  const draggingDrawer = useRef(false);
+  const [isDraggingDrawer, setIsDraggingDrawer] = useState(false);
+  const ghostDrawerLineRef = useRef<HTMLDivElement>(null);
+  const lastClampedDrawerYRef = useRef<number>(0);
+  const drawerStartYRef = useRef<number>(0);
+  const drawerStartHeightRef = useRef<number>(0);
 
   const graph = canvases[activeCanvas] ?? emptyGraph();
   const project: Project = { canvases, activeCanvas };
@@ -517,7 +565,7 @@ function MainEditor() {
     // author's back — but Play/Pause is untouched, since it drives the live
     // scene (wind, physics, gamepad) regardless of any timeline length.
     if (!keyframesEnabled) {
-      setIsTimelineDrawerOpen(false);
+      setSpaces((prev) => (prev.timeline ? { ...prev, timeline: false } : prev));
     }
   }, [keyframesEnabled]);
 
@@ -587,10 +635,28 @@ function MainEditor() {
       if (!isInput && e.key === "Escape") {
         e.preventDefault();
         setIsPlaying(false);
+        setGraphWithHistory((prevGraph) => {
+          if (!selectedNodeId) return prevGraph;
+          const instance = findNodeDeep(prevGraph, selectedNodeId);
+          if (
+            instance &&
+            (instance.type === EDIT_MESH_NODE.type || instance.type === EDIT_MESH_POINTS_NODE.type)
+          ) {
+            const pts = instance.params.selectedPoints;
+            const fcs = instance.params.selectedFaces;
+            if ((Array.isArray(pts) && pts.length > 0) || (Array.isArray(fcs) && fcs.length > 0)) {
+              return updateNodeDeep(prevGraph, instance.id, (n) => ({
+                ...n,
+                params: { ...n.params, selectedPoints: [], selectedFaces: [] },
+              }));
+            }
+          }
+          return prevGraph;
+        });
         return;
       }
 
-      // Play/Pause is the master clock for the live scene — wind, physics,
+      // Space plays / pauses the whole engine — cloth, soft bodies, wind,
       // gamepad input, all of it — not just keyframe playback, so it works
       // with no Render node and with Frame Count off. keyframesEnabled only
       // gates the *scrub bar and keyframe drawer*, which need an actual
@@ -601,19 +667,13 @@ function MainEditor() {
       } else if (!isInput && (e.key === "t" || e.key === "T") && !isCmdOrCtrl && !isGraphZone()) {
         e.preventDefault();
         // No Render node, or Frame Count off: there is no timeline length to
-        // scrub or keyframe against, so the advanced drawer stays closed.
-        if (keyframesEnabled) setIsTimelineDrawerOpen((prev) => !prev);
-      } else if (!isInput && (e.key === "Tab" || e.code === "Tab") && e.shiftKey) {
-        // Global on purpose: one of the four states (full-canvas Graph)
-        // unmounts every Viewport instance, so a listener living inside one
-        // (the old approach) couldn't fire once none were left mounted.
-        e.preventDefault();
-        cycleViewMode();
+        // scrub or keyframe against, so the timeline space stays closed.
+        if (keyframesEnabled) toggleSpace("timeline");
       }
     }
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [keyframesEnabled, cycleViewMode, handleResetSimulations]);
+  }, [keyframesEnabled, handleResetSimulations, toggleSpace]);
 
   const onToggleKeyframe = useCallback(
     (nodeId: string, paramKey: string, frame: number, currentValue: any) => {
@@ -1245,7 +1305,19 @@ function MainEditor() {
       if (action === TOGGLE_POINTS_KEYFRAME_ACTION) {
         const node = graph.nodes.find((n) => n.id === nodeId);
         if (!node || currentFrame < 0) return;
-        onToggleKeyframe(nodeId, "pointsList", currentFrame, node.params.pointsList);
+        let points = node.params.pointsList;
+        if (node.type === EDIT_MESH_POINTS_NODE.type && (!Array.isArray(points) || points.length === 0)) {
+          const inputs = evaluatedResults?.get(nodeId)?.__evaluatedInputs as Record<string, unknown> | undefined;
+          const basisObj = inputs?.basis;
+          if (basisObj instanceof THREE.Object3D) {
+            const extracted = extractPointsFromMesh(basisObj, nodeId, "Edit Mesh Points");
+            if (extracted) {
+              points = extracted.points;
+              onParamChange("pointsList", extracted.points, nodeId);
+            }
+          }
+        }
+        onToggleKeyframe(nodeId, "pointsList", currentFrame, points);
         return;
       }
       if (action === RESEED_MESH_POINTS_ACTION) {
@@ -1261,7 +1333,7 @@ function MainEditor() {
         }
         const extracted = extractPointsFromMesh(basisObj, nodeId, "Edit Mesh Points");
         if (!extracted) return;
-        onParamChange("pointsList", extracted.points, nodeId);
+        onParamChange({ pointsList: extracted.points, selectedPoints: [] }, nodeId);
         return;
       }
       if (action === EDIT_MESH_RESEED_ACTION) {
@@ -1709,33 +1781,82 @@ function MainEditor() {
     }));
   };
 
-  const onSplitHandleMouseDown = useCallback((e: React.MouseEvent) => {
+  const onSplitHandleMouseDown = useCallback((e: React.MouseEvent | React.PointerEvent) => {
     if (e.shiftKey) return;
     e.preventDefault();
     draggingSplit.current = true;
+    lastClampedYRef.current = e.clientY;
+    setIsDraggingSplit(true);
+    document.body.style.cursor = "row-resize";
+    document.body.style.userSelect = "none";
   }, []);
 
+  const onDrawerSplitMouseDown = useCallback((e: React.MouseEvent | React.PointerEvent) => {
+    if (e.shiftKey) return;
+    e.preventDefault();
+    e.stopPropagation();
+    draggingDrawer.current = true;
+    drawerStartYRef.current = e.clientY;
+    drawerStartHeightRef.current = timelineDrawerHeight;
+    lastClampedDrawerYRef.current = e.clientY;
+    setIsDraggingDrawer(true);
+    document.body.style.cursor = "row-resize";
+    document.body.style.userSelect = "none";
+  }, [timelineDrawerHeight]);
+
   useEffect(() => {
-    function onMouseMove(e: MouseEvent) {
-      if (!draggingSplit.current || !containerRef.current) return;
-      document.body.style.cursor = "row-resize";
-      document.body.style.userSelect = "none";
-      const rect = containerRef.current.getBoundingClientRect();
-      const percent = ((e.clientY - rect.top) / rect.height) * 100;
-      setSplitPercent(Math.min(MAX_PANE_PERCENT, Math.max(MIN_PANE_PERCENT, percent)));
+    function onPointerMove(e: MouseEvent | PointerEvent) {
+      if (draggingSplit.current && containerRef.current) {
+        const rect = containerRef.current.getBoundingClientRect();
+        const minTop = rect.top + (rect.height * MIN_PANE_PERCENT) / 100;
+        const maxTop = rect.top + (rect.height * MAX_PANE_PERCENT) / 100;
+        const clampedY = Math.min(maxTop, Math.max(minTop, e.clientY));
+        lastClampedYRef.current = clampedY;
+        if (ghostLineRef.current) {
+          ghostLineRef.current.style.transform = `translateY(${clampedY}px)`;
+        }
+      } else if (draggingDrawer.current) {
+        const delta = e.clientY - drawerStartYRef.current;
+        const newHeight = Math.max(160, Math.min(650, drawerStartHeightRef.current + delta));
+        const clampedY = drawerStartYRef.current + (newHeight - drawerStartHeightRef.current);
+        lastClampedDrawerYRef.current = clampedY;
+        if (ghostDrawerLineRef.current) {
+          ghostDrawerLineRef.current.style.transform = `translateY(${clampedY}px)`;
+        }
+      }
     }
-    function onMouseUp() {
+
+    function onPointerUp() {
       if (draggingSplit.current) {
         draggingSplit.current = false;
         document.body.style.cursor = "";
         document.body.style.userSelect = "";
+        if (containerRef.current) {
+          const rect = containerRef.current.getBoundingClientRect();
+          const percent = ((lastClampedYRef.current - rect.top) / rect.height) * 100;
+          setSplitPercent(Math.min(MAX_PANE_PERCENT, Math.max(MIN_PANE_PERCENT, percent)));
+        }
+        setIsDraggingSplit(false);
+      }
+      if (draggingDrawer.current) {
+        draggingDrawer.current = false;
+        document.body.style.cursor = "";
+        document.body.style.userSelect = "";
+        const delta = lastClampedDrawerYRef.current - drawerStartYRef.current;
+        setTimelineDrawerHeight(Math.max(160, Math.min(650, drawerStartHeightRef.current + delta)));
+        setIsDraggingDrawer(false);
       }
     }
-    window.addEventListener("mousemove", onMouseMove);
-    window.addEventListener("mouseup", onMouseUp);
+
+    window.addEventListener("mousemove", onPointerMove);
+    window.addEventListener("mouseup", onPointerUp);
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp);
     return () => {
-      window.removeEventListener("mousemove", onMouseMove);
-      window.removeEventListener("mouseup", onMouseUp);
+      window.removeEventListener("mousemove", onPointerMove);
+      window.removeEventListener("mouseup", onPointerUp);
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
     };
   }, []);
 
@@ -2303,7 +2424,13 @@ function MainEditor() {
   return (
     <div
       ref={containerRef}
-      style={{ width: "100vw", height: "100vh", display: "flex", flexDirection: "column" }}
+      style={{
+        width: "100vw",
+        height: "100vh",
+        display: "flex",
+        flexDirection: "column",
+        backgroundColor: "var(--chrome-bg, #2f3641)",
+      }}
     >
       <TopBar
         project={project}
@@ -2319,13 +2446,15 @@ function MainEditor() {
         isExporting={isExporting}
         exportMode={exportMode}
         exportProgress={exportProgress}
-        isTimelineOpen={isTimelineDrawerOpen}
-        onToggleTimeline={keyframesEnabled ? () => setIsTimelineDrawerOpen((prev) => !prev) : undefined}
+        isTimelineOpen={spaces.timeline}
+        onToggleTimeline={keyframesEnabled ? () => toggleSpace("timeline") : undefined}
         is2DMode={is2DMode}
         onToggle2DMode={toggle2DMode}
         isPlaying={isPlaying}
         onTogglePlay={() => setIsPlaying((p) => !p)}
         onResetSimulations={handleResetSimulations}
+        spaces={spaces}
+        onToggleSpace={toggleSpace}
       />
       {isExporting && (
         // Off-screen (not display:none, which some webviews suspend rAF
@@ -2342,52 +2471,137 @@ function MainEditor() {
           />
         </div>
       )}
-      <div style={{ height: viewMode === "graph" ? "0%" : `${splitPercent}%`, minHeight: 0, position: "relative" }}>
-        <SplitViewport
-          graph={graph}
-          registry={DEFAULT_REGISTRY}
-          renderNodeId={findRenderNodeId(graph) ?? ""}
-          epochMs={epochMs}
-          selectedNodeId={selectedNodeId}
-          onSelectNode={handleSelectNode}
-          onTransformChange={onTransformChange}
-          onTransformStart={onTransformStart}
-          onCameraChange={onPreviewCameraChange}
-          currentFrame={currentFrame}
-          totalFrames={totalFrames}
-          onFrameChange={onViewportFrame}
-          onEvaluatedResults={onEvaluatedResults}
-          isPlaying={isPlaying}
-          onHubChange={handleHubChange}
-          suspended={isExporting}
-          viewMode={viewMode}
-          onCycleViewMode={cycleViewMode}
-          keyframes={graph.keyframes}
-          keyframesEnabled={keyframesEnabled}
-          evaluatedResults={evaluatedResults}
-          onParamChange={onParamChange}
-          onParamAction={onParamAction}
-          onUnpinParam={onToggleExposed}
-          onRenameExposedParam={onRenameExposed}
-          mode2D={is2DMode}
-          snapElevation={snapElevation}
-          onToggleSnapElevation={toggleSnapElevation}
-        />
-        {needsTransformHint && (
-          <div className="viewport-hint">Wire a Transform node into this object's Matrix to move it</div>
-        )}
-        {selectedInstance &&
-          selectedInstance.type === CAMERA_NODE.type &&
-          selectedInstance.params.mode === "calibrated" && (
-            <CalibrationOverlay
-              graph={graph}
-              cameraNodeId={selectedInstance.id}
-              storedPicks={selectedInstance.params.calibrationPicks}
-              mode={selectedInstance.params.mode ?? DEFAULT_REGISTRY.get(selectedInstance.type)?.defaultParams.mode}
-              onChange={onParamChange}
-            />
+      <div
+        style={{
+          display: spaces.view3D || spaces.camera ? "flex" : "none",
+          flexDirection: "column",
+          height:
+            (spaces.view3D || spaces.camera) && (spaces.canvas || spaces.timeline)
+              ? `${splitPercent}%`
+              : spaces.view3D || spaces.camera
+              ? "100%"
+              : "0%",
+          flex:
+            (spaces.view3D || spaces.camera) && !(spaces.canvas || spaces.timeline)
+              ? 1
+              : undefined,
+          minHeight: 0,
+          position: "relative",
+        }}
+      >
+        <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
+          <SplitViewport
+            graph={graph}
+            registry={DEFAULT_REGISTRY}
+            renderNodeId={findRenderNodeId(graph) ?? ""}
+            epochMs={epochMs}
+            selectedNodeId={selectedNodeId}
+            onSelectNode={handleSelectNode}
+            onTransformChange={onTransformChange}
+            onTransformStart={onTransformStart}
+            onCameraChange={onPreviewCameraChange}
+            currentFrame={currentFrame}
+            totalFrames={totalFrames}
+            onFrameChange={onViewportFrame}
+            onEvaluatedResults={onEvaluatedResults}
+            isPlaying={isPlaying}
+            onHubChange={handleHubChange}
+            suspended={isExporting || (!spaces.view3D && !spaces.camera)}
+            show3DView={spaces.view3D}
+            showCameraView={spaces.camera}
+            onCycleViewMode={() => toggleSpace("camera")}
+            keyframes={graph.keyframes}
+            keyframesEnabled={keyframesEnabled}
+            evaluatedResults={evaluatedResults}
+            onParamChange={onParamChange}
+            onParamAction={onParamAction}
+            onUnpinParam={onToggleExposed}
+            onRenameExposedParam={onRenameExposed}
+            mode2D={is2DMode}
+            onToggle2DMode={toggle2DMode}
+            snapElevation={snapElevation}
+            onToggleSnapElevation={toggleSnapElevation}
+          />
+          {needsTransformHint && (
+            <div className="viewport-hint">Wire a Transform node into this object's Matrix to move it</div>
           )}
+          {selectedInstance &&
+            selectedInstance.type === CAMERA_NODE.type &&
+            selectedInstance.params.mode === "calibrated" && (
+              <CalibrationOverlay
+                graph={graph}
+                cameraNodeId={selectedInstance.id}
+                storedPicks={selectedInstance.params.calibrationPicks}
+                mode={selectedInstance.params.mode ?? DEFAULT_REGISTRY.get(selectedInstance.type)?.defaultParams.mode}
+                onChange={onParamChange}
+              />
+            )}
+        </div>
+        {keyframesEnabled && (
+          <TimelineBar
+            currentFrame={currentFrame}
+            totalFrames={totalFrames}
+            isPlaying={isPlaying}
+            keyframesEnabled={keyframesEnabled}
+            selectedKeyframes={selectedKeyframesRecord}
+            markers={graph.markers ?? []}
+            waveformUrl={waveformClip?.url}
+            waveformStartFrame={waveformClip?.startFrame}
+            waveformDuration={waveformClip?.duration}
+            fps={exportFps}
+            onToggleMarker={onToggleMarker}
+            onMoveMarker={onMoveMarker}
+            onRenameMarker={onRenameMarker}
+            onMoveKeyframe={onMoveKeyframe}
+            onUpdateKeyframeEasing={onUpdateKeyframeEasing}
+            onDeleteKeyframe={onDeleteKeyframe}
+            onFrameChange={setCurrentFrame}
+            onSplitHandleMouseDown={
+              (spaces.view3D || spaces.camera) && (spaces.canvas || spaces.timeline)
+                ? onSplitHandleMouseDown
+                : () => {}
+            }
+            canResizeSplit={Boolean((spaces.view3D || spaces.camera) && (spaces.canvas || spaces.timeline))}
+            isDrawerOpen={spaces.timeline}
+            onToggleDrawer={() => toggleSpace("timeline")}
+          />
+        )}
       </div>
+
+      {/* Primary Split Divider with left & right resize handle buttons between 3D View and Lower Pane (only needed when mini timeline is disabled) */}
+      {(spaces.view3D || spaces.camera) && (spaces.canvas || spaces.timeline) && !keyframesEnabled && (
+        <div
+          className="workspace-split-divider"
+          onMouseDown={onSplitHandleMouseDown}
+          title="Resize workspace split (drag vertically)"
+        >
+          <button
+            type="button"
+            className="timeline-split-handle-btn timeline-split-handle-btn-left"
+            onMouseDown={onSplitHandleMouseDown}
+            title="Resize workspace split (drag vertically)"
+          >
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="8 7 12 3 16 7" />
+              <polyline points="8 17 12 21 16 17" />
+              <line x1="12" y1="3" x2="12" y2="21" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            className="timeline-split-handle-btn timeline-split-handle-btn-right"
+            onMouseDown={onSplitHandleMouseDown}
+            title="Resize workspace split (drag vertically)"
+          >
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="8 7 12 3 16 7" />
+              <polyline points="8 17 12 21 16 17" />
+              <line x1="12" y1="3" x2="12" y2="21" />
+            </svg>
+          </button>
+        </div>
+      )}
+
       {/* True screen overlay, not scoped to the 3D-viewport pane above: a
           fixed-position sibling of every other pane (see param-panel.css),
           so it stays reachable in every Shift+Tab view state, full-canvas
@@ -2418,78 +2632,155 @@ function MainEditor() {
           onToggleExposed={onToggleExposed}
         />
       )}
-      <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
-        {!isTimelineDrawerOpen && (
-          <TimelineBar
+      <div
+        style={{
+          flex: spaces.canvas || spaces.timeline ? 1 : "none",
+          minHeight: 0,
+          display: spaces.canvas || spaces.timeline ? "flex" : "none",
+          flexDirection: "column",
+        }}
+      >
+        {spaces.timeline && (
+          <TimelineDrawer
+            isOpen={spaces.timeline}
+            onClose={() => toggleSpace("timeline")}
             currentFrame={currentFrame}
             totalFrames={totalFrames}
             isPlaying={isPlaying}
             keyframesEnabled={keyframesEnabled}
-            selectedKeyframes={selectedKeyframesRecord}
-            markers={graph.markers ?? []}
-            waveformUrl={waveformClip?.url}
-            waveformStartFrame={waveformClip?.startFrame}
-            waveformDuration={waveformClip?.duration}
+            graph={graph}
+            registry={DEFAULT_REGISTRY}
+            selectedNodeIds={selectedNodeIds}
+            onSelectNode={handleSelectNode}
+            onFrameChange={setCurrentFrame}
+            onTogglePlay={() => setIsPlaying((p) => !p)}
+            onToggleKeyframe={onToggleKeyframe}
+            onBatchMoveKeyframes={onBatchMoveKeyframes}
+            onBatchDeleteKeyframes={onBatchDeleteKeyframes}
+            onBatchDuplicateKeyframes={onBatchDuplicateKeyframes}
+            onBatchUpdateEasing={onBatchUpdateEasing}
+            onChangeKeyframeValue={onChangeKeyframeValue}
+            onEditKeyframes={onEditKeyframes}
             fps={exportFps}
+            onPasteKeyframes={onPasteKeyframes}
+            markers={graph.markers ?? []}
             onToggleMarker={onToggleMarker}
             onMoveMarker={onMoveMarker}
             onRenameMarker={onRenameMarker}
-            onMoveKeyframe={onMoveKeyframe}
-            onUpdateKeyframeEasing={onUpdateKeyframeEasing}
-            onDeleteKeyframe={onDeleteKeyframe}
-            onFrameChange={setCurrentFrame}
-            onSplitHandleMouseDown={onSplitHandleMouseDown}
-            isDrawerOpen={isTimelineDrawerOpen}
-            onToggleDrawer={() => setIsTimelineDrawerOpen((prev) => !prev)}
+            drawerHeight={timelineDrawerHeight}
+            onDrawerHeightChange={setTimelineDrawerHeight}
+            onSplitHandleMouseDown={
+              (spaces.view3D || spaces.camera) && spaces.canvas
+                ? onSplitHandleMouseDown
+                : () => {}
+            }
+            isFullHeight={!spaces.canvas}
           />
         )}
-        <TimelineDrawer
-          isOpen={isTimelineDrawerOpen}
-          onClose={() => setIsTimelineDrawerOpen(false)}
-          currentFrame={currentFrame}
-          totalFrames={totalFrames}
-          isPlaying={isPlaying}
-          keyframesEnabled={keyframesEnabled}
-          graph={graph}
-          registry={DEFAULT_REGISTRY}
-          selectedNodeIds={selectedNodeIds}
-          onSelectNode={handleSelectNode}
-          onFrameChange={setCurrentFrame}
-          onTogglePlay={() => setIsPlaying((p) => !p)}
-          onToggleKeyframe={onToggleKeyframe}
-          onBatchMoveKeyframes={onBatchMoveKeyframes}
-          onBatchDeleteKeyframes={onBatchDeleteKeyframes}
-          onBatchDuplicateKeyframes={onBatchDuplicateKeyframes}
-          onBatchUpdateEasing={onBatchUpdateEasing}
-          onChangeKeyframeValue={onChangeKeyframeValue}
-          onEditKeyframes={onEditKeyframes}
-          fps={exportFps}
-          onPasteKeyframes={onPasteKeyframes}
-          markers={graph.markers ?? []}
-          onToggleMarker={onToggleMarker}
-          onMoveMarker={onMoveMarker}
-          onRenameMarker={onRenameMarker}
-          drawerHeight={timelineDrawerHeight}
-          onDrawerHeightChange={setTimelineDrawerHeight}
-          onSplitHandleMouseDown={onSplitHandleMouseDown}
-        />
-        <div style={{ flex: 1, minHeight: 0 }}>
-          <GraphEditor
-            key={`${activeCanvas}:${editorKey}`}
-            graph={graph}
-            registry={DEFAULT_REGISTRY}
-            onGraphChange={onGraphChange}
-            onSelectNode={handleSelectNode}
-            selectedNodeId={selectedNodeId}
-            onSelectNodes={handleSelectNodes}
-            selectedNodeIds={selectedNodeIds}
-            canvasCount={CANVAS_COUNT}
-            activeCanvas={activeCanvas}
-            emptyCanvases={canvases.map(isCanvasEmpty)}
-            onSelectCanvas={switchCanvas}
+        {/* Secondary Split Divider with left & right resize handle buttons between Timeline and Canvas */}
+        {spaces.timeline && spaces.canvas && (
+          <div
+            className="workspace-split-divider"
+            onMouseDown={onDrawerSplitMouseDown}
+            title="Resize timeline height (drag vertically)"
+          >
+            <button
+              type="button"
+              className="timeline-split-handle-btn timeline-split-handle-btn-left"
+              onMouseDown={onDrawerSplitMouseDown}
+              title="Resize timeline height (drag vertically)"
+            >
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="8 7 12 3 16 7" />
+                <polyline points="8 17 12 21 16 17" />
+                <line x1="12" y1="3" x2="12" y2="21" />
+              </svg>
+            </button>
+            <button
+              type="button"
+              className="timeline-split-handle-btn timeline-split-handle-btn-right"
+              onMouseDown={onDrawerSplitMouseDown}
+              title="Resize timeline height (drag vertically)"
+            >
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="8 7 12 3 16 7" />
+                <polyline points="8 17 12 21 16 17" />
+                <line x1="12" y1="3" x2="12" y2="21" />
+              </svg>
+            </button>
+          </div>
+        )}
+        {spaces.canvas && (
+          <div style={{ flex: 1, minHeight: 0 }}>
+            <GraphEditor
+              key={`${activeCanvas}:${editorKey}`}
+              graph={graph}
+              registry={DEFAULT_REGISTRY}
+              onGraphChange={onGraphChange}
+              onSelectNode={handleSelectNode}
+              selectedNodeId={selectedNodeId}
+              onSelectNodes={handleSelectNodes}
+              selectedNodeIds={selectedNodeIds}
+              canvasCount={CANVAS_COUNT}
+              activeCanvas={activeCanvas}
+              emptyCanvases={canvases.map(isCanvasEmpty)}
+              onSelectCanvas={switchCanvas}
+            />
+          </div>
+        )}
+      </div>
+      {isDraggingSplit && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 99999,
+            cursor: "row-resize",
+            userSelect: "none",
+            pointerEvents: "auto",
+          }}
+        >
+          <div
+            ref={ghostLineRef}
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              right: 0,
+              height: 1,
+              background: "#38bdf8",
+              transform: `translateY(${lastClampedYRef.current}px)`,
+              pointerEvents: "none",
+            }}
           />
         </div>
-      </div>
+      )}
+      {isDraggingDrawer && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 99999,
+            cursor: "row-resize",
+            userSelect: "none",
+            pointerEvents: "auto",
+          }}
+        >
+          <div
+            ref={ghostDrawerLineRef}
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              right: 0,
+              height: 1,
+              background: "#38bdf8",
+              transform: `translateY(${lastClampedDrawerYRef.current}px)`,
+              pointerEvents: "none",
+            }}
+          />
+        </div>
+      )}
     </div>
   );
 }

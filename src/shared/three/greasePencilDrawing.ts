@@ -17,8 +17,8 @@ export function calculateSimulatedPressure(
   currentPoint: { x: number; y: number; time: number },
   hardwarePressure = 0,
 ): number {
-  if (hardwarePressure > 0.01 && hardwarePressure < 0.99) {
-    return hardwarePressure;
+  if (hardwarePressure > 0.01) {
+    return Math.min(1.0, hardwarePressure);
   }
 
   if (!prevPoint) return 0.65;

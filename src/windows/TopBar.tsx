@@ -19,6 +19,7 @@ import { ShortcutsModal } from "./ShortcutsModal";
 import { DemosMenu } from "./DemosMenu";
 import { ShareMenu } from "./ShareMenu";
 import { DownloadMenu } from "./DownloadMenu";
+import { PreferencesModal } from "./PreferencesModal";
 import { createStarterProject } from "../shared/graph/starterGraph";
 import "./top-bar.css";
 
@@ -48,6 +49,9 @@ export interface TopBarProps {
   onTogglePlay?: () => void;
   /** Discards every simulation's accumulated state and returns to frame 0. */
   onResetSimulations?: () => void;
+  /** Workspace space toggles (3D View, Camera, Canvas, Timeline) */
+  spaces?: { view3D: boolean; camera: boolean; canvas: boolean; timeline?: boolean };
+  onToggleSpace?: (space: "view3D" | "camera" | "canvas" | "timeline") => void;
 }
 
 export const TopBar: React.FC<TopBarProps> = ({
@@ -64,13 +68,15 @@ export const TopBar: React.FC<TopBarProps> = ({
   isExporting = false,
   exportMode = null,
   exportProgress = 0,
-  isTimelineOpen = false,
-  onToggleTimeline,
+  isTimelineOpen: _isTimelineOpen = false,
+  onToggleTimeline: _onToggleTimeline,
   is2DMode = false,
   onToggle2DMode,
   isPlaying = false,
   onTogglePlay,
   onResetSimulations,
+  spaces,
+  onToggleSpace,
 }) => {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [toastError, setToastError] = useState(false);
@@ -78,6 +84,7 @@ export const TopBar: React.FC<TopBarProps> = ({
   const [filenameInput, setFilenameInput] = useState(currentFilename);
   const [isOutputOpen, setIsOutputOpen] = useState(false);
   const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
+  const [isPreferencesOpen, setIsPreferencesOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   // Owned so a second toast doesn't get cut short by the first's leftover
   // timer, and cleared on unmount to avoid a setState on a dead component.
@@ -259,19 +266,19 @@ export const TopBar: React.FC<TopBarProps> = ({
 
       {/* Center section: Undo & Redo */}
       <div className="top-bar-center">
-        {/* UNDO */}
+        {/* UNDO (U+21B0) */}
         <button className="top-bar-button top-bar-button-icon-only" onClick={onUndo} title="Undo (Ctrl+Z / ⌘Z)">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="1 4 1 10 7 10" />
-            <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="11 5 6 10 11 15" />
+            <path d="M6 10h11v9" />
           </svg>
         </button>
 
-        {/* REDO */}
+        {/* REDO (U+21B1) */}
         <button className="top-bar-button top-bar-button-icon-only" onClick={onRedo} title="Redo (Ctrl+Shift+Z / ⌘⇧Z)">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="23 4 23 10 17 10" />
-            <path d="M20.49 15a9 9 0 1 1-2.13-9.36L23 10" />
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="13 5 18 10 13 15" />
+            <path d="M18 10H7v9" />
           </svg>
         </button>
 
@@ -279,31 +286,79 @@ export const TopBar: React.FC<TopBarProps> = ({
           <>
             <div className="top-bar-divider" />
             <button
-              className="top-bar-button top-bar-button-icon-only"
+              className={`top-bar-button top-bar-button-icon-only ${isPlaying ? "top-bar-button-active" : ""}`}
               onClick={onTogglePlay}
               title={isPlaying ? "Pause (Space)" : "Play (Space) — runs the live scene even with no Render node or Frame Count off"}
             >
-              {isPlaying ? "⏸" : "▶"}
+              {isPlaying ? (
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                  <rect x="6" y="4" width="4" height="16" rx="1" />
+                  <rect x="14" y="4" width="4" height="16" rx="1" />
+                </svg>
+              ) : (
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                  <polygon points="6 4 20 12 6 20 6 4" />
+                </svg>
+              )}
             </button>
             <button
               className="top-bar-button top-bar-button-icon-only"
               onClick={onResetSimulations}
               title="Reset simulations (Shift + Space) — rebuild physics, fluids and integrators, and return to frame 0"
             >
-              ⟲
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                <path d="M3 3v5h5" />
+              </svg>
             </button>
           </>
         )}
+      </div>
 
+      {/* Center area: 2D/3D Mode selector & Workspaces switches (3D View, Camera, Canvas) */}
+      <div className="top-bar-center">
         {onToggle2DMode && (
-          <>
-            <div className="top-bar-divider" />
+          <div className="top-bar-mode-group">
             <button
-              className={`top-bar-button top-bar-button-mode ${is2DMode ? "top-bar-button-mode-active" : ""}`}
-              onClick={onToggle2DMode}
-              title={is2DMode ? "2D Mode active (click to switch to 3D Orbit Mode)" : "3D Mode active (click to switch to 2D Mode)"}
+              type="button"
+              className={`top-bar-mode-btn ${!is2DMode ? "active" : ""}`}
+              onClick={is2DMode ? onToggle2DMode : undefined}
+              title="3D Mode — Free orbit 3D viewport (Click to switch to 3D)"
             >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+                <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
+                <line x1="12" y1="22.08" x2="12" y2="12" />
+              </svg>
+              3D
+            </button>
+            <button
+              type="button"
+              className={`top-bar-mode-btn ${is2DMode ? "active" : ""}`}
+              onClick={!is2DMode ? onToggle2DMode : undefined}
+              title="2D Mode — Orthographic drawing plane & elevation view (Ideal for Grease Pencil & tablets)"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="2" />
+                <line x1="3" y1="9" x2="21" y2="9" />
+                <line x1="9" y1="21" x2="9" y2="9" />
+              </svg>
+              2D
+            </button>
+          </div>
+        )}
+
+        {onToggle2DMode && spaces && onToggleSpace && <div className="top-bar-divider" />}
+
+        {spaces && onToggleSpace && (
+          <div className="top-bar-spaces-group">
+            <button
+              type="button"
+              className={`top-bar-space-btn ${spaces.view3D ? "active" : ""}`}
+              onClick={() => onToggleSpace("view3D")}
+              title={is2DMode ? "Toggle 2D Viewport" : "Toggle 3D Viewport"}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 {is2DMode ? (
                   <>
                     <rect x="3" y="3" width="18" height="18" rx="2" />
@@ -318,35 +373,59 @@ export const TopBar: React.FC<TopBarProps> = ({
                   </>
                 )}
               </svg>
-              {is2DMode ? "2D" : "3D"}
+              {is2DMode ? "2D View" : "3D View"}
             </button>
-          </>
+            <button
+              type="button"
+              className={`top-bar-space-btn ${spaces.camera ? "active" : ""}`}
+              onClick={() => onToggleSpace("camera")}
+              title="Toggle Camera View (Projected view)"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+                <circle cx="12" cy="13" r="4" />
+              </svg>
+              Camera
+            </button>
+            <button
+              type="button"
+              className={`top-bar-space-btn ${spaces.canvas ? "active" : ""}`}
+              onClick={() => onToggleSpace("canvas")}
+              title="Toggle Canvas (Node Graph)"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="7" height="7" rx="1" />
+                <rect x="14" y="3" width="7" height="7" rx="1" />
+                <rect x="14" y="14" width="7" height="7" rx="1" />
+                <rect x="3" y="14" width="7" height="7" rx="1" />
+              </svg>
+              Canvas
+            </button>
+            {spaces.timeline !== undefined && (
+              <button
+                type="button"
+                className={`top-bar-space-btn ${spaces.timeline ? "active" : ""}`}
+                onClick={() => onToggleSpace("timeline")}
+                title="Toggle Timeline (Animation & Playhead)"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="2" y="4" width="20" height="16" rx="2" />
+                  <path d="M6 8h.01M10 8h.01M14 8h.01M18 8h.01M6 12h.01M10 12h.01M14 12h.01M18 12h.01M8 16h8" />
+                </svg>
+                Timeline
+              </button>
+            )}
+          </div>
         )}
       </div>
 
-      {/* Right area: Toast + Timeline + Shortcuts + Filename + Download + Share */}
+      {/* Right area: Toast + Shortcuts + Preferences + Filename + Download + Share */}
       <div className="top-bar-right">
         {toastMessage && (
           <div className={`top-bar-toast${toastError ? " top-bar-toast-error" : ""}`}>
             {toastError ? "⚠ " : "✓ "}{toastMessage}
           </div>
         )}
-
-        {/* TIMELINE — advanced keyframe dope sheet drawer */}
-        {onToggleTimeline && (
-          <button
-            className={`top-bar-button${isTimelineOpen ? " top-bar-button-output-active" : ""}`}
-            onClick={onToggleTimeline}
-            title={isTimelineOpen ? "Close Timeline (T)" : "Open advanced Timeline (T)"}
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="2" y="4" width="20" height="16" rx="2" />
-              <path d="M6 8h.01M10 8h.01M14 8h.01M18 8h.01M6 12h.01M10 12h.01M14 12h.01M18 12h.01M8 16h8" />
-            </svg>
-            Timeline
-          </button>
-        )}
-
 
         {/* SHORTCUTS — keyboard shortcuts reference popup */}
         <button
@@ -359,6 +438,19 @@ export const TopBar: React.FC<TopBarProps> = ({
             <path d="M6 8h.01M10 8h.01M14 8h.01M18 8h.01M6 12h.01M10 12h.01M14 12h.01M18 12h.01M8 16h8" />
           </svg>
           Shortcuts
+        </button>
+
+        {/* PREFERENCES — tablet expresskeys and app configuration modal */}
+        <button
+          className="top-bar-button top-bar-button-prefs"
+          onClick={() => setIsPreferencesOpen(true)}
+          title="Preferences & Tablet Setup"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="3" />
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+          </svg>
+          Preferences
         </button>
 
         {isEditingFilename ? (
@@ -417,6 +509,7 @@ export const TopBar: React.FC<TopBarProps> = ({
       </div>
 
       <ShortcutsModal isOpen={isShortcutsOpen} onClose={() => setIsShortcutsOpen(false)} />
+      <PreferencesModal isOpen={isPreferencesOpen} onClose={() => setIsPreferencesOpen(false)} />
     </header>
   );
 };

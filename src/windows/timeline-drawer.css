@@ -4,8 +4,8 @@
   display: flex;
   flex-direction: column;
   background: var(--chrome-bg, #2f3641);
-  border-top: 2px solid #000000;
-  border-bottom: 2px solid #000000;
+  border-top: none;
+  border-bottom: 1px solid var(--chrome-border, #334155);
   color: var(--chrome-text, #eef2f6);
   user-select: none;
   position: relative;
@@ -47,10 +47,10 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 42px;
-  min-height: 42px;
-  background: var(--chrome-surface, #3b434f);
-  border-bottom: 1px solid var(--chrome-border, #5a6472);
+  height: 38px;
+  min-height: 38px;
+  background: var(--chrome-surface, #1e2430);
+  border-bottom: 1px solid var(--chrome-border, #334155);
   padding: 0 10px;
   gap: 8px;
 }
@@ -58,28 +58,13 @@
 .timeline-drawer-title-area {
   display: flex;
   align-items: center;
-  gap: 8px;
-}
-
-.timeline-drawer-badge {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: #38bdf8;
-  background: rgba(56, 189, 248, 0.12);
-  border: 1px solid rgba(56, 189, 248, 0.3);
-  padding: 3px 8px;
-  border-radius: 4px;
+  gap: 4px;
 }
 
 .timeline-filter-btn {
-  background: var(--chrome-surface-raised, #47505d);
-  border: 1px solid var(--chrome-border, #5a6472);
-  color: var(--chrome-text-muted, #b3bdc9);
+  background: transparent;
+  border: none;
+  color: var(--chrome-text-muted, #94a3b8);
   padding: 4px 8px;
   border-radius: 4px;
   font-size: 11px;
@@ -87,76 +72,99 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  transition: all 0.15s ease;
+  transition: color 0.15s ease, background 0.15s ease;
+  outline: none;
+  box-shadow: none;
 }
 
 .timeline-filter-btn:hover {
-  color: var(--chrome-text, #eef2f6);
-  background: #525c6b;
+  color: #ffffff;
+  background: var(--chrome-surface-raised);
 }
 
-.timeline-filter-btn.active {
-  color: #fff;
-  background: #2563eb;
-  border-color: #3b82f6;
+.timeline-filter-btn.active,
+.timeline-filter-btn:active {
+  color: #38bdf8;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  outline: none;
 }
 
 /* Center transport & timecode */
 .timeline-drawer-transport {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 2px;
 }
 
 .timeline-ctrl-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
+  width: 26px;
   height: 26px;
-  background: var(--chrome-surface-raised, #47505d);
-  border: 1px solid var(--chrome-border, #5a6472);
+  background: transparent;
+  border: none;
   border-radius: 4px;
-  color: var(--chrome-text, #eef2f6);
+  color: var(--chrome-text-muted, #94a3b8);
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: color 0.15s ease, background 0.15s ease;
+  outline: none;
+  box-shadow: none;
 }
 
 .timeline-ctrl-btn:hover:not(:disabled) {
-  background: #5b6677;
-  color: #fff;
-  border-color: #798799;
+  background: var(--chrome-surface-raised);
+  color: #ffffff;
+}
+
+.timeline-ctrl-btn:active,
+.timeline-ctrl-btn.active {
+  color: #38bdf8;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  outline: none;
 }
 
 .timeline-ctrl-btn:disabled {
-  opacity: 0.4;
+  opacity: 0.35;
   cursor: not-allowed;
 }
 
 .timeline-play-btn-large {
-  width: 34px;
-  background: #2563eb;
-  border-color: #3b82f6;
-  color: #fff;
+  width: 28px;
+  height: 26px;
+  background: transparent;
+  border: none;
+  color: var(--chrome-text-muted, #94a3b8);
+  outline: none;
+  box-shadow: none;
 }
 
 .timeline-play-btn-large:hover:not(:disabled) {
-  background: #1d4ed8;
+  background: var(--chrome-surface-raised);
+  color: #ffffff;
 }
 
-.timeline-play-btn-large.playing {
-  background: #059669;
-  border-color: #10b981;
+.timeline-play-btn-large.playing,
+.timeline-play-btn-large:active {
+  background: transparent;
+  color: #38bdf8;
+  border: none;
+  box-shadow: none;
+  outline: none;
 }
 
 .timeline-timecode-box {
   display: flex;
   align-items: center;
   background: rgba(0, 0, 0, 0.35);
-  border: 1px solid var(--chrome-border, #5a6472);
+  border: 1px solid var(--chrome-border, #334155);
   border-radius: 4px;
   padding: 2px 8px;
-  margin: 0 6px;
+  margin: 0 4px;
   gap: 6px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
@@ -175,7 +183,7 @@
 
 .timeline-timecode-box span {
   font-size: 11px;
-  color: var(--chrome-text-muted, #b3bdc9);
+  color: var(--chrome-text-muted, #94a3b8);
 }
 
 .timeline-timecode-tc {
@@ -187,47 +195,50 @@
 .timeline-drawer-actions {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
 }
 
 .timeline-action-btn {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  background: var(--chrome-surface-raised, #47505d);
-  border: 1px solid var(--chrome-border, #5a6472);
-  color: var(--chrome-text, #eef2f6);
+  background: transparent;
+  border: none;
+  color: var(--chrome-text-muted, #94a3b8);
   padding: 4px 8px;
   border-radius: 4px;
   font-size: 11px;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: color 0.15s ease, background 0.15s ease;
+  outline: none;
+  box-shadow: none;
 }
 
 .timeline-action-btn:hover:not(:disabled) {
-  background: #5b6677;
-  color: #fff;
+  background: var(--chrome-surface-raised);
+  color: #ffffff;
 }
 
-.timeline-action-btn.active {
-  background: rgba(56, 189, 248, 0.18);
-  border-color: #38bdf8;
+.timeline-action-btn.active,
+.timeline-action-btn:active {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  outline: none;
   color: #38bdf8;
 }
 
 .timeline-action-btn:disabled {
-  opacity: 0.4;
+  opacity: 0.35;
   cursor: not-allowed;
 }
 
 .timeline-action-btn.btn-kf-add {
-  background: rgba(118, 197, 96, 0.18);
-  border-color: rgba(118, 197, 96, 0.5);
   color: #76c560;
 }
 
 .timeline-action-btn.btn-kf-add:hover {
-  background: rgba(118, 197, 96, 0.35);
+  background: var(--chrome-surface-raised);
   color: #a3e635;
 }
 
@@ -236,8 +247,8 @@
 }
 
 .timeline-action-btn.btn-delete:hover:not(:disabled) {
-  background: rgba(239, 68, 68, 0.2);
-  border-color: #ef4444;
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
 }
 
 .timeline-easing-select {

@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { NodeDefinition } from "../types";
 import { clearMeshWarning, findFirstMesh, warnMeshRequired } from "../meshRequired";
 import { createNodeCache, disposeObject3D } from "../nodeCaches";
+import { QuadMesh, cloneQuadMesh } from "../quadMesh";
 import { emitModifiedMesh, primitiveOutputs } from "./object";
 
 export interface ExtractedPoints {
@@ -113,6 +114,9 @@ interface PointsMeshState {
   groupCount?: number;
   /** Scratch accumulator for the per-frame normal recompute, sized groupCount * 3. */
   groupNormals?: Float64Array;
+  /** If the source geometry carries a QuadMesh (e.g. from Box, Plane, etc.), keep its topology and sync positions. */
+  quadMesh?: QuadMesh;
+  quadVertexToBufferIndex?: Int32Array;
 }
 
 const NORMAL_QUANT = 1e3;
@@ -289,6 +293,37 @@ export function writePointsToMesh(nodeId: string, inputObj: THREE.Object3D, poin
     state.smoothingGroup = smoothing?.groups;
     state.groupCount = smoothing?.count;
     state.groupNormals = smoothing ? new Float64Array(smoothing.count * 3) : undefined;
+
+    if (srcGeom.userData?.quadMesh) {
+      const srcQuad = srcGeom.userData.quadMesh as QuadMesh;
+      state.quadMesh = cloneQuadMesh(srcQuad);
+      const vToBuf = new Int32Array(srcQuad.positions.length);
+      vToBuf.fill(-1);
+      const pos = srcGeom.attributes.position;
+      for (let v = 0; v < srcQuad.positions.length; v++) {
+        const qx = srcQuad.positions[v][0];
+        const qy = srcQuad.positions[v][1];
+        const qz = srcQuad.positions[v][2];
+        let bestDist = Infinity;
+        let bestIdx = -1;
+        for (let b = 0; b < pos.count; b++) {
+          const dx = pos.getX(b) - qx;
+          const dy = pos.getY(b) - qy;
+          const dz = pos.getZ(b) - qz;
+          const distSq = dx * dx + dy * dy + dz * dz;
+          if (distSq < bestDist) {
+            bestDist = distSq;
+            bestIdx = b;
+            if (distSq < 1e-8) break;
+          }
+        }
+        vToBuf[v] = bestDist < 1e-4 ? bestIdx : -1;
+      }
+      state.quadVertexToBufferIndex = vToBuf;
+    } else {
+      state.quadMesh = undefined;
+      state.quadVertexToBufferIndex = undefined;
+    }
   }
 
   const geometry = state.mesh.geometry;
@@ -301,6 +336,24 @@ export function writePointsToMesh(nodeId: string, inputObj: THREE.Object3D, poin
     array[i * 3 + 2] = Number(p?.z) || 0;
   }
   target.needsUpdate = true;
+
+  if (state.quadMesh && state.quadVertexToBufferIndex) {
+    for (let v = 0; v < state.quadMesh.positions.length; v++) {
+      const b = state.quadVertexToBufferIndex[v];
+      if (b >= 0 && b < points.length) {
+        const p = points[b] as { x?: number; y?: number; z?: number };
+        state.quadMesh.positions[v] = [
+          Number(p?.x) || 0,
+          Number(p?.y) || 0,
+          Number(p?.z) || 0,
+        ];
+      }
+    }
+    geometry.userData.quadMesh = cloneQuadMesh(state.quadMesh);
+  } else {
+    delete geometry.userData.quadMesh;
+  }
+
   if (state.smoothingGroup && state.groupNormals) {
     // Re-average within the source's own smoothing groups, so smooth stays
     // smooth, flat stays flat and Auto Smooth keeps exactly its hard edges.

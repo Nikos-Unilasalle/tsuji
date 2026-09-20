@@ -47,6 +47,10 @@
   --canvas-text-muted: #aab4c0;
 }
 
+html, body, #root {
+  background-color: var(--chrome-bg, #2f3641);
+}
+
 body, input, button, select, textarea {
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }

@@ -33,6 +33,7 @@ interface TimelineBarProps {
   onDeleteKeyframe?: (frame: number) => void;
   onFrameChange: (frame: number) => void;
   onSplitHandleMouseDown: (e: React.MouseEvent) => void;
+  canResizeSplit?: boolean;
   isDrawerOpen?: boolean;
   onToggleDrawer?: () => void;
 }
@@ -170,6 +171,7 @@ export function TimelineBar({
   onDeleteKeyframe,
   onFrameChange,
   onSplitHandleMouseDown,
+  canResizeSplit = true,
   isDrawerOpen = false,
   onToggleDrawer,
 }: TimelineBarProps) {
@@ -293,16 +295,9 @@ export function TimelineBar({
   }, [isTimelineHovered, keyframesEnabled, currentFrame, hoveredMarkerFrame, onToggleMarker, easingPopover]);
 
   const handlePointerDownTrack = (e: React.MouseEvent) => {
-    // 1. Right click OR Shift + Left click: scrub playhead (tête de lecture)
-    if (e.button === 2 || (e.button === 0 && e.shiftKey)) {
+    // Direct scrub on left click (0) or right click (2) - stylus tap & mouse drag
+    if (e.button === 0 || e.button === 2) {
       startScrubbing(e);
-      return;
-    }
-
-    // 2. Left click (without Shift): resize split between canvas and viewports
-    if (e.button === 0) {
-      e.preventDefault();
-      onSplitHandleMouseDown(e);
       return;
     }
   };
@@ -462,14 +457,6 @@ export function TimelineBar({
   return (
     <div
       className={`timeline-bar-container ${isCmdPressed ? "cmd-active" : ""} ${isShiftPressed ? "shift-active" : ""}`}
-      onMouseDown={(e) => {
-        if (e.shiftKey) {
-          startScrubbing(e);
-        } else if (e.metaKey || e.ctrlKey) {
-          e.preventDefault();
-          onSplitHandleMouseDown(e);
-        }
-      }}
       onMouseEnter={() => {
         setIsTimelineHovered(true);
         setInputZone("timeline");
@@ -478,21 +465,32 @@ export function TimelineBar({
         setIsTimelineHovered(false);
         setInputZone(null);
       }}
-      title="Click and drag to resize panels | Shift + click and drag to scrub playhead"
+      title="Timeline & Workspace Splitter"
     >
-      <div
-        className="timeline-split-resize-handle"
-        onMouseDown={(e) => {
-          if (e.shiftKey) {
-            startScrubbing(e);
-          } else {
-            onSplitHandleMouseDown(e);
-          }
-        }}
-        title="Drag to resize panels (Shift+drag to scrub playhead)"
-      />
-
       <div className="timeline-bar-inner">
+        {canResizeSplit && (
+          <div
+            className="timeline-split-resize-handle"
+            onMouseDown={onSplitHandleMouseDown}
+            title="Resize workspace split (drag vertically)"
+          />
+        )}
+        {/* Left resize handle button */}
+        {canResizeSplit && (
+          <button
+            type="button"
+            className="timeline-split-handle-btn timeline-split-handle-btn-left"
+            onMouseDown={onSplitHandleMouseDown}
+            title="Resize workspace split (drag vertically)"
+          >
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="8 7 12 3 16 7" />
+              <polyline points="8 17 12 21 16 17" />
+              <line x1="12" y1="3" x2="12" y2="21" />
+            </svg>
+          </button>
+        )}
+
         <div
           ref={trackRef}
           className={`timeline-track ${!keyframesEnabled ? "disabled" : ""}`}
@@ -500,7 +498,7 @@ export function TimelineBar({
           onMouseMove={handleMouseMoveTrack}
           onMouseLeave={handleMouseLeaveTrack}
           onContextMenu={(e) => e.preventDefault()}
-          title="Drag to resize split | Shift + drag to scrub playhead"
+          title="Drag to scrub timeline"
         >
           <div className="timeline-track-bg" />
           <WaveformCanvas
@@ -586,10 +584,26 @@ export function TimelineBar({
             <div
               className="timeline-playhead-cursor"
               style={{ left: `${progressPct}%` }}
-              title={`Frame ${currentFrame} (Shift+drag to scrub)`}
+              title={`Frame ${currentFrame} (Drag to scrub)`}
             />
           )}
         </div>
+
+        {/* Right resize handle button */}
+        {canResizeSplit && (
+          <button
+            type="button"
+            className="timeline-split-handle-btn timeline-split-handle-btn-right"
+            onMouseDown={onSplitHandleMouseDown}
+            title="Resize workspace split (drag vertically)"
+          >
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="8 7 12 3 16 7" />
+              <polyline points="8 17 12 21 16 17" />
+              <line x1="12" y1="3" x2="12" y2="21" />
+            </svg>
+          </button>
+        )}
 
         {onToggleDrawer && (
           <button

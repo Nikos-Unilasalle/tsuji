@@ -40,8 +40,10 @@ interface SplitViewportProps {
   onHubChange?: (nodeId: string, patch: Partial<{ x: number; y: number; rotation: number; scale: number }>) => void;
   /** Freezes both panes while a video export runs — see Viewport's `suspended`. */
   suspended?: boolean;
-  viewMode: SplitViewMode;
-  onCycleViewMode: () => void;
+  viewMode?: SplitViewMode;
+  onCycleViewMode?: () => void;
+  show3DView?: boolean;
+  showCameraView?: boolean;
   /** Editor pane's pinned param HUD — see ViewportParamHUD. Not passed to the output/camera-preview pane. */
   keyframes?: KeyframeStore;
   keyframesEnabled?: boolean;
@@ -51,6 +53,7 @@ interface SplitViewportProps {
   onUnpinParam?: (nodeId: string, paramId: string) => void;
   onRenameExposedParam?: (nodeId: string, paramId: string, label: string) => void;
   mode2D?: boolean;
+  onToggle2DMode?: () => void;
   snapElevation?: boolean;
   onToggleSnapElevation?: () => void;
   gpTool?: GpToolMode;
@@ -79,6 +82,8 @@ export function SplitViewport({
   suspended = false,
   viewMode,
   onCycleViewMode: cycleMode,
+  show3DView,
+  showCameraView,
   keyframes,
   keyframesEnabled,
   evaluatedResults,
@@ -87,6 +92,7 @@ export function SplitViewport({
   onUnpinParam,
   onRenameExposedParam,
   mode2D = false,
+  onToggle2DMode,
   snapElevation = false,
   onToggleSnapElevation,
   gpTool: gpToolProp,
@@ -177,12 +183,13 @@ export function SplitViewport({
     window.addEventListener("mouseup", onMouseUp);
   }, []);
 
-  const isGraph = viewMode === "graph";
-  const isSplit = viewMode === "split";
-  const isCamera = viewMode === "camera";
-  const isSplitActive = isSplit || is2D;
+  const hasExplicitSpaces = show3DView !== undefined || showCameraView !== undefined;
+  const show3D = hasExplicitSpaces ? Boolean(show3DView) : (viewMode === "viewport" || viewMode === "split");
+  const showCam = hasExplicitSpaces ? Boolean(showCameraView) : (viewMode === "camera" || viewMode === "split");
+  const isSplitActive = (show3D && showCam) || is2D;
 
-  const primaryVisible = !isGraph;
+  const primaryVisible = show3D || (showCam && !isSplitActive);
+  const isCamera = !show3D && showCam;
   const secondaryVisible = isSplitActive;
   const everSplitRef = useRef(isSplitActive);
   if (isSplitActive) everSplitRef.current = true;
@@ -217,6 +224,7 @@ export function SplitViewport({
           outputMode={false}
           cameraView={isCamera}
           mode2D={is2D}
+          onToggle2DMode={onToggle2DMode}
           elevationView={false}
           selectedNodeId={selectedNodeId}
           onSelectNode={onSelectNode}

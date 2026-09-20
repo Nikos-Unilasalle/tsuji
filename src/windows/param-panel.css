@@ -6,10 +6,10 @@
      the 42px TopBar, 12px from the right edge) in every view state,
      including ones with no 3D viewport on screen at all. */
   position: fixed;
-  top: 54px;
+  top: 50px;
   right: 12px;
   width: 320px;
-  max-height: calc(100vh - 66px);
+  max-height: calc(100vh - 62px);
   overflow-y: auto;
   scrollbar-width: none; /* Firefox: hide scrollbar */
   -ms-overflow-style: none; /* IE/Edge: hide scrollbar */
@@ -44,7 +44,7 @@
 /* Compact tab pinned to right edge when panel is collapsed/disappeared */
 .param-panel-tab {
   position: fixed;
-  top: 54px;
+  top: 50px;
   right: 0;
   display: inline-flex;
   align-items: center;

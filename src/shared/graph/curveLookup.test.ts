@@ -86,4 +86,23 @@ describe("resolveCurveEditTarget", () => {
 
     expect(resolveCurveEditTarget(graph, "lat1")).toEqual({ pointsNodeId: "lat1", spaceNodeId: "lat1" });
   });
+
+  test("Edit Mesh Points edits its own control points in its own space even when pointsList is unseeded", () => {
+    const graph: Graph = {
+      nodes: [node("box1", "object/box"), node("edit1", "object/edit_points", { pointsList: [] })],
+      connections: [wire("box1", "geometry", "edit1", "basis")],
+    };
+
+    expect(resolveCurveEditTarget(graph, "edit1")).toEqual({ pointsNodeId: "edit1", spaceNodeId: "edit1" });
+  });
+
+  test("Edit Mesh Points with seeded pointsList resolves to its own node for points and space", () => {
+    const graph: Graph = {
+      nodes: [node("edit1", "object/edit_points", { pointsList: POINTS })],
+      connections: [],
+    };
+
+    expect(resolveCurveEditTarget(graph, "edit1")).toEqual({ pointsNodeId: "edit1", spaceNodeId: "edit1" });
+  });
 });
+

@@ -78,6 +78,7 @@ export interface TimelineDrawerProps {
   drawerHeight: number;
   onDrawerHeightChange: (height: number) => void;
   onSplitHandleMouseDown: (e: React.MouseEvent) => void;
+  isFullHeight?: boolean;
 }
 
 function renderKeyframeGlyph(easeIn: EasingType = "smooth", isSummary = false) {
@@ -147,6 +148,7 @@ export const TimelineDrawer: React.FC<TimelineDrawerProps> = ({
   drawerHeight,
   onDrawerHeightChange,
   onSplitHandleMouseDown,
+  isFullHeight = false,
 }) => {
   const [viewMode, setViewMode] = useState<"selected" | "all">("selected");
   const [pixelsPerFrame, setPixelsPerFrame] = useState(6);
@@ -678,7 +680,7 @@ export const TimelineDrawer: React.FC<TimelineDrawerProps> = ({
     <div
       ref={drawerRootRef}
       className={`timeline-drawer-root ${isResizingDrawer ? "resizing" : ""} ${isOpen ? "open" : "closed"}`}
-      style={{ height: `${drawerHeight}px` }}
+      style={{ height: isFullHeight ? "100%" : `${drawerHeight}px`, flex: isFullHeight ? 1 : undefined }}
       onMouseEnter={() => setInputZone("timeline")}
       onMouseLeave={() => setInputZone(null)}
       onClick={() => {
@@ -699,15 +701,8 @@ export const TimelineDrawer: React.FC<TimelineDrawerProps> = ({
 
       {/* --- HEADER TOOLBAR --- */}
       <div className="timeline-drawer-header">
-        {/* Left Badge & Mode filter */}
+        {/* Left Mode filter */}
         <div className="timeline-drawer-title-area">
-          <div className="timeline-drawer-badge">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <rect x="2" y="4" width="20" height="16" rx="2" />
-              <path d="M6 8h.01M10 8h.01M14 8h.01M18 8h.01M6 12h.01M10 12h.01M14 12h.01M18 12h.01M8 16h8" />
-            </svg>
-            TIMELINE
-          </div>
           <button
             className={`timeline-filter-btn ${viewMode === "selected" ? "active" : ""}`}
             onClick={() => setViewMode("selected")}

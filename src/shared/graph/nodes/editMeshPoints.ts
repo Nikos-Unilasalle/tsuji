@@ -82,6 +82,7 @@ export const EDIT_MESH_POINTS_NODE: NodeDefinition = {
   outputs: [{ id: "geometry", label: "Geometry", type: "geometry" }],
   defaultParams: {
     pointsList: [],
+    selectedPoints: [] as number[],
   },
   paramFields: [
     { id: "reseedButton", label: "Reset Points from Basis", kind: "button", action: RESEED_MESH_POINTS_ACTION },

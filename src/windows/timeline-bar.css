@@ -2,14 +2,18 @@
 
 .timeline-bar-container {
   width: 100%;
-  height: 3px;
-  background-color: #000000;
-  position: relative;
+  height: 24px;
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background-color: transparent;
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   user-select: none;
-  z-index: 20;
+  z-index: 25;
   box-sizing: border-box;
+  pointer-events: none;
 }
 
 .timeline-bar-container.cmd-active,
@@ -22,40 +26,110 @@
   cursor: ew-resize !important;
 }
 
-/* 3px black line acts as resize handle */
+/* Invisible line acts as resize handle */
 .timeline-split-resize-handle {
   width: 100%;
-  height: 9px;
+  height: 8px;
   cursor: row-resize;
   background: transparent;
   position: absolute;
-  top: -3px;
+  bottom: 0;
   left: 0;
   z-index: 25;
+  pointer-events: auto;
 }
 
 .timeline-bar-inner {
   width: 100%;
-  height: 3px;
+  height: 24px;
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   position: relative;
   padding: 0;
   box-sizing: border-box;
 }
 
-/* Scrubbing Track Line: 20px tall hit region for easy grabbing, visual line 1px centered */
-.timeline-track {
+/* Elegant left and right split handle buttons resting above the 1px line */
+.timeline-split-handle-btn {
   position: absolute;
-  left: 6px;
-  right: 42px;
-  top: 50%;
-  transform: translateY(-50%);
-  height: 20px;
+  bottom: 3px;
+  width: 20px;
+  height: 18px;
+  background: #1e2430;
+  border: none;
+  border-radius: 4px;
+  color: #94a3b8;
   display: flex;
   align-items: center;
+  justify-content: center;
   cursor: row-resize;
+  z-index: 30;
+  transition: all 0.15s ease;
+  padding: 0;
+  user-select: none;
+  outline: none;
+  box-shadow: none;
+  pointer-events: auto;
+}
+
+.timeline-split-handle-btn:hover {
+  background: #283040;
+  color: #38bdf8;
+}
+
+.timeline-split-handle-btn:active {
+  background: #283040;
+  color: #38bdf8;
+}
+
+.timeline-split-handle-btn-left {
+  left: 6px;
+}
+
+.timeline-split-handle-btn-right {
+  right: 6px;
+}
+
+.timeline-bar-container .timeline-split-handle-btn-right {
+  right: 76px;
+}
+
+/* Standalone workspace separation divider */
+.workspace-split-divider {
+  width: 100%;
+  height: 2px;
+  background-color: var(--chrome-border, #334155);
+  position: relative;
+  display: flex;
+  align-items: center;
+  user-select: none;
+  z-index: 25;
+  cursor: row-resize;
+  flex-shrink: 0;
+}
+
+.workspace-split-divider::before {
+  content: "";
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  left: 0;
+  right: 0;
+  cursor: row-resize;
+}
+
+/* Scrubbing Track Line: 1px tall line along the bottom edge */
+.timeline-track {
+  position: absolute;
+  left: 32px;
+  right: 104px;
+  bottom: 0;
+  height: 16px;
+  display: flex;
+  align-items: flex-end;
+  cursor: pointer;
   z-index: 26;
+  pointer-events: auto;
 }
 
 .timeline-track.disabled {
@@ -66,7 +140,7 @@
 .timeline-track-bg {
   width: 100%;
   height: 1px;
-  background: #1e293b;
+  background: transparent;
 }
 
 .timeline-waveform {
@@ -81,9 +155,11 @@
 .timeline-track-fill {
   position: absolute;
   left: 0;
+  bottom: 0;
   height: 1px;
   background: #38bdf8;
   pointer-events: none;
+  border-radius: 0;
 }
 
 /* Visual marker (horizontal bar under 1px blue track line, 1 frame wide, 1px height, flat style without shadow) */
@@ -126,8 +202,8 @@
 /* Interactive Keyframe Diamond on the track */
 .timeline-keyframe-diamond {
   position: absolute;
-  top: 50%;
-  transform: translate(-50%, -50%);
+  bottom: 2px;
+  transform: translateX(-50%);
   width: 14px;
   height: 14px;
   display: flex;
@@ -140,12 +216,12 @@
 }
 
 .timeline-keyframe-diamond:hover {
-  transform: translate(-50%, -50%) scale(1.25);
+  transform: translateX(-50%) scale(1.25);
 }
 
 .timeline-keyframe-diamond.dragging {
   cursor: grabbing;
-  transform: translate(-50%, -50%) scale(1.35);
+  transform: translateX(-50%) scale(1.35);
   z-index: 31;
 }
 
@@ -161,10 +237,10 @@
 /* Playhead cursor: fully transparent, with 24px wide invisible grab hit box */
 .timeline-playhead-cursor {
   position: absolute;
-  top: 50%;
-  transform: translate(-50%, -50%);
+  bottom: 0;
+  transform: translateX(-50%);
   width: 1px;
-  height: 15px;
+  height: 16px;
   background: transparent;
   box-shadow: none;
   pointer-events: auto;
@@ -175,27 +251,28 @@
 .timeline-playhead-cursor::before {
   content: "";
   position: absolute;
-  top: 50%;
+  bottom: 0;
   left: 50%;
-  transform: translate(-50%, -50%);
+  transform: translateX(-50%);
   width: 24px;
-  height: 24px;
+  height: 20px;
   background: transparent;
   cursor: row-resize;
 }
 
-/* Hover Frame Badge Tooltip with gray text */
+/* Hover Frame Badge Tooltip */
 .timeline-hover-badge {
   position: absolute;
-  bottom: 16px;
+  bottom: 24px;
   transform: translateX(-50%);
-  background: #ffffff;
-  color: #475569;
+  background: #1e2430;
+  color: #e2e8f0;
+  border: 1px solid #334155;
   font-family: inherit;
   font-size: 10px;
-  font-weight: 700;
+  font-weight: 600;
   padding: 2px 7px;
-  border-radius: 10px;
+  border-radius: 4px;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
   white-space: nowrap;
   pointer-events: none;
@@ -205,51 +282,56 @@
 .timeline-drawer-toggle-btn {
   position: absolute;
   right: 48px;
-  top: 50%;
-  transform: translateY(-50%);
-  background: #1e293b;
-  border: 1px solid #334155;
-  color: #38bdf8;
+  bottom: 3px;
+  background: #1e2430;
+  border: none;
+  color: #94a3b8;
   border-radius: 4px;
   width: 22px;
-  height: 20px;
+  height: 18px;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   z-index: 30;
   transition: all 0.15s ease;
+  outline: none;
+  box-shadow: none;
+  pointer-events: auto;
 }
 
 .timeline-drawer-toggle-btn:hover {
-  background: #334155;
+  background: #283040;
   color: #ffffff;
-  border-color: #38bdf8;
-  box-shadow: 0 0 6px rgba(56, 189, 248, 0.4);
 }
 
-.timeline-drawer-toggle-btn.active {
-  background: #0284c7;
-  color: #ffffff;
-  border-color: #38bdf8;
+.timeline-drawer-toggle-btn.active,
+.timeline-drawer-toggle-btn:active {
+  background: #283040;
+  color: #38bdf8;
+  border: none;
+  box-shadow: none;
 }
 
-/* Total Frame Count Badge directly touching the right edge, gray text */
+/* Total Frame Count Badge */
 .timeline-total-badge {
   position: absolute;
-  right: 0;
-  top: 50%;
-  transform: translateY(-50%);
-  background: #ffffff;
-  color: #475569;
+  right: 6px;
+  bottom: 3px;
+  background: #1e2430;
+  color: #94a3b8;
   font-family: inherit;
   font-size: 10px;
-  font-weight: 700;
-  padding: 2px 7px;
-  border-radius: 10px 0 0 10px;
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.4);
+  font-weight: 600;
+  padding: 0 6px;
+  height: 18px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  border-radius: 4px;
   z-index: 30;
   line-height: 1;
+  pointer-events: auto;
 }
 
 

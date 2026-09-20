@@ -48,36 +48,28 @@ describe("TimelineBar Shift+drag playhead scrubbing", () => {
     expect(calculateFrame(2000)).toBe(99);
   });
 
-  it("routes track click: Left click without Shift resizes split, Shift + Left click scrubs playhead", () => {
+  it("routes track click: Left click or Right click directly scrubs playhead, split handle buttons resize panels", () => {
     const onSplitHandleMouseDown = vi.fn();
     const onFrameChange = vi.fn();
 
     const handlePointerDownTrack = (e: { button: number; shiftKey: boolean }) => {
-      // 1. Right click OR Shift + Left click: scrub playhead
-      if (e.button === 2 || (e.button === 0 && e.shiftKey)) {
+      // Direct scrub on Left click (0) or Right click (2)
+      if (e.button === 0 || e.button === 2) {
         onFrameChange(42);
-        return;
-      }
-
-      // 2. Left click (without Shift): resize split
-      if (e.button === 0) {
-        onSplitHandleMouseDown();
         return;
       }
     };
 
-    // 1. Normal left click -> resizes panels, does not scrub
+    // 1. Normal left click directly scrubs playhead (no Shift needed)
     handlePointerDownTrack({ button: 0, shiftKey: false });
-    expect(onSplitHandleMouseDown).toHaveBeenCalledTimes(1);
-    expect(onFrameChange).not.toHaveBeenCalled();
-
-    // 2. Shift + Left click -> scrubs playhead, does not resize panels
-    handlePointerDownTrack({ button: 0, shiftKey: true });
-    expect(onSplitHandleMouseDown).toHaveBeenCalledTimes(1); // still 1
     expect(onFrameChange).toHaveBeenCalledWith(42);
 
-    // 3. Right click -> scrubs playhead
+    // 2. Right click also scrubs playhead
     handlePointerDownTrack({ button: 2, shiftKey: false });
     expect(onFrameChange).toHaveBeenCalledTimes(2);
+
+    // 3. Dedicated split handle button triggers panel resizing
+    onSplitHandleMouseDown();
+    expect(onSplitHandleMouseDown).toHaveBeenCalledTimes(1);
   });
 });

@@ -83,47 +83,37 @@ export function DragNumberInput({
     setEditing(false);
   };
 
-  const DRAG_THRESHOLD_PX = 3;
   const PIXELS_PER_STEP = 4;
 
   const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
     if (e.button !== 0) return;
     e.preventDefault();
 
+    const nativeEv = e.nativeEvent as PointerEvent;
+    const isPen = nativeEv?.pointerType === "pen";
+    const dragThreshold = isPen ? 6 : 3;
+
     const el = e.currentTarget;
     const startValue = liveValueRef.current;
-    // Always driven by `movementY` (delta since the previous mousemove,
-    // reported on every mousemove regardless of Pointer Lock) rather than
-    // `clientY - startY`, so nothing has to change when Pointer Lock kicks
-    // in mid-gesture: the accumulator has been counting the same deltas
-    // since event #1, lock just stops the OS cursor from ever hitting a
-    // screen edge and clamping further deltas to 0 (Blender-style infinite
-    // scrub — the cursor vanishes and reappears at the field on release
-    // rather than visibly teleporting, since a page can't move the system
-    // cursor, only hide it and read relative movement while it's hidden).
     let accumulatedDy = 0;
+    let lastClientY = e.clientY;
     let dragged = false;
     let lockRequested = false;
 
     const handleMouseMove = (ev: MouseEvent) => {
-      accumulatedDy += -ev.movementY;
+      // For pen inputs, movementY can be erratic when tablet drivers report absolute positions.
+      // We safely compute dy from clientY if isPen or if movementY is suspiciously anomalous.
+      const dy = isPen ? -(ev.clientY - lastClientY) : -ev.movementY;
+      lastClientY = ev.clientY;
+      accumulatedDy += dy;
+
       if (!dragged) {
-        if (Math.abs(accumulatedDy) < DRAG_THRESHOLD_PX) return;
+        if (Math.abs(accumulatedDy) < dragThreshold) return;
         dragged = true;
         onDragStart?.();
-        // Deferred until a real drag is confirmed — requesting it on every
-        // plain click would fire the browser's "press Esc to exit" toast
-        // for what's supposed to be an ordinary click-to-edit.
-        if (!lockRequested) {
+        // Only request Pointer Lock for mouse, never for styluses (avoids driver jumps)
+        if (!isPen && !lockRequested) {
           lockRequested = true;
-          // Modern browsers return a Promise here that rejects
-          // (NotAllowedError) wherever Pointer Lock isn't grantable — a
-          // sandboxed embed, a webview that doesn't count a deferred
-          // mousemove-time call as user activation, etc. Already handled
-          // gracefully either way (see the comment above — movementY keeps
-          // working without a lock, just edge-clamped instead of
-          // infinite), so this only needs to not become an unhandled
-          // rejection in the console.
           el.requestPointerLock?.()?.catch(() => {});
         }
       }

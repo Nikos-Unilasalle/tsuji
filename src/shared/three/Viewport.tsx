@@ -25,7 +25,8 @@ import {
   latticeEvaluatedPoints,
 } from "../graph/nodes/lattice";
 import { POINTS_SELECTION_NODE } from "../graph/nodes/pointsSelection";
-import { applyWeldedPointMoves, EDIT_MESH_POINTS_NODE } from "../graph/nodes/editMeshPoints";
+import { applyWeldedPointMoves, EDIT_MESH_POINTS_NODE, RESEED_MESH_POINTS_ACTION } from "../graph/nodes/editMeshPoints";
+import { extractPointsFromMesh } from "../graph/nodes/pointsGeometry";
 import { POINTS_INFLUENCE_NODE, POINTS_INFLUENCE_DISCRETE_LEVELS, PointsInfluenceMode } from "../graph/nodes/pointsInfluence";
 import { FACE_SELECTION_NODE } from "../graph/nodes/meshEdit";
 import { createFaceSelectionHandles } from "./faceSelectionHandles";
@@ -42,6 +43,7 @@ import {
   QuadMesh,
   cloneQuadMesh,
   createQuadBox,
+  bufferGeometryToQuadMesh,
   getLoopCutPreviewSegments,
   loopCut,
   transformSelection,
@@ -560,6 +562,7 @@ interface ViewportProps {
   onUnpinParam?: (nodeId: string, paramId: string) => void;
   onRenameExposedParam?: (nodeId: string, paramId: string, label: string) => void;
   mode2D?: boolean;
+  onToggle2DMode?: () => void;
   elevationView?: boolean;
   snapElevation?: boolean;
   onToggleSnapElevation?: () => void;
@@ -590,8 +593,8 @@ export function Viewport({
   onTransformStart,
   onCameraChange,
   previewCameraPose = null,
-  isSplitView = false,
-  onToggleSplitView,
+  isSplitView: _isSplitView = false,
+  onToggleSplitView: _onToggleSplitView,
   currentFrame = -1,
   onEvaluatedResults,
   isPlaying = false,
@@ -607,6 +610,7 @@ export function Viewport({
   onUnpinParam,
   onRenameExposedParam,
   mode2D = false,
+  onToggle2DMode,
   elevationView = false,
   snapElevation = false,
   onToggleSnapElevation,
@@ -619,6 +623,7 @@ export function Viewport({
   const [showUiOverlay, setShowUiOverlay] = useState(true);
   const showUiOverlayRef = useRef(showUiOverlay);
   showUiOverlayRef.current = showUiOverlay;
+  const [isHudCollapsed, setIsHudCollapsed] = useState(false);
 
   const currentFrameRef = useRef(currentFrame);
   currentFrameRef.current = currentFrame;
@@ -1275,6 +1280,7 @@ export function Viewport({
     const editMeshCentroidProxy = new THREE.Object3D();
     editMeshCentroidProxy.userData.isEditMeshCentroidProxy = true;
     let dragStartMeshData: QuadMesh | null = null;
+    let dragStartPointPositionsList: THREE.Vector3[] | null = null;
 
     // Points Influence editing — same generic point-cloud handles again, this
     // time colored as a heatmap of a graded 0-1 influence instead of a
@@ -1569,6 +1575,83 @@ export function Viewport({
         }
       }
 
+      // Deselect All shortcut: Alt+A or Cmd/Ctrl+D
+      if ((e.altKey && (key === "a" || key === "q")) || ((e.ctrlKey || e.metaKey) && key === "d")) {
+        const activeEditMeshNode = selectedNodeIdRef.current
+          ? graphRef.current.nodes.find(
+              (n) =>
+                n.id === selectedNodeIdRef.current &&
+                (n.type === EDIT_MESH_NODE.type || n.type === EDIT_MESH_POINTS_NODE.type),
+            )
+          : null;
+        if (activeEditMeshNode) {
+          e.preventDefault();
+          onParamChangeRef.current?.("selectedPoints", [], activeEditMeshNode.id);
+          onParamChangeRef.current?.("selectedFaces", [], activeEditMeshNode.id);
+          return;
+        }
+      }
+
+      // Escape shortcut: Deselect All in Edit Mesh / Edit Mesh Points
+      if (key === "escape") {
+        const activeEditMeshNode = selectedNodeIdRef.current
+          ? graphRef.current.nodes.find(
+              (n) =>
+                n.id === selectedNodeIdRef.current &&
+                (n.type === EDIT_MESH_NODE.type || n.type === EDIT_MESH_POINTS_NODE.type),
+            )
+          : null;
+        if (activeEditMeshNode) {
+          const pts = activeEditMeshNode.params.selectedPoints;
+          const fcs = activeEditMeshNode.params.selectedFaces;
+          const hasSelectedPoints = Array.isArray(pts) && pts.length > 0;
+          const hasSelectedFaces = Array.isArray(fcs) && fcs.length > 0;
+          if (hasSelectedPoints || hasSelectedFaces) {
+            e.preventDefault();
+            e.stopPropagation();
+            onParamChangeRef.current?.("selectedPoints", [], activeEditMeshNode.id);
+            onParamChangeRef.current?.("selectedFaces", [], activeEditMeshNode.id);
+            return;
+          }
+        }
+      }
+
+      // Select All shortcut: A (without modifiers) in Edit Mesh / Edit Mesh Points
+      if (key === "a" && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        const activeEditMeshNode = selectedNodeIdRef.current
+          ? graphRef.current.nodes.find(
+              (n) =>
+                n.id === selectedNodeIdRef.current &&
+                (n.type === EDIT_MESH_NODE.type || n.type === EDIT_MESH_POINTS_NODE.type),
+            )
+          : null;
+        if (activeEditMeshNode) {
+          const meshObj = latestResultsRef.current?.get(activeEditMeshNode.id)?.geometry;
+          const srcMesh = meshObj instanceof THREE.Object3D ? findFirstMesh(meshObj) : null;
+          if (srcMesh) {
+            const quadMesh: QuadMesh =
+              activeEditMeshNode.type === EDIT_MESH_NODE.type
+                ? ((activeEditMeshNode.params.meshData as QuadMesh) ||
+                   (srcMesh.geometry?.userData?.quadMesh as QuadMesh) ||
+                   createQuadBox(1, 1, 1))
+                : (srcMesh.geometry ? bufferGeometryToQuadMesh(srcMesh.geometry) : createQuadBox(1, 1, 1));
+            const selectMode = activeEditMeshNode.type === EDIT_MESH_POINTS_NODE.type
+              ? "points"
+              : ((activeEditMeshNode.params.selectMode as "points" | "faces") || "faces");
+
+            e.preventDefault();
+            if (selectMode === "points") {
+              const allPoints = Array.from({ length: quadMesh.positions.length }, (_, i) => i);
+              onParamChangeRef.current?.("selectedPoints", allPoints, activeEditMeshNode.id);
+            } else {
+              const allFaces = Array.from({ length: quadMesh.faces.length }, (_, i) => i);
+              onParamChangeRef.current?.("selectedFaces", allFaces, activeEditMeshNode.id);
+            }
+            return;
+          }
+        }
+      }
+
       if (e.metaKey || e.ctrlKey || e.altKey) return;
 
       // Curve control point editing — checked before the gizmo/camera keys so
@@ -1620,8 +1703,8 @@ export function Viewport({
         }
       }
 
-      // Gizmo mode shortcuts: G (translate), R (rotate), S (scale)
-      if (key === "g") {
+      // Gizmo mode shortcuts: G / W (translate), R (rotate), S (scale)
+      if (key === "g" || key === "w") {
         e.preventDefault();
         setTransformMode("translate");
         if (transformControls) transformControls.setMode("translate");
@@ -1722,11 +1805,28 @@ export function Viewport({
             dragStartCentroidQuat.copy(centroid.quaternion);
             dragStartCentroidScale.copy(centroid.scale);
             const node = graphRef.current.nodes.find((n) => n.id === selectedNodeIdRef.current);
-            const rawMesh = node?.params?.meshData as QuadMesh | undefined;
-            dragStartMeshData = rawMesh ? cloneQuadMesh(rawMesh) : createQuadBox(1, 1, 1);
+            if (node?.type === EDIT_MESH_NODE.type) {
+              const rawMesh = node.params.meshData as QuadMesh | undefined;
+              dragStartMeshData = rawMesh ? cloneQuadMesh(rawMesh) : createQuadBox(1, 1, 1);
+              dragStartPointPositionsList = null;
+            } else if (node?.type === EDIT_MESH_POINTS_NODE.type) {
+              const meshObj = latestResultsRef.current?.get(node.id)?.geometry;
+              const srcMesh = meshObj instanceof THREE.Object3D ? findFirstMesh(meshObj) : null;
+              if (srcMesh?.geometry) {
+                dragStartMeshData = bufferGeometryToQuadMesh(srcMesh.geometry);
+                const rawList = Array.isArray(node.params.pointsList) && node.params.pointsList.length > 0
+                  ? node.params.pointsList
+                  : extractPointsFromMesh(srcMesh, node.id, "Edit Mesh Points")?.points ?? [];
+                dragStartPointPositionsList = rawList.map((p) => asVector3(p, new THREE.Vector3()).clone());
+              }
+            }
           }
         }
-        if (!event.value) suppressNextClick = true;
+        if (!event.value) {
+          suppressNextClick = true;
+          dragStartMeshData = null;
+          dragStartPointPositionsList = null;
+        }
       });
 
       transformControls.addEventListener("objectChange", () => {
@@ -1906,7 +2006,14 @@ export function Viewport({
           const pointIdx = object.userData.pointIndex as number;
           const node = graphRef.current.nodes.find((n) => n.id === curvePointsNodeId);
           if (!node || !onTransformChangeRef.current) return;
-          const rawList = Array.isArray(node.params.pointsList) ? [...node.params.pointsList] : [];
+          let rawList = Array.isArray(node.params.pointsList) ? [...node.params.pointsList] : [];
+          if (rawList.length === 0 && node.type === EDIT_MESH_POINTS_NODE.type) {
+            rawList = [];
+            for (let i = 0; i < curveHandles.count(); i++) {
+              const h = curveHandles.handleAt(i);
+              rawList.push(h ? h.position.clone() : new THREE.Vector3());
+            }
+          }
           if (pointIdx < 0 || pointIdx >= rawList.length) return;
           // A mesh's stored points are raw vertex-buffer entries, so a corner
           // is several coincident ones — the drag has to carry all of them or
@@ -1934,7 +2041,14 @@ export function Viewport({
         if (object.userData?.isCurveCentroidHandle) {
           const node = graphRef.current.nodes.find((n) => n.id === curvePointsNodeId);
           if (!node || !onTransformChangeRef.current) return;
-          const rawList = Array.isArray(node.params.pointsList) ? [...node.params.pointsList] : [];
+          let rawList = Array.isArray(node.params.pointsList) ? [...node.params.pointsList] : [];
+          if (rawList.length === 0 && node.type === EDIT_MESH_POINTS_NODE.type) {
+            rawList = [];
+            for (let i = 0; i < curveHandles.count(); i++) {
+              const h = curveHandles.handleAt(i);
+              rawList.push(h ? h.position.clone() : new THREE.Vector3());
+            }
+          }
 
           const deltaQuat = new THREE.Quaternion().copy(object.quaternion).multiply(dragStartCentroidQuat.clone().invert());
           const deltaScaleX = dragStartCentroidScale.x !== 0 ? object.scale.x / dragStartCentroidScale.x : 1;
@@ -1992,6 +2106,57 @@ export function Viewport({
           const invWorldMat = meshWorldMat.clone().invert();
 
           const localDeltaPos = worldDeltaPos.clone().applyMatrix4(invWorldMat).sub(new THREE.Vector3().applyMatrix4(invWorldMat));
+
+          if (node.type === EDIT_MESH_POINTS_NODE.type) {
+            if (!onTransformChangeRef.current || !dragStartPointPositionsList) return;
+            const selectedIndices = Array.isArray(node.params.selectedPoints)
+              ? (node.params.selectedPoints as number[])
+              : [];
+            if (selectedIndices.length === 0) return;
+
+            const localCentroid = new THREE.Vector3();
+            let count = 0;
+            for (const idx of selectedIndices) {
+              const p = dragStartMeshData.positions[idx];
+              if (p) {
+                localCentroid.add(new THREE.Vector3(p[0], p[1], p[2]));
+                count++;
+              }
+            }
+            if (count > 0) localCentroid.divideScalar(count);
+
+            const transformedUniquePoints = new Map<number, THREE.Vector3>();
+            const p = new THREE.Vector3();
+            const scaleVec = new THREE.Vector3(deltaScaleX, deltaScaleY, deltaScaleZ);
+            for (const idx of selectedIndices) {
+              const raw = dragStartMeshData.positions[idx];
+              if (!raw) continue;
+              p.set(raw[0] - localCentroid.x, raw[1] - localCentroid.y, raw[2] - localCentroid.z);
+              p.multiply(scaleVec);
+              p.applyQuaternion(deltaQuat);
+              p.add(localCentroid).add(localDeltaPos);
+              transformedUniquePoints.set(idx, p.clone());
+            }
+
+            const originPos = new THREE.Vector3();
+            const resultList = dragStartPointPositionsList.map((pt) => pt.clone());
+            for (let i = 0; i < dragStartPointPositionsList.length; i++) {
+              const pt = dragStartPointPositionsList[i];
+              for (const [uniqueIdx, targetPos] of transformedUniquePoints) {
+                const orig = dragStartMeshData.positions[uniqueIdx];
+                originPos.set(orig[0], orig[1], orig[2]);
+                if (pt.distanceToSquared(originPos) <= 1e-6) {
+                  resultList[i].copy(targetPos);
+                  break;
+                }
+              }
+            }
+
+            onTransformChangeRef.current(node.id, { pointsList: resultList });
+            return;
+          }
+
+          if (!onParamChangeRef.current) return;
 
           const selectMode = (node.params.selectMode as "points" | "faces") || "faces";
           const selectedIndices = selectMode === "points"
@@ -2168,7 +2333,11 @@ export function Viewport({
 
       // Edit Mesh gestures: Cmd/Ctrl-drag (paint select) & Shift-drag (marquee select / shift-click)
       const editMeshNodeOnDown = !outputMode && selectedNodeIdRef.current
-        ? graphRef.current.nodes.find((n) => n.id === selectedNodeIdRef.current && n.type === EDIT_MESH_NODE.type)
+        ? graphRef.current.nodes.find(
+            (n) =>
+              n.id === selectedNodeIdRef.current &&
+              (n.type === EDIT_MESH_NODE.type || n.type === EDIT_MESH_POINTS_NODE.type),
+          )
         : null;
 
       if (editMeshNodeOnDown && e.button === 0) {
@@ -2184,10 +2353,14 @@ export function Viewport({
           const srcMesh = meshObj instanceof THREE.Object3D ? findFirstMesh(meshObj) : null;
           if (srcMesh && raycaster) {
             const quadMesh: QuadMesh =
-              (editMeshNodeOnDown.params.meshData as QuadMesh) ||
-              (srcMesh.geometry?.userData?.quadMesh as QuadMesh) ||
-              createQuadBox(1, 1, 1);
-            const selectMode = (editMeshNodeOnDown.params.selectMode as "points" | "faces") || "faces";
+              editMeshNodeOnDown.type === EDIT_MESH_NODE.type
+                ? ((editMeshNodeOnDown.params.meshData as QuadMesh) ||
+                   (srcMesh.geometry?.userData?.quadMesh as QuadMesh) ||
+                   createQuadBox(1, 1, 1))
+                : (srcMesh.geometry ? bufferGeometryToQuadMesh(srcMesh.geometry) : createQuadBox(1, 1, 1));
+            const selectMode = editMeshNodeOnDown.type === EDIT_MESH_POINTS_NODE.type
+              ? "points"
+              : ((editMeshNodeOnDown.params.selectMode as "points" | "faces") || "faces");
             const rect = renderer.domElement.getBoundingClientRect();
             const mouseX = e.clientX - rect.left;
             const mouseY = e.clientY - rect.top;
@@ -2197,22 +2370,26 @@ export function Viewport({
             if (selectMode === "points") {
               const picked = editMeshHandles.pickPointsInRadius(mouseX, mouseY, 28, rect.width, rect.height, camera, quadMesh, srcMesh.matrixWorld);
               if (picked.length > 0) {
-                const curPoints = new Set<number>(
-                  Array.isArray(editMeshNodeOnDown.params.selectedPoints)
-                    ? (editMeshNodeOnDown.params.selectedPoints as number[])
-                    : [],
-                );
+                const curPoints = e.shiftKey
+                  ? new Set<number>(
+                      Array.isArray(editMeshNodeOnDown.params.selectedPoints)
+                        ? (editMeshNodeOnDown.params.selectedPoints as number[])
+                        : [],
+                    )
+                  : new Set<number>();
                 picked.forEach((p) => curPoints.add(p));
                 onParamChangeRef.current?.("selectedPoints", Array.from(curPoints), editMeshNodeOnDown.id);
               }
             } else {
               const faceIdx = editMeshHandles.pickFace(raycaster, quadMesh, srcMesh.matrixWorld);
               if (faceIdx !== null) {
-                const curFaces = new Set<number>(
-                  Array.isArray(editMeshNodeOnDown.params.selectedFaces)
-                    ? (editMeshNodeOnDown.params.selectedFaces as number[])
-                    : [],
-                );
+                const curFaces = e.shiftKey
+                  ? new Set<number>(
+                      Array.isArray(editMeshNodeOnDown.params.selectedFaces)
+                        ? (editMeshNodeOnDown.params.selectedFaces as number[])
+                        : [],
+                    )
+                  : new Set<number>();
                 curFaces.add(faceIdx);
                 onParamChangeRef.current?.("selectedFaces", Array.from(curFaces), editMeshNodeOnDown.id);
               }
@@ -2220,7 +2397,7 @@ export function Viewport({
           }
           e.stopImmediatePropagation();
           return;
-        } else if (e.shiftKey && editMeshToolRef.current !== "loopcut") {
+        } else if (e.shiftKey && (editMeshNodeOnDown.type === EDIT_MESH_POINTS_NODE.type || editMeshToolRef.current !== "loopcut")) {
           // Shift-drag (marquee) or Shift-click arming
           editMeshRectDragRef.current = {
             startX: e.clientX,
@@ -2489,17 +2666,25 @@ export function Viewport({
         setEditMeshPaintCursor({ x: e.clientX - hostRect.left, y: e.clientY - hostRect.top });
 
         const activeEditMesh = selectedNodeIdRef.current
-          ? graphRef.current.nodes.find((n) => n.id === selectedNodeIdRef.current && n.type === EDIT_MESH_NODE.type)
+          ? graphRef.current.nodes.find(
+              (n) =>
+                n.id === selectedNodeIdRef.current &&
+                (n.type === EDIT_MESH_NODE.type || n.type === EDIT_MESH_POINTS_NODE.type),
+            )
           : null;
         if (activeEditMesh && raycaster) {
           const meshObj = latestResultsRef.current?.get(activeEditMesh.id)?.geometry;
           const srcMesh = meshObj instanceof THREE.Object3D ? findFirstMesh(meshObj) : null;
           if (srcMesh) {
             const quadMesh: QuadMesh =
-              (activeEditMesh.params.meshData as QuadMesh) ||
-              (srcMesh.geometry?.userData?.quadMesh as QuadMesh) ||
-              createQuadBox(1, 1, 1);
-            const selectMode = (activeEditMesh.params.selectMode as "points" | "faces") || "faces";
+              activeEditMesh.type === EDIT_MESH_NODE.type
+                ? ((activeEditMesh.params.meshData as QuadMesh) ||
+                   (srcMesh.geometry?.userData?.quadMesh as QuadMesh) ||
+                   createQuadBox(1, 1, 1))
+                : (srcMesh.geometry ? bufferGeometryToQuadMesh(srcMesh.geometry) : createQuadBox(1, 1, 1));
+            const selectMode = activeEditMesh.type === EDIT_MESH_POINTS_NODE.type
+              ? "points"
+              : ((activeEditMesh.params.selectMode as "points" | "faces") || "faces");
             const rect = renderer.domElement.getBoundingClientRect();
             const mouseX = e.clientX - rect.left;
             const mouseY = e.clientY - rect.top;
@@ -2746,7 +2931,11 @@ export function Viewport({
 
         const dist = Math.hypot(e.clientX - drag.startX, e.clientY - drag.startY);
         const activeEditMesh = selectedNodeIdRef.current
-          ? graphRef.current.nodes.find((n) => n.id === selectedNodeIdRef.current && n.type === EDIT_MESH_NODE.type)
+          ? graphRef.current.nodes.find(
+              (n) =>
+                n.id === selectedNodeIdRef.current &&
+                (n.type === EDIT_MESH_NODE.type || n.type === EDIT_MESH_POINTS_NODE.type),
+            )
           : null;
 
         if (activeEditMesh) {
@@ -2754,10 +2943,14 @@ export function Viewport({
           const srcMesh = meshObj instanceof THREE.Object3D ? findFirstMesh(meshObj) : null;
           if (srcMesh && raycaster) {
             const quadMesh: QuadMesh =
-              (activeEditMesh.params.meshData as QuadMesh) ||
-              (srcMesh.geometry?.userData?.quadMesh as QuadMesh) ||
-              createQuadBox(1, 1, 1);
-            const selectMode = (activeEditMesh.params.selectMode as "points" | "faces") || "faces";
+              activeEditMesh.type === EDIT_MESH_NODE.type
+                ? ((activeEditMesh.params.meshData as QuadMesh) ||
+                   (srcMesh.geometry?.userData?.quadMesh as QuadMesh) ||
+                   createQuadBox(1, 1, 1))
+                : (srcMesh.geometry ? bufferGeometryToQuadMesh(srcMesh.geometry) : createQuadBox(1, 1, 1));
+            const selectMode = activeEditMesh.type === EDIT_MESH_POINTS_NODE.type
+              ? "points"
+              : ((activeEditMesh.params.selectMode as "points" | "faces") || "faces");
             const rect = renderer.domElement.getBoundingClientRect();
 
             if (dist > CLICK_MOVE_THRESHOLD_PX) {
@@ -2769,20 +2962,26 @@ export function Viewport({
 
               if (selectMode === "points") {
                 const picked = editMeshHandles.pickPointsInRect(minX, minY, maxX, maxY, rect.width, rect.height, camera, quadMesh, srcMesh.matrixWorld);
-                const curPoints = new Set<number>(
-                  Array.isArray(activeEditMesh.params.selectedPoints)
-                    ? (activeEditMesh.params.selectedPoints as number[])
-                    : [],
-                );
+                const isAccumulate = e.altKey || e.ctrlKey || e.metaKey;
+                const curPoints = isAccumulate
+                  ? new Set<number>(
+                      Array.isArray(activeEditMesh.params.selectedPoints)
+                        ? (activeEditMesh.params.selectedPoints as number[])
+                        : [],
+                    )
+                  : new Set<number>();
                 picked.forEach((p) => curPoints.add(p));
                 onParamChangeRef.current?.("selectedPoints", Array.from(curPoints), activeEditMesh.id);
               } else {
                 const picked = editMeshHandles.pickFacesInRect(minX, minY, maxX, maxY, rect.width, rect.height, camera, quadMesh, srcMesh.matrixWorld);
-                const curFaces = new Set<number>(
-                  Array.isArray(activeEditMesh.params.selectedFaces)
-                    ? (activeEditMesh.params.selectedFaces as number[])
-                    : [],
-                );
+                const isAccumulate = e.altKey || e.ctrlKey || e.metaKey;
+                const curFaces = isAccumulate
+                  ? new Set<number>(
+                      Array.isArray(activeEditMesh.params.selectedFaces)
+                        ? (activeEditMesh.params.selectedFaces as number[])
+                        : [],
+                    )
+                  : new Set<number>();
                 picked.forEach((f) => curFaces.add(f));
                 onParamChangeRef.current?.("selectedFaces", Array.from(curFaces), activeEditMesh.id);
               }
@@ -3026,19 +3225,27 @@ export function Viewport({
 
       // Edit Mesh interaction: points/faces selection & loop cut
       const activeEditMesh = !outputMode && selectedNodeIdRef.current
-        ? graphRef.current.nodes.find((n) => n.id === selectedNodeIdRef.current && n.type === EDIT_MESH_NODE.type)
+        ? graphRef.current.nodes.find(
+            (n) =>
+              n.id === selectedNodeIdRef.current &&
+              (n.type === EDIT_MESH_NODE.type || n.type === EDIT_MESH_POINTS_NODE.type),
+          )
         : null;
       if (activeEditMesh) {
         const meshObj = latestResultsRef.current?.get(activeEditMesh.id)?.geometry;
         const srcMesh = meshObj instanceof THREE.Object3D ? findFirstMesh(meshObj) : null;
         if (srcMesh) {
           const quadMesh: QuadMesh =
-            (activeEditMesh.params.meshData as QuadMesh) ||
-            (srcMesh.geometry?.userData?.quadMesh as QuadMesh) ||
-            createQuadBox(1, 1, 1);
-          const selectMode = (activeEditMesh.params.selectMode as "points" | "faces") || "faces";
+            activeEditMesh.type === EDIT_MESH_NODE.type
+              ? ((activeEditMesh.params.meshData as QuadMesh) ||
+                 (srcMesh.geometry?.userData?.quadMesh as QuadMesh) ||
+                 createQuadBox(1, 1, 1))
+              : (srcMesh.geometry ? bufferGeometryToQuadMesh(srcMesh.geometry) : createQuadBox(1, 1, 1));
+          const selectMode = activeEditMesh.type === EDIT_MESH_POINTS_NODE.type
+            ? "points"
+            : ((activeEditMesh.params.selectMode as "points" | "faces") || "faces");
 
-          if (editMeshToolRef.current === "loopcut") {
+          if (activeEditMesh.type === EDIT_MESH_NODE.type && editMeshToolRef.current === "loopcut") {
             const edge = editMeshHandles.pickEdge(raycaster, quadMesh, srcMesh.matrixWorld);
             if (edge) {
               const res = loopCut(quadMesh, edge, editMeshLoopCutsRef.current);
@@ -3095,27 +3302,59 @@ export function Viewport({
             }
           }
 
-          // If click did not hit any point or face, check if another object in the scene was hit
-          const sceneHit = raycaster
-            ? raycaster.intersectObjects(scene.children, true).find((i) => {
-                let curr: THREE.Object3D | null = i.object;
-                let taggedNode = false;
-                while (curr) {
-                  if (curr.visible === false) return false;
-                  if (curr.userData?.nodeId && curr.userData.nodeId !== activeEditMesh.id) taggedNode = true;
-                  curr = curr.parent;
-                }
-                return taggedNode;
-              })
-            : undefined;
+          // If click did not hit any point or face, check what was clicked
+          const gizmoHelper = transformControls?.getHelper();
+          const isGizmoHit = Boolean(
+            transformControls?.axis !== null ||
+            (gizmoHelper && raycaster.intersectObjects(
+              gizmoHelper.children.filter((c: any) => !c.isTransformControlsPlane),
+              true,
+            ).some((h) => h.object.visible !== false && !(h.object as any).isTransformControlsPlane))
+          );
+          if (isGizmoHit) return;
 
-          if (!sceneHit && !e.shiftKey) {
-            // Check if click was on the transform gizmo helper to prevent clearing selection
-            if (transformControls?.getHelper()) {
-              const gizmoHits = raycaster.intersectObject(transformControls.getHelper(), true);
-              if (gizmoHits.length > 0) return;
+          // Find the frontmost visible object hit by the raycast
+          let frontHitNodeId: string | null = null;
+          if (raycaster) {
+            const hits = raycaster.intersectObjects(scene.children, true);
+            for (const hit of hits) {
+              let curr: THREE.Object3D | null = hit.object;
+              let isVisible = true;
+              while (curr) {
+                if (curr.visible === false) {
+                  isVisible = false;
+                  break;
+                }
+                curr = curr.parent;
+              }
+              if (!isVisible) continue;
+
+              curr = hit.object;
+              while (curr) {
+                if (curr.userData?.nodeId) {
+                  frontHitNodeId = curr.userData.nodeId;
+                  break;
+                }
+                curr = curr.parent;
+              }
+              break;
             }
-            // Clicked empty space: clear element selection, keep EditMesh node selected!
+          }
+
+          const isUpstreamBasis = Boolean(
+            frontHitNodeId &&
+            activeEditMesh.type === EDIT_MESH_POINTS_NODE.type &&
+            graphRef.current.connections.some(
+              (c) => c.toNode === activeEditMesh.id && c.toSocket === "basis" && c.fromNode === frontHitNodeId,
+            )
+          );
+
+          const hitActiveMesh = frontHitNodeId === activeEditMesh.id || isUpstreamBasis;
+          const hitOtherNode = frontHitNodeId !== null && !hitActiveMesh;
+
+          if (!hitOtherNode && !e.shiftKey) {
+            // Clicked empty space or clicked active mesh surface outside of points/faces:
+            // clear element selection, keep EditMesh node selected!
             if (selectMode === "points") {
               onParamChangeRef.current?.("selectedPoints", [], activeEditMesh.id);
             } else {
@@ -3919,13 +4158,20 @@ export function Viewport({
       // off the cage they are meant to be editing. A drag is converted back
       // through latticeBasePointForTarget below.
       const isLatticeNode = curveNode?.type === LATTICE_DEFORM_NODE.type;
-      const curvePoints = isLatticeNode
-        ? latticeEvaluatedPoints(curveNode!.params)
-        : (Array.isArray(curveNode?.params.pointsList) ? curveNode.params.pointsList : []).map((p) =>
-            asVector3(p, new THREE.Vector3()),
-          );
-
       const isEditMeshPointsNode = curveNode?.type === EDIT_MESH_POINTS_NODE.type;
+      const rawStoredPoints = Array.isArray(curveNode?.params.pointsList) ? curveNode.params.pointsList : [];
+
+      let curvePoints: THREE.Vector3[];
+      if (isLatticeNode) {
+        curvePoints = latticeEvaluatedPoints(curveNode!.params);
+      } else if (isEditMeshPointsNode && rawStoredPoints.length === 0) {
+        const spaceObj = curveTarget ? results.get(curveTarget.spaceNodeId)?.geometry : undefined;
+        const mesh = spaceObj instanceof THREE.Object3D ? findFirstMesh(spaceObj) : null;
+        const extracted = mesh ? extractPointsFromMesh(spaceObj as THREE.Object3D, curveNode!.id, "Edit Mesh Points") : null;
+        curvePoints = extracted?.points ?? [];
+      } else {
+        curvePoints = rawStoredPoints.map((p) => asVector3(p, new THREE.Vector3()));
+      }
       const overMeshPointsCap = isEditMeshPointsNode && curvePoints.length > EDIT_MESH_POINTS_HANDLE_CAP;
       if (overMeshPointsCap && !editMeshPointsCapWarned) {
         editMeshPointsCapWarned = true;
@@ -3934,7 +4180,7 @@ export function Viewport({
         );
       }
 
-      if (curveTarget && curveNode && curvePoints.length >= 2 && !overMeshPointsCap) {
+      if (curveTarget && curveNode && curveNode.type !== EDIT_MESH_POINTS_NODE.type && curvePoints.length >= 2 && !overMeshPointsCap) {
         if (curvePointsNodeId !== curveNode.id) {
           curvePointsNodeId = curveNode.id;
           selectedPointIndices.clear();
@@ -4098,7 +4344,11 @@ export function Viewport({
       // Edit Mesh handling: sync handles and anchor editMeshCentroidProxy
       let editMeshHasSelection = false;
       const editMeshNode = !outputMode
-        ? graphRef.current.nodes.find((n) => n.id === selectedNodeIdRef.current && n.type === EDIT_MESH_NODE.type)
+        ? graphRef.current.nodes.find(
+            (n) =>
+              n.id === selectedNodeIdRef.current &&
+              (n.type === EDIT_MESH_NODE.type || n.type === EDIT_MESH_POINTS_NODE.type),
+          )
         : undefined;
       if (editMeshNode) {
         const srcObj = results.get(editMeshNode.id)?.geometry;
@@ -4106,20 +4356,26 @@ export function Viewport({
         if (srcMesh) srcMesh.updateMatrixWorld(true);
 
         const quadMesh: QuadMesh =
-          (editMeshNode.params.meshData as QuadMesh) ||
-          (srcMesh?.geometry?.userData?.quadMesh as QuadMesh) ||
-          createQuadBox(1, 1, 1);
+          editMeshNode.type === EDIT_MESH_NODE.type
+            ? ((editMeshNode.params.meshData as QuadMesh) ||
+               (srcMesh?.geometry?.userData?.quadMesh as QuadMesh) ||
+               createQuadBox(1, 1, 1))
+            : (srcMesh?.geometry ? bufferGeometryToQuadMesh(srcMesh.geometry) : createQuadBox(1, 1, 1));
 
-        const selectMode = (editMeshNode.params.selectMode as "points" | "faces") || "faces";
+        const selectMode = editMeshNode.type === EDIT_MESH_POINTS_NODE.type
+          ? "points"
+          : ((editMeshNode.params.selectMode as "points" | "faces") || "faces");
         const selPoints = new Set<number>(
           Array.isArray(editMeshNode.params.selectedPoints)
             ? (editMeshNode.params.selectedPoints as number[])
             : [],
         );
         const selFaces = new Set<number>(
-          Array.isArray(editMeshNode.params.selectedFaces)
-            ? (editMeshNode.params.selectedFaces as number[])
-            : [0],
+          editMeshNode.type === EDIT_MESH_POINTS_NODE.type
+            ? []
+            : (Array.isArray(editMeshNode.params.selectedFaces)
+                ? (editMeshNode.params.selectedFaces as number[])
+                : [0]),
         );
 
         editMeshHandles.sync(
@@ -4392,7 +4648,15 @@ export function Viewport({
           // the params were written back to a node whose real object never
           // moved. They stay as fallbacks for nodes with no geometry output
           // of their own (lights, camera helpers).
-          if (isGp && gpToolRef.current !== "select") {
+          if (editMeshNode) {
+            targetObject = null;
+            if (transformControls.object) transformControls.detach();
+            if (gizmoPivotProxyNodeId) {
+              gizmoPivotProxy.visible = false;
+              gizmoPivotProxyNodeId = null;
+              gizmoPivotProxyRealObject = null;
+            }
+          } else if (isGp && gpToolRef.current !== "select") {
             targetObject = null;
             if (transformControls.object) transformControls.detach();
             if (gizmoPivotProxyNodeId) {
@@ -5129,6 +5393,23 @@ export function Viewport({
                 {currentFrame >= 0 ? currentFrame : 0}
               </div>
 
+              {onToggle2DMode && (
+                <button
+                  type="button"
+                  className={`viewport-hud-button ${mode2D ? "viewport-hud-button-active" : ""}`}
+                  onClick={onToggle2DMode}
+                  title={mode2D ? "2D Drawing Mode active (click to switch to 3D Orbit Mode)" : "3D Drawing Mode active (click to switch to 2D Plane Mode)"}
+                  style={{
+                    fontWeight: 700,
+                    fontSize: "11px",
+                    padding: "0 6px",
+                    minWidth: "28px",
+                  }}
+                >
+                  {mode2D ? "2D" : "3D"}
+                </button>
+              )}
+
               <div
                 style={{
                   width: 1,
@@ -5644,14 +5925,21 @@ export function Viewport({
         selectedNodeId &&
         (() => {
           const editMeshNode = graph.nodes.find(
-            (n) => n.id === selectedNodeId && n.type === EDIT_MESH_NODE.type,
+            (n) =>
+              n.id === selectedNodeId &&
+              (n.type === EDIT_MESH_NODE.type || n.type === EDIT_MESH_POINTS_NODE.type),
           );
           if (!editMeshNode) return null;
-          const selectMode = (editMeshNode.params.selectMode as "points" | "faces") || "faces";
+          const isPointsOnly = editMeshNode.type === EDIT_MESH_POINTS_NODE.type;
+          const selectMode = isPointsOnly ? "points" : ((editMeshNode.params.selectMode as "points" | "faces") || "faces");
           const selectedFaces = Array.isArray(editMeshNode.params.selectedFaces)
             ? (editMeshNode.params.selectedFaces as number[])
             : [];
-          const isFacesActive = selectMode === "faces" && selectedFaces.length > 0;
+          const selectedPoints = Array.isArray(editMeshNode.params.selectedPoints)
+            ? (editMeshNode.params.selectedPoints as number[])
+            : [];
+          const isFacesActive = !isPointsOnly && selectMode === "faces" && selectedFaces.length > 0;
+          const selectedCount = isPointsOnly || selectMode === "points" ? selectedPoints.length : selectedFaces.length;
 
           return (
             <div
@@ -5689,7 +5977,7 @@ export function Viewport({
                   userSelect: "none",
                 }}
               >
-                Edit Mesh
+                {isPointsOnly ? "Edit Mesh Points" : "Edit Mesh"}
               </div>
 
               <div style={{ width: 1, height: 16, background: "rgba(255, 255, 255, 0.15)" }} />
@@ -5698,8 +5986,10 @@ export function Viewport({
               <button
                 type="button"
                 className={`viewport-hud-button ${selectMode === "points" ? "viewport-hud-button-active" : ""}`}
-                onClick={() => onParamChange?.("selectMode", "points", editMeshNode.id)}
-                title="Points Mode (Shortcut: 1) — Select and transform vertices"
+                onClick={() => {
+                  if (!isPointsOnly) onParamChange?.("selectMode", "points", editMeshNode.id);
+                }}
+                title={isPointsOnly ? "Points Mode (Vertices)" : "Points Mode (Shortcut: 1) — Select and transform vertices"}
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                   <circle cx="5" cy="5" r="2.5" />
@@ -5711,16 +6001,18 @@ export function Viewport({
               </button>
 
               {/* Mode: Faces */}
-              <button
-                type="button"
-                className={`viewport-hud-button ${selectMode === "faces" ? "viewport-hud-button-active" : ""}`}
-                onClick={() => onParamChange?.("selectMode", "faces", editMeshNode.id)}
-                title="Faces Mode (Shortcut: 3) — Select and transform quads"
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-                  <rect x="4" y="4" width="16" height="16" rx="2" fill="currentColor" fillOpacity="0.3" />
-                </svg>
-              </button>
+              {!isPointsOnly && (
+                <button
+                  type="button"
+                  className={`viewport-hud-button ${selectMode === "faces" ? "viewport-hud-button-active" : ""}`}
+                  onClick={() => onParamChange?.("selectMode", "faces", editMeshNode.id)}
+                  title="Faces Mode (Shortcut: 3) — Select and transform quads"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                    <rect x="4" y="4" width="16" height="16" rx="2" fill="currentColor" fillOpacity="0.3" />
+                  </svg>
+                </button>
+              )}
 
               <div style={{ width: 1, height: 16, background: "rgba(255, 255, 255, 0.15)" }} />
 
@@ -5746,7 +6038,7 @@ export function Viewport({
                 type="button"
                 className={`viewport-hud-button ${transformMode === "rotate" ? "viewport-hud-button-active" : ""}`}
                 onClick={() => setTransformMode("rotate")}
-                title="Rotate (Shortcut: R)"
+                title="Rotate (Shortcut: R / E)"
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M21 12a9 9 0 1 1-2.64-6.36L21 8" />
@@ -5759,7 +6051,7 @@ export function Viewport({
                 type="button"
                 className={`viewport-hud-button ${transformMode === "scale" ? "viewport-hud-button-active" : ""}`}
                 onClick={() => setTransformMode("scale")}
-                title="Scale (Shortcut: S)"
+                title="Scale (Shortcut: S / R)"
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <polyline points="15 3 21 3 21 9" />
@@ -5769,137 +6061,168 @@ export function Viewport({
                 </svg>
               </button>
 
-              <div style={{ width: 1, height: 16, background: "rgba(255, 255, 255, 0.15)" }} />
-
-              {/* Tool: Extrude */}
-              <button
-                type="button"
-                className="viewport-hud-button"
-                onClick={() => onParamAction?.(editMeshNode.id, EDIT_MESH_EXTRUDE_ACTION)}
-                title="Extrude (Shortcut: E) — Extrude selected face(s)"
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M12 19V5M5 12l7-7 7 7" />
-                </svg>
-              </button>
-
-              {/* Tool: Loop Cut */}
-              <button
-                type="button"
-                className={`viewport-hud-button ${editMeshTool === "loopcut" ? "viewport-hud-button-active" : ""}`}
-                onClick={() => setEditMeshTool((t) => (t === "loopcut" ? "select" : "loopcut"))}
-                title={`Loop Cut (Shortcut: Ctrl+R) — Scroll wheel over mesh to set cuts count (${editMeshLoopCuts})`}
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <rect x="3" y="3" width="18" height="18" rx="2" />
-                  <line x1="3" y1="12" x2="21" y2="12" strokeDasharray="3 3" />
-                </svg>
-                {editMeshTool === "loopcut" && (
-                  <span
+              {selectedCount > 0 && (
+                <>
+                  <div style={{ width: 1, height: 16, background: "rgba(255, 255, 255, 0.15)" }} />
+                  <button
+                    type="button"
+                    className="viewport-hud-button"
+                    onClick={() => {
+                      onParamChange?.(
+                        isPointsOnly || selectMode === "points" ? "selectedPoints" : "selectedFaces",
+                        [],
+                        editMeshNode.id,
+                      );
+                    }}
+                    title={`Deselect All (${selectedCount} selected) (Shortcut: Esc / Alt+A)`}
                     style={{
-                      marginLeft: 4,
-                      fontSize: "10px",
-                      fontWeight: 700,
-                      color: "#facc15",
-                      background: "rgba(250, 204, 21, 0.2)",
-                      padding: "1px 4px",
-                      borderRadius: "3px",
-                      lineHeight: "1",
+                      color: "#f87171",
                     }}
                   >
-                    {editMeshLoopCuts}
-                  </span>
-                )}
-              </button>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="12" r="9" />
+                      <line x1="15" y1="9" x2="9" y2="15" />
+                      <line x1="9" y1="9" x2="15" y2="15" />
+                    </svg>
+                  </button>
+                </>
+              )}
 
-              {/* Tool: Inset */}
-              <button
-                type="button"
-                className="viewport-hud-button"
-                onClick={() => onParamAction?.(editMeshNode.id, EDIT_MESH_INSET_ACTION)}
-                title="Inset (Shortcut: I) — Inset selected face(s)"
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <rect x="3" y="3" width="18" height="18" rx="2" />
-                  <rect x="8" y="8" width="8" height="8" rx="1" />
-                </svg>
-              </button>
+              {!isPointsOnly && (
+                <>
+                  <div style={{ width: 1, height: 16, background: "rgba(255, 255, 255, 0.15)" }} />
 
-              {/* Tool: Delete Face Selection */}
-              <button
-                type="button"
-                className="viewport-hud-button"
-                disabled={!isFacesActive}
-                style={
-                  !isFacesActive
-                    ? { opacity: 0.35, cursor: "not-allowed", pointerEvents: "auto" }
-                    : undefined
-                }
-                onClick={() => {
-                  if (isFacesActive) {
-                    onParamAction?.(editMeshNode.id, EDIT_MESH_DELETE_FACES_ACTION);
-                  }
-                }}
-                title={
-                  isFacesActive
-                    ? "Delete Face Selection (Shortcut: X / Delete) — Remove selected face(s)"
-                    : "Delete Face Selection (Disabled in Points mode or when no faces selected)"
-                }
-              >
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="M3 6h18" />
-                  <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
-                  <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
-                  <line x1="10" y1="11" x2="10" y2="17" />
-                  <line x1="14" y1="11" x2="14" y2="17" />
-                </svg>
-              </button>
+                  {/* Tool: Extrude */}
+                  <button
+                    type="button"
+                    className="viewport-hud-button"
+                    onClick={() => onParamAction?.(editMeshNode.id, EDIT_MESH_EXTRUDE_ACTION)}
+                    title="Extrude (Shortcut: E) — Extrude selected face(s)"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 19V5M5 12l7-7 7 7" />
+                    </svg>
+                  </button>
 
-              {/* Tool: Separate Face Selection */}
-              <button
-                type="button"
-                className="viewport-hud-button"
-                disabled={!isFacesActive}
-                style={
-                  !isFacesActive
-                    ? { opacity: 0.35, cursor: "not-allowed", pointerEvents: "auto" }
-                    : undefined
-                }
-                onClick={() => {
-                  if (isFacesActive) {
-                    onParamAction?.(editMeshNode.id, EDIT_MESH_SEPARATE_FACES_ACTION);
-                  }
-                }}
-                title={
-                  isFacesActive
-                    ? "Separate Face Selection (Shortcut: P) — Create a new object node from selected face(s)"
-                    : "Separate Face Selection (Disabled in Points mode or when no faces selected)"
-                }
-              >
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <rect x="3" y="9" width="11" height="11" rx="2" />
-                  <path d="M9 3h10a2 2 0 0 1 2 2v10" strokeDasharray="2.5 2.5" />
-                  <path d="M14 10l6-6m0 0h-4m4 0v4" />
-                </svg>
-              </button>
+                  {/* Tool: Loop Cut */}
+                  <button
+                    type="button"
+                    className={`viewport-hud-button ${editMeshTool === "loopcut" ? "viewport-hud-button-active" : ""}`}
+                    onClick={() => setEditMeshTool((t) => (t === "loopcut" ? "select" : "loopcut"))}
+                    title={`Loop Cut (Shortcut: Ctrl+R) — Scroll wheel over mesh to set cuts count (${editMeshLoopCuts})`}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <rect x="3" y="3" width="18" height="18" rx="2" />
+                      <line x1="3" y1="12" x2="21" y2="12" strokeDasharray="3 3" />
+                    </svg>
+                    {editMeshTool === "loopcut" && (
+                      <span
+                        style={{
+                          marginLeft: 4,
+                          fontSize: "10px",
+                          fontWeight: 700,
+                          color: "#facc15",
+                          background: "rgba(250, 204, 21, 0.2)",
+                          padding: "1px 4px",
+                          borderRadius: "3px",
+                          lineHeight: "1",
+                        }}
+                      >
+                        {editMeshLoopCuts}
+                      </span>
+                    )}
+                  </button>
+
+                  {/* Tool: Inset */}
+                  <button
+                    type="button"
+                    className="viewport-hud-button"
+                    onClick={() => onParamAction?.(editMeshNode.id, EDIT_MESH_INSET_ACTION)}
+                    title="Inset (Shortcut: I) — Inset selected face(s)"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <rect x="3" y="3" width="18" height="18" rx="2" />
+                      <rect x="8" y="8" width="8" height="8" rx="1" />
+                    </svg>
+                  </button>
+
+                  {/* Tool: Delete Face Selection */}
+                  <button
+                    type="button"
+                    className="viewport-hud-button"
+                    disabled={!isFacesActive}
+                    style={
+                      !isFacesActive
+                        ? { opacity: 0.35, cursor: "not-allowed", pointerEvents: "auto" }
+                        : undefined
+                    }
+                    onClick={() => {
+                      if (isFacesActive) {
+                        onParamAction?.(editMeshNode.id, EDIT_MESH_DELETE_FACES_ACTION);
+                      }
+                    }}
+                    title={
+                      isFacesActive
+                        ? "Delete Face Selection (Shortcut: X / Delete) — Remove selected face(s)"
+                        : "Delete Face Selection (Disabled in Points mode or when no faces selected)"
+                    }
+                  >
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M3 6h18" />
+                      <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+                      <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+                      <line x1="10" y1="11" x2="10" y2="17" />
+                      <line x1="14" y1="11" x2="14" y2="17" />
+                    </svg>
+                  </button>
+
+                  {/* Tool: Separate Face Selection */}
+                  <button
+                    type="button"
+                    className="viewport-hud-button"
+                    disabled={!isFacesActive}
+                    style={
+                      !isFacesActive
+                        ? { opacity: 0.35, cursor: "not-allowed", pointerEvents: "auto" }
+                        : undefined
+                    }
+                    onClick={() => {
+                      if (isFacesActive) {
+                        onParamAction?.(editMeshNode.id, EDIT_MESH_SEPARATE_FACES_ACTION);
+                      }
+                    }}
+                    title={
+                      isFacesActive
+                        ? "Separate Face Selection (Shortcut: P) — Create a new object node from selected face(s)"
+                        : "Separate Face Selection (Disabled in Points mode or when no faces selected)"
+                    }
+                  >
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <rect x="3" y="9" width="11" height="11" rx="2" />
+                      <path d="M9 3h10a2 2 0 0 1 2 2v10" strokeDasharray="2.5 2.5" />
+                      <path d="M14 10l6-6m0 0h-4m4 0v4" />
+                    </svg>
+                  </button>
+                </>
+              )}
 
               <div style={{ width: 1, height: 16, background: "rgba(255, 255, 255, 0.15)" }} />
 
@@ -5907,8 +6230,8 @@ export function Viewport({
               <button
                 type="button"
                 className="viewport-hud-button"
-                onClick={() => onParamAction?.(editMeshNode.id, EDIT_MESH_RESEED_ACTION)}
-                title="Reset Mesh from Input or default Cube"
+                onClick={() => onParamAction?.(editMeshNode.id, isPointsOnly ? RESEED_MESH_POINTS_ACTION : EDIT_MESH_RESEED_ACTION)}
+                title={isPointsOnly ? "Reset Points from Basis" : "Reset Mesh from Input or default Cube"}
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
@@ -6152,297 +6475,257 @@ export function Viewport({
           );
         })()}
       {/* Top-Left Viewport HUD & Controls — editor-only, never shown in the output window */}
+      {/* Top-Left Viewport HUD & Controls — editor-only, never shown in the output window */}
       {!outputMode && (
-        <div className="viewport-hud">
-          {!elevationView && (
-            <>
-          {graph.nodes.some((n) => n.type === CAMERA_NODE.type) && (
-            <>
-              <button
-                type="button"
-                className="viewport-hud-button viewport-hud-button-active"
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  color: "#38bdf8",
-                  backgroundColor: "rgba(56, 189, 248, 0.15)",
-                  borderColor: "#38bdf8",
-                }}
-                onClick={() => snapSelectedCameraToEditorRef.current?.()}
-                title="Align Active Camera to current 3D View (Ctrl+Alt+0)"
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
-                  <circle cx="12" cy="13" r="4" />
-                </svg>
-              </button>
-              <button
-                type="button"
-                className={`viewport-hud-button ${lockCameraToView ? "viewport-hud-button-active" : ""}`}
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  color: lockCameraToView ? "#f59e0b" : "#94a3b8",
-                  backgroundColor: lockCameraToView ? "rgba(245, 158, 11, 0.2)" : undefined,
-                  borderColor: lockCameraToView ? "#f59e0b" : undefined,
-                }}
-                onClick={() => {
-                  setLockCameraToView((prev) => {
-                    const next = !prev;
-                    if (next) {
-                      snapSelectedCameraToEditorRef.current?.();
-                    }
-                    return next;
-                  });
-                }}
-                title={
-                  lockCameraToView
-                    ? "Camera lock active: camera tracks viewport in real-time (Lock Camera to View)"
-                    : "Lock camera to 3D viewport continuously (Lock Camera to View)"
-                }
-              >
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-                  <path d={lockCameraToView ? "M7 11V7a5 5 0 0 1 10 0v4" : "M7 11V7a5 5 0 0 1 9.9-1"} />
-                </svg>
-              </button>
-            </>
-          )}
+        isHudCollapsed ? (
           <button
             type="button"
-            className={`viewport-hud-button ${showUiOverlay ? "viewport-hud-button-active" : ""}`}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-              color: showUiOverlay ? "#38bdf8" : "#cbd5e1",
-              backgroundColor: showUiOverlay ? "rgba(56, 189, 248, 0.15)" : undefined,
-              borderColor: showUiOverlay ? "#38bdf8" : undefined,
-            }}
-            onClick={() => setShowUiOverlay((prev) => !prev)}
-            title={
-              showUiOverlay
-                ? "Hide construction elements / helpers (Tab)"
-                : "Show construction elements / helpers (Tab)"
-            }
+            className="viewport-hud-collapsed"
+            onClick={() => setIsHudCollapsed(false)}
+            title="Show 3D View controls"
           >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              {showUiOverlay ? (
-                <>
-                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                  <circle cx="12" cy="12" r="3" />
-                </>
-              ) : (
-                <>
-                  <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
-                  <line x1="1" y1="1" x2="23" y2="23" />
-                </>
-              )}
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="12" y1="5" x2="12" y2="19" />
+              <line x1="5" y1="12" x2="19" y2="12" />
             </svg>
           </button>
-          <button
-            type="button"
-            className={`viewport-hud-button ${isOrthographic ? "viewport-hud-button-active" : ""}`}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-              color: isOrthographic ? "#38bdf8" : "#cbd5e1",
-            }}
-            onClick={() => setIsOrthographic((prev) => !prev)}
-            title={
-              isOrthographic
-                ? "Orthographic View (click to switch to Perspective)"
-                : "Perspective View (click to switch to Orthographic)"
-            }
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              {isOrthographic ? (
-                <>
-                  <rect x="3" y="3" width="18" height="18" rx="2" />
-                  <path d="M3 9h18M3 15h18M9 3v18M15 3v18" opacity="0.4" />
-                </>
-              ) : (
-                <>
-                  <polygon points="12 2 2 7 12 12 22 7 12 2" />
-                  <polyline points="2 17 12 22 22 17" />
-                  <polyline points="2 12 12 17 22 12" />
-                </>
-              )}
-            </svg>
-          </button>
-          <button
-            type="button"
-            className={`viewport-hud-button ${showEnvInEditor ? "viewport-hud-button-active" : ""}`}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-              color: showEnvInEditor ? "#38bdf8" : "#cbd5e1",
-            }}
-            onClick={() => setShowEnvInEditor((prev) => !prev)}
-            title="Toggle Environment (HDRI / Background)"
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="5" />
-              <line x1="12" y1="1" x2="12" y2="3" />
-              <line x1="12" y1="21" x2="12" y2="23" />
-              <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
-              <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
-              <line x1="1" y1="12" x2="3" y2="12" />
-              <line x1="21" y1="12" x2="23" y2="12" />
-              <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
-              <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
-            </svg>
-          </button>
-          <div className="viewport-hud-legend">
-            {(
-              [
-                { axis: "x", label: "X", views: ["Right", "Left"] },
-                { axis: "y", label: "Y", views: ["Top", "Bottom"] },
-                { axis: "z", label: "Z", views: ["Front", "Back"] },
-              ] as const
-            ).map(({ axis, label, views }) => (
-              <button
-                key={axis}
-                type="button"
-                className={`viewport-hud-axis viewport-hud-axis-${axis}`}
-                title={`View ${views[0]} / ${views[1]} (click to toggle)`}
-                onClick={() => {
-                  const sign = axisSideRef.current[axis];
-                  setAxisViewRef.current(axis, sign);
-                  axisSideRef.current[axis] = (sign === 1 ? -1 : 1) as 1 | -1;
-                }}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-          {isAxisView && (
+        ) : (
+          <div className="viewport-hud">
+            {!elevationView && (
+              <>
+            {graph.nodes.some((n) => n.type === CAMERA_NODE.type) && (
+              <>
+                <button
+                  type="button"
+                  className="viewport-hud-button"
+                  onClick={() => snapSelectedCameraToEditorRef.current?.()}
+                  title="Align Active Camera to current 3D View (Ctrl+Alt+0)"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+                    <circle cx="12" cy="13" r="4" />
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  className={`viewport-hud-button ${lockCameraToView ? "viewport-hud-button-active" : ""}`}
+                  onClick={() => {
+                    setLockCameraToView((prev) => {
+                      const next = !prev;
+                      if (next) {
+                        snapSelectedCameraToEditorRef.current?.();
+                      }
+                      return next;
+                    });
+                  }}
+                  title={
+                    lockCameraToView
+                      ? "Camera lock active: camera tracks viewport in real-time (Lock Camera to View)"
+                      : "Lock camera to 3D viewport continuously (Lock Camera to View)"
+                  }
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                    <path d={lockCameraToView ? "M7 11V7a5 5 0 0 1 10 0v4" : "M7 11V7a5 5 0 0 1 9.9-1"} />
+                  </svg>
+                </button>
+              </>
+            )}
             <button
               type="button"
-              className={`viewport-hud-button ${isViewLocked ? "viewport-hud-button-active" : ""}`}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                color: isViewLocked ? "#38bdf8" : "#cbd5e1",
-                backgroundColor: isViewLocked ? "rgba(56, 189, 248, 0.15)" : undefined,
-                borderColor: isViewLocked ? "#38bdf8" : undefined,
-              }}
-              onClick={toggleViewLock}
+              className={`viewport-hud-button ${showUiOverlay ? "viewport-hud-button-active" : ""}`}
+              onClick={() => setShowUiOverlay((prev) => !prev)}
               title={
-                isViewLocked
-                  ? "Unlock view — orbit re-enabled"
-                  : "Lock view — disable orbit (work serenely in this fixed view)"
+                showUiOverlay
+                  ? "Hide construction elements / helpers (Tab)"
+                  : "Show construction elements / helpers (Tab)"
               }
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="4" y="11" width="16" height="10" rx="2" />
-                {isViewLocked ? (
-                  <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+                {showUiOverlay ? (
+                  <>
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                    <circle cx="12" cy="12" r="3" />
+                  </>
                 ) : (
-                  <path d="M8 11V7a4 4 0 0 1 7.9-3.6" />
+                  <>
+                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+                    <line x1="1" y1="1" x2="23" y2="23" />
+                  </>
                 )}
               </svg>
             </button>
-          )}
-          </>
-          )}
-          <button
-            type="button"
-            className="viewport-hud-button"
-            style={{ display: "inline-flex", alignItems: "center", justifyContent: "center" }}
-            onClick={() => resetCameraRef.current()}
-            title="Reset 3D Camera view"
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-              <path d="M3 3v5h5" />
-            </svg>
-          </button>
-          {elevationView && onToggleSnapElevation && (
             <button
               type="button"
-              className={`viewport-hud-button ${snapElevation ? "viewport-hud-button-active" : ""}`}
-              style={{ display: "inline-flex", alignItems: "center", justifyContent: "center" }}
-              onClick={onToggleSnapElevation}
-              title={snapElevation ? "Elevation snapping active (0.5)" : "Enable elevation snapping (0.5)"}
+              className={`viewport-hud-button ${isOrthographic ? "viewport-hud-button-active" : ""}`}
+              onClick={() => setIsOrthographic((prev) => !prev)}
+              title={
+                isOrthographic
+                  ? "Orthographic View (click to switch to Perspective)"
+                  : "Perspective View (click to switch to Orthographic)"
+              }
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M6 3v7a6 6 0 0 0 12 0V3" />
-                <line x1="4" y1="3" x2="8" y2="3" />
-                <line x1="16" y1="3" x2="20" y2="3" />
+                {isOrthographic ? (
+                  <>
+                    <rect x="3" y="3" width="18" height="18" rx="2" />
+                    <path d="M3 9h18M3 15h18M9 3v18M15 3v18" opacity="0.4" />
+                  </>
+                ) : (
+                  <>
+                    <polygon points="12 2 2 7 12 12 22 7 12 2" />
+                    <polyline points="2 17 12 22 22 17" />
+                    <polyline points="2 12 12 17 22 12" />
+                  </>
+                )}
               </svg>
             </button>
-          )}
-          {!elevationView && onToggleSplitView && (
             <button
               type="button"
-              className={`viewport-hud-button ${isSplitView ? "viewport-hud-button-active" : ""}`}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                color: isSplitView ? "#38bdf8" : "#cbd5e1",
-              }}
-              onClick={onToggleSplitView}
-              title="Cycle View: Viewport / Split / Camera / Full Canvas (Shift+Tab)"
+              className={`viewport-hud-button ${showEnvInEditor ? "viewport-hud-button-active" : ""}`}
+              onClick={() => setShowEnvInEditor((prev) => !prev)}
+              title="Toggle Environment (HDRI / Background)"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3" y="3" width="18" height="18" rx="2" />
-                <line x1="12" y1="3" x2="12" y2="21" />
+                <circle cx="12" cy="12" r="5" />
+                <line x1="12" y1="1" x2="12" y2="3" />
+                <line x1="12" y1="21" x2="12" y2="23" />
+                <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
+                <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+                <line x1="1" y1="12" x2="3" y2="12" />
+                <line x1="21" y1="12" x2="23" y2="12" />
+                <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
+                <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
               </svg>
             </button>
-          )}
-          {onSelectNode && (
-            <div className="viewport-hud-gizmo-modes">
-              {(["translate", "rotate", "scale"] as const).map((mode) => (
+            <div className="viewport-hud-legend">
+              {(
+                [
+                  { axis: "x", label: "X", views: ["Right", "Left"] },
+                  { axis: "y", label: "Y", views: ["Top", "Bottom"] },
+                  { axis: "z", label: "Z", views: ["Front", "Back"] },
+                ] as const
+              ).map(({ axis, label, views }) => (
                 <button
-                  key={mode}
+                  key={axis}
                   type="button"
-                  className={
-                    "viewport-hud-button" + (transformMode === mode ? " viewport-hud-button-active" : "")
-                  }
-                  style={{ display: "inline-flex", alignItems: "center", justifyContent: "center" }}
-                  onClick={() => setTransformMode(mode)}
-                  title={
-                    mode === "translate"
-                      ? "Gizmo: Translate (W)"
-                      : mode === "rotate"
-                      ? "Gizmo: Rotate (E)"
-                      : "Gizmo: Scale (R)"
-                  }
+                  className={`viewport-hud-axis viewport-hud-axis-${axis}`}
+                  title={`View ${views[0]} / ${views[1]} (click to toggle)`}
+                  onClick={() => {
+                    const sign = axisSideRef.current[axis];
+                    setAxisViewRef.current(axis, sign);
+                    axisSideRef.current[axis] = (sign === 1 ? -1 : 1) as 1 | -1;
+                  }}
                 >
-                  {mode === "translate" ? (
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <polyline points="5 9 2 12 5 15" />
-                      <polyline points="9 5 12 2 15 5" />
-                      <polyline points="15 19 12 22 9 19" />
-                      <polyline points="19 9 22 12 19 15" />
-                      <line x1="2" y1="12" x2="22" y2="12" />
-                      <line x1="12" y1="2" x2="12" y2="22" />
-                    </svg>
-                  ) : mode === "rotate" ? (
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M21.5 2v6h-6" />
-                      <path d="M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67" />
-                    </svg>
-                  ) : (
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <polyline points="15 3 21 3 21 9" />
-                      <polyline points="9 21 3 21 3 15" />
-                      <line x1="21" y1="3" x2="14" y2="10" />
-                      <line x1="3" y1="21" x2="10" y2="14" />
-                    </svg>
-                  )}
+                  {label}
                 </button>
               ))}
             </div>
-          )}
-        </div>
+            {isAxisView && (
+              <button
+                type="button"
+                className={`viewport-hud-button ${isViewLocked ? "viewport-hud-button-active" : ""}`}
+                onClick={toggleViewLock}
+                title={
+                  isViewLocked
+                    ? "Unlock view — orbit re-enabled"
+                    : "Lock view — disable orbit (work serenely in this fixed view)"
+                }
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="4" y="11" width="16" height="10" rx="2" />
+                  {isViewLocked ? (
+                    <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+                  ) : (
+                    <path d="M8 11V7a4 4 0 0 1 7.9-3.6" />
+                  )}
+                </svg>
+              </button>
+            )}
+            </>
+            )}
+            <button
+              type="button"
+              className="viewport-hud-button"
+              onClick={() => resetCameraRef.current()}
+              title="Reset 3D Camera view"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                <path d="M3 3v5h5" />
+              </svg>
+            </button>
+            {elevationView && onToggleSnapElevation && (
+              <button
+                type="button"
+                className={`viewport-hud-button ${snapElevation ? "viewport-hud-button-active" : ""}`}
+                onClick={onToggleSnapElevation}
+                title={snapElevation ? "Elevation snapping active (0.5)" : "Enable elevation snapping (0.5)"}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M6 3v7a6 6 0 0 0 12 0V3" />
+                  <line x1="4" y1="3" x2="8" y2="3" />
+                  <line x1="16" y1="3" x2="20" y2="3" />
+                </svg>
+              </button>
+            )}
+            {onSelectNode && (
+              <div className="viewport-hud-gizmo-modes">
+                {(["translate", "rotate", "scale"] as const).map((mode) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    className={
+                      "viewport-hud-button" + (transformMode === mode ? " viewport-hud-button-active" : "")
+                    }
+                    onClick={() => setTransformMode(mode)}
+                    title={
+                      mode === "translate"
+                        ? "Gizmo: Translate (W)"
+                        : mode === "rotate"
+                        ? "Gizmo: Rotate (E)"
+                        : "Gizmo: Scale (R)"
+                    }
+                  >
+                    {mode === "translate" ? (
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="5 9 2 12 5 15" />
+                        <polyline points="9 5 12 2 15 5" />
+                        <polyline points="15 19 12 22 9 19" />
+                        <polyline points="19 9 22 12 19 15" />
+                        <line x1="2" y1="12" x2="22" y2="12" />
+                        <line x1="12" y1="2" x2="12" y2="22" />
+                      </svg>
+                    ) : mode === "rotate" ? (
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M21.5 2v6h-6" />
+                        <path d="M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67" />
+                      </svg>
+                    ) : (
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="15 3 21 3 21 9" />
+                        <polyline points="9 21 3 21 3 15" />
+                        <line x1="21" y1="3" x2="14" y2="10" />
+                        <line x1="3" y1="21" x2="10" y2="14" />
+                      </svg>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+            <div className="viewport-hud-divider" />
+            <button
+              type="button"
+              className="viewport-hud-button viewport-hud-hide"
+              onClick={() => setIsHudCollapsed(true)}
+              title="Hide 3D View controls"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+            </button>
+          </div>
+        )
       )}
 
       {/* Pinned params HUD — the editor's own free-orbit pane only, never the

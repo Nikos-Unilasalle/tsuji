@@ -21,17 +21,16 @@
   left: 12px;
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 6px 12px;
-  background: rgba(59, 67, 79, 0.88);
-  backdrop-filter: blur(8px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  gap: 2px;
+  padding: 4px;
+  background: var(--chrome-surface);
+  border: 1px solid var(--chrome-border);
   border-radius: 8px;
   color: var(--chrome-text);
   font-family: system-ui, -apple-system, sans-serif;
   font-size: 12px;
   font-weight: 500;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
   z-index: 10;
   pointer-events: auto;
 }
@@ -47,30 +46,28 @@
 .viewport-hud-legend {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding-left: 8px;
-  border-left: 1px solid rgba(255, 255, 255, 0.15);
-  font-size: 11px;
+  gap: 2px;
+  padding: 0 2px;
 }
 
 .viewport-hud-axis {
   display: flex;
   align-items: center;
-  gap: 3px;
-  font-weight: 600;
+  justify-content: center;
+  height: 24px;
+  padding: 0 7px;
   font: inherit;
+  font-size: 11px;
   font-weight: 700;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: transparent;
+  border: 1px solid transparent;
   border-radius: 4px;
-  padding: 2px 8px;
   cursor: pointer;
-  transition: background 0.15s ease, border-color 0.15s ease;
+  transition: all 0.15s ease;
 }
 
 .viewport-hud-axis:hover {
-  background: rgba(255, 255, 255, 0.16);
-  border-color: rgba(255, 255, 255, 0.4);
+  background: var(--chrome-surface-raised);
 }
 
 .viewport-hud-axis-x {
@@ -86,38 +83,99 @@
 }
 
 .viewport-hud-button {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   justify-content: center;
   width: 28px;
   height: 28px;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  color: #cbd5e1;
-  border-radius: 6px;
   padding: 0;
-  font-size: 11px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--canvas-text-muted, #94a3b8);
   cursor: pointer;
   transition: all 0.15s ease;
+  outline: none;
+  box-shadow: none;
+}
+
+.viewport-hud-button svg {
+  width: 16px;
+  height: 16px;
+  color: inherit;
 }
 
 .viewport-hud-button:hover {
-  background: rgba(56, 189, 248, 0.25);
-  border-color: #38bdf8;
-  color: #ffffff;
+  background: var(--chrome-surface-raised);
+  color: var(--canvas-text, #f1f5f9);
+}
+
+/* Pressed and Active states: No contour / border / outline, only icon blue */
+.viewport-hud-button:active,
+.viewport-hud-button-active {
+  background: transparent;
+  border: none;
+  color: #38bdf8;
+  box-shadow: none;
+  outline: none;
+}
+
+.viewport-hud-button:active:hover,
+.viewport-hud-button-active:hover {
+  background: var(--chrome-surface-raised);
+  color: #38bdf8;
+}
+
+.viewport-hud-button:active svg,
+.viewport-hud-button-active svg {
+  color: #38bdf8;
 }
 
 .viewport-hud-gizmo-modes {
   display: flex;
-  gap: 4px;
-  padding-left: 8px;
-  border-left: 1px solid rgba(255, 255, 255, 0.15);
+  align-items: center;
+  gap: 2px;
 }
 
-.viewport-hud-button-active {
-  background: rgba(56, 189, 248, 0.35);
-  border-color: #38bdf8;
+.viewport-hud-divider {
+  width: 1px;
+  align-self: stretch;
+  margin: 2px 2px;
+  background: var(--chrome-border);
+}
+
+.viewport-hud-hide {
+  color: var(--canvas-text-muted, #94a3b8);
+}
+
+/* Collapsed state — a small white icon in the same corner, matching quick-add-collapsed */
+.viewport-hud-collapsed {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
   color: #ffffff;
+  opacity: 0.55;
+  cursor: pointer;
+}
+
+.viewport-hud-collapsed svg {
+  width: 14px;
+  height: 14px;
+}
+
+.viewport-hud-collapsed:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.12);
 }
 
 .viewport-hint {

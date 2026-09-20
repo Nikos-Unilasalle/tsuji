@@ -11,6 +11,7 @@ export const CURVE_POINTS_NODE_TYPES = [
   "curve/from_points",
   "curve/to_mesh",
   "modifier/lattice",
+  "object/edit_points",
 ];
 
 /**
