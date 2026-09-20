@@ -31,10 +31,22 @@ type LoadState = "idle" | "loading" | "ready" | "error";
  */
 export const DownloadMenu: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
+  const [panelPos, setPanelPos] = useState<{ top: number; right: number } | null>(null);
   const [state, setState] = useState<LoadState>("idle");
   const [release, setRelease] = useState<Release | null>(null);
   const [copied, setCopied] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+
+  const toggleOpen = () => {
+    if (!isOpen && rootRef.current) {
+      const rect = rootRef.current.getBoundingClientRect();
+      setPanelPos({
+        top: rect.bottom + 6,
+        right: Math.max(12, window.innerWidth - rect.right),
+      });
+    }
+    setIsOpen((v) => !v);
+  };
 
   const copyCommand = useCallback((command: string) => {
     // Clipboard access can be refused (insecure origin, denied permission),
@@ -84,17 +96,23 @@ export const DownloadMenu: React.FC = () => {
     if (!isOpen) return;
     // Fetch once per session — a release does not appear mid-visit.
     if (state === "idle") void load();
-    const onPointerDown = (e: MouseEvent) => {
+    const onPointerDown = (e: MouseEvent | PointerEvent) => {
       if (rootRef.current && !rootRef.current.contains(e.target as Node)) setIsOpen(false);
     };
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") setIsOpen(false);
     };
-    window.addEventListener("mousedown", onPointerDown);
+    const onScrollOrResize = () => setIsOpen(false);
+
+    window.addEventListener("pointerdown", onPointerDown);
     window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("resize", onScrollOrResize);
+    window.addEventListener("scroll", onScrollOrResize, true);
     return () => {
-      window.removeEventListener("mousedown", onPointerDown);
+      window.removeEventListener("pointerdown", onPointerDown);
       window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("resize", onScrollOrResize);
+      window.removeEventListener("scroll", onScrollOrResize, true);
     };
   }, [isOpen, state, load]);
 
@@ -105,7 +123,7 @@ export const DownloadMenu: React.FC = () => {
     <div className="download-menu-root" ref={rootRef}>
       <button
         className={`top-bar-button top-bar-button-download${isOpen ? " top-bar-button-output-active" : ""}`}
-        onClick={() => setIsOpen((v) => !v)}
+        onClick={toggleOpen}
         title="Download the desktop app"
       >
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -117,7 +135,11 @@ export const DownloadMenu: React.FC = () => {
       </button>
 
       {isOpen && (
-        <div className="download-menu-panel" role="menu">
+        <div
+          className="download-menu-panel"
+          role="menu"
+          style={panelPos ? { top: panelPos.top, right: panelPos.right } : { top: 44, right: 12 }}
+        >
           <div className="download-menu-header">
             Desktop app
             {state === "ready" && release?.tag_name && (

@@ -33,21 +33,39 @@ export const ShareMenu: React.FC<ShareMenuProps> = ({
   exportProgress = 0,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [panelPos, setPanelPos] = useState<{ top: number; right: number } | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
+
+  const toggleOpen = () => {
+    if (!isOpen && rootRef.current) {
+      const rect = rootRef.current.getBoundingClientRect();
+      setPanelPos({
+        top: rect.bottom + 6,
+        right: Math.max(12, window.innerWidth - rect.right),
+      });
+    }
+    setIsOpen((v) => !v);
+  };
 
   useEffect(() => {
     if (!isOpen) return;
-    const onPointerDown = (e: MouseEvent) => {
+    const onPointerDown = (e: MouseEvent | PointerEvent) => {
       if (rootRef.current && !rootRef.current.contains(e.target as Node)) setIsOpen(false);
     };
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") setIsOpen(false);
     };
-    window.addEventListener("mousedown", onPointerDown);
+    const onScrollOrResize = () => setIsOpen(false);
+
+    window.addEventListener("pointerdown", onPointerDown);
     window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("resize", onScrollOrResize);
+    window.addEventListener("scroll", onScrollOrResize, true);
     return () => {
-      window.removeEventListener("mousedown", onPointerDown);
+      window.removeEventListener("pointerdown", onPointerDown);
       window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("resize", onScrollOrResize);
+      window.removeEventListener("scroll", onScrollOrResize, true);
     };
   }, [isOpen]);
 
@@ -55,7 +73,7 @@ export const ShareMenu: React.FC<ShareMenuProps> = ({
     <div className="share-menu-root" ref={rootRef}>
       <button
         className={`top-bar-button top-bar-button-share${isOpen || isOutputOpen ? " top-bar-button-output-active" : ""}`}
-        onClick={() => setIsOpen((v) => !v)}
+        onClick={toggleOpen}
         title="Fullscreen output and export"
       >
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -69,7 +87,10 @@ export const ShareMenu: React.FC<ShareMenuProps> = ({
       </button>
 
       {isOpen && (
-        <div className="share-menu-panel">
+        <div
+          className="share-menu-panel"
+          style={panelPos ? { top: panelPos.top, right: panelPos.right } : { top: 44, right: 12 }}
+        >
           <button
             type="button"
             className={`share-menu-item${isOutputOpen ? " is-active" : ""}`}

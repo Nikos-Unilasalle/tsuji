@@ -14,9 +14,7 @@
 }
 
 .demos-menu-panel {
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 0;
+  position: fixed;
   width: 320px;
   max-height: 70vh;
   overflow-y: auto;
@@ -25,7 +23,7 @@
   border-radius: 8px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
   padding: 8px;
-  z-index: 50;
+  z-index: 100;
 }
 
 /* Collapsed headings sit as one list; the separator would read as clutter

@@ -96,7 +96,15 @@ export const TopBar: React.FC<TopBarProps> = ({
 
   const handlePointerDown = (e: React.PointerEvent) => {
     // Ignore drag start on text inputs or active dropdowns
-    if ((e.target as HTMLElement).tagName === "INPUT") return;
+    const target = e.target as HTMLElement;
+    if (
+      target.tagName === "INPUT" ||
+      target.closest(".download-menu-panel") ||
+      target.closest(".share-menu-panel") ||
+      target.closest(".demos-menu-panel")
+    ) {
+      return;
+    }
     dragStartRef.current = {
       x: e.clientX,
       scrollLeft: headerRef.current?.scrollLeft ?? 0,
@@ -108,10 +116,10 @@ export const TopBar: React.FC<TopBarProps> = ({
   const handlePointerMove = (e: React.PointerEvent) => {
     if (!dragStartRef.current.active || !headerRef.current) return;
     const delta = e.clientX - dragStartRef.current.x;
-    if (Math.abs(delta) > 4) {
+    if (Math.abs(delta) > 8) {
       dragStartRef.current.dragged = true;
+      headerRef.current.scrollLeft = dragStartRef.current.scrollLeft - delta;
     }
-    headerRef.current.scrollLeft = dragStartRef.current.scrollLeft - delta;
   };
 
   const handlePointerUp = () => {
@@ -119,7 +127,7 @@ export const TopBar: React.FC<TopBarProps> = ({
   };
 
   const handleClickCapture = (e: React.MouseEvent) => {
-    // If the mouse/pointer was dragged more than 4px, suppress the click on the button underneath
+    // If the mouse/pointer was dragged more than 8px, suppress the click on the button underneath
     if (dragStartRef.current.dragged) {
       e.preventDefault();
       e.stopPropagation();

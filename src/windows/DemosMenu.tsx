@@ -27,24 +27,42 @@ function matches(demo: DemoEntry, category: string, query: string): boolean {
  */
 export const DemosMenu: React.FC<DemosMenuProps> = ({ onLoadDemo, onError }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [panelPos, setPanelPos] = useState<{ top: number; left: number } | null>(null);
   const [loadingFile, setLoadingFile] = useState<string | null>(null);
   const [openCategory, setOpenCategory] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const rootRef = useRef<HTMLDivElement>(null);
 
+  const toggleOpen = () => {
+    if (!isOpen && rootRef.current) {
+      const rect = rootRef.current.getBoundingClientRect();
+      setPanelPos({
+        top: rect.bottom + 6,
+        left: Math.max(12, rect.left),
+      });
+    }
+    setIsOpen((v) => !v);
+  };
+
   useEffect(() => {
     if (!isOpen) return;
-    const onPointerDown = (e: MouseEvent) => {
+    const onPointerDown = (e: MouseEvent | PointerEvent) => {
       if (rootRef.current && !rootRef.current.contains(e.target as Node)) setIsOpen(false);
     };
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") setIsOpen(false);
     };
-    window.addEventListener("mousedown", onPointerDown);
+    const onScrollOrResize = () => setIsOpen(false);
+
+    window.addEventListener("pointerdown", onPointerDown);
     window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("resize", onScrollOrResize);
+    window.addEventListener("scroll", onScrollOrResize, true);
     return () => {
-      window.removeEventListener("mousedown", onPointerDown);
+      window.removeEventListener("pointerdown", onPointerDown);
       window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("resize", onScrollOrResize);
+      window.removeEventListener("scroll", onScrollOrResize, true);
     };
   }, [isOpen]);
 
@@ -89,7 +107,7 @@ export const DemosMenu: React.FC<DemosMenuProps> = ({ onLoadDemo, onError }) => 
     <div className="demos-menu-root" ref={rootRef}>
       <button
         className={`top-bar-button top-bar-button-demos top-bar-button-icon-only${isOpen ? " top-bar-button-output-active" : ""}`}
-        onClick={() => setIsOpen((v) => !v)}
+        onClick={toggleOpen}
         title="Browse Demos"
       >
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -98,7 +116,10 @@ export const DemosMenu: React.FC<DemosMenuProps> = ({ onLoadDemo, onError }) => 
       </button>
 
       {isOpen && (
-        <div className="demos-menu-panel">
+        <div
+          className="demos-menu-panel"
+          style={panelPos ? { top: panelPos.top, left: panelPos.left } : { top: 44, left: 12 }}
+        >
           <input
             className="demos-menu-search"
             autoFocus
