@@ -208,8 +208,8 @@ input, textarea, [contenteditable="true"], .drag-number-editing, .param-text-inp
 }
 
 .canvas-selector-tab:hover {
-  background: rgba(56, 189, 248, 0.25);
-  border-color: #38bdf8;
+  background: color-mix(in srgb, var(--accent-color, #38bdf8) 25%, transparent);
+  border-color: var(--accent-color, #38bdf8);
   color: #ffffff;
 }
 
@@ -220,27 +220,27 @@ input, textarea, [contenteditable="true"], .drag-number-editing, .param-text-inp
 }
 
 .canvas-selector-tab-active {
-  background: #38bdf8;
-  border-color: #38bdf8;
+  background: var(--accent-color, #38bdf8);
+  border-color: var(--accent-color, #38bdf8);
   color: #0b1220;
 }
 
 /* Selection Box & Selected Nodes Highlight */
 .react-flow__selection {
-  background: rgba(56, 189, 248, 0.06) !important;
-  border: 1px solid rgba(56, 189, 248, 0.5) !important;
+  background: color-mix(in srgb, var(--accent-color, #38bdf8) 6%, transparent) !important;
+  border: 1px solid color-mix(in srgb, var(--accent-color, #38bdf8) 50%, transparent) !important;
   border-radius: 4px;
 }
 
 .graph-node.selected,
 .react-flow__node.selected .graph-node {
-  border-color: #38bdf8 !important;
-  box-shadow: 0 0 6px rgba(56, 189, 248, 0.3), 0 4px 16px rgba(0, 0, 0, 0.35) !important;
+  border-color: var(--accent-color, #38bdf8) !important;
+  box-shadow: 0 0 6px color-mix(in srgb, var(--accent-color, #38bdf8) 30%, transparent), 0 4px 16px rgba(0, 0, 0, 0.35) !important;
 }
 
 .graph-node-reroute.selected,
 .react-flow__node.selected .graph-node-reroute {
-  outline: 1.5px solid #38bdf8 !important;
+  outline: 1.5px solid var(--accent-color, #38bdf8) !important;
   outline-offset: 1px;
 }
 
@@ -280,7 +280,7 @@ input, textarea, [contenteditable="true"], .drag-number-editing, .param-text-inp
 }
 
 .graph-breadcrumb button:hover:not(:disabled) {
-  background: rgba(56, 189, 248, 0.25);
+  background: color-mix(in srgb, var(--accent-color, #38bdf8) 25%, transparent);
   color: #ffffff;
 }
 
