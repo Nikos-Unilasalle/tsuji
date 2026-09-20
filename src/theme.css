@@ -45,6 +45,14 @@
      medium-dark, not light. */
   --canvas-text: #eef2f6;
   --canvas-text-muted: #aab4c0;
+
+  /* Accent & Interactive Highlights */
+  --accent-color: #38bdf8;
+
+  /* 3D Viewport palette */
+  --viewport-bg-top: #39424f;
+  --viewport-bg-bottom: #59636f;
+  --viewport-grid: #6a7482;
 }
 
 html, body, #root {

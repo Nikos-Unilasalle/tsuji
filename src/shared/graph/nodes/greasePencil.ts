@@ -714,6 +714,7 @@ export const GREASE_PENCIL_NODE: NodeDefinition = {
     matrix.decompose(state.group.position, state.group.quaternion, state.group.scale);
     state.group.updateMatrixWorld(true);
 
+    state.group.userData.nodeId = ctx.nodeId;
     if (state.activeMesh) state.activeMesh.userData.nodeId = ctx.nodeId;
     if (state.fillMesh) state.fillMesh.userData.nodeId = ctx.nodeId;
     if (state.onionPrevMesh) state.onionPrevMesh.userData.nodeId = ctx.nodeId;

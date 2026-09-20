@@ -35,6 +35,7 @@
   height: 9px;
   cursor: row-resize;
   z-index: 100;
+  touch-action: none;
 }
 
 .timeline-drawer-resizer-bottom {

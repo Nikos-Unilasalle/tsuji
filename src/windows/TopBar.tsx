@@ -15,7 +15,6 @@ import {
   watchFullscreen,
 } from "../shared/ipc";
 import logoUrl from "../assets/logo.png";
-import { ShortcutsModal } from "./ShortcutsModal";
 import { DemosMenu } from "./DemosMenu";
 import { ShareMenu } from "./ShareMenu";
 import { DownloadMenu } from "./DownloadMenu";
@@ -83,9 +82,58 @@ export const TopBar: React.FC<TopBarProps> = ({
   const [isEditingFilename, setIsEditingFilename] = useState(false);
   const [filenameInput, setFilenameInput] = useState(currentFilename);
   const [isOutputOpen, setIsOutputOpen] = useState(false);
-  const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
   const [isPreferencesOpen, setIsPreferencesOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+
+  // Blender-style horizontal drag-to-scroll header behavior
+  const headerRef = useRef<HTMLElement>(null);
+  const dragStartRef = useRef<{ x: number; scrollLeft: number; active: boolean; dragged: boolean }>({
+    x: 0,
+    scrollLeft: 0,
+    active: false,
+    dragged: false,
+  });
+
+  const handlePointerDown = (e: React.PointerEvent) => {
+    // Ignore drag start on text inputs or active dropdowns
+    if ((e.target as HTMLElement).tagName === "INPUT") return;
+    dragStartRef.current = {
+      x: e.clientX,
+      scrollLeft: headerRef.current?.scrollLeft ?? 0,
+      active: true,
+      dragged: false,
+    };
+  };
+
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (!dragStartRef.current.active || !headerRef.current) return;
+    const delta = e.clientX - dragStartRef.current.x;
+    if (Math.abs(delta) > 4) {
+      dragStartRef.current.dragged = true;
+    }
+    headerRef.current.scrollLeft = dragStartRef.current.scrollLeft - delta;
+  };
+
+  const handlePointerUp = () => {
+    dragStartRef.current.active = false;
+  };
+
+  const handleClickCapture = (e: React.MouseEvent) => {
+    // If the mouse/pointer was dragged more than 4px, suppress the click on the button underneath
+    if (dragStartRef.current.dragged) {
+      e.preventDefault();
+      e.stopPropagation();
+      dragStartRef.current.dragged = false;
+    }
+  };
+
+  const handleWheel = (e: React.WheelEvent) => {
+    if (!headerRef.current) return;
+    const delta = e.deltaX !== 0 ? e.deltaX : e.deltaY;
+    if (delta !== 0) {
+      headerRef.current.scrollLeft += delta;
+    }
+  };
   // Owned so a second toast doesn't get cut short by the first's leftover
   // timer, and cleared on unmount to avoid a setState on a dead component.
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -215,7 +263,16 @@ export const TopBar: React.FC<TopBarProps> = ({
   };
 
   return (
-    <header className="top-bar">
+    <header
+      ref={headerRef}
+      className="top-bar"
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerUp}
+      onClickCapture={handleClickCapture}
+      onWheel={handleWheel}
+    >
       {/* Left section: Logo + File Operations */}
       <div className="top-bar-left">
         <div className="top-bar-logo">
@@ -262,10 +319,9 @@ export const TopBar: React.FC<TopBarProps> = ({
           }}
           onError={(message) => showToast(message, true)}
         />
-      </div>
 
-      {/* Center section: Undo & Redo */}
-      <div className="top-bar-center">
+        <div className="top-bar-divider" />
+
         {/* UNDO (U+21B0) */}
         <button className="top-bar-button top-bar-button-icon-only" onClick={onUndo} title="Undo (Ctrl+Z / ⌘Z)">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -315,7 +371,7 @@ export const TopBar: React.FC<TopBarProps> = ({
         )}
       </div>
 
-      {/* Center area: 2D/3D Mode selector & Workspaces switches (3D View, Camera, Canvas) */}
+      {/* Center area: 2D/3D Mode selector & Workspaces palette (3D View, Camera, Canvas, Timeline) */}
       <div className="top-bar-center">
         {onToggle2DMode && (
           <div className="top-bar-mode-group">
@@ -373,7 +429,6 @@ export const TopBar: React.FC<TopBarProps> = ({
                   </>
                 )}
               </svg>
-              {is2DMode ? "2D View" : "3D View"}
             </button>
             <button
               type="button"
@@ -385,7 +440,6 @@ export const TopBar: React.FC<TopBarProps> = ({
                 <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
                 <circle cx="12" cy="13" r="4" />
               </svg>
-              Camera
             </button>
             <button
               type="button"
@@ -399,7 +453,6 @@ export const TopBar: React.FC<TopBarProps> = ({
                 <rect x="14" y="14" width="7" height="7" rx="1" />
                 <rect x="3" y="14" width="7" height="7" rx="1" />
               </svg>
-              Canvas
             </button>
             {spaces.timeline !== undefined && (
               <button
@@ -412,7 +465,6 @@ export const TopBar: React.FC<TopBarProps> = ({
                   <rect x="2" y="4" width="20" height="16" rx="2" />
                   <path d="M6 8h.01M10 8h.01M14 8h.01M18 8h.01M6 12h.01M10 12h.01M14 12h.01M18 12h.01M8 16h8" />
                 </svg>
-                Timeline
               </button>
             )}
           </div>
@@ -427,18 +479,6 @@ export const TopBar: React.FC<TopBarProps> = ({
           </div>
         )}
 
-        {/* SHORTCUTS — keyboard shortcuts reference popup */}
-        <button
-          className="top-bar-button top-bar-button-shortcuts"
-          onClick={() => setIsShortcutsOpen(true)}
-          title="Keyboard Shortcuts Guide"
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <rect x="2" y="4" width="20" height="16" rx="2" />
-            <path d="M6 8h.01M10 8h.01M14 8h.01M18 8h.01M6 12h.01M10 12h.01M14 12h.01M18 12h.01M8 16h8" />
-          </svg>
-          Shortcuts
-        </button>
 
         {/* PREFERENCES — tablet expresskeys and app configuration modal */}
         <button
@@ -507,8 +547,6 @@ export const TopBar: React.FC<TopBarProps> = ({
           </svg>
         </button>
       </div>
-
-      <ShortcutsModal isOpen={isShortcutsOpen} onClose={() => setIsShortcutsOpen(false)} />
       <PreferencesModal isOpen={isPreferencesOpen} onClose={() => setIsPreferencesOpen(false)} />
     </header>
   );

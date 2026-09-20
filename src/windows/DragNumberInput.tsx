@@ -85,25 +85,30 @@ export function DragNumberInput({
 
   const PIXELS_PER_STEP = 4;
 
-  const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (e.button !== 0) return;
     e.preventDefault();
 
-    const nativeEv = e.nativeEvent as PointerEvent;
-    const isPen = nativeEv?.pointerType === "pen";
-    const dragThreshold = isPen ? 6 : 3;
+    const isPen = e.pointerType === "pen" || e.pointerType === "touch";
+    const dragThreshold = isPen ? 4 : 3;
 
     const el = e.currentTarget;
+    const pointerId = e.pointerId;
+    try {
+      el.setPointerCapture(pointerId);
+    } catch {
+      // ignore
+    }
+
     const startValue = liveValueRef.current;
     let accumulatedDy = 0;
     let lastClientY = e.clientY;
     let dragged = false;
     let lockRequested = false;
 
-    const handleMouseMove = (ev: MouseEvent) => {
-      // For pen inputs, movementY can be erratic when tablet drivers report absolute positions.
-      // We safely compute dy from clientY if isPen or if movementY is suspiciously anomalous.
-      const dy = isPen ? -(ev.clientY - lastClientY) : -ev.movementY;
+    const handlePointerMove = (ev: PointerEvent) => {
+      // For pen/touch inputs, movementY can be 0 or erratic. We safely compute dy from clientY.
+      const dy = isPen || ev.movementY === undefined ? -(ev.clientY - lastClientY) : -ev.movementY;
       lastClientY = ev.clientY;
       accumulatedDy += dy;
 
@@ -111,7 +116,7 @@ export function DragNumberInput({
         if (Math.abs(accumulatedDy) < dragThreshold) return;
         dragged = true;
         onDragStart?.();
-        // Only request Pointer Lock for mouse, never for styluses (avoids driver jumps)
+        // Only request Pointer Lock for mouse, never for styluses/touch (prevents driver/cursor jumps)
         if (!isPen && !lockRequested) {
           lockRequested = true;
           el.requestPointerLock?.()?.catch(() => {});
@@ -125,18 +130,30 @@ export function DragNumberInput({
       onChange(newValue, { shiftKey: ev.shiftKey, startValue, isDrag: true });
     };
 
-    const handleMouseUp = () => {
-      window.removeEventListener("mousemove", handleMouseMove);
-      window.removeEventListener("mouseup", handleMouseUp);
+    const handlePointerUp = () => {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+      window.removeEventListener("pointercancel", handlePointerUp);
+      try {
+        if (el.hasPointerCapture(pointerId)) {
+          el.releasePointerCapture(pointerId);
+        }
+      } catch {
+        // ignore
+      }
       if (document.pointerLockElement === el) document.exitPointerLock();
       justDraggedRef.current = dragged;
       if (dragged) {
         onDragEnd?.();
+      } else {
+        setText(formatValue(liveValueRef.current, integer));
+        setEditing(true);
       }
     };
 
-    window.addEventListener("mousemove", handleMouseMove);
-    window.addEventListener("mouseup", handleMouseUp);
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
+    window.addEventListener("pointercancel", handlePointerUp);
   };
 
   let boxStyle: React.CSSProperties = {};
@@ -190,7 +207,7 @@ export function DragNumberInput({
         setText(formatValue(value, integer));
         setEditing(true);
       }}
-      onMouseDown={handleMouseDown}
+      onPointerDown={handlePointerDown}
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
       title="Drag to scrub, click to type (Shift = finer)"

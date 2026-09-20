@@ -39,14 +39,14 @@
 
 .quick-add-button:active {
   background: transparent;
-  color: #38bdf8;
+  color: var(--accent-color, #38bdf8);
   border: none;
   outline: none;
   box-shadow: none;
 }
 
 .quick-add-button:active svg {
-  color: #38bdf8;
+  color: var(--accent-color, #38bdf8);
 }
 
 .quick-add-divider {

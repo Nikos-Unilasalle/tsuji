@@ -1784,6 +1784,11 @@ function MainEditor() {
   const onSplitHandleMouseDown = useCallback((e: React.MouseEvent | React.PointerEvent) => {
     if (e.shiftKey) return;
     e.preventDefault();
+    if ("pointerId" in e && e.currentTarget && typeof (e.currentTarget as HTMLElement).setPointerCapture === "function") {
+      try {
+        (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+      } catch {}
+    }
     draggingSplit.current = true;
     lastClampedYRef.current = e.clientY;
     setIsDraggingSplit(true);
@@ -1795,6 +1800,11 @@ function MainEditor() {
     if (e.shiftKey) return;
     e.preventDefault();
     e.stopPropagation();
+    if ("pointerId" in e && e.currentTarget && typeof (e.currentTarget as HTMLElement).setPointerCapture === "function") {
+      try {
+        (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+      } catch {}
+    }
     draggingDrawer.current = true;
     drawerStartYRef.current = e.clientY;
     drawerStartHeightRef.current = timelineDrawerHeight;
@@ -1852,11 +1862,13 @@ function MainEditor() {
     window.addEventListener("mouseup", onPointerUp);
     window.addEventListener("pointermove", onPointerMove);
     window.addEventListener("pointerup", onPointerUp);
+    window.addEventListener("pointercancel", onPointerUp);
     return () => {
       window.removeEventListener("mousemove", onPointerMove);
       window.removeEventListener("mouseup", onPointerUp);
       window.removeEventListener("pointermove", onPointerMove);
       window.removeEventListener("pointerup", onPointerUp);
+      window.removeEventListener("pointercancel", onPointerUp);
     };
   }, []);
 
@@ -2573,12 +2585,14 @@ function MainEditor() {
         <div
           className="workspace-split-divider"
           onMouseDown={onSplitHandleMouseDown}
+          onPointerDown={onSplitHandleMouseDown}
           title="Resize workspace split (drag vertically)"
         >
           <button
             type="button"
             className="timeline-split-handle-btn timeline-split-handle-btn-left"
             onMouseDown={onSplitHandleMouseDown}
+            onPointerDown={onSplitHandleMouseDown}
             title="Resize workspace split (drag vertically)"
           >
             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -2591,6 +2605,7 @@ function MainEditor() {
             type="button"
             className="timeline-split-handle-btn timeline-split-handle-btn-right"
             onMouseDown={onSplitHandleMouseDown}
+            onPointerDown={onSplitHandleMouseDown}
             title="Resize workspace split (drag vertically)"
           >
             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -2682,12 +2697,14 @@ function MainEditor() {
           <div
             className="workspace-split-divider"
             onMouseDown={onDrawerSplitMouseDown}
+            onPointerDown={onDrawerSplitMouseDown}
             title="Resize timeline height (drag vertically)"
           >
             <button
               type="button"
               className="timeline-split-handle-btn timeline-split-handle-btn-left"
               onMouseDown={onDrawerSplitMouseDown}
+              onPointerDown={onDrawerSplitMouseDown}
               title="Resize timeline height (drag vertically)"
             >
               <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -2700,6 +2717,7 @@ function MainEditor() {
               type="button"
               className="timeline-split-handle-btn timeline-split-handle-btn-right"
               onMouseDown={onDrawerSplitMouseDown}
+              onPointerDown={onDrawerSplitMouseDown}
               title="Resize timeline height (drag vertically)"
             >
               <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -2748,7 +2766,7 @@ function MainEditor() {
               left: 0,
               right: 0,
               height: 1,
-              background: "#38bdf8",
+              background: "var(--accent-color, #38bdf8)",
               transform: `translateY(${lastClampedYRef.current}px)`,
               pointerEvents: "none",
             }}
@@ -2774,7 +2792,7 @@ function MainEditor() {
               left: 0,
               right: 0,
               height: 1,
-              background: "#38bdf8",
+              background: "var(--accent-color, #38bdf8)",
               transform: `translateY(${lastClampedDrawerYRef.current}px)`,
               pointerEvents: "none",
             }}

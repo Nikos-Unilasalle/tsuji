@@ -23,6 +23,15 @@
      the Demos menu. */
   z-index: 30;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  touch-action: pan-x;
+}
+
+.top-bar::-webkit-scrollbar {
+  display: none;
 }
 
 .top-bar-left {
@@ -30,7 +39,7 @@
   align-items: center;
   gap: 8px;
   flex: 1 1 0;
-  min-width: 0;
+  min-width: max-content;
 }
 
 .top-bar-logo {
@@ -71,7 +80,8 @@
   align-items: center;
   justify-content: center;
   gap: 10px;
-  flex-shrink: 0;
+  flex: 0 0 auto;
+  margin: 0 auto;
 }
 
 .top-bar-button {
@@ -90,6 +100,8 @@
   transition: color 0.15s ease, background 0.15s ease;
   outline: none;
   box-shadow: none;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .top-bar-button-icon-only {
@@ -124,7 +136,7 @@
 .top-bar-button-mode-active {
   background: transparent;
   border: none;
-  color: #38bdf8;
+  color: var(--accent-color, #38bdf8);
   box-shadow: none;
   outline: none;
 }
@@ -135,7 +147,7 @@
 .top-bar-button-output-active:hover,
 .top-bar-button-mode-active:hover {
   background: var(--chrome-surface-raised);
-  color: #38bdf8;
+  color: var(--accent-color, #38bdf8);
 }
 
 .top-bar-button:active svg,
@@ -143,7 +155,7 @@
 .top-bar-button.active svg,
 .top-bar-button-output-active svg,
 .top-bar-button-mode-active svg {
-  color: #38bdf8;
+  color: var(--accent-color, #38bdf8);
 }
 
 .top-bar-button-mode {
@@ -163,7 +175,8 @@
   justify-content: flex-end;
   gap: 8px;
   flex: 1 1 0;
-  min-width: 0;
+  min-width: max-content;
+  margin-left: auto;
 }
 
 /* 2D / 3D Mode Selector Group */
@@ -218,7 +231,7 @@
 .top-bar-mode-btn:active,
 .top-bar-mode-btn.active {
   background: transparent;
-  color: #38bdf8;
+  color: var(--accent-color, #38bdf8);
   border: none;
   box-shadow: none;
   outline: none;
@@ -227,12 +240,12 @@
 .top-bar-mode-btn:active:hover,
 .top-bar-mode-btn.active:hover {
   background: rgba(255, 255, 255, 0.08);
-  color: #38bdf8;
+  color: var(--accent-color, #38bdf8);
 }
 
 .top-bar-mode-btn:active svg,
 .top-bar-mode-btn.active svg {
-  color: #38bdf8;
+  color: var(--accent-color, #38bdf8);
 }
 
 .top-bar-filename {
@@ -245,18 +258,18 @@
   border-radius: 6px;
   font-family: inherit;
   font-size: 11px;
-  color: #38bdf8;
+  color: var(--accent-color, #38bdf8);
   cursor: pointer;
   transition: border-color 0.15s ease;
 }
 
 .top-bar-filename:hover {
-  border-color: #38bdf8;
+  border-color: var(--accent-color, #38bdf8);
 }
 
 .top-bar-filename-edit-input {
   background: var(--chrome-bg);
-  border: 1px solid #38bdf8;
+  border: 1px solid var(--accent-color, #38bdf8);
   border-radius: 4px;
   color: #ffffff;
   font-family: inherit;
@@ -307,15 +320,14 @@
 .top-bar-space-btn {
   display: flex;
   align-items: center;
-  gap: 5px;
+  justify-content: center;
+  width: 28px;
   height: 24px;
-  padding: 0 8px;
+  padding: 0;
   background: transparent;
   border: none;
   border-radius: 4px;
   color: var(--chrome-text-muted, #94a3b8);
-  font-size: 11px;
-  font-weight: 600;
   cursor: pointer;
   transition: color 0.15s ease, background 0.15s ease;
   user-select: none;
@@ -343,7 +355,7 @@
 .top-bar-space-btn:active,
 .top-bar-space-btn.active {
   background: transparent;
-  color: #38bdf8;
+  color: var(--accent-color, #38bdf8);
   border: none;
   box-shadow: none;
   outline: none;
@@ -352,10 +364,10 @@
 .top-bar-space-btn:active:hover,
 .top-bar-space-btn.active:hover {
   background: rgba(255, 255, 255, 0.08);
-  color: #38bdf8;
+  color: var(--accent-color, #38bdf8);
 }
 
 .top-bar-space-btn.active svg,
 .top-bar-space-btn:active svg {
-  color: #38bdf8;
+  color: var(--accent-color, #38bdf8);
 }

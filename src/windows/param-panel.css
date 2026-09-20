@@ -141,7 +141,7 @@
 .param-panel-pin-btn-header-active {
   background: rgba(56, 189, 248, 0.2);
   border-color: rgba(56, 189, 248, 0.4);
-  color: #38bdf8;
+  color: var(--accent-color, #38bdf8);
 }
 
 .param-name-section {
@@ -189,7 +189,7 @@
 
 .param-group-arrow {
   font-size: 9px;
-  color: #38bdf8;
+  color: var(--accent-color, #38bdf8);
   width: 12px;
   text-align: center;
   transition: transform 0.15s ease;
@@ -236,7 +236,7 @@
 
 .param-row-driven label::after {
   content: " ⇢";
-  color: #38bdf8;
+  color: var(--accent-color, #38bdf8);
   font-style: normal;
 }
 
@@ -377,7 +377,7 @@
 }
 
 .param-text-input:focus {
-  border-color: #38bdf8;
+  border-color: var(--accent-color, #38bdf8);
   background: rgba(255, 255, 255, 0.12);
 }
 
@@ -429,7 +429,7 @@
 
 .param-panel-freeze:hover {
   background: rgba(56, 189, 248, 0.2);
-  border-color: #38bdf8;
+  border-color: var(--accent-color, #38bdf8);
 }
 
 .param-panel-freeze svg {

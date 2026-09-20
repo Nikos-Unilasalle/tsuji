@@ -26,7 +26,6 @@
   cursor: ew-resize !important;
 }
 
-/* Invisible line acts as resize handle */
 .timeline-split-resize-handle {
   width: 100%;
   height: 8px;
@@ -37,6 +36,7 @@
   left: 0;
   z-index: 25;
   pointer-events: auto;
+  touch-action: none;
 }
 
 .timeline-bar-inner {
@@ -70,16 +70,17 @@
   outline: none;
   box-shadow: none;
   pointer-events: auto;
+  touch-action: none;
 }
 
 .timeline-split-handle-btn:hover {
   background: #283040;
-  color: #38bdf8;
+  color: var(--accent-color, #38bdf8);
 }
 
 .timeline-split-handle-btn:active {
   background: #283040;
-  color: #38bdf8;
+  color: var(--accent-color, #38bdf8);
 }
 
 .timeline-split-handle-btn-left {
@@ -106,6 +107,7 @@
   z-index: 25;
   cursor: row-resize;
   flex-shrink: 0;
+  touch-action: none;
 }
 
 .workspace-split-divider::before {
@@ -157,7 +159,7 @@
   left: 0;
   bottom: 0;
   height: 1px;
-  background: #38bdf8;
+  background: var(--accent-color, #38bdf8);
   pointer-events: none;
   border-radius: 0;
 }
@@ -308,7 +310,7 @@
 .timeline-drawer-toggle-btn.active,
 .timeline-drawer-toggle-btn:active {
   background: #283040;
-  color: #38bdf8;
+  color: var(--accent-color, #38bdf8);
   border: none;
   box-shadow: none;
 }
@@ -442,7 +444,7 @@
 }
 
 .easing-popover-link-toggle input[type="checkbox"] {
-  accent-color: #38bdf8;
+  accent-color: var(--accent-color, #38bdf8);
   cursor: pointer;
 }
 
@@ -455,7 +457,7 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: #38bdf8;
+  color: var(--accent-color, #38bdf8);
   margin-bottom: 6px;
 }
 
@@ -507,7 +509,7 @@
 }
 
 .easing-curve-path {
-  stroke: #38bdf8;
+  stroke: var(--accent-color, #38bdf8);
   stroke-width: 2;
   fill: none;
 }
@@ -564,7 +566,7 @@
 
 .easing-btn.active {
   background: #0369a1;
-  border-color: #38bdf8;
+  border-color: var(--accent-color, #38bdf8);
   color: #ffffff;
   font-weight: 600;
   box-shadow: 0 0 6px rgba(56, 189, 248, 0.4);

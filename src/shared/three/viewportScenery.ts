@@ -105,20 +105,37 @@ export const GIZMO_ACTIVE_COLOR = 0xf0c674;
  * to `scene.background`, three.js stretches it flat across the frame (the
  * equirect wrapping only applies to textures explicitly mapped that way).
  */
-export function createViewportBackground(): THREE.Texture {
+export function createViewportBackground(top?: string, bottom?: string): THREE.CanvasTexture {
   const canvas = document.createElement("canvas");
   canvas.width = 2;
   canvas.height = 256;
   const ctx = canvas.getContext("2d")!;
   const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
-  gradient.addColorStop(0, VIEWPORT_BG_TOP);
-  gradient.addColorStop(1, VIEWPORT_BG_BOTTOM);
+  gradient.addColorStop(0, top ?? VIEWPORT_BG_TOP);
+  gradient.addColorStop(1, bottom ?? VIEWPORT_BG_BOTTOM);
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
   return texture;
+}
+
+/**
+ * Live-updates the gradient texture used for the viewport background.
+ */
+export function updateViewportBackground(texture: THREE.Texture, top: string, bottom: string): void {
+  const canvasTexture = texture as THREE.CanvasTexture;
+  const canvas = canvasTexture.image as HTMLCanvasElement | undefined;
+  if (!canvas) return;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+  const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+  gradient.addColorStop(0, top);
+  gradient.addColorStop(1, bottom);
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  canvasTexture.needsUpdate = true;
 }
 
 /**
@@ -136,12 +153,15 @@ export function disposeMainSceneGridAndAxes(group: THREE.Group): void {
 }
 
 /** Build main 3D Scene Grid & Origin Axes Helper */
-export function buildMainSceneGridAndAxes(): THREE.Group {
+export function buildMainSceneGridAndAxes(gridColor?: string | number, gridMajorColor?: string | number): THREE.Group {
   const group = new THREE.Group();
 
   // Ground Grid (XZ Plane)
-  const gridHelper = new THREE.GridHelper(20, 20, GRID_LINE_MAJOR, GRID_LINE);
+  const major = new THREE.Color(gridMajorColor ?? GRID_LINE_MAJOR);
+  const minor = new THREE.Color(gridColor ?? GRID_LINE);
+  const gridHelper = new THREE.GridHelper(20, 20, major, minor);
   gridHelper.position.y = -0.001; // Avoid z-fighting with objects at y=0
+  gridHelper.userData.isSceneryGridHelper = true;
   group.add(gridHelper);
 
   // The two in-plane axes drawn the length of the grid, Blender-style: a
@@ -178,6 +198,23 @@ export function buildMainSceneGridAndAxes(): THREE.Group {
   group.add(upArrow);
 
   return group;
+}
+
+/**
+ * Live-updates the grid helper colors inside the grid & axes group.
+ */
+export function updateGridColor(group: THREE.Group, gridColor: string | number, gridMajorColor?: string | number): void {
+  const oldHelper = group.children.find((child) => child.userData?.isSceneryGridHelper);
+  if (oldHelper) {
+    group.remove(oldHelper);
+    disposeObject3D(oldHelper);
+  }
+  const major = new THREE.Color(gridMajorColor ?? GRID_LINE_MAJOR);
+  const minor = new THREE.Color(gridColor ?? GRID_LINE);
+  const newGridHelper = new THREE.GridHelper(20, 20, major, minor);
+  newGridHelper.position.y = -0.001;
+  newGridHelper.userData.isSceneryGridHelper = true;
+  group.add(newGridHelper);
 }
 
 /**

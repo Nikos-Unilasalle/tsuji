@@ -738,9 +738,18 @@ function GraphEditorContent({
         setNodes(nextNodes);
         setEdges(nextEdges);
         onGraphChange?.(toGraph([...graph.nodes, instance], nextNodes, nextEdges, graph.keyframes, graph.markers, graph.exposedParams));
+      } else {
+        // Direct left-click on an edge (especially critical for tablet / stylus without right-click) deletes it
+        event.preventDefault();
+        event.stopPropagation();
+        const nextEdges = applyEdgeChanges([{ type: "remove", id: edge.id }], edges);
+        const nextNodes = refreshDynamicSockets(nodes, nextEdges, graph.nodes, registry);
+        setNodes(nextNodes);
+        setEdges(nextEdges);
+        commit(nextNodes, nextEdges);
       }
     },
-    [edges, graph, nodes, onGraphChange, registry, screenToFlowPosition, setEdges, setNodes],
+    [commit, edges, graph, nodes, onGraphChange, registry, screenToFlowPosition, setEdges, setNodes],
   );
 
   const onNodeDragStop = useCallback(
@@ -1350,6 +1359,113 @@ function GraphEditorContent({
     return () => window.removeEventListener("keydown", handleFrameKey);
   }, [selectedNodeId, graph.nodes, setCenter]);
 
+  // Context Menu state (for node & canvas long-press / right-click)
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    type: "node" | "canvas";
+    nodeId?: string;
+  } | null>(null);
+
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressStartRef = useRef<{ x: number; y: number; nodeId?: string } | null>(null);
+
+  const clearLongPress = useCallback(() => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+    longPressStartRef.current = null;
+  }, []);
+
+  const handleCanvasPointerDown = useCallback((e: React.PointerEvent) => {
+    if (e.button !== 0) return;
+    const targetEl = e.target as HTMLElement;
+    if (
+      targetEl.tagName === "INPUT" ||
+      targetEl.tagName === "BUTTON" ||
+      targetEl.closest("button") ||
+      targetEl.closest(".graph-context-menu") ||
+      targetEl.closest(".graph-node-palette") ||
+      targetEl.closest(".quick-add-toolbar") ||
+      targetEl.closest(".react-flow__edge")
+    ) {
+      return;
+    }
+
+    const nodeEl = targetEl.closest(".react-flow__node");
+    const nodeId = nodeEl ? nodeEl.getAttribute("data-id") ?? undefined : undefined;
+
+    longPressStartRef.current = {
+      x: e.clientX,
+      y: e.clientY,
+      nodeId,
+    };
+
+    if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
+    longPressTimerRef.current = setTimeout(() => {
+      if (!longPressStartRef.current) return;
+      const { x, y, nodeId: targetNodeId } = longPressStartRef.current;
+      if (targetNodeId) {
+        onSelectNode(targetNodeId);
+        onSelectNodes?.([targetNodeId]);
+        setContextMenu({ x, y, type: "node", nodeId: targetNodeId });
+      } else {
+        setContextMenu({ x, y, type: "canvas" });
+      }
+      longPressStartRef.current = null;
+      longPressTimerRef.current = null;
+    }, 450);
+  }, [onSelectNode, onSelectNodes]);
+
+  const handleCanvasPointerMove = useCallback((e: React.PointerEvent) => {
+    if (!longPressStartRef.current) return;
+    const dx = e.clientX - longPressStartRef.current.x;
+    const dy = e.clientY - longPressStartRef.current.y;
+    if (Math.hypot(dx, dy) > 8) {
+      clearLongPress();
+    }
+  }, [clearLongPress]);
+
+  const handleCanvasPointerUp = useCallback(
+    (e: React.PointerEvent) => {
+      if (longPressStartRef.current && !longPressStartRef.current.nodeId) {
+        const dx = e.clientX - longPressStartRef.current.x;
+        const dy = e.clientY - longPressStartRef.current.y;
+        if (Math.hypot(dx, dy) <= 8) {
+          // Tapped canvas background with stylus / touch / mouse: place spawn cursor
+          const flowPos = screenToFlowPosition({ x: e.clientX, y: e.clientY });
+          spawnCursorPosRef.current = flowPos;
+          setSpawnCursorPos(flowPos);
+          selectedIdsRef.current = new Set();
+          onSelectNode(null);
+          onSelectNodes?.([]);
+        }
+      }
+      clearLongPress();
+    },
+    [clearLongPress, onSelectNode, onSelectNodes, screenToFlowPosition],
+  );
+
+  useEffect(() => {
+    if (!contextMenu) return;
+    const handleOutside = (e: MouseEvent | PointerEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest(".graph-context-menu")) {
+        setContextMenu(null);
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setContextMenu(null);
+    };
+    window.addEventListener("pointerdown", handleOutside);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("pointerdown", handleOutside);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [contextMenu]);
+
   // Group nodes are built by Cmd+G, boundary nodes by the group that owns
   // them — placing either by hand would produce a node with no interior and
   // no ports, so they stay out of the palette and the search.
@@ -1373,7 +1489,13 @@ function GraphEditorContent({
       }}
     >
       <NodePalette nodes={paletteNodes} onAddNode={addNode} />
-      <div className="graph-editor-canvas">
+      <div
+        className="graph-editor-canvas"
+        onPointerDown={handleCanvasPointerDown}
+        onPointerMove={handleCanvasPointerMove}
+        onPointerUp={handleCanvasPointerUp}
+        onPointerCancel={handleCanvasPointerUp}
+      >
         <QuickAddToolbar onAddNode={addNode} onOpenSearch={() => setSearchModalOpen(true)} />
         <ReactFlow
           nodes={nodes}
@@ -1392,6 +1514,18 @@ function GraphEditorContent({
           isValidConnection={isValidConnection}
           onEdgeContextMenu={onEdgeContextMenu}
           onEdgeClick={onEdgeClick}
+          onNodeContextMenu={(event, node) => {
+            event.preventDefault();
+            clearLongPress();
+            onSelectNode(node.id);
+            onSelectNodes?.([node.id]);
+            setContextMenu({ x: event.clientX, y: event.clientY, type: "node", nodeId: node.id });
+          }}
+          onPaneContextMenu={(event) => {
+            event.preventDefault();
+            clearLongPress();
+            setContextMenu({ x: event.clientX, y: event.clientY, type: "canvas" });
+          }}
           onNodeDragStop={onNodeDragStop}
           onNodeClick={onNodeClick}
           onNodeDoubleClick={onNodeDoubleClick}
@@ -1451,6 +1585,85 @@ function GraphEditorContent({
             ))}
           </div>
         ) : null}
+
+        {contextMenu && (
+          <div
+            className="graph-context-menu"
+            style={{
+              left: Math.min(contextMenu.x, window.innerWidth - 180),
+              top: Math.min(contextMenu.y, window.innerHeight - 150),
+            }}
+            onClick={(e) => e.stopPropagation()}
+            onPointerDown={(e) => e.stopPropagation()}
+          >
+            {contextMenu.type === "node" ? (
+              <>
+                <button
+                  type="button"
+                  className="graph-context-menu-item"
+                  onClick={() => {
+                    duplicateSelected();
+                    setContextMenu(null);
+                  }}
+                >
+                  <span>Duplicate</span>
+                  <span className="graph-context-menu-shortcut">Ctrl+D</span>
+                </button>
+                <button
+                  type="button"
+                  className="graph-context-menu-item"
+                  onClick={() => {
+                    copySelected();
+                    setContextMenu(null);
+                  }}
+                >
+                  <span>Copy</span>
+                  <span className="graph-context-menu-shortcut">Ctrl+C</span>
+                </button>
+                <div className="graph-context-menu-divider" />
+                <button
+                  type="button"
+                  className="graph-context-menu-item graph-context-menu-item-danger"
+                  onClick={() => {
+                    const target = nodes.find((n) => n.id === contextMenu.nodeId);
+                    if (target) onNodesDelete([target]);
+                    setContextMenu(null);
+                  }}
+                >
+                  <span>Delete</span>
+                  <span className="graph-context-menu-shortcut">Del</span>
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  className="graph-context-menu-item"
+                  disabled={!getGraphClipboard()?.nodes?.length}
+                  onClick={() => {
+                    pasteClipboard();
+                    setContextMenu(null);
+                  }}
+                >
+                  <span>Paste</span>
+                  <span className="graph-context-menu-shortcut">Ctrl+V</span>
+                </button>
+                <div className="graph-context-menu-divider" />
+                <button
+                  type="button"
+                  className="graph-context-menu-item"
+                  onClick={() => {
+                    setSearchModalOpen(true);
+                    setContextMenu(null);
+                  }}
+                >
+                  <span>Add Node...</span>
+                  <span className="graph-context-menu-shortcut">Space</span>
+                </button>
+              </>
+            )}
+          </div>
+        )}
       </div>
 
       {searchModalOpen && (

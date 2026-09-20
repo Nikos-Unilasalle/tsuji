@@ -77,7 +77,7 @@ export interface TimelineDrawerProps {
   evaluatedResults?: Map<string, Record<string, unknown>>;
   drawerHeight: number;
   onDrawerHeightChange: (height: number) => void;
-  onSplitHandleMouseDown: (e: React.MouseEvent) => void;
+  onSplitHandleMouseDown: (e: React.MouseEvent | React.PointerEvent) => void;
   isFullHeight?: boolean;
 }
 
@@ -692,6 +692,12 @@ export const TimelineDrawer: React.FC<TimelineDrawerProps> = ({
         className="timeline-drawer-resizer"
         title="Drag to resize panels"
         onMouseDown={(e) => {
+          if (e.button !== 0) return;
+          e.preventDefault();
+          e.stopPropagation();
+          onSplitHandleMouseDown(e);
+        }}
+        onPointerDown={(e) => {
           if (e.button !== 0) return;
           e.preventDefault();
           e.stopPropagation();

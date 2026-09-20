@@ -264,7 +264,7 @@ export function SplitViewport({
           width: "2px",
           height: "100%",
           cursor: "col-resize",
-          backgroundColor: is2D ? "#00f3ff" : "#000000",
+          backgroundColor: is2D ? "var(--accent-color, #38bdf8)" : "var(--chrome-border, #000000)",
           zIndex: 20,
           flexShrink: 0,
           display: isSplitActive ? "block" : "none",

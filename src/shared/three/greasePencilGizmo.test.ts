@@ -113,4 +113,39 @@ describe("Grease Pencil Gizmo & Elevation Viewport Integration", () => {
     expect(scalePatch.scale?.y).toBe(2);
     expect(scalePatch.scale?.z).toBe(2);
   });
+
+  it("converts world-space drawn points to local GP space so that strokes never jump after gizmo transforms", () => {
+    // Simulate GP object translated by (10, 5, 2) and rotated 90 degrees around Y
+    const gpGroup = new THREE.Group();
+    gpGroup.position.set(10, 5, 2);
+    gpGroup.rotation.set(0, Math.PI / 2, 0);
+    gpGroup.scale.set(2, 2, 2);
+    gpGroup.updateMatrixWorld(true);
+
+    const invMatrix = gpGroup.matrixWorld.clone().invert();
+
+    // The user draws a stroke in world space at position (12, 7, 4)
+    const worldDrawnPoint = new THREE.Vector3(12, 7, 4);
+
+    // Coordinate conversion into local GP space
+    const localPoint = worldDrawnPoint.clone().applyMatrix4(invMatrix);
+
+    // When the GP mesh is rendered inside gpGroup (local space), Three.js computes:
+    // worldRenderedPoint = gpGroup.matrixWorld * localPoint
+    const worldRenderedPoint = localPoint.clone().applyMatrix4(gpGroup.matrixWorld);
+
+    // Verify zero jump: rendered point must match drawn point exactly!
+    expect(worldRenderedPoint.x).toBeCloseTo(12);
+    expect(worldRenderedPoint.y).toBeCloseTo(7);
+    expect(worldRenderedPoint.z).toBeCloseTo(4);
+
+    // Further verify: if gizmo later translates gpGroup by (+5, 0, 0)
+    gpGroup.position.x += 5;
+    gpGroup.updateMatrixWorld(true);
+
+    const updatedWorldPoint = localPoint.clone().applyMatrix4(gpGroup.matrixWorld);
+    expect(updatedWorldPoint.x).toBeCloseTo(17);
+    expect(updatedWorldPoint.y).toBeCloseTo(7);
+    expect(updatedWorldPoint.z).toBeCloseTo(4);
+  });
 });

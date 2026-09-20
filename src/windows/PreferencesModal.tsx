@@ -1,5 +1,18 @@
 import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import {
+  ThemeColors,
+  ThemeDefinition,
+  PRESET_THEMES,
+  getAllThemes,
+  getActiveTheme,
+  setActiveTheme,
+  saveCustomTheme,
+  deleteCustomTheme,
+  exportThemeToJSON,
+  importThemeFromJSON,
+  applyThemeColors,
+} from "../shared/theme/themeStore";
 import "./preferences-modal.css";
 
 interface PreferencesModalProps {
@@ -69,8 +82,58 @@ const TABLET_SHORTCUT_SECTIONS: ShortcutSection[] = [
   },
 ];
 
+interface ColorCategory {
+  category: string;
+  fields: { key: keyof ThemeColors; label: string; desc: string }[];
+}
+
+const COLOR_CATEGORIES: ColorCategory[] = [
+  {
+    category: "Accent & Highlights",
+    fields: [
+      { key: "accentColor", label: "Accent Color", desc: "Active buttons, space toggles, timeline playhead, slider tracks, resize guides" },
+    ],
+  },
+  {
+    category: "3D Viewport",
+    fields: [
+      { key: "viewportBgTop", label: "3D Background Top", desc: "Top gradient hue of the 3D scene background" },
+      { key: "viewportBgBottom", label: "3D Background Bottom", desc: "Bottom gradient hue of the 3D scene background" },
+      { key: "viewportGrid", label: "Floor Grid Lines", desc: "Ground grid reference lines on the 3D floor plane" },
+    ],
+  },
+  {
+    category: "Application Chrome",
+    fields: [
+      { key: "chromeBg", label: "Window Background", desc: "Main window background and deep chrome canvas" },
+      { key: "chromeSurface", label: "Panels & Bars", desc: "Top bar, floating panels, and timeline drawer" },
+      { key: "chromeSurfaceRaised", label: "Raised Surfaces", desc: "Buttons, numerical inputs, and active rows" },
+      { key: "chromeBorder", label: "Borders & Lines", desc: "Workspace split dividers and panel borders" },
+      { key: "chromeText", label: "Primary Text", desc: "Main UI text, titles, and active labels" },
+      { key: "chromeTextMuted", label: "Secondary Text", desc: "Hints, units, and secondary descriptions" },
+    ],
+  },
+  {
+    category: "Node Graph Canvas",
+    fields: [
+      { key: "canvasBg", label: "Graph Background", desc: "Node graph workspace background" },
+      { key: "canvasNode", label: "Node Body", desc: "Node cards background color" },
+      { key: "canvasNodeRaised", label: "Node Header", desc: "Node title bars and highlighted headers" },
+    ],
+  },
+];
+
 export const PreferencesModal: React.FC<PreferencesModalProps> = ({ isOpen, onClose }) => {
-  const [activeTab, setActiveTab] = useState<"tablet" | "ergonomics">("tablet");
+  const [activeTab, setActiveTab] = useState<"tablet" | "themes" | "ergonomics">("themes");
+
+  // Themes state
+  const [themesList, setThemesList] = useState<ThemeDefinition[]>([]);
+  const [activeTheme, setActiveThemeState] = useState<ThemeDefinition>(PRESET_THEMES[0]);
+  const [editColors, setEditColors] = useState<ThemeColors>(PRESET_THEMES[0].colors);
+  const [customNameInput, setCustomNameInput] = useState("");
+  const [isSavingCustom, setIsSavingCustom] = useState(false);
+  const [importStatus, setImportStatus] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Ergonomics state loaded from localStorage
   const [tabletMode, setTabletMode] = useState(() => {
@@ -87,6 +150,17 @@ export const PreferencesModal: React.FC<PreferencesModalProps> = ({ isOpen, onCl
   const lastPointRef = useRef<{ x: number; y: number } | null>(null);
 
   useEffect(() => {
+    if (isOpen) {
+      const all = getAllThemes();
+      const current = getActiveTheme();
+      setThemesList(all);
+      setActiveThemeState(current);
+      setEditColors({ ...current.colors });
+      setImportStatus(null);
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape" && isOpen) {
         onClose();
@@ -95,6 +169,85 @@ export const PreferencesModal: React.FC<PreferencesModalProps> = ({ isOpen, onCl
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isOpen, onClose]);
+
+  const handleSelectTheme = (theme: ThemeDefinition) => {
+    setActiveThemeState(theme);
+    setEditColors({ ...theme.colors });
+    setActiveTheme(theme);
+  };
+
+  const handleColorChange = (key: keyof ThemeColors, hex: string) => {
+    const updated = { ...editColors, [key]: hex };
+    setEditColors(updated);
+    applyThemeColors(updated);
+  };
+
+  const handleSaveTheme = () => {
+    const name = customNameInput.trim() || `Custom Theme ${themesList.length + 1}`;
+    const newTheme: ThemeDefinition = {
+      id: `custom-${Date.now()}`,
+      name,
+      isPreset: false,
+      colors: { ...editColors },
+    };
+    const updatedList = saveCustomTheme(newTheme);
+    setThemesList(updatedList);
+    setActiveThemeState(newTheme);
+    setIsSavingCustom(false);
+    setCustomNameInput("");
+  };
+
+  const handleDeleteTheme = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const updatedList = deleteCustomTheme(id);
+    setThemesList(updatedList);
+    const active = getActiveTheme();
+    setActiveThemeState(active);
+    setEditColors({ ...active.colors });
+  };
+
+  const handleExportTheme = () => {
+    const jsonStr = exportThemeToJSON({
+      ...activeTheme,
+      colors: editColors,
+    });
+    const blob = new Blob([jsonStr], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${activeTheme.name.toLowerCase().replace(/[^a-z0-9]/g, "-")}.tsuji-theme.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImportFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const text = event.target?.result as string;
+        const imported = importThemeFromJSON(text);
+        const updatedList = saveCustomTheme(imported);
+        setThemesList(updatedList);
+        setActiveThemeState(imported);
+        setEditColors({ ...imported.colors });
+        setImportStatus(`Theme "${imported.name}" loaded successfully.`);
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : "Failed to parse theme file.";
+        setImportStatus(`Import error: ${msg}`);
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  };
+
+  const handleResetToDefault = () => {
+    const defaultTheme = PRESET_THEMES[0];
+    setActiveTheme(defaultTheme);
+    setActiveThemeState(defaultTheme);
+    setEditColors({ ...defaultTheme.colors });
+  };
 
   const handleToggleTabletMode = (checked: boolean) => {
     setTabletMode(checked);
@@ -135,8 +288,8 @@ export const PreferencesModal: React.FC<PreferencesModalProps> = ({ isOpen, onCl
       ctx.beginPath();
       ctx.moveTo(lastPointRef.current.x, lastPointRef.current.y);
       ctx.lineTo(curX, curY);
-      ctx.strokeStyle = `rgba(56, 189, 248, ${Math.max(0.2, p)})`;
-      ctx.lineWidth = Math.max(1, p * 16);
+      ctx.strokeStyle = editColors.accentColor || "#38bdf8";
+      ctx.lineWidth = Math.max(1, p * 12);
       ctx.lineCap = "round";
       ctx.lineJoin = "round";
       ctx.stroke();
@@ -168,6 +321,7 @@ export const PreferencesModal: React.FC<PreferencesModalProps> = ({ isOpen, onCl
   return createPortal(
     <div className="prefs-backdrop" onClick={onClose}>
       <div className="prefs-modal" onClick={(e) => e.stopPropagation()}>
+        {/* Header matching TopBar 38px height */}
         <div className="prefs-header">
           <div className="prefs-title-group">
             <svg
@@ -179,45 +333,223 @@ export const PreferencesModal: React.FC<PreferencesModalProps> = ({ isOpen, onCl
               strokeLinecap="round"
               strokeLinejoin="round"
             >
-              <circle cx="12" cy="12" r="3" />
-              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+              <line x1="4" y1="21" x2="4" y2="14" />
+              <line x1="4" y1="10" x2="4" y2="3" />
+              <line x1="12" y1="21" x2="12" y2="12" />
+              <line x1="12" y1="8" x2="12" y2="3" />
+              <line x1="20" y1="21" x2="20" y2="16" />
+              <line x1="20" y1="12" x2="20" y2="3" />
+              <line x1="1" y1="14" x2="7" y2="14" />
+              <line x1="9" y1="8" x2="15" y2="8" />
+              <line x1="17" y1="16" x2="23" y2="16" />
             </svg>
-            <span className="prefs-title">Preferences & Tablet Setup</span>
+            <span className="prefs-title">Preferences</span>
           </div>
           <button type="button" className="prefs-close-btn" onClick={onClose} title="Close (Esc)">
             ✕
           </button>
         </div>
 
+        {/* Minimalist Tabs without emojis */}
         <div className="prefs-tabs">
+          <button
+            type="button"
+            className={`prefs-tab-btn ${activeTab === "themes" ? "active" : ""}`}
+            onClick={() => setActiveTab("themes")}
+          >
+            Themes & Colors
+          </button>
           <button
             type="button"
             className={`prefs-tab-btn ${activeTab === "tablet" ? "active" : ""}`}
             onClick={() => setActiveTab("tablet")}
           >
-            ⌨️ Physical Buttons (ExpressKeys)
+            Tablet & Shortcuts
           </button>
           <button
             type="button"
             className={`prefs-tab-btn ${activeTab === "ergonomics" ? "active" : ""}`}
             onClick={() => setActiveTab("ergonomics")}
           >
-            🖊️ Ergonomics & Pressure Test
+            Ergonomics & Stylus
           </button>
         </div>
 
         <div className="prefs-body">
+          {/* THEMES TAB */}
+          {activeTab === "themes" && (
+            <div className="prefs-themes-container">
+              {/* Presets & Custom Themes row */}
+              <div className="prefs-section-header">
+                <span className="prefs-section-label">Theme Selection</span>
+                <div className="prefs-theme-actions">
+                  <button
+                    type="button"
+                    className="prefs-action-btn"
+                    onClick={() => setIsSavingCustom(true)}
+                    title="Save current palette as a custom theme"
+                  >
+                    Save As Custom...
+                  </button>
+                  <button
+                    type="button"
+                    className="prefs-action-btn"
+                    onClick={handleExportTheme}
+                    title="Export current theme to JSON"
+                  >
+                    Export JSON
+                  </button>
+                  <button
+                    type="button"
+                    className="prefs-action-btn"
+                    onClick={() => fileInputRef.current?.click()}
+                    title="Import theme from JSON"
+                  >
+                    Import JSON
+                  </button>
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    accept=".json"
+                    style={{ display: "none" }}
+                    onChange={handleImportFile}
+                  />
+                  <button
+                    type="button"
+                    className="prefs-action-btn prefs-action-btn-subtle"
+                    onClick={handleResetToDefault}
+                    title="Reset to default Tsuji Slate"
+                  >
+                    Reset Default
+                  </button>
+                </div>
+              </div>
+
+              {/* Theme Cards List */}
+              <div className="prefs-theme-pills">
+                {themesList.map((t) => {
+                  const isSelected = activeTheme.id === t.id;
+                  return (
+                    <div
+                      key={t.id}
+                      className={`prefs-theme-pill ${isSelected ? "active" : ""}`}
+                      onClick={() => handleSelectTheme(t)}
+                    >
+                      <div className="prefs-theme-pill-preview">
+                        <span style={{ backgroundColor: t.colors.chromeBg }} />
+                        <span style={{ backgroundColor: t.colors.viewportBgTop || t.colors.chromeSurface }} />
+                        <span style={{ backgroundColor: t.colors.accentColor }} />
+                      </div>
+                      <span className="prefs-theme-pill-name">{t.name}</span>
+                      {!t.isPreset && (
+                        <button
+                          type="button"
+                          className="prefs-theme-pill-del"
+                          onClick={(e) => handleDeleteTheme(t.id, e)}
+                          title="Delete custom theme"
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Inline Save Dialog */}
+              {isSavingCustom && (
+                <div className="prefs-inline-save-card">
+                  <span className="prefs-option-hint">Enter a name for your custom theme:</span>
+                  <div className="prefs-inline-save-row">
+                    <input
+                      type="text"
+                      className="prefs-text-input"
+                      placeholder="My Custom Theme"
+                      value={customNameInput}
+                      onChange={(e) => setCustomNameInput(e.target.value)}
+                      autoFocus
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") handleSaveTheme();
+                        if (e.key === "Escape") setIsSavingCustom(false);
+                      }}
+                    />
+                    <button type="button" className="prefs-btn-confirm" onClick={handleSaveTheme}>
+                      Save
+                    </button>
+                    <button
+                      type="button"
+                      className="prefs-action-btn"
+                      onClick={() => setIsSavingCustom(false)}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {importStatus && (
+                <div className="prefs-status-banner">
+                  {importStatus}
+                </div>
+              )}
+
+              {/* Color Customizer Section */}
+              <div className="prefs-section-header" style={{ marginTop: 20 }}>
+                <span className="prefs-section-label">Interface Colors (Live Customization)</span>
+                <span className="prefs-option-hint">Changes apply immediately to the workspace</span>
+              </div>
+
+              {COLOR_CATEGORIES.map((cat) => (
+                <div key={cat.category} className="prefs-color-category-block">
+                  <div className="prefs-category-header">
+                    <span className="prefs-category-title">{cat.category}</span>
+                  </div>
+                  <div className="prefs-color-grid">
+                    {cat.fields.map((field) => (
+                      <div key={field.key} className="prefs-color-row">
+                        <div className="prefs-color-meta">
+                          <span className="prefs-color-label">{field.label}</span>
+                          <span className="prefs-color-desc">{field.desc}</span>
+                        </div>
+                        <div className="prefs-color-controls">
+                          <div className="prefs-swatch-wrapper">
+                            <input
+                              type="color"
+                              className="prefs-color-picker"
+                              value={editColors[field.key] || "#000000"}
+                              onChange={(e) => handleColorChange(field.key, e.target.value)}
+                            />
+                            <span
+                              className="prefs-color-swatch"
+                              style={{ backgroundColor: editColors[field.key] }}
+                            />
+                          </div>
+                          <input
+                            type="text"
+                            className="prefs-hex-input"
+                            value={editColors[field.key] || ""}
+                            onChange={(e) => handleColorChange(field.key, e.target.value)}
+                            spellCheck={false}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* TABLET SHORTCUTS TAB */}
           {activeTab === "tablet" && (
             <>
-              <div className="prefs-intro-banner">
-                💡 <strong>Mapping Physical Buttons:</strong> In your tablet driver control panel
-                (XP-Pen, Huion, Wacom), assign the shortcuts below to your tablet's <strong>ExpressKeys</strong> or
-                stylus barrel buttons for instant, seamless control.
+              <div className="prefs-info-note">
+                Assign the shortcuts below to your tablet ExpressKeys or stylus barrel buttons in your tablet driver configuration panel.
               </div>
 
               {TABLET_SHORTCUT_SECTIONS.map((section) => (
-                <div key={section.category}>
-                  <div className="prefs-section-title">{section.category}</div>
+                <div key={section.category} className="prefs-shortcut-section">
+                  <div className="prefs-section-label">{section.category}</div>
                   <div className="prefs-shortcut-grid">
                     {section.items.map((item, idx) => (
                       <div className="prefs-shortcut-card" key={idx}>
@@ -237,6 +569,7 @@ export const PreferencesModal: React.FC<PreferencesModalProps> = ({ isOpen, onCl
             </>
           )}
 
+          {/* ERGONOMICS TAB */}
           {activeTab === "ergonomics" && (
             <>
               <div className="prefs-option-row">
@@ -280,15 +613,7 @@ export const PreferencesModal: React.FC<PreferencesModalProps> = ({ isOpen, onCl
                   <button
                     type="button"
                     onClick={clearTestCanvas}
-                    style={{
-                      background: "transparent",
-                      border: "1px solid #334155",
-                      color: "#94a3b8",
-                      borderRadius: 4,
-                      padding: "2px 8px",
-                      cursor: "pointer",
-                      fontSize: 11,
-                    }}
+                    className="prefs-action-btn prefs-action-btn-subtle"
                   >
                     Clear Drawing
                   </button>
@@ -298,9 +623,15 @@ export const PreferencesModal: React.FC<PreferencesModalProps> = ({ isOpen, onCl
                 </span>
 
                 <div className="prefs-pressure-bar-container">
-                  <div className="prefs-pressure-bar-fill" style={{ width: `${Math.round(currentPressure * 100)}%` }} />
+                  <div
+                    className="prefs-pressure-bar-fill"
+                    style={{
+                      width: `${Math.round(currentPressure * 100)}%`,
+                      backgroundColor: editColors.accentColor || "#38bdf8",
+                    }}
+                  />
                 </div>
-                <div style={{ fontSize: 11, color: "#38bdf8", textAlign: "right" }}>
+                <div className="prefs-pressure-value">
                   Pressure: {Math.round(currentPressure * 100)}%
                 </div>
 
@@ -320,7 +651,7 @@ export const PreferencesModal: React.FC<PreferencesModalProps> = ({ isOpen, onCl
         </div>
 
         <div className="prefs-footer">
-          <button type="button" className="prefs-btn-primary" onClick={onClose}>
+          <button type="button" className="prefs-btn-close" onClick={onClose}>
             Close
           </button>
         </div>

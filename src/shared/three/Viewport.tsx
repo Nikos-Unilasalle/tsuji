@@ -202,12 +202,34 @@ function resolvePointerPoint(
 
   return worldPos ? { pos: worldPos } : null;
 }
+
+function getGpInverseMatrix(
+  node: NodeInstance,
+  latestResults: Map<string, Record<string, unknown>> | null,
+): THREE.Matrix4 {
+  const gpGroup = (latestResults?.get(node.id)?.geometry as THREE.Object3D) || null;
+  const inv = new THREE.Matrix4();
+  if (gpGroup) {
+    gpGroup.updateWorldMatrix(true, false);
+    inv.copy(gpGroup.matrixWorld).invert();
+  } else {
+    const loc = node.params.location instanceof THREE.Vector3 ? node.params.location : new THREE.Vector3();
+    const rot = node.params.rotation instanceof THREE.Vector3 ? node.params.rotation : new THREE.Vector3();
+    const sca = node.params.scale instanceof THREE.Vector3 ? node.params.scale : new THREE.Vector3(1, 1, 1);
+    const piv = node.params.pivot instanceof THREE.Vector3 ? node.params.pivot : new THREE.Vector3();
+    const m = composeNativeMatrixWithPivot(undefined, loc, rot, sca, piv, node.params);
+    inv.copy(m).invert();
+  }
+  return inv;
+}
 import { createBackgroundBlur } from "./backgroundBlur";
 import { applyEnvironment, resolveActiveEnvironment } from "./environmentSync";
 import {
   buildMainSceneGridAndAxes,
   createGizmoScene,
   createViewportBackground,
+  updateViewportBackground,
+  updateGridColor,
   disposeMainSceneGridAndAxes,
   disposeGizmoScene,
   GIZMO_ACTIVE_COLOR,
@@ -215,6 +237,7 @@ import {
   GIZMO_Y_COLOR,
   GIZMO_Z_COLOR,
 } from "./viewportScenery";
+import { getActiveTheme, ThemeColors } from "../theme/themeStore";
 import { disposeObject3D } from "../graph/nodeCaches";
 import { registerPointerViewport } from "../graph/pointerStore";
 import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
@@ -868,6 +891,12 @@ export function Viewport({
     const next = typeof action === "function" ? action(transformMode) : action;
     setInternalTransformMode(next);
     onTransformModeChange?.(next);
+    const selNode = selectedNodeIdRef.current
+      ? graphRef.current.nodes.find((n) => n.id === selectedNodeIdRef.current)
+      : null;
+    if (isPaintOrGreaseNode(selNode)) {
+      setGpTool("select");
+    }
   };
   const transformModeRef = useRef(transformMode);
   transformModeRef.current = transformMode;
@@ -956,7 +985,11 @@ export function Viewport({
     const exportCanvas = document.createElement("canvas");
     const exportCtx = exportCanvas.getContext("2d");
 
-    const viewportBackground = createViewportBackground();
+    const currentTheme = getActiveTheme();
+    const viewportBackground = createViewportBackground(
+      currentTheme.colors.viewportBgTop,
+      currentTheme.colors.viewportBgBottom,
+    );
     const scene = new THREE.Scene();
     const bgScene = new THREE.Scene();
     bgScene.background = viewportBackground;
@@ -972,11 +1005,23 @@ export function Viewport({
 
     // Grid & Origin Axes Helper — editor-only, never baked into the projected output
     if (!outputMode) {
-      gridAndAxes = buildMainSceneGridAndAxes();
+      gridAndAxes = buildMainSceneGridAndAxes(currentTheme.colors.viewportGrid);
       editorUiScene.add(gridAndAxes);
     }
     const elevationHUD = createElevationHUD();
     editorUiScene.add(elevationHUD.group);
+
+    const handleThemeColorsChanged = (e: Event) => {
+      const colors = (e as CustomEvent<ThemeColors>).detail;
+      if (!colors) return;
+      if (viewportBackground) {
+        updateViewportBackground(viewportBackground, colors.viewportBgTop, colors.viewportBgBottom);
+      }
+      if (gridAndAxes) {
+        updateGridColor(gridAndAxes, colors.viewportGrid);
+      }
+    };
+    window.addEventListener("tsuji-theme-colors-changed", handleThemeColorsChanged);
 
     const perspectiveCamera = new THREE.PerspectiveCamera(50, 1, 0.1, 100);
     perspectiveCamera.position.set(3, 3, 5);
@@ -2504,19 +2549,22 @@ export function Viewport({
         const toolRadius = Math.max(0.85, bSize * 0.1);
 
         if (worldPos) {
+          const invMatrix = getGpInverseMatrix(gpNode, latestResultsRef.current);
+          const localPos = worldPos.clone().applyMatrix4(invMatrix);
+          const localNormal = ptData?.normal ? ptData.normal.clone().transformDirection(invMatrix) : undefined;
           const currentFrames = gpWorkingFramesRef.current;
           const targetFrame = currentFrameRef.current >= 0 ? currentFrameRef.current : 0;
           if (gpToolRef.current === "eraser_hard") {
-            const erased = eraseStrokesAtPosition(currentFrames, targetFrame, worldPos, toolRadius);
+            const erased = eraseStrokesAtPosition(currentFrames, targetFrame, localPos, toolRadius);
             gpWorkingFramesRef.current = erased;
             onParamChangeRef.current?.("frames", erased, gpNode.id);
           } else if (gpToolRef.current === "eraser_soft") {
-            const softErased = eraseStrokesSoft(currentFrames, targetFrame, worldPos, toolRadius, 0.3);
+            const softErased = eraseStrokesSoft(currentFrames, targetFrame, localPos, toolRadius, 0.3);
             gpWorkingFramesRef.current = softErased;
             onParamChangeRef.current?.("frames", softErased, gpNode.id);
           } else if (gpToolRef.current === "tint") {
             const activeColorHex = parseColorHex(gpNode.params.activeColor, "#38bdf8");
-            const tinted = tintStrokesAtPosition(currentFrames, targetFrame, worldPos, activeColorHex, toolRadius, 0.4);
+            const tinted = tintStrokesAtPosition(currentFrames, targetFrame, localPos, activeColorHex, toolRadius, 0.4);
             gpWorkingFramesRef.current = tinted;
             onParamChangeRef.current?.("frames", tinted, gpNode.id);
           } else {
@@ -2524,13 +2572,13 @@ export function Viewport({
             const pressure = Math.max(0.04, Math.min(2.5, basePr * gpPressureModifierRef.current));
             gpActivePointsRef.current = [
               {
-                x: worldPos.x,
-                y: worldPos.y,
-                z: worldPos.z,
+                x: localPos.x,
+                y: localPos.y,
+                z: localPos.z,
                 pressure,
-                nx: ptData?.normal?.x,
-                ny: ptData?.normal?.y,
-                nz: ptData?.normal?.z,
+                nx: localNormal?.x,
+                ny: localNormal?.y,
+                nz: localNormal?.z,
               },
             ];
             gpSmoothedWorldPosRef.current = worldPos.clone();
@@ -2793,21 +2841,23 @@ export function Viewport({
         const worldPos = ptData?.pos ?? null;
 
         if (worldPos) {
+          const invMatrix = getGpInverseMatrix(gpNode, latestResultsRef.current);
+          const localPos = worldPos.clone().applyMatrix4(invMatrix);
           const currentFrames = gpWorkingFramesRef.current || (gpNode.params.frames as KeyframeDrawing[]) || [];
           const targetFrame = currentFrameRef.current >= 0 ? currentFrameRef.current : 0;
           const bSize = Number(gpNode.params.brushSize) || 4;
           const toolRadius = Math.max(0.85, bSize * 0.1);
           if (gpToolRef.current === "eraser_hard") {
-            const erased = eraseStrokesAtPosition(currentFrames, targetFrame, worldPos, toolRadius);
+            const erased = eraseStrokesAtPosition(currentFrames, targetFrame, localPos, toolRadius);
             gpWorkingFramesRef.current = erased;
             onParamChangeRef.current?.("frames", erased, gpNode.id);
           } else if (gpToolRef.current === "eraser_soft") {
-            const softErased = eraseStrokesSoft(currentFrames, targetFrame, worldPos, toolRadius, 0.25);
+            const softErased = eraseStrokesSoft(currentFrames, targetFrame, localPos, toolRadius, 0.25);
             gpWorkingFramesRef.current = softErased;
             onParamChangeRef.current?.("frames", softErased, gpNode.id);
           } else if (gpToolRef.current === "tint") {
             const activeColorHex = parseColorHex(gpNode.params.activeColor, "#38bdf8");
-            const tinted = tintStrokesAtPosition(currentFrames, targetFrame, worldPos, activeColorHex, toolRadius, 0.35);
+            const tinted = tintStrokesAtPosition(currentFrames, targetFrame, localPos, activeColorHex, toolRadius, 0.35);
             gpWorkingFramesRef.current = tinted;
             onParamChangeRef.current?.("frames", tinted, gpNode.id);
           } else {
@@ -2840,14 +2890,16 @@ export function Viewport({
                     mode2D,
                   );
                   if (subPt) {
+                    const subLocal = subPt.pos.clone().applyMatrix4(invMatrix);
+                    const subNormal = subPt.normal ? subPt.normal.clone().transformDirection(invMatrix) : undefined;
                     gpActivePointsRef.current.push({
-                      x: subPt.pos.x,
-                      y: subPt.pos.y,
-                      z: subPt.pos.z,
+                      x: subLocal.x,
+                      y: subLocal.y,
+                      z: subLocal.z,
                       pressure,
-                      nx: subPt.normal?.x,
-                      ny: subPt.normal?.y,
-                      nz: subPt.normal?.z,
+                      nx: subNormal?.x,
+                      ny: subNormal?.y,
+                      nz: subNormal?.z,
                     });
                   }
                 }
@@ -2866,16 +2918,18 @@ export function Viewport({
               gpSmoothedWorldPosRef.current = worldPos.clone();
             }
 
+            const localPtPos = ptPos.clone().applyMatrix4(invMatrix);
+            const localNormal = ptData?.normal ? ptData.normal.clone().transformDirection(invMatrix) : undefined;
             const lastPt = gpActivePointsRef.current[gpActivePointsRef.current.length - 1];
-            if (!lastPt || (Math.hypot(lastPt.x - ptPos.x, lastPt.y - ptPos.y, lastPt.z - ptPos.z) > 0.02)) {
+            if (!lastPt || (Math.hypot(lastPt.x - localPtPos.x, lastPt.y - localPtPos.y, lastPt.z - localPtPos.z) > 0.02)) {
               gpActivePointsRef.current.push({
-                x: ptPos.x,
-                y: ptPos.y,
-                z: ptPos.z,
+                x: localPtPos.x,
+                y: localPtPos.y,
+                z: localPtPos.z,
                 pressure,
-                nx: ptData?.normal?.x,
-                ny: ptData?.normal?.y,
-                nz: ptData?.normal?.z,
+                nx: localNormal?.x,
+                ny: localNormal?.y,
+                nz: localNormal?.z,
               });
               const nextPreview = [...gpLivePreviewRef.current, { screenX, screenY }];
               gpLivePreviewRef.current = nextPreview;
@@ -4659,6 +4713,8 @@ export function Viewport({
           } else if (isGp && gpToolRef.current !== "select") {
             targetObject = null;
             if (transformControls.object) transformControls.detach();
+            attachedObjectNodeId = null;
+            attachedGizmoTarget = null;
             if (gizmoPivotProxyNodeId) {
               gizmoPivotProxy.visible = false;
               gizmoPivotProxyNodeId = null;
@@ -4746,6 +4802,8 @@ export function Viewport({
             attachedGizmoTarget = gizmoTarget;
           }
           transformControls.setMode(transformModeRef.current);
+          transformControls.enabled = true;
+          transformControls.getHelper().visible = true;
           if (mode2D) {
             transformControls.showX = true;
             transformControls.showY = false;
@@ -5173,6 +5231,7 @@ export function Viewport({
       // celle-ci lui est fournie, elle est donc à libérer ici.
       volumetricPass.dispose();
       backgroundBlur.dispose();
+      window.removeEventListener("tsuji-theme-colors-changed", handleThemeColorsChanged);
       stopListeningForReset();
       renderer.dispose();
       if (host.contains(renderer.domElement)) {

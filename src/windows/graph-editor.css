@@ -316,3 +316,63 @@ input, textarea, [contenteditable="true"], .drag-number-editing, .param-text-inp
 .graph-node-socket-new:hover span {
   color: #cbd5e1;
 }
+
+/* Minimalist Context Menu for Nodes and Canvas */
+.graph-context-menu {
+  position: fixed;
+  z-index: 1000;
+  min-width: 150px;
+  background: var(--chrome-surface-raised, #1e2430);
+  border: 1px solid var(--chrome-border, #334155);
+  border-radius: 6px;
+  padding: 4px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(8px);
+  user-select: none;
+  font-family: inherit;
+}
+
+.graph-context-menu-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 6px 10px;
+  box-sizing: border-box;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: var(--chrome-text, #e2e8f0);
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.graph-context-menu-item:hover:not(:disabled) {
+  background: var(--chrome-surface, #283040);
+  color: var(--accent-color, #38bdf8);
+}
+
+.graph-context-menu-item:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.graph-context-menu-item-danger:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+}
+
+.graph-context-menu-shortcut {
+  font-size: 10px;
+  color: var(--chrome-text-muted, #94a3b8);
+  margin-left: 16px;
+}
+
+.graph-context-menu-divider {
+  height: 1px;
+  background: var(--chrome-border, rgba(255, 255, 255, 0.08));
+  margin: 4px 0;
+}
+

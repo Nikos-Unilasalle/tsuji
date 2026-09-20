@@ -32,7 +32,7 @@ interface TimelineBarProps {
   onUpdateKeyframeEasing?: (frame: number, easeIn: EasingType, easeStrength?: number, easeBezier?: [number, number, number, number]) => void;
   onDeleteKeyframe?: (frame: number) => void;
   onFrameChange: (frame: number) => void;
-  onSplitHandleMouseDown: (e: React.MouseEvent) => void;
+  onSplitHandleMouseDown: (e: React.MouseEvent | React.PointerEvent) => void;
   canResizeSplit?: boolean;
   isDrawerOpen?: boolean;
   onToggleDrawer?: () => void;
@@ -472,6 +472,7 @@ export function TimelineBar({
           <div
             className="timeline-split-resize-handle"
             onMouseDown={onSplitHandleMouseDown}
+            onPointerDown={onSplitHandleMouseDown}
             title="Resize workspace split (drag vertically)"
           />
         )}
@@ -481,6 +482,7 @@ export function TimelineBar({
             type="button"
             className="timeline-split-handle-btn timeline-split-handle-btn-left"
             onMouseDown={onSplitHandleMouseDown}
+            onPointerDown={onSplitHandleMouseDown}
             title="Resize workspace split (drag vertically)"
           >
             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -595,6 +597,7 @@ export function TimelineBar({
             type="button"
             className="timeline-split-handle-btn timeline-split-handle-btn-right"
             onMouseDown={onSplitHandleMouseDown}
+            onPointerDown={onSplitHandleMouseDown}
             title="Resize workspace split (drag vertically)"
           >
             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
