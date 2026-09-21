@@ -1,8 +1,8 @@
 import { describe, it, expect } from "vitest";
 import * as THREE from "three";
-import { EDIT_MESH_NODE } from "./editMesh";
+import { EDIT_MESH_NODE, EDIT_MESH_RESEED_ACTION, resolveEditMeshData } from "./editMesh";
 import { EvalContext } from "../types";
-import { cloneQuadMesh, createQuadBox, quadMeshToBufferGeometry } from "../quadMesh";
+import { cloneQuadMesh, createQuadBox, quadMeshToBufferGeometry, QuadMesh, transformSelection } from "../quadMesh";
 
 describe("EDIT_MESH_NODE", () => {
   it("defaults to a quad box when no geometry is wired", () => {
@@ -211,4 +211,160 @@ describe("EDIT_MESH_NODE", () => {
       expect((out.geometry as THREE.Mesh).userData.pivot.toArray()).toEqual([0, 1, 0]);
     });
   });
+
+  describe("resolveEditMeshData and geometry freezing", () => {
+    it("includes a Freeze / Reset from Input button in paramFields", () => {
+      const reseedField = EDIT_MESH_NODE.paramFields?.find((f) => f.id === "reseedButton");
+      expect(reseedField).toBeDefined();
+      if (reseedField && reseedField.kind === "button") {
+        expect(reseedField.action).toBe(EDIT_MESH_RESEED_ACTION);
+      }
+    });
+
+    it("returns existing meshData if already set (frozen)", () => {
+      const frozenMesh: QuadMesh = {
+        positions: [[0, 0, 0], [1, 0, 0], [1, 1, 0], [0, 1, 0]],
+        faces: [[0, 1, 2, 3]],
+      };
+      const node = { id: "edit-1", params: { meshData: frozenMesh } };
+      const resolved = resolveEditMeshData(node);
+      expect(resolved).toBe(frozenMesh);
+    });
+
+    it("extracts QuadMesh from evaluated results when meshData is not set", () => {
+      const inputQuad = createQuadBox(2, 4, 6);
+      const inputGeom = quadMeshToBufferGeometry(inputQuad);
+      const inputMesh = new THREE.Mesh(inputGeom);
+
+      const evaluatedResults = new Map<string, Record<string, unknown>>([
+        ["edit-1", { geometry: inputMesh }],
+      ]);
+      const node = { id: "edit-1", params: { meshData: null } };
+      const resolved = resolveEditMeshData(node, evaluatedResults);
+
+      expect(resolved.positions.length).toBe(inputQuad.positions.length);
+      expect(resolved.faces.length).toBe(inputQuad.faces.length);
+    });
+
+    it("extracts QuadMesh when input geometry is inside a THREE.Group", () => {
+      const cylinderGeom = new THREE.CylinderGeometry(1, 1, 2, 8);
+      const group = new THREE.Group();
+      group.add(new THREE.Mesh(cylinderGeom));
+
+      const evaluatedResults = new Map<string, Record<string, unknown>>([
+        ["edit-1", { __evaluatedInputs: { geometry: group } }],
+      ]);
+      const node = { id: "edit-1", params: { meshData: null } };
+      const resolved = resolveEditMeshData(node, evaluatedResults);
+
+      expect(resolved.positions.length).toBeGreaterThan(0);
+      expect(resolved.faces.length).toBeGreaterThan(0);
+    });
+
+    it("preserves frozen meshData even if evaluated input geometry changes", () => {
+      const frozenMesh: QuadMesh = {
+        positions: [[0, 0, 0], [2, 0, 0], [2, 2, 0], [0, 2, 0]],
+        faces: [[0, 1, 2, 3]],
+      };
+      const node = { id: "edit-1", params: { meshData: frozenMesh } };
+
+      // Upstream changes to an entirely different sphere or box
+      const sphereGeom = new THREE.SphereGeometry(5, 8, 8);
+      const evaluatedResults = new Map<string, Record<string, unknown>>([
+        ["edit-1", { __evaluatedInputs: { geometry: new THREE.Mesh(sphereGeom) } }],
+      ]);
+
+      const resolved = resolveEditMeshData(node, evaluatedResults);
+      expect(resolved).toBe(frozenMesh);
+      expect(resolved.positions.length).toBe(4);
+    });
+  });
+
+  describe("Proportional Editing", () => {
+    it("hides Influence Diameter when proportionalEditing is false, and shows it when true", () => {
+      const instanceOff = {
+        id: "edit-test",
+        type: EDIT_MESH_NODE.type,
+        position: { x: 0, y: 0 },
+        params: { proportionalEditing: false },
+      } as any;
+      const fieldsOff = EDIT_MESH_NODE.dynamicParamFields?.(instanceOff);
+      expect(fieldsOff?.find((f) => f.id === "proportionalEditing")).toBeDefined();
+      expect(fieldsOff?.find((f) => f.id === "proportionalDiameter")).toBeUndefined();
+
+      const instanceOn = {
+        id: "edit-test",
+        type: EDIT_MESH_NODE.type,
+        position: { x: 0, y: 0 },
+        params: { proportionalEditing: true },
+      } as any;
+      const fieldsOn = EDIT_MESH_NODE.dynamicParamFields?.(instanceOn);
+      expect(fieldsOn?.find((f) => f.id === "proportionalEditing")).toBeDefined();
+      expect(fieldsOn?.find((f) => f.id === "proportionalDiameter")).toBeDefined();
+    });
+
+    it("proportionalEditing transforms nearby unselected vertices with smooth falloff", () => {
+      // Mesh with 3 points along the X axis: 0, 0.5, 1.5
+      const lineMesh: QuadMesh = {
+        positions: [
+          [0, 0, 0],   // index 0: selected
+          [0.5, 0, 0], // index 1: at distance 0.5 (within radius 1.0)
+          [1.5, 0, 0], // index 2: at distance 1.5 (beyond radius 1.0)
+        ],
+        faces: [[0, 1, 2, 2]],
+      };
+
+      // Move point 0 by +2 in Y with diameter 2.0 (radius 1.0)
+      const res = transformSelection(
+        lineMesh,
+        "points",
+        [0],
+        {
+          position: new THREE.Vector3(0, 2, 0),
+          rotation: new THREE.Quaternion(),
+          scale: new THREE.Vector3(1, 1, 1),
+        },
+        new THREE.Vector3(0, 0, 0),
+        { enabled: true, diameter: 2.0 },
+      );
+
+      // Point 0 (selected) moved fully by +2
+      expect(res.positions[0][1]).toBeCloseTo(2, 4);
+
+      // Point 1 (distance 0.5 from point 0, radius 1.0 -> t = 0.5, u = 0.5, weight = 0.5)
+      // Moved by 2 * 0.5 = 1
+      expect(res.positions[1][1]).toBeCloseTo(1, 4);
+
+      // Point 2 (distance 1.5 >= radius 1.0)
+      // Untouched: Y remains 0
+      expect(res.positions[2][1]).toBeCloseTo(0, 4);
+    });
+
+    it("without proportionalEditing, unselected vertices remain completely untouched", () => {
+      const lineMesh: QuadMesh = {
+        positions: [
+          [0, 0, 0],
+          [0.5, 0, 0],
+        ],
+        faces: [[0, 1, 1, 0]],
+      };
+
+      const res = transformSelection(
+        lineMesh,
+        "points",
+        [0],
+        {
+          position: new THREE.Vector3(0, 2, 0),
+          rotation: new THREE.Quaternion(),
+          scale: new THREE.Vector3(1, 1, 1),
+        },
+        new THREE.Vector3(0, 0, 0),
+        { enabled: false, diameter: 2.0 },
+      );
+
+      expect(res.positions[0][1]).toBeCloseTo(2, 4);
+      expect(res.positions[1][1]).toBe(0);
+    });
+  });
 });
+

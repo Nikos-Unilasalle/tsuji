@@ -131,10 +131,8 @@ export function SplitViewport({
     [onTransformModeChange],
   );
 
-  const [sharedCameraPose, setSharedCameraPose] = useState<PreviewCameraPose | null>(null);
   const handlePrimaryCameraChange = useCallback(
     (pose: PreviewCameraPose) => {
-      setSharedCameraPose(pose);
       onCameraChange?.(pose);
     },
     [onCameraChange],
@@ -347,7 +345,7 @@ export function SplitViewport({
             onSelectNode={onSelectNode}
             onTransformChange={onTransformChange}
             onTransformStart={onTransformStart}
-            previewCameraPose={previewCameraPose ?? sharedCameraPose}
+            previewCameraPose={null}
             currentFrame={currentFrame}
             onEvaluatedResults={onEvaluatedResults}
             isPlaying={isPlaying}

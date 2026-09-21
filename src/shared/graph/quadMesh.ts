@@ -962,8 +962,13 @@ export function getLoopCutPreviewSegments(
   return segments;
 }
 
+export interface ProportionalOptions {
+  enabled?: boolean;
+  diameter?: number;
+}
+
 /**
- * Transforms the selected points or faces around their centroid.
+ * Transforms the selected points or faces around their centroid, with optional Blender-style Proportional Editing.
  */
 export function transformSelection(
   mesh: QuadMesh,
@@ -971,6 +976,7 @@ export function transformSelection(
   selectedIndices: number[],
   delta: { position: THREE.Vector3; rotation: THREE.Quaternion; scale: THREE.Vector3 },
   centroid: THREE.Vector3,
+  proportionalOptions?: ProportionalOptions,
 ): QuadMesh {
   if (selectedIndices.length === 0) return cloneQuadMesh(mesh);
 
@@ -987,21 +993,85 @@ export function transformSelection(
     }
   }
 
+  if (targetVertexIndices.size === 0) return cloneQuadMesh(mesh);
+
   const next = cloneQuadMesh(mesh);
+  const isProportional = Boolean(proportionalOptions?.enabled);
+  const diameter = Math.max(1e-4, Number(proportionalOptions?.diameter) || 1.0);
+  const radius = diameter / 2;
+  const radiusSq = radius * radius;
+
   const p = new THREE.Vector3();
-
-  for (const vIdx of targetVertexIndices) {
-    const raw = next.positions[vIdx];
+  const computeFullTransformed = (raw: [number, number, number]): THREE.Vector3 => {
     p.set(raw[0] - centroid.x, raw[1] - centroid.y, raw[2] - centroid.z);
-
-    // Apply scale relative to centroid
     p.multiply(delta.scale);
-    // Apply rotation relative to centroid
     p.applyQuaternion(delta.rotation);
-    // Apply position offset
     p.add(centroid).add(delta.position);
+    return p;
+  };
 
-    next.positions[vIdx] = [p.x, p.y, p.z];
+  if (!isProportional) {
+    for (const vIdx of targetVertexIndices) {
+      const raw = mesh.positions[vIdx];
+      if (!raw) continue;
+      const full = computeFullTransformed(raw);
+      next.positions[vIdx] = [full.x, full.y, full.z];
+    }
+    return next;
+  }
+
+  // Pre-gather selected vertex positions for fast distance checking
+  const selectedPositions: [number, number, number][] = [];
+  for (const vIdx of targetVertexIndices) {
+    const sp = mesh.positions[vIdx];
+    if (sp) selectedPositions.push(sp);
+  }
+
+  for (let i = 0; i < mesh.positions.length; i++) {
+    const raw = mesh.positions[i];
+    if (!raw) continue;
+
+    if (targetVertexIndices.has(i)) {
+      const full = computeFullTransformed(raw);
+      next.positions[i] = [full.x, full.y, full.z];
+      continue;
+    }
+
+    // Find min distance to any selected vertex
+    let minDistSq = Infinity;
+    const px = raw[0];
+    const py = raw[1];
+    const pz = raw[2];
+    for (let s = 0; s < selectedPositions.length; s++) {
+      const sp = selectedPositions[s];
+      const dx = px - sp[0];
+      const dy = py - sp[1];
+      const dz = pz - sp[2];
+      const distSq = dx * dx + dy * dy + dz * dz;
+      if (distSq < minDistSq) {
+        minDistSq = distSq;
+        if (minDistSq <= 0) break;
+      }
+    }
+
+    if (minDistSq < radiusSq) {
+      const dist = Math.sqrt(minDistSq);
+      const t = dist / radius; // 0 (closest) to 1 (at influence boundary)
+      // Smoothstep falloff (Blender smooth curve): u = 1 - t, weight = u^2 * (3 - 2u)
+      const u = 1 - t;
+      const weight = u * u * (3 - 2 * u);
+
+      const full = computeFullTransformed(raw);
+      const dispX = full.x - raw[0];
+      const dispY = full.y - raw[1];
+      const dispZ = full.z - raw[2];
+
+      next.positions[i] = [
+        raw[0] + dispX * weight,
+        raw[1] + dispY * weight,
+        raw[2] + dispZ * weight,
+      ];
+    }
   }
 
   return next;

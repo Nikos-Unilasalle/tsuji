@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { NodeDefinition } from "../types";
+import { NodeDefinition, NodeInstance, ParamFieldDef } from "../types";
 import { createNodeCache, disposeObject3D } from "../nodeCaches";
 import { findFirstMesh } from "../meshRequired";
 import {
@@ -18,6 +18,7 @@ import {
   QuadMesh,
   QuadMeshShading,
   createQuadBox,
+  cloneQuadMesh,
   quadMeshToBufferGeometry,
   bufferGeometryToQuadMesh,
 } from "../quadMesh";
@@ -28,6 +29,50 @@ export const EDIT_MESH_INSET_ACTION = "edit-mesh/inset";
 export const EDIT_MESH_UNWRAP_UVS_ACTION = "edit-mesh/unwrap-uvs";
 export const EDIT_MESH_DELETE_FACES_ACTION = "edit-mesh/delete-faces";
 export const EDIT_MESH_SEPARATE_FACES_ACTION = "edit-mesh/separate-faces";
+
+/**
+ * Resolves the effective QuadMesh for an Edit Mesh node:
+ * 1. Returns frozen `node.params.meshData` if already edited / set.
+ * 2. If not yet frozen, extracts the input geometry from evaluated results (or inputs).
+ * 3. Falls back to a pristine unit quad box if no input geometry exists.
+ */
+export function resolveEditMeshData(
+  node: { id: string; params: Record<string, unknown> },
+  evaluatedResults?: Map<string, Record<string, unknown>> | null,
+): QuadMesh {
+  const meshData = node.params.meshData as QuadMesh | undefined;
+  if (
+    meshData &&
+    typeof meshData === "object" &&
+    Array.isArray(meshData.positions) &&
+    meshData.positions.length > 0
+  ) {
+    return meshData;
+  }
+
+  // Check evaluated node output first: its geometry.userData.quadMesh holds the input quadMesh
+  const evalResult = evaluatedResults?.get(node.id);
+  const evalObj = evalResult?.geometry;
+  const evalMesh = evalObj instanceof THREE.Object3D ? findFirstMesh(evalObj) : null;
+  if (evalMesh?.geometry?.userData?.quadMesh) {
+    return cloneQuadMesh(evalMesh.geometry.userData.quadMesh as QuadMesh);
+  }
+
+  // Check evaluated inputs if available
+  const evalInputs = evalResult?.__evaluatedInputs as Record<string, unknown> | undefined;
+  const inGeomObj = evalInputs?.geometry instanceof THREE.Object3D ? evalInputs.geometry : null;
+  const inMesh = inGeomObj ? findFirstMesh(inGeomObj) : null;
+  if (inMesh?.geometry) {
+    return bufferGeometryToQuadMesh(inMesh.geometry);
+  }
+
+  if (evalMesh?.geometry) {
+    return bufferGeometryToQuadMesh(evalMesh.geometry);
+  }
+
+  return createQuadBox(1, 1, 1);
+}
+
 
 interface EditMeshState {
   mesh?: THREE.Mesh;
@@ -281,6 +326,8 @@ export const EDIT_MESH_NODE: NodeDefinition = {
     shading: "auto" as QuadMeshShading,
     extrudeDistance: 0.5,
     insetRatio: 0.25,
+    proportionalEditing: false,
+    proportionalDiameter: 1.0,
     uvScale: [1, 1] as [number, number],
     uvOffset: [0, 0] as [number, number],
     // The same native pose every geometry node owns (see
@@ -305,12 +352,71 @@ export const EDIT_MESH_NODE: NodeDefinition = {
       options: ["auto", "smooth", "flat"],
     },
     {
+      id: "proportionalEditing",
+      label: "Proportional Editing",
+      kind: "boolean",
+    },
+    {
+      id: "proportionalDiameter",
+      label: "Influence Diameter",
+      kind: "number",
+      step: 0.1,
+    },
+    {
+      id: "reseedButton",
+      label: "Freeze / Reset from Input",
+      kind: "button",
+      action: EDIT_MESH_RESEED_ACTION,
+    },
+    {
       id: "unwrapButton",
       label: "Recalculate UVs",
       kind: "button",
       action: EDIT_MESH_UNWRAP_UVS_ACTION,
     },
   ],
+  dynamicParamFields: (instance: NodeInstance) => {
+    const fields: ParamFieldDef[] = [
+      ...NATIVE_TRANSFORM_PARAM_FIELDS,
+      {
+        id: "shading",
+        label: "Shading",
+        kind: "select",
+        options: ["auto", "smooth", "flat"],
+      },
+      {
+        id: "proportionalEditing",
+        label: "Proportional Editing",
+        kind: "boolean",
+      },
+    ];
+
+    if (instance?.params?.proportionalEditing) {
+      fields.push({
+        id: "proportionalDiameter",
+        label: "Influence Diameter",
+        kind: "number",
+        step: 0.1,
+      });
+    }
+
+    fields.push(
+      {
+        id: "reseedButton",
+        label: "Freeze / Reset from Input",
+        kind: "button",
+        action: EDIT_MESH_RESEED_ACTION,
+      },
+      {
+        id: "unwrapButton",
+        label: "Recalculate UVs",
+        kind: "button",
+        action: EDIT_MESH_UNWRAP_UVS_ACTION,
+      },
+    );
+
+    return fields;
+  },
   evaluate: (inputs, params, ctx) => {
     const inputObj = inputs.geometry instanceof THREE.Object3D ? inputs.geometry : null;
     const srcMesh = inputObj ? findFirstMesh(inputObj) : null;

@@ -17,6 +17,7 @@ import {
   EDIT_MESH_UNWRAP_UVS_ACTION,
   EDIT_MESH_DELETE_FACES_ACTION,
   EDIT_MESH_SEPARATE_FACES_ACTION,
+  resolveEditMeshData,
 } from "./shared/graph/nodes/editMesh";
 import {
   QuadMesh,
@@ -1339,9 +1340,10 @@ function MainEditor() {
       if (action === EDIT_MESH_RESEED_ACTION) {
         const inputs = evaluatedResults?.get(nodeId)?.__evaluatedInputs as Record<string, unknown> | undefined;
         const geomObj = inputs?.geometry;
+        const mesh = geomObj instanceof THREE.Object3D ? findFirstMesh(geomObj) : null;
         let quadMesh: QuadMesh;
-        if (geomObj instanceof THREE.Mesh && geomObj.geometry) {
-          quadMesh = bufferGeometryToQuadMesh(geomObj.geometry);
+        if (mesh && mesh.geometry) {
+          quadMesh = bufferGeometryToQuadMesh(mesh.geometry);
         } else {
           quadMesh = createQuadBox(1, 1, 1);
         }
@@ -1356,7 +1358,7 @@ function MainEditor() {
       if (action === EDIT_MESH_EXTRUDE_ACTION) {
         const node = graph.nodes.find((n) => n.id === nodeId);
         if (!node) return;
-        const meshData: QuadMesh = (node.params.meshData as QuadMesh) || createQuadBox(1, 1, 1);
+        const meshData: QuadMesh = resolveEditMeshData(node, evaluatedResults);
         const selectedFaces: number[] = Array.isArray(node.params.selectedFaces)
           ? (node.params.selectedFaces as number[])
           : [0];
@@ -1372,7 +1374,7 @@ function MainEditor() {
       if (action === EDIT_MESH_INSET_ACTION) {
         const node = graph.nodes.find((n) => n.id === nodeId);
         if (!node) return;
-        const meshData: QuadMesh = (node.params.meshData as QuadMesh) || createQuadBox(1, 1, 1);
+        const meshData: QuadMesh = resolveEditMeshData(node, evaluatedResults);
         const selectedFaces: number[] = Array.isArray(node.params.selectedFaces)
           ? (node.params.selectedFaces as number[])
           : [0];
@@ -1388,7 +1390,7 @@ function MainEditor() {
       if (action === EDIT_MESH_UNWRAP_UVS_ACTION) {
         const node = graph.nodes.find((n) => n.id === nodeId);
         if (!node) return;
-        const meshData: QuadMesh = (node.params.meshData as QuadMesh) || createQuadBox(1, 1, 1);
+        const meshData: QuadMesh = resolveEditMeshData(node, evaluatedResults);
         const unwrapped = boxProjectUVs(meshData);
         onParamChange("meshData", unwrapped, nodeId);
         return;
@@ -1402,21 +1404,7 @@ function MainEditor() {
           : [];
         if (selectedFaces.length === 0) return;
 
-        let meshData: QuadMesh;
-        if (node.params.meshData && typeof node.params.meshData === "object" && Array.isArray((node.params.meshData as QuadMesh).positions)) {
-          meshData = node.params.meshData as QuadMesh;
-        } else {
-          const evaluatedObj = evaluatedResults?.get(nodeId)?.geometry;
-          const evaluatedMesh = evaluatedObj instanceof THREE.Object3D ? findFirstMesh(evaluatedObj) : null;
-          if (evaluatedMesh?.geometry?.userData?.quadMesh) {
-            meshData = evaluatedMesh.geometry.userData.quadMesh as QuadMesh;
-          } else if (evaluatedMesh?.geometry) {
-            meshData = bufferGeometryToQuadMesh(evaluatedMesh.geometry);
-          } else {
-            meshData = createQuadBox(1, 1, 1);
-          }
-        }
-
+        const meshData: QuadMesh = resolveEditMeshData(node, evaluatedResults);
         const remainingMesh = deleteFaces(meshData, selectedFaces);
         onParamChange({
           meshData: cloneQuadMesh(remainingMesh),
@@ -1434,21 +1422,7 @@ function MainEditor() {
           : [];
         if (selectedFaces.length === 0) return;
 
-        let meshData: QuadMesh;
-        if (node.params.meshData && typeof node.params.meshData === "object" && Array.isArray((node.params.meshData as QuadMesh).positions)) {
-          meshData = node.params.meshData as QuadMesh;
-        } else {
-          const evaluatedObj = evaluatedResults?.get(nodeId)?.geometry;
-          const evaluatedMesh = evaluatedObj instanceof THREE.Object3D ? findFirstMesh(evaluatedObj) : null;
-          if (evaluatedMesh?.geometry?.userData?.quadMesh) {
-            meshData = evaluatedMesh.geometry.userData.quadMesh as QuadMesh;
-          } else if (evaluatedMesh?.geometry) {
-            meshData = bufferGeometryToQuadMesh(evaluatedMesh.geometry);
-          } else {
-            meshData = createQuadBox(1, 1, 1);
-          }
-        }
-
+        const meshData: QuadMesh = resolveEditMeshData(node, evaluatedResults);
         const separatedMesh = extractFaces(meshData, selectedFaces);
         const remainingMesh = deleteFaces(meshData, selectedFaces);
 

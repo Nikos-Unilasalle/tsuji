@@ -37,6 +37,7 @@ import {
   EDIT_MESH_RESEED_ACTION,
   EDIT_MESH_DELETE_FACES_ACTION,
   EDIT_MESH_SEPARATE_FACES_ACTION,
+  resolveEditMeshData,
 } from "../graph/nodes/editMesh";
 import { createEditMeshHandles } from "./editMeshHandles";
 import {
@@ -1676,9 +1677,7 @@ export function Viewport({
           if (srcMesh) {
             const quadMesh: QuadMesh =
               activeEditMeshNode.type === EDIT_MESH_NODE.type
-                ? ((activeEditMeshNode.params.meshData as QuadMesh) ||
-                   (srcMesh.geometry?.userData?.quadMesh as QuadMesh) ||
-                   createQuadBox(1, 1, 1))
+                ? resolveEditMeshData(activeEditMeshNode, latestResultsRef.current)
                 : (srcMesh.geometry ? bufferGeometryToQuadMesh(srcMesh.geometry) : createQuadBox(1, 1, 1));
             const selectMode = activeEditMeshNode.type === EDIT_MESH_POINTS_NODE.type
               ? "points"
@@ -1687,10 +1686,18 @@ export function Viewport({
             e.preventDefault();
             if (selectMode === "points") {
               const allPoints = Array.from({ length: quadMesh.positions.length }, (_, i) => i);
-              onParamChangeRef.current?.("selectedPoints", allPoints, activeEditMeshNode.id);
+              if (activeEditMeshNode.type === EDIT_MESH_NODE.type && !activeEditMeshNode.params.meshData) {
+                onParamChangeRef.current?.({ selectedPoints: allPoints, meshData: cloneQuadMesh(quadMesh) }, activeEditMeshNode.id);
+              } else {
+                onParamChangeRef.current?.("selectedPoints", allPoints, activeEditMeshNode.id);
+              }
             } else {
               const allFaces = Array.from({ length: quadMesh.faces.length }, (_, i) => i);
-              onParamChangeRef.current?.("selectedFaces", allFaces, activeEditMeshNode.id);
+              if (activeEditMeshNode.type === EDIT_MESH_NODE.type && !activeEditMeshNode.params.meshData) {
+                onParamChangeRef.current?.({ selectedFaces: allFaces, meshData: cloneQuadMesh(quadMesh) }, activeEditMeshNode.id);
+              } else {
+                onParamChangeRef.current?.("selectedFaces", allFaces, activeEditMeshNode.id);
+              }
             }
             return;
           }
@@ -1730,6 +1737,14 @@ export function Viewport({
         } else if (key === "i") {
           e.preventDefault();
           onParamActionRef.current?.(activeEditMeshNode.id, EDIT_MESH_INSET_ACTION);
+          return;
+        } else if (key === "o") {
+          e.preventDefault();
+          onParamChangeRef.current?.(
+            "proportionalEditing",
+            !activeEditMeshNode.params.proportionalEditing,
+            activeEditMeshNode.id,
+          );
           return;
         } else if ((key === "delete" || key === "backspace") && activeEditMeshNode.params.selectMode === "faces") {
           const faces = Array.isArray(activeEditMeshNode.params.selectedFaces) ? (activeEditMeshNode.params.selectedFaces as number[]) : [];
@@ -1851,8 +1866,7 @@ export function Viewport({
             dragStartCentroidScale.copy(centroid.scale);
             const node = graphRef.current.nodes.find((n) => n.id === selectedNodeIdRef.current);
             if (node?.type === EDIT_MESH_NODE.type) {
-              const rawMesh = node.params.meshData as QuadMesh | undefined;
-              dragStartMeshData = rawMesh ? cloneQuadMesh(rawMesh) : createQuadBox(1, 1, 1);
+              dragStartMeshData = cloneQuadMesh(resolveEditMeshData(node, latestResultsRef.current));
               dragStartPointPositionsList = null;
             } else if (node?.type === EDIT_MESH_POINTS_NODE.type) {
               const meshObj = latestResultsRef.current?.get(node.id)?.geometry;
@@ -2226,6 +2240,9 @@ export function Viewport({
             localCentroid.divideScalar(targetVertices.size);
           }
 
+          const proportionalEditing = Boolean(node.params.proportionalEditing);
+          const proportionalDiameter = Number(node.params.proportionalDiameter) || 1.0;
+
           const updatedMesh = transformSelection(
             dragStartMeshData,
             selectMode,
@@ -2236,6 +2253,10 @@ export function Viewport({
               scale: new THREE.Vector3(deltaScaleX, deltaScaleY, deltaScaleZ),
             },
             localCentroid,
+            {
+              enabled: proportionalEditing,
+              diameter: proportionalDiameter,
+            },
           );
 
           onParamChangeRef.current("meshData", updatedMesh, node.id);
@@ -2399,9 +2420,7 @@ export function Viewport({
           if (srcMesh && raycaster) {
             const quadMesh: QuadMesh =
               editMeshNodeOnDown.type === EDIT_MESH_NODE.type
-                ? ((editMeshNodeOnDown.params.meshData as QuadMesh) ||
-                   (srcMesh.geometry?.userData?.quadMesh as QuadMesh) ||
-                   createQuadBox(1, 1, 1))
+                ? resolveEditMeshData(editMeshNodeOnDown, latestResultsRef.current)
                 : (srcMesh.geometry ? bufferGeometryToQuadMesh(srcMesh.geometry) : createQuadBox(1, 1, 1));
             const selectMode = editMeshNodeOnDown.type === EDIT_MESH_POINTS_NODE.type
               ? "points"
@@ -2423,7 +2442,11 @@ export function Viewport({
                     )
                   : new Set<number>();
                 picked.forEach((p) => curPoints.add(p));
-                onParamChangeRef.current?.("selectedPoints", Array.from(curPoints), editMeshNodeOnDown.id);
+                if (editMeshNodeOnDown.type === EDIT_MESH_NODE.type && !editMeshNodeOnDown.params.meshData) {
+                  onParamChangeRef.current?.({ selectedPoints: Array.from(curPoints), meshData: cloneQuadMesh(quadMesh) }, editMeshNodeOnDown.id);
+                } else {
+                  onParamChangeRef.current?.("selectedPoints", Array.from(curPoints), editMeshNodeOnDown.id);
+                }
               }
             } else {
               const faceIdx = editMeshHandles.pickFace(raycaster, quadMesh, srcMesh.matrixWorld);
@@ -2436,7 +2459,11 @@ export function Viewport({
                     )
                   : new Set<number>();
                 curFaces.add(faceIdx);
-                onParamChangeRef.current?.("selectedFaces", Array.from(curFaces), editMeshNodeOnDown.id);
+                if (editMeshNodeOnDown.type === EDIT_MESH_NODE.type && !editMeshNodeOnDown.params.meshData) {
+                  onParamChangeRef.current?.({ selectedFaces: Array.from(curFaces), meshData: cloneQuadMesh(quadMesh) }, editMeshNodeOnDown.id);
+                } else {
+                  onParamChangeRef.current?.("selectedFaces", Array.from(curFaces), editMeshNodeOnDown.id);
+                }
               }
             }
           }
@@ -2726,9 +2753,7 @@ export function Viewport({
           if (srcMesh) {
             const quadMesh: QuadMesh =
               activeEditMesh.type === EDIT_MESH_NODE.type
-                ? ((activeEditMesh.params.meshData as QuadMesh) ||
-                   (srcMesh.geometry?.userData?.quadMesh as QuadMesh) ||
-                   createQuadBox(1, 1, 1))
+                ? resolveEditMeshData(activeEditMesh, latestResultsRef.current)
                 : (srcMesh.geometry ? bufferGeometryToQuadMesh(srcMesh.geometry) : createQuadBox(1, 1, 1));
             const selectMode = activeEditMesh.type === EDIT_MESH_POINTS_NODE.type
               ? "points"
@@ -2755,7 +2780,11 @@ export function Viewport({
                   }
                 }
                 if (changed) {
-                  onParamChangeRef.current?.("selectedPoints", Array.from(curPoints), activeEditMesh.id);
+                  if (activeEditMesh.type === EDIT_MESH_NODE.type && !activeEditMesh.params.meshData) {
+                    onParamChangeRef.current?.({ selectedPoints: Array.from(curPoints), meshData: cloneQuadMesh(quadMesh) }, activeEditMesh.id);
+                  } else {
+                    onParamChangeRef.current?.("selectedPoints", Array.from(curPoints), activeEditMesh.id);
+                  }
                 }
               }
             } else {
@@ -2768,7 +2797,11 @@ export function Viewport({
                 );
                 if (!curFaces.has(hitFace)) {
                   curFaces.add(hitFace);
-                  onParamChangeRef.current?.("selectedFaces", Array.from(curFaces), activeEditMesh.id);
+                  if (activeEditMesh.type === EDIT_MESH_NODE.type && !activeEditMesh.params.meshData) {
+                    onParamChangeRef.current?.({ selectedFaces: Array.from(curFaces), meshData: cloneQuadMesh(quadMesh) }, activeEditMesh.id);
+                  } else {
+                    onParamChangeRef.current?.("selectedFaces", Array.from(curFaces), activeEditMesh.id);
+                  }
                 }
               }
             }
@@ -2785,10 +2818,7 @@ export function Viewport({
         const meshObj = latestResultsRef.current?.get(activeEditMesh.id)?.geometry;
         const srcMesh = meshObj instanceof THREE.Object3D ? findFirstMesh(meshObj) : null;
         if (srcMesh) {
-          const quadMesh: QuadMesh =
-            (activeEditMesh.params.meshData as QuadMesh) ||
-            (srcMesh.geometry?.userData?.quadMesh as QuadMesh) ||
-            createQuadBox(1, 1, 1);
+          const quadMesh: QuadMesh = resolveEditMeshData(activeEditMesh, latestResultsRef.current);
           const rect = renderer.domElement.getBoundingClientRect();
           const mouseNorm = new THREE.Vector2(
             ((e.clientX - rect.left) / rect.width) * 2 - 1,
@@ -2998,9 +3028,7 @@ export function Viewport({
           if (srcMesh && raycaster) {
             const quadMesh: QuadMesh =
               activeEditMesh.type === EDIT_MESH_NODE.type
-                ? ((activeEditMesh.params.meshData as QuadMesh) ||
-                   (srcMesh.geometry?.userData?.quadMesh as QuadMesh) ||
-                   createQuadBox(1, 1, 1))
+                ? resolveEditMeshData(activeEditMesh, latestResultsRef.current)
                 : (srcMesh.geometry ? bufferGeometryToQuadMesh(srcMesh.geometry) : createQuadBox(1, 1, 1));
             const selectMode = activeEditMesh.type === EDIT_MESH_POINTS_NODE.type
               ? "points"
@@ -3025,7 +3053,11 @@ export function Viewport({
                     )
                   : new Set<number>();
                 picked.forEach((p) => curPoints.add(p));
-                onParamChangeRef.current?.("selectedPoints", Array.from(curPoints), activeEditMesh.id);
+                if (activeEditMesh.type === EDIT_MESH_NODE.type && !activeEditMesh.params.meshData) {
+                  onParamChangeRef.current?.({ selectedPoints: Array.from(curPoints), meshData: cloneQuadMesh(quadMesh) }, activeEditMesh.id);
+                } else {
+                  onParamChangeRef.current?.("selectedPoints", Array.from(curPoints), activeEditMesh.id);
+                }
               } else {
                 const picked = editMeshHandles.pickFacesInRect(minX, minY, maxX, maxY, rect.width, rect.height, camera, quadMesh, srcMesh.matrixWorld);
                 const isAccumulate = e.altKey || e.ctrlKey || e.metaKey;
@@ -3037,7 +3069,11 @@ export function Viewport({
                     )
                   : new Set<number>();
                 picked.forEach((f) => curFaces.add(f));
-                onParamChangeRef.current?.("selectedFaces", Array.from(curFaces), activeEditMesh.id);
+                if (activeEditMesh.type === EDIT_MESH_NODE.type && !activeEditMesh.params.meshData) {
+                  onParamChangeRef.current?.({ selectedFaces: Array.from(curFaces), meshData: cloneQuadMesh(quadMesh) }, activeEditMesh.id);
+                } else {
+                  onParamChangeRef.current?.("selectedFaces", Array.from(curFaces), activeEditMesh.id);
+                }
               }
               return;
             } else {
@@ -3057,7 +3093,11 @@ export function Viewport({
                   );
                   if (curPoints.has(ptIdx)) curPoints.delete(ptIdx);
                   else curPoints.add(ptIdx);
-                  onParamChangeRef.current?.("selectedPoints", Array.from(curPoints), activeEditMesh.id);
+                  if (activeEditMesh.type === EDIT_MESH_NODE.type && !activeEditMesh.params.meshData) {
+                    onParamChangeRef.current?.({ selectedPoints: Array.from(curPoints), meshData: cloneQuadMesh(quadMesh) }, activeEditMesh.id);
+                  } else {
+                    onParamChangeRef.current?.("selectedPoints", Array.from(curPoints), activeEditMesh.id);
+                  }
                   return;
                 }
               } else {
@@ -3070,7 +3110,11 @@ export function Viewport({
                   );
                   if (curFaces.has(faceIdx)) curFaces.delete(faceIdx);
                   else curFaces.add(faceIdx);
-                  onParamChangeRef.current?.("selectedFaces", Array.from(curFaces), activeEditMesh.id);
+                  if (activeEditMesh.type === EDIT_MESH_NODE.type && !activeEditMesh.params.meshData) {
+                    onParamChangeRef.current?.({ selectedFaces: Array.from(curFaces), meshData: cloneQuadMesh(quadMesh) }, activeEditMesh.id);
+                  } else {
+                    onParamChangeRef.current?.("selectedFaces", Array.from(curFaces), activeEditMesh.id);
+                  }
                   return;
                 }
               }
@@ -3291,9 +3335,7 @@ export function Viewport({
         if (srcMesh) {
           const quadMesh: QuadMesh =
             activeEditMesh.type === EDIT_MESH_NODE.type
-              ? ((activeEditMesh.params.meshData as QuadMesh) ||
-                 (srcMesh.geometry?.userData?.quadMesh as QuadMesh) ||
-                 createQuadBox(1, 1, 1))
+              ? resolveEditMeshData(activeEditMesh, latestResultsRef.current)
               : (srcMesh.geometry ? bufferGeometryToQuadMesh(srcMesh.geometry) : createQuadBox(1, 1, 1));
           const selectMode = activeEditMesh.type === EDIT_MESH_POINTS_NODE.type
             ? "points"
@@ -3333,7 +3375,11 @@ export function Viewport({
                 curPoints.clear();
                 curPoints.add(ptIdx);
               }
-              onParamChangeRef.current?.("selectedPoints", Array.from(curPoints), activeEditMesh.id);
+              if (activeEditMesh.type === EDIT_MESH_NODE.type && !activeEditMesh.params.meshData) {
+                onParamChangeRef.current?.({ selectedPoints: Array.from(curPoints), meshData: cloneQuadMesh(quadMesh) }, activeEditMesh.id);
+              } else {
+                onParamChangeRef.current?.("selectedPoints", Array.from(curPoints), activeEditMesh.id);
+              }
               return;
             }
           } else if (selectMode === "faces") {
@@ -3351,7 +3397,11 @@ export function Viewport({
                 curFaces.clear();
                 curFaces.add(faceIdx);
               }
-              onParamChangeRef.current?.("selectedFaces", Array.from(curFaces), activeEditMesh.id);
+              if (activeEditMesh.type === EDIT_MESH_NODE.type && !activeEditMesh.params.meshData) {
+                onParamChangeRef.current?.({ selectedFaces: Array.from(curFaces), meshData: cloneQuadMesh(quadMesh) }, activeEditMesh.id);
+              } else {
+                onParamChangeRef.current?.("selectedFaces", Array.from(curFaces), activeEditMesh.id);
+              }
               return;
             }
           }
@@ -3514,10 +3564,7 @@ export function Viewport({
             const meshObj = latestResultsRef.current?.get(activeEditMesh.id)?.geometry;
             const srcMesh = meshObj instanceof THREE.Object3D ? findFirstMesh(meshObj) : null;
             if (srcMesh) {
-              const quadMesh: QuadMesh =
-                (activeEditMesh.params.meshData as QuadMesh) ||
-                (srcMesh.geometry?.userData?.quadMesh as QuadMesh) ||
-                createQuadBox(1, 1, 1);
+              const quadMesh: QuadMesh = resolveEditMeshData(activeEditMesh, latestResultsRef.current);
               editMeshPreviewLoopRef.current = getLoopCutPreviewSegments(
                 quadMesh,
                 editMeshHoverEdgeRef.current,
@@ -3531,26 +3578,27 @@ export function Viewport({
 
     let removeContextMenu: (() => void) | null = null;
 
+    // No browser context menu over the 3D view, ever. OrbitControls already
+    // suppresses it — but only while `controls.enabled` is true, and tick()
+    // turns that off whenever a Camera node drives the view. Every such gap
+    // used to reach Chrome's canvas menu ("Save image as…"), which is fatal
+    // to Face Selection's Shift+right-click deselect: once the native menu
+    // opens the browser swallows the pointerup that gesture is read from,
+    // so the menu appears *and* the face stays selected. Gating this on a
+    // Face Selection node being active reopened the same gap one frame at a
+    // time (faceSelectionNodeId is only assigned inside tick()), so it is
+    // unconditional — right-click in a viewport is a camera/edit gesture,
+    // never a request to save the canvas as a PNG.
+    const onCanvasContextMenu = (e: MouseEvent) => e.preventDefault();
+    renderer.domElement.addEventListener("contextmenu", onCanvasContextMenu);
+    removeContextMenu = () => renderer.domElement.removeEventListener("contextmenu", onCanvasContextMenu);
+
     if (!outputMode) {
       renderer.domElement.addEventListener("pointerdown", onCanvasPointerDown, { capture: true });
       renderer.domElement.addEventListener("wheel", onCanvasWheel, { passive: false });
       window.addEventListener("pointermove", onCanvasPointerMove);
       window.addEventListener("pointerup", onCanvasPointerUp);
       window.addEventListener("pointercancel", onCanvasPointerUp);
-      // No browser context menu over the 3D view, ever. OrbitControls already
-      // suppresses it — but only while `controls.enabled` is true, and tick()
-      // turns that off whenever a Camera node drives the view. Every such gap
-      // used to reach Chrome's canvas menu ("Save image as…"), which is fatal
-      // to Face Selection's Shift+right-click deselect: once the native menu
-      // opens the browser swallows the pointerup that gesture is read from,
-      // so the menu appears *and* the face stays selected. Gating this on a
-      // Face Selection node being active reopened the same gap one frame at a
-      // time (faceSelectionNodeId is only assigned inside tick()), so it is
-      // unconditional — right-click in a viewport is a camera/edit gesture,
-      // never a request to save the canvas as a PNG.
-      const onCanvasContextMenu = (e: MouseEvent) => e.preventDefault();
-      renderer.domElement.addEventListener("contextmenu", onCanvasContextMenu);
-      removeContextMenu = () => renderer.domElement.removeEventListener("contextmenu", onCanvasContextMenu);
     }
 
     const motionBlurEffect = createMotionBlur(host.clientWidth || 1, host.clientHeight || 1);
@@ -4411,9 +4459,7 @@ export function Viewport({
 
         const quadMesh: QuadMesh =
           editMeshNode.type === EDIT_MESH_NODE.type
-            ? ((editMeshNode.params.meshData as QuadMesh) ||
-               (srcMesh?.geometry?.userData?.quadMesh as QuadMesh) ||
-               createQuadBox(1, 1, 1))
+            ? resolveEditMeshData(editMeshNode, results)
             : (srcMesh?.geometry ? bufferGeometryToQuadMesh(srcMesh.geometry) : createQuadBox(1, 1, 1));
 
         const selectMode = editMeshNode.type === EDIT_MESH_POINTS_NODE.type
@@ -4432,6 +4478,11 @@ export function Viewport({
                 : [0]),
         );
 
+        const propDiameter =
+          editMeshNode.type === EDIT_MESH_NODE.type && editMeshNode.params.proportionalEditing
+            ? Number(editMeshNode.params.proportionalDiameter) || 1.0
+            : null;
+
         editMeshHandles.sync(
           srcMesh,
           quadMesh,
@@ -4440,6 +4491,7 @@ export function Viewport({
           selFaces,
           editMeshHoverFaceRef.current,
           editMeshPreviewLoopRef.current,
+          propDiameter,
         );
 
         // Position editMeshCentroidProxy at selection centroid
@@ -5191,13 +5243,13 @@ export function Viewport({
       disposeEvalSession(sessionIdRef.current);
       unregisterPointerViewport();
       resizeObserver.disconnect();
+      removeContextMenu?.();
       if (!outputMode) {
         renderer.domElement.removeEventListener("pointerdown", onCanvasPointerDown, { capture: true });
         renderer.domElement.removeEventListener("wheel", onCanvasWheel);
         window.removeEventListener("pointermove", onCanvasPointerMove);
         window.removeEventListener("pointerup", onCanvasPointerUp);
         window.removeEventListener("pointercancel", onCanvasPointerUp);
-        removeContextMenu?.();
         controls.removeEventListener("start", handleOrbitStart);
         controls.removeEventListener("change", emitCameraPose);
         window.removeEventListener("keydown", onSnapKeyDown);
@@ -6080,24 +6132,6 @@ export function Viewport({
                 pointerEvents: "auto",
               }}
             >
-              {/* Node Badge */}
-              <div
-                style={{
-                  fontSize: "11px",
-                  fontWeight: 700,
-                  color: "#38bdf8",
-                  padding: "2px 8px",
-                  background: "rgba(56, 189, 248, 0.15)",
-                  borderRadius: "4px",
-                  letterSpacing: "0.02em",
-                  userSelect: "none",
-                }}
-              >
-                {isPointsOnly ? "Edit Mesh Points" : "Edit Mesh"}
-              </div>
-
-              <div style={{ width: 1, height: 16, background: "rgba(255, 255, 255, 0.15)" }} />
-
               {/* Mode: Points */}
               <button
                 type="button"
@@ -6176,6 +6210,27 @@ export function Viewport({
                   <line x1="3" y1="21" x2="10" y2="14" />
                 </svg>
               </button>
+
+              {/* Proportional Editing Toggle */}
+              {!isPointsOnly && (
+                <button
+                  type="button"
+                  className={`viewport-hud-button ${editMeshNode.params.proportionalEditing ? "viewport-hud-button-active" : ""}`}
+                  onClick={() => {
+                    onParamChange?.("proportionalEditing", !editMeshNode.params.proportionalEditing, editMeshNode.id);
+                  }}
+                  title={
+                    editMeshNode.params.proportionalEditing
+                      ? `Proportional Editing ON (Influence Diameter: ${editMeshNode.params.proportionalDiameter ?? 1.0}) — Click to turn OFF (Shortcut: O)`
+                      : "Proportional Editing OFF — Click to turn ON (Shortcut: O)"
+                  }
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <circle cx="12" cy="12" r="3" fill="currentColor" />
+                    <circle cx="12" cy="12" r="8" stroke="currentColor" strokeDasharray="3 3" />
+                  </svg>
+                </button>
+              )}
 
               {selectedCount > 0 && (
                 <>

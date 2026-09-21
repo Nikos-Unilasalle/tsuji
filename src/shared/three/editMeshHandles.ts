@@ -64,6 +64,7 @@ export interface EditMeshHandles {
     selectedFaces: Set<number>,
     hoverFace: number | null,
     previewLoopCutSegments: [ [number, number, number], [number, number, number] ][] | null,
+    proportionalDiameter?: number | null,
   ): void;
   clear(): void;
   pickFace(raycaster: THREE.Raycaster, quadMesh: QuadMesh, meshWorldMatrix: THREE.Matrix4): number | null;
@@ -123,6 +124,8 @@ export function createEditMeshHandles(): EditMeshHandles {
   let selectedPointsMesh: THREE.Points | null = null;
   // Loop cut preview line
   let loopCutLines: THREE.LineSegments | null = null;
+  // Proportional editing influence cage
+  let proportionalCircleLines: THREE.LineSegments | null = null;
 
   function clear() {
     if (wireframeLines) {
@@ -153,13 +156,19 @@ export function createEditMeshHandles(): EditMeshHandles {
       (loopCutLines.material as THREE.Material).dispose();
       loopCutLines = null;
     }
+    if (proportionalCircleLines) {
+      group.remove(proportionalCircleLines);
+      proportionalCircleLines.geometry.dispose();
+      (proportionalCircleLines.material as THREE.Material).dispose();
+      proportionalCircleLines = null;
+    }
   }
 
   return {
     group,
     clear,
 
-    sync(mesh, quadMesh, selectMode, selectedPoints, selectedFaces, hoverFace, previewLoopCutSegments) {
+    sync(mesh, quadMesh, selectMode, selectedPoints, selectedFaces, hoverFace, previewLoopCutSegments, proportionalDiameter) {
       clear();
       if (!mesh || !quadMesh) return;
 
@@ -319,6 +328,63 @@ export function createEditMeshHandles(): EditMeshHandles {
           loopCutLines.renderOrder = RENDER_ORDER + 4;
           loopCutLines.matrixAutoUpdate = false;
           group.add(loopCutLines);
+        }
+      }
+
+      // 5. Proportional Editing Influence Cage
+      if (proportionalDiameter && proportionalDiameter > 0 && (selectedPoints.size > 0 || selectedFaces.size > 0)) {
+        const selVerts = new Set<number>();
+        if (selectMode === "points") {
+          for (const p of selectedPoints) selVerts.add(p);
+        } else {
+          for (const f of selectedFaces) {
+            const face = quadMesh.faces[f];
+            if (face) for (const v of face) selVerts.add(v);
+          }
+        }
+        if (selVerts.size > 0) {
+          const cx = new THREE.Vector3();
+          let count = 0;
+          for (const v of selVerts) {
+            const p = positions[v];
+            if (p) {
+              cx.x += p[0]; cx.y += p[1]; cx.z += p[2];
+              count++;
+            }
+          }
+          if (count > 0) {
+            cx.divideScalar(count);
+            const r = proportionalDiameter / 2;
+            const segments = 48;
+            const circleVerts: number[] = [];
+            for (let i = 0; i < segments; i++) {
+              const a1 = (i / segments) * Math.PI * 2;
+              const a2 = ((i + 1) / segments) * Math.PI * 2;
+              const c1 = Math.cos(a1) * r;
+              const s1 = Math.sin(a1) * r;
+              const c2 = Math.cos(a2) * r;
+              const s2 = Math.sin(a2) * r;
+
+              // XY circle
+              circleVerts.push(cx.x + c1, cx.y + s1, cx.z, cx.x + c2, cx.y + s2, cx.z);
+              // XZ circle
+              circleVerts.push(cx.x + c1, cx.y, cx.z + s1, cx.x + c2, cx.y, cx.z + s2);
+              // YZ circle
+              circleVerts.push(cx.x, cx.y + c1, cx.z + s1, cx.x, cx.y + c2, cx.z + s2);
+            }
+            const circleGeom = new THREE.BufferGeometry();
+            circleGeom.setAttribute("position", new THREE.Float32BufferAttribute(circleVerts, 3));
+            const circleMat = new THREE.LineBasicMaterial({
+              color: 0x38bdf8,
+              transparent: true,
+              opacity: 0.45,
+              depthTest: false,
+            });
+            proportionalCircleLines = new THREE.LineSegments(circleGeom, circleMat);
+            proportionalCircleLines.renderOrder = RENDER_ORDER + 2;
+            proportionalCircleLines.matrixAutoUpdate = false;
+            group.add(proportionalCircleLines);
+          }
         }
       }
     },
