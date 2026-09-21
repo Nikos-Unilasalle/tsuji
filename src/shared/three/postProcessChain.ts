@@ -105,6 +105,22 @@ function instantiatePass(
   }
 }
 
+function patchOutlinePassSide(pass: any) {
+  if (pass && pass.overlayMaterial && !pass.overlayMaterial.uniforms["outlineSide"]) {
+    pass.overlayMaterial.uniforms["outlineSide"] = { value: 0.0 };
+    pass.overlayMaterial.fragmentShader = pass.overlayMaterial.fragmentShader
+      .replace(
+        "uniform bool usePatternTexture;",
+        "uniform bool usePatternTexture;\nuniform float outlineSide;"
+      )
+      .replace(
+        "vec4 finalColor = edgeStrength * maskColor.r * edgeValue;",
+        "float sideFactor = outlineSide < 0.5 ? maskColor.r : (outlineSide < 1.5 ? (1.0 - maskColor.r) : 1.0);\nvec4 finalColor = edgeStrength * sideFactor * edgeValue;"
+      );
+    pass.overlayMaterial.needsUpdate = true;
+  }
+}
+
 function configurePass(
   pass: any,
   cfg: PostProcessConfig,
@@ -139,22 +155,39 @@ function configurePass(
       break;
     }
     case "outline": {
+      patchOutlinePassSide(pass);
       const edgeColor = cfg.params.edgeColor instanceof THREE.Color ? cfg.params.edgeColor : new THREE.Color(0xffffff);
-      pass.edgeStrength = Number(cfg.params.edgeStrength) ?? 3.0;
-      pass.edgeGlow = 0.5;
-      pass.edgeThickness = Number(cfg.params.edgeThickness) ?? 1.0;
+      pass.edgeStrength = typeof cfg.params.edgeStrength === "number" && !isNaN(cfg.params.edgeStrength)
+        ? cfg.params.edgeStrength
+        : 3.0;
+      pass.edgeGlow = typeof cfg.params.edgeGlow === "number" && !isNaN(cfg.params.edgeGlow) ? cfg.params.edgeGlow : 0.0;
+      pass.edgeThickness = typeof cfg.params.edgeThickness === "number" && !isNaN(cfg.params.edgeThickness)
+        ? cfg.params.edgeThickness
+        : 1.0;
       pass.visibleEdgeColor.copy(edgeColor);
-      // The node's own Geometry input wins when wired — outlining just that
-      // object, not everything in the render (see the node's doc comment
-      // for why "everything" reads as broken the moment two objects touch).
-      // Falls back to the whole render output otherwise, unchanged from
-      // before Geometry existed.
-      const target = cfg.params.targetObject instanceof THREE.Object3D ? cfg.params.targetObject : outlineTarget;
-      if (target) {
+      if (cfg.params.hiddenEdgeColor instanceof THREE.Color) {
+        pass.hiddenEdgeColor.copy(cfg.params.hiddenEdgeColor);
+      } else {
+        pass.hiddenEdgeColor.set(0x000000);
+      }
+
+      const outlineSide = typeof cfg.params.outlineSide === "number" && !isNaN(cfg.params.outlineSide)
+        ? cfg.params.outlineSide
+        : 0.0;
+      if (pass.overlayMaterial?.uniforms?.["outlineSide"]) {
+        pass.overlayMaterial.uniforms["outlineSide"].value = outlineSide;
+      }
+
+      if (Array.isArray(cfg.params.selectedObjects)) {
+        pass.selectedObjects = cfg.params.selectedObjects;
+      } else {
+        const target = cfg.params.targetObject instanceof THREE.Object3D ? cfg.params.targetObject : outlineTarget;
         const meshes: THREE.Mesh[] = [];
-        target.traverse((c) => {
-          if (c instanceof THREE.Mesh) meshes.push(c);
-        });
+        if (target) {
+          target.traverse((c) => {
+            if (c instanceof THREE.Mesh) meshes.push(c);
+          });
+        }
         pass.selectedObjects = meshes;
       }
       break;

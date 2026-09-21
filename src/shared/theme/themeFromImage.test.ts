@@ -79,6 +79,7 @@ describe("themeFromImage engine", () => {
       "chromeSurface",
       "chromeSurfaceRaised",
       "chromeBorder",
+      "chromePillBg",
       "chromeText",
       "chromeTextMuted",
       "canvasBg",

@@ -119,7 +119,23 @@
   padding: 16px 20px;
   overflow-y: auto;
   flex: 1;
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE / Edge */
 }
+
+.prefs-body::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Edge */
+}
+
+.prefs-modal * {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.prefs-modal *::-webkit-scrollbar {
+  display: none;
+}
+
 
 .prefs-info-note {
   color: var(--chrome-text-muted, #94a3b8);

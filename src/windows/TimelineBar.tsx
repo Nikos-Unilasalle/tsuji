@@ -591,23 +591,6 @@ export function TimelineBar({
           )}
         </div>
 
-        {/* Right resize handle button */}
-        {canResizeSplit && (
-          <button
-            type="button"
-            className="timeline-split-handle-btn timeline-split-handle-btn-right"
-            onMouseDown={onSplitHandleMouseDown}
-            onPointerDown={onSplitHandleMouseDown}
-            title="Resize workspace split (drag vertically)"
-          >
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="8 7 12 3 16 7" />
-              <polyline points="8 17 12 21 16 17" />
-              <line x1="12" y1="3" x2="12" y2="21" />
-            </svg>
-          </button>
-        )}
-
         {onToggleDrawer && (
           <button
             type="button"

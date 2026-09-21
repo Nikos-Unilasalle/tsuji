@@ -141,7 +141,7 @@ export interface TextureParams {
  */
 const textureAlphaCache = new WeakMap<THREE.Texture, boolean>();
 
-function textureHasAlpha(tex: THREE.Texture): boolean {
+export function textureHasAlpha(tex: THREE.Texture): boolean {
   const cached = textureAlphaCache.get(tex);
   if (cached !== undefined) return cached;
 

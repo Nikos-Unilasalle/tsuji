@@ -90,6 +90,14 @@ import {
   POSTPROCESS_HALFTONE_NODE,
   POSTPROCESS_SUPER8_NODE,
 } from "./postprocessingFilm";
+import {
+  MODIFIER_DRY_BRUSH_NODE,
+  MODIFIER_DUOTONE_NODE,
+  MODIFIER_FILM_TEXTURE_NODE,
+  MODIFIER_HALFTONE_NODE,
+  MODIFIER_OUTLINE_NODE,
+  MODIFIER_SUPER8_NODE,
+} from "./modifiersFilm";
 
 import { CURVE_ARRAY_NODE, CURVE_DEFORM_NODE, CURVE_FROM_POINTS_NODE, CURVE_PRIMITIVE_NODE, CURVE_TO_MESH_NODE, CURVES_TO_MESH_NODE, SAMPLE_CURVE_NODE } from "./curve";
 import { CURVE_TO_LINE_NODE } from "./line";
@@ -457,6 +465,12 @@ export const STARTER_NODES = [
   RIGID_BODY_NODE,
   PHYSICS_CHARACTER_NODE,
   VEHICLE_NODE,
+  MODIFIER_DUOTONE_NODE,
+  MODIFIER_HALFTONE_NODE,
+  MODIFIER_FILM_TEXTURE_NODE,
+  MODIFIER_DRY_BRUSH_NODE,
+  MODIFIER_SUPER8_NODE,
+  MODIFIER_OUTLINE_NODE,
 ];
 
 export const DEFAULT_REGISTRY = createRegistry(STARTER_NODES);
@@ -548,4 +562,5 @@ export * from "./cloth";
 export * from "./rapier";
 export * from "./terrain";
 export * from "./kineticText";
+export * from "./modifiersFilm";
 

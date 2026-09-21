@@ -175,6 +175,12 @@ const APPEARANCE_BY_DESIGN: Record<string, string> = {
   "geometry/wind-sway": "clones the material to patch its vertex shader; the clone keeps every map",
   "physics/ray-burst": "emits its own line material, it does not pass the source mesh along",
   "object/metaballs": "reads the input only for ball centres — the surface it meshes is its own, with its own material",
+  "modifier/duotone": "stylizes mesh appearance with a two-color ramp shader",
+  "modifier/halftone": "stylizes mesh appearance with a halftone raster shader",
+  "modifier/film-texture": "stylizes mesh appearance with film grain and damage shader",
+  "modifier/dry-brush": "stylizes mesh appearance with dry-brush paper speckle shader",
+  "modifier/super8": "stylizes mesh appearance with super 8 projector vintage shader",
+  "modifier/outline": "stylizes mesh appearance with contour and edge outline shader",
   render: "the scene root, not a modifier",
 };
 

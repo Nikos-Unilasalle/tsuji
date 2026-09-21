@@ -20,6 +20,8 @@
   --chrome-surface-raised: #47505d;
   /* Borders and dividers. */
   --chrome-border: #5a6472;
+  /* Badges, pills, and resize handles. */
+  --chrome-pill-bg: #1e2430;
   /* Primary text. */
   --chrome-text: #eef2f6;
   /* Secondary text: labels, hints. */

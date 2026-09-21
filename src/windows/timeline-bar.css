@@ -55,7 +55,7 @@
   bottom: 3px;
   width: 20px;
   height: 18px;
-  background: #1e2430;
+  background: var(--chrome-pill-bg, #1e2430);
   border: none;
   border-radius: 4px;
   color: #94a3b8;
@@ -104,7 +104,7 @@
   display: flex;
   align-items: center;
   user-select: none;
-  z-index: 25;
+  z-index: 95;
   cursor: row-resize;
   flex-shrink: 0;
   touch-action: none;
@@ -119,6 +119,14 @@
   right: 0;
   cursor: row-resize;
 }
+
+.workspace-split-divider .timeline-split-handle-btn {
+  top: 50%;
+  bottom: auto;
+  transform: translateY(-50%);
+  z-index: 96;
+}
+
 
 /* Scrubbing Track Line: 1px tall line along the bottom edge */
 .timeline-track {
@@ -267,7 +275,7 @@
   position: absolute;
   bottom: 24px;
   transform: translateX(-50%);
-  background: #1e2430;
+  background: var(--chrome-pill-bg, #1e2430);
   color: #e2e8f0;
   border: 1px solid #334155;
   font-family: inherit;
@@ -285,7 +293,7 @@
   position: absolute;
   right: 48px;
   bottom: 3px;
-  background: #1e2430;
+  background: var(--chrome-pill-bg, #1e2430);
   border: none;
   color: #94a3b8;
   border-radius: 4px;
@@ -320,7 +328,7 @@
   position: absolute;
   right: 6px;
   bottom: 3px;
-  background: #1e2430;
+  background: var(--chrome-pill-bg, #1e2430);
   color: #94a3b8;
   font-family: inherit;
   font-size: 10px;

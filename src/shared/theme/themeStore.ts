@@ -9,6 +9,7 @@ export interface ThemeColors {
   chromeSurface: string;
   chromeSurfaceRaised: string;
   chromeBorder: string;
+  chromePillBg: string;
   chromeText: string;
   chromeTextMuted: string;
   // Canvas / Graph
@@ -43,6 +44,7 @@ export const PRESET_THEMES: ThemeDefinition[] = [
       chromeSurface: "#3b434f",
       chromeSurfaceRaised: "#47505d",
       chromeBorder: "#5a6472",
+      chromePillBg: "#1e2430",
       chromeText: "#eef2f6",
       chromeTextMuted: "#b3bdc9",
       canvasBg: "#3c4552",
@@ -66,6 +68,7 @@ export const PRESET_THEMES: ThemeDefinition[] = [
       chromeSurface: "#2d2d2d",
       chromeSurfaceRaised: "#3a3a3a",
       chromeBorder: "#454545",
+      chromePillBg: "#1e1e1e",
       chromeText: "#f0f0f0",
       chromeTextMuted: "#9e9e9e",
       canvasBg: "#2b2b2b",
@@ -89,6 +92,7 @@ export const PRESET_THEMES: ThemeDefinition[] = [
       chromeSurface: "#18202d",
       chromeSurfaceRaised: "#222c3e",
       chromeBorder: "#2d3a52",
+      chromePillBg: "#0b0e14",
       chromeText: "#e8effc",
       chromeTextMuted: "#8da0c0",
       canvasBg: "#151b26",
@@ -112,6 +116,7 @@ export const PRESET_THEMES: ThemeDefinition[] = [
       chromeSurface: "#333d4e",
       chromeSurfaceRaised: "#404c60",
       chromeBorder: "#526078",
+      chromePillBg: "#1b222c",
       chromeText: "#eaf0f8",
       chromeTextMuted: "#a0afc4",
       canvasBg: "#2e3745",
@@ -135,6 +140,7 @@ export const PRESET_THEMES: ThemeDefinition[] = [
       chromeSurface: "#16181c",
       chromeSurfaceRaised: "#23262b",
       chromeBorder: "#343840",
+      chromePillBg: "#050505",
       chromeText: "#f4f4f5",
       chromeTextMuted: "#9ca3af",
       canvasBg: "#121316",
@@ -158,6 +164,7 @@ export const PRESET_THEMES: ThemeDefinition[] = [
       chromeSurface: "#f5f2eb",
       chromeSurfaceRaised: "#ffffff",
       chromeBorder: "#d5cfc4",
+      chromePillBg: "#ded9cf",
       chromeText: "#2d3238",
       chromeTextMuted: "#767b83",
       canvasBg: "#e0dbd1",
@@ -172,6 +179,7 @@ export const PRESET_THEMES: ThemeDefinition[] = [
       viewportGrid: "#c5bfb2",
     },
   },
+
 ];
 
 const STORAGE_KEY_ACTIVE = "tsuji_active_theme";
@@ -189,6 +197,7 @@ export function normalizeThemeColors(colors: Partial<ThemeColors> | undefined): 
     chromeSurface: colors.chromeSurface || fallback.chromeSurface,
     chromeSurfaceRaised: colors.chromeSurfaceRaised || fallback.chromeSurfaceRaised,
     chromeBorder: colors.chromeBorder || fallback.chromeBorder,
+    chromePillBg: colors.chromePillBg || fallback.chromePillBg,
     chromeText: colors.chromeText || fallback.chromeText,
     chromeTextMuted: colors.chromeTextMuted || fallback.chromeTextMuted,
     canvasBg: colors.canvasBg || fallback.canvasBg,
@@ -240,6 +249,7 @@ export function applyThemeColors(colors: ThemeColors): void {
     root.style.setProperty("--chrome-surface", normalized.chromeSurface);
     root.style.setProperty("--chrome-surface-raised", normalized.chromeSurfaceRaised);
     root.style.setProperty("--chrome-border", normalized.chromeBorder);
+    root.style.setProperty("--chrome-pill-bg", normalized.chromePillBg);
     root.style.setProperty("--chrome-text", normalized.chromeText);
     root.style.setProperty("--chrome-text-muted", normalized.chromeTextMuted);
     root.style.setProperty("--canvas-bg", normalized.canvasBg);
@@ -256,6 +266,7 @@ export function applyThemeColors(colors: ThemeColors): void {
     root.style.setProperty("--viewport-bg-bottom", normalized.viewportBgBottom);
     root.style.setProperty("--viewport-grid", normalized.viewportGrid);
   }
+
 
   if (typeof window !== "undefined" && typeof window.dispatchEvent === "function") {
     window.dispatchEvent(new CustomEvent("tsuji-theme-colors-changed", { detail: normalized }));

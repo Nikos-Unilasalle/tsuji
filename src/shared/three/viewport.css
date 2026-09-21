@@ -306,3 +306,69 @@
   pointer-events: none;
 }
 
+/* Vertical split divider between 3D View and Camera View */
+.viewport-split-divider {
+  width: 2px;
+  height: 100%;
+  cursor: col-resize;
+  background-color: var(--chrome-border, #000000);
+  z-index: 20;
+  flex-shrink: 0;
+  position: relative;
+  user-select: none;
+  touch-action: none;
+}
+
+.viewport-split-divider::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -4px;
+  right: -4px;
+  cursor: col-resize;
+}
+
+.viewport-split-handle-btn {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 18px;
+  height: 20px;
+  background: var(--chrome-pill-bg, #1e2430);
+  border: none;
+  border-radius: 4px;
+  color: #94a3b8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: col-resize;
+  z-index: 30;
+  transition: all 0.15s ease;
+  padding: 0;
+  user-select: none;
+  outline: none;
+  box-shadow: none;
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.viewport-split-handle-btn:hover {
+  background: #283040;
+  color: var(--accent-color, #38bdf8);
+}
+
+.viewport-split-handle-btn:active {
+  background: #283040;
+  color: var(--accent-color, #38bdf8);
+}
+
+.viewport-split-handle-btn-top {
+  top: 8px;
+}
+
+.viewport-split-handle-btn-bottom {
+  bottom: 8px;
+}
+
+

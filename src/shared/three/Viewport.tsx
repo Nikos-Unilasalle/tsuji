@@ -5024,6 +5024,63 @@ export function Viewport({
         ? (renderResult.postprocess as PostProcessConfig[])
         : [];
 
+      // Collect per-object modifier outlines for 3D meshes
+      const modifierOutlineConfigs: PostProcessConfig[] = [];
+      const outlineGroups = new Map<
+        string,
+        {
+          meshes: THREE.Mesh[];
+          mod: {
+            edgeColor: THREE.Color;
+            edgeStrength: number;
+            edgeThickness: number;
+            sharpness: number;
+            outlineSide: number;
+            nodeId?: string;
+          };
+        }
+      >();
+
+      scene.traverse((obj) => {
+        const mod = obj.userData?.outlineModifier;
+        if (mod && mod.is3D) {
+          const key = mod.nodeId || String(obj.id);
+          let group = outlineGroups.get(key);
+          if (!group) {
+            group = { meshes: [], mod };
+            outlineGroups.set(key, group);
+          }
+          if (obj instanceof THREE.Mesh) {
+            if (!group.meshes.includes(obj)) group.meshes.push(obj);
+          } else {
+            obj.traverse((child) => {
+              if (child instanceof THREE.Mesh && !group!.meshes.includes(child)) {
+                group!.meshes.push(child);
+              }
+            });
+          }
+        }
+      });
+
+      for (const [key, { meshes, mod }] of outlineGroups.entries()) {
+        if (meshes.length > 0) {
+          modifierOutlineConfigs.push({
+            type: "outline",
+            nodeId: `mod-outline-${key}`,
+            params: {
+              selectedObjects: meshes,
+              edgeColor: mod.edgeColor,
+              edgeStrength: (typeof mod.edgeStrength === "number" ? mod.edgeStrength : 1.0) * 3.0,
+              edgeThickness: typeof mod.edgeThickness === "number" ? mod.edgeThickness : 3.0,
+              edgeGlow: Math.max(0, (1.0 - (typeof mod.sharpness === "number" ? mod.sharpness : 1.0)) * 1.5),
+              outlineSide: typeof mod.outlineSide === "number" ? mod.outlineSide : 0.0,
+            },
+          });
+        }
+      }
+
+      const effectivePostConfigs = [...modifierOutlineConfigs, ...postConfigs];
+
       // Motion blur lives on the Render node itself rather than in the
       // postprocess chain (it's a property of the output, not an effect a
       // graph wires up), so it can switch the composer path on by itself
@@ -5034,7 +5091,7 @@ export function Viewport({
       // chemin composer : la passe séparée ne peut pas s'exécuter autrement.
       const volumetric = findVolumetricSettings(scene);
 
-      if (postChain.isActive(postConfigs, motionBlur, volumetric)) {
+      if (postChain.isActive(effectivePostConfigs, motionBlur, volumetric)) {
         postChainWasActive = true;
         scene.background = bgScene.background;
         // Le volume est rendu par sa propre passe : l'exclure du rendu de scène
@@ -5043,7 +5100,7 @@ export function Viewport({
         postChain.render({
           scene,
           camera,
-          configs: postConfigs,
+          configs: effectivePostConfigs,
           motionBlur,
           width,
           height,

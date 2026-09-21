@@ -283,6 +283,7 @@ export function generateThemeFromClusters(clusters: Cluster[], options: ImageThe
       chromeSurface: oklchToHex({ L: 0.19, C: ambChroma * 0.35, h: ambHue }),
       chromeSurfaceRaised: oklchToHex({ L: 0.26, C: ambChroma * 0.45, h: ambHue }),
       chromeBorder: oklchToHex({ L: 0.35, C: ambChroma * 0.5, h: ambHue }),
+      chromePillBg: oklchToHex({ L: 0.10, C: ambChroma * 0.2, h: ambHue }),
       chromeText: oklchToHex({ L: 0.94, C: 0.008, h: ambHue }),
       chromeTextMuted: oklchToHex({ L: 0.68, C: 0.018, h: ambHue }),
       canvasBg: oklchToHex({ L: 0.16, C: ambChroma * 0.35, h: ambHue }),
@@ -302,6 +303,7 @@ export function generateThemeFromClusters(clusters: Cluster[], options: ImageThe
       chromeSurface: oklchToHex({ L: 0.96, C: ambChroma * 0.18, h: ambHue }),
       chromeSurfaceRaised: oklchToHex({ L: 0.995, C: 0.005, h: ambHue }),
       chromeBorder: oklchToHex({ L: 0.81, C: ambChroma * 0.3, h: ambHue }),
+      chromePillBg: oklchToHex({ L: 0.85, C: ambChroma * 0.2, h: ambHue }),
       chromeText: oklchToHex({ L: 0.18, C: 0.012, h: ambHue }),
       chromeTextMuted: oklchToHex({ L: 0.48, C: 0.018, h: ambHue }),
       canvasBg: oklchToHex({ L: 0.87, C: ambChroma * 0.3, h: ambHue }),
@@ -316,6 +318,7 @@ export function generateThemeFromClusters(clusters: Cluster[], options: ImageThe
       viewportGrid: oklchToHex({ L: 0.74, C: ambChroma * 0.25, h: ambHue }),
     };
   }
+
 
   // 4. WCAG AAA Contrast Check & Enforcement (>= 7:1)
   let contrast = calculateContrastRatio(colors.chromeText, colors.chromeSurface);

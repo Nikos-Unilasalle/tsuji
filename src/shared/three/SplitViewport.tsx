@@ -3,6 +3,8 @@ import { GpToolMode, TransformGizmoMode, TransformPatch, Viewport } from "./View
 import { EvalResult } from "../graph/evaluate";
 import { Graph, KeyframeStore, NodeRegistry } from "../graph/types";
 import type { PreviewCameraPose } from "../ipc";
+import "./viewport.css";
+
 
 /**
  * Shift+Tab cycles: viewport (free orbit) -> split (editor + camera preview)
@@ -139,48 +141,85 @@ export function SplitViewport({
   );
 
   const isDraggingRef = useRef(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const ghostLineRef = useRef<HTMLDivElement>(null);
+  const lastClampedXRef = useRef(0);
+
   // Held so an unmount while the splitter is pressed can remove the global
   // window listeners — otherwise they'd linger until the next mouseup and
   // keep calling setState on a component that no longer exists.
-  const dragHandlersRef = useRef<{ move: (e: MouseEvent) => void; up: () => void } | null>(null);
+  const dragHandlersRef = useRef<{ move: (e: MouseEvent | PointerEvent) => void; up: () => void } | null>(null);
 
   useEffect(
     () => () => {
       if (dragHandlersRef.current) {
         window.removeEventListener("mousemove", dragHandlersRef.current.move);
         window.removeEventListener("mouseup", dragHandlersRef.current.up);
+        window.removeEventListener("pointermove", dragHandlersRef.current.move);
+        window.removeEventListener("pointerup", dragHandlersRef.current.up);
+        window.removeEventListener("pointercancel", dragHandlersRef.current.up);
+        document.body.style.cursor = "";
+        document.body.style.userSelect = "";
         dragHandlersRef.current = null;
       }
     },
     [],
   );
 
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+  const handleMouseDown = useCallback((e: React.MouseEvent | React.PointerEvent) => {
+    if ("button" in e && e.button !== 0) return;
     e.preventDefault();
+    e.stopPropagation();
     isDraggingRef.current = true;
+    lastClampedXRef.current = e.clientX;
+    setIsDragging(true);
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
 
-    const onMouseMove = (moveEvent: MouseEvent) => {
+    const onMouseMove = (moveEvent: MouseEvent | PointerEvent) => {
       if (!isDraggingRef.current) return;
       const container = document.getElementById("split-viewport-container");
       if (!container) return;
       const rect = container.getBoundingClientRect();
       if (rect.width <= 0) return;
 
-      const newPercent = ((moveEvent.clientX - rect.left) / rect.width) * 100;
-      // Clamped so neither pane can be dragged to 0 width.
-      setSplitPercent(Math.max(15, Math.min(85, newPercent)));
+      const minX = rect.left + rect.width * 0.15;
+      const maxX = rect.left + rect.width * 0.85;
+      const clampedX = Math.min(maxX, Math.max(minX, moveEvent.clientX));
+      lastClampedXRef.current = clampedX;
+      if (ghostLineRef.current) {
+        ghostLineRef.current.style.transform = `translateX(${clampedX - rect.left}px)`;
+      }
     };
 
     const onMouseUp = () => {
       isDraggingRef.current = false;
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
       window.removeEventListener("mousemove", onMouseMove);
       window.removeEventListener("mouseup", onMouseUp);
+      window.removeEventListener("pointermove", onMouseMove);
+      window.removeEventListener("pointerup", onMouseUp);
+      window.removeEventListener("pointercancel", onMouseUp);
       dragHandlersRef.current = null;
+
+      const container = document.getElementById("split-viewport-container");
+      if (container) {
+        const rect = container.getBoundingClientRect();
+        if (rect.width > 0) {
+          const newPercent = ((lastClampedXRef.current - rect.left) / rect.width) * 100;
+          setSplitPercent(Math.max(15, Math.min(85, newPercent)));
+        }
+      }
+      setIsDragging(false);
     };
 
     dragHandlersRef.current = { move: onMouseMove, up: onMouseUp };
     window.addEventListener("mousemove", onMouseMove);
     window.addEventListener("mouseup", onMouseUp);
+    window.addEventListener("pointermove", onMouseMove);
+    window.addEventListener("pointerup", onMouseUp);
+    window.addEventListener("pointercancel", onMouseUp);
   }, []);
 
   const hasExplicitSpaces = show3DView !== undefined || showCameraView !== undefined;
@@ -257,19 +296,31 @@ export function SplitViewport({
         />
       </div>
 
-      {/* Draggable Splitter — only meaningful (and visible) in split or 2D mode */}
+      {/* Draggable Splitter — between 3D View and Camera View (split or 2D mode) */}
       <div
+        className="viewport-split-divider"
         onMouseDown={handleMouseDown}
+        onPointerDown={handleMouseDown}
         style={{
-          width: "2px",
-          height: "100%",
-          cursor: "col-resize",
-          backgroundColor: is2D ? "var(--accent-color, #38bdf8)" : "var(--chrome-border, #000000)",
-          zIndex: 20,
-          flexShrink: 0,
+          backgroundColor: is2D ? "var(--accent-color, #38bdf8)" : undefined,
           display: isSplitActive ? "block" : "none",
         }}
-      />
+        title="Resize viewports (drag horizontally)"
+      >
+        <button
+          type="button"
+          className="viewport-split-handle-btn viewport-split-handle-btn-top"
+          onMouseDown={handleMouseDown}
+          onPointerDown={handleMouseDown}
+          title="Resize viewports (drag horizontally)"
+        >
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="7 8 3 12 7 16" />
+            <polyline points="17 8 21 12 17 16" />
+            <line x1="3" y1="12" x2="21" y2="12" />
+          </svg>
+        </button>
+      </div>
 
       <div
         style={{
@@ -313,6 +364,34 @@ export function SplitViewport({
           />
         )}
       </div>
+
+      {isDragging && (
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            zIndex: 99999,
+            cursor: "col-resize",
+            userSelect: "none",
+            pointerEvents: "auto",
+          }}
+        >
+          <div
+            ref={ghostLineRef}
+            style={{
+              position: "absolute",
+              top: 0,
+              bottom: 0,
+              left: 0,
+              width: 1,
+              background: "var(--accent-color, #38bdf8)",
+              transform: `translateX(${lastClampedXRef.current - (document.getElementById("split-viewport-container")?.getBoundingClientRect().left ?? 0)}px)`,
+              pointerEvents: "none",
+            }}
+          />
+        </div>
+      )}
     </div>
   );
 }
+

@@ -111,6 +111,7 @@ const COLOR_CATEGORIES: ColorCategory[] = [
       { key: "chromeSurface", label: "Panels & Bars", desc: "Top bar, floating panels, and timeline drawer" },
       { key: "chromeSurfaceRaised", label: "Raised Surfaces", desc: "Buttons, numerical inputs, and active rows" },
       { key: "chromeBorder", label: "Borders & Lines", desc: "Workspace split dividers and panel borders" },
+      { key: "chromePillBg", label: "Pastilles & Handle Buttons", desc: "Background of split handle buttons, timeline badges, and pills" },
       { key: "chromeText", label: "Primary Text", desc: "Main UI text, titles, and active labels" },
       { key: "chromeTextMuted", label: "Secondary Text", desc: "Hints, units, and secondary descriptions" },
     ],

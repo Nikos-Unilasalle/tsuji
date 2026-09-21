@@ -2601,21 +2601,9 @@ function MainEditor() {
               <line x1="12" y1="3" x2="12" y2="21" />
             </svg>
           </button>
-          <button
-            type="button"
-            className="timeline-split-handle-btn timeline-split-handle-btn-right"
-            onMouseDown={onSplitHandleMouseDown}
-            onPointerDown={onSplitHandleMouseDown}
-            title="Resize workspace split (drag vertically)"
-          >
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="8 7 12 3 16 7" />
-              <polyline points="8 17 12 21 16 17" />
-              <line x1="12" y1="3" x2="12" y2="21" />
-            </svg>
-          </button>
         </div>
       )}
+
 
       {/* True screen overlay, not scoped to the 3D-viewport pane above: a
           fixed-position sibling of every other pane (see param-panel.css),
@@ -2690,7 +2678,9 @@ function MainEditor() {
                 : () => {}
             }
             isFullHeight={!spaces.canvas}
+            isDraggingDrawer={isDraggingDrawer}
           />
+
         )}
         {/* Secondary Split Divider with left & right resize handle buttons between Timeline and Canvas */}
         {spaces.timeline && spaces.canvas && (
@@ -2713,21 +2703,9 @@ function MainEditor() {
                 <line x1="12" y1="3" x2="12" y2="21" />
               </svg>
             </button>
-            <button
-              type="button"
-              className="timeline-split-handle-btn timeline-split-handle-btn-right"
-              onMouseDown={onDrawerSplitMouseDown}
-              onPointerDown={onDrawerSplitMouseDown}
-              title="Resize timeline height (drag vertically)"
-            >
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="8 7 12 3 16 7" />
-                <polyline points="8 17 12 21 16 17" />
-                <line x1="12" y1="3" x2="12" y2="21" />
-              </svg>
-            </button>
           </div>
         )}
+
         {spaces.canvas && (
           <div style={{ flex: 1, minHeight: 0 }}>
             <GraphEditor

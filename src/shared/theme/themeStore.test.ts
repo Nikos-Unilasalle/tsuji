@@ -85,6 +85,7 @@ describe("themeStore", () => {
     const preset = PRESET_THEMES[0];
     applyThemeColors(preset.colors);
     expect(mocks.cssProperties.get("--chrome-bg")).toBe(preset.colors.chromeBg);
+    expect(mocks.cssProperties.get("--chrome-pill-bg")).toBe(preset.colors.chromePillBg);
     expect(mocks.cssProperties.get("--canvas-scene-bg")).toBe(preset.colors.canvasSceneBg);
     expect(mocks.cssProperties.get("--canvas-scene-active")).toBe(preset.colors.canvasSceneActive);
     expect(mocks.cssProperties.get("--accent-color")).toBe(preset.colors.accentColor);

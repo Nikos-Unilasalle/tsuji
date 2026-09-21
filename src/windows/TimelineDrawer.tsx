@@ -79,7 +79,9 @@ export interface TimelineDrawerProps {
   onDrawerHeightChange: (height: number) => void;
   onSplitHandleMouseDown: (e: React.MouseEvent | React.PointerEvent) => void;
   isFullHeight?: boolean;
+  isDraggingDrawer?: boolean;
 }
+
 
 function renderKeyframeGlyph(easeIn: EasingType = "smooth", isSummary = false) {
   if (isSummary) {
@@ -149,6 +151,7 @@ export const TimelineDrawer: React.FC<TimelineDrawerProps> = ({
   onDrawerHeightChange,
   onSplitHandleMouseDown,
   isFullHeight = false,
+  isDraggingDrawer = false,
 }) => {
   const [viewMode, setViewMode] = useState<"selected" | "all">("selected");
   const [pixelsPerFrame, setPixelsPerFrame] = useState(6);
@@ -679,7 +682,7 @@ export const TimelineDrawer: React.FC<TimelineDrawerProps> = ({
   return (
     <div
       ref={drawerRootRef}
-      className={`timeline-drawer-root ${isResizingDrawer ? "resizing" : ""} ${isOpen ? "open" : "closed"}`}
+      className={`timeline-drawer-root ${isResizingDrawer || isDraggingDrawer ? "resizing" : ""} ${isOpen ? "open" : "closed"}`}
       style={{ height: isFullHeight ? "100%" : `${drawerHeight}px`, flex: isFullHeight ? 1 : undefined }}
       onMouseEnter={() => setInputZone("timeline")}
       onMouseLeave={() => setInputZone(null)}
@@ -1375,20 +1378,23 @@ export const TimelineDrawer: React.FC<TimelineDrawerProps> = ({
         </div>
       )}
 
-      {/* Bottom Edge Resizer (left-drag) */}
-      <div
-        className="timeline-drawer-resizer timeline-drawer-resizer-bottom"
-        title="Drag to resize timeline"
-        onMouseDown={(e) => {
-          if (e.button !== 0) return;
-          e.preventDefault();
-          e.stopPropagation();
-          const rect = drawerRootRef.current?.getBoundingClientRect();
-          drawerTopRef.current = rect?.top ?? 0;
-          isResizingDrawerRef.current = true;
-          setIsResizingDrawer(true);
-        }}
-      />
+      {/* Bottom Edge Resizer (left-drag, only when lower pane / canvas is hidden) */}
+      {isFullHeight && (
+        <div
+          className="timeline-drawer-resizer timeline-drawer-resizer-bottom"
+          title="Drag to resize timeline"
+          onMouseDown={(e) => {
+            if (e.button !== 0) return;
+            e.preventDefault();
+            e.stopPropagation();
+            const rect = drawerRootRef.current?.getBoundingClientRect();
+            drawerTopRef.current = rect?.top ?? 0;
+            isResizingDrawerRef.current = true;
+            setIsResizingDrawer(true);
+          }}
+        />
+      )}
+
 
       {/* Easing Popover (same as the mini timeline) */}
       {easingPopover && (
