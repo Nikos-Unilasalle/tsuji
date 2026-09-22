@@ -1722,15 +1722,7 @@ export function Viewport({
         ? graphRef.current.nodes.find((n) => n.id === selectedNodeIdRef.current && n.type === EDIT_MESH_NODE.type)
         : null;
       if (activeEditMeshNode) {
-        if (key === "1") {
-          e.preventDefault();
-          onParamChangeRef.current?.("selectMode", "points", activeEditMeshNode.id);
-          return;
-        } else if (key === "3") {
-          e.preventDefault();
-          onParamChangeRef.current?.("selectMode", "faces", activeEditMeshNode.id);
-          return;
-        } else if (key === "e") {
+        if (key === "e") {
           e.preventDefault();
           onParamActionRef.current?.(activeEditMeshNode.id, EDIT_MESH_EXTRUDE_ACTION);
           return;
@@ -6139,7 +6131,7 @@ export function Viewport({
                 onClick={() => {
                   if (!isPointsOnly) onParamChange?.("selectMode", "points", editMeshNode.id);
                 }}
-                title={isPointsOnly ? "Points Mode (Vertices)" : "Points Mode (Shortcut: 1) — Select and transform vertices"}
+                title={isPointsOnly ? "Points Mode (Vertices)" : "Points Mode — Select and transform vertices"}
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                   <circle cx="5" cy="5" r="2.5" />
@@ -6156,7 +6148,7 @@ export function Viewport({
                   type="button"
                   className={`viewport-hud-button ${selectMode === "faces" ? "viewport-hud-button-active" : ""}`}
                   onClick={() => onParamChange?.("selectMode", "faces", editMeshNode.id)}
-                  title="Faces Mode (Shortcut: 3) — Select and transform quads"
+                  title="Faces Mode — Select and transform quads"
                 >
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
                     <rect x="4" y="4" width="16" height="16" rx="2" fill="currentColor" fillOpacity="0.3" />

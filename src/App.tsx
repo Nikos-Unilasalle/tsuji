@@ -259,9 +259,9 @@ function MainEditor() {
   const toggleSpace = useCallback((space: keyof WorkspaceSpaces) => {
     setSpaces((prev) => {
       const next = { ...prev, [space]: !prev[space] };
-      // Prevent disabling all spaces: at least one space must remain active!
+      // Prevent disabling all spaces: if all spaces would become hidden, activate canvas or view3D!
       if (!next.view3D && !next.camera && !next.canvas && !next.timeline) {
-        return prev;
+        return { ...next, [space === "view3D" ? "canvas" : "view3D"]: true };
       }
       try {
         localStorage.setItem("tsuji_active_spaces_v1", JSON.stringify(next));
@@ -670,6 +670,46 @@ function MainEditor() {
         // No Render node, or Frame Count off: there is no timeline length to
         // scrub or keyframe against, so the timeline space stays closed.
         if (keyframesEnabled) toggleSpace("timeline");
+      } else if (
+        !isInput &&
+        !isCmdOrCtrl &&
+        !e.altKey &&
+        (e.key === "1" || code === "Digit1" || code === "Numpad1")
+      ) {
+        if (!isKeyReservedForPlayback(e)) {
+          e.preventDefault();
+          toggleSpace("canvas");
+        }
+      } else if (
+        !isInput &&
+        !isCmdOrCtrl &&
+        !e.altKey &&
+        (e.key === "2" || code === "Digit2" || code === "Numpad2")
+      ) {
+        if (!isKeyReservedForPlayback(e)) {
+          e.preventDefault();
+          toggleSpace("view3D");
+        }
+      } else if (
+        !isInput &&
+        !isCmdOrCtrl &&
+        !e.altKey &&
+        (e.key === "3" || code === "Digit3" || code === "Numpad3")
+      ) {
+        if (!isKeyReservedForPlayback(e)) {
+          e.preventDefault();
+          toggleSpace("camera");
+        }
+      } else if (
+        !isInput &&
+        !isCmdOrCtrl &&
+        !e.altKey &&
+        (e.key === "4" || code === "Digit4" || code === "Numpad4")
+      ) {
+        if (!isKeyReservedForPlayback(e)) {
+          e.preventDefault();
+          toggleSpace("timeline");
+        }
       }
     }
     window.addEventListener("keydown", handleKeyDown);

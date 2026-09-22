@@ -420,7 +420,7 @@ export const TopBar: React.FC<TopBarProps> = ({
               type="button"
               className={`top-bar-space-btn ${spaces.view3D ? "active" : ""}`}
               onClick={() => onToggleSpace("view3D")}
-              title={is2DMode ? "Toggle 2D Viewport" : "Toggle 3D Viewport"}
+              title={is2DMode ? "Toggle 2D Viewport (2)" : "Toggle 3D Viewport (2)"}
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 {is2DMode ? (
@@ -442,7 +442,7 @@ export const TopBar: React.FC<TopBarProps> = ({
               type="button"
               className={`top-bar-space-btn ${spaces.camera ? "active" : ""}`}
               onClick={() => onToggleSpace("camera")}
-              title="Toggle Camera View (Projected view)"
+              title="Toggle Camera View (Projected view) (3)"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
@@ -453,7 +453,7 @@ export const TopBar: React.FC<TopBarProps> = ({
               type="button"
               className={`top-bar-space-btn ${spaces.canvas ? "active" : ""}`}
               onClick={() => onToggleSpace("canvas")}
-              title="Toggle Canvas (Node Graph)"
+              title="Toggle Canvas (Node Graph) (1)"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <rect x="3" y="3" width="7" height="7" rx="1" />
@@ -467,7 +467,7 @@ export const TopBar: React.FC<TopBarProps> = ({
                 type="button"
                 className={`top-bar-space-btn ${spaces.timeline ? "active" : ""}`}
                 onClick={() => onToggleSpace("timeline")}
-                title="Toggle Timeline (Animation & Playhead)"
+                title="Toggle Timeline (Animation & Playhead) (4 / T)"
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <rect x="2" y="4" width="20" height="16" rx="2" />

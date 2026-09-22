@@ -21,6 +21,10 @@ const SHORTCUT_SECTIONS: ShortcutSection[] = [
   {
     category: "General & Project",
     items: [
+      { keys: ["1"], description: "Toggle Canvas (Show / Hide Node Graph)" },
+      { keys: ["2"], description: "Toggle 3D Viewport (Show / Hide)" },
+      { keys: ["3"], description: "Toggle Camera View (Show / Hide)" },
+      { keys: ["4"], description: "Toggle Timeline Drawer (Show / Hide)" },
       { keys: ["⌘ / Ctrl", "Z"], description: "Undo last action" },
       { keys: ["⌘ / Ctrl", "⇧ Shift", "Z"], description: "Redo last action" },
       { keys: ["⌘ / Ctrl", "S"], description: "Save Project (.tsuji)" },
@@ -31,6 +35,8 @@ const SHORTCUT_SECTIONS: ShortcutSection[] = [
   {
     category: "3D Viewport & Navigation",
     items: [
+      { keys: ["2"], description: "Toggle 3D Viewport (Show / Hide)" },
+      { keys: ["3"], description: "Toggle Camera View (Projected View)" },
       { keys: ["Left Drag"], description: "Orbit 3D Camera" },
       { keys: ["Right Drag"], description: "Pan 3D Camera" },
       { keys: ["Mouse Wheel"], description: "Zoom 3D View in / out" },
@@ -68,6 +74,7 @@ const SHORTCUT_SECTIONS: ShortcutSection[] = [
   {
     category: "Canvases",
     items: [
+      { keys: ["1"], description: "Show / Hide Canvas" },
       { keys: ["1", "…", "6"], description: "Canvas selector, top right of the node editor — click to switch" },
       { keys: ["Go To Canvas node"], description: "Switch canvas from the graph itself, on a trigger (key, beat, condition)" },
     ],
@@ -75,7 +82,7 @@ const SHORTCUT_SECTIONS: ShortcutSection[] = [
   {
     category: "Timeline & Keyframe Animation",
     items: [
-      { keys: ["T"], description: "Toggle Advanced Timeline Drawer (Open / Close)" },
+      { keys: ["4", "T"], description: "Toggle Advanced Timeline Drawer (Open / Close)" },
       { keys: ["Space"], description: "Play / Pause timeline playback" },
       {
         keys: ["Esc"],
