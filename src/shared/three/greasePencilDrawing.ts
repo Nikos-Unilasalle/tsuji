@@ -149,6 +149,44 @@ export function smoothStrokePoints(points: StrokePoint[], smoothing: number): St
 }
 
 /**
+ * Collapses the cluster of near-stationary samples a stroke ends on.
+ *
+ * A hand always dwells for a few milliseconds before lifting the pen, and a
+ * 200 Hz tablet turns that pause into a dozen samples piled inside a couple of
+ * pixels. Rendered as a ribbon, that pile is a blob — and with simulated
+ * pressure it is a widening one, since "not moving" reads as "pressing hard".
+ * Every one of those samples describes the same place, so all but the last are
+ * dropped.
+ *
+ * @param radius Half-width of the stroke in the same units as the points;
+ *               samples within this distance of the endpoint are redundant.
+ */
+export function trimStrokeDwellTail(points: StrokePoint[], radius: number): StrokePoint[] {
+  if (!points || points.length < 3 || !(radius > 0)) return points ?? [];
+
+  const end = points[points.length - 1];
+  let firstOfCluster = points.length - 1;
+  while (firstOfCluster > 1) {
+    const p = points[firstOfCluster - 1];
+    const d = Math.hypot(p.x - end.x, p.y - end.y, p.z - end.z);
+    if (d > radius) break;
+    firstOfCluster--;
+  }
+
+  // Nothing piled up (the common case for a stroke released while moving).
+  if (firstOfCluster >= points.length - 1) return points;
+
+  // Keep the endpoint, and give it the lowest pressure of the cluster: the
+  // dwell samples only ever inflate it.
+  let minPressure = end.pressure;
+  for (let i = firstOfCluster; i < points.length; i++) {
+    minPressure = Math.min(minPressure, points[i].pressure);
+  }
+
+  return [...points.slice(0, firstOfCluster), { ...end, pressure: minPressure }];
+}
+
+/**
  * Projects a screen pointer position (clientX, clientY) into 3D world coordinates on the drawing plane.
  */
 export function projectScreenToDrawingPlane(
@@ -371,6 +409,117 @@ export function eraseStrokesAtPosition(
     return true;
   });
 
+  return frames.map((f) => (f.frame === activeFrame ? { ...f, strokes: nextStrokes } : f));
+}
+
+/**
+ * Erases the portion of each stroke that falls inside the eraser disc, cutting
+ * strokes into the surviving fragments instead of deleting them whole.
+ *
+ * This is the behaviour every other 2D package has (and what Blender's Grease
+ * Pencil v3 eraser rewrite moved to): brushing the tip of a long line should
+ * shorten that line, not make the entire line disappear. Boundary points are
+ * interpolated onto the eraser circle so the cut lands exactly under the
+ * cursor rather than snapping to the nearest sample.
+ */
+export function eraseStrokesCut(
+  frames: KeyframeDrawing[],
+  frameIndex: number,
+  worldPos: THREE.Vector3,
+  radius = 0.75,
+): KeyframeDrawing[] {
+  const targetDrawing = resolveActiveDrawing(frames, frameIndex);
+  if (!targetDrawing) return frames;
+  const activeFrame = targetDrawing.frame;
+  const radSq = radius * radius;
+
+  const distSq = (p: StrokePoint) => {
+    const dx = p.x - worldPos.x;
+    const dy = p.y - worldPos.y;
+    const dz = p.z - worldPos.z;
+    return dx * dx + dy * dy + dz * dz;
+  };
+
+  // Position on segment a->b at the eraser boundary, walking from `a` outward.
+  const boundaryPoint = (a: StrokePoint, b: StrokePoint): StrokePoint => {
+    let lo = 0;
+    let hi = 1;
+    for (let it = 0; it < 12; it++) {
+      const mid = (lo + hi) * 0.5;
+      const p: StrokePoint = {
+        x: a.x + (b.x - a.x) * mid,
+        y: a.y + (b.y - a.y) * mid,
+        z: a.z + (b.z - a.z) * mid,
+        pressure: a.pressure + (b.pressure - a.pressure) * mid,
+      };
+      if (distSq(p) > radSq) lo = mid;
+      else hi = mid;
+    }
+    const t = lo;
+    const out: StrokePoint = {
+      x: a.x + (b.x - a.x) * t,
+      y: a.y + (b.y - a.y) * t,
+      z: a.z + (b.z - a.z) * t,
+      pressure: a.pressure + (b.pressure - a.pressure) * t,
+    };
+    if (a.nx !== undefined) {
+      out.nx = a.nx;
+      out.ny = a.ny;
+      out.nz = a.nz;
+    }
+    return out;
+  };
+
+  const nextStrokes: GreaseStroke[] = [];
+  let mutated = false;
+
+  for (const stroke of targetDrawing.strokes) {
+    const pts = stroke.points;
+    if (!pts || pts.length === 0) {
+      mutated = true;
+      continue;
+    }
+
+    const inside = pts.map((p) => distSq(p) <= radSq);
+    if (!inside.some(Boolean)) {
+      nextStrokes.push(stroke);
+      continue;
+    }
+    mutated = true;
+
+    // Split into runs of surviving points, extending each run up to the
+    // eraser boundary on both sides.
+    const runs: StrokePoint[][] = [];
+    let run: StrokePoint[] | null = null;
+    for (let i = 0; i < pts.length; i++) {
+      if (!inside[i]) {
+        if (!run) {
+          run = [];
+          if (i > 0) run.push(boundaryPoint(pts[i], pts[i - 1]));
+        }
+        run.push({ ...pts[i] });
+      } else if (run) {
+        run.push(boundaryPoint(pts[i - 1], pts[i]));
+        runs.push(run);
+        run = null;
+      }
+    }
+    if (run) runs.push(run);
+
+    for (let r = 0; r < runs.length; r++) {
+      const segment = runs[r];
+      if (segment.length < 2) continue;
+      nextStrokes.push({
+        ...stroke,
+        // A cut stroke is no longer a closed loop.
+        closed: false,
+        id: r === 0 ? stroke.id : `${stroke.id}_c${r}_${Math.random().toString(36).slice(2, 6)}`,
+        points: segment,
+      });
+    }
+  }
+
+  if (!mutated) return frames;
   return frames.map((f) => (f.frame === activeFrame ? { ...f, strokes: nextStrokes } : f));
 }
 

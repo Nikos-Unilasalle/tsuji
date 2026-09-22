@@ -56,12 +56,37 @@ import { enableSmoothShadows } from "./smoothShadows";
 // Re-exported so call sites (App.tsx, SplitViewport) keep importing these
 // from the component they belong to, not from its internals.
 export type { TransformGizmoMode, TransformPatch };
-export type GpToolMode = "pen" | "eraser_hard" | "eraser_soft" | "tint" | "select";
+export type GpToolMode =
+  | "pen"
+  | "line"
+  | "rect"
+  | "ellipse"
+  | "arc"
+  | "polyline"
+  | "fill"
+  | "eraser_hard"
+  | "eraser_soft"
+  | "eraser_stroke"
+  | "tint"
+  | "lasso"
+  | "carve"
+  | "select";
+
+/** Tools that build a stroke from an anchor-to-cursor drag. */
+const GP_SHAPE_TOOLS: ReadonlySet<GpToolMode> = new Set<GpToolMode>(["line", "rect", "ellipse", "arc"]);
+/** Tools driven by a freehand screen-space lasso. */
+const GP_LASSO_TOOLS: ReadonlySet<GpToolMode> = new Set<GpToolMode>(["lasso", "carve"]);
 import { createElevationHUD, snapElevationValue } from "./elevationGizmo";
-import { GREASE_PENCIL_NODE, KeyframeDrawing, GreaseStroke, StrokePoint, parseColorHex } from "../graph/nodes/greasePencil";
+import {
+  GREASE_PENCIL_NODE,
+  KeyframeDrawing,
+  GreaseStroke,
+  StrokePoint,
+  parseColorHex,
+  resolveActiveDrawing,
+} from "../graph/nodes/greasePencil";
 import { PAINT_ON_GEOMETRY_NODE } from "../graph/nodes/paintOnGeometry";
 import {
-  calculateSimulatedPressure,
   applyStrokeTaper,
   projectScreenToDrawingPlane,
   projectScreenToTargetGeometry,
@@ -70,10 +95,37 @@ import {
   createBlankDrawing,
   clearDrawingAtFrame,
   eraseStrokesAtPosition,
+  eraseStrokesCut,
   eraseStrokesSoft,
   tintStrokesAtPosition,
   smoothStrokePoints,
+  trimStrokeDwellTail,
 } from "./greasePencilDrawing";
+import {
+  buildPolylinePoints,
+  buildShapePoints,
+  densifyShapePoints,
+  type ShapeKind,
+  type ShapePoint,
+} from "./strokeShapes";
+import {
+  carveStrokesWithLasso,
+  deleteStrokes,
+  selectStrokesInLasso,
+  translateStrokes,
+  type PointProjector,
+} from "./strokeLasso";
+import { computeFillRegion } from "./strokeFill";
+import {
+  collectPointerSamples,
+  createPressureTracker,
+  createStabilizer,
+  tiltToBrushAngle,
+  type PressureTracker,
+  type PointerSample,
+  type Stabilizer,
+  type StabilizerMode,
+} from "./strokeInput";
 import type { GreaseBrushType } from "../graph/nodes/greasePencil";
 
 function isPaintOrGreaseNode(node: { type: string } | null | undefined): boolean {
@@ -761,6 +813,33 @@ export function Viewport({
   const gpPressureModifierRef = useRef(1.0);
   const gpWorkingFramesRef = useRef<KeyframeDrawing[] | null>(null);
   const gpSmoothedWorldPosRef = useRef<THREE.Vector3 | null>(null);
+  // Screen-space stabilizer for the active stroke (see strokeInput.ts). Runs
+  // before projection so smoothing behaves the same at any camera angle.
+  const gpStabilizerRef = useRef<Stabilizer | null>(null);
+  const gpPrevSampleRef = useRef<PointerSample | null>(null);
+  /** Pressure resolver for the active stroke (hardware, else simulated). */
+  const gpPressureTrackerRef = useRef<PressureTracker | null>(null);
+  /** Screen position of the last point actually appended, for pixel dedup. */
+  const gpLastAppendedScreenRef = useRef<{ x: number; y: number } | null>(null);
+  /** Anchor point of the shape tools' drag, in client space. */
+  const gpLineAnchorRef = useRef<{ x: number; y: number } | null>(null);
+  /** Vertices committed so far by the polyline tool, in client space. */
+  const gpPolylineVerticesRef = useRef<ShapePoint[]>([]);
+  /** Freehand lasso path being drawn, in client space. */
+  const gpLassoPointsRef = useRef<ShapePoint[]>([]);
+  const [gpLassoPreview, setGpLassoPreview] = useState<ShapePoint[]>([]);
+  /** Strokes picked by the lasso select tool. */
+  const gpSelectedStrokeIdsRef = useRef<Set<string>>(new Set());
+  const [gpSelectionOverlay, setGpSelectionOverlay] = useState<{ screenX: number; screenY: number }[][]>([]);
+  /** In-flight drag that moves the lasso selection. */
+  const gpSelectionDragRef = useRef<{ lastX: number; lastY: number } | null>(null);
+  /** Last warning raised by the fill tool ("leaked" and friends). */
+  const [gpToolHint, setGpToolHint] = useState<string | null>(null);
+  /**
+   * Bridge to the polyline finisher, which lives in the renderer effect while
+   * the keyboard handler that ends a polyline lives in another one.
+   */
+  const gpFinishPolylineRef = useRef<((closeShape: boolean) => void) | null>(null);
 
   // Edit Mesh modeling state
   const [editMeshTool, setEditMeshTool] = useState<"select" | "extrude" | "loopcut" | "inset">("select");
@@ -1785,6 +1864,44 @@ export function Viewport({
         toggleViewLock();
       }
 
+      // Grease Pencil tool gestures: finish a polyline, drop a lasso
+      // selection, delete the selected strokes.
+      const gpKeyNode = selectedNodeIdRef.current
+        ? graphRef.current.nodes.find((n) => n.id === selectedNodeIdRef.current && isPaintOrGreaseNode(n))
+        : null;
+      if (gpKeyNode) {
+        const targetFrame = currentFrameRef.current >= 0 ? currentFrameRef.current : 0;
+
+        if (gpToolRef.current === "polyline" && gpPolylineVerticesRef.current.length >= 2) {
+          if (e.key === "Enter" || e.key === "Escape") {
+            e.preventDefault();
+            // Enter closes the shape, Escape leaves it open.
+            gpFinishPolylineRef.current?.(e.key === "Enter");
+            return;
+          }
+        }
+
+        if (gpSelectedStrokeIdsRef.current.size > 0) {
+          if (e.key === "Escape") {
+            e.preventDefault();
+            gpSelectedStrokeIdsRef.current = new Set();
+            setGpSelectionOverlay([]);
+            setGpToolHint(null);
+            return;
+          }
+          if (e.key === "Delete" || e.key === "Backspace") {
+            e.preventDefault();
+            const frames = (gpKeyNode.params.frames as KeyframeDrawing[]) || [];
+            const next = deleteStrokes(frames, targetFrame, gpSelectedStrokeIdsRef.current);
+            if (next !== frames) onParamChangeRef.current?.("frames", next, gpKeyNode.id);
+            gpSelectedStrokeIdsRef.current = new Set();
+            setGpSelectionOverlay([]);
+            setGpToolHint(null);
+            return;
+          }
+        }
+      }
+
       // Terrain brush size shortcuts: [ (decrease) and ] (increase)
       const terrainNode = selectedNodeIdRef.current
         ? graphRef.current.nodes.find((n) => n.id === selectedNodeIdRef.current && isTerrainNode(n))
@@ -2378,6 +2495,331 @@ export function Viewport({
       }
     }
 
+    /**
+     * Reads the drawing settings off the Grease Pencil node, with defaults that
+     * match the node definition so older files keep working.
+     */
+    function readGpDrawSettings(gpNode: { params: Record<string, unknown> }) {
+      const modeParam = String(gpNode.params.stabilizerMode ?? "basic") as StabilizerMode;
+      const mode: StabilizerMode =
+        modeParam === "none" || modeParam === "basic" || modeParam === "weighted" || modeParam === "stabilizer"
+          ? modeParam
+          : "basic";
+      return {
+        stabilizerMode: mode,
+        stabilizerStrength: Math.max(0, Math.min(1, Number(gpNode.params.stabilizerStrength ?? 0.35))),
+        curve: {
+          gamma: Number(gpNode.params.pressureCurve ?? 1),
+          min: Number(gpNode.params.pressureMin ?? 0.05),
+          max: Number(gpNode.params.pressureMax ?? 1),
+        },
+      };
+    }
+
+    /**
+     * Projects one stabilized screen sample into the drawing and appends it to
+     * the in-progress stroke.
+     *
+     * Kept separate from the pointer handlers because a single `pointermove`
+     * now carries every coalesced tablet sample, and pen-up replays the
+     * stabilizer's remaining lag through the same path.
+     */
+    function appendGpStrokePoint(
+      gpNode: NonNullable<ReturnType<typeof findGpNode>>,
+      screenPos: { x: number; y: number },
+      pressure: number,
+      invMatrix: THREE.Matrix4,
+      tilt?: { angle: number; inclination: number } | null,
+    ) {
+      const rect = renderer.domElement.getBoundingClientRect();
+      // Reject samples that land on the same pixel as the previous one. The
+      // test is in screen space so it neither drops detail when zoomed in nor
+      // lets a cluster of coincident points pile up when zoomed out — such a
+      // pile makes the ribbon's tangents degenerate and shows up as a blob.
+      const lastScreen = gpLastAppendedScreenRef.current;
+      if (lastScreen && Math.hypot(screenPos.x - lastScreen.x, screenPos.y - lastScreen.y) < 0.6) {
+        return;
+      }
+
+      const ptData = resolvePointerPoint(
+        screenPos.x,
+        screenPos.y,
+        gpNode,
+        graphRef.current,
+        latestResultsRef.current,
+        camera,
+        renderer.domElement,
+        mode2D,
+      );
+      if (!ptData?.pos) return;
+
+      const localPos = ptData.pos.clone().applyMatrix4(invMatrix);
+      const localNormal = ptData.normal ? ptData.normal.clone().transformDirection(invMatrix) : undefined;
+      const last = gpActivePointsRef.current[gpActivePointsRef.current.length - 1];
+      if (last && Math.hypot(last.x - localPos.x, last.y - localPos.y, last.z - localPos.z) < 1e-5) {
+        return;
+      }
+      gpLastAppendedScreenRef.current = { x: screenPos.x, y: screenPos.y };
+
+      gpActivePointsRef.current.push({
+        x: localPos.x,
+        y: localPos.y,
+        z: localPos.z,
+        pressure,
+        nx: localNormal?.x,
+        ny: localNormal?.y,
+        nz: localNormal?.z,
+        tiltAngle: tilt?.angle,
+        tiltInc: tilt?.inclination,
+      });
+
+      // Preview points accumulate in the ref only. One pointer event can carry
+      // twenty coalesced samples, and re-rendering the viewport once per
+      // sample stalls the main thread badly enough to show up as input lag —
+      // the caller flushes once per event instead (see flushGpLivePreview).
+      gpLivePreviewRef.current = [
+        ...gpLivePreviewRef.current,
+        { screenX: screenPos.x - rect.left, screenY: screenPos.y - rect.top },
+      ];
+    }
+
+    /** Publishes the accumulated live-preview points to React, once. */
+    function flushGpLivePreview() {
+      setGpLivePreview(gpLivePreviewRef.current);
+    }
+
+    /**
+     * Writes a finished point list into the node's frames as a new stroke.
+     * Shared by the freehand pen, the shape tools and the fill tool.
+     */
+    function commitGpStroke(
+      gpNode: NonNullable<ReturnType<typeof findGpNode>>,
+      points: StrokePoint[],
+      opts: { closed?: boolean; fill?: boolean } = {},
+    ) {
+      if (points.length < 2) return;
+      const strokeColor = parseColorHex(gpNode.params.activeColor, "#38bdf8");
+      const customFillColor = parseColorHex(gpNode.params.fillColor, "");
+      const fillColorVal = customFillColor || strokeColor;
+      const fill = opts.fill ?? gpSolidFillRef.current;
+
+      const newStroke: GreaseStroke = {
+        id: `stroke_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        points,
+        color: strokeColor,
+        width: Number(gpNode.params.brushSize) || 4,
+        brushType: gpBrushTypeRef.current,
+        fill,
+        fillColor: fill ? fillColorVal : undefined,
+        closed: opts.closed,
+      };
+
+      const currentFrames = (gpNode.params.frames as KeyframeDrawing[]) || [];
+      const targetFrame = currentFrameRef.current >= 0 ? currentFrameRef.current : 0;
+      const nextFrames = addStrokeToFrames(currentFrames, targetFrame, newStroke);
+      onParamChangeRef.current?.("frames", nextFrames, gpNode.id);
+    }
+
+    /**
+     * Rebuilds the in-progress stroke from a screen-space outline.
+     *
+     * The shape tools regenerate their whole point list on every pointer move,
+     * so this replaces rather than appends, and it bypasses the stabilizer:
+     * a rectangle should be exactly a rectangle.
+     */
+    function setGpStrokeFromScreenPoints(
+      gpNode: NonNullable<ReturnType<typeof findGpNode>>,
+      screenPoints: ShapePoint[],
+      invMatrix: THREE.Matrix4,
+      pressure: number,
+    ) {
+      const rect = renderer.domElement.getBoundingClientRect();
+      gpActivePointsRef.current = [];
+      gpLivePreviewRef.current = [];
+
+      // Sample the outline often enough that projecting onto a curved surface
+      // or an angled plane still follows it.
+      const dense = densifyShapePoints(screenPoints, 6);
+      for (const sp of dense) {
+        const ptData = resolvePointerPoint(
+          sp.x,
+          sp.y,
+          gpNode,
+          graphRef.current,
+          latestResultsRef.current,
+          camera,
+          renderer.domElement,
+          mode2D,
+        );
+        if (!ptData?.pos) continue;
+        const local = ptData.pos.clone().applyMatrix4(invMatrix);
+        const normal = ptData.normal ? ptData.normal.clone().transformDirection(invMatrix) : undefined;
+        gpActivePointsRef.current.push({
+          x: local.x,
+          y: local.y,
+          z: local.z,
+          pressure,
+          nx: normal?.x,
+          ny: normal?.y,
+          nz: normal?.z,
+        });
+        gpLivePreviewRef.current.push({ screenX: sp.x - rect.left, screenY: sp.y - rect.top });
+      }
+      flushGpLivePreview();
+    }
+
+    /** Projects a drawing-local stroke point back to client space. */
+    function makeGpProjector(gpNode: NonNullable<ReturnType<typeof findGpNode>>): PointProjector {
+      const rect = renderer.domElement.getBoundingClientRect();
+      const matrix = getGpInverseMatrix(gpNode, latestResultsRef.current).clone().invert();
+      const v = new THREE.Vector3();
+      return (p: StrokePoint) => {
+        v.set(p.x, p.y, p.z).applyMatrix4(matrix).project(camera);
+        return {
+          x: rect.left + ((v.x + 1) / 2) * rect.width,
+          y: rect.top + ((1 - v.y) / 2) * rect.height,
+        };
+      };
+    }
+
+    /** Screen-space polylines of the active drawing, for selection overlays. */
+    function projectStrokes(
+      gpNode: NonNullable<ReturnType<typeof findGpNode>>,
+      strokes: GreaseStroke[],
+    ): { screenX: number; screenY: number }[][] {
+      const rect = renderer.domElement.getBoundingClientRect();
+      const project = makeGpProjector(gpNode);
+      return strokes.map((s) =>
+        s.points
+          .map((p) => project(p))
+          .filter((p): p is { x: number; y: number } => p !== null)
+          .map((p) => ({ screenX: p.x - rect.left, screenY: p.y - rect.top })),
+      );
+    }
+
+    /**
+     * Closes the polyline in progress and commits it.
+     *
+     * `closeShape` joins the last vertex back to the first, which is how the
+     * tool draws filled polygons.
+     */
+    function finishGpPolyline(
+      gpNode: NonNullable<ReturnType<typeof findGpNode>>,
+      invMatrix: THREE.Matrix4,
+      closeShape = false,
+    ) {
+      const verts = gpPolylineVerticesRef.current;
+      gpPolylineVerticesRef.current = [];
+      isGpDrawingRef.current = false;
+      setIsGpDrawing(false);
+      controls.enabled = true;
+
+      if (verts.length >= 2) {
+        const outline = closeShape ? [...verts, verts[0]] : verts;
+        setGpStrokeFromScreenPoints(gpNode, outline, invMatrix, 0.75);
+        const points = gpActivePointsRef.current;
+        if (points.length >= 2) {
+          commitGpStroke(gpNode, points, {
+            closed: closeShape,
+            fill: closeShape ? gpSolidFillRef.current : false,
+          });
+        }
+      }
+
+      gpActivePointsRef.current = [];
+      gpLivePreviewRef.current = [];
+      setGpLivePreview([]);
+    }
+
+    // Let the keyboard handler (another effect) end the polyline in progress.
+    gpFinishPolylineRef.current = (closeShape: boolean) => {
+      const gpNode = findGpNode();
+      if (!gpNode) return;
+      finishGpPolyline(gpNode, getGpInverseMatrix(gpNode, latestResultsRef.current), closeShape);
+    };
+
+    /**
+     * Fill tool: rasterizes the drawing around the click, floods the region
+     * the artist pointed at and commits its outline as a filled stroke.
+     */
+    function runGpFill(gpNode: NonNullable<ReturnType<typeof findGpNode>>, seed: { x: number; y: number }) {
+      const rect = renderer.domElement.getBoundingClientRect();
+      const frames = (gpNode.params.frames as KeyframeDrawing[]) || [];
+      const targetFrame = currentFrameRef.current >= 0 ? currentFrameRef.current : 0;
+      const drawing = resolveActiveDrawing(frames, targetFrame);
+      if (!drawing || drawing.strokes.length === 0) {
+        setGpToolHint("Nothing to fill — draw a closed shape first");
+        return;
+      }
+
+      const project = makeGpProjector(gpNode);
+      const boundaries = drawing.strokes
+        .map((s) => s.points.map((p) => project(p)).filter((p): p is { x: number; y: number } => p !== null))
+        .filter((line) => line.length >= 2);
+      if (boundaries.length === 0) {
+        setGpToolHint("Nothing to fill — draw a closed shape first");
+        return;
+      }
+
+      const result = computeFillRegion({
+        boundaries,
+        seed,
+        bounds: { minX: rect.left, minY: rect.top, maxX: rect.right, maxY: rect.bottom },
+        cellSize: 2,
+        // Gap closing scales with the brush: a fat brush implies a sketch
+        // whose corners are correspondingly loose.
+        gapClose: Math.max(2, (Number(gpNode.params.brushSize) || 4) * 0.75),
+        tolerance: 1.5,
+      });
+
+      if (result.leaked) {
+        setGpToolHint("Fill leaked — the region is not closed (raise Brush Size to bridge bigger gaps)");
+        return;
+      }
+      if (!result.contour) {
+        setGpToolHint("Nothing to fill here");
+        return;
+      }
+
+      const invMatrix = getGpInverseMatrix(gpNode, latestResultsRef.current);
+      const points: StrokePoint[] = [];
+      for (const sp of result.contour) {
+        const hit = resolvePointerPoint(
+          sp.x, sp.y, gpNode, graphRef.current, latestResultsRef.current, camera, renderer.domElement, mode2D,
+        );
+        if (!hit?.pos) continue;
+        const local = hit.pos.clone().applyMatrix4(invMatrix);
+        points.push({ x: local.x, y: local.y, z: local.z, pressure: 0.5 });
+      }
+      if (points.length < 3) {
+        setGpToolHint("Nothing to fill here");
+        return;
+      }
+      points.push({ ...points[0] });
+
+      setGpToolHint(null);
+      commitGpStroke(gpNode, points, { closed: true, fill: true });
+    }
+
+    /** Refreshes the highlight drawn over the lasso-selected strokes. */
+    function refreshGpSelectionOverlay(gpNode: NonNullable<ReturnType<typeof findGpNode>> | null) {
+      const ids = gpSelectedStrokeIdsRef.current;
+      if (!gpNode || ids.size === 0) {
+        setGpSelectionOverlay([]);
+        return;
+      }
+      const frames = (gpNode.params.frames as KeyframeDrawing[]) || [];
+      const drawing = resolveActiveDrawing(frames, currentFrameRef.current >= 0 ? currentFrameRef.current : 0);
+      const selected = (drawing?.strokes ?? []).filter((s) => ids.has(s.id));
+      setGpSelectionOverlay(projectStrokes(gpNode, selected));
+    }
+
+    function findGpNode() {
+      return selectedNodeIdRef.current
+        ? graphRef.current.nodes.find((n) => n.id === selectedNodeIdRef.current && isPaintOrGreaseNode(n)) ?? null
+        : null;
+    }
+
     function onCanvasPointerDown(e: PointerEvent) {
       if (e.ctrlKey && !e.metaKey && e.button === 0) {
         try {
@@ -2533,10 +2975,77 @@ export function Viewport({
       }
 
       const isDrawingOrModifying =
-        gpToolRef.current === "pen" ||
-        gpToolRef.current === "eraser_hard" ||
-        gpToolRef.current === "eraser_soft" ||
-        gpToolRef.current === "tint";
+        gpToolRef.current !== "select" &&
+        !GP_LASSO_TOOLS.has(gpToolRef.current) &&
+        gpToolRef.current !== "fill" &&
+        gpToolRef.current !== "polyline";
+
+      // Lasso-driven tools (select / carve) and the click-based tools (fill,
+      // polyline) run their own gestures rather than the stroke pipeline.
+      if (gpNode && !outputMode && !elevationView && e.button === 0 && !isMarqueeModifier && !e.altKey) {
+        const tool = gpToolRef.current;
+
+        if (GP_LASSO_TOOLS.has(tool)) {
+          controls.enabled = false;
+          const projector = makeGpProjector(gpNode);
+          const frames = (gpNode.params.frames as KeyframeDrawing[]) || [];
+          const targetFrame = currentFrameRef.current >= 0 ? currentFrameRef.current : 0;
+          const drawing = resolveActiveDrawing(frames, targetFrame);
+
+          // Pressing inside an existing selection moves it instead of
+          // starting a new lasso — the usual select-then-drag idiom.
+          if (tool === "lasso" && gpSelectedStrokeIdsRef.current.size > 0 && drawing) {
+            const hitRadius = 12;
+            const grabbed = drawing.strokes.some((s) => {
+              if (!gpSelectedStrokeIdsRef.current.has(s.id)) return false;
+              return s.points.some((p) => {
+                const sp = projector(p);
+                return sp !== null && Math.hypot(sp.x - e.clientX, sp.y - e.clientY) < hitRadius;
+              });
+            });
+            if (grabbed) {
+              gpSelectionDragRef.current = { lastX: e.clientX, lastY: e.clientY };
+              gpWorkingFramesRef.current = frames;
+              e.stopImmediatePropagation();
+              return;
+            }
+          }
+
+          gpLassoPointsRef.current = [{ x: e.clientX, y: e.clientY }];
+          setGpLassoPreview(gpLassoPointsRef.current);
+          isGpDrawingRef.current = true;
+          setIsGpDrawing(true);
+          e.stopImmediatePropagation();
+          return;
+        }
+
+        if (tool === "fill") {
+          runGpFill(gpNode, { x: e.clientX, y: e.clientY });
+          e.stopImmediatePropagation();
+          return;
+        }
+
+        if (tool === "polyline") {
+          const invMatrix = getGpInverseMatrix(gpNode, latestResultsRef.current);
+          // Double click closes the polyline.
+          if (e.detail >= 2 && gpPolylineVerticesRef.current.length >= 2) {
+            finishGpPolyline(gpNode, invMatrix);
+          } else {
+            gpPolylineVerticesRef.current = [...gpPolylineVerticesRef.current, { x: e.clientX, y: e.clientY }];
+            isGpDrawingRef.current = true;
+            setIsGpDrawing(true);
+            controls.enabled = false;
+            setGpStrokeFromScreenPoints(
+              gpNode,
+              buildPolylinePoints(gpPolylineVerticesRef.current),
+              invMatrix,
+              0.75,
+            );
+          }
+          e.stopImmediatePropagation();
+          return;
+        }
+      }
 
       if (gpNode && !outputMode && !elevationView && isDrawingOrModifying && e.button === 0 && !isMarqueeModifier && !e.altKey) {
         isGpDrawingRef.current = true;
@@ -2573,7 +3082,19 @@ export function Viewport({
           const localNormal = ptData?.normal ? ptData.normal.clone().transformDirection(invMatrix) : undefined;
           const currentFrames = gpWorkingFramesRef.current;
           const targetFrame = currentFrameRef.current >= 0 ? currentFrameRef.current : 0;
-          if (gpToolRef.current === "eraser_hard") {
+          if (GP_SHAPE_TOOLS.has(gpToolRef.current)) {
+            // Shapes only need their anchor on press; the outline is rebuilt
+            // on every move until release.
+            gpLineAnchorRef.current = { x: e.clientX, y: e.clientY };
+            gpActivePointsRef.current = [];
+            gpLivePreviewRef.current = [];
+            flushGpLivePreview();
+          } else if (gpToolRef.current === "eraser_hard") {
+            const erased = eraseStrokesCut(currentFrames, targetFrame, localPos, toolRadius);
+            gpWorkingFramesRef.current = erased;
+            onParamChangeRef.current?.("frames", erased, gpNode.id);
+          } else if (gpToolRef.current === "eraser_stroke") {
+            // Whole-stroke eraser: touching a line removes all of it.
             const erased = eraseStrokesAtPosition(currentFrames, targetFrame, localPos, toolRadius);
             gpWorkingFramesRef.current = erased;
             onParamChangeRef.current?.("frames", erased, gpNode.id);
@@ -2587,7 +3108,16 @@ export function Viewport({
             gpWorkingFramesRef.current = tinted;
             onParamChangeRef.current?.("frames", tinted, gpNode.id);
           } else {
-            let basePr = calculateSimulatedPressure(null, { x: screenX, y: screenY, time: now }, e.pressure);
+            const settings = readGpDrawSettings(gpNode);
+            const sample = collectPointerSamples(e, now)[0];
+            gpPrevSampleRef.current = sample;
+            gpStabilizerRef.current = createStabilizer(settings.stabilizerMode, settings.stabilizerStrength);
+            gpStabilizerRef.current.begin({ x: e.clientX, y: e.clientY });
+            // Origin for the straight-line / shape tools (see gpToolRef).
+            gpLineAnchorRef.current = { x: e.clientX, y: e.clientY };
+
+            gpPressureTrackerRef.current = createPressureTracker(settings.curve);
+            const basePr = gpPressureTrackerRef.current.next(sample, null);
             const pressure = Math.max(0.04, Math.min(2.5, basePr * gpPressureModifierRef.current));
             gpActivePointsRef.current = [
               {
@@ -2601,6 +3131,7 @@ export function Viewport({
               },
             ];
             gpSmoothedWorldPosRef.current = worldPos.clone();
+            gpLastAppendedScreenRef.current = { x: e.clientX, y: e.clientY };
             gpLivePreviewRef.current = [{ screenX, screenY }];
             setGpLivePreview([{ screenX, screenY }]);
           }
@@ -2844,10 +3375,75 @@ export function Viewport({
         ? graphRef.current.nodes.find((n) => n.id === selectedNodeIdRef.current && isPaintOrGreaseNode(n))
         : null;
 
+      // Dragging a lasso selection around.
+      if (gpSelectionDragRef.current && gpNode) {
+        const drag = gpSelectionDragRef.current;
+        const invMatrix = getGpInverseMatrix(gpNode, latestResultsRef.current);
+        const from = resolvePointerPoint(
+          drag.lastX, drag.lastY, gpNode, graphRef.current, latestResultsRef.current, camera, renderer.domElement, mode2D,
+        );
+        const to = resolvePointerPoint(
+          e.clientX, e.clientY, gpNode, graphRef.current, latestResultsRef.current, camera, renderer.domElement, mode2D,
+        );
+        if (from?.pos && to?.pos) {
+          const a = from.pos.clone().applyMatrix4(invMatrix);
+          const b = to.pos.clone().applyMatrix4(invMatrix);
+          const frames = gpWorkingFramesRef.current || ((gpNode.params.frames as KeyframeDrawing[]) || []);
+          const targetFrame = currentFrameRef.current >= 0 ? currentFrameRef.current : 0;
+          const moved = translateStrokes(frames, targetFrame, gpSelectedStrokeIdsRef.current, {
+            x: b.x - a.x,
+            y: b.y - a.y,
+            z: b.z - a.z,
+          });
+          gpWorkingFramesRef.current = moved;
+          onParamChangeRef.current?.("frames", moved, gpNode.id);
+        }
+        drag.lastX = e.clientX;
+        drag.lastY = e.clientY;
+        return;
+      }
+
+      // Freehand lasso path (select / carve).
+      if (isGpDrawingRef.current && gpNode && GP_LASSO_TOOLS.has(gpToolRef.current)) {
+        const last = gpLassoPointsRef.current[gpLassoPointsRef.current.length - 1];
+        if (!last || Math.hypot(e.clientX - last.x, e.clientY - last.y) > 2) {
+          gpLassoPointsRef.current = [...gpLassoPointsRef.current, { x: e.clientX, y: e.clientY }];
+          setGpLassoPreview(gpLassoPointsRef.current);
+        }
+        return;
+      }
+
+      // Shape tools rebuild their whole outline from anchor to cursor.
+      if (isGpDrawingRef.current && gpNode && GP_SHAPE_TOOLS.has(gpToolRef.current) && gpLineAnchorRef.current) {
+        const invMatrix = getGpInverseMatrix(gpNode, latestResultsRef.current);
+        const shape = buildShapePoints(
+          gpToolRef.current as ShapeKind,
+          gpLineAnchorRef.current,
+          { x: e.clientX, y: e.clientY },
+          {
+            constrain: e.shiftKey || Boolean(e.getModifierState && e.getModifierState("Shift")),
+            fromCenter: Boolean(e.getModifierState && e.getModifierState("Control")),
+            flip: Boolean(e.getModifierState && e.getModifierState("Alt")),
+          },
+        );
+        setGpStrokeFromScreenPoints(gpNode, shape, invMatrix, 0.8);
+        return;
+      }
+
+      // Polyline: preview the segment running to the cursor.
+      if (gpNode && gpToolRef.current === "polyline" && gpPolylineVerticesRef.current.length > 0) {
+        const invMatrix = getGpInverseMatrix(gpNode, latestResultsRef.current);
+        setGpStrokeFromScreenPoints(
+          gpNode,
+          buildPolylinePoints(gpPolylineVerticesRef.current, { x: e.clientX, y: e.clientY }),
+          invMatrix,
+          0.75,
+        );
+        return;
+      }
+
       if (isGpDrawingRef.current && gpNode && host) {
         const rect = renderer.domElement.getBoundingClientRect();
-        const screenX = e.clientX - rect.left;
-        const screenY = e.clientY - rect.top;
         const now = performance.now();
 
         const ptData = resolvePointerPoint(
@@ -2870,7 +3466,7 @@ export function Viewport({
           const bSize = Number(gpNode.params.brushSize) || 4;
           const toolRadius = Math.max(0.85, bSize * 0.1);
           if (gpToolRef.current === "eraser_hard") {
-            const erased = eraseStrokesAtPosition(currentFrames, targetFrame, localPos, toolRadius);
+            const erased = eraseStrokesCut(currentFrames, targetFrame, localPos, toolRadius);
             gpWorkingFramesRef.current = erased;
             onParamChangeRef.current?.("frames", erased, gpNode.id);
           } else if (gpToolRef.current === "eraser_soft") {
@@ -2887,76 +3483,72 @@ export function Viewport({
             const isCtrl = Boolean(e.getModifierState && e.getModifierState("Control"));
             const targetMod = isShift ? 0.35 : isCtrl ? 1.85 : 1.0;
             gpPressureModifierRef.current = THREE.MathUtils.lerp(gpPressureModifierRef.current, targetMod, 0.12);
-            let basePr = calculateSimulatedPressure(gpPrevPointerRef.current, { x: screenX, y: screenY, time: now }, e.pressure);
-            const pressure = Math.max(0.04, Math.min(2.5, basePr * gpPressureModifierRef.current));
 
-            // Sub-stepping for Paint on geometry to wrap smoothly around curved surfaces / sharp corners
-            if (gpPrevPointerRef.current && gpNode.type === PAINT_ON_GEOMETRY_NODE.type) {
-              const dx = screenX - gpPrevPointerRef.current.x;
-              const dy = screenY - gpPrevPointerRef.current.y;
-              const dist = Math.hypot(dx, dy);
-              if (dist > 8) {
-                const steps = Math.min(6, Math.floor(dist / 6));
-                for (let s = 1; s < steps; s++) {
-                  const t = s / steps;
-                  const subClientX = e.clientX - (1 - t) * dx;
-                  const subClientY = e.clientY - (1 - t) * dy;
-                  const subPt = resolvePointerPoint(
-                    subClientX,
-                    subClientY,
-                    gpNode,
-                    graphRef.current,
-                    latestResultsRef.current,
-                    camera,
-                    renderer.domElement,
-                    mode2D,
-                  );
-                  if (subPt) {
-                    const subLocal = subPt.pos.clone().applyMatrix4(invMatrix);
-                    const subNormal = subPt.normal ? subPt.normal.clone().transformDirection(invMatrix) : undefined;
-                    gpActivePointsRef.current.push({
-                      x: subLocal.x,
-                      y: subLocal.y,
-                      z: subLocal.z,
+            const settings = readGpDrawSettings(gpNode);
+            if (!gpStabilizerRef.current) {
+              gpStabilizerRef.current = createStabilizer(settings.stabilizerMode, settings.stabilizerStrength);
+              gpStabilizerRef.current.begin({ x: e.clientX, y: e.clientY });
+            }
+            if (!gpPressureTrackerRef.current) {
+              gpPressureTrackerRef.current = createPressureTracker(settings.curve);
+            }
+
+            // One pointermove carries every sample the tablet reported since
+            // the last frame. Replaying them all is what keeps fast strokes
+            // faithful instead of turning them into long straight chords.
+            const samples = collectPointerSamples(e, now);
+            // Only decimate far past what any tablet reports per frame; the
+            // per-pixel dedup in appendGpStrokePoint is the real throttle, and
+            // it never discards motion the way a fixed stride does.
+            const maxSamples = 64;
+            const stride = Math.max(1, Math.ceil(samples.length / maxSamples));
+            const isPaintOnGeo = gpNode.type === PAINT_ON_GEOMETRY_NODE.type;
+
+            for (let i = 0; i < samples.length; i++) {
+              if (stride > 1 && i % stride !== 0 && i !== samples.length - 1) continue;
+              const sample = samples[i];
+              const basePr = gpPressureTrackerRef.current.next(sample, gpPrevSampleRef.current);
+              const pressure = Math.max(0.04, Math.min(2.5, basePr * gpPressureModifierRef.current));
+
+              // Pen speed in px/ms drives how much the stabilizer relaxes, so
+              // a fast flick tracks the hand instead of trailing behind it.
+              const prevSample = gpPrevSampleRef.current;
+              const speed = prevSample
+                ? Math.hypot(sample.x - prevSample.x, sample.y - prevSample.y) /
+                  Math.max(1, sample.time - prevSample.time)
+                : 0;
+              const stabilized = gpStabilizerRef.current.push({ x: sample.x, y: sample.y }, speed);
+
+              // Paint on geometry still sub-steps across wide gaps so strokes
+              // wrap around curved surfaces instead of skipping over them.
+              const prevScreen = gpPrevPointerRef.current;
+              if (isPaintOnGeo && prevScreen) {
+                const dx = stabilized.x - rect.left - prevScreen.x;
+                const dy = stabilized.y - rect.top - prevScreen.y;
+                const gap = Math.hypot(dx, dy);
+                if (gap > 8) {
+                  const steps = Math.min(6, Math.floor(gap / 6));
+                  for (let s = 1; s < steps; s++) {
+                    const t = s / steps;
+                    appendGpStrokePoint(
+                      gpNode,
+                      { x: stabilized.x - (1 - t) * dx, y: stabilized.y - (1 - t) * dy },
                       pressure,
-                      nx: subNormal?.x,
-                      ny: subNormal?.y,
-                      nz: subNormal?.z,
-                    });
+                      invMatrix,
+                    );
                   }
                 }
               }
-            }
 
-            gpPrevPointerRef.current = { x: screenX, y: screenY, time: now };
-
-            const smoothing = Math.max(0, Math.min(1, Number(gpNode.params.smoothing ?? 0.2)));
-            let ptPos = worldPos;
-            if (smoothing > 0.01 && gpSmoothedWorldPosRef.current) {
-              const alpha = Math.max(0.15, 1.0 - smoothing * 0.75);
-              gpSmoothedWorldPosRef.current.lerp(worldPos, alpha);
-              ptPos = gpSmoothedWorldPosRef.current.clone();
-            } else {
-              gpSmoothedWorldPosRef.current = worldPos.clone();
+              appendGpStrokePoint(gpNode, stabilized, pressure, invMatrix, tiltToBrushAngle(sample));
+              gpPrevPointerRef.current = {
+                x: stabilized.x - rect.left,
+                y: stabilized.y - rect.top,
+                time: sample.time,
+              };
+              gpPrevSampleRef.current = sample;
             }
-
-            const localPtPos = ptPos.clone().applyMatrix4(invMatrix);
-            const localNormal = ptData?.normal ? ptData.normal.clone().transformDirection(invMatrix) : undefined;
-            const lastPt = gpActivePointsRef.current[gpActivePointsRef.current.length - 1];
-            if (!lastPt || (Math.hypot(lastPt.x - localPtPos.x, lastPt.y - localPtPos.y, lastPt.z - localPtPos.z) > 0.02)) {
-              gpActivePointsRef.current.push({
-                x: localPtPos.x,
-                y: localPtPos.y,
-                z: localPtPos.z,
-                pressure,
-                nx: localNormal?.x,
-                ny: localNormal?.y,
-                nz: localNormal?.z,
-              });
-              const nextPreview = [...gpLivePreviewRef.current, { screenX, screenY }];
-              gpLivePreviewRef.current = nextPreview;
-              setGpLivePreview(nextPreview);
-            }
+            flushGpLivePreview();
           }
         }
         return;
@@ -3139,10 +3731,115 @@ export function Viewport({
         ? graphRef.current.nodes.find((n) => n.id === selectedNodeIdRef.current && isPaintOrGreaseNode(n))
         : null;
 
+      // End of a lasso-selection drag.
+      if (gpSelectionDragRef.current) {
+        gpSelectionDragRef.current = null;
+        gpWorkingFramesRef.current = null;
+        controls.enabled = true;
+        refreshGpSelectionOverlay(gpNode ?? null);
+        return;
+      }
+
+      // Lasso released: select the enclosed strokes, or carve them away.
+      if (isGpDrawingRef.current && gpNode && GP_LASSO_TOOLS.has(gpToolRef.current)) {
+        isGpDrawingRef.current = false;
+        setIsGpDrawing(false);
+        controls.enabled = true;
+
+        const polygon = gpLassoPointsRef.current;
+        gpLassoPointsRef.current = [];
+        setGpLassoPreview([]);
+
+        if (polygon.length >= 3) {
+          const frames = (gpNode.params.frames as KeyframeDrawing[]) || [];
+          const targetFrame = currentFrameRef.current >= 0 ? currentFrameRef.current : 0;
+          const projector = makeGpProjector(gpNode);
+
+          if (gpToolRef.current === "lasso") {
+            const drawing = resolveActiveDrawing(frames, targetFrame);
+            const mode = e.shiftKey || Boolean(e.getModifierState && e.getModifierState("Shift"))
+              ? "enclose"
+              : "touch";
+            const picked = selectStrokesInLasso(drawing?.strokes ?? [], polygon, projector, mode);
+            gpSelectedStrokeIdsRef.current = new Set(picked);
+            refreshGpSelectionOverlay(gpNode);
+            setGpToolHint(
+              picked.length > 0
+                ? `${picked.length} stroke${picked.length > 1 ? "s" : ""} selected — drag to move, ⌫ to delete`
+                : null,
+            );
+          } else {
+            // Carve: the lasso has to exist in drawing space too, so a hole
+            // punched in a filled shape lands in the right place.
+            const invMatrix = getGpInverseMatrix(gpNode, latestResultsRef.current);
+            const localPolygon: StrokePoint[] = [];
+            for (const sp of polygon) {
+              const hit = resolvePointerPoint(
+                sp.x, sp.y, gpNode, graphRef.current, latestResultsRef.current, camera, renderer.domElement, mode2D,
+              );
+              if (!hit?.pos) continue;
+              const local = hit.pos.clone().applyMatrix4(invMatrix);
+              localPolygon.push({ x: local.x, y: local.y, z: local.z, pressure: 0.6 });
+            }
+            const carved = carveStrokesWithLasso(frames, targetFrame, polygon, projector, localPolygon);
+            if (carved !== frames) onParamChangeRef.current?.("frames", carved, gpNode.id);
+          }
+        }
+        return;
+      }
+
+      // Shape tools commit the outline they previewed.
+      if (isGpDrawingRef.current && gpNode && GP_SHAPE_TOOLS.has(gpToolRef.current)) {
+        isGpDrawingRef.current = false;
+        setIsGpDrawing(false);
+        controls.enabled = true;
+        const tool = gpToolRef.current;
+        const points = gpActivePointsRef.current;
+        gpActivePointsRef.current = [];
+        gpLivePreviewRef.current = [];
+        setGpLivePreview([]);
+        gpLineAnchorRef.current = null;
+
+        const closed = tool === "rect" || tool === "ellipse";
+        if (points.length >= 2) {
+          commitGpStroke(gpNode, points, { closed, fill: closed ? gpSolidFillRef.current : false });
+        }
+        return;
+      }
+
+      // Polyline stays armed across clicks; nothing to do on release.
+      if (gpToolRef.current === "polyline") {
+        controls.enabled = true;
+        return;
+      }
+
       if (isGpDrawingRef.current) {
         isGpDrawingRef.current = false;
         setIsGpDrawing(false);
         controls.enabled = true;
+        setGpLivePreview([]);
+        gpLivePreviewRef.current = [];
+
+        // Drain the stabilizer's lag into the stroke so the line actually
+        // reaches where the pen was lifted (Krita's "finish line").
+        if (gpToolRef.current === "pen" && gpStabilizerRef.current && gpNode) {
+          const tail = gpStabilizerRef.current.finish({ x: e.clientX, y: e.clientY });
+          if (tail.length > 0) {
+            const invMatrix = getGpInverseMatrix(gpNode, latestResultsRef.current);
+            const lastPressure = gpActivePointsRef.current[gpActivePointsRef.current.length - 1]?.pressure ?? 0.6;
+            for (let i = 0; i < tail.length; i++) {
+              // Thin the catch-up tail out the way a real pen lifts off:
+              // holding full width over the drained lag left an ink blob.
+              const t = (i + 1) / tail.length;
+              appendGpStrokePoint(gpNode, tail[i], lastPressure * (1 - 0.55 * t), invMatrix);
+            }
+          }
+        }
+        gpStabilizerRef.current = null;
+        gpPrevSampleRef.current = null;
+        gpLastAppendedScreenRef.current = null;
+        gpLineAnchorRef.current = null;
+        gpPrevPointerRef.current = null;
         setGpLivePreview([]);
         gpLivePreviewRef.current = [];
 
@@ -3151,14 +3848,32 @@ export function Viewport({
             const p = gpActivePointsRef.current[0];
             gpActivePointsRef.current.push({ x: p.x + 0.002, y: p.y, z: p.z + 0.002, pressure: p.pressure });
           }
+          const usedHardwarePressure = gpPressureTrackerRef.current?.usedHardware() ?? false;
+          gpPressureTrackerRef.current = null;
+
           const taperStart = gpShiftAtStartRef.current;
-          const taperEnd = e.shiftKey || Boolean(e.getModifierState && e.getModifierState("Shift"));
+          // Without a stylus reporting the lift-off, the stroke has to end
+          // itself: velocity-simulated pressure always reads the hand's final
+          // deceleration as "pressing harder".
+          const taperEnd =
+            !usedHardwarePressure || e.shiftKey || Boolean(e.getModifierState && e.getModifierState("Shift"));
           const widenStart = gpCtrlAtStartRef.current;
           const widenEnd = Boolean(e.getModifierState && e.getModifierState("Control"));
           gpShiftAtStartRef.current = false;
           gpCtrlAtStartRef.current = false;
 
-          const smoothing = Math.max(0, Math.min(1, Number(gpNode.params.smoothing ?? 0.2)));
+          // Collapse the pile of samples left by the hand dwelling before the
+          // pen came up; it renders as a blob at the stroke's tip.
+          const strokeRadius = (Number(gpNode.params.brushSize) || 4) * 0.02;
+          gpActivePointsRef.current = trimStrokeDwellTail(gpActivePointsRef.current, strokeRadius * 1.5);
+
+          // The stabilizer already filtered the input live, and the ribbon
+          // builder resamples onto a spline. Running the old post-pass at full
+          // strength on top of both is what rounded off fast strokes, so it is
+          // scaled back to a finishing touch whenever a stabilizer ran.
+          const rawSmoothing = Math.max(0, Math.min(1, Number(gpNode.params.smoothing ?? 0.2)));
+          const stabilizerActive = readGpDrawSettings(gpNode).stabilizerMode !== "none";
+          const smoothing = stabilizerActive ? rawSmoothing * 0.35 : rawSmoothing;
           const smoothedPoints = smoothStrokePoints(gpActivePointsRef.current, smoothing);
 
           const finalPoints = (taperStart || taperEnd || widenStart || widenEnd)
@@ -5494,6 +6209,63 @@ export function Viewport({
           />
         </svg>
       )}
+      {/* Lasso path (select / carve) and the highlight over picked strokes */}
+      {!outputMode && (gpLassoPreview.length > 1 || gpSelectionOverlay.length > 0) && (
+        <svg
+          style={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: 43 }}
+          width="100%"
+          height="100%"
+        >
+          {gpSelectionOverlay.map((line, i) => (
+            <polyline
+              key={`gp-sel-${i}`}
+              points={line.map((p) => `${p.screenX},${p.screenY}`).join(" ")}
+              fill="none"
+              stroke="#f59e0b"
+              strokeWidth={3}
+              strokeOpacity={0.85}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          ))}
+          {gpLassoPreview.length > 1 &&
+            (() => {
+              const rect = hostRef.current?.getBoundingClientRect();
+              const ox = rect?.left ?? 0;
+              const oy = rect?.top ?? 0;
+              const pts = gpLassoPreview.map((p) => `${p.x - ox},${p.y - oy}`).join(" ");
+              return (
+                <polygon
+                  points={pts}
+                  fill={gpTool === "carve" ? "rgba(239, 68, 68, 0.12)" : "rgba(56, 189, 248, 0.10)"}
+                  stroke={gpTool === "carve" ? "#ef4444" : "#38bdf8"}
+                  strokeWidth={1.5}
+                  strokeDasharray="6 4"
+                />
+              );
+            })()}
+        </svg>
+      )}
+      {/* Transient hint from the lasso / fill tools */}
+      {!outputMode && gpToolHint && (
+        <div
+          style={{
+            position: "absolute",
+            bottom: 56,
+            left: "50%",
+            transform: "translateX(-50%)",
+            padding: "6px 12px",
+            borderRadius: 6,
+            background: "rgba(15, 23, 42, 0.92)",
+            color: "#e2e8f0",
+            fontSize: 11,
+            pointerEvents: "none",
+            zIndex: 44,
+          }}
+        >
+          {gpToolHint}
+        </div>
+      )}
       {/* Passe-partout guide: target-output-aspect crop, shown while a Camera
           node is selected so "Aligner Caméra" reproduces what's actually
           framed — see the comment in tick() next to cameraGuideRef. */}
@@ -5600,6 +6372,69 @@ export function Viewport({
                 </svg>
               </button>
 
+              {/* Shape tools. Shift constrains (square / circle / 15° line),
+                  Ctrl draws from the centre, Alt flips an arc's bulge. */}
+              {(
+                [
+                  {
+                    tool: "line" as GpToolMode,
+                    title: "Line (Shift: snap angle · Ctrl: from centre)",
+                    path: <line x1="4" y1="20" x2="20" y2="4" />,
+                  },
+                  {
+                    tool: "rect" as GpToolMode,
+                    title: "Rectangle (Shift: square · Ctrl: from centre)",
+                    path: <rect x="4" y="5" width="16" height="14" rx="1" />,
+                  },
+                  {
+                    tool: "ellipse" as GpToolMode,
+                    title: "Ellipse (Shift: circle · Ctrl: from centre)",
+                    path: <ellipse cx="12" cy="12" rx="9" ry="6.5" />,
+                  },
+                  {
+                    tool: "arc" as GpToolMode,
+                    title: "Arc (Alt: flip the bulge)",
+                    path: <path d="M4 20 A 16 16 0 0 1 20 4" />,
+                  },
+                  {
+                    tool: "polyline" as GpToolMode,
+                    title: "Polyline (click each vertex · double-click or Enter to close · Esc to end open)",
+                    path: <polyline points="3 18 9 8 14 15 21 5" />,
+                  },
+                  {
+                    tool: "fill" as GpToolMode,
+                    title: "Fill (click inside a closed region — Brush Size sets how big a gap is bridged)",
+                    path: (
+                      <>
+                        <path d="M19 11 11 3 3 11l8 8z" />
+                        <path d="M19 15c0 1.7 1.3 3 2 3s2-1.3 2-3-2-4-2-4-2 2.3-2 4Z" />
+                      </>
+                    ),
+                  },
+                ] as const
+              ).map(({ tool, title, path }) => (
+                <button
+                  key={tool}
+                  type="button"
+                  className={`viewport-hud-button ${gpTool === tool ? "viewport-hud-button-active" : ""}`}
+                  onClick={() => setGpTool(tool)}
+                  title={title}
+                >
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    {path}
+                  </svg>
+                </button>
+              ))}
+
               {/* Brush Preset Selector */}
               <select
                 value={gpBrushType}
@@ -5619,12 +6454,15 @@ export function Viewport({
                   outline: "none",
                   cursor: "pointer",
                 }}
-                title="Brush preset: Ink Pen, Ink Pen Rough, Marker Bold, Airbrush"
+                title="Brush preset — Marker Bold follows stylus tilt; Pencil, Charcoal and Watercolour are textured media"
               >
                 <option value="ink_pen" style={{ background: "#1e293b", color: "#fff" }}>Ink Pen</option>
                 <option value="ink_pen_rough" style={{ background: "#1e293b", color: "#fff" }}>Ink Pen Rough</option>
                 <option value="marker_bold" style={{ background: "#1e293b", color: "#fff" }}>Marker Bold</option>
                 <option value="airbrush" style={{ background: "#1e293b", color: "#fff" }}>Airbrush</option>
+                <option value="pencil" style={{ background: "#1e293b", color: "#fff" }}>Pencil</option>
+                <option value="charcoal" style={{ background: "#1e293b", color: "#fff" }}>Charcoal</option>
+                <option value="watercolor" style={{ background: "#1e293b", color: "#fff" }}>Watercolour</option>
               </select>
 
               {/* Solid Fill Toggle */}
@@ -5696,6 +6534,73 @@ export function Viewport({
                   <path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21" />
                   <path d="M22 21H7" strokeDasharray="none" />
                   <path d="m5 11 9 9" />
+                </svg>
+              </button>
+
+              {/* Tool: Stroke Eraser — removes a whole line on contact */}
+              <button
+                type="button"
+                className={`viewport-hud-button ${gpTool === "eraser_stroke" ? "viewport-hud-button-active" : ""}`}
+                onClick={() => setGpTool("eraser_stroke")}
+                title="Stroke Eraser (touch a line to delete all of it)"
+              >
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M3 17c4-9 10-11 18-12" />
+                  <path d="m14 8 7 7M21 8l-7 7" />
+                </svg>
+              </button>
+
+              {/* Tool: Lasso select (drag to pick, drag again to move, ⌫ to delete) */}
+              <button
+                type="button"
+                className={`viewport-hud-button ${gpTool === "lasso" ? "viewport-hud-button-active" : ""}`}
+                onClick={() => setGpTool("lasso")}
+                title="Lasso Select (Shift: only fully enclosed · drag selection to move · ⌫ delete · Esc clear)"
+              >
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <ellipse cx="12" cy="9" rx="9" ry="6" strokeDasharray="3 2" />
+                  <path d="M8 14.5c0 2 1 3.5 1 5" />
+                </svg>
+              </button>
+
+              {/* Tool: Carver — boolean subtraction along a lasso */}
+              <button
+                type="button"
+                className={`viewport-hud-button ${gpTool === "carve" ? "viewport-hud-button-active" : ""}`}
+                onClick={() => setGpTool("carve")}
+                title="Carver (lasso a region to subtract it — cuts strokes, punches holes in fills)"
+              >
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <circle cx="10" cy="12" r="7" strokeDasharray="3 2" />
+                  <path d="M14 5h7v7" />
+                  <path d="M21 5 13 13" />
                 </svg>
               </button>
 

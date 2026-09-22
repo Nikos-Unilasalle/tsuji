@@ -11,13 +11,31 @@ export interface StrokePoint {
   nx?: number;
   ny?: number;
   nz?: number;
+  /** Stylus tilt direction, in radians within the drawing plane. */
+  tiltAngle?: number;
+  /** How far the stylus is tilted from vertical, 0 (upright) to 1 (flat). */
+  tiltInc?: number;
 }
 
 export type GreaseBrushType =
   | "ink_pen"
   | "ink_pen_rough"
   | "marker_bold"
-  | "airbrush";
+  | "airbrush"
+  | "pencil"
+  | "charcoal"
+  | "watercolor";
+
+/** Brush ids handed to the shader for procedural grain (see applyStrokeEdgeAA). */
+export const BRUSH_SHADER_ID: Record<GreaseBrushType, number> = {
+  ink_pen: 0,
+  ink_pen_rough: 0,
+  marker_bold: 0,
+  airbrush: 0,
+  pencil: 1,
+  charcoal: 2,
+  watercolor: 3,
+};
 
 export interface GreaseStroke {
   id: string;
@@ -28,6 +46,8 @@ export interface GreaseStroke {
   fill?: boolean;
   fillColor?: string;
   closed?: boolean;
+  /** Regions subtracted from this stroke's fill by the Carver tool. */
+  holes?: StrokePoint[][];
 }
 
 export interface KeyframeDrawing {
@@ -169,21 +189,35 @@ export function buildStrokesFillGeometry(
     const origin = new THREE.Vector3(pts[0].x, pts[0].y, pts[0].z);
 
     // Project points into 2D plane coordinates
-    const pts2D: THREE.Vector2[] = [];
-    for (const p of pts) {
+    const to2D = (p: StrokePoint) => {
       const diff = new THREE.Vector3(p.x, p.y, p.z).sub(origin);
-      pts2D.push(new THREE.Vector2(diff.dot(u), diff.dot(v)));
-    }
+      return new THREE.Vector2(diff.dot(u), diff.dot(v));
+    };
+    const pts2D: THREE.Vector2[] = pts.map(to2D);
+
+    // Holes punched by the Carver tool, triangulated together with the
+    // outline so the fill really is perforated rather than overdrawn.
+    const holes3D = (stroke.holes ?? []).filter((h) => h && h.length >= 3);
+    const holes2D = holes3D.map((h) => h.map(to2D));
 
     // Triangulate using Three.js built-in ShapeUtils ear-clipping
-    const triangles = THREE.ShapeUtils.triangulateShape(pts2D, []);
+    const triangles = THREE.ShapeUtils.triangulateShape(pts2D, holes2D);
     if (!triangles || triangles.length === 0) continue;
 
     const startV = vertexOffset;
+    // Vertex order must match what triangulateShape indexed: outline first,
+    // then each hole in turn.
     for (const p of pts) {
       positions.push(p.x, p.y, p.z);
       colors.push(tmpColor.r, tmpColor.g, tmpColor.b);
       vertexOffset++;
+    }
+    for (const hole of holes3D) {
+      for (const p of hole) {
+        positions.push(p.x, p.y, p.z);
+        colors.push(tmpColor.r, tmpColor.g, tmpColor.b);
+        vertexOffset++;
+      }
     }
 
     for (const tri of triangles) {
@@ -202,12 +236,198 @@ export function buildStrokesFillGeometry(
 }
 
 /**
+ * Resamples a raw stroke polyline along a centripetal Catmull-Rom spline at a
+ * roughly constant arc-length spacing.
+ *
+ * Raw tablet samples are unevenly spaced (fast motion = wide gaps) and reveal
+ * visible facets when the viewport is zoomed in. Resampling gives the ribbon
+ * builder a dense, evenly spaced point set so joins stay smooth at any zoom,
+ * while pressure and surface normals are interpolated along with position.
+ */
+export function resampleStrokePoints(points: StrokePoint[], spacing: number): StrokePoint[] {
+  if (!points || points.length < 3 || !(spacing > 0)) return points ?? [];
+
+  // Drop duplicate samples: they make the Catmull-Rom tangents degenerate.
+  const src: StrokePoint[] = [points[0]];
+  for (let i = 1; i < points.length; i++) {
+    const a = src[src.length - 1];
+    const b = points[i];
+    if (Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z) > 1e-6) src.push(b);
+  }
+  if (src.length < 3) return points;
+
+  let totalLength = 0;
+  for (let i = 1; i < src.length; i++) {
+    totalLength += Math.hypot(src[i].x - src[i - 1].x, src[i].y - src[i - 1].y, src[i].z - src[i - 1].z);
+  }
+  if (totalLength <= spacing) return points;
+
+  // Guard against pathological point counts on very long strokes.
+  const maxPoints = 6000;
+  const step = Math.max(spacing, totalLength / maxPoints);
+
+  const vecs = src.map((p) => new THREE.Vector3(p.x, p.y, p.z));
+  const curve = new THREE.CatmullRomCurve3(vecs, false, "centripetal");
+  const sampleCount = Math.max(2, Math.ceil(totalLength / step));
+
+  // Map curve parameter -> source index so pressure/normals follow the position.
+  const out: StrokePoint[] = [];
+  for (let i = 0; i <= sampleCount; i++) {
+    const t = i / sampleCount;
+    const pos = curve.getPoint(t);
+    const srcT = t * (src.length - 1);
+    const i0 = Math.min(src.length - 1, Math.floor(srcT));
+    const i1 = Math.min(src.length - 1, i0 + 1);
+    const f = srcT - i0;
+    const a = src[i0];
+    const b = src[i1];
+
+    const pt: StrokePoint = {
+      x: pos.x,
+      y: pos.y,
+      z: pos.z,
+      pressure: (a.pressure ?? 0.6) * (1 - f) + (b.pressure ?? 0.6) * f,
+    };
+
+    if (a.nx !== undefined && b.nx !== undefined) {
+      const n = new THREE.Vector3(
+        (a.nx ?? 0) * (1 - f) + (b.nx ?? 0) * f,
+        (a.ny ?? 0) * (1 - f) + (b.ny ?? 0) * f,
+        (a.nz ?? 0) * (1 - f) + (b.nz ?? 0) * f,
+      );
+      if (n.lengthSq() > 1e-8) {
+        n.normalize();
+        pt.nx = n.x;
+        pt.ny = n.y;
+        pt.nz = n.z;
+      }
+    }
+
+    // Stylus tilt has to survive resampling, or the chisel brush loses the
+    // nib angle the artist drew with. The azimuth is interpolated the short
+    // way round so a stroke crossing ±π does not spin the nib.
+    if (a.tiltAngle !== undefined || b.tiltAngle !== undefined) {
+      const angA = a.tiltAngle ?? b.tiltAngle ?? 0;
+      const angB = b.tiltAngle ?? a.tiltAngle ?? 0;
+      let delta = angB - angA;
+      while (delta > Math.PI) delta -= Math.PI * 2;
+      while (delta < -Math.PI) delta += Math.PI * 2;
+      pt.tiltAngle = angA + delta * f;
+    }
+    if (a.tiltInc !== undefined || b.tiltInc !== undefined) {
+      pt.tiltInc = (a.tiltInc ?? b.tiltInc ?? 0) * (1 - f) + (b.tiltInc ?? a.tiltInc ?? 0) * f;
+    }
+
+    out.push(pt);
+  }
+
+  return out;
+}
+
+/**
+ * Patches a MeshBasicMaterial so strokes get an anti-aliased, feathered edge
+ * and per-brush media grain.
+ *
+ * The ribbon builder writes two attributes:
+ * - `aEdge`: normalized offset from the stroke centerline (|aEdge| == 1 on the
+ *   silhouette). Alpha fades over one screen pixel of that distance field,
+ *   which kills the stair-stepping plain triangle edges show on diagonals.
+ * - `aGrain`: (distance along the stroke in half-widths, brush id). Textured
+ *   brushes use it to modulate alpha, so pencil tooth, charcoal break-up and
+ *   watercolour pooling come out of the shader instead of needing texture
+ *   assets — and they stay resolution-independent when the view is zoomed.
+ */
+export function applyStrokeEdgeAA(material: THREE.MeshBasicMaterial): THREE.MeshBasicMaterial {
+  if (material.userData.strokeEdgeAA) return material;
+  material.userData.strokeEdgeAA = true;
+  material.transparent = true;
+
+  material.onBeforeCompile = (shader) => {
+    shader.vertexShader = shader.vertexShader
+      .replace(
+        "#include <common>",
+        "#include <common>\nattribute vec2 aEdge;\nattribute vec2 aGrain;\nvarying vec2 vEdge;\nvarying vec2 vGrain;",
+      )
+      .replace("#include <begin_vertex>", "#include <begin_vertex>\nvEdge = aEdge;\nvGrain = aGrain;");
+
+    shader.fragmentShader = shader.fragmentShader
+      .replace(
+        "#include <common>",
+        [
+          "#include <common>",
+          "varying vec2 vEdge;",
+          "varying vec2 vGrain;",
+          "float strokeHash(vec2 p) {",
+          "  return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);",
+          "}",
+          "float strokeNoise(vec2 p) {",
+          "  vec2 i = floor(p);",
+          "  vec2 f = fract(p);",
+          "  vec2 w = f * f * (3.0 - 2.0 * f);",
+          "  float a = strokeHash(i);",
+          "  float b = strokeHash(i + vec2(1.0, 0.0));",
+          "  float c = strokeHash(i + vec2(0.0, 1.0));",
+          "  float d = strokeHash(i + vec2(1.0, 1.0));",
+          "  return mix(mix(a, b, w.x), mix(c, d, w.x), w.y);",
+          "}",
+        ].join("\n"),
+      )
+      .replace(
+        "#include <dithering_fragment>",
+        [
+          "#include <dithering_fragment>",
+          "float edgeDist = length(vEdge);",
+          "float edgeWidth = max(fwidth(edgeDist), 1e-4);",
+          "float strokeAlpha = 1.0 - smoothstep(1.0 - edgeWidth, 1.0, edgeDist);",
+          "int brushId = int(vGrain.y + 0.5);",
+          "vec2 grainUv = vec2(vGrain.x, vEdge.x);",
+          "if (brushId == 1) {",
+          // Pencil: fine paper tooth, biting harder where the lead rides light.
+          "  float tooth = strokeNoise(grainUv * vec2(9.0, 5.0));",
+          "  tooth = mix(tooth, strokeNoise(grainUv * vec2(31.0, 17.0)), 0.5);",
+          "  strokeAlpha *= mix(0.45, 1.0, smoothstep(0.25, 0.8, tooth));",
+          "  strokeAlpha *= mix(0.65, 1.0, 1.0 - abs(vEdge.x));",
+          "} else if (brushId == 2) {",
+          // Charcoal: coarse, high-contrast break-up with dry skips.
+          "  float grain = strokeNoise(grainUv * vec2(5.0, 3.5));",
+          "  float speck = strokeNoise(grainUv * vec2(23.0, 13.0));",
+          "  strokeAlpha *= smoothstep(0.18, 0.62, grain * 0.65 + speck * 0.35);",
+          "} else if (brushId == 3) {",
+          // Watercolour: translucent body with pigment pooling at the edges.
+          "  float wash = strokeNoise(grainUv * vec2(2.5, 2.0));",
+          "  float pooling = smoothstep(0.35, 1.0, abs(vEdge.x));",
+          "  strokeAlpha *= (0.28 + 0.34 * wash + 0.45 * pooling);",
+          "}",
+          "gl_FragColor.a *= clamp(strokeAlpha, 0.0, 1.0);",
+          "if (gl_FragColor.a < 0.004) discard;",
+        ].join("\n"),
+      );
+  };
+  material.customProgramCacheKey = () => "strokeEdgeAA_v2";
+  material.needsUpdate = true;
+  return material;
+}
+
+const CAP_SEGMENTS = 10;
+
+/**
  * Builds a variable-width polygonal ribbon geometry for grease strokes.
  * Supports distinct brush presets:
  * - "ink_pen": Smooth, clean vector calligraphy ribbon.
  * - "ink_pen_rough": Hand-drawn rough ink texture with micro-jittered edges.
- * - "marker_bold": Chisel-angled bold marker stroke.
+ * - "marker_bold": Chisel-angled bold marker stroke, steered by stylus tilt.
  * - "airbrush": Soft stippled spray micro-droplets along trajectory.
+ * - "pencil" / "charcoal" / "watercolor": textured media, shaded from the
+ *   `aGrain` coordinate by the material patched with `applyStrokeEdgeAA`.
+ *
+ * Geometry quality notes:
+ * - Points are resampled onto a centripetal Catmull-Rom spline first, so the
+ *   ribbon stays smooth however coarse the raw tablet samples were.
+ * - Corners are mitered (with a bevel fallback past the miter limit) instead of
+ *   simply offsetting along the averaged tangent, which used to pinch the
+ *   ribbon on tight turns.
+ * - Both stroke ends get a round cap, and every vertex carries an `aEdge`
+ *   distance-field coordinate consumed by `applyStrokeEdgeAA` for smooth edges.
  */
 export function buildStrokesRibbonGeometry(
   strokes: GreaseStroke[],
@@ -218,27 +438,42 @@ export function buildStrokesRibbonGeometry(
 ): THREE.BufferGeometry {
   const positions: number[] = [];
   const colors: number[] = [];
+  const edges: number[] = [];
+  const grains: number[] = [];
   const indices: number[] = [];
   const tmpColor = new THREE.Color();
   let vertexOffset = 0;
+  // Set per stroke, before its vertices are emitted.
+  let grainAlong = 0;
+  let grainBrush = 0;
+
+  const pushVertex = (x: number, y: number, z: number, ex: number, ey: number) => {
+    positions.push(x, y, z);
+    colors.push(tmpColor.r, tmpColor.g, tmpColor.b);
+    edges.push(ex, ey);
+    grains.push(grainAlong, grainBrush);
+    return vertexOffset++;
+  };
 
   for (const stroke of strokes) {
-    const pts = stroke.points;
-    if (!pts || pts.length < 2) continue;
+    const rawPts = stroke.points;
+    if (!rawPts || rawPts.length < 2) continue;
 
     tmpColor.set(overrideColorHex || stroke.color || defaultColorHex);
     const strokeWidth = stroke.width || baseBrushSize;
     const baseRadius = strokeWidth * 0.02;
     const brushType: GreaseBrushType = stroke.brushType || "ink_pen";
+    grainBrush = BRUSH_SHADER_ID[brushType] ?? 0;
+    grainAlong = 0;
 
     // 1. Airbrush Preset: Soft Stippled Particle Spray
     if (brushType === "airbrush") {
       const sprayCountPerPoint = 6;
-      for (let i = 0; i < pts.length; i++) {
-        const p = pts[i];
+      for (let i = 0; i < rawPts.length; i++) {
+        const p = rawPts[i];
         const pr = Math.max(0.04, Math.min(1.0, p.pressure ?? 0.6));
         const sprayRadius = baseRadius * pr * 1.8;
-        const dotSize = Math.max(0.002, baseRadius * 0.12 * pr);
+        const dotSize = Math.max(0.002, baseRadius * 0.18 * pr);
 
         for (let s = 0; s < sprayCountPerPoint; s++) {
           const hash = Math.sin(i * 37.17 + s * 13.51) * 43758.5453;
@@ -250,22 +485,11 @@ export function buildStrokesRibbonGeometry(
           const cz = p.z + Math.sin(angle) * dist;
           const cy = p.y;
 
-          const startV = vertexOffset;
-          positions.push(cx - dotSize, cy, cz - dotSize);
-          colors.push(tmpColor.r, tmpColor.g, tmpColor.b);
-          vertexOffset++;
-
-          positions.push(cx + dotSize, cy, cz - dotSize);
-          colors.push(tmpColor.r, tmpColor.g, tmpColor.b);
-          vertexOffset++;
-
-          positions.push(cx + dotSize, cy, cz + dotSize);
-          colors.push(tmpColor.r, tmpColor.g, tmpColor.b);
-          vertexOffset++;
-
-          positions.push(cx - dotSize, cy, cz + dotSize);
-          colors.push(tmpColor.r, tmpColor.g, tmpColor.b);
-          vertexOffset++;
+          // Corner edge coords make each quad shade as a soft round droplet.
+          const startV = pushVertex(cx - dotSize, cy, cz - dotSize, -1, -1);
+          pushVertex(cx + dotSize, cy, cz - dotSize, 1, -1);
+          pushVertex(cx + dotSize, cy, cz + dotSize, 1, 1);
+          pushVertex(cx - dotSize, cy, cz + dotSize, -1, 1);
 
           indices.push(startV, startV + 1, startV + 2);
           indices.push(startV, startV + 2, startV + 3);
@@ -276,13 +500,20 @@ export function buildStrokesRibbonGeometry(
 
     // Detect if this stroke is primarily horizontal (2D mode) or vertical/slanted (3D mode)
     let yDelta = 0;
-    for (let k = 1; k < pts.length; k++) {
-      yDelta += Math.abs(pts[k].y - pts[0].y);
+    for (let k = 1; k < rawPts.length; k++) {
+      yDelta += Math.abs(rawPts[k].y - rawPts[0].y);
     }
     const upVector = yDelta < 0.1 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(0, 0, 1);
 
+    const pts = resampleStrokePoints(rawPts, Math.max(0.003, baseRadius * 0.4));
+    if (pts.length < 2) continue;
+
+    const centers: THREE.Vector3[] = [];
     const leftVerts: THREE.Vector3[] = [];
     const rightVerts: THREE.Vector3[] = [];
+    const sides: THREE.Vector3[] = [];
+    const tangents: THREE.Vector3[] = [];
+    const radii: number[] = [];
 
     for (let i = 0; i < pts.length; i++) {
       const p = pts[i];
@@ -290,19 +521,27 @@ export function buildStrokesRibbonGeometry(
       const pr = Math.max(0.03, Math.min(1.0, p.pressure ?? 0.6));
       const radius = Math.max(0.001, baseRadius * pr);
 
-      let tangent = new THREE.Vector3();
-      if (i === 0) {
-        tangent.subVectors(new THREE.Vector3(pts[1].x, pts[1].y, pts[1].z), pVec);
-      } else if (i === pts.length - 1) {
-        tangent.subVectors(pVec, new THREE.Vector3(pts[i - 1].x, pts[i - 1].y, pts[i - 1].z));
-      } else {
-        tangent.subVectors(
-          new THREE.Vector3(pts[i + 1].x, pts[i + 1].y, pts[i + 1].z),
-          new THREE.Vector3(pts[i - 1].x, pts[i - 1].y, pts[i - 1].z),
-        );
+      // Segment directions around this point, used both for the frame and for
+      // the miter length at corners.
+      const dirIn = new THREE.Vector3();
+      const dirOut = new THREE.Vector3();
+      if (i > 0) {
+        dirIn.subVectors(pVec, new THREE.Vector3(pts[i - 1].x, pts[i - 1].y, pts[i - 1].z));
+        if (dirIn.lengthSq() > 1e-12) dirIn.normalize();
+        else dirIn.set(0, 0, 0);
       }
-      if (tangent.lengthSq() < 1e-6) tangent.set(1, 0, 0);
-      else tangent.normalize();
+      if (i < pts.length - 1) {
+        dirOut.subVectors(new THREE.Vector3(pts[i + 1].x, pts[i + 1].y, pts[i + 1].z), pVec);
+        if (dirOut.lengthSq() > 1e-12) dirOut.normalize();
+        else dirOut.set(0, 0, 0);
+      }
+
+      const tangent = new THREE.Vector3().addVectors(dirIn, dirOut);
+      if (tangent.lengthSq() < 1e-8) {
+        tangent.copy(dirOut.lengthSq() > 0 ? dirOut : dirIn);
+      }
+      if (tangent.lengthSq() < 1e-8) tangent.set(1, 0, 0);
+      tangent.normalize();
 
       let side: THREE.Vector3;
       if (p.nx !== undefined && p.ny !== undefined && p.nz !== undefined) {
@@ -320,39 +559,75 @@ export function buildStrokesRibbonGeometry(
       }
       side.normalize();
 
-      // 2. Marker Bold: Chisel tip slant (~45 deg)
+      // 2. Marker Bold: chisel tip. The nib direction follows the stylus tilt
+      // when the tablet reports it (a real chisel marker turns as you rotate
+      // your hand), and falls back to a fixed 45° slant otherwise.
       if (brushType === "marker_bold") {
         const chiselDir = new THREE.Vector3(0.7071, 0, 0.7071);
         if (yDelta >= 0.1) chiselDir.set(0.7071, 0.7071, 0);
-        side.lerp(chiselDir, 0.6).normalize();
+
+        if (p.tiltAngle !== undefined) {
+          // Build the nib direction inside the stroke's own plane from the
+          // tilt azimuth: side and tangent span that plane.
+          const ca = Math.cos(p.tiltAngle);
+          const sa = Math.sin(p.tiltAngle);
+          chiselDir
+            .copy(side)
+            .multiplyScalar(ca)
+            .addScaledVector(tangent, sa);
+          if (chiselDir.lengthSq() < 1e-6) chiselDir.copy(side);
+          chiselDir.normalize();
+        }
+
+        // A flatter stylus lays more of the nib down, so the slant bites more.
+        const blend = p.tiltInc !== undefined ? 0.3 + 0.6 * Math.min(1, Math.max(0, p.tiltInc)) : 0.6;
+        side.lerp(chiselDir, blend).normalize();
+      }
+
+      // Miter compensation: the averaged frame is shorter than the true offset
+      // by cos(theta/2), so widen it there — clamped to keep spikes in check.
+      //
+      // Past a right angle the widening is dropped entirely: a near-reversal
+      // (which a jittery sample or a catch-up tail can produce) would
+      // otherwise balloon the ribbon into a blob right where the artist wanted
+      // a point.
+      let miter = 1;
+      if (dirIn.lengthSq() > 0 && dirOut.lengthSq() > 0) {
+        const dot = dirIn.dot(dirOut);
+        if (dot > 0) {
+          const cosHalf = Math.sqrt(Math.max(0, (1 + dot) * 0.5));
+          miter = Math.min(1.6, 1 / Math.max(0.35, cosHalf));
+        }
       }
 
       // 3. Ink Pen Rough: Micro-jittered edges
-      let rL = radius;
-      let rR = radius;
+      let rL = radius * miter;
+      let rR = radius * miter;
       if (brushType === "ink_pen_rough") {
         const nL = Math.sin(i * 12.9898 + p.x * 37.1) * 43758.5453;
         const nR = Math.sin(i * 27.6543 + p.z * 51.3) * 43758.5453;
-        rL = radius * (0.7 + 0.6 * (nL - Math.floor(nL)));
-        rR = radius * (0.7 + 0.6 * (nR - Math.floor(nR)));
+        rL *= 0.7 + 0.6 * (nL - Math.floor(nL));
+        rR *= 0.7 + 0.6 * (nR - Math.floor(nR));
       }
 
+      centers.push(pVec);
+      sides.push(side);
+      tangents.push(tangent);
+      radii.push(radius);
       leftVerts.push(pVec.clone().addScaledVector(side, -rL));
       rightVerts.push(pVec.clone().addScaledVector(side, rR));
     }
 
     const startV = vertexOffset;
+    // Grain runs along the stroke in units of half-width, so the texture
+    // density of a thin stroke matches that of a thick one.
+    const grainScale = 1 / Math.max(1e-4, baseRadius);
+    let along = 0;
     for (let i = 0; i < pts.length; i++) {
-      const l = leftVerts[i];
-      const r = rightVerts[i];
-
-      positions.push(l.x, l.y, l.z);
-      colors.push(tmpColor.r, tmpColor.g, tmpColor.b);
-      vertexOffset++;
-
-      positions.push(r.x, r.y, r.z);
-      colors.push(tmpColor.r, tmpColor.g, tmpColor.b);
-      vertexOffset++;
+      if (i > 0) along += centers[i].distanceTo(centers[i - 1]) * grainScale;
+      grainAlong = along;
+      pushVertex(leftVerts[i].x, leftVerts[i].y, leftVerts[i].z, -1, 0);
+      pushVertex(rightVerts[i].x, rightVerts[i].y, rightVerts[i].z, 1, 0);
     }
 
     for (let i = 0; i < pts.length - 1; i++) {
@@ -360,12 +635,43 @@ export function buildStrokesRibbonGeometry(
       indices.push(baseIdx, baseIdx + 1, baseIdx + 2);
       indices.push(baseIdx + 1, baseIdx + 3, baseIdx + 2);
     }
+
+    // Round caps at both ends, built as fans in the (side, tangent) plane so
+    // the stroke terminates on a disc rather than a flat chopped edge.
+    const addCap = (idx: number, outward: THREE.Vector3) => {
+      const radius = radii[idx];
+      if (radius <= 1e-5) return;
+      const center = centers[idx];
+      const side = sides[idx];
+      grainAlong = idx === 0 ? 0 : along;
+      const centerIdx = pushVertex(center.x, center.y, center.z, 0, 0);
+
+      let prevIdx = -1;
+      for (let s = 0; s <= CAP_SEGMENTS; s++) {
+        const a = (s / CAP_SEGMENTS) * Math.PI - Math.PI / 2;
+        const ex = Math.sin(a);
+        const ey = Math.cos(a);
+        const px = center.x + side.x * radius * ex + outward.x * radius * ey;
+        const py = center.y + side.y * radius * ex + outward.y * radius * ey;
+        const pz = center.z + side.z * radius * ex + outward.z * radius * ey;
+        const vIdx = pushVertex(px, py, pz, ex, ey);
+        if (prevIdx >= 0) indices.push(centerIdx, prevIdx, vIdx);
+        prevIdx = vIdx;
+      }
+    };
+
+    if (!stroke.closed) {
+      addCap(0, tangents[0].clone().negate());
+      addCap(pts.length - 1, tangents[pts.length - 1].clone());
+    }
   }
 
   const geo = new THREE.BufferGeometry();
   if (positions.length > 0) {
     geo.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
     geo.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
+    geo.setAttribute("aEdge", new THREE.Float32BufferAttribute(edges, 2));
+    geo.setAttribute("aGrain", new THREE.Float32BufferAttribute(grains, 2));
     geo.setIndex(indices);
     geo.computeVertexNormals();
   }
@@ -426,6 +732,15 @@ export const GREASE_PENCIL_NODE: NodeDefinition = {
     solidFill: false,
     fillColor: "",
     smoothing: 0.2,
+    // Input stabilization (see shared/three/strokeInput.ts). "basic" is the
+    // default because it removes digitizer jitter with no perceptible lag;
+    // "stabilizer" trades latency for very smooth long curves.
+    stabilizerMode: "basic",
+    stabilizerStrength: 0.35,
+    // Tablet pressure response: exponent + output range
+    pressureCurve: 1,
+    pressureMin: 0.05,
+    pressureMax: 1,
     onionSkin: true,
     onionSkinBefore: 1,
     onionSkinAfter: 1,
@@ -445,11 +760,29 @@ export const GREASE_PENCIL_NODE: NodeDefinition = {
       id: "brushType",
       label: "Brush Type",
       kind: "select",
-      options: ["ink_pen", "ink_pen_rough", "marker_bold", "airbrush"],
+      options: [
+        "ink_pen",
+        "ink_pen_rough",
+        "marker_bold",
+        "airbrush",
+        "pencil",
+        "charcoal",
+        "watercolor",
+      ],
     },
     { id: "solidFill", label: "Solid Fill", kind: "boolean" },
     { id: "fillColor", label: "Fill Color", kind: "color" },
     { id: "smoothing", label: "Smoothing", kind: "number", step: 0.05 },
+    {
+      id: "stabilizerMode",
+      label: "Stabilizer",
+      kind: "select",
+      options: ["none", "basic", "weighted", "stabilizer"],
+    },
+    { id: "stabilizerStrength", label: "Stabilizer Amount", kind: "number", step: 0.05 },
+    { id: "pressureCurve", label: "Pressure Curve", kind: "number", step: 0.05 },
+    { id: "pressureMin", label: "Pressure Min", kind: "number", step: 0.01 },
+    { id: "pressureMax", label: "Pressure Max", kind: "number", step: 0.01 },
     { id: "onionSkin", label: "Onion Skin", kind: "boolean" },
     { id: "onionSkinBefore", label: "Ghost Before", kind: "number", step: 1 },
     { id: "onionSkinAfter", label: "Ghost After", kind: "number", step: 1 },
@@ -588,16 +921,18 @@ export const GREASE_PENCIL_NODE: NodeDefinition = {
         state.activeGeo = activeRibbonGeo;
 
         if (!state.activeMat) {
-          state.activeMat = new THREE.MeshBasicMaterial({
-            side: THREE.DoubleSide,
-            vertexColors: true,
-            depthTest: true,
-            depthWrite: false,
-            transparent: true,
-            polygonOffset: true,
-            polygonOffsetFactor: -2,
-            polygonOffsetUnits: -2,
-          });
+          state.activeMat = applyStrokeEdgeAA(
+            new THREE.MeshBasicMaterial({
+              side: THREE.DoubleSide,
+              vertexColors: true,
+              depthTest: true,
+              depthWrite: false,
+              transparent: true,
+              polygonOffset: true,
+              polygonOffsetFactor: -2,
+              polygonOffsetUnits: -2,
+            }),
+          );
         }
         state.activeMat.side = THREE.DoubleSide;
         state.activeMat.vertexColors = true;
@@ -642,14 +977,16 @@ export const GREASE_PENCIL_NODE: NodeDefinition = {
           state.onionPrevGeo = prevGeo;
 
           if (!state.onionPrevMat) {
-            state.onionPrevMat = new THREE.MeshBasicMaterial({
-              side: THREE.DoubleSide,
-              vertexColors: true,
-              transparent: true,
-              opacity: ghostOpacity,
-              depthTest: true,
-              depthWrite: false,
-            });
+            state.onionPrevMat = applyStrokeEdgeAA(
+              new THREE.MeshBasicMaterial({
+                side: THREE.DoubleSide,
+                vertexColors: true,
+                transparent: true,
+                opacity: ghostOpacity,
+                depthTest: true,
+                depthWrite: false,
+              }),
+            );
           }
           state.onionPrevMat.opacity = ghostOpacity;
 
@@ -673,14 +1010,16 @@ export const GREASE_PENCIL_NODE: NodeDefinition = {
           state.onionNextGeo = nextGeo;
 
           if (!state.onionNextMat) {
-            state.onionNextMat = new THREE.MeshBasicMaterial({
-              side: THREE.DoubleSide,
-              vertexColors: true,
-              transparent: true,
-              opacity: ghostOpacity,
-              depthTest: true,
-              depthWrite: false,
-            });
+            state.onionNextMat = applyStrokeEdgeAA(
+              new THREE.MeshBasicMaterial({
+                side: THREE.DoubleSide,
+                vertexColors: true,
+                transparent: true,
+                opacity: ghostOpacity,
+                depthTest: true,
+                depthWrite: false,
+              }),
+            );
           }
           state.onionNextMat.opacity = ghostOpacity;
 
