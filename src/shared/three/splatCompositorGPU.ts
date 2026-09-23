@@ -165,6 +165,12 @@ export function ensureSplatGpu(state: SplatGpuState, res: number, layerCount: nu
       const tex = new THREE.DataTexture(bytes, res, res, THREE.RGBAFormat);
       tex.minFilter = THREE.LinearFilter;
       tex.magFilter = THREE.LinearFilter;
+      // packSplatBytes fills row 0 with the top of the stroke (same
+      // convention applyMixStroke uses for the CPU/CanvasTexture path, which
+      // defaults to flipY=true) — DataTexture defaults to flipY=false, so
+      // without this the GPU path samples weights upside down and paint
+      // lands mirrored vertically from where the stylus actually is.
+      tex.flipY = true;
       tex.needsUpdate = true;
       state.splatBytes.push(bytes);
       state.splatTextures.push(tex);
