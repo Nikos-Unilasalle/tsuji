@@ -23,6 +23,9 @@ interface FrozenState {
 
 const frozenCache = createNodeCache<FrozenState>((s) => disposeObject3D(s.mesh));
 
+/** Action id the Recalculate UVs button sends up to App.tsx's onAction — see the handler next to EDIT_MESH_UNWRAP_UVS_ACTION. */
+export const FROZEN_UNWRAP_UVS_ACTION = "object/frozen-unwrap-uvs";
+
 function buildGeometry(params: Record<string, unknown>): THREE.BufferGeometry {
   const positions = Array.isArray(params.positions) ? (params.positions as number[]) : [];
   const normals = Array.isArray(params.normals) ? (params.normals as number[]) : [];
@@ -71,9 +74,11 @@ export const OBJECT_FROZEN_NODE: NodeDefinition = {
   },
   paramFields: buildPrimitiveDynamicParamFields([
     { id: "doubleSided", label: "Double Sided", kind: "boolean", group: "Material" },
+    { id: "unwrapButton", label: "Recalculate UVs", kind: "button", action: FROZEN_UNWRAP_UVS_ACTION },
   ])(),
   dynamicParamFields: buildPrimitiveDynamicParamFields([
     { id: "doubleSided", label: "Double Sided", kind: "boolean", group: "Material" },
+    { id: "unwrapButton", label: "Recalculate UVs", kind: "button", action: FROZEN_UNWRAP_UVS_ACTION },
   ]),
   evaluate: (inputs, params, ctx) => {
     let state = frozenCache.get(ctx.nodeId);

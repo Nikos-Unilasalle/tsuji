@@ -26,6 +26,7 @@ import {
   createQuadBox,
   boxProjectUVs,
   bufferGeometryToQuadMesh,
+  quadMeshToBufferGeometry,
   extrudeFaces,
   insetFaces,
   deleteFaces,
@@ -33,7 +34,11 @@ import {
 } from "./shared/graph/quadMesh";
 import { extractPointsFromMesh } from "./shared/graph/nodes/pointsGeometry";
 import { findFirstMesh } from "./shared/graph/meshRequired";
-import { freezeObjectToGeometryData, OBJECT_FROZEN_NODE } from "./shared/graph/nodes/frozenGeometry";
+import {
+  freezeObjectToGeometryData,
+  FROZEN_UNWRAP_UVS_ACTION,
+  OBJECT_FROZEN_NODE,
+} from "./shared/graph/nodes/frozenGeometry";
 import type { KeyframeDrawing } from "./shared/graph/nodes/greasePencil";
 import { randomId } from "./shared/randomId";
 import { findRenderNodeId } from "./shared/graph/nodes/render";
@@ -1499,6 +1504,26 @@ function MainEditor() {
         const meshData: QuadMesh = resolveEditMeshData(node, evaluatedResults);
         const unwrapped = boxProjectUVs(meshData);
         onParamChange("meshData", unwrapped, nodeId);
+        return;
+      }
+      if (action === FROZEN_UNWRAP_UVS_ACTION) {
+        const node = graph.nodes.find((n) => n.id === nodeId);
+        if (!node) return;
+        const positions = Array.isArray(node.params.positions) ? (node.params.positions as number[]) : [];
+        const index = Array.isArray(node.params.index) ? (node.params.index as number[]) : null;
+        const geometry = new THREE.BufferGeometry();
+        geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+        if (index) geometry.setIndex(index);
+        const quadMesh = bufferGeometryToQuadMesh(geometry);
+        const unwrapped = quadMeshToBufferGeometry(boxProjectUVs(quadMesh));
+        onParamChange({
+          positions: Array.from(unwrapped.attributes.position.array),
+          normals: Array.from(unwrapped.attributes.normal.array),
+          uvs: Array.from(unwrapped.attributes.uv.array),
+          index: unwrapped.index ? Array.from(unwrapped.index.array) : null,
+        }, nodeId);
+        geometry.dispose();
+        unwrapped.dispose();
         return;
       }
       if (action === EDIT_MESH_DELETE_FACES_ACTION) {
