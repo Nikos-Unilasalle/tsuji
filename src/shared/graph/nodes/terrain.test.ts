@@ -167,6 +167,115 @@ describe("Terrain Maker & Engine", () => {
     expect(sculptOffsets[centerIdx]).toBeLessThan(8.0);
   });
 
+  test("mask gates every other brush's delta, and mask tool paints/erases weights", () => {
+    const geo = createTerrainGeometry(20, 20, 10, 10);
+    const config: TerrainGridConfig = {
+      width: 20,
+      depth: 20,
+      segmentsX: 10,
+      segmentsZ: 10,
+      heightScale: 5,
+      heightOffset: 0,
+      slopeShading: false,
+      flatShading: false,
+    };
+    const centerIdx = 5 * 11 + 5;
+
+    // Paint a full mask at the center.
+    const maskWeights: Record<number, number> = {};
+    const maskStroke: SculptStrokeParams = {
+      tool: "mask",
+      falloff: "flat",
+      radius: 1.0,
+      strength: 1.0,
+      invert: false,
+      hitPoint: new THREE.Vector3(0, 0, 0),
+      deltaTime: 1.0,
+    };
+    applySculptStroke(geo, config, null, {}, maskStroke, maskWeights);
+    expect(maskWeights[centerIdx]).toBeCloseTo(1.0, 1);
+
+    // A masked vertex must not move under Sculpt.
+    const sculptOffsets: Record<number, number> = {};
+    const raiseStroke: SculptStrokeParams = {
+      tool: "sculpt",
+      falloff: "flat",
+      radius: 4.0,
+      strength: 1.0,
+      invert: false,
+      hitPoint: new THREE.Vector3(0, 0, 0),
+      deltaTime: 0.05,
+    };
+    applySculptStroke(geo, config, null, sculptOffsets, raiseStroke, maskWeights);
+    expect(sculptOffsets[centerIdx] ?? 0).toBeCloseTo(0, 4);
+
+    // Erase (maskErase) brings the weight back toward 0.
+    applySculptStroke(geo, config, null, {}, { ...maskStroke, maskErase: true, strength: 1.0, deltaTime: 1.0 }, maskWeights);
+    expect(maskWeights[centerIdx]).toBeLessThan(1.0);
+  });
+
+  test("symmetryX mirrors a stroke's delta across the X axis", () => {
+    const geo = createTerrainGeometry(20, 20, 10, 10);
+    const config: TerrainGridConfig = {
+      width: 20,
+      depth: 20,
+      segmentsX: 10,
+      segmentsZ: 10,
+      heightScale: 5,
+      heightOffset: 0,
+      slopeShading: false,
+      flatShading: false,
+    };
+    const sculptOffsets: Record<number, number> = {};
+    // Hit point offset from center on X, radius small so only its column is touched.
+    const stroke: SculptStrokeParams = {
+      tool: "sculpt",
+      falloff: "flat",
+      radius: 1.0,
+      strength: 1.0,
+      invert: false,
+      hitPoint: new THREE.Vector3(4, 0, 0),
+      deltaTime: 0.05,
+      symmetryX: true,
+    };
+    applySculptStroke(geo, config, null, sculptOffsets, stroke);
+    // cols=11, dx=2, halfW=10 -> i = (4+10)/2 = 7, mirrored i' = (-4+10)/2 = 3
+    const rowBase = 5 * 11;
+    expect(sculptOffsets[rowBase + 7]).toBeGreaterThan(0);
+    expect(sculptOffsets[rowBase + 3]).toBeCloseTo(sculptOffsets[rowBase + 7], 4);
+  });
+
+  test("clayStrip, pinch and crease tools move vertices", () => {
+    const geo = createTerrainGeometry(20, 20, 10, 10);
+    const config: TerrainGridConfig = {
+      width: 20,
+      depth: 20,
+      segmentsX: 10,
+      segmentsZ: 10,
+      heightScale: 5,
+      heightOffset: 0,
+      slopeShading: false,
+      flatShading: false,
+    };
+    const centerIdx = 5 * 11 + 5;
+
+    for (const tool of ["clayStrip", "pinch", "crease"] as const) {
+      const sculptOffsets: Record<number, number> = { [centerIdx]: 5.0 };
+      updateTerrainHeightsAndNormals(geo, config, null, sculptOffsets);
+      const stroke: SculptStrokeParams = {
+        tool,
+        falloff: "smooth",
+        radius: 4.0,
+        strength: 1.0,
+        invert: false,
+        hitPoint: new THREE.Vector3(0, 0, 0),
+        deltaTime: 0.1,
+      };
+      applySculptStroke(geo, config, null, sculptOffsets, stroke);
+      expect(sculptOffsets[centerIdx]).not.toBeCloseTo(5.0, 4);
+    }
+  });
+
   test("falloff calculations conform to curve shapes", () => {
     expect(calculateFalloff(0.0, "smooth")).toBeCloseTo(1.0);
     expect(calculateFalloff(1.0, "smooth")).toBeCloseTo(0.0);

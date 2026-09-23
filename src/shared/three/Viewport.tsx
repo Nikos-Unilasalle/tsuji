@@ -174,6 +174,10 @@ import {
   TerrainBrushTool,
 } from "./terrainSculpt";
 import { TerrainGridConfig } from "./terrainEngine";
+import { SculptMeshData, buildAdjacency, computeVertexNormals, syncBufferGeometry } from "./sculptMesh";
+import { refineNearBrush } from "./sculptDyntopo";
+import { applySculptStroke3D, SculptBrushTool, SculptStrokeParams3D } from "./sculptEngine";
+import { BrushFalloff } from "./brushFalloff";
 
 function isTerrainNode(node: { type: string } | null | undefined): boolean {
   if (!node) return false;
@@ -186,6 +190,22 @@ function getTerrainMeshForNode(
 ): THREE.Mesh | null {
   const res = latestResults?.get(nodeId);
   if (res?.geometry instanceof THREE.Mesh && res.geometry.userData?.isTerrain) {
+    return res.geometry;
+  }
+  return null;
+}
+
+function isSculptNode(node: { type: string } | null | undefined): boolean {
+  if (!node) return false;
+  return node.type === "object/sculpt";
+}
+
+function getSculptMeshForNode(
+  nodeId: string,
+  latestResults: Map<string, Record<string, unknown>> | null | undefined,
+): THREE.Mesh | null {
+  const res = latestResults?.get(nodeId);
+  if (res?.geometry instanceof THREE.Mesh && res.geometry.userData?.isSculpt) {
     return res.geometry;
   }
   return null;
@@ -946,7 +966,25 @@ export function Viewport({
   terrainInvertRef.current = terrainInvert;
   const isTerrainSculptingRef = useRef(false);
   const terrainSculptWorkingOffsetsRef = useRef<Record<number, number> | null>(null);
+  const terrainMaskWorkingRef = useRef<Record<number, number> | null>(null);
   const terrainTargetHeightRef = useRef<number | null>(null);
+
+  // Sculpt (object/sculpt) state
+  const [sculptBrushTool, setSculptBrushTool] = useState<SculptBrushTool>("draw");
+  const sculptBrushToolRef = useRef<SculptBrushTool>("draw");
+  sculptBrushToolRef.current = sculptBrushTool;
+  const [sculptBrushFalloff, setSculptBrushFalloff] = useState<BrushFalloff>("smooth");
+  const sculptBrushFalloffRef = useRef<BrushFalloff>("smooth");
+  sculptBrushFalloffRef.current = sculptBrushFalloff;
+  const [sculptInvert, setSculptInvert] = useState(false);
+  const sculptInvertRef = useRef(false);
+  sculptInvertRef.current = sculptInvert;
+  const isSculptingRef = useRef(false);
+  const sculptWorkingMeshRef = useRef<SculptMeshData | null>(null);
+  const sculptWorkingAdjacencyRef = useRef<number[][]>([]);
+  const sculptStrokeOriginRef = useRef<THREE.Vector3 | null>(null);
+  const sculptStrokeNormalRef = useRef<THREE.Vector3 | null>(null);
+  const sculptLastHitRef = useRef<THREE.Vector3 | null>(null);
 
   // Texture Paint and Texture Mix painting state
   /** Pending debounced param writes for painted textures, by node id. */
@@ -1675,6 +1713,7 @@ export function Viewport({
     });
     const pivotCrossPool: THREE.LineSegments[] = [];
     const terrainBrushGizmo = createTerrainBrushGizmo();
+    const sculptBrushGizmo = createTerrainBrushGizmo();
     const textureBrushGizmo = createTextureBrushGizmo();
     textureBrushGizmoRef.current = textureBrushGizmo;
 
@@ -1691,6 +1730,7 @@ export function Viewport({
       editorUiScene.add(gizmoPivotProxy);
       editorUiScene.add(pivotCrossGroup);
       editorUiScene.add(terrainBrushGizmo);
+      editorUiScene.add(sculptBrushGizmo);
       editorUiScene.add(textureBrushGizmo);
       // The face-selection highlight lives in the *main* scene (not the
       // editor overlay, which clears depth and would show every selected face
@@ -2023,6 +2063,7 @@ export function Viewport({
               (n) =>
                 n.id === selectedNodeIdRef.current &&
                 (isTerrainNode(n) ||
+                  isSculptNode(n) ||
                   isTexturePaintNode(n) ||
                   isTextureMixNode(n) ||
                   isPaintOrGreaseNode(n)),
@@ -2030,12 +2071,16 @@ export function Viewport({
           : null;
         if (brushNode) {
           e.preventDefault();
-          // Terrain sizes are scene units and move in halves; the pixel-space
-          // brushes move proportionally, which is what reads as linear.
+          // Terrain sizes are scene units and move in halves; sculpt sizes
+          // are small scene-unit radii and move proportionally like the
+          // pixel-space brushes (halves would be far too coarse at 0.02-2).
           const isTerrain = isTerrainNode(brushNode);
-          const cur = Number(brushNode.params.brushSize) || (isTerrain ? 4 : 24);
+          const isSculpt = isSculptNode(brushNode);
+          const cur = Number(brushNode.params.brushSize) || (isTerrain ? 4 : isSculpt ? 0.3 : 24);
           const next = isTerrain
             ? Math.max(0.5, Math.min(50, Math.round((cur + (bigger ? 0.5 : -0.5)) * 2) / 2))
+            : isSculpt
+            ? Math.max(0.02, Math.min(2, bigger ? cur * 1.15 : cur / 1.15))
             : Math.max(1, Math.min(512, Math.round(bigger ? cur * 1.15 + 1 : cur / 1.15 - 1)));
           onParamChangeRef.current?.("brushSize", next, brushNode.id);
           return;
@@ -3111,6 +3156,8 @@ export function Viewport({
 
             const workingOffsets = { ...((terrainNode.params.sculptOffsets as Record<number, number>) || {}) };
             terrainSculptWorkingOffsetsRef.current = workingOffsets;
+            const workingMask = { ...((terrainNode.params.maskWeights as Record<number, number>) || {}) };
+            terrainMaskWorkingRef.current = workingMask;
             terrainTargetHeightRef.current = localHit.y;
 
             const brushRadius = Number(terrainNode.params.brushSize) || 4;
@@ -3127,12 +3174,89 @@ export function Viewport({
               hitPoint: localHit,
               targetHeight: localHit.y,
               deltaTime: 0.03,
+              maskErase: e.shiftKey,
+              symmetryX: Boolean(terrainNode.params.symmetryX),
+              symmetryZ: Boolean(terrainNode.params.symmetryZ),
             };
 
             const terrainConfig = terrainMesh.userData.terrainConfig as TerrainGridConfig;
             const heightmapPixels = terrainMesh.userData.heightmapPixels;
 
-            applySculptStroke(terrainMesh.geometry, terrainConfig, heightmapPixels, workingOffsets, strokeParams);
+            applySculptStroke(terrainMesh.geometry, terrainConfig, heightmapPixels, workingOffsets, strokeParams, workingMask);
+            e.stopImmediatePropagation();
+            return;
+          }
+        }
+      }
+
+      const sculptNode = selectedNodeIdRef.current
+        ? graphRef.current.nodes.find((n) => n.id === selectedNodeIdRef.current && isSculptNode(n))
+        : null;
+
+      if (sculptNode && !outputMode && !elevationView && e.button === 0 && !isMarqueeModifier && raycaster) {
+        const sculptMesh = getSculptMeshForNode(sculptNode.id, latestResultsRef.current);
+        if (sculptMesh) {
+          const rect = renderer.domElement.getBoundingClientRect();
+          const mouseNorm = new THREE.Vector2(
+            ((e.clientX - rect.left) / rect.width) * 2 - 1,
+            -((e.clientY - rect.top) / rect.height) * 2 + 1,
+          );
+          raycaster.setFromCamera(mouseNorm, camera);
+          const intersects = raycaster.intersectObject(sculptMesh, false);
+          if (intersects.length > 0 && intersects[0].face) {
+            const hit = intersects[0];
+            const localHit = sculptMesh.worldToLocal(hit.point.clone());
+            // hit.face.normal is already in the geometry's own local space —
+            // exactly the space applySculptStroke3D operates in, unlike the
+            // gizmo (which needs the *world* normal to orient itself visibly
+            // in the editor overlay scene, computed separately below).
+            const localNormal = hit.face!.normal.clone().normalize();
+
+            isSculptingRef.current = true;
+            controls.enabled = false;
+
+            const baseData = sculptMesh.userData.sculptMeshData as SculptMeshData;
+            const workingMesh: SculptMeshData = {
+              positions: baseData.positions.slice(),
+              normals: baseData.normals.slice(),
+              indices: baseData.indices.slice(),
+              mask: baseData.mask ? baseData.mask.slice() : undefined,
+            };
+            sculptWorkingMeshRef.current = workingMesh;
+            sculptWorkingAdjacencyRef.current = buildAdjacency(workingMesh.indices, workingMesh.positions.length / 3);
+            sculptStrokeOriginRef.current = localHit.clone();
+            sculptStrokeNormalRef.current = localNormal.clone();
+            sculptLastHitRef.current = localHit.clone();
+
+            const brushRadius = Number(sculptNode.params.brushSize) || 0.3;
+            const brushStrength = Number(sculptNode.params.brushStrength) || 0.5;
+            const tool = (sculptNode.params.brushTool as SculptBrushTool) || sculptBrushToolRef.current;
+            const falloff = (sculptNode.params.brushFalloff as BrushFalloff) || sculptBrushFalloffRef.current;
+            const detailSize = Number(sculptNode.params.detailSize) || 0.1;
+
+            const refined = refineNearBrush(workingMesh, localHit, brushRadius, detailSize);
+            sculptWorkingMeshRef.current = refined;
+            sculptWorkingAdjacencyRef.current = buildAdjacency(refined.indices, refined.positions.length / 3);
+
+            const strokeParams3D: SculptStrokeParams3D = {
+              tool,
+              falloff,
+              radius: brushRadius,
+              strength: brushStrength,
+              invert: sculptInvertRef.current || e.altKey,
+              hitPoint: localHit,
+              hitNormal: localNormal,
+              strokeOrigin: localHit.clone(),
+              strokeNormal: localNormal.clone(),
+              deltaTime: 0.03,
+              maskErase: e.shiftKey,
+              symmetryX: Boolean(sculptNode.params.symmetryX),
+              symmetryY: Boolean(sculptNode.params.symmetryY),
+              symmetryZ: Boolean(sculptNode.params.symmetryZ),
+            };
+            applySculptStroke3D(refined, sculptWorkingAdjacencyRef.current, strokeParams3D);
+            refined.normals = computeVertexNormals(refined.positions, refined.indices);
+            syncBufferGeometry(sculptMesh.geometry, refined);
             e.stopImmediatePropagation();
             return;
           }
@@ -3495,6 +3619,9 @@ export function Viewport({
                 hitPoint: localHit,
                 targetHeight: terrainTargetHeightRef.current ?? localHit.y,
                 deltaTime: 0.016,
+                maskErase: e.shiftKey,
+                symmetryX: Boolean(terrainNode.params.symmetryX),
+                symmetryZ: Boolean(terrainNode.params.symmetryZ),
               };
 
               const terrainConfig = terrainMesh.userData.terrainConfig as TerrainGridConfig;
@@ -3506,6 +3633,7 @@ export function Viewport({
                 heightmapPixels,
                 terrainSculptWorkingOffsetsRef.current,
                 strokeParams,
+                terrainMaskWorkingRef.current ?? undefined,
               );
               e.stopImmediatePropagation();
               return;
@@ -3516,6 +3644,80 @@ export function Viewport({
         }
       } else if (terrainBrushGizmo && terrainBrushGizmo.visible) {
         terrainBrushGizmo.visible = false;
+      }
+
+      const sculptNode = selectedNodeIdRef.current
+        ? graphRef.current.nodes.find((n) => n.id === selectedNodeIdRef.current && isSculptNode(n))
+        : null;
+
+      if (sculptNode && !outputMode && host && raycaster) {
+        const sculptMesh = getSculptMeshForNode(sculptNode.id, latestResultsRef.current);
+        if (sculptMesh) {
+          const rect = renderer.domElement.getBoundingClientRect();
+          const mouseNorm = new THREE.Vector2(
+            ((e.clientX - rect.left) / rect.width) * 2 - 1,
+            -((e.clientY - rect.top) / rect.height) * 2 + 1,
+          );
+          raycaster.setFromCamera(mouseNorm, camera);
+          const intersects = raycaster.intersectObject(sculptMesh, false);
+
+          if (intersects.length > 0 && intersects[0].face) {
+            const hit = intersects[0];
+            const localHit = sculptMesh.worldToLocal(hit.point.clone());
+            const localNormal = hit.face!.normal.clone().normalize();
+            const brushRadius = Number(sculptNode.params.brushSize) || 0.3;
+
+            if (sculptBrushGizmo) {
+              sculptBrushGizmo.visible = true;
+              sculptBrushGizmo.position.copy(hit.point);
+              const worldNormal = hit.face!.normal.clone().transformDirection(sculptMesh.matrixWorld);
+              sculptBrushGizmo.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), worldNormal);
+              sculptBrushGizmo.scale.set(brushRadius, brushRadius, brushRadius);
+            }
+
+            if (isSculptingRef.current && sculptWorkingMeshRef.current) {
+              const brushStrength = Number(sculptNode.params.brushStrength) || 0.5;
+              const tool = (sculptNode.params.brushTool as SculptBrushTool) || sculptBrushToolRef.current;
+              const falloff = (sculptNode.params.brushFalloff as BrushFalloff) || sculptBrushFalloffRef.current;
+              const detailSize = Number(sculptNode.params.detailSize) || 0.1;
+
+              let workingMesh = refineNearBrush(sculptWorkingMeshRef.current, localHit, brushRadius, detailSize);
+              const adjacency = buildAdjacency(workingMesh.indices, workingMesh.positions.length / 3);
+
+              const moveDelta = sculptLastHitRef.current ? localHit.clone().sub(sculptLastHitRef.current) : new THREE.Vector3();
+              sculptLastHitRef.current = localHit.clone();
+
+              const strokeParams3D: SculptStrokeParams3D = {
+                tool,
+                falloff,
+                radius: brushRadius,
+                strength: brushStrength,
+                invert: sculptInvertRef.current || e.altKey,
+                hitPoint: localHit,
+                hitNormal: localNormal,
+                strokeOrigin: sculptStrokeOriginRef.current ?? localHit,
+                strokeNormal: sculptStrokeNormalRef.current ?? localNormal,
+                moveDelta,
+                deltaTime: 0.016,
+                maskErase: e.shiftKey,
+                symmetryX: Boolean(sculptNode.params.symmetryX),
+                symmetryY: Boolean(sculptNode.params.symmetryY),
+                symmetryZ: Boolean(sculptNode.params.symmetryZ),
+              };
+              applySculptStroke3D(workingMesh, adjacency, strokeParams3D);
+              workingMesh.normals = computeVertexNormals(workingMesh.positions, workingMesh.indices);
+              sculptWorkingMeshRef.current = workingMesh;
+              sculptWorkingAdjacencyRef.current = adjacency;
+              syncBufferGeometry(sculptMesh.geometry, workingMesh);
+              e.stopImmediatePropagation();
+              return;
+            }
+          } else if (!isSculptingRef.current && sculptBrushGizmo) {
+            sculptBrushGizmo.visible = false;
+          }
+        }
+      } else if (sculptBrushGizmo && sculptBrushGizmo.visible) {
+        sculptBrushGizmo.visible = false;
       }
 
       const texPaintNode = selectedNodeIdRef.current
@@ -4129,13 +4331,42 @@ export function Viewport({
           : null;
         if (terrainNode && terrainSculptWorkingOffsetsRef.current) {
           onParamChangeRef.current?.(
-            "sculptOffsets",
-            { ...terrainSculptWorkingOffsetsRef.current },
+            {
+              sculptOffsets: { ...terrainSculptWorkingOffsetsRef.current },
+              maskWeights: { ...(terrainMaskWorkingRef.current ?? {}) },
+            },
             terrainNode.id,
           );
         }
         terrainSculptWorkingOffsetsRef.current = null;
+        terrainMaskWorkingRef.current = null;
         terrainTargetHeightRef.current = null;
+        return;
+      }
+
+      if (isSculptingRef.current) {
+        isSculptingRef.current = false;
+        controls.enabled = true;
+        const sculptNode = selectedNodeIdRef.current
+          ? graphRef.current.nodes.find((n) => n.id === selectedNodeIdRef.current && isSculptNode(n))
+          : null;
+        if (sculptNode && sculptWorkingMeshRef.current) {
+          const mesh = sculptWorkingMeshRef.current;
+          onParamChangeRef.current?.(
+            "sculptMesh",
+            {
+              positions: Array.from(mesh.positions),
+              indices: Array.from(mesh.indices),
+              mask: mesh.mask ? Array.from(mesh.mask) : undefined,
+            },
+            sculptNode.id,
+          );
+        }
+        sculptWorkingMeshRef.current = null;
+        sculptWorkingAdjacencyRef.current = [];
+        sculptStrokeOriginRef.current = null;
+        sculptStrokeNormalRef.current = null;
+        sculptLastHitRef.current = null;
         return;
       }
 
@@ -6401,6 +6632,7 @@ export function Viewport({
       pointsInfluenceHandles.clear();
       pivotHandle.clear();
       terrainBrushGizmo.removeFromParent();
+      sculptBrushGizmo.removeFromParent();
       textureBrushGizmo.removeFromParent();
       textureBrushGizmo.geometry.dispose();
       sliceProxy.removeFromParent();
@@ -7908,6 +8140,21 @@ export function Viewport({
                 </svg>
               </button>
 
+              {/* Tool: Clay Strip */}
+              <button
+                type="button"
+                className={`viewport-hud-button ${currentTool === "clayStrip" ? "viewport-hud-button-active" : ""}`}
+                onClick={() => {
+                  setTerrainBrushTool("clayStrip");
+                  onParamChange?.("brushTool", "clayStrip", tNode.id);
+                }}
+                title="Clay Strip: Build up material toward the brush-local average"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="9" width="18" height="7" rx="1.5" />
+                </svg>
+              </button>
+
               {/* Tool: Smooth */}
               <button
                 type="button"
@@ -7921,6 +8168,36 @@ export function Viewport({
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M2 12c3-4 6-4 9 0s6 4 9 0" />
                   <path d="M2 17c3-4 6-4 9 0s6 4 9 0" />
+                </svg>
+              </button>
+
+              {/* Tool: Pinch */}
+              <button
+                type="button"
+                className={`viewport-hud-button ${currentTool === "pinch" ? "viewport-hud-button-active" : ""}`}
+                onClick={() => {
+                  setTerrainBrushTool("pinch");
+                  onParamChange?.("brushTool", "pinch", tNode.id);
+                }}
+                title="Pinch: Sharpen ridges (opposite of Smooth)"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M4 4 20 20M20 4 4 20" />
+                </svg>
+              </button>
+
+              {/* Tool: Crease */}
+              <button
+                type="button"
+                className={`viewport-hud-button ${currentTool === "crease" ? "viewport-hud-button-active" : ""}`}
+                onClick={() => {
+                  setTerrainBrushTool("crease");
+                  onParamChange?.("brushTool", "crease", tNode.id);
+                }}
+                title="Crease: Carve a sharp valley line"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 12h7l2 6 4-14 2 8h3" />
                 </svg>
               </button>
 
@@ -7974,6 +8251,22 @@ export function Viewport({
                 </svg>
               </button>
 
+              {/* Tool: Mask */}
+              <button
+                type="button"
+                className={`viewport-hud-button ${currentTool === "mask" ? "viewport-hud-button-active" : ""}`}
+                onClick={() => {
+                  setTerrainBrushTool("mask");
+                  onParamChange?.("brushTool", "mask", tNode.id);
+                }}
+                title="Mask: Paint protection (Hold Shift to erase)"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="9" />
+                  <path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor" stroke="none" />
+                </svg>
+              </button>
+
               <div style={{ width: 1, height: 16, background: "rgba(255, 255, 255, 0.15)" }} />
 
               {/* Invert (+ / -) */}
@@ -7985,6 +8278,26 @@ export function Viewport({
                 style={{ fontWeight: 700, fontSize: "13px", minWidth: 26 }}
               >
                 {terrainInvert ? "−" : "+"}
+              </button>
+
+              {/* Symmetry X / Z */}
+              <button
+                type="button"
+                className={`viewport-hud-button ${tNode.params.symmetryX ? "viewport-hud-button-active" : ""}`}
+                onClick={() => onParamChange?.("symmetryX", !tNode.params.symmetryX, tNode.id)}
+                title="Symmetry X: Mirror strokes across the X axis"
+                style={{ fontWeight: 700, fontSize: "11px", minWidth: 22 }}
+              >
+                X
+              </button>
+              <button
+                type="button"
+                className={`viewport-hud-button ${tNode.params.symmetryZ ? "viewport-hud-button-active" : ""}`}
+                onClick={() => onParamChange?.("symmetryZ", !tNode.params.symmetryZ, tNode.id)}
+                title="Symmetry Z: Mirror strokes across the Z axis"
+                style={{ fontWeight: 700, fontSize: "11px", minWidth: 22 }}
+              >
+                Z
               </button>
 
               <div style={{ width: 1, height: 16, background: "rgba(255, 255, 255, 0.15)" }} />
@@ -8058,10 +8371,218 @@ export function Viewport({
                 className="viewport-hud-button"
                 onClick={() => {
                   if (window.confirm("Reset all manual sculpt offsets on this terrain?")) {
-                    onParamChange?.("sculptOffsets", {}, tNode.id);
+                    onParamChange?.({ sculptOffsets: {}, maskWeights: {} }, tNode.id);
                   }
                 }}
                 title="Reset manual sculpting offsets"
+                style={{ fontSize: "11px", padding: "2px 6px" }}
+              >
+                Reset
+              </button>
+            </div>
+          );
+        })()}
+      {/* Sculpt Floating Toolbar */}
+      {!outputMode &&
+        !elevationView &&
+        selectedNodeId &&
+        (() => {
+          const sNode = graph.nodes.find((n) => n.id === selectedNodeId && isSculptNode(n));
+          if (!sNode) return null;
+          const currentTool = (sNode.params.brushTool as SculptBrushTool) || sculptBrushTool;
+          const brushSize = Number(sNode.params.brushSize) || 0.3;
+          const brushStrength = Number(sNode.params.brushStrength) || 0.5;
+          const brushFalloff = (sNode.params.brushFalloff as BrushFalloff) || sculptBrushFalloff;
+          const detailSize = Number(sNode.params.detailSize) || 0.1;
+
+          const TOOL_LABELS: { id: SculptBrushTool; label: string; title: string }[] = [
+            { id: "draw", label: "Dr", title: "Draw: Raise / Lower along the stroke normal (Hold Alt to invert)" },
+            { id: "clay", label: "Cl", title: "Clay: Build up material toward the brush-local average plane" },
+            { id: "inflate", label: "In", title: "Inflate: Puff the surface out along each vertex's own normal" },
+            { id: "smooth", label: "Sm", title: "Smooth: Laplacian-average neighbors" },
+            { id: "pinch", label: "Pi", title: "Pinch: Sharpen toward the stroke center" },
+            { id: "crease", label: "Cr", title: "Crease: Carve a sharp valley line" },
+            { id: "flatten", label: "Fl", title: "Flatten: Project onto the plane frozen at stroke start" },
+            { id: "grab", label: "Gr", title: "Grab: Drag the brush footprint with the pointer" },
+            { id: "mask", label: "Ma", title: "Mask: Paint protection (Hold Shift to erase)" },
+          ];
+
+          return (
+            <div
+              className="viewport-terrain-hud"
+              style={{
+                position: "absolute",
+                bottom: 16,
+                left: "50%",
+                transform: "translateX(-50%)",
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                padding: "6px 14px",
+                background: "rgba(20, 24, 33, 0.95)",
+                backdropFilter: "blur(12px)",
+                border: "1px solid rgba(56, 189, 248, 0.45)",
+                borderRadius: "8px",
+                boxShadow: "0 8px 24px rgba(0, 0, 0, 0.5), 0 0 16px rgba(56, 189, 248, 0.2)",
+                color: "#ffffff",
+                fontSize: "12px",
+                zIndex: 45,
+                pointerEvents: "auto",
+              }}
+            >
+              <div
+                style={{
+                  fontSize: "11px",
+                  fontWeight: 700,
+                  color: "#38bdf8",
+                  padding: "2px 8px",
+                  background: "rgba(56, 189, 248, 0.15)",
+                  borderRadius: "4px",
+                  letterSpacing: "0.04em",
+                  userSelect: "none",
+                }}
+                title="Sculpt Tool"
+              >
+                SCULPT
+              </div>
+
+              <div style={{ width: 1, height: 16, background: "rgba(255, 255, 255, 0.15)" }} />
+
+              {TOOL_LABELS.map(({ id, label, title }) => (
+                <button
+                  key={id}
+                  type="button"
+                  className={`viewport-hud-button ${currentTool === id ? "viewport-hud-button-active" : ""}`}
+                  onClick={() => {
+                    setSculptBrushTool(id);
+                    onParamChange?.("brushTool", id, sNode.id);
+                  }}
+                  title={title}
+                  style={{ fontSize: "10px", fontWeight: 700, minWidth: 22 }}
+                >
+                  {label}
+                </button>
+              ))}
+
+              <div style={{ width: 1, height: 16, background: "rgba(255, 255, 255, 0.15)" }} />
+
+              {/* Invert (+ / -) */}
+              <button
+                type="button"
+                className={`viewport-hud-button ${sculptInvert ? "viewport-hud-button-active" : ""}`}
+                onClick={() => setSculptInvert(!sculptInvert)}
+                title={sculptInvert ? "Inverted (or hold Alt)" : "Normal (or hold Alt to invert)"}
+                style={{ fontWeight: 700, fontSize: "13px", minWidth: 26 }}
+              >
+                {sculptInvert ? "−" : "+"}
+              </button>
+
+              {/* Symmetry X / Y / Z */}
+              {(["symmetryX", "symmetryY", "symmetryZ"] as const).map((key, i) => (
+                <button
+                  key={key}
+                  type="button"
+                  className={`viewport-hud-button ${sNode.params[key] ? "viewport-hud-button-active" : ""}`}
+                  onClick={() => onParamChange?.(key, !sNode.params[key], sNode.id)}
+                  title={`Symmetry ${"XYZ"[i]}: Mirror strokes across the ${"XYZ"[i]} axis`}
+                  style={{ fontWeight: 700, fontSize: "11px", minWidth: 22 }}
+                >
+                  {"XYZ"[i]}
+                </button>
+              ))}
+
+              <div style={{ width: 1, height: 16, background: "rgba(255, 255, 255, 0.15)" }} />
+
+              {/* Radius / Size */}
+              <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                <span style={{ fontSize: "11px", color: "#94a3b8", minWidth: 32 }} title="Radius (use [ and ] shortcuts)">
+                  R: {brushSize.toFixed(2)}
+                </span>
+                <input
+                  type="range"
+                  min={0.02}
+                  max={2}
+                  step={0.02}
+                  value={brushSize}
+                  onChange={(e) => onParamChange?.("brushSize", Number(e.target.value), sNode.id)}
+                  style={{ width: 56, accentColor: "#38bdf8", cursor: "pointer" }}
+                  title="Brush Radius"
+                />
+              </div>
+
+              {/* Strength */}
+              <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                <span style={{ fontSize: "11px", color: "#94a3b8", minWidth: 30 }} title="Brush Strength">
+                  {Math.round(brushStrength * 100)}%
+                </span>
+                <input
+                  type="range"
+                  min={0.05}
+                  max={1.0}
+                  step={0.05}
+                  value={brushStrength}
+                  onChange={(e) => onParamChange?.("brushStrength", Number(e.target.value), sNode.id)}
+                  style={{ width: 50, accentColor: "#38bdf8", cursor: "pointer" }}
+                  title="Brush Strength"
+                />
+              </div>
+
+              {/* Detail Size (dyntopo) */}
+              <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                <span style={{ fontSize: "11px", color: "#94a3b8", minWidth: 20 }} title="Dyntopo target edge length — smaller means finer detail under the brush">
+                  Det
+                </span>
+                <input
+                  type="range"
+                  min={0.01}
+                  max={0.5}
+                  step={0.01}
+                  value={detailSize}
+                  onChange={(e) => onParamChange?.("detailSize", Number(e.target.value), sNode.id)}
+                  style={{ width: 50, accentColor: "#38bdf8", cursor: "pointer" }}
+                  title="Detail Size"
+                />
+              </div>
+
+              {/* Falloff */}
+              <select
+                value={brushFalloff}
+                onChange={(e) => {
+                  const f = e.target.value as BrushFalloff;
+                  setSculptBrushFalloff(f);
+                  onParamChange?.("brushFalloff", f, sNode.id);
+                }}
+                style={{
+                  background: "rgba(255, 255, 255, 0.08)",
+                  color: "#f1f5f9",
+                  border: "1px solid rgba(255, 255, 255, 0.15)",
+                  borderRadius: 4,
+                  fontSize: "11px",
+                  height: 24,
+                  padding: "0 6px",
+                  outline: "none",
+                  cursor: "pointer",
+                }}
+                title="Brush Falloff Shape"
+              >
+                <option value="smooth" style={{ background: "#1e293b", color: "#fff" }}>Smooth</option>
+                <option value="linear" style={{ background: "#1e293b", color: "#fff" }}>Linear</option>
+                <option value="sphere" style={{ background: "#1e293b", color: "#fff" }}>Sphere</option>
+                <option value="flat" style={{ background: "#1e293b", color: "#fff" }}>Flat</option>
+              </select>
+
+              <div style={{ width: 1, height: 16, background: "rgba(255, 255, 255, 0.15)" }} />
+
+              {/* Clear / Reset button */}
+              <button
+                type="button"
+                className="viewport-hud-button"
+                onClick={() => {
+                  if (window.confirm("Reset this sculpt back to its base primitive? All sculpted detail will be lost.")) {
+                    onParamChange?.("sculptMesh", null, sNode.id);
+                  }
+                }}
+                title="Reset to base primitive"
                 style={{ fontSize: "11px", padding: "2px 6px" }}
               >
                 Reset

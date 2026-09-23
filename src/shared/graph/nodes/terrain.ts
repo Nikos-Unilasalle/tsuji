@@ -29,6 +29,7 @@ interface TerrainNodeState {
   heightmapTexture: THREE.Texture | null;
   heightmapPixels: { data: Uint8ClampedArray | Uint8Array | Float32Array; width: number; height: number } | null;
   sculptOffsets: Record<number, number>;
+  maskWeights: Record<number, number>;
   outputTexture: THREE.DataTexture | null;
 }
 
@@ -67,7 +68,17 @@ function syncOutputHeightmap(
 }
 
 export const TERRAIN_RESOLUTION_OPTIONS: TerrainResolution[] = ["32x32", "64x64", "128x128", "256x256"];
-export const TERRAIN_BRUSH_TOOLS: TerrainBrushTool[] = ["sculpt", "smooth", "flatten", "noise", "erode"];
+export const TERRAIN_BRUSH_TOOLS: TerrainBrushTool[] = [
+  "sculpt",
+  "clayStrip",
+  "smooth",
+  "pinch",
+  "crease",
+  "flatten",
+  "noise",
+  "erode",
+  "mask",
+];
 export const TERRAIN_BRUSH_FALLOFFS: TerrainBrushFalloff[] = ["smooth", "linear", "sphere", "flat"];
 
 const TERRAIN_PARAM_FIELDS: ParamFieldDef[] = [
@@ -101,6 +112,8 @@ const TERRAIN_PARAM_FIELDS: ParamFieldDef[] = [
     options: [...TERRAIN_BRUSH_FALLOFFS],
     group: "Sculpt Palette",
   },
+  { id: "symmetryX", label: "Symmetry X", kind: "boolean", group: "Sculpt Palette" },
+  { id: "symmetryZ", label: "Symmetry Z", kind: "boolean", group: "Sculpt Palette" },
   { id: "visible", label: "Visible", kind: "boolean", group: "Transform" },
   { id: "location", label: "Location", kind: "vector", group: "Transform" },
   { id: "rotation", label: "Rotation (°)", kind: "vector", step: 1, degrees: true, group: "Transform" },
@@ -139,6 +152,9 @@ export const TERRAIN_NODE: NodeDefinition = {
     brushStrength: 0.5,
     brushFalloff: "smooth",
     sculptOffsets: {},
+    maskWeights: {},
+    symmetryX: false,
+    symmetryZ: false,
     visible: 1,
     location: new THREE.Vector3(0, 0, 0),
     rotation: new THREE.Vector3(0, 0, 0),
@@ -181,6 +197,10 @@ export const TERRAIN_NODE: NodeDefinition = {
     if (params.sculptOffsets && typeof params.sculptOffsets === "object") {
       sculptOffsets = params.sculptOffsets as Record<number, number>;
     }
+    let maskWeights: Record<number, number> = {};
+    if (params.maskWeights && typeof params.maskWeights === "object") {
+      maskWeights = params.maskWeights as Record<number, number>;
+    }
 
     const configSignature = `${width}|${depth}|${segmentsX}x${segmentsZ}|${heightScale}|${heightOffset}|${slopeShading}|${flatShading}|${wireframe}|${inputHeightmap?.uuid ?? "none"}`;
 
@@ -214,6 +234,7 @@ export const TERRAIN_NODE: NodeDefinition = {
         heightmapTexture: inputHeightmap,
         heightmapPixels,
         sculptOffsets,
+        maskWeights,
         outputTexture: null,
       };
       syncOutputHeightmap(state, segmentsX + 1, segmentsZ + 1, initialHeights);
@@ -237,6 +258,7 @@ export const TERRAIN_NODE: NodeDefinition = {
       }
 
       state.sculptOffsets = sculptOffsets;
+      state.maskWeights = maskWeights;
 
       // Update heights and normals if config, pixels or offsets changed
       if (state.configSignature !== configSignature || state.textureVersion !== currentTexVersion) {
@@ -254,6 +276,7 @@ export const TERRAIN_NODE: NodeDefinition = {
     state.mesh.userData.terrainConfig = config;
     state.mesh.userData.heightmapPixels = state.heightmapPixels;
     state.mesh.userData.sculptOffsets = state.sculptOffsets;
+    state.mesh.userData.maskWeights = state.maskWeights;
 
     // Apply materials and textures
     const matParams = extractMaterialParams(inputs, params);
