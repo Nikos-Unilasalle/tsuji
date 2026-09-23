@@ -985,6 +985,8 @@ export function Viewport({
   const sculptStrokeOriginRef = useRef<THREE.Vector3 | null>(null);
   const sculptStrokeNormalRef = useRef<THREE.Vector3 | null>(null);
   const sculptLastHitRef = useRef<THREE.Vector3 | null>(null);
+  /** Wall-clock throttle for dyntopo refinement during a drag — re-splitting on every pointermove is wasted work once edges are already near target size; 100ms matches marmelab/sculpt-3D's own throttle. */
+  const sculptLastRefineTimeRef = useRef(0);
 
   // Texture Paint and Texture Mix painting state
   /** Pending debounced param writes for painted textures, by node id. */
@@ -3232,9 +3234,13 @@ export function Viewport({
             const brushStrength = Number(sculptNode.params.brushStrength) || 0.5;
             const tool = (sculptNode.params.brushTool as SculptBrushTool) || sculptBrushToolRef.current;
             const falloff = (sculptNode.params.brushFalloff as BrushFalloff) || sculptBrushFalloffRef.current;
-            const detailSize = Number(sculptNode.params.detailSize) || 0.1;
-
-            const refined = refineNearBrush(workingMesh, localHit, brushRadius, detailSize);
+            // Detail follows the brush, not a separate param: a fixed
+            // "detail size" independent of brush radius can end up smaller
+            // than the base mesh's own edge length, triggering a runaway
+            // subdivision cascade the instant the brush touches the mesh.
+            const detailSize = brushRadius * 0.25;
+            const refined = refineNearBrush(workingMesh, localHit, brushRadius * 1.5, detailSize);
+            sculptLastRefineTimeRef.current = performance.now();
             sculptWorkingMeshRef.current = refined;
             sculptWorkingAdjacencyRef.current = buildAdjacency(refined.indices, refined.positions.length / 3);
 
@@ -3679,10 +3685,23 @@ export function Viewport({
               const brushStrength = Number(sculptNode.params.brushStrength) || 0.5;
               const tool = (sculptNode.params.brushTool as SculptBrushTool) || sculptBrushToolRef.current;
               const falloff = (sculptNode.params.brushFalloff as BrushFalloff) || sculptBrushFalloffRef.current;
-              const detailSize = Number(sculptNode.params.detailSize) || 0.1;
+              const detailSize = brushRadius * 0.25;
 
-              let workingMesh = refineNearBrush(sculptWorkingMeshRef.current, localHit, brushRadius, detailSize);
-              const adjacency = buildAdjacency(workingMesh.indices, workingMesh.positions.length / 3);
+              // Re-splitting on every pointermove is wasted work once edges
+              // near the brush are already at target size — throttle to a
+              // wall-clock interval and let a continuous drag converge over
+              // a few calls instead of one every frame.
+              let workingMesh = sculptWorkingMeshRef.current;
+              let adjacency = sculptWorkingAdjacencyRef.current;
+              const now = performance.now();
+              if (now - sculptLastRefineTimeRef.current > 100) {
+                sculptLastRefineTimeRef.current = now;
+                const refined = refineNearBrush(workingMesh, localHit, brushRadius * 1.5, detailSize);
+                if (refined !== workingMesh) {
+                  workingMesh = refined;
+                  adjacency = buildAdjacency(workingMesh.indices, workingMesh.positions.length / 3);
+                }
+              }
 
               const moveDelta = sculptLastHitRef.current ? localHit.clone().sub(sculptLastHitRef.current) : new THREE.Vector3();
               sculptLastHitRef.current = localHit.clone();
@@ -8393,7 +8412,6 @@ export function Viewport({
           const brushSize = Number(sNode.params.brushSize) || 0.3;
           const brushStrength = Number(sNode.params.brushStrength) || 0.5;
           const brushFalloff = (sNode.params.brushFalloff as BrushFalloff) || sculptBrushFalloff;
-          const detailSize = Number(sNode.params.detailSize) || 0.1;
 
           const TOOL_LABELS: { id: SculptBrushTool; label: string; title: string }[] = [
             { id: "draw", label: "Dr", title: "Draw: Raise / Lower along the stroke normal (Hold Alt to invert)" },
@@ -8527,22 +8545,6 @@ export function Viewport({
                 />
               </div>
 
-              {/* Detail Size (dyntopo) */}
-              <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                <span style={{ fontSize: "11px", color: "#94a3b8", minWidth: 20 }} title="Dyntopo target edge length — smaller means finer detail under the brush">
-                  Det
-                </span>
-                <input
-                  type="range"
-                  min={0.01}
-                  max={0.5}
-                  step={0.01}
-                  value={detailSize}
-                  onChange={(e) => onParamChange?.("detailSize", Number(e.target.value), sNode.id)}
-                  style={{ width: 50, accentColor: "#38bdf8", cursor: "pointer" }}
-                  title="Detail Size"
-                />
-              </div>
 
               {/* Falloff */}
               <select

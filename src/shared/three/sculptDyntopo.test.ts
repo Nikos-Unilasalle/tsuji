@@ -9,17 +9,23 @@ describe("sculptDyntopo refineNearBrush", () => {
     const beforeTriCount = mesh.indices.length / 3;
     const hitPoint = new THREE.Vector3(mesh.positions[0], mesh.positions[1], mesh.positions[2]);
 
-    const refined = refineNearBrush(mesh, hitPoint, 0.8, 0.2, 6);
+    const refined = refineNearBrush(mesh, hitPoint, 0.8, 0.2);
     const afterTriCount = refined.indices.length / 3;
 
     expect(afterTriCount).toBeGreaterThan(beforeTriCount);
   });
 
   test("is bounded: edges within the brush radius end up at or below detailSize", () => {
-    const mesh = buildBasePrimitive("sphere", 1, 4.0);
+    // One call performs one split round (matching the real per-stroke-call
+    // cadence in Viewport.tsx); a stroke that needs several halvings
+    // converges over repeated calls, same as a continuous drag would.
+    let mesh = buildBasePrimitive("sphere", 1, 4.0);
     const hitPoint = new THREE.Vector3(mesh.positions[0], mesh.positions[1], mesh.positions[2]);
     const detailSize = 0.15;
-    const refined = refineNearBrush(mesh, hitPoint, 0.5, detailSize, 6);
+    for (let i = 0; i < 6; i++) {
+      mesh = refineNearBrush(mesh, hitPoint, 0.5, detailSize);
+    }
+    const refined = mesh;
 
     for (let t = 0; t < refined.indices.length; t += 3) {
       const a = refined.indices[t], b = refined.indices[t + 1], c = refined.indices[t + 2];
@@ -47,7 +53,7 @@ describe("sculptDyntopo refineNearBrush", () => {
   test("nothing qualifies when the hit point is far from the mesh: geometry untouched", () => {
     const mesh = buildBasePrimitive("sphere", 2, 4.0);
     const hitPoint = new THREE.Vector3(1000, 1000, 1000);
-    const refined = refineNearBrush(mesh, hitPoint, 0.5, 0.001, 4);
+    const refined = refineNearBrush(mesh, hitPoint, 0.5, 0.001);
     expect(refined.indices.length).toBe(mesh.indices.length);
     expect(refined.positions.length).toBe(mesh.positions.length);
   });
