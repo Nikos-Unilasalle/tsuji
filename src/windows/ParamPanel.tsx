@@ -12,6 +12,7 @@ import { KeyframeStore, ParamFieldDef } from "../shared/graph/types";
 import { ColorPickerInput } from "./ColorPickerInput";
 import { CurveProfileEditor } from "./CurveProfileEditor";
 import { ColorRampEditor } from "./ColorRampEditor";
+import { TopographyBandsEditor } from "./TopographyBandsEditor";
 import { DragNumberInput } from "./DragNumberInput";
 import "./param-panel.css";
 
@@ -94,7 +95,12 @@ interface ParamPanelProps {
   keyframes?: KeyframeStore;
   currentFrame?: number;
   keyframesEnabled?: boolean;
-  onChange: (paramId: string, value: unknown) => void;
+  /**
+   * A single param, or a patch of several at once — the visual editors (see
+   * `topography_bands`) drive a whole rule set from one drag, and one patch
+   * is one undo step instead of six.
+   */
+  onChange: (paramId: string | Record<string, unknown>, value?: unknown) => void;
   onToggleKeyframe?: (nodeId: string, paramKey: string, frame: number, currentValue: any) => void;
   /** Fired by a "button" field — see ParamFieldDef. */
   onAction?: (nodeId: string, action: string) => void;
@@ -136,6 +142,22 @@ export function getKeyframeStatus(
 /** Field kinds simple enough to render as a compact HUD row — see ViewportParamHUD. */
 export const EXPOSABLE_KINDS = new Set(["number", "vector", "boolean", "select", "color"]);
 
+/**
+ * How many texture layers a layered node currently has, read off its params.
+ *
+ * The panel never sees the node definition, so it counts the per-layer keys
+ * the node writes rather than asking how many sockets are wired.
+ */
+function layerCountOf(params: Record<string, unknown>): number {
+  let max = 3;
+  for (const key of Object.keys(params)) {
+    if (!key.startsWith("uvScale")) continue;
+    const idx = parseInt(key.slice("uvScale".length), 10);
+    if (!Number.isNaN(idx)) max = Math.max(max, idx + 1);
+  }
+  return max;
+}
+
 export function booleanField(value: unknown, onChange: (v: unknown) => void) {
   return <input type="checkbox" checked={!!value} onChange={(e) => onChange(e.target.checked ? 1 : 0)} />;
 }
@@ -143,9 +165,12 @@ export function booleanField(value: unknown, onChange: (v: unknown) => void) {
 export function selectField(field: ParamFieldDef & { kind: "select" }, value: unknown, onChange: (v: unknown) => void) {
   return (
     <select value={String(value)} onChange={(e) => onChange(e.target.value)}>
-      {field.options.map((opt) => (
+      {field.options.map((opt, i) => (
         <option key={opt} value={opt}>
-          {opt}
+          {/* A stored value and what the artist reads are not always the same
+              thing: a layer param holds an index, but "Rock" is what means
+              something on screen. */}
+          {field.optionLabels?.[i] ?? opt}
         </option>
       ))}
     </select>
@@ -668,9 +693,18 @@ export function ParamPanel({
                     );
                   }
 
+                  // An editor that is itself the control needs the whole row:
+                  // squeezed beside a label column it loses half its width and
+                  // the label ends up ellipsed to one letter.
+                  const isWideEditor = field.kind === "topography_bands";
+
                   return (
                     <div
-                      className={"param-row" + (isDriven ? " param-row-driven" : "")}
+                      className={
+                        "param-row" +
+                        (isDriven ? " param-row-driven" : "") +
+                        (isWideEditor ? " param-row-wide" : "")
+                      }
                       key={field.id}
                       title={isDriven ? `${field.label} comes from the wire plugged into this node — unplug it to set a value here` : undefined}
                     >
@@ -739,6 +773,13 @@ export function ParamPanel({
                         <CurveProfileEditor
                           value={params[field.id] as any}
                           onChange={(v) => onChange(field.id, v)}
+                        />
+                      )}
+                      {field.kind === "topography_bands" && (
+                        <TopographyBandsEditor
+                          params={params}
+                          layerCount={layerCountOf(params)}
+                          onChange={(patch) => onChange(patch)}
                         />
                       )}
                       {field.kind === "color_ramp" && (

@@ -216,7 +216,15 @@ export type ParamFieldDef =
   /** `percent` is the same display-only convention as `degrees` — shows/edits the value ×100, stores it unscaled (0-1 fraction). Mutually exclusive with `degrees`. */
   | { id: string; label: string; kind: "number"; step?: number; degrees?: boolean; percent?: boolean; group?: string }
   | { id: string; label: string; kind: "boolean"; group?: string }
-  | { id: string; label: string; kind: "select"; options: string[]; group?: string }
+  | {
+      id: string;
+      label: string;
+      kind: "select";
+      options: string[];
+      /** Display text per option, positionally. Falls back to the value itself. */
+      optionLabels?: string[];
+      group?: string;
+    }
   | { id: string; label: string; kind: "color"; group?: string }
   | { id: string; label: string; kind: "vector"; step?: number; degrees?: boolean; group?: string }
   | { id: string; label: string; kind: "text"; group?: string }
@@ -228,6 +236,12 @@ export type ParamFieldDef =
    */
   | { id: string; label: string; kind: "note"; tone?: "warn"; group?: string }
   | { id: string; label: string; kind: "curve_profile"; group?: string }
+  /**
+   * The Topography node's altitude/steepness rules, as one visual control.
+   * Unlike every other field this one reads and writes several params at
+   * once — the rules only make sense as a set.
+   */
+  | { id: string; label: string; kind: "topography_bands"; group?: string }
   | { id: string; label: string; kind: "color_ramp"; group?: string }
   | {
       id: string;

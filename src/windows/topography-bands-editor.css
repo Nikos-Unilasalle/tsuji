@@ -1,0 +1,140 @@
+/*
+ * Every colour here comes from the interface palette (see theme.css and
+ * themeStore.ts). The fallbacks after each var are the default theme's own
+ * values — they exist for a stylesheet loaded before the theme applies, not
+ * as a second palette.
+ */
+
+.topo-bands {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--chrome-surface, #3b434f);
+  border: 1px solid var(--chrome-border, #5a6472);
+  border-radius: 6px;
+  padding: 10px;
+  margin-top: 4px;
+}
+
+.topo-bands-row {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+}
+
+.topo-bands-column {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.topo-bands-caption {
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--chrome-text-muted, #b3bdc9);
+}
+
+.topo-bands-bar-wrap {
+  position: relative;
+  display: flex;
+  gap: 6px;
+}
+
+.topo-bands-bar {
+  border-radius: 4px;
+  cursor: ns-resize;
+  touch-action: none;
+  display: block;
+}
+
+.topo-bands-scale {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  font-size: 9px;
+  color: var(--chrome-text-muted, #b3bdc9);
+  padding: 1px 0;
+}
+
+/* Band names sit on the band they name, inside the bar. */
+.topo-bands-tag {
+  position: absolute;
+  left: 3px;
+  max-width: 48px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 2px 4px;
+  font-size: 9px;
+  line-height: 1;
+  border-radius: 3px;
+  border: 1px solid transparent;
+  background: color-mix(in srgb, var(--chrome-pill-bg, #1e2430) 80%, transparent);
+  color: var(--chrome-text, #eef2f6);
+  cursor: pointer;
+}
+
+.topo-bands-tag:hover {
+  background: var(--chrome-pill-bg, #1e2430);
+}
+
+.topo-bands-tag.is-selected {
+  border-color: var(--accent-color, #38bdf8);
+}
+
+.topo-bands-dial {
+  border-radius: 4px;
+  cursor: crosshair;
+  touch-action: none;
+  display: block;
+  background: var(--chrome-pill-bg, #1e2430);
+}
+
+.topo-bands-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-top: 1px solid var(--chrome-border, #5a6472);
+  padding-top: 8px;
+}
+
+.topo-bands-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--chrome-text, #eef2f6);
+}
+
+.topo-bands-field label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.topo-bands-field select {
+  flex: 0 0 96px;
+  background: var(--chrome-surface-raised, #47505d);
+  color: var(--chrome-text, #eef2f6);
+  border: 1px solid var(--chrome-border, #5a6472);
+  border-radius: 4px;
+  font-size: 11px;
+  height: 22px;
+  padding: 0 4px;
+  outline: none;
+}
+
+.topo-bands-unit {
+  width: 10px;
+  font-size: 10px;
+  color: var(--chrome-text-muted, #b3bdc9);
+}
+
+.topo-bands-hint {
+  font-size: 10px;
+  color: var(--chrome-text-muted, #b3bdc9);
+  line-height: 1.35;
+}

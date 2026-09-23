@@ -56,6 +56,9 @@ import { enableSmoothShadows } from "./smoothShadows";
 // Re-exported so call sites (App.tsx, SplitViewport) keep importing these
 // from the component they belong to, not from its internals.
 export type { TransformGizmoMode, TransformPatch };
+/** Quiet time after the last stroke before a painted map is written to params. */
+const TEXTURE_SNAPSHOT_DEBOUNCE_MS = 700;
+
 export type GpToolMode =
   | "pen"
   | "line"
@@ -188,6 +191,61 @@ function getTerrainMeshForNode(
   return null;
 }
 
+import {
+  TexturePaintTool,
+  applyPaintStroke,
+  clearPaintCanvas,
+  exportCanvasToPNG,
+  serializePaintCanvas,
+} from "./texturePainter";
+import {
+  TextureMixFalloff,
+  TextureMixTool,
+  applyMixStroke,
+} from "./textureMixEngine";
+import { serializeSplatToPng } from "./splatSerialization";
+import { compositeLayersAuto } from "./layeredTexture";
+import { getTexturePaintState } from "../graph/nodes/texturePaint";
+import { getTextureMixPaintState } from "../graph/nodes/textureMixPaint";
+
+function isTexturePaintNode(node: { type: string } | null | undefined): boolean {
+  return node?.type === "texture/paint";
+}
+
+function isTextureMixNode(node: { type: string } | null | undefined): boolean {
+  return node?.type === "texture/mix-paint";
+}
+
+function getTexturePaintMeshesForNode(
+  nodeId: string,
+  graph: Graph,
+  latestResults: Map<string, Record<string, unknown>> | null | undefined,
+): THREE.Mesh[] {
+  const meshes: THREE.Mesh[] = [];
+  const res = latestResults?.get(nodeId);
+  if (res?.geometry instanceof THREE.Object3D) {
+    res.geometry.traverse((child) => {
+      if ((child as THREE.Mesh).isMesh) {
+        meshes.push(child as THREE.Mesh);
+      }
+    });
+  }
+  if (meshes.length === 0) {
+    const conn = graph.connections.find((c) => c.toNode === nodeId && c.toSocket === "geometry");
+    if (conn) {
+      const srcRes = latestResults?.get(conn.fromNode);
+      if (srcRes?.geometry instanceof THREE.Object3D) {
+        srcRes.geometry.traverse((child) => {
+          if ((child as THREE.Mesh).isMesh) {
+            meshes.push(child as THREE.Mesh);
+          }
+        });
+      }
+    }
+  }
+  return meshes;
+}
+
 function createTerrainBrushGizmo(): THREE.LineLoop {
   const points: THREE.Vector3[] = [];
   const segments = 64;
@@ -207,6 +265,27 @@ function createTerrainBrushGizmo(): THREE.LineLoop {
   line.renderOrder = 9999;
   return line;
 }
+
+function createTextureBrushGizmo(): THREE.LineLoop {
+  const points: THREE.Vector3[] = [];
+  const segments = 64;
+  for (let i = 0; i <= segments; i++) {
+    const theta = (i / segments) * Math.PI * 2;
+    points.push(new THREE.Vector3(Math.cos(theta), 0.05, Math.sin(theta)));
+  }
+  const geo = new THREE.BufferGeometry().setFromPoints(points);
+  const mat = new THREE.LineBasicMaterial({
+    color: 0x38bdf8,
+    depthTest: false,
+    transparent: true,
+    opacity: 0.9,
+  });
+  const line = new THREE.LineLoop(geo, mat);
+  line.visible = false;
+  line.renderOrder = 9999;
+  return line;
+}
+
 
 function getTargetGeometryForNode(
   node: { id: string; type: string },
@@ -868,6 +947,16 @@ export function Viewport({
   const isTerrainSculptingRef = useRef(false);
   const terrainSculptWorkingOffsetsRef = useRef<Record<number, number> | null>(null);
   const terrainTargetHeightRef = useRef<number | null>(null);
+
+  // Texture Paint and Texture Mix painting state
+  /** Pending debounced param writes for painted textures, by node id. */
+  const textureSnapshotTimersRef = useRef<Map<string, number>>(new Map());
+  const isTexturePaintingRef = useRef(false);
+  const texturePaintLastUvRef = useRef<{ x: number; y: number } | null>(null);
+  const textureBrushGizmoRef = useRef<THREE.LineLoop | null>(null);
+  const texturePaintLastPressureRef = useRef<number>(1.0);
+  const texturePaintPressureTrackerRef = useRef<PressureTracker>(createPressureTracker());
+  const texturePaintPrevSampleRef = useRef<PointerSample | null>(null);
 
   const snapSelectedCameraToEditorRef = useRef<() => void>(() => {});
   const cameraGuideRef = useRef<HTMLDivElement>(null);
@@ -1568,6 +1657,8 @@ export function Viewport({
     });
     const pivotCrossPool: THREE.LineSegments[] = [];
     const terrainBrushGizmo = createTerrainBrushGizmo();
+    const textureBrushGizmo = createTextureBrushGizmo();
+    textureBrushGizmoRef.current = textureBrushGizmo;
 
     if (!outputMode) {
       editorUiScene.add(curveHandles.group);
@@ -1582,6 +1673,7 @@ export function Viewport({
       editorUiScene.add(gizmoPivotProxy);
       editorUiScene.add(pivotCrossGroup);
       editorUiScene.add(terrainBrushGizmo);
+      editorUiScene.add(textureBrushGizmo);
       // The face-selection highlight lives in the *main* scene (not the
       // editor overlay, which clears depth and would show every selected face
       // through the object) so it is occluded like the surface it sits on.
@@ -1902,22 +1994,32 @@ export function Viewport({
         }
       }
 
-      // Terrain brush size shortcuts: [ (decrease) and ] (increase)
-      const terrainNode = selectedNodeIdRef.current
-        ? graphRef.current.nodes.find((n) => n.id === selectedNodeIdRef.current && isTerrainNode(n))
-        : null;
-      if (terrainNode) {
-        if (e.key === "[" || e.key === "{") {
+      // Brush size: [ shrinks, ] grows. One rule for every brush in the app —
+      // terrain sculpt, texture paint, texture mix and grease pencil — rather
+      // than a shortcut that only works on the tool it was written for.
+      const smaller = e.key === "[" || e.key === "{";
+      const bigger = e.key === "]" || e.key === "}";
+      if (smaller || bigger) {
+        const brushNode = selectedNodeIdRef.current
+          ? graphRef.current.nodes.find(
+              (n) =>
+                n.id === selectedNodeIdRef.current &&
+                (isTerrainNode(n) ||
+                  isTexturePaintNode(n) ||
+                  isTextureMixNode(n) ||
+                  isPaintOrGreaseNode(n)),
+            )
+          : null;
+        if (brushNode) {
           e.preventDefault();
-          const cur = Number(terrainNode.params.brushSize) || 4;
-          const next = Math.max(0.5, Math.round((cur - 0.5) * 2) / 2);
-          onParamChangeRef.current?.("brushSize", next, terrainNode.id);
-          return;
-        } else if (e.key === "]" || e.key === "}") {
-          e.preventDefault();
-          const cur = Number(terrainNode.params.brushSize) || 4;
-          const next = Math.min(50, Math.round((cur + 0.5) * 2) / 2);
-          onParamChangeRef.current?.("brushSize", next, terrainNode.id);
+          // Terrain sizes are scene units and move in halves; the pixel-space
+          // brushes move proportionally, which is what reads as linear.
+          const isTerrain = isTerrainNode(brushNode);
+          const cur = Number(brushNode.params.brushSize) || (isTerrain ? 4 : 24);
+          const next = isTerrain
+            ? Math.max(0.5, Math.min(50, Math.round((cur + (bigger ? 0.5 : -0.5)) * 2) / 2))
+            : Math.max(1, Math.min(512, Math.round(bigger ? cur * 1.15 + 1 : cur / 1.15 - 1)));
+          onParamChangeRef.current?.("brushSize", next, brushNode.id);
           return;
         }
       }
@@ -2589,6 +2691,51 @@ export function Viewport({
     }
 
     /**
+     * Writes a painted texture or splat map into the node's params.
+     *
+     * Debounced, because the encode is the expensive part and a working pass
+     * is a burst of short strokes: without this, every pen-up paid for a full
+     * PNG encode of the whole map.
+     */
+    function scheduleTextureSnapshot(nodeId: string) {
+      const pending = textureSnapshotTimersRef.current;
+      const existing = pending.get(nodeId);
+      if (existing !== undefined) clearTimeout(existing);
+
+      const timer = setTimeout(() => {
+        pending.delete(nodeId);
+        const node = graphRef.current.nodes.find((n) => n.id === nodeId);
+        if (!node) return;
+
+        if (isTexturePaintNode(node)) {
+          const state = getTexturePaintState(nodeId);
+          if (state.canvas) {
+            onParamChangeRef.current?.("textureData", serializePaintCanvas(state.canvas), nodeId);
+          }
+        } else if (isTextureMixNode(node)) {
+          const state = getTextureMixPaintState(nodeId);
+          if (state.splatBuffer && state.res) {
+            // PNG-packed rather than raw base64: the same map goes from
+            // megabytes of base64 to tens of kilobytes, which is the
+            // difference between fitting in the autosave quota and not.
+            const encoded = serializeSplatToPng(
+              state.splatBuffer,
+              state.res,
+              state.res,
+              state.layerCount ?? 1,
+            );
+            if (encoded) {
+              state.lastSplatData = encoded;
+              onParamChangeRef.current?.("splatData", encoded, nodeId);
+            }
+          }
+        }
+      }, TEXTURE_SNAPSHOT_DEBOUNCE_MS) as unknown as number;
+
+      pending.set(nodeId, timer);
+    }
+
+    /**
      * Writes a finished point list into the node's frames as a new stroke.
      * Shared by the freehand pen, the shape tools and the fill tool.
      */
@@ -2974,6 +3121,119 @@ export function Viewport({
         }
       }
 
+      const texPaintNode = selectedNodeIdRef.current
+        ? graphRef.current.nodes.find(
+            (n) => n.id === selectedNodeIdRef.current && (isTexturePaintNode(n) || isTextureMixNode(n)),
+          )
+        : null;
+
+      if (texPaintNode && !outputMode && !elevationView && e.button === 0 && !isMarqueeModifier && raycaster) {
+        const targetMeshes = getTexturePaintMeshesForNode(texPaintNode.id, graphRef.current, latestResultsRef.current);
+        if (targetMeshes.length > 0) {
+          const rect = renderer.domElement.getBoundingClientRect();
+          const mouseNorm = new THREE.Vector2(
+            ((e.clientX - rect.left) / rect.width) * 2 - 1,
+            -((e.clientY - rect.top) / rect.height) * 2 + 1,
+          );
+          raycaster.setFromCamera(mouseNorm, camera);
+          const intersects = raycaster.intersectObjects(targetMeshes, true);
+          if (intersects.length > 0) {
+            const hit = intersects[0];
+            let uv = hit.uv ? { x: hit.uv.x, y: hit.uv.y } : null;
+            if (!uv && hit.point) {
+              uv = { x: ((hit.point.x % 1) + 1) % 1, y: ((hit.point.z % 1) + 1) % 1 };
+            }
+            if (uv) {
+              isTexturePaintingRef.current = true;
+              texturePaintLastUvRef.current = { ...uv };
+              controls.enabled = false;
+
+              texturePaintPressureTrackerRef.current = createPressureTracker({
+                gamma: Number(texPaintNode.params.pressureCurve ?? 1),
+                min: Number(texPaintNode.params.pressureMin ?? 0.05),
+                max: Number(texPaintNode.params.pressureMax ?? 1),
+              });
+              const samples = collectPointerSamples(e, performance.now());
+              const sample = samples[0];
+              texturePaintPrevSampleRef.current = sample;
+              const usePressure = Boolean(texPaintNode.params.usePressure ?? true);
+              const pressureTarget = (texPaintNode.params.pressureTarget as any) || "both";
+              const basePr = texturePaintPressureTrackerRef.current.next(sample, null);
+              const pressure = usePressure && sample.isPen ? Math.max(0.04, Math.min(1.0, basePr)) : 1.0;
+              texturePaintLastPressureRef.current = pressure;
+
+              if (isTexturePaintNode(texPaintNode)) {
+                const state = getTexturePaintState(texPaintNode.id);
+                if (state.canvas) {
+                  const brushTool = (texPaintNode.params.brushTool as TexturePaintTool) || "paint";
+                  const brushColor = String(texPaintNode.params.brushColor || "#38bdf8");
+                  const brushSize = Number(texPaintNode.params.brushSize) || 24;
+                  const brushOpacity = Number(texPaintNode.params.brushOpacity ?? 1.0);
+                  const brushHardness = Number(texPaintNode.params.brushHardness ?? 0.5);
+                  const symmetryX = Boolean(texPaintNode.params.symmetryX);
+
+                  const res = applyPaintStroke(state.canvas, {
+                    tool: brushTool,
+                    color: brushColor,
+                    radius: brushSize,
+                    opacity: brushOpacity,
+                    hardness: brushHardness,
+                    uv,
+                    prevUv: null,
+                    symmetryX,
+                    pressure,
+                    prevPressure: null,
+                    pressureAffects: pressureTarget,
+                  });
+                  if (res.sampledColor) {
+                    onParamChangeRef.current?.("brushColor", res.sampledColor, texPaintNode.id);
+                  }
+                  if (state.texture) state.texture.needsUpdate = true;
+                }
+              } else if (isTextureMixNode(texPaintNode)) {
+                const state = getTextureMixPaintState(texPaintNode.id);
+                if (state.splatBuffer && state.outCanvas) {
+                  const resPx = state.outCanvas.width;
+                  const activeLayer = Number(texPaintNode.params.activeLayer) || 0;
+                  const brushTool = (texPaintNode.params.brushTool as TextureMixTool) || "paint";
+                  const brushSize = Number(texPaintNode.params.brushSize) || 32;
+                  const brushStrength = Number(texPaintNode.params.brushStrength) || 0.8;
+                  const brushFalloff = (texPaintNode.params.brushFalloff as any) || "smooth";
+
+                  const dirty = applyMixStroke(state.splatBuffer, resPx, resPx, state.lastLayerCount || 1, {
+                    tool: brushTool,
+                    activeLayer,
+                    radius: brushSize,
+                    strength: brushStrength,
+                    falloff: brushFalloff,
+                    uv,
+                    prevUv: null,
+                    pressure,
+                    prevPressure: null,
+                    pressureAffects: pressureTarget,
+                  });
+                  // Recomposite only the rect the stamp touched, and tell the
+                  // node its weights moved so its signature guard re-bakes.
+                  // GPU pass when the renderer is up, CPU dirty-rect otherwise.
+                  const composited = compositeLayersAuto(state, state.layers ?? [], {
+                    renderer,
+                    res: resPx,
+                    layerCount: state.lastLayerCount || 1,
+                    region: dirty,
+                  });
+                  if (composited) state.texture = composited;
+                  state.splatVersion = (state.splatVersion ?? 0) + 1;
+                  if (state.texture) state.texture.needsUpdate = true;
+                  if (state.splatTexture) state.splatTexture.needsUpdate = true;
+                }
+              }
+              e.stopImmediatePropagation();
+              return;
+            }
+          }
+        }
+      }
+
       const isDrawingOrModifying =
         gpToolRef.current !== "select" &&
         !GP_LASSO_TOOLS.has(gpToolRef.current) &&
@@ -3238,6 +3498,140 @@ export function Viewport({
         }
       } else if (terrainBrushGizmo && terrainBrushGizmo.visible) {
         terrainBrushGizmo.visible = false;
+      }
+
+      const texPaintNode = selectedNodeIdRef.current
+        ? graphRef.current.nodes.find(
+            (n) => n.id === selectedNodeIdRef.current && (isTexturePaintNode(n) || isTextureMixNode(n)),
+          )
+        : null;
+
+      if (texPaintNode && !outputMode && host && raycaster) {
+        const targetMeshes = getTexturePaintMeshesForNode(texPaintNode.id, graphRef.current, latestResultsRef.current);
+        if (targetMeshes.length > 0) {
+          const rect = renderer.domElement.getBoundingClientRect();
+          const mouseNorm = new THREE.Vector2(
+            ((e.clientX - rect.left) / rect.width) * 2 - 1,
+            -((e.clientY - rect.top) / rect.height) * 2 + 1,
+          );
+          raycaster.setFromCamera(mouseNorm, camera);
+          const intersects = raycaster.intersectObjects(targetMeshes, true);
+          if (intersects.length > 0) {
+            const hit = intersects[0];
+            let uv = hit.uv ? { x: hit.uv.x, y: hit.uv.y } : null;
+            if (!uv && hit.point) {
+              uv = { x: ((hit.point.x % 1) + 1) % 1, y: ((hit.point.z % 1) + 1) % 1 };
+            }
+
+            const samples = collectPointerSamples(e, performance.now());
+            const sample = samples[samples.length - 1];
+            const usePressure = Boolean(texPaintNode.params.usePressure ?? true);
+            const pressureTarget = (texPaintNode.params.pressureTarget as any) || "both";
+            const basePr = texturePaintPressureTrackerRef.current.next(sample, texturePaintPrevSampleRef.current);
+            texturePaintPrevSampleRef.current = sample;
+            const pressure = usePressure && sample.isPen ? Math.max(0.04, Math.min(1.0, basePr)) : 1.0;
+            const prevPressure = texturePaintLastPressureRef.current;
+            texturePaintLastPressureRef.current = pressure;
+
+            if (textureBrushGizmo) {
+              textureBrushGizmo.visible = true;
+              textureBrushGizmo.position.copy(hit.point);
+              if (hit.face) {
+                const worldNormal = hit.face.normal.clone().transformDirection(hit.object.matrixWorld);
+                textureBrushGizmo.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), worldNormal);
+              }
+              const brushSize = Number(texPaintNode.params.brushSize) || 24;
+              const effectiveBrushSize =
+                usePressure && sample.isPen && (pressureTarget === "both" || pressureTarget === "size")
+                  ? Math.max(1, brushSize * pressure)
+                  : brushSize;
+              const scaleRadius = Math.max(0.05, (effectiveBrushSize / 1024) * 5);
+              textureBrushGizmo.scale.set(scaleRadius, scaleRadius, scaleRadius);
+              if (isTexturePaintNode(texPaintNode)) {
+                (textureBrushGizmo.material as THREE.LineBasicMaterial).color.set(
+                  String(texPaintNode.params.brushColor || "#38bdf8"),
+                );
+              } else {
+                (textureBrushGizmo.material as THREE.LineBasicMaterial).color.set(0xf59e0b);
+              }
+            }
+
+            if (isTexturePaintingRef.current && uv) {
+              const prevUv = texturePaintLastUvRef.current;
+              texturePaintLastUvRef.current = { ...uv };
+
+              if (isTexturePaintNode(texPaintNode)) {
+                const state = getTexturePaintState(texPaintNode.id);
+                if (state.canvas) {
+                  const brushTool = (texPaintNode.params.brushTool as TexturePaintTool) || "paint";
+                  const brushColor = String(texPaintNode.params.brushColor || "#38bdf8");
+                  const brushSize = Number(texPaintNode.params.brushSize) || 24;
+                  const brushOpacity = Number(texPaintNode.params.brushOpacity ?? 1.0);
+                  const brushHardness = Number(texPaintNode.params.brushHardness ?? 0.5);
+                  const symmetryX = Boolean(texPaintNode.params.symmetryX);
+
+                  const res = applyPaintStroke(state.canvas, {
+                    tool: brushTool,
+                    color: brushColor,
+                    radius: brushSize,
+                    opacity: brushOpacity,
+                    hardness: brushHardness,
+                    uv,
+                    prevUv,
+                    symmetryX,
+                    pressure,
+                    prevPressure,
+                    pressureAffects: pressureTarget,
+                  });
+                  if (res.sampledColor) {
+                    onParamChangeRef.current?.("brushColor", res.sampledColor, texPaintNode.id);
+                  }
+                  if (state.texture) state.texture.needsUpdate = true;
+                }
+              } else if (isTextureMixNode(texPaintNode)) {
+                const state = getTextureMixPaintState(texPaintNode.id);
+                if (state.splatBuffer && state.outCanvas) {
+                  const resPx = state.outCanvas.width;
+                  const activeLayer = Number(texPaintNode.params.activeLayer) || 0;
+                  const brushTool = (texPaintNode.params.brushTool as TextureMixTool) || "paint";
+                  const brushSize = Number(texPaintNode.params.brushSize) || 32;
+                  const brushStrength = Number(texPaintNode.params.brushStrength) || 0.8;
+                  const brushFalloff = (texPaintNode.params.brushFalloff as any) || "smooth";
+
+                  const dirty = applyMixStroke(state.splatBuffer, resPx, resPx, state.lastLayerCount || 1, {
+                    tool: brushTool,
+                    activeLayer,
+                    radius: brushSize,
+                    strength: brushStrength,
+                    falloff: brushFalloff,
+                    uv,
+                    prevUv,
+                    pressure,
+                    prevPressure,
+                    pressureAffects: pressureTarget,
+                  });
+                  // GPU pass when the renderer is up, CPU dirty-rect otherwise.
+                  const composited = compositeLayersAuto(state, state.layers ?? [], {
+                    renderer,
+                    res: resPx,
+                    layerCount: state.lastLayerCount || 1,
+                    region: dirty,
+                  });
+                  if (composited) state.texture = composited;
+                  state.splatVersion = (state.splatVersion ?? 0) + 1;
+                  if (state.texture) state.texture.needsUpdate = true;
+                  if (state.splatTexture) state.splatTexture.needsUpdate = true;
+                }
+              }
+              e.stopImmediatePropagation();
+              return;
+            }
+          } else if (!isTexturePaintingRef.current && textureBrushGizmo) {
+            textureBrushGizmo.visible = false;
+          }
+        }
+      } else if (textureBrushGizmo && textureBrushGizmo.visible) {
+        textureBrushGizmo.visible = false;
       }
 
       // Edit Mesh Marquee Dragging (Shift-drag)
@@ -3724,6 +4118,20 @@ export function Viewport({
         }
         terrainSculptWorkingOffsetsRef.current = null;
         terrainTargetHeightRef.current = null;
+        return;
+      }
+
+      if (isTexturePaintingRef.current) {
+        isTexturePaintingRef.current = false;
+        controls.enabled = true;
+        texturePaintLastUvRef.current = null;
+        const node = selectedNodeIdRef.current
+          ? graphRef.current.nodes.find((n) => n.id === selectedNodeIdRef.current)
+          : null;
+        // Encoding a 1024² map is expensive enough to be felt, and a working
+        // pass is dozens of short strokes. Coalesce them: the buffer in memory
+        // is the live one, the param only has to catch up before a save.
+        if (node) scheduleTextureSnapshot(node.id);
         return;
       }
 
@@ -5964,6 +6372,10 @@ export function Viewport({
         window.removeEventListener("keyup", onSnapKeyUp);
         window.removeEventListener("blur", onSnapWindowBlur);
       }
+      // A debounced texture snapshot outliving the viewport would write into
+      // a graph this component no longer owns.
+      for (const timer of textureSnapshotTimersRef.current.values()) clearTimeout(timer);
+      textureSnapshotTimersRef.current.clear();
       transformControls?.dispose();
       elevationHUD.dispose();
       curveHandles.clear();
@@ -5971,6 +6383,8 @@ export function Viewport({
       pointsInfluenceHandles.clear();
       pivotHandle.clear();
       terrainBrushGizmo.removeFromParent();
+      textureBrushGizmo.removeFromParent();
+      textureBrushGizmo.geometry.dispose();
       sliceProxy.removeFromParent();
       sliceVisualGeometry.dispose();
       sliceVisual.material.dispose();
@@ -6221,9 +6635,9 @@ export function Viewport({
               key={`gp-sel-${i}`}
               points={line.map((p) => `${p.screenX},${p.screenY}`).join(" ")}
               fill="none"
-              stroke="#f59e0b"
+              stroke="var(--accent-color, #38bdf8)"
               strokeWidth={3}
-              strokeOpacity={0.85}
+              strokeOpacity={0.9}
               strokeLinecap="round"
               strokeLinejoin="round"
             />
@@ -6235,12 +6649,15 @@ export function Viewport({
               const oy = rect?.top ?? 0;
               const pts = gpLassoPreview.map((p) => `${p.x - ox},${p.y - oy}`).join(" ");
               return (
+                // Both lassos take the interface accent; what tells them
+                // apart is the dash — a tight, ticking outline for the
+                // destructive one — rather than a hue the palette does not own.
                 <polygon
                   points={pts}
-                  fill={gpTool === "carve" ? "rgba(239, 68, 68, 0.12)" : "rgba(56, 189, 248, 0.10)"}
-                  stroke={gpTool === "carve" ? "#ef4444" : "#38bdf8"}
+                  fill="color-mix(in srgb, var(--accent-color, #38bdf8) 12%, transparent)"
+                  stroke="var(--accent-color, #38bdf8)"
                   strokeWidth={1.5}
-                  strokeDasharray="6 4"
+                  strokeDasharray={gpTool === "carve" ? "2 3" : "6 4"}
                 />
               );
             })()}
@@ -6256,8 +6673,9 @@ export function Viewport({
             transform: "translateX(-50%)",
             padding: "6px 12px",
             borderRadius: 6,
-            background: "rgba(15, 23, 42, 0.92)",
-            color: "#e2e8f0",
+            background: "var(--chrome-surface, #3b434f)",
+            border: "1px solid var(--chrome-border, #5a6472)",
+            color: "var(--chrome-text, #eef2f6)",
             fontSize: 11,
             pointerEvents: "none",
             zIndex: 44,
@@ -7538,6 +7956,476 @@ export function Viewport({
                 style={{ fontSize: "11px", padding: "2px 6px" }}
               >
                 Reset
+              </button>
+            </div>
+          );
+        })()}
+      {/* Texture Paint Floating Toolbar */}
+      {!outputMode &&
+        !elevationView &&
+        selectedNodeId &&
+        (() => {
+          const tpNode = graph.nodes.find(
+            (n) => n.id === selectedNodeId && isTexturePaintNode(n),
+          );
+          if (!tpNode) return null;
+          const currentTool = (tpNode.params.brushTool as TexturePaintTool) || "paint";
+          const brushColor = String(tpNode.params.brushColor || "#38bdf8");
+          const brushSize = Number(tpNode.params.brushSize) || 24;
+          const brushOpacity = Number(tpNode.params.brushOpacity ?? 1.0);
+          const symmetryX = Boolean(tpNode.params.symmetryX);
+          const state = getTexturePaintState(tpNode.id);
+
+          return (
+            <div
+              className="viewport-texture-paint-hud"
+              style={{
+                position: "absolute",
+                bottom: 16,
+                left: "50%",
+                transform: "translateX(-50%)",
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                padding: "6px 14px",
+                background: "rgba(20, 24, 33, 0.95)",
+                backdropFilter: "blur(12px)",
+                border: "1px solid rgba(56, 189, 248, 0.45)",
+                borderRadius: "8px",
+                boxShadow:
+                  "0 8px 24px rgba(0, 0, 0, 0.5), 0 0 16px rgba(56, 189, 248, 0.2)",
+                color: "#ffffff",
+                fontSize: "12px",
+                zIndex: 45,
+                pointerEvents: "auto",
+              }}
+            >
+              {/* Badge */}
+              <div
+                style={{
+                  fontSize: "11px",
+                  fontWeight: 700,
+                  color: "#38bdf8",
+                  padding: "2px 8px",
+                  background: "rgba(56, 189, 248, 0.15)",
+                  borderRadius: "4px",
+                  letterSpacing: "0.04em",
+                  userSelect: "none",
+                }}
+                title="3D Texture Painting Tool"
+              >
+                PAINT
+              </div>
+
+              <div style={{ width: 1, height: 16, background: "rgba(255, 255, 255, 0.15)" }} />
+
+              {/* Tool: Paint */}
+              <button
+                type="button"
+                className={`viewport-hud-button ${currentTool === "paint" ? "viewport-hud-button-active" : ""}`}
+                onClick={() => onParamChange?.("brushTool", "paint", tpNode.id)}
+                title="Brush: Paint onto surface"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="m18 2 4 4-12 12H6v-4L18 2z" />
+                  <path d="M14 6l4 4" />
+                </svg>
+              </button>
+
+              {/* Tool: Erase */}
+              <button
+                type="button"
+                className={`viewport-hud-button ${currentTool === "erase" ? "viewport-hud-button-active" : ""}`}
+                onClick={() => onParamChange?.("brushTool", "erase", tpNode.id)}
+                title="Eraser: Erase to transparent or base color"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21" />
+                  <path d="M22 21H7" />
+                  <path d="m5 11 9 9" />
+                </svg>
+              </button>
+
+              {/* Tool: Smooth */}
+              <button
+                type="button"
+                className={`viewport-hud-button ${currentTool === "smooth" ? "viewport-hud-button-active" : ""}`}
+                onClick={() => onParamChange?.("brushTool", "smooth", tpNode.id)}
+                title="Smooth / Soften: Blur painted area"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M2 12c3-4 6-4 9 0s6 4 9 0" />
+                  <path d="M2 17c3-4 6-4 9 0s6 4 9 0" />
+                </svg>
+              </button>
+
+              {/* Tool: Eyedropper */}
+              <button
+                type="button"
+                className={`viewport-hud-button ${currentTool === "eyedropper" ? "viewport-hud-button-active" : ""}`}
+                onClick={() => onParamChange?.("brushTool", "eyedropper", tpNode.id)}
+                title="Eyedropper: Pick color from texture"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="m2 22 1-1h3l9-9" />
+                  <path d="M3 21v-3l9-9" />
+                  <path d="m15 6 3.4-3.4a2.1 2.1 0 1 1 3 3L18 9" />
+                </svg>
+              </button>
+
+              {/* Tool: Fill */}
+              <button
+                type="button"
+                className={`viewport-hud-button ${currentTool === "fill" ? "viewport-hud-button-active" : ""}`}
+                onClick={() => onParamChange?.("brushTool", "fill", tpNode.id)}
+                title="Fill Bucket: Fill entire canvas with color"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M19 11 11 3 3 11l8 8z" />
+                  <path d="M19 15c0 1.7 1.3 3 2 3s2-1.3 2-3-2-4-2-4-2 2.3-2 4Z" />
+                </svg>
+              </button>
+
+              <div style={{ width: 1, height: 16, background: "rgba(255, 255, 255, 0.15)" }} />
+
+              {/* Color Picker */}
+              <label
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  cursor: "pointer",
+                }}
+                title="Brush color"
+              >
+                <input
+                  type="color"
+                  value={brushColor}
+                  onChange={(e) => onParamChange?.("brushColor", e.target.value, tpNode.id)}
+                  style={{
+                    width: 20,
+                    height: 20,
+                    padding: 0,
+                    border: "1px solid rgba(255,255,255,0.4)",
+                    borderRadius: "50%",
+                    cursor: "pointer",
+                    backgroundColor: "transparent",
+                  }}
+                />
+              </label>
+
+              {/* Brush Size */}
+              <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                <span style={{ fontSize: "11px", color: "#94a3b8", minWidth: 26 }} title="Brush Radius">
+                  {brushSize}px
+                </span>
+                <input
+                  type="range"
+                  min={2}
+                  max={128}
+                  value={brushSize}
+                  onChange={(e) => onParamChange?.("brushSize", Number(e.target.value), tpNode.id)}
+                  style={{ width: 56, accentColor: "#38bdf8", cursor: "pointer" }}
+                  title="Brush Size (px)"
+                />
+              </div>
+
+              {/* Opacity */}
+              <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                <span style={{ fontSize: "11px", color: "#94a3b8", minWidth: 30 }} title="Brush Opacity">
+                  {Math.round(brushOpacity * 100)}%
+                </span>
+                <input
+                  type="range"
+                  min={0.05}
+                  max={1.0}
+                  step={0.05}
+                  value={brushOpacity}
+                  onChange={(e) => onParamChange?.("brushOpacity", Number(e.target.value), tpNode.id)}
+                  style={{ width: 50, accentColor: "#38bdf8", cursor: "pointer" }}
+                  title="Brush Opacity"
+                />
+              </div>
+
+              {/* Symmetry Mirror */}
+              <button
+                type="button"
+                className={`viewport-hud-button ${symmetryX ? "viewport-hud-button-active" : ""}`}
+                onClick={() => onParamChange?.("symmetryX", !symmetryX, tpNode.id)}
+                title="Symmetry: Mirror along X axis"
+                style={{ fontSize: "11px", padding: "2px 6px" }}
+              >
+                Mirror
+              </button>
+
+              {/* Stylus Pressure */}
+              <button
+                type="button"
+                className={`viewport-hud-button ${Boolean(tpNode.params.usePressure ?? true) ? "viewport-hud-button-active" : ""}`}
+                onClick={() => onParamChange?.("usePressure", !Boolean(tpNode.params.usePressure ?? true), tpNode.id)}
+                title="Stylus Pressure Sensitivity (Tablet / Pen)"
+                style={{ fontSize: "11px", padding: "2px 6px" }}
+              >
+                🖊️ Pen
+              </button>
+
+              <div style={{ width: 1, height: 16, background: "rgba(255, 255, 255, 0.15)" }} />
+
+              {/* Clear */}
+              <button
+                type="button"
+                className="viewport-hud-button"
+                onClick={() => {
+                  if (state.canvas && window.confirm("Clear painted canvas?")) {
+                    clearPaintCanvas(state.canvas, String(tpNode.params.baseColor || "#ffffff"));
+                    const dataUrl = serializePaintCanvas(state.canvas);
+                    onParamChange?.("textureData", dataUrl, tpNode.id);
+                    if (state.texture) state.texture.needsUpdate = true;
+                  }
+                }}
+                title="Clear texture canvas"
+                style={{ fontSize: "11px", padding: "2px 6px" }}
+              >
+                Clear
+              </button>
+
+              {/* Export */}
+              <button
+                type="button"
+                className="viewport-hud-button"
+                onClick={() => {
+                  if (state.canvas) exportCanvasToPNG(state.canvas, `texture_paint_${tpNode.id}.png`);
+                }}
+                title="Export texture as PNG"
+                style={{ fontSize: "11px", padding: "2px 6px" }}
+              >
+                Export
+              </button>
+            </div>
+          );
+        })()}
+      {/* Texture Mix Floating Toolbar */}
+      {!outputMode &&
+        !elevationView &&
+        selectedNodeId &&
+        (() => {
+          const tmNode = graph.nodes.find(
+            (n) => n.id === selectedNodeId && isTextureMixNode(n),
+          );
+          if (!tmNode) return null;
+          const activeLayer = Number(tmNode.params.activeLayer) || 0;
+          const currentTool = (tmNode.params.brushTool as TextureMixTool) || "paint";
+          const brushSize = Number(tmNode.params.brushSize) || 32;
+          const brushStrength = Number(tmNode.params.brushStrength) || 0.8;
+          const brushFalloff = (tmNode.params.brushFalloff as TextureMixFalloff) || "smooth";
+          const state = getTextureMixPaintState(tmNode.id);
+
+          // Find connected texture sockets
+          const conns = graph.connections.filter((c) => c.toNode === tmNode.id && c.toSocket.startsWith("texture"));
+          const layerCount = Math.max(1, conns.length + 1);
+
+          return (
+            <div
+              className="viewport-texture-mix-hud"
+              style={{
+                position: "absolute",
+                bottom: 16,
+                left: "50%",
+                transform: "translateX(-50%)",
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                padding: "6px 14px",
+                background: "rgba(20, 24, 33, 0.95)",
+                backdropFilter: "blur(12px)",
+                border: "1px solid rgba(245, 158, 11, 0.45)",
+                borderRadius: "8px",
+                boxShadow:
+                  "0 8px 24px rgba(0, 0, 0, 0.5), 0 0 16px rgba(245, 158, 11, 0.2)",
+                color: "#ffffff",
+                fontSize: "12px",
+                zIndex: 45,
+                pointerEvents: "auto",
+              }}
+            >
+              {/* Badge */}
+              <div
+                style={{
+                  fontSize: "11px",
+                  fontWeight: 700,
+                  color: "#f59e0b",
+                  padding: "2px 8px",
+                  background: "rgba(245, 158, 11, 0.15)",
+                  borderRadius: "4px",
+                  letterSpacing: "0.04em",
+                  userSelect: "none",
+                }}
+                title="Multi-Texture Splat Painting Tool"
+              >
+                TEXTURE MIX
+              </div>
+
+              <div style={{ width: 1, height: 16, background: "rgba(255, 255, 255, 0.15)" }} />
+
+              {/* Dynamic Layer Pills */}
+              <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                {Array.from({ length: layerCount }, (_, lIdx) => {
+                  const isActive = activeLayer === lIdx;
+                  return (
+                    <button
+                      key={lIdx}
+                      type="button"
+                      className={`viewport-hud-button ${isActive ? "viewport-hud-button-active" : ""}`}
+                      onClick={() => onParamChange?.("activeLayer", lIdx, tmNode.id)}
+                      style={{
+                        fontSize: "11px",
+                        fontWeight: isActive ? 700 : 500,
+                        padding: "2px 8px",
+                        borderRadius: "4px",
+                      }}
+                      title={`Select Layer ${lIdx + 1} to paint`}
+                    >
+                      Layer {lIdx + 1}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div style={{ width: 1, height: 16, background: "rgba(255, 255, 255, 0.15)" }} />
+
+              {/* Tool: Paint (Add weight) */}
+              <button
+                type="button"
+                className={`viewport-hud-button ${currentTool === "paint" ? "viewport-hud-button-active" : ""}`}
+                onClick={() => onParamChange?.("brushTool", "paint", tmNode.id)}
+                title="Paint: Paint active layer texture onto surface"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="m18 2 4 4-12 12H6v-4L18 2z" />
+                  <path d="M14 6l4 4" />
+                </svg>
+              </button>
+
+              {/* Tool: Erase (Remove weight) */}
+              <button
+                type="button"
+                className={`viewport-hud-button ${currentTool === "erase" ? "viewport-hud-button-active" : ""}`}
+                onClick={() => onParamChange?.("brushTool", "erase", tmNode.id)}
+                title="Erase: Fade out active layer"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21" />
+                  <path d="M22 21H7" />
+                  <path d="m5 11 9 9" />
+                </svg>
+              </button>
+
+              {/* Tool: Smooth (Blend weights) */}
+              <button
+                type="button"
+                className={`viewport-hud-button ${currentTool === "smooth" ? "viewport-hud-button-active" : ""}`}
+                onClick={() => onParamChange?.("brushTool", "smooth", tmNode.id)}
+                title="Smooth: Blend and soften transitions between textures"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M2 12c3-4 6-4 9 0s6 4 9 0" />
+                  <path d="M2 17c3-4 6-4 9 0s6 4 9 0" />
+                </svg>
+              </button>
+
+              {/* Tool: Fill */}
+              <button
+                type="button"
+                className={`viewport-hud-button ${currentTool === "fill" ? "viewport-hud-button-active" : ""}`}
+                onClick={() => onParamChange?.("brushTool", "fill", tmNode.id)}
+                title="Fill: Cover surface with active layer"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M19 11 11 3 3 11l8 8z" />
+                  <path d="M19 15c0 1.7 1.3 3 2 3s2-1.3 2-3-2-4-2-4-2 2.3-2 4Z" />
+                </svg>
+              </button>
+
+              <div style={{ width: 1, height: 16, background: "rgba(255, 255, 255, 0.15)" }} />
+
+              {/* Brush Size */}
+              <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                <span style={{ fontSize: "11px", color: "#94a3b8", minWidth: 26 }} title="Brush Radius">
+                  {brushSize}px
+                </span>
+                <input
+                  type="range"
+                  min={4}
+                  max={128}
+                  value={brushSize}
+                  onChange={(e) => onParamChange?.("brushSize", Number(e.target.value), tmNode.id)}
+                  style={{ width: 56, accentColor: "#f59e0b", cursor: "pointer" }}
+                  title="Brush Radius"
+                />
+              </div>
+
+              {/* Brush Strength */}
+              <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                <span style={{ fontSize: "11px", color: "#94a3b8", minWidth: 30 }} title="Brush Strength">
+                  {Math.round(brushStrength * 100)}%
+                </span>
+                <input
+                  type="range"
+                  min={0.05}
+                  max={1.0}
+                  step={0.05}
+                  value={brushStrength}
+                  onChange={(e) => onParamChange?.("brushStrength", Number(e.target.value), tmNode.id)}
+                  style={{ width: 50, accentColor: "#f59e0b", cursor: "pointer" }}
+                  title="Brush Strength"
+                />
+              </div>
+
+              {/* Falloff */}
+              <select
+                value={brushFalloff}
+                onChange={(e) => onParamChange?.("brushFalloff", e.target.value, tmNode.id)}
+                style={{
+                  background: "#1e293b",
+                  color: "#fff",
+                  border: "1px solid rgba(255, 255, 255, 0.15)",
+                  borderRadius: 4,
+                  fontSize: "11px",
+                  height: 24,
+                  padding: "0 6px",
+                  outline: "none",
+                  cursor: "pointer",
+                }}
+                title="Brush Falloff"
+              >
+                <option value="smooth">Smooth</option>
+                <option value="linear">Linear</option>
+                <option value="flat">Flat</option>
+              </select>
+
+              {/* Stylus Pressure */}
+              <button
+                type="button"
+                className={`viewport-hud-button ${Boolean(tmNode.params.usePressure ?? true) ? "viewport-hud-button-active" : ""}`}
+                onClick={() => onParamChange?.("usePressure", !Boolean(tmNode.params.usePressure ?? true), tmNode.id)}
+                title="Stylus Pressure Sensitivity (Tablet / Pen)"
+                style={{ fontSize: "11px", padding: "2px 6px" }}
+              >
+                🖊️ Pen
+              </button>
+
+              <div style={{ width: 1, height: 16, background: "rgba(255, 255, 255, 0.15)" }} />
+
+              {/* Export */}
+              <button
+                type="button"
+                className="viewport-hud-button"
+                onClick={() => {
+                  if (state.outCanvas) exportCanvasToPNG(state.outCanvas, `texture_mix_${tmNode.id}.png`);
+                }}
+                title="Export blended texture as PNG"
+                style={{ fontSize: "11px", padding: "2px 6px" }}
+              >
+                Export
               </button>
             </div>
           );

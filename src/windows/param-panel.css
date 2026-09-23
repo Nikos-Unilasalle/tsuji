@@ -488,3 +488,20 @@
   height: 8px;
   border-radius: 50%;
 }
+
+/*
+ * A row whose field *is* the control (the Topography bands editor): the label
+ * goes above rather than beside, so the editor gets the panel's full width.
+ */
+.param-row-wide {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+}
+
+.param-row-wide > label {
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--chrome-text-muted, #b3bdc9);
+}

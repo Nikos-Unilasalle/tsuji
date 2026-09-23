@@ -69,10 +69,19 @@ import {
   Keyframe,
   KeyframeStore,
   Marker,
+  NodeInstance,
   normalizeCanvases,
   ParamFieldDef,
   Project,
 } from "./shared/graph/types";
+import {
+  TOPOGRAPHY_BAKE_ACTION,
+  TOPOGRAPHY_PRESETS,
+  TOPOGRAPHY_PRESET_ACTION_PREFIX,
+  getHeightSlopeMixState,
+} from "./shared/graph/nodes/textureHeightSlopeMix";
+import { TEXTURE_MIX_PAINT_NODE } from "./shared/graph/nodes/textureMixPaint";
+import { serializeSplatToPng } from "./shared/three/splatSerialization";
 import { broadcastGraph, maximizeMainWindow, PreviewCameraPose, startBroadcasting } from "./shared/ipc";
 import { exportVideo, mimeToExtension, saveVideoBlob } from "./shared/export/videoExport";
 import { exportPngSequence, saveZipBlob } from "./shared/export/imageSequenceExport";
@@ -1425,6 +1434,63 @@ function MainEditor() {
           selectMode: "faces",
           selectedFaces: result.newFaces,
         }, nodeId);
+        return;
+      }
+      if (action.startsWith(TOPOGRAPHY_PRESET_ACTION_PREFIX)) {
+        const preset = TOPOGRAPHY_PRESETS[action.slice(TOPOGRAPHY_PRESET_ACTION_PREFIX.length)];
+        if (preset) onParamChange({ ...preset }, nodeId);
+        return;
+      }
+      if (action === TOPOGRAPHY_BAKE_ACTION) {
+        const node = graph.nodes.find((n) => n.id === nodeId);
+        if (!node) return;
+
+        // Hand the procedural result over to the paintable node: same
+        // textures, same tiling, same names, and the weights it just computed
+        // as a starting point to touch up by hand.
+        const state = getHeightSlopeMixState(nodeId);
+        if (!state.splatBuffer || !state.res) {
+          console.warn("Topography Texture Mix: nothing baked yet.");
+          return;
+        }
+        const layerCount = state.layerCount ?? 3;
+        const splatData = serializeSplatToPng(state.splatBuffer, state.res, state.res, layerCount);
+
+        const carried: Record<string, unknown> = {};
+        for (const [key, value] of Object.entries(node.params)) {
+          if (key.startsWith("uvScale") || key.startsWith("layerName")) carried[key] = value;
+        }
+
+        const mixNode: NodeInstance = {
+          id: `node_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+          type: TEXTURE_MIX_PAINT_NODE.type,
+          position: { x: (node.position?.x ?? 0) + 260, y: (node.position?.y ?? 0) + 40 },
+          params: {
+            ...cloneParams(TEXTURE_MIX_PAINT_NODE.defaultParams),
+            ...carried,
+            resolution: state.res,
+            splatData,
+          },
+        };
+
+        // Rewire the textures and the geometry the topography node was fed,
+        // so the new node lands ready to paint rather than unconnected.
+        const carriedConnections = graph.connections
+          .filter((c) => c.toNode === nodeId && (c.toSocket === "geometry" || c.toSocket.startsWith("texture")))
+          .map((c) => ({
+            id: `conn_${Date.now()}_${Math.random().toString(36).slice(2, 7)}_${c.toSocket}`,
+            fromNode: c.fromNode,
+            fromSocket: c.fromSocket,
+            toNode: mixNode.id,
+            toSocket: c.toSocket,
+          }));
+
+        setGraphWithHistory((prev) => ({
+          ...prev,
+          nodes: [...prev.nodes, mixNode],
+          connections: [...prev.connections, ...carriedConnections],
+        }));
+        setSelectedNodeId(mixNode.id);
         return;
       }
       if (action === EDIT_MESH_UNWRAP_UVS_ACTION) {
