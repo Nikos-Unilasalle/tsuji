@@ -1313,7 +1313,95 @@ function GraphEditorContent({
     setNodes,
   ]);
 
-  const { fitView, setCenter } = useReactFlow();
+  const { fitView, setCenter, getViewport, setViewport } = useReactFlow();
+
+  const GRAPH_EDGE_ZOOM_THRESHOLD_PX = 28;
+  const GRAPH_EDGE_ZOOM_SENSITIVITY = 0.003;
+
+  /** The small grab-circle that appears near the graph canvas's left/right edge — drag it vertically to zoom around the pane's center, same idea as the 3D viewport's edge-zoom handle. */
+  const [edgeZoomHandle, setEdgeZoomHandle] = useState<{ side: "left" | "right"; y: number } | null>(null);
+  const edgeZoomDraggingRef = useRef(false);
+  const edgeZoomLastYRef = useRef(0);
+  const canvasPaneRef = useRef<HTMLDivElement>(null);
+  const edgeZoomHandlersRef = useRef<{ move: (e: PointerEvent) => void; up: () => void } | null>(null);
+  useEffect(
+    () => () => {
+      if (edgeZoomHandlersRef.current) {
+        window.removeEventListener("pointermove", edgeZoomHandlersRef.current.move);
+        window.removeEventListener("pointerup", edgeZoomHandlersRef.current.up);
+        window.removeEventListener("pointercancel", edgeZoomHandlersRef.current.up);
+        document.body.style.cursor = "";
+        document.body.style.userSelect = "";
+        edgeZoomHandlersRef.current = null;
+      }
+    },
+    [],
+  );
+
+  const handleGraphEdgeHoverMove = (e: React.MouseEvent) => {
+    if (edgeZoomDraggingRef.current) return;
+    const rect = canvasPaneRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const fromLeft = e.clientX - rect.left;
+    const fromRight = rect.right - e.clientX;
+    if (fromLeft <= GRAPH_EDGE_ZOOM_THRESHOLD_PX) {
+      setEdgeZoomHandle({ side: "left", y: e.clientY - rect.top });
+    } else if (fromRight <= GRAPH_EDGE_ZOOM_THRESHOLD_PX) {
+      setEdgeZoomHandle({ side: "right", y: e.clientY - rect.top });
+    } else {
+      setEdgeZoomHandle(null);
+    }
+  };
+
+  const handleGraphEdgeHoverLeave = () => {
+    if (!edgeZoomDraggingRef.current) setEdgeZoomHandle(null);
+  };
+
+  const handleGraphEdgeZoomPointerDown = (e: React.PointerEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    edgeZoomDraggingRef.current = true;
+    edgeZoomLastYRef.current = e.clientY;
+    document.body.style.cursor = "ns-resize";
+    document.body.style.userSelect = "none";
+
+    const onMove = (moveEvent: PointerEvent) => {
+      if (!edgeZoomDraggingRef.current) return;
+      const deltaY = moveEvent.clientY - edgeZoomLastYRef.current;
+      edgeZoomLastYRef.current = moveEvent.clientY;
+      const rect = canvasPaneRef.current?.getBoundingClientRect();
+      if (deltaY !== 0 && rect) {
+        const factor = Math.exp(-deltaY * GRAPH_EDGE_ZOOM_SENSITIVITY);
+        const vp = getViewport();
+        const newZoom = Math.max(0.05, Math.min(2, vp.zoom * factor));
+        const scale = newZoom / vp.zoom;
+        const cx = rect.width / 2;
+        const cy = rect.height / 2;
+        setViewport({
+          x: cx - (cx - vp.x) * scale,
+          y: cy - (cy - vp.y) * scale,
+          zoom: newZoom,
+        });
+      }
+      if (rect) {
+        setEdgeZoomHandle((prev) => (prev ? { ...prev, y: moveEvent.clientY - rect.top } : prev));
+      }
+    };
+    const onUp = () => {
+      edgeZoomDraggingRef.current = false;
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+      edgeZoomHandlersRef.current = null;
+      setEdgeZoomHandle(null);
+    };
+    edgeZoomHandlersRef.current = { move: onMove, up: onUp };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
+  };
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -1491,11 +1579,34 @@ function GraphEditorContent({
       <NodePalette nodes={paletteNodes} onAddNode={addNode} />
       <div
         className="graph-editor-canvas"
+        ref={canvasPaneRef}
         onPointerDown={handleCanvasPointerDown}
         onPointerMove={handleCanvasPointerMove}
         onPointerUp={handleCanvasPointerUp}
         onPointerCancel={handleCanvasPointerUp}
+        onMouseMove={handleGraphEdgeHoverMove}
+        onMouseLeave={handleGraphEdgeHoverLeave}
       >
+        {edgeZoomHandle && (
+          <div
+            onPointerDown={handleGraphEdgeZoomPointerDown}
+            title="Drag to zoom"
+            style={{
+              position: "absolute",
+              left: edgeZoomHandle.side === "left" ? "6px" : undefined,
+              right: edgeZoomHandle.side === "right" ? "6px" : undefined,
+              top: `${edgeZoomHandle.y - 9}px`,
+              width: "18px",
+              height: "18px",
+              borderRadius: "50%",
+              border: "1.5px solid #38bdf8",
+              backgroundColor: "rgba(56, 189, 248, 0.35)",
+              cursor: "ns-resize",
+              zIndex: 50,
+              pointerEvents: "auto",
+            }}
+          />
+        )}
         <QuickAddToolbar onAddNode={addNode} onOpenSearch={() => setSearchModalOpen(true)} />
         <ReactFlow
           nodes={nodes}

@@ -1027,6 +1027,24 @@ export function Viewport({
   }, []);
 
   const hostRef = useRef<HTMLDivElement>(null);
+  /** The small grab-circle that appears near the viewport's left/right edge — drag it vertically to zoom around the orbit target, same as a mouse-wheel dolly. */
+  const [edgeZoomHandle, setEdgeZoomHandle] = useState<{ side: "left" | "right"; y: number } | null>(null);
+  const edgeZoomDraggingRef = useRef(false);
+  const edgeZoomLastYRef = useRef(0);
+  const edgeZoomHandlersRef = useRef<{ move: (e: PointerEvent) => void; up: () => void } | null>(null);
+  useEffect(
+    () => () => {
+      if (edgeZoomHandlersRef.current) {
+        window.removeEventListener("pointermove", edgeZoomHandlersRef.current.move);
+        window.removeEventListener("pointerup", edgeZoomHandlersRef.current.up);
+        window.removeEventListener("pointercancel", edgeZoomHandlersRef.current.up);
+        document.body.style.cursor = "";
+        document.body.style.userSelect = "";
+        edgeZoomHandlersRef.current = null;
+      }
+    },
+    [],
+  );
   const graphRef = useRef(graph);
   graphRef.current = graph;
   const registryRef = useRef(registry);
@@ -6489,13 +6507,104 @@ export function Viewport({
     return () => window.removeEventListener("keydown", handleFrameKey);
   }, [outputMode]);
 
+  const EDGE_ZOOM_THRESHOLD_PX = 28;
+  const EDGE_ZOOM_DRAG_SENSITIVITY = 4;
+
+  const handleViewportMouseMove = (e: React.MouseEvent) => {
+    if (outputMode) return;
+    setInputZone("viewport");
+    if (edgeZoomDraggingRef.current) return;
+    const rect = hostRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const fromLeft = e.clientX - rect.left;
+    const fromRight = rect.right - e.clientX;
+    if (fromLeft <= EDGE_ZOOM_THRESHOLD_PX) {
+      setEdgeZoomHandle({ side: "left", y: e.clientY - rect.top });
+    } else if (fromRight <= EDGE_ZOOM_THRESHOLD_PX) {
+      setEdgeZoomHandle({ side: "right", y: e.clientY - rect.top });
+    } else {
+      setEdgeZoomHandle(null);
+    }
+  };
+
+  const handleViewportMouseLeave = () => {
+    if (outputMode) return;
+    setInputZone(null);
+    if (!edgeZoomDraggingRef.current) setEdgeZoomHandle(null);
+  };
+
+  // Dragging the handle dollies the camera the same way a mouse wheel does —
+  // synthesizing wheel events lets OrbitControls' own zoom (already centered
+  // on controls.target, and already correct for both perspective dolly and
+  // orthographic camera.zoom) do the work instead of duplicating its math.
+  const handleEdgeZoomPointerDown = (e: React.PointerEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    edgeZoomDraggingRef.current = true;
+    edgeZoomLastYRef.current = e.clientY;
+    document.body.style.cursor = "ns-resize";
+    document.body.style.userSelect = "none";
+    const canvas = hostRef.current?.querySelector("canvas");
+
+    const onMove = (moveEvent: PointerEvent) => {
+      if (!edgeZoomDraggingRef.current) return;
+      const deltaY = moveEvent.clientY - edgeZoomLastYRef.current;
+      edgeZoomLastYRef.current = moveEvent.clientY;
+      if (deltaY !== 0 && canvas) {
+        canvas.dispatchEvent(
+          new WheelEvent("wheel", { deltaY: deltaY * EDGE_ZOOM_DRAG_SENSITIVITY, bubbles: true, cancelable: true }),
+        );
+      }
+      const rect = hostRef.current?.getBoundingClientRect();
+      if (rect) {
+        setEdgeZoomHandle((prev) => (prev ? { ...prev, y: moveEvent.clientY - rect.top } : prev));
+      }
+    };
+    const onUp = () => {
+      edgeZoomDraggingRef.current = false;
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+      edgeZoomHandlersRef.current = null;
+      setEdgeZoomHandle(null);
+    };
+    edgeZoomHandlersRef.current = { move: onMove, up: onUp };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
+  };
+
   return (
     <div
       className="viewport-container"
       ref={hostRef}
       onMouseEnter={outputMode ? undefined : () => setInputZone("viewport")}
-      onMouseLeave={outputMode ? undefined : () => setInputZone(null)}
+      onMouseMove={outputMode ? undefined : handleViewportMouseMove}
+      onMouseLeave={outputMode ? undefined : handleViewportMouseLeave}
     >
+      {/* Edge Zoom Handle — grab and drag vertically near the left/right edge to dolly the camera around the orbit target */}
+      {!outputMode && edgeZoomHandle && (
+        <div
+          onPointerDown={handleEdgeZoomPointerDown}
+          title="Drag to zoom"
+          style={{
+            position: "absolute",
+            left: edgeZoomHandle.side === "left" ? "6px" : undefined,
+            right: edgeZoomHandle.side === "right" ? "6px" : undefined,
+            top: `${edgeZoomHandle.y - 9}px`,
+            width: "18px",
+            height: "18px",
+            borderRadius: "50%",
+            border: "1.5px solid #38bdf8",
+            backgroundColor: "rgba(56, 189, 248, 0.35)",
+            cursor: "ns-resize",
+            zIndex: 50,
+            pointerEvents: "auto",
+          }}
+        />
+      )}
       {/* Rectangular Marquee Selection Overlay (Cmd+Drag) */}
       {!outputMode && marqueeBox && (
         <div
