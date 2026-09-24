@@ -1894,6 +1894,97 @@ export const TEXTURE_SEPARATE_RGB_NODE: NodeDefinition = {
   },
 };
 
+interface TextureThresholdState {
+  texture?: THREE.CanvasTexture;
+  canvas?: HTMLCanvasElement;
+  aCanvas?: HTMLCanvasElement;
+  signature?: string;
+}
+
+const textureThresholdCache = createNodeCache<TextureThresholdState>((s) => s.texture?.dispose());
+
+/**
+ * Threshold Texture node — steps a texture's luminance to 0/1 at a cutoff,
+ * with an optional smoothstep width for an anti-aliased edge instead of a
+ * hard cut. The per-pixel counterpart to Value Math's `less-than`.
+ */
+export const TEXTURE_THRESHOLD_NODE: NodeDefinition = {
+  type: "texture/threshold",
+  label: "Threshold",
+  category: "texture",
+  inputs: [
+    { id: "texture", label: "Texture", type: "texture" },
+    { id: "cutoff", label: "Cutoff", type: "value" },
+  ],
+  outputs: [{ id: "mask", label: "Mask", type: "texture" }],
+  defaultParams: { cutoff: 0.5, smoothing: 0, invert: false, resolution: 256 },
+  paramFields: [
+    { id: "cutoff", label: "Cutoff (fallback)", kind: "number", step: 0.05 },
+    { id: "smoothing", label: "Smoothing (soft edge width)", kind: "number", step: 0.01 },
+    { id: "invert", label: "Invert", kind: "boolean" },
+    { id: "resolution", label: "Resolution (px)", kind: "number", step: 64 },
+  ],
+  evaluate: (inputs, params, ctx) => {
+    const state = textureThresholdCache.get(ctx.nodeId) ?? (() => {
+      const s: TextureThresholdState = {};
+      textureThresholdCache.set(ctx.nodeId, s);
+      return s;
+    })();
+    if (typeof document === "undefined") return { mask: null };
+
+    const source = inputs.texture instanceof THREE.Texture ? inputs.texture : null;
+    const cutoff = Math.max(0, Math.min(1, inputs.cutoff !== undefined ? Number(inputs.cutoff) : Number(params.cutoff) ?? 0.5));
+    const smoothing = Math.max(0, Number(params.smoothing) || 0);
+    const invert = Boolean(params.invert);
+    const resolution = Math.max(16, Math.min(1024, Math.round(Number(params.resolution) || 256)));
+
+    const sig = [cutoff, smoothing, invert, resolution, source?.uuid ?? "", source?.version ?? 0].join("|");
+    if (sig !== state.signature) {
+      state.signature = sig;
+      if (!state.aCanvas) state.aCanvas = document.createElement("canvas");
+      if (!state.canvas) state.canvas = document.createElement("canvas");
+
+      drawSourceToCanvas(state.aCanvas, source, resolution);
+      const aCtx = state.aCanvas.getContext("2d");
+      if (!aCtx) return { mask: state.texture ?? null };
+      const aData = aCtx.getImageData(0, 0, resolution, resolution).data;
+
+      const out = state.canvas;
+      out.width = resolution;
+      out.height = resolution;
+      const outCtx = out.getContext("2d");
+      if (!outCtx) return { mask: state.texture ?? null };
+      const outImg = outCtx.createImageData(resolution, resolution);
+      const outData = outImg.data;
+
+      const half = smoothing * 0.5;
+      const lo = cutoff - half;
+      const hi = cutoff + half;
+
+      for (let i = 0; i < outData.length; i += 4) {
+        const l = (0.299 * aData[i] + 0.587 * aData[i + 1] + 0.114 * aData[i + 2]) / 255;
+        let v: number;
+        if (half <= 1e-6) {
+          v = l < cutoff ? 0 : 1;
+        } else {
+          const t = Math.max(0, Math.min(1, (l - lo) / (hi - lo)));
+          v = t * t * (3 - 2 * t);
+        }
+        if (invert) v = 1 - v;
+        const px = Math.round(v * 255);
+        outData[i] = px;
+        outData[i + 1] = px;
+        outData[i + 2] = px;
+        outData[i + 3] = 255;
+      }
+      outCtx.putImageData(outImg, 0, 0);
+      state.texture = replaceCanvasTexture(state.texture, out, THREE.LinearSRGBColorSpace);
+    }
+
+    return { mask: state.texture ?? null };
+  },
+};
+
 interface PixelSpawnerState {
   group?: THREE.Group;
   materials?: THREE.Material[];

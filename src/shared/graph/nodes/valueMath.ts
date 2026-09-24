@@ -18,6 +18,7 @@ const OPS: Record<string, (a: number, b: number) => number> = {
   // unused, so a wire into B keeps working (silently ignored) rather than
   // needing its own single-input node.
   abs: (a) => Math.abs(a),
+  "less-than": (a, b) => (a < b ? 1 : 0),
 };
 
 /** One node, an `op` param picks the operation — matches Blender's Math node rather than a node per operator. */
