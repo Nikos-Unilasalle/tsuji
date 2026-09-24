@@ -5,6 +5,7 @@ import { createNodeCache, disposeObject3D } from "../nodeCaches";
 import { composeNativeMatrix, getSourcePivot } from "./transform";
 import { COMMON_PRIMITIVE_OUTPUTS, primitiveOutputs } from "./object";
 import { InstancedItemSpec, renderInstanced } from "./instancedRender";
+import { ColorRamp, DEFAULT_COLOR_RAMP, sampleColorRamp } from "../colorRamp";
 
 /**
  * Points a CanvasTexture at `canvas`, forcing a fresh texture object rather
@@ -1617,6 +1618,279 @@ export const TEXTURE_BLUR_NODE: NodeDefinition = {
     }
 
     return { texture: state.texture ?? null };
+  },
+};
+
+interface TextureColorRampState {
+  texture?: THREE.CanvasTexture;
+  canvas?: HTMLCanvasElement;
+  aCanvas?: HTMLCanvasElement;
+  signature?: string;
+}
+
+const textureColorRampCache = createNodeCache<TextureColorRampState>((s) => s.texture?.dispose());
+
+function rampSignature(ramp: ColorRamp): string {
+  return JSON.stringify({
+    i: ramp.interpolation,
+    s: ramp.stops.map((s) => [s.position, s.color instanceof THREE.Color ? s.color.getHexString() : s.color]),
+  });
+}
+
+/**
+ * Color Ramp Texture node — samples a texture's luminance through a
+ * Blender-style color ramp, turning any grayscale mask/noise/math output
+ * into a graded color texture. Same "color_ramp" param kind and
+ * `sampleColorRamp` as Color Palette List, so the ramp editor is identical.
+ */
+export const TEXTURE_COLOR_RAMP_NODE: NodeDefinition = {
+  type: "texture/color-ramp",
+  label: "Color Ramp",
+  category: "texture",
+  inputs: [{ id: "texture", label: "Texture", type: "texture" }],
+  outputs: [{ id: "texture", label: "Texture", type: "texture" }],
+  defaultParams: { ramp: DEFAULT_COLOR_RAMP, resolution: 256 },
+  paramFields: [
+    { id: "ramp", label: "Ramp", kind: "color_ramp" },
+    { id: "resolution", label: "Resolution (px)", kind: "number", step: 64 },
+  ],
+  evaluate: (inputs, params, ctx) => {
+    const state = textureColorRampCache.get(ctx.nodeId) ?? (() => {
+      const s: TextureColorRampState = {};
+      textureColorRampCache.set(ctx.nodeId, s);
+      return s;
+    })();
+    if (typeof document === "undefined") return { texture: null };
+
+    const source = inputs.texture instanceof THREE.Texture ? inputs.texture : null;
+    const ramp = params.ramp && typeof params.ramp === "object" ? (params.ramp as ColorRamp) : DEFAULT_COLOR_RAMP;
+    const resolution = Math.max(16, Math.min(1024, Math.round(Number(params.resolution) || 256)));
+
+    const sig = [rampSignature(ramp), resolution, source?.uuid ?? "", source?.version ?? 0].join("|");
+    if (sig !== state.signature) {
+      state.signature = sig;
+      if (!state.aCanvas) state.aCanvas = document.createElement("canvas");
+      if (!state.canvas) state.canvas = document.createElement("canvas");
+
+      drawSourceToCanvas(state.aCanvas, source, resolution);
+      const aCtx = state.aCanvas.getContext("2d");
+      if (!aCtx) return { texture: state.texture ?? null };
+      const aData = aCtx.getImageData(0, 0, resolution, resolution).data;
+
+      // Sampling the ramp is a handful of lerps, cheap enough per pixel, but
+      // it still allocates a THREE.Color each call — a 256-entry LUT keyed
+      // by luminance keeps that off the hot path.
+      const lutSize = 256;
+      const lut: [number, number, number][] = new Array(lutSize);
+      for (let i = 0; i < lutSize; i++) {
+        const c = sampleColorRamp(ramp, i / (lutSize - 1));
+        lut[i] = [Math.round(c.r * 255), Math.round(c.g * 255), Math.round(c.b * 255)];
+      }
+
+      const out = state.canvas;
+      out.width = resolution;
+      out.height = resolution;
+      const outCtx = out.getContext("2d");
+      if (!outCtx) return { texture: state.texture ?? null };
+      const outImg = outCtx.createImageData(resolution, resolution);
+      const outData = outImg.data;
+
+      for (let i = 0; i < outData.length; i += 4) {
+        const l = (0.299 * aData[i] + 0.587 * aData[i + 1] + 0.114 * aData[i + 2]) / 255;
+        const [r, g, b] = lut[Math.max(0, Math.min(lutSize - 1, Math.round(l * (lutSize - 1))))];
+        outData[i] = r;
+        outData[i + 1] = g;
+        outData[i + 2] = b;
+        outData[i + 3] = aData[i + 3];
+      }
+      outCtx.putImageData(outImg, 0, 0);
+      state.texture = replaceCanvasTexture(state.texture, out, THREE.SRGBColorSpace);
+    }
+
+    return { texture: state.texture ?? null };
+  },
+};
+
+interface TextureCombineRGBState {
+  texture?: THREE.CanvasTexture;
+  canvas?: HTMLCanvasElement;
+  rCanvas?: HTMLCanvasElement;
+  gCanvas?: HTMLCanvasElement;
+  bCanvas?: HTMLCanvasElement;
+  aCanvas?: HTMLCanvasElement;
+  signature?: string;
+}
+
+const textureCombineRGBCache = createNodeCache<TextureCombineRGBState>((s) => s.texture?.dispose());
+
+/**
+ * Combine RGB node — packs up to 4 grayscale textures (each read by
+ * luminance, same convention as Mask's channel extract) into one texture's
+ * R/G/B/A channels. Pairs with Mask's "extract" mode: build several masks,
+ * pack them into one texture's channels for a single downstream wire.
+ * Any missing channel input reads as 0 (1 for Alpha, so an unwired result
+ * stays opaque).
+ */
+export const TEXTURE_COMBINE_RGB_NODE: NodeDefinition = {
+  type: "texture/combine-rgb",
+  label: "Combine RGB",
+  category: "texture",
+  inputs: [
+    { id: "r", label: "R", type: "texture" },
+    { id: "g", label: "G", type: "texture" },
+    { id: "b", label: "B", type: "texture" },
+    { id: "a", label: "A", type: "texture" },
+  ],
+  outputs: [{ id: "texture", label: "Texture", type: "texture" }],
+  defaultParams: { resolution: 256 },
+  paramFields: [{ id: "resolution", label: "Resolution (px)", kind: "number", step: 64 }],
+  evaluate: (inputs, params, ctx) => {
+    const state = textureCombineRGBCache.get(ctx.nodeId) ?? (() => {
+      const s: TextureCombineRGBState = {};
+      textureCombineRGBCache.set(ctx.nodeId, s);
+      return s;
+    })();
+    if (typeof document === "undefined") return { texture: null };
+
+    const rSrc = inputs.r instanceof THREE.Texture ? inputs.r : null;
+    const gSrc = inputs.g instanceof THREE.Texture ? inputs.g : null;
+    const bSrc = inputs.b instanceof THREE.Texture ? inputs.b : null;
+    const aSrc = inputs.a instanceof THREE.Texture ? inputs.a : null;
+    const resolution = Math.max(16, Math.min(1024, Math.round(Number(params.resolution) || 256)));
+
+    const sig = [
+      resolution,
+      rSrc?.uuid ?? "", rSrc?.version ?? 0,
+      gSrc?.uuid ?? "", gSrc?.version ?? 0,
+      bSrc?.uuid ?? "", bSrc?.version ?? 0,
+      aSrc?.uuid ?? "", aSrc?.version ?? 0,
+    ].join("|");
+    if (sig !== state.signature) {
+      state.signature = sig;
+      if (!state.rCanvas) state.rCanvas = document.createElement("canvas");
+      if (!state.gCanvas) state.gCanvas = document.createElement("canvas");
+      if (!state.bCanvas) state.bCanvas = document.createElement("canvas");
+      if (!state.aCanvas) state.aCanvas = document.createElement("canvas");
+      if (!state.canvas) state.canvas = document.createElement("canvas");
+
+      const readLuma = (canvas: HTMLCanvasElement, source: THREE.Texture | null): Uint8ClampedArray | null => {
+        if (!source) return null;
+        drawSourceToCanvas(canvas, source, resolution);
+        return canvas.getContext("2d")?.getImageData(0, 0, resolution, resolution).data ?? null;
+      };
+
+      const rData = readLuma(state.rCanvas, rSrc);
+      const gData = readLuma(state.gCanvas, gSrc);
+      const bData = readLuma(state.bCanvas, bSrc);
+      const aData = readLuma(state.aCanvas, aSrc);
+
+      const out = state.canvas;
+      out.width = resolution;
+      out.height = resolution;
+      const outCtx = out.getContext("2d");
+      if (!outCtx) return { texture: state.texture ?? null };
+      const outImg = outCtx.createImageData(resolution, resolution);
+      const outData = outImg.data;
+
+      const lumaAt = (data: Uint8ClampedArray | null, i: number, fallback: number): number =>
+        data ? Math.round(0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]) : fallback;
+
+      for (let i = 0; i < outData.length; i += 4) {
+        outData[i] = lumaAt(rData, i, 0);
+        outData[i + 1] = lumaAt(gData, i, 0);
+        outData[i + 2] = lumaAt(bData, i, 0);
+        outData[i + 3] = lumaAt(aData, i, 255);
+      }
+      outCtx.putImageData(outImg, 0, 0);
+      state.texture = replaceCanvasTexture(state.texture, out, THREE.LinearSRGBColorSpace);
+    }
+
+    return { texture: state.texture ?? null };
+  },
+};
+
+interface TextureSeparateRGBState {
+  sourceCanvas?: HTMLCanvasElement;
+  rTex?: THREE.CanvasTexture;
+  gTex?: THREE.CanvasTexture;
+  bTex?: THREE.CanvasTexture;
+  aTex?: THREE.CanvasTexture;
+  signature?: string;
+}
+
+const textureSeparateRGBCache = createNodeCache<TextureSeparateRGBState>((s) => {
+  s.rTex?.dispose();
+  s.gTex?.dispose();
+  s.bTex?.dispose();
+  s.aTex?.dispose();
+});
+
+/** Separate RGB node — splits a texture's R/G/B/A channels out as four grayscale textures. */
+export const TEXTURE_SEPARATE_RGB_NODE: NodeDefinition = {
+  type: "texture/separate-rgb",
+  label: "Separate RGB",
+  category: "texture",
+  inputs: [{ id: "texture", label: "Texture", type: "texture" }],
+  outputs: [
+    { id: "r", label: "R", type: "texture" },
+    { id: "g", label: "G", type: "texture" },
+    { id: "b", label: "B", type: "texture" },
+    { id: "a", label: "A", type: "texture" },
+  ],
+  defaultParams: { resolution: 256 },
+  paramFields: [{ id: "resolution", label: "Resolution (px)", kind: "number", step: 64 }],
+  evaluate: (inputs, params, ctx) => {
+    const state = textureSeparateRGBCache.get(ctx.nodeId) ?? (() => {
+      const s: TextureSeparateRGBState = {};
+      textureSeparateRGBCache.set(ctx.nodeId, s);
+      return s;
+    })();
+    if (typeof document === "undefined") return { r: null, g: null, b: null, a: null };
+
+    const source = inputs.texture instanceof THREE.Texture ? inputs.texture : null;
+    const resolution = Math.max(16, Math.min(1024, Math.round(Number(params.resolution) || 256)));
+
+    const sig = [resolution, source?.uuid ?? "", source?.version ?? 0].join("|");
+    if (sig !== state.signature) {
+      state.signature = sig;
+      if (!state.sourceCanvas) state.sourceCanvas = document.createElement("canvas");
+      drawSourceToCanvas(state.sourceCanvas, source, resolution);
+      const data = state.sourceCanvas.getContext("2d")?.getImageData(0, 0, resolution, resolution).data ?? null;
+
+      const makeChannelTexture = (channelIndex: number): THREE.CanvasTexture => {
+        const canvas = document.createElement("canvas");
+        canvas.width = resolution;
+        canvas.height = resolution;
+        const cCtx = canvas.getContext("2d")!;
+        const img = cCtx.createImageData(resolution, resolution);
+        const out = img.data;
+        for (let i = 0; i < out.length; i += 4) {
+          const v = data ? data[i + channelIndex] : channelIndex === 3 ? 255 : 0;
+          out[i] = v;
+          out[i + 1] = v;
+          out[i + 2] = v;
+          out[i + 3] = 255;
+        }
+        cCtx.putImageData(img, 0, 0);
+        return replaceCanvasTexture(undefined, canvas, THREE.LinearSRGBColorSpace);
+      };
+
+      state.rTex?.dispose();
+      state.gTex?.dispose();
+      state.bTex?.dispose();
+      state.aTex?.dispose();
+      state.rTex = makeChannelTexture(0);
+      state.gTex = makeChannelTexture(1);
+      state.bTex = makeChannelTexture(2);
+      state.aTex = makeChannelTexture(3);
+    }
+
+    return {
+      r: state.rTex ?? null,
+      g: state.gTex ?? null,
+      b: state.bTex ?? null,
+      a: state.aTex ?? null,
+    };
   },
 };
 
