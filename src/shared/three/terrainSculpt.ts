@@ -282,5 +282,5 @@ export function applySculptStroke(
   }
 
   // Recompute heights and normals with updated offsets
-  updateTerrainHeightsAndNormals(geometry, config, heightmapPixels, sculptOffsets);
+  updateTerrainHeightsAndNormals(geometry, config, heightmapPixels, sculptOffsets, maskWeights);
 }

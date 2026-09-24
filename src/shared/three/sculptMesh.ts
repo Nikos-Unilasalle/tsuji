@@ -255,15 +255,54 @@ export function buildBasePrimitive(
  * counts every stroke call, so this replaces the attributes outright rather
  * than mutating typed arrays in place.
  */
-export function syncBufferGeometry(geometry: THREE.BufferGeometry, mesh: SculptMeshData): void {
+/** Warm red tint blended over masked (protected) areas — the mask tool is otherwise invisible, since it paints a weight with no visual trace of its own. */
+const MASK_TINT_COLOR = new THREE.Color(0x2680ff);
+
+export function meshHasActiveMask(mask: Float32Array | undefined): boolean {
+  if (!mask) return false;
+  for (let i = 0; i < mask.length; i++) {
+    if (mask[i] > 0.001) return true;
+  }
+  return false;
+}
+
+/**
+ * Writes a SculptMeshData snapshot into a live BufferGeometry. Unlike Terrain
+ * (fixed vertex count, in-place mutation), dyntopo changes vertex/index
+ * counts every stroke call, so this replaces the attributes outright rather
+ * than mutating typed arrays in place.
+ *
+ * Returns whether the mask is currently visible (any weight > 0) — callers
+ * must toggle `material.vertexColors` (and set `needsUpdate`) to match, since
+ * this only touches the geometry, not the material drawing it.
+ */
+export function syncBufferGeometry(geometry: THREE.BufferGeometry, mesh: SculptMeshData): boolean {
   geometry.setAttribute("position", new THREE.Float32BufferAttribute(mesh.positions, 3));
   geometry.setAttribute("normal", new THREE.Float32BufferAttribute(mesh.normals, 3));
   geometry.setIndex(new THREE.Uint32BufferAttribute(mesh.indices, 1));
   geometry.attributes.position.needsUpdate = true;
   geometry.attributes.normal.needsUpdate = true;
   if (geometry.index) geometry.index.needsUpdate = true;
+
+  const maskActive = meshHasActiveMask(mesh.mask);
+  if (maskActive) {
+    const vertexCount = mesh.positions.length / 3;
+    const colors = new Float32Array(vertexCount * 3);
+    for (let i = 0; i < vertexCount; i++) {
+      const w = mesh.mask![i] ?? 0;
+      colors[i * 3] = 1 + (MASK_TINT_COLOR.r - 1) * w;
+      colors[i * 3 + 1] = 1 + (MASK_TINT_COLOR.g - 1) * w;
+      colors[i * 3 + 2] = 1 + (MASK_TINT_COLOR.b - 1) * w;
+    }
+    geometry.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
+    geometry.attributes.color.needsUpdate = true;
+  } else if (geometry.attributes.color) {
+    geometry.deleteAttribute("color");
+  }
+
   geometry.computeBoundingBox();
   geometry.computeBoundingSphere();
+  return maskActive;
 }
 
 export { subdivideTriangleMesh, edgeKey };

@@ -121,11 +121,29 @@ export function createTerrainGeometry(
  * Recomputes all terrain vertex elevations and analytical normals.
  * Total height = Base Heightmap (Texture) + Sculpt Offsets.
  */
+/** Warm red tint blended over masked (protected) areas — same convention as the Sculpt node's mask visualization. */
+const MASK_TINT_COLOR = [0.15, 0.5, 1.0];
+
+function maskWeightAt(mask: Record<number, number> | Float32Array | null | undefined, idx: number): number {
+  if (!mask) return 0;
+  return (mask instanceof Float32Array ? mask[idx] : mask[idx]) || 0;
+}
+
+export function hasAnyMaskWeight(mask: Record<number, number> | Float32Array | null | undefined): boolean {
+  if (!mask) return false;
+  if (mask instanceof Float32Array) {
+    for (let i = 0; i < mask.length; i++) if (mask[i] > 0.001) return true;
+    return false;
+  }
+  return Object.values(mask).some((w) => w > 0.001);
+}
+
 export function updateTerrainHeightsAndNormals(
   geometry: THREE.BufferGeometry,
   config: TerrainGridConfig,
   heightmapPixels: { data: Uint8ClampedArray | Uint8Array | Float32Array; width: number; height: number } | null,
   sculptOffsets?: Record<number, number> | Float32Array | null,
+  maskWeights?: Record<number, number> | Float32Array | null,
 ): Float32Array {
   const { width, depth, segmentsX, segmentsZ, heightScale, heightOffset, slopeShading } = config;
   const cols = segmentsX + 1;
@@ -142,10 +160,15 @@ export function updateTerrainHeightsAndNormals(
   }
   const normArray = normAttr.array as Float32Array;
 
+  const maskActive = hasAnyMaskWeight(maskWeights);
+  const needsColor = slopeShading || maskActive;
   let colorAttr = geometry.attributes.color as THREE.BufferAttribute | undefined;
-  if (slopeShading && (!colorAttr || colorAttr.count !== vertexCount)) {
+  if (needsColor && (!colorAttr || colorAttr.count !== vertexCount)) {
     geometry.setAttribute("color", new THREE.BufferAttribute(new Float32Array(vertexCount * 3), 3));
     colorAttr = geometry.attributes.color as THREE.BufferAttribute;
+  } else if (!needsColor && colorAttr) {
+    geometry.deleteAttribute("color");
+    colorAttr = undefined;
   }
   const colorArray = colorAttr ? (colorAttr.array as Float32Array) : null;
 
@@ -228,36 +251,49 @@ export function updateTerrainHeightsAndNormals(
       normArray[idx * 3 + 1] = normY;
       normArray[idx * 3 + 2] = normZ;
 
-      // Step 3: Slope / Elevation Shading
-      if (slopeShading && colorArray) {
-        // Slope metric: 0 is flat horizontal ground, 1 is steep vertical cliff
-        const slope = 1.0 - normY;
-        const h = heights[idx];
+      // Step 3: Slope / Elevation Shading, then Mask tint on top
+      if (colorArray) {
+        let r = 1;
+        let g = 1;
+        let b = 1;
 
-        let r = grassColor[0];
-        let g = grassColor[1];
-        let b = grassColor[2];
+        if (slopeShading) {
+          // Slope metric: 0 is flat horizontal ground, 1 is steep vertical cliff
+          const slope = 1.0 - normY;
+          const h = heights[idx];
 
-        if (slope > 0.4) {
-          // Transition to rock on steep slopes
-          const t = Math.min(1.0, (slope - 0.4) / 0.25);
-          r = r + (rockColor[0] - r) * t;
-          g = g + (rockColor[1] - g) * t;
-          b = b + (rockColor[2] - b) * t;
-        } else if (slope > 0.18) {
-          // Transition to dirt / earth
-          const t = Math.min(1.0, (slope - 0.18) / 0.22);
-          r = r + (dirtColor[0] - r) * t;
-          g = g + (dirtColor[1] - g) * t;
-          b = b + (dirtColor[2] - b) * t;
+          r = grassColor[0];
+          g = grassColor[1];
+          b = grassColor[2];
+
+          if (slope > 0.4) {
+            // Transition to rock on steep slopes
+            const t = Math.min(1.0, (slope - 0.4) / 0.25);
+            r = r + (rockColor[0] - r) * t;
+            g = g + (rockColor[1] - g) * t;
+            b = b + (rockColor[2] - b) * t;
+          } else if (slope > 0.18) {
+            // Transition to dirt / earth
+            const t = Math.min(1.0, (slope - 0.18) / 0.22);
+            r = r + (dirtColor[0] - r) * t;
+            g = g + (dirtColor[1] - g) * t;
+            b = b + (dirtColor[2] - b) * t;
+          }
+
+          // High peaks transition to snow
+          if (h > snowLine && slope < 0.6) {
+            const snowT = Math.min(1.0, (h - snowLine) / Math.max(1, maxH - snowLine));
+            r = r + (snowColor[0] - r) * snowT;
+            g = g + (snowColor[1] - g) * snowT;
+            b = b + (snowColor[2] - b) * snowT;
+          }
         }
 
-        // High peaks transition to snow
-        if (h > snowLine && slope < 0.6) {
-          const snowT = Math.min(1.0, (h - snowLine) / Math.max(1, maxH - snowLine));
-          r = r + (snowColor[0] - r) * snowT;
-          g = g + (snowColor[1] - g) * snowT;
-          b = b + (snowColor[2] - b) * snowT;
+        if (maskActive) {
+          const w = maskWeightAt(maskWeights, idx);
+          r = r + (MASK_TINT_COLOR[0] - r) * w;
+          g = g + (MASK_TINT_COLOR[1] - g) * w;
+          b = b + (MASK_TINT_COLOR[2] - b) * w;
         }
 
         colorArray[idx * 3] = r;

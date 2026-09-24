@@ -173,7 +173,7 @@ import {
   TerrainBrushFalloff,
   TerrainBrushTool,
 } from "./terrainSculpt";
-import { TerrainGridConfig } from "./terrainEngine";
+import { TerrainGridConfig, hasAnyMaskWeight } from "./terrainEngine";
 import { SculptMeshData, buildAdjacency, computeVertexNormals, syncBufferGeometry } from "./sculptMesh";
 import { refineNearBrush } from "./sculptDyntopo";
 import { applySculptStroke3D, SculptBrushTool, SculptStrokeParams3D } from "./sculptEngine";
@@ -732,7 +732,12 @@ interface ViewportProps {
   keyframes?: KeyframeStore;
   keyframesEnabled?: boolean;
   evaluatedResults?: EvalResult | null;
-  onParamChange?: (paramId: string | Record<string, unknown>, value?: unknown, targetNodeId?: string) => void;
+  onParamChange?: (
+    paramId: string | Record<string, unknown>,
+    value?: unknown,
+    targetNodeId?: string,
+    options?: { coalesce?: boolean },
+  ) => void;
   onParamAction?: (nodeId: string, action: string) => void;
   onUnpinParam?: (nodeId: string, paramId: string) => void;
   onRenameExposedParam?: (nodeId: string, paramId: string, label: string) => void;
@@ -987,6 +992,8 @@ export function Viewport({
   const sculptLastHitRef = useRef<THREE.Vector3 | null>(null);
   /** Wall-clock throttle for dyntopo refinement during a drag — re-splitting on every pointermove is wasted work once edges are already near target size; 100ms matches marmelab/sculpt-3D's own throttle. */
   const sculptLastRefineTimeRef = useRef(0);
+  const sculptPressureTrackerRef = useRef<PressureTracker>(createPressureTracker());
+  const sculptLastPressureSampleRef = useRef<PointerSample | null>(null);
 
   // Texture Paint and Texture Mix painting state
   /** Pending debounced param writes for painted textures, by node id. */
@@ -2775,7 +2782,7 @@ export function Viewport({
         if (isTexturePaintNode(node)) {
           const state = getTexturePaintState(nodeId);
           if (state.canvas) {
-            onParamChangeRef.current?.("textureData", serializePaintCanvas(state.canvas), nodeId);
+            onParamChangeRef.current?.("textureData", serializePaintCanvas(state.canvas), nodeId, { coalesce: false });
           }
         } else if (isTextureMixNode(node)) {
           const state = getTextureMixPaintState(nodeId);
@@ -2791,7 +2798,7 @@ export function Viewport({
             );
             if (encoded) {
               state.lastSplatData = encoded;
-              onParamChangeRef.current?.("splatData", encoded, nodeId);
+              onParamChangeRef.current?.("splatData", encoded, nodeId, { coalesce: false });
             }
           }
         }
@@ -2829,7 +2836,7 @@ export function Viewport({
       const currentFrames = (gpNode.params.frames as KeyframeDrawing[]) || [];
       const targetFrame = currentFrameRef.current >= 0 ? currentFrameRef.current : 0;
       const nextFrames = addStrokeToFrames(currentFrames, targetFrame, newStroke);
-      onParamChangeRef.current?.("frames", nextFrames, gpNode.id);
+      onParamChangeRef.current?.("frames", nextFrames, gpNode.id, { coalesce: false });
     }
 
     /**
@@ -3185,6 +3192,13 @@ export function Viewport({
             const heightmapPixels = terrainMesh.userData.heightmapPixels;
 
             applySculptStroke(terrainMesh.geometry, terrainConfig, heightmapPixels, workingOffsets, strokeParams, workingMask);
+            const terrainMaskActive = hasAnyMaskWeight(workingMask);
+            const terrainMat = terrainMesh.material as THREE.MeshStandardMaterial;
+            const terrainWantsVertexColors = Boolean(terrainNode.params.slopeShading) || terrainMaskActive;
+            if (terrainMat.vertexColors !== terrainWantsVertexColors) {
+              terrainMat.vertexColors = terrainWantsVertexColors;
+              terrainMat.needsUpdate = true;
+            }
             e.stopImmediatePropagation();
             return;
           }
@@ -3234,12 +3248,26 @@ export function Viewport({
             const brushStrength = Number(sculptNode.params.brushStrength) || 0.5;
             const tool = (sculptNode.params.brushTool as SculptBrushTool) || sculptBrushToolRef.current;
             const falloff = (sculptNode.params.brushFalloff as BrushFalloff) || sculptBrushFalloffRef.current;
-            // Detail follows the brush, not a separate param: a fixed
-            // "detail size" independent of brush radius can end up smaller
-            // than the base mesh's own edge length, triggering a runaway
-            // subdivision cascade the instant the brush touches the mesh.
-            const detailSize = brushRadius * 0.25;
-            const refined = refineNearBrush(workingMesh, localHit, brushRadius * 1.5, detailSize);
+            // Fraction of the brush radius dyntopo targets as edge length —
+            // clamped so it can never end up smaller than the base mesh's
+            // own edge length, which is what used to trigger a runaway
+            // subdivision cascade the instant the brush touched the mesh.
+            const dyntopoDetail = Math.max(0.1, Math.min(0.5, Number(sculptNode.params.dyntopoDetail) || 0.25));
+
+            sculptPressureTrackerRef.current = createPressureTracker({
+              gamma: Number(sculptNode.params.pressureCurve ?? 1),
+              min: Number(sculptNode.params.pressureMin ?? 0.05),
+              max: Number(sculptNode.params.pressureMax ?? 1),
+            });
+            const sample = collectPointerSamples(e, performance.now())[0];
+            sculptLastPressureSampleRef.current = sample;
+            const usePressure = Boolean(sculptNode.params.usePressure ?? true);
+            const rawPressure = sculptPressureTrackerRef.current.next(sample, null);
+            const pressure = usePressure && sample.isPen ? Math.max(0.04, Math.min(1.0, rawPressure)) : 1.0;
+            const effectiveRadius = brushRadius * pressure;
+            const effectiveStrength = brushStrength * pressure;
+
+            const refined = refineNearBrush(workingMesh, localHit, effectiveRadius * 1.5, effectiveRadius * dyntopoDetail);
             sculptLastRefineTimeRef.current = performance.now();
             sculptWorkingMeshRef.current = refined;
             sculptWorkingAdjacencyRef.current = buildAdjacency(refined.indices, refined.positions.length / 3);
@@ -3247,8 +3275,8 @@ export function Viewport({
             const strokeParams3D: SculptStrokeParams3D = {
               tool,
               falloff,
-              radius: brushRadius,
-              strength: brushStrength,
+              radius: effectiveRadius,
+              strength: effectiveStrength,
               invert: sculptInvertRef.current || e.altKey,
               hitPoint: localHit,
               hitNormal: localNormal,
@@ -3262,7 +3290,12 @@ export function Viewport({
             };
             applySculptStroke3D(refined, sculptWorkingAdjacencyRef.current, strokeParams3D);
             refined.normals = computeVertexNormals(refined.positions, refined.indices);
-            syncBufferGeometry(sculptMesh.geometry, refined);
+            const maskActive = syncBufferGeometry(sculptMesh.geometry, refined);
+            const sculptMat = sculptMesh.material as THREE.MeshStandardMaterial;
+            if (sculptMat.vertexColors !== maskActive) {
+              sculptMat.vertexColors = maskActive;
+              sculptMat.needsUpdate = true;
+            }
             e.stopImmediatePropagation();
             return;
           }
@@ -3641,6 +3674,13 @@ export function Viewport({
                 strokeParams,
                 terrainMaskWorkingRef.current ?? undefined,
               );
+              const terrainMaskActive = hasAnyMaskWeight(terrainMaskWorkingRef.current);
+              const terrainMat = terrainMesh.material as THREE.MeshStandardMaterial;
+              const terrainWantsVertexColors = Boolean(terrainNode.params.slopeShading) || terrainMaskActive;
+              if (terrainMat.vertexColors !== terrainWantsVertexColors) {
+                terrainMat.vertexColors = terrainWantsVertexColors;
+                terrainMat.needsUpdate = true;
+              }
               e.stopImmediatePropagation();
               return;
             }
@@ -3685,7 +3725,19 @@ export function Viewport({
               const brushStrength = Number(sculptNode.params.brushStrength) || 0.5;
               const tool = (sculptNode.params.brushTool as SculptBrushTool) || sculptBrushToolRef.current;
               const falloff = (sculptNode.params.brushFalloff as BrushFalloff) || sculptBrushFalloffRef.current;
-              const detailSize = brushRadius * 0.25;
+              const dyntopoDetail = Math.max(0.1, Math.min(0.5, Number(sculptNode.params.dyntopoDetail) || 0.25));
+
+              const samples = collectPointerSamples(e, performance.now());
+              const usePressure = Boolean(sculptNode.params.usePressure ?? true);
+              let pressure = 1.0;
+              for (const s of samples) {
+                const rawPressure = sculptPressureTrackerRef.current.next(s, sculptLastPressureSampleRef.current);
+                pressure = usePressure && s.isPen ? Math.max(0.04, Math.min(1.0, rawPressure)) : 1.0;
+                sculptLastPressureSampleRef.current = s;
+              }
+              const effectiveRadius = brushRadius * pressure;
+              const effectiveStrength = brushStrength * pressure;
+              const detailSize = effectiveRadius * dyntopoDetail;
 
               // Re-splitting on every pointermove is wasted work once edges
               // near the brush are already at target size — throttle to a
@@ -3696,7 +3748,7 @@ export function Viewport({
               const now = performance.now();
               if (now - sculptLastRefineTimeRef.current > 100) {
                 sculptLastRefineTimeRef.current = now;
-                const refined = refineNearBrush(workingMesh, localHit, brushRadius * 1.5, detailSize);
+                const refined = refineNearBrush(workingMesh, localHit, effectiveRadius * 1.5, detailSize);
                 if (refined !== workingMesh) {
                   workingMesh = refined;
                   adjacency = buildAdjacency(workingMesh.indices, workingMesh.positions.length / 3);
@@ -3709,8 +3761,8 @@ export function Viewport({
               const strokeParams3D: SculptStrokeParams3D = {
                 tool,
                 falloff,
-                radius: brushRadius,
-                strength: brushStrength,
+                radius: effectiveRadius,
+                strength: effectiveStrength,
                 invert: sculptInvertRef.current || e.altKey,
                 hitPoint: localHit,
                 hitNormal: localNormal,
@@ -3727,7 +3779,12 @@ export function Viewport({
               workingMesh.normals = computeVertexNormals(workingMesh.positions, workingMesh.indices);
               sculptWorkingMeshRef.current = workingMesh;
               sculptWorkingAdjacencyRef.current = adjacency;
-              syncBufferGeometry(sculptMesh.geometry, workingMesh);
+              const maskActive = syncBufferGeometry(sculptMesh.geometry, workingMesh);
+              const sculptMat = sculptMesh.material as THREE.MeshStandardMaterial;
+              if (sculptMat.vertexColors !== maskActive) {
+                sculptMat.vertexColors = maskActive;
+                sculptMat.needsUpdate = true;
+              }
               e.stopImmediatePropagation();
               return;
             }
@@ -4355,6 +4412,8 @@ export function Viewport({
               maskWeights: { ...(terrainMaskWorkingRef.current ?? {}) },
             },
             terrainNode.id,
+            undefined,
+            { coalesce: false },
           );
         }
         terrainSculptWorkingOffsetsRef.current = null;
@@ -4379,6 +4438,7 @@ export function Viewport({
               mask: mesh.mask ? Array.from(mesh.mask) : undefined,
             },
             sculptNode.id,
+            { coalesce: false },
           );
         }
         sculptWorkingMeshRef.current = null;
@@ -8412,6 +8472,7 @@ export function Viewport({
           const brushSize = Number(sNode.params.brushSize) || 0.3;
           const brushStrength = Number(sNode.params.brushStrength) || 0.5;
           const brushFalloff = (sNode.params.brushFalloff as BrushFalloff) || sculptBrushFalloff;
+          const dyntopoDetail = Math.max(0.1, Math.min(0.5, Number(sNode.params.dyntopoDetail) || 0.25));
 
           const TOOL_LABELS: { id: SculptBrushTool; label: string; title: string }[] = [
             { id: "draw", label: "Dr", title: "Draw: Raise / Lower along the stroke normal (Hold Alt to invert)" },
@@ -8572,6 +8633,36 @@ export function Viewport({
                 <option value="sphere" style={{ background: "#1e293b", color: "#fff" }}>Sphere</option>
                 <option value="flat" style={{ background: "#1e293b", color: "#fff" }}>Flat</option>
               </select>
+
+              <div style={{ width: 1, height: 16, background: "rgba(255, 255, 255, 0.15)" }} />
+
+              {/* Dyntopo Detail */}
+              <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                <span style={{ fontSize: "11px", color: "#94a3b8", minWidth: 20 }} title="Dyntopo detail as a fraction of brush radius — smaller means finer detail under the brush">
+                  Det
+                </span>
+                <input
+                  type="range"
+                  min={0.1}
+                  max={0.5}
+                  step={0.01}
+                  value={dyntopoDetail}
+                  onChange={(e) => onParamChange?.("dyntopoDetail", Number(e.target.value), sNode.id)}
+                  style={{ width: 50, accentColor: "#38bdf8", cursor: "pointer" }}
+                  title="Dyntopo Detail"
+                />
+              </div>
+
+              {/* Stylus Pressure */}
+              <button
+                type="button"
+                className={`viewport-hud-button ${Boolean(sNode.params.usePressure ?? true) ? "viewport-hud-button-active" : ""}`}
+                onClick={() => onParamChange?.("usePressure", !Boolean(sNode.params.usePressure ?? true), sNode.id)}
+                title="Stylus Pressure Sensitivity (Tablet / Pen)"
+                style={{ fontSize: "11px", padding: "2px 6px" }}
+              >
+                🖊️ Pen
+              </button>
 
               <div style={{ width: 1, height: 16, background: "rgba(255, 255, 255, 0.15)" }} />
 

@@ -190,6 +190,17 @@ const HISTORY_LIMIT = 50;
 /** Consecutive edits to the same control within this window collapse into one undo step. */
 const HISTORY_COALESCE_MS = 600;
 
+/**
+ * A discrete gesture (a whole paint/sculpt stroke, committed once on
+ * pointer-up) must always be its own undo step — coalescing by key is for
+ * continuous inputs like a slider drag that fire many onParamChange calls
+ * per gesture and want just one. Passing `{ coalesce: false }` opts out so
+ * back-to-back strokes within HISTORY_COALESCE_MS don't fuse into one undo.
+ */
+function coalesceKeyFor(nodeId: string | null, paramId: string, options?: { coalesce?: boolean }): string | undefined {
+  return options?.coalesce === false ? undefined : `${nodeId}:${paramId}`;
+}
+
 /** Quiet time after the last edit before the document is written to localStorage. */
 const AUTOSAVE_DEBOUNCE_MS = 800;
 
@@ -1148,7 +1159,12 @@ function MainEditor() {
     setCurrentFilePath(path);
   };
 
-  const onParamChange = (paramId: string | Record<string, unknown>, value?: unknown, targetNodeId?: string) => {
+  const onParamChange = (
+    paramId: string | Record<string, unknown>,
+    value?: unknown,
+    targetNodeId?: string,
+    options?: { coalesce?: boolean },
+  ) => {
     if (typeof paramId === "object" && paramId !== null) {
       const updates = paramId as Record<string, unknown>;
       const nodeIdToUpdate = (value as string | undefined) ?? selectedNodeId;
@@ -1161,7 +1177,7 @@ function MainEditor() {
           nextParams[k] = cloneParamValue(v);
         }
         return updateNodeDeep(prevGraph, instance.id, (n) => ({ ...n, params: nextParams }));
-      }, `${nodeIdToUpdate}:batch`);
+      }, coalesceKeyFor(nodeIdToUpdate, "batch", options));
       return;
     }
     const nodeIdToUpdate = targetNodeId ?? selectedNodeId;
@@ -1288,7 +1304,7 @@ function MainEditor() {
         ...updateNodeDeep(withCamerasOff, instance.id, (n) => ({ ...n, params: nextParams })),
         keyframes: nextKeyframes,
       };
-    }, `${nodeIdToUpdate}:${paramId}`);
+    }, coalesceKeyFor(nodeIdToUpdate, String(paramId), options));
   };
 
   const onToggleExposed = useCallback(

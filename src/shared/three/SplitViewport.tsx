@@ -50,7 +50,12 @@ interface SplitViewportProps {
   keyframes?: KeyframeStore;
   keyframesEnabled?: boolean;
   evaluatedResults?: EvalResult | null;
-  onParamChange?: (paramId: string | Record<string, unknown>, value?: unknown, targetNodeId?: string) => void;
+  onParamChange?: (
+    paramId: string | Record<string, unknown>,
+    value?: unknown,
+    targetNodeId?: string,
+    options?: { coalesce?: boolean },
+  ) => void;
   onParamAction?: (nodeId: string, action: string) => void;
   onUnpinParam?: (nodeId: string, paramId: string) => void;
   onRenameExposedParam?: (nodeId: string, paramId: string, label: string) => void;

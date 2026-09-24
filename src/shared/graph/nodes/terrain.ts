@@ -15,6 +15,7 @@ import {
   TerrainResolution,
   createTerrainGeometry,
   getTexturePixels,
+  hasAnyMaskWeight,
   parseResolution,
   updateTerrainHeightsAndNormals,
 } from "../../three/terrainEngine";
@@ -95,7 +96,6 @@ const TERRAIN_PARAM_FIELDS: ParamFieldDef[] = [
   { id: "heightOffset", label: "Height Offset (Y)", kind: "number", step: 0.5, group: "Relief" },
   { id: "slopeShading", label: "Auto Slope Shading (Grass/Rock/Snow)", kind: "boolean", group: "Shading" },
   { id: "flatShading", label: "Flat Shading (Low-Poly)", kind: "boolean", group: "Shading" },
-  { id: "wireframe", label: "Wireframe", kind: "boolean", group: "Shading" },
   {
     id: "brushTool",
     label: "Brush Tool",
@@ -214,7 +214,7 @@ export const TERRAIN_NODE: NodeDefinition = {
         metalness: 0.1,
         flatShading,
         wireframe,
-        vertexColors: slopeShading,
+        vertexColors: slopeShading || hasAnyMaskWeight(maskWeights),
       });
       const mesh = new THREE.Mesh(geometry, material);
       mesh.castShadow = true;
@@ -223,7 +223,7 @@ export const TERRAIN_NODE: NodeDefinition = {
       mesh.userData.isTerrain = true;
 
       const heightmapPixels = inputHeightmap ? getTexturePixels(inputHeightmap) : null;
-      const initialHeights = updateTerrainHeightsAndNormals(geometry, config, heightmapPixels, sculptOffsets);
+      const initialHeights = updateTerrainHeightsAndNormals(geometry, config, heightmapPixels, sculptOffsets, maskWeights);
 
       state = {
         mesh,
@@ -257,17 +257,22 @@ export const TERRAIN_NODE: NodeDefinition = {
         state.heightmapPixels = inputHeightmap ? getTexturePixels(inputHeightmap) : null;
       }
 
+      const prevMaskWeights = state.maskWeights;
       state.sculptOffsets = sculptOffsets;
       state.maskWeights = maskWeights;
 
-      // Update heights and normals if config, pixels or offsets changed
-      if (state.configSignature !== configSignature || state.textureVersion !== currentTexVersion) {
+      // Update heights and normals if config, pixels, offsets or mask changed
+      if (
+        state.configSignature !== configSignature ||
+        state.textureVersion !== currentTexVersion ||
+        prevMaskWeights !== maskWeights
+      ) {
         state.configSignature = configSignature;
         state.material.flatShading = flatShading;
         state.material.wireframe = wireframe;
-        state.material.vertexColors = slopeShading;
+        state.material.vertexColors = slopeShading || hasAnyMaskWeight(maskWeights);
         state.material.needsUpdate = true;
-        const updatedHeights = updateTerrainHeightsAndNormals(state.geometry, config, state.heightmapPixels, sculptOffsets);
+        const updatedHeights = updateTerrainHeightsAndNormals(state.geometry, config, state.heightmapPixels, sculptOffsets, maskWeights);
         syncOutputHeightmap(state, segmentsX + 1, segmentsZ + 1, updatedHeights);
       }
     }

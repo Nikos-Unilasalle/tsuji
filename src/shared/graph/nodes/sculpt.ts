@@ -17,6 +17,7 @@ import {
   buildAdjacency,
   buildBasePrimitive,
   computeVertexNormals,
+  meshHasActiveMask,
   syncBufferGeometry,
 } from "../../three/sculptMesh";
 import { SculptBrushTool } from "../../three/sculptEngine";
@@ -57,11 +58,18 @@ const SCULPT_PARAM_FIELDS: ParamFieldDef[] = [
   { id: "primitive", label: "Primitive", kind: "select", options: [...SCULPT_PRIMITIVE_OPTIONS], group: "Base Mesh" },
   { id: "size", label: "Size", kind: "number", step: 0.1, group: "Base Mesh" },
   { id: "baseResolution", label: "Base Resolution", kind: "number", step: 1, group: "Base Mesh" },
-  { id: "wireframe", label: "Wireframe", kind: "boolean", group: "Base Mesh" },
+  {
+    id: "dyntopoDetail",
+    label: "Dyntopo Detail (% of Brush Radius)",
+    kind: "number",
+    step: 0.01,
+    group: "Base Mesh",
+  },
   { id: "brushTool", label: "Brush Tool", kind: "select", options: [...SCULPT_BRUSH_TOOLS], group: "Sculpt Palette" },
   { id: "brushSize", label: "Brush Radius", kind: "number", step: 0.02, group: "Sculpt Palette" },
   { id: "brushStrength", label: "Brush Strength", kind: "number", step: 0.05, group: "Sculpt Palette" },
   { id: "brushFalloff", label: "Brush Falloff", kind: "select", options: [...SCULPT_BRUSH_FALLOFFS], group: "Sculpt Palette" },
+  { id: "usePressure", label: "Stylus Pressure", kind: "boolean", group: "Sculpt Palette" },
   { id: "symmetryX", label: "Symmetry X", kind: "boolean", group: "Sculpt Palette" },
   { id: "symmetryY", label: "Symmetry Y", kind: "boolean", group: "Sculpt Palette" },
   { id: "symmetryZ", label: "Symmetry Z", kind: "boolean", group: "Sculpt Palette" },
@@ -98,11 +106,16 @@ export const SCULPT_NODE: NodeDefinition = {
     primitive: "sphere",
     size: 2,
     baseResolution: 2,
+    dyntopoDetail: 0.25,
     wireframe: false,
     brushTool: "draw",
     brushSize: 0.3,
     brushStrength: 0.3,
     brushFalloff: "smooth",
+    usePressure: true,
+    pressureCurve: 1,
+    pressureMin: 0.05,
+    pressureMax: 1,
     symmetryX: false,
     symmetryY: false,
     symmetryZ: false,
@@ -111,11 +124,11 @@ export const SCULPT_NODE: NodeDefinition = {
     location: new THREE.Vector3(0, 0, 0),
     rotation: new THREE.Vector3(0, 0, 0),
     scale: new THREE.Vector3(1, 1, 1),
-    color: new THREE.Color(0xaaaaaa),
+    color: new THREE.Color("#f75eaa"),
     emissive: new THREE.Color(0x000000),
     emissiveIntensity: 1.0,
     shadeless: false,
-    roughness: 0.6,
+    roughness: 0.2,
     metalness: 0.0,
     opacity: 1.0,
   },
@@ -140,7 +153,7 @@ export const SCULPT_NODE: NodeDefinition = {
       const adjacency = buildAdjacency(meshData.indices, meshData.positions.length / 3);
       const geometry = new THREE.BufferGeometry();
       syncBufferGeometry(geometry, meshData);
-      const material = new THREE.MeshStandardMaterial({ color: 0xaaaaaa, roughness: 0.6, wireframe });
+      const material = new THREE.MeshStandardMaterial({ color: 0xf75eaa, roughness: 0.2, wireframe });
       const mesh = new THREE.Mesh(geometry, material);
       mesh.castShadow = true;
       mesh.receiveShadow = true;
@@ -181,6 +194,11 @@ export const SCULPT_NODE: NodeDefinition = {
     }
 
     state.material.wireframe = wireframe;
+    const maskActive = meshHasActiveMask(state.meshData.mask);
+    if (state.material.vertexColors !== maskActive) {
+      state.material.vertexColors = maskActive;
+      state.material.needsUpdate = true;
+    }
     state.mesh.userData.sculptMeshData = state.meshData;
     state.mesh.userData.sculptAdjacency = state.adjacency;
     state.mesh.userData.sculptPrimitiveSignature = state.primitiveSignature;

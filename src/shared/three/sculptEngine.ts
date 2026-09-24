@@ -122,9 +122,11 @@ function applyStrokeAtOrigin(
     return;
   }
 
-  const center = stroke.tool === "flatten" || stroke.tool === "grab" || stroke.tool === "crease"
-    ? origin
-    : stroke.hitPoint;
+  // Flatten and Grab anchor to the stroke's frozen starting point (a fixed
+  // target plane / drag origin); every other tool — including Crease —
+  // follows the pointer's *current* hit so the effect tracks the stylus
+  // instead of carving a single notch wherever the stroke began.
+  const center = stroke.tool === "flatten" || stroke.tool === "grab" ? origin : stroke.hitPoint;
   const verts = gatherVerticesInRadius(positions, adjacency, center, r);
   if (verts.size === 0) return;
 
