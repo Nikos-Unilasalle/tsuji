@@ -15,6 +15,7 @@ import { ColorRampEditor } from "./ColorRampEditor";
 import { TopographyBandsEditor } from "./TopographyBandsEditor";
 import { DragNumberInput } from "./DragNumberInput";
 import "./param-panel.css";
+import "./graph-editor.css";
 
 /**
  * The ports of a group's boundary, edited from the boundary node itself —
@@ -341,6 +342,7 @@ interface VectorFieldControlProps {
   currentFrame: number | undefined;
   keyframesEnabled: boolean;
   onHoverKey: (key: string | null) => void;
+  onRequestKeyframeMenu?: (paramKey: string, x: number, y: number) => void;
 }
 
 export function VectorFieldControl({
@@ -352,6 +354,7 @@ export function VectorFieldControl({
   currentFrame,
   keyframesEnabled,
   onHoverKey,
+  onRequestKeyframeMenu,
 }: VectorFieldControlProps) {
   const is2D =
     (value instanceof THREE.Vector2) ||
@@ -392,6 +395,11 @@ export function VectorFieldControl({
             onDragEnd={handleDragEnd}
             onMouseEnter={() => onHoverKey(fullKey)}
             onMouseLeave={() => onHoverKey(null)}
+            onContextMenu={
+              onRequestKeyframeMenu
+                ? (e) => onRequestKeyframeMenu(fullKey, e.clientX, e.clientY)
+                : undefined
+            }
             onChange={(next, meta) => {
               if (meta?.isDrag && meta.shiftKey) {
                 const startSnap = startVectorRef.current ?? {
@@ -447,6 +455,7 @@ export function vectorField(
   currentFrame: number | undefined,
   keyframesEnabled: boolean,
   onHoverKey: (key: string | null) => void,
+  onRequestKeyframeMenu?: (paramKey: string, x: number, y: number) => void,
 ) {
   return (
     <VectorFieldControl
@@ -459,6 +468,7 @@ export function vectorField(
       currentFrame={currentFrame}
       keyframesEnabled={keyframesEnabled}
       onHoverKey={onHoverKey}
+      onRequestKeyframeMenu={onRequestKeyframeMenu}
     />
   );
 }
@@ -485,6 +495,23 @@ export function ParamPanel({
   const categoryColor = category ? CATEGORY_COLOR[category] : UNKNOWN_CATEGORY_COLOR;
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({ Transform: true });
   const [hoveredParamKey, setHoveredParamKey] = useState<string | null>(null);
+  const [numContextMenu, setNumContextMenu] = useState<{ x: number; y: number; paramKey: string } | null>(null);
+
+  const valueToStoreForKey = (paramKey: string): any => {
+    if (paramKey.includes(".")) {
+      const [baseKey, comp] = paramKey.split(".");
+      const baseVal = parseVector3(params[baseKey]);
+      return (baseVal as any)[comp] ?? 0;
+    }
+    return params[paramKey];
+  };
+
+  const addKeyframeForKey = (paramKey: string) => {
+    if (currentFrame === undefined || currentFrame < 0 || !onToggleKeyframe) return;
+    onToggleKeyframe(nodeId, paramKey, currentFrame, valueToStoreForKey(paramKey));
+  };
+
+  const canKeyframe = keyframesEnabled && currentFrame !== undefined && currentFrame >= 0 && !!onToggleKeyframe;
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
@@ -495,21 +522,26 @@ export function ParamPanel({
           activeEl.blur();
         }
         e.preventDefault();
-
-        let valToStore: any;
-        if (hoveredParamKey.includes(".")) {
-          const [baseKey, comp] = hoveredParamKey.split(".");
-          const baseVal = parseVector3(params[baseKey]);
-          valToStore = (baseVal as any)[comp] ?? 0;
-        } else {
-          valToStore = params[hoveredParamKey];
-        }
-        onToggleKeyframe(nodeId, hoveredParamKey, currentFrame, valToStore);
+        addKeyframeForKey(hoveredParamKey);
       }
     }
     window.addEventListener("keydown", handleKeyDown, true);
     return () => window.removeEventListener("keydown", handleKeyDown, true);
   }, [keyframesEnabled, hoveredParamKey, currentFrame, nodeId, params, onToggleKeyframe]);
+
+  useEffect(() => {
+    if (!numContextMenu) return;
+    function handleDismiss(e: MouseEvent | KeyboardEvent) {
+      if (e instanceof KeyboardEvent && e.key !== "Escape") return;
+      setNumContextMenu(null);
+    }
+    window.addEventListener("pointerdown", handleDismiss);
+    window.addEventListener("keydown", handleDismiss);
+    return () => {
+      window.removeEventListener("pointerdown", handleDismiss);
+      window.removeEventListener("keydown", handleDismiss);
+    };
+  }, [numContextMenu]);
 
   const toggleGroup = (groupName: string) => {
     setOpenGroups((prev) => ({ ...prev, [groupName]: !prev[groupName] }));
@@ -742,6 +774,11 @@ export function ParamPanel({
                           status={status}
                           onMouseEnter={() => setHoveredParamKey(field.id)}
                           onMouseLeave={() => setHoveredParamKey((prev) => (prev === field.id ? null : prev))}
+                          onContextMenu={
+                            canKeyframe
+                              ? (e) => setNumContextMenu({ x: e.clientX, y: e.clientY, paramKey: field.id })
+                              : undefined
+                          }
                           onChange={(v) => onChange(field.id, toStoredUnit(v, field.degrees, field.percent))}
                         />
                       )}
@@ -755,6 +792,7 @@ export function ParamPanel({
                           currentFrame,
                           keyframesEnabled,
                           setHoveredParamKey,
+                          canKeyframe ? (paramKey, x, y) => setNumContextMenu({ x, y, paramKey }) : undefined,
                         )}
                       {field.kind === "boolean" && booleanField(params[field.id], (v) => onChange(field.id, v))}
                       {field.kind === "select" && selectField(field, params[field.id], (v) => onChange(field.id, v))}
@@ -825,6 +863,30 @@ export function ParamPanel({
         </button>
       )}
     </div>
+
+    {numContextMenu && (
+      <div
+        className="graph-context-menu"
+        style={{
+          left: Math.min(numContextMenu.x, window.innerWidth - 180),
+          top: Math.min(numContextMenu.y, window.innerHeight - 150),
+        }}
+        onClick={(e) => e.stopPropagation()}
+        onPointerDown={(e) => e.stopPropagation()}
+      >
+        <button
+          type="button"
+          className="graph-context-menu-item"
+          onClick={() => {
+            addKeyframeForKey(numContextMenu.paramKey);
+            setNumContextMenu(null);
+          }}
+        >
+          <span>Add Keyframe</span>
+          <span className="graph-context-menu-shortcut">K</span>
+        </button>
+      </div>
+    )}
     </>
   );
 }

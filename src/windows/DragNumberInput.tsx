@@ -36,6 +36,7 @@ interface DragNumberInputProps {
   isVector?: boolean;
   onDragStart?: () => void;
   onDragEnd?: () => void;
+  onContextMenu?: (e: React.MouseEvent<HTMLDivElement>) => void;
 }
 
 export function DragNumberInput({
@@ -50,6 +51,7 @@ export function DragNumberInput({
   isVector = false,
   onDragStart,
   onDragEnd,
+  onContextMenu,
 }: DragNumberInputProps) {
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState("");
@@ -210,6 +212,11 @@ export function DragNumberInput({
       onPointerDown={handlePointerDown}
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
+      onContextMenu={(e) => {
+        if (!onContextMenu) return;
+        e.preventDefault();
+        onContextMenu(e);
+      }}
       title="Drag to scrub, click to type (Shift = finer)"
     >
       {formatValue(value, integer)}
