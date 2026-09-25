@@ -27,6 +27,8 @@ describe("exportPngSequence", () => {
   test("captures every frame and bundles them into a zip in frame order, even when encodes finish out of order", async () => {
     const fake = fakeCanvasFactory([30, 0, 10]);
     vi.stubGlobal("document", { createElement: fake.createElement });
+    // CI runs Node 20, which has no global navigator.
+    vi.stubGlobal("navigator", undefined);
 
     const captureFrame = vi.fn(async (i: number) => {
       fake.setFrame(i);

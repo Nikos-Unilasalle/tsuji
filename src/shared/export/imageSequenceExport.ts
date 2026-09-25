@@ -31,7 +31,7 @@ type PngEncoder = { encode: (index: number, source: HTMLCanvasElement) => Promis
  * `toBlob`, still overlapped with rendering.
  */
 function createPngEncoder(): PngEncoder {
-  const cores = navigator.hardwareConcurrency || 4;
+  const cores = (typeof navigator !== "undefined" && navigator.hardwareConcurrency) || 4;
   const canUseWorkers =
     typeof Worker !== "undefined" && typeof OffscreenCanvas !== "undefined" && typeof createImageBitmap !== "undefined";
 
