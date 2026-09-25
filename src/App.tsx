@@ -108,6 +108,7 @@ import { TopBar } from "./windows/TopBar";
 export interface WorkspaceSpaces {
   view3D: boolean;
   camera: boolean;
+  view2D: boolean;
   canvas: boolean;
   timeline: boolean;
 }
@@ -274,10 +275,11 @@ function MainEditor() {
           typeof parsed.camera === "boolean" &&
           typeof parsed.canvas === "boolean"
         ) {
-          if (parsed.view3D || parsed.camera || parsed.canvas || parsed.timeline) {
+          if (parsed.view3D || parsed.camera || parsed.view2D || parsed.canvas || parsed.timeline) {
             return {
               view3D: parsed.view3D,
               camera: parsed.camera,
+              view2D: Boolean(parsed.view2D),
               canvas: parsed.canvas,
               timeline: parsed.timeline !== undefined ? Boolean(parsed.timeline) : true,
             };
@@ -285,14 +287,14 @@ function MainEditor() {
         }
       }
     } catch {}
-    return { view3D: true, camera: false, canvas: true, timeline: true };
+    return { view3D: true, camera: false, view2D: false, canvas: true, timeline: true };
   });
 
   const toggleSpace = useCallback((space: keyof WorkspaceSpaces) => {
     setSpaces((prev) => {
       const next = { ...prev, [space]: !prev[space] };
       // Prevent disabling all spaces: if all spaces would become hidden, activate canvas or view3D!
-      if (!next.view3D && !next.camera && !next.canvas && !next.timeline) {
+      if (!next.view3D && !next.camera && !next.view2D && !next.canvas && !next.timeline) {
         return { ...next, [space === "view3D" ? "canvas" : "view3D"]: true };
       }
       try {
@@ -741,6 +743,16 @@ function MainEditor() {
         if (!isKeyReservedForPlayback(e)) {
           e.preventDefault();
           toggleSpace("timeline");
+        }
+      } else if (
+        !isInput &&
+        !isCmdOrCtrl &&
+        !e.altKey &&
+        (e.key === "5" || code === "Digit5" || code === "Numpad5")
+      ) {
+        if (!isKeyReservedForPlayback(e)) {
+          e.preventDefault();
+          toggleSpace("view2D");
         }
       }
     }
@@ -2614,16 +2626,16 @@ function MainEditor() {
       )}
       <div
         style={{
-          display: spaces.view3D || spaces.camera ? "flex" : "none",
+          display: spaces.view3D || spaces.camera || spaces.view2D ? "flex" : "none",
           flexDirection: "column",
           height:
-            (spaces.view3D || spaces.camera) && (spaces.canvas || spaces.timeline)
+            (spaces.view3D || spaces.camera || spaces.view2D) && (spaces.canvas || spaces.timeline)
               ? `${splitPercent}%`
-              : spaces.view3D || spaces.camera
+              : spaces.view3D || spaces.camera || spaces.view2D
               ? "100%"
               : "0%",
           flex:
-            (spaces.view3D || spaces.camera) && !(spaces.canvas || spaces.timeline)
+            (spaces.view3D || spaces.camera || spaces.view2D) && !(spaces.canvas || spaces.timeline)
               ? 1
               : undefined,
           minHeight: 0,
@@ -2647,9 +2659,11 @@ function MainEditor() {
             onEvaluatedResults={onEvaluatedResults}
             isPlaying={isPlaying}
             onHubChange={handleHubChange}
-            suspended={isExporting || (!spaces.view3D && !spaces.camera)}
+            suspended={isExporting || (!spaces.view3D && !spaces.camera && !spaces.view2D)}
             show3DView={spaces.view3D}
             showCameraView={spaces.camera}
+            show2DView={spaces.view2D}
+            view2DNodeId={findView2DNodeId(graph)}
             onCycleViewMode={() => toggleSpace("camera")}
             keyframes={graph.keyframes}
             keyframesEnabled={keyframesEnabled}
@@ -2698,11 +2712,11 @@ function MainEditor() {
             onDeleteKeyframe={onDeleteKeyframe}
             onFrameChange={setCurrentFrame}
             onSplitHandleMouseDown={
-              (spaces.view3D || spaces.camera) && (spaces.canvas || spaces.timeline)
+              (spaces.view3D || spaces.camera || spaces.view2D) && (spaces.canvas || spaces.timeline)
                 ? onSplitHandleMouseDown
                 : () => {}
             }
-            canResizeSplit={Boolean((spaces.view3D || spaces.camera) && (spaces.canvas || spaces.timeline))}
+            canResizeSplit={Boolean((spaces.view3D || spaces.camera || spaces.view2D) && (spaces.canvas || spaces.timeline))}
             isDrawerOpen={spaces.timeline}
             onToggleDrawer={() => toggleSpace("timeline")}
           />
@@ -2710,7 +2724,7 @@ function MainEditor() {
       </div>
 
       {/* Primary Split Divider with left & right resize handle buttons between 3D View and Lower Pane (only needed when mini timeline is disabled) */}
-      {(spaces.view3D || spaces.camera) && (spaces.canvas || spaces.timeline) && !keyframesEnabled && (
+      {(spaces.view3D || spaces.camera || spaces.view2D) && (spaces.canvas || spaces.timeline) && !keyframesEnabled && (
         <div
           className="workspace-split-divider"
           onMouseDown={onSplitHandleMouseDown}
@@ -2802,7 +2816,7 @@ function MainEditor() {
             drawerHeight={timelineDrawerHeight}
             onDrawerHeightChange={setTimelineDrawerHeight}
             onSplitHandleMouseDown={
-              (spaces.view3D || spaces.camera) && spaces.canvas
+              (spaces.view3D || spaces.camera || spaces.view2D) && spaces.canvas
                 ? onSplitHandleMouseDown
                 : () => {}
             }
