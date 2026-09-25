@@ -1,3 +1,5 @@
+import { useEffect } from "react";
+
 /**
  * Reads the interface palette from CSS, for the places that cannot use it
  * directly.
@@ -23,7 +25,8 @@ export type ThemeVarName =
   | "--canvas-bg"
   | "--canvas-node"
   | "--canvas-node-raised"
-  | "--accent-color";
+  | "--accent-color"
+  | "--danger-color";
 
 /** One palette entry, or the fallback when there is no document to read. */
 export function themeVar(name: ThemeVarName, fallback: string, element?: Element | null): string {
@@ -68,4 +71,12 @@ export function themeVarAlpha(
 ): string {
   const [r, g, b] = parseCssColor(themeVar(name, fallback, element));
   return `rgba(${r}, ${g}, ${b}, ${Math.max(0, Math.min(1, alpha))})`;
+}
+
+/** Re-runs a canvas `draw` when the theme changes — a canvas keeps whatever colours it was last painted with. */
+export function useRedrawOnThemeChange(draw: () => void): void {
+  useEffect(() => {
+    window.addEventListener("tsuji-theme-colors-changed", draw);
+    return () => window.removeEventListener("tsuji-theme-colors-changed", draw);
+  }, [draw]);
 }

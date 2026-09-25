@@ -161,17 +161,17 @@ export function DragNumberInput({
   let boxStyle: React.CSSProperties = {};
   if (status === "exact") {
     boxStyle = {
-      backgroundColor: "#76C560",
-      color: "#0f172a",
+      backgroundColor: "var(--keyframe-exact)",
+      color: "var(--chrome-pill-bg)",
       fontWeight: "700",
-      borderColor: "#5aa746",
+      borderColor: "color-mix(in srgb, var(--keyframe-exact) 80%, black)",
     };
   } else if (status === "interpolated") {
     boxStyle = {
-      backgroundColor: "#EDA446",
-      color: "#0f172a",
+      backgroundColor: "var(--keyframe-interpolated)",
+      color: "var(--chrome-pill-bg)",
       fontWeight: "700",
-      borderColor: "#d48b32",
+      borderColor: "color-mix(in srgb, var(--keyframe-interpolated) 80%, black)",
     };
   }
 

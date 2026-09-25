@@ -100,7 +100,7 @@ export function NodeSearchModal({ registry, onSelectNodeType, onClose }: NodeSea
             <div className="node-search-empty">No nodes matching "{query}"</div>
           ) : (
             filteredNodes.map((nodeDef, index) => {
-              const categoryColor = CATEGORY_COLOR[nodeDef.category] ?? "#38bdf8";
+              const categoryColor = CATEGORY_COLOR[nodeDef.category] ?? "var(--accent-color)";
               const categoryLabel = CATEGORY_LABEL[nodeDef.category] ?? nodeDef.category;
               const isSelected = index === selectedIndex;
 

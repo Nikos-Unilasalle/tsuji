@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { COLOR_RAMP_INTERPOLATIONS, ColorRamp, ColorRampInterpolation, ColorStop, DEFAULT_COLOR_RAMP, evalColorRamp } from "../shared/graph/colorRamp";
 import { ColorPickerInput } from "./ColorPickerInput";
+import { themeVar, themeVarAlpha, useRedrawOnThemeChange } from "./themeVars";
 import { DragNumberInput } from "./DragNumberInput";
 import "./color-ramp-editor.css";
 
@@ -57,7 +58,7 @@ export const ColorRampEditor: React.FC<ColorRampEditorProps> = ({ value, onChang
     // Checkerboard behind the bar, so a transparent-looking stop (there's no
     // alpha channel here, but it reads as "empty" otherwise) still has
     // *something* under it — mirrors the color picker's own convention.
-    ctx.fillStyle = "#12161f";
+    ctx.fillStyle = themeVar("--chrome-pill-bg", "#1e2430", canvas);
     ctx.fillRect(0, 0, w, h);
 
     const steps = Math.max(2, Math.floor(barW));
@@ -68,7 +69,7 @@ export const ColorRampEditor: React.FC<ColorRampEditorProps> = ({ value, onChang
       const x = padding + (i / steps) * barW;
       ctx.fillRect(x, padding, Math.ceil(barW / steps) + 1, BAR_HEIGHT);
     }
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.15)";
+    ctx.strokeStyle = themeVarAlpha("--chrome-text", 0.15, "#eef2f6", canvas);
     ctx.lineWidth = 1;
     ctx.strokeRect(padding + 0.5, padding + 0.5, barW - 1, BAR_HEIGHT - 1);
 
@@ -87,7 +88,7 @@ export const ColorRampEditor: React.FC<ColorRampEditorProps> = ({ value, onChang
       ctx.fillStyle = `#${stop.color.getHexString()}`;
       ctx.fill();
       ctx.lineWidth = idx === clampedSelected ? 2 : 1;
-      ctx.strokeStyle = idx === clampedSelected ? "#38bdf8" : "#0b1220";
+      ctx.strokeStyle = idx === clampedSelected ? themeVar("--accent-color", "#38bdf8", canvas) : themeVar("--chrome-bg", "#2f3641", canvas);
       ctx.stroke();
     });
   }, [ramp, clampedSelected]);
@@ -95,6 +96,7 @@ export const ColorRampEditor: React.FC<ColorRampEditorProps> = ({ value, onChang
   useEffect(() => {
     draw();
   }, [draw]);
+  useRedrawOnThemeChange(draw);
 
   const posToT = (clientX: number): number => {
     const canvas = canvasRef.current!;

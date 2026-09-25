@@ -747,7 +747,7 @@ export function ParamPanel({
                             checked={!!params[useKey]}
                             onChange={(e) => onChange(useKey, e.target.checked ? 1 : 0)}
                             title={`Enable ${field.label}`}
-                            style={{ cursor: "pointer", accentColor: "#38bdf8", flex: "0 0 auto" }}
+                            style={{ cursor: "pointer", accentColor: "var(--accent-color)", flex: "0 0 auto" }}
                           />
                         )}
                         <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>

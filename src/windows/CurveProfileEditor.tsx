@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { DEFAULT_PROFILE_POINTS, evalProfileCurve, ProfilePoint } from "../shared/graph/profileCurve";
+import { themeVar, themeVarAlpha, useRedrawOnThemeChange } from "./themeVars";
 import "./curve-profile-editor.css";
 
 interface CurveProfileEditorProps {
@@ -27,10 +28,10 @@ export const CurveProfileEditor: React.FC<CurveProfileEditorProps> = ({ value, o
     ctx.clearRect(0, 0, w, h);
 
     // Background grid
-    ctx.fillStyle = "#12161f";
+    ctx.fillStyle = themeVar("--chrome-pill-bg", "#1e2430", canvas);
     ctx.fillRect(0, 0, w, h);
 
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.08)";
+    ctx.strokeStyle = themeVarAlpha("--chrome-text", 0.08, "#eef2f6", canvas);
     ctx.lineWidth = 1;
 
     // Grid lines
@@ -68,8 +69,8 @@ export const CurveProfileEditor: React.FC<CurveProfileEditorProps> = ({ value, o
     ctx.closePath();
 
     const fillGrad = ctx.createLinearGradient(0, padding, 0, h - padding);
-    fillGrad.addColorStop(0, "rgba(56, 189, 248, 0.25)");
-    fillGrad.addColorStop(1, "rgba(56, 189, 248, 0.03)");
+    fillGrad.addColorStop(0, themeVarAlpha("--accent-color", 0.25, "#38bdf8", canvas));
+    fillGrad.addColorStop(1, themeVarAlpha("--accent-color", 0.03, "#38bdf8", canvas));
     ctx.fillStyle = fillGrad;
     ctx.fill();
 
@@ -83,7 +84,7 @@ export const CurveProfileEditor: React.FC<CurveProfileEditorProps> = ({ value, o
       if (i === 0) ctx.moveTo(px, py);
       else ctx.lineTo(px, py);
     }
-    ctx.strokeStyle = "#ffffff";
+    ctx.strokeStyle = themeVar("--chrome-text", "#eef2f6", canvas);
     ctx.lineWidth = 2;
     ctx.stroke();
 
@@ -92,8 +93,8 @@ export const CurveProfileEditor: React.FC<CurveProfileEditorProps> = ({ value, o
       const px = padding + pt.x * drawW;
       const py = h - padding - pt.y * drawH;
 
-      ctx.fillStyle = "#ffffff";
-      ctx.strokeStyle = draggingIdx === idx ? "#38bdf8" : "#0284c7";
+      ctx.fillStyle = themeVar("--chrome-text", "#eef2f6", canvas);
+      ctx.strokeStyle = draggingIdx === idx ? themeVar("--accent-color", "#38bdf8", canvas) : themeVarAlpha("--accent-color", 0.6, "#38bdf8", canvas);
       ctx.lineWidth = 2;
 
       const size = 8;
@@ -105,6 +106,7 @@ export const CurveProfileEditor: React.FC<CurveProfileEditorProps> = ({ value, o
   useEffect(() => {
     draw();
   }, [draw]);
+  useRedrawOnThemeChange(draw);
 
   const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;

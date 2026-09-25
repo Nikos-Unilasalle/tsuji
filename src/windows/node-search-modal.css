@@ -5,7 +5,7 @@
   width: 100vw;
   height: 100vh;
   z-index: 9999;
-  background: rgba(0, 0, 0, 0.45);
+  background: color-mix(in srgb, var(--chrome-pill-bg) 55%, transparent);
   backdrop-filter: blur(4px);
   display: flex;
   align-items: flex-start;
@@ -16,11 +16,11 @@
 .node-search-modal {
   width: 420px;
   max-height: 500px;
-  background: rgba(59, 67, 79, 0.97);
+  background: color-mix(in srgb, var(--chrome-surface) 97%, transparent);
   backdrop-filter: blur(16px);
   border: 1px solid var(--chrome-border);
   border-radius: 12px;
-  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.08);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.7), 0 0 0 1px color-mix(in srgb, var(--chrome-text) 8%, transparent);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -50,7 +50,7 @@
 .node-search-icon {
   width: 16px;
   height: 16px;
-  color: #38bdf8;
+  color: var(--accent-color);
 }
 
 .node-search-input {
@@ -65,7 +65,7 @@
 }
 
 .node-search-input::placeholder {
-  color: #6e7681;
+  color: var(--chrome-text-muted);
 }
 
 .node-search-list {
@@ -91,7 +91,7 @@
   padding: 9px 14px;
   border-radius: 8px;
   cursor: pointer;
-  color: #c9d1d9;
+  color: var(--chrome-text);
   font-family: "Roboto", system-ui, sans-serif;
   font-size: 13px;
   transition: background 0.1s ease, color 0.1s ease;
@@ -99,8 +99,8 @@
 
 .node-search-item:hover,
 .node-search-item.active {
-  background: rgba(56, 189, 248, 0.18);
-  color: #ffffff;
+  background: color-mix(in srgb, var(--accent-color) 18%, transparent);
+  color: var(--chrome-text);
 }
 
 .node-search-item-info {

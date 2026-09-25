@@ -8,11 +8,11 @@
   overflow-y: auto;
   scrollbar-width: none;
   -ms-overflow-style: none;
-  background: rgba(22, 27, 34, 0.92);
+  background: color-mix(in srgb, var(--chrome-pill-bg) 92%, transparent);
   backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid color-mix(in srgb, var(--chrome-text) 10%, transparent);
   border-radius: 8px;
-  color: #e6e6e6;
+  color: var(--chrome-text);
   font-family: "Roboto", system-ui, sans-serif;
   font-size: 12px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
@@ -27,18 +27,18 @@
   align-items: center;
   justify-content: space-between;
   padding: 8px 10px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid color-mix(in srgb, var(--chrome-text) 8%, transparent);
   font-weight: 700;
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: #9aa4b2;
+  color: var(--chrome-text-muted);
 }
 
 .viewport-param-hud-collapse {
   background: none;
   border: none;
-  color: #9aa4b2;
+  color: var(--chrome-text-muted);
   cursor: pointer;
   font-size: 11px;
   padding: 0 2px;
@@ -65,7 +65,7 @@
 }
 
 .viewport-param-hud-row label {
-  color: #9aa4b2;
+  color: var(--chrome-text-muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -76,16 +76,16 @@
 }
 
 .viewport-param-hud-row label:hover {
-  color: #e6e6e6;
+  color: var(--chrome-text);
 }
 
 .viewport-param-hud-label-edit {
   flex: 0 0 auto;
   width: 90px;
-  background: rgba(255, 255, 255, 0.08);
+  background: color-mix(in srgb, var(--chrome-text) 8%, transparent);
   border: 1px solid var(--accent-color, #38bdf8);
   border-radius: 3px;
-  color: #e6e6e6;
+  color: var(--chrome-text);
   font-size: 12px;
   font-family: inherit;
   padding: 1px 4px;
@@ -103,7 +103,7 @@
 .viewport-param-hud-unpin {
   background: none;
   border: none;
-  color: #6b7280;
+  color: var(--chrome-text-muted);
   cursor: pointer;
   font-size: 14px;
   line-height: 1;
@@ -112,5 +112,5 @@
 }
 
 .viewport-param-hud-unpin:hover {
-  color: #ef4444;
+  color: var(--danger-color);
 }

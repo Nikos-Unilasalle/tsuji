@@ -50,6 +50,11 @@
 
   /* Accent & Interactive Highlights */
   --accent-color: #38bdf8;
+  /* Destructive actions and errors (delete, unpin, invalid input). */
+  --danger-color: #ef4444;
+  /* Animated param fields: keyed on this frame / between two keys (Blender's green / orange). */
+  --keyframe-exact: #76c560;
+  --keyframe-interpolated: #eda446;
 
   /* 3D Viewport palette */
   --viewport-bg-top: #39424f;
