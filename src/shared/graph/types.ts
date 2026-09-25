@@ -137,6 +137,19 @@ export interface EvalContext {
    */
   connectedInputs?: ReadonlySet<string>;
   /**
+   * Which of this node's *output* sockets have a wire leaving them, by
+   * socket id. For a node whose output is expensive to produce (the Camera
+   * node's render-to-texture output, say) and only worth producing when
+   * something downstream actually reads it — everything else should keep
+   * computing every output unconditionally, the same as it always has.
+   *
+   * Absent when a node is evaluated outside a graph (a direct `evaluate()`
+   * call in a test); treat that as "nothing downstream", i.e. skip the
+   * expensive path, matching the graph as it will actually run before it's
+   * wired up.
+   */
+  connectedOutputs?: ReadonlySet<string>;
+  /**
    * Which node feeds each connected input socket, by socket id.
    *
    * Rarer still than connectedInputs, and for one reason: a node that has to

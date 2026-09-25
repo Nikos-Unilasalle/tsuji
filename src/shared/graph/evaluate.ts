@@ -434,6 +434,7 @@ interface GraphStructuralCache {
   nodesById: Map<string, NodeInstance>;
   connectionsByToNode: Map<string, Connection[]>;
   connectionByToNodeSocket: Map<string, Connection>;
+  connectionsByFromNode: Map<string, Connection[]>;
 }
 
 // One entry per live graph rather than a single "last graph" slot: a group
@@ -455,6 +456,7 @@ function getGraphStructuralCache(graph: Graph): GraphStructuralCache {
 
   const connectionsByToNode = new Map<string, Connection[]>();
   const connectionByToNodeSocket = new Map<string, Connection>();
+  const connectionsByFromNode = new Map<string, Connection[]>();
 
   for (let i = 0; i < graph.connections.length; i++) {
     const conn = graph.connections[i];
@@ -465,6 +467,13 @@ function getGraphStructuralCache(graph: Graph): GraphStructuralCache {
     }
     list.push(conn);
     connectionByToNodeSocket.set(`${conn.toNode}:${conn.toSocket}`, conn);
+
+    let fromList = connectionsByFromNode.get(conn.fromNode);
+    if (!fromList) {
+      fromList = [];
+      connectionsByFromNode.set(conn.fromNode, fromList);
+    }
+    fromList.push(conn);
   }
 
   const cache: GraphStructuralCache = {
@@ -472,6 +481,7 @@ function getGraphStructuralCache(graph: Graph): GraphStructuralCache {
     nodesById,
     connectionsByToNode,
     connectionByToNodeSocket,
+    connectionsByFromNode,
   };
   structuralCaches.set(graph, cache);
   return cache;
@@ -504,10 +514,11 @@ function getMutableDefaultKeys(defaultParams: Record<string, unknown>): string[]
 // Object pooling for connectedInputs and inputSources to eliminate GC churn at 60 fps
 const pooledConnectedInputs = new Set<string>();
 const pooledInputSources = new Map<string, string>();
+const pooledConnectedOutputs = new Set<string>();
 const EMPTY_CONNECTIONS: Connection[] = [];
 
 export function evaluateGraph(graph: Graph, registry: NodeRegistry, ctx: EvalContext): EvalResult {
-  const { topo, nodesById, connectionsByToNode, connectionByToNodeSocket } = getGraphStructuralCache(graph);
+  const { topo, nodesById, connectionsByToNode, connectionByToNodeSocket, connectionsByFromNode } = getGraphStructuralCache(graph);
   const { order, cyclic } = topo;
   const slotKey = frameSlotKey(ctx);
   const previousFrameOutputs = previousFrameOutputsBySession.get(slotKey) ?? null;
@@ -569,9 +580,15 @@ export function evaluateGraph(graph: Graph, registry: NodeRegistry, ctx: EvalCon
     const nested = instance.subgraph !== undefined;
     const connectedInputs = nested ? new Set<string>() : pooledConnectedInputs;
     const inputSources = nested ? new Map<string, string>() : pooledInputSources;
+    const connectedOutputs = nested ? new Set<string>() : pooledConnectedOutputs;
 
     connectedInputs.clear();
     inputSources.clear();
+    connectedOutputs.clear();
+    const outgoing = connectionsByFromNode.get(nodeId);
+    if (outgoing) {
+      for (let i = 0; i < outgoing.length; i++) connectedOutputs.add(outgoing[i].fromSocket);
+    }
 
     for (let i = 0; i < socketDefs.length; i++) {
       const socket = socketDefs[i];
@@ -605,6 +622,7 @@ export function evaluateGraph(graph: Graph, registry: NodeRegistry, ctx: EvalCon
           registry,
           connectedInputs,
           inputSources,
+          connectedOutputs,
           markers: ctx.markers || graph.markers,
         }) || {};
       applyVisibility(outputs.geometry, inputs[VISIBILITY_SOCKET]);

@@ -6,6 +6,7 @@ import { composeNativeMatrix, getSourcePivot } from "./transform";
 import { COMMON_PRIMITIVE_OUTPUTS, primitiveOutputs } from "./object";
 import { InstancedItemSpec, renderInstanced } from "./instancedRender";
 import { ColorRamp, DEFAULT_COLOR_RAMP, sampleColorRamp } from "../colorRamp";
+import { evalProfileCurve, ProfilePoint } from "../profileCurve";
 
 /**
  * Points a CanvasTexture at `canvas`, forcing a fresh texture object rather
@@ -675,16 +676,29 @@ function drawProcedural(
         return colorAt(colorB, colorA, Math.min(1, d));
       });
     } else if (type === "voronoi") {
-      const rand = mulberry32(seed);
-      const sites: { x: number; y: number }[] = [];
-      for (let i = 0; i < cells * cells; i++) sites.push({ x: rand() * size, y: rand() * size });
+      // One jittered site per grid cell (classic Worley noise), site position
+      // derived from a hash of its cell coordinates instead of a stored
+      // array. A pixel only ever needs its own cell's site and the 8
+      // neighbors', so cost is O(size²) flat regardless of cell count — the
+      // previous version checked distance to *every* site for *every*
+      // pixel (O(size² × cells²)), which is what made high-density Voronoi
+      // (large Scale) grind to a halt.
+      const siteAt = (ix: number, iy: number): { x: number; y: number } => ({
+        x: (ix + hash2(ix, iy, seed)) * cell,
+        y: (iy + hash2(ix, iy, seed + 1)) * cell,
+      });
       drawPerPixel(canvas, (x, y) => {
+        const cx = Math.floor(x / cell);
+        const cy = Math.floor(y / cell);
         let minD = Infinity;
-        for (const s of sites) {
-          const dx = x - s.x;
-          const dy = y - s.y;
-          const dd = dx * dx + dy * dy;
-          if (dd < minD) minD = dd;
+        for (let ny = cy - 1; ny <= cy + 1; ny++) {
+          for (let nx = cx - 1; nx <= cx + 1; nx++) {
+            const s = siteAt(nx, ny);
+            const dx = x - s.x;
+            const dy = y - s.y;
+            const dd = dx * dx + dy * dy;
+            if (dd < minD) minD = dd;
+          }
         }
         return colorAt(colorB, colorA, Math.min(1, Math.sqrt(minD) / cell));
       });
@@ -1982,6 +1996,389 @@ export const TEXTURE_THRESHOLD_NODE: NodeDefinition = {
     }
 
     return { mask: state.texture ?? null };
+  },
+};
+
+interface TextureInvertState {
+  texture?: THREE.CanvasTexture;
+  canvas?: HTMLCanvasElement;
+  aCanvas?: HTMLCanvasElement;
+  signature?: string;
+}
+
+const textureInvertCache = createNodeCache<TextureInvertState>((s) => s.texture?.dispose());
+
+/** Invert Texture node — 1-minus-color per channel, alpha untouched. */
+export const TEXTURE_INVERT_NODE: NodeDefinition = {
+  type: "texture/invert",
+  label: "Invert",
+  category: "texture",
+  inputs: [
+    { id: "texture", label: "Texture", type: "texture" },
+    { id: "factor", label: "Factor", type: "value" },
+  ],
+  outputs: [{ id: "texture", label: "Texture", type: "texture" }],
+  defaultParams: { factor: 1, resolution: 256 },
+  paramFields: [
+    { id: "factor", label: "Factor (fallback)", kind: "number", step: 0.05 },
+    { id: "resolution", label: "Resolution (px)", kind: "number", step: 64 },
+  ],
+  evaluate: (inputs, params, ctx) => {
+    const state = textureInvertCache.get(ctx.nodeId) ?? (() => {
+      const s: TextureInvertState = {};
+      textureInvertCache.set(ctx.nodeId, s);
+      return s;
+    })();
+    if (typeof document === "undefined") return { texture: null };
+
+    const source = inputs.texture instanceof THREE.Texture ? inputs.texture : null;
+    const factor = Math.max(0, Math.min(1, inputs.factor !== undefined ? Number(inputs.factor) : Number(params.factor) ?? 1));
+    const resolution = Math.max(16, Math.min(1024, Math.round(Number(params.resolution) || 256)));
+
+    const sig = [factor, resolution, source?.uuid ?? "", source?.version ?? 0].join("|");
+    if (sig !== state.signature) {
+      state.signature = sig;
+      if (!state.aCanvas) state.aCanvas = document.createElement("canvas");
+      if (!state.canvas) state.canvas = document.createElement("canvas");
+
+      drawSourceToCanvas(state.aCanvas, source, resolution);
+      const aCtx = state.aCanvas.getContext("2d");
+      if (!aCtx) return { texture: state.texture ?? null };
+      const aData = aCtx.getImageData(0, 0, resolution, resolution).data;
+
+      const out = state.canvas;
+      out.width = resolution;
+      out.height = resolution;
+      const outCtx = out.getContext("2d");
+      if (!outCtx) return { texture: state.texture ?? null };
+      const outImg = outCtx.createImageData(resolution, resolution);
+      const outData = outImg.data;
+
+      for (let i = 0; i < outData.length; i += 4) {
+        for (let c = 0; c < 3; c++) {
+          const v = aData[i + c] / 255;
+          outData[i + c] = Math.round((v + (1 - v - v) * factor) * 255);
+        }
+        outData[i + 3] = aData[i + 3];
+      }
+      outCtx.putImageData(outImg, 0, 0);
+      state.texture = replaceCanvasTexture(state.texture, out, THREE.SRGBColorSpace);
+    }
+
+    return { texture: state.texture ?? null };
+  },
+};
+
+interface TextureLevelsState {
+  texture?: THREE.CanvasTexture;
+  canvas?: HTMLCanvasElement;
+  aCanvas?: HTMLCanvasElement;
+  signature?: string;
+}
+
+const textureLevelsCache = createNodeCache<TextureLevelsState>((s) => s.texture?.dispose());
+
+/**
+ * Levels Texture node — Photoshop-style input black/white point remap plus
+ * gamma, then an output black/white point. Same shape as Photoshop/GIMP
+ * Levels: `((v - inBlack) / (inWhite - inBlack)) ^ (1/gamma)`, remapped into
+ * `[outBlack, outWhite]`.
+ */
+export const TEXTURE_LEVELS_NODE: NodeDefinition = {
+  type: "texture/levels",
+  label: "Levels",
+  category: "texture",
+  inputs: [{ id: "texture", label: "Texture", type: "texture" }],
+  outputs: [{ id: "texture", label: "Texture", type: "texture" }],
+  defaultParams: { inBlack: 0, inWhite: 1, gamma: 1, outBlack: 0, outWhite: 1, resolution: 256 },
+  paramFields: [
+    { id: "inBlack", label: "Input Black", kind: "number", step: 0.01 },
+    { id: "inWhite", label: "Input White", kind: "number", step: 0.01 },
+    { id: "gamma", label: "Gamma", kind: "number", step: 0.05 },
+    { id: "outBlack", label: "Output Black", kind: "number", step: 0.01 },
+    { id: "outWhite", label: "Output White", kind: "number", step: 0.01 },
+    { id: "resolution", label: "Resolution (px)", kind: "number", step: 64 },
+  ],
+  evaluate: (inputs, params, ctx) => {
+    const state = textureLevelsCache.get(ctx.nodeId) ?? (() => {
+      const s: TextureLevelsState = {};
+      textureLevelsCache.set(ctx.nodeId, s);
+      return s;
+    })();
+    if (typeof document === "undefined") return { texture: null };
+
+    const source = inputs.texture instanceof THREE.Texture ? inputs.texture : null;
+    const inBlack = Number(params.inBlack) || 0;
+    const inWhite = Number(params.inWhite) ?? 1;
+    const gamma = Math.max(0.01, Number(params.gamma) || 1);
+    const outBlack = Number(params.outBlack) || 0;
+    const outWhite = Number(params.outWhite) ?? 1;
+    const resolution = Math.max(16, Math.min(1024, Math.round(Number(params.resolution) || 256)));
+
+    const sig = [inBlack, inWhite, gamma, outBlack, outWhite, resolution, source?.uuid ?? "", source?.version ?? 0].join("|");
+    if (sig !== state.signature) {
+      state.signature = sig;
+      if (!state.aCanvas) state.aCanvas = document.createElement("canvas");
+      if (!state.canvas) state.canvas = document.createElement("canvas");
+
+      drawSourceToCanvas(state.aCanvas, source, resolution);
+      const aCtx = state.aCanvas.getContext("2d");
+      if (!aCtx) return { texture: state.texture ?? null };
+      const aData = aCtx.getImageData(0, 0, resolution, resolution).data;
+
+      const out = state.canvas;
+      out.width = resolution;
+      out.height = resolution;
+      const outCtx = out.getContext("2d");
+      if (!outCtx) return { texture: state.texture ?? null };
+      const outImg = outCtx.createImageData(resolution, resolution);
+      const outData = outImg.data;
+
+      const inSpan = inWhite - inBlack;
+      const invGamma = 1 / gamma;
+
+      // 256-entry LUT: the levels formula is the same for every pixel of a
+      // given input value, so computing it once per 0-255 level (not once
+      // per pixel) is a straight ~1000x fewer Math.pow calls at 1024².
+      const lut = new Uint8ClampedArray(256);
+      for (let v = 0; v < 256; v++) {
+        let t = inSpan === 0 ? 0 : (v / 255 - inBlack) / inSpan;
+        t = Math.max(0, Math.min(1, t));
+        t = Math.pow(t, invGamma);
+        lut[v] = Math.round((outBlack + t * (outWhite - outBlack)) * 255);
+      }
+
+      for (let i = 0; i < outData.length; i += 4) {
+        outData[i] = lut[aData[i]];
+        outData[i + 1] = lut[aData[i + 1]];
+        outData[i + 2] = lut[aData[i + 2]];
+        outData[i + 3] = aData[i + 3];
+      }
+      outCtx.putImageData(outImg, 0, 0);
+      state.texture = replaceCanvasTexture(state.texture, out, THREE.SRGBColorSpace);
+    }
+
+    return { texture: state.texture ?? null };
+  },
+};
+
+/** RGB [0,1] -> HSV, each channel [0,1]. */
+function rgbToHsv(r: number, g: number, b: number): [number, number, number] {
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const d = max - min;
+  let h = 0;
+  if (d > 1e-6) {
+    if (max === r) h = ((g - b) / d) % 6;
+    else if (max === g) h = (b - r) / d + 2;
+    else h = (r - g) / d + 4;
+    h /= 6;
+    if (h < 0) h += 1;
+  }
+  const s = max <= 1e-6 ? 0 : d / max;
+  return [h, s, max];
+}
+
+/** HSV [0,1] -> RGB [0,1]. */
+function hsvToRgb(h: number, s: number, v: number): [number, number, number] {
+  const i = Math.floor(h * 6) % 6;
+  const f = h * 6 - Math.floor(h * 6);
+  const p = v * (1 - s);
+  const q = v * (1 - f * s);
+  const t = v * (1 - (1 - f) * s);
+  switch (((i % 6) + 6) % 6) {
+    case 0: return [v, t, p];
+    case 1: return [q, v, p];
+    case 2: return [p, v, t];
+    case 3: return [p, q, v];
+    case 4: return [t, p, v];
+    default: return [v, p, q];
+  }
+}
+
+interface TextureHueSatValState {
+  texture?: THREE.CanvasTexture;
+  canvas?: HTMLCanvasElement;
+  aCanvas?: HTMLCanvasElement;
+  signature?: string;
+}
+
+const textureHueSatValCache = createNodeCache<TextureHueSatValState>((s) => s.texture?.dispose());
+
+/** Hue/Saturation/Value node — Blender-style hue rotate, saturation scale, value scale, converted through HSV. */
+export const TEXTURE_HUE_SAT_VAL_NODE: NodeDefinition = {
+  type: "texture/hue-sat-val",
+  label: "Hue/Saturation/Value",
+  category: "texture",
+  inputs: [
+    { id: "texture", label: "Texture", type: "texture" },
+    { id: "hue", label: "Hue Shift (°)", type: "value" },
+    { id: "saturation", label: "Saturation", type: "value" },
+    { id: "value", label: "Value", type: "value" },
+  ],
+  outputs: [{ id: "texture", label: "Texture", type: "texture" }],
+  defaultParams: { hue: 0, saturation: 1, value: 1, resolution: 256 },
+  paramFields: [
+    { id: "hue", label: "Hue Shift (° fallback)", kind: "number", step: 5 },
+    { id: "saturation", label: "Saturation (fallback)", kind: "number", step: 0.05 },
+    { id: "value", label: "Value (fallback)", kind: "number", step: 0.05 },
+    { id: "resolution", label: "Resolution (px)", kind: "number", step: 64 },
+  ],
+  evaluate: (inputs, params, ctx) => {
+    const state = textureHueSatValCache.get(ctx.nodeId) ?? (() => {
+      const s: TextureHueSatValState = {};
+      textureHueSatValCache.set(ctx.nodeId, s);
+      return s;
+    })();
+    if (typeof document === "undefined") return { texture: null };
+
+    const source = inputs.texture instanceof THREE.Texture ? inputs.texture : null;
+    const hueDeg = inputs.hue !== undefined ? Number(inputs.hue) : Number(params.hue) || 0;
+    const saturation = Math.max(0, inputs.saturation !== undefined ? Number(inputs.saturation) : Number(params.saturation) ?? 1);
+    const value = Math.max(0, inputs.value !== undefined ? Number(inputs.value) : Number(params.value) ?? 1);
+    const resolution = Math.max(16, Math.min(1024, Math.round(Number(params.resolution) || 256)));
+
+    const sig = [hueDeg, saturation, value, resolution, source?.uuid ?? "", source?.version ?? 0].join("|");
+    if (sig !== state.signature) {
+      state.signature = sig;
+      if (!state.aCanvas) state.aCanvas = document.createElement("canvas");
+      if (!state.canvas) state.canvas = document.createElement("canvas");
+
+      drawSourceToCanvas(state.aCanvas, source, resolution);
+      const aCtx = state.aCanvas.getContext("2d");
+      if (!aCtx) return { texture: state.texture ?? null };
+      const aData = aCtx.getImageData(0, 0, resolution, resolution).data;
+
+      const out = state.canvas;
+      out.width = resolution;
+      out.height = resolution;
+      const outCtx = out.getContext("2d");
+      if (!outCtx) return { texture: state.texture ?? null };
+      const outImg = outCtx.createImageData(resolution, resolution);
+      const outData = outImg.data;
+
+      const hueShift = hueDeg / 360;
+
+      for (let i = 0; i < outData.length; i += 4) {
+        const [h, s, v] = rgbToHsv(aData[i] / 255, aData[i + 1] / 255, aData[i + 2] / 255);
+        let hh = (h + hueShift) % 1;
+        if (hh < 0) hh += 1;
+        const [r, g, b] = hsvToRgb(hh, Math.max(0, Math.min(1, s * saturation)), Math.max(0, v * value));
+        outData[i] = Math.round(Math.max(0, Math.min(1, r)) * 255);
+        outData[i + 1] = Math.round(Math.max(0, Math.min(1, g)) * 255);
+        outData[i + 2] = Math.round(Math.max(0, Math.min(1, b)) * 255);
+        outData[i + 3] = aData[i + 3];
+      }
+      outCtx.putImageData(outImg, 0, 0);
+      state.texture = replaceCanvasTexture(state.texture, out, THREE.SRGBColorSpace);
+    }
+
+    return { texture: state.texture ?? null };
+  },
+};
+
+const IDENTITY_CURVE_POINTS: ProfilePoint[] = [
+  { x: 0, y: 0 },
+  { x: 1, y: 1 },
+];
+
+interface TextureRgbCurvesState {
+  texture?: THREE.CanvasTexture;
+  canvas?: HTMLCanvasElement;
+  aCanvas?: HTMLCanvasElement;
+  signature?: string;
+}
+
+const textureRgbCurvesCache = createNodeCache<TextureRgbCurvesState>((s) => s.texture?.dispose());
+
+/**
+ * RGB Curves node — a master curve (applied to all channels) plus per-R/G/B
+ * curves, same "curve_profile" editor and `evalProfileCurve` sampler as
+ * Curve to Mesh's thickness profile. Master curve default and per-channel
+ * defaults are identity (straight diagonal) — unlike `curve_profile`'s own
+ * DEFAULT_PROFILE_POINTS bump shape, which is tuned for a thickness profile,
+ * not a color remap, and would darken/distort every texture on drop.
+ */
+export const TEXTURE_RGB_CURVES_NODE: NodeDefinition = {
+  type: "texture/rgb-curves",
+  label: "RGB Curves",
+  category: "texture",
+  inputs: [{ id: "texture", label: "Texture", type: "texture" }],
+  outputs: [{ id: "texture", label: "Texture", type: "texture" }],
+  defaultParams: {
+    curveMaster: [...IDENTITY_CURVE_POINTS],
+    curveR: [...IDENTITY_CURVE_POINTS],
+    curveG: [...IDENTITY_CURVE_POINTS],
+    curveB: [...IDENTITY_CURVE_POINTS],
+    resolution: 256,
+  },
+  paramFields: [
+    { id: "curveMaster", label: "Master", kind: "curve_profile" },
+    { id: "curveR", label: "Red", kind: "curve_profile" },
+    { id: "curveG", label: "Green", kind: "curve_profile" },
+    { id: "curveB", label: "Blue", kind: "curve_profile" },
+    { id: "resolution", label: "Resolution (px)", kind: "number", step: 64 },
+  ],
+  evaluate: (inputs, params, ctx) => {
+    const state = textureRgbCurvesCache.get(ctx.nodeId) ?? (() => {
+      const s: TextureRgbCurvesState = {};
+      textureRgbCurvesCache.set(ctx.nodeId, s);
+      return s;
+    })();
+    if (typeof document === "undefined") return { texture: null };
+
+    const source = inputs.texture instanceof THREE.Texture ? inputs.texture : null;
+    const curveMaster = Array.isArray(params.curveMaster) ? (params.curveMaster as ProfilePoint[]) : IDENTITY_CURVE_POINTS;
+    const curveR = Array.isArray(params.curveR) ? (params.curveR as ProfilePoint[]) : IDENTITY_CURVE_POINTS;
+    const curveG = Array.isArray(params.curveG) ? (params.curveG as ProfilePoint[]) : IDENTITY_CURVE_POINTS;
+    const curveB = Array.isArray(params.curveB) ? (params.curveB as ProfilePoint[]) : IDENTITY_CURVE_POINTS;
+    const resolution = Math.max(16, Math.min(1024, Math.round(Number(params.resolution) || 256)));
+
+    const sig = [
+      JSON.stringify(curveMaster), JSON.stringify(curveR), JSON.stringify(curveG), JSON.stringify(curveB),
+      resolution, source?.uuid ?? "", source?.version ?? 0,
+    ].join("|");
+    if (sig !== state.signature) {
+      state.signature = sig;
+      if (!state.aCanvas) state.aCanvas = document.createElement("canvas");
+      if (!state.canvas) state.canvas = document.createElement("canvas");
+
+      drawSourceToCanvas(state.aCanvas, source, resolution);
+      const aCtx = state.aCanvas.getContext("2d");
+      if (!aCtx) return { texture: state.texture ?? null };
+      const aData = aCtx.getImageData(0, 0, resolution, resolution).data;
+
+      const out = state.canvas;
+      out.width = resolution;
+      out.height = resolution;
+      const outCtx = out.getContext("2d");
+      if (!outCtx) return { texture: state.texture ?? null };
+      const outImg = outCtx.createImageData(resolution, resolution);
+      const outData = outImg.data;
+
+      // 256-entry LUT per curve — evalProfileCurve does a Catmull-Rom solve,
+      // too costly to re-run per pixel at up to 1024².
+      const buildLut = (curve: ProfilePoint[]): Uint8ClampedArray => {
+        const lut = new Uint8ClampedArray(256);
+        for (let v = 0; v < 256; v++) lut[v] = Math.round(evalProfileCurve(curve, v / 255) * 255);
+        return lut;
+      };
+      const lutMaster = buildLut(curveMaster);
+      const lutR = buildLut(curveR);
+      const lutG = buildLut(curveG);
+      const lutB = buildLut(curveB);
+
+      for (let i = 0; i < outData.length; i += 4) {
+        outData[i] = lutMaster[lutR[aData[i]]];
+        outData[i + 1] = lutMaster[lutG[aData[i + 1]]];
+        outData[i + 2] = lutMaster[lutB[aData[i + 2]]];
+        outData[i + 3] = aData[i + 3];
+      }
+      outCtx.putImageData(outImg, 0, 0);
+      state.texture = replaceCanvasTexture(state.texture, out, THREE.SRGBColorSpace);
+    }
+
+    return { texture: state.texture ?? null };
   },
 };
 

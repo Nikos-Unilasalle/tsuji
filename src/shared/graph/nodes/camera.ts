@@ -43,6 +43,87 @@ function getGroup(nodeId: string): THREE.Group {
   return group;
 }
 
+interface CameraRttState {
+  target?: THREE.WebGLRenderTarget;
+  camera?: THREE.PerspectiveCamera;
+  resolution?: number;
+}
+
+const cameraRttCache = createNodeCache<CameraRttState>((s) => s.target?.dispose());
+
+/**
+ * Renders the scene through a standalone camera at `pose`/`fov` into an
+ * offscreen WebGLRenderTarget, for the Camera node's `texture` output — a
+ * "camera on a screen inside the scene" without a second Viewport. Only
+ * called when `texture` is actually wired (see the `connectedOutputs` check
+ * in evaluate below); an unwired output costs nothing beyond the check
+ * itself, same as before this existed.
+ *
+ * Every `userData.isHelper` object (camera frustums, empty crosshairs) is
+ * force-hidden for the duration of this one render and restored right after
+ * — `scene` is the shared, mutable scene the main Viewport also renders
+ * (and toggles that same visibility on for the editor overlay), so leaving
+ * them hidden past this call would blank them out of the main view too.
+ * Perspective only: an orthographic Camera node still renders its texture
+ * output through a perspective projection at the same fov/pose, since a
+ * frustum-based ortho size isn't a param this node has — no attempt to
+ * mirror the free-orbit editor's own ortho zoom state here.
+ */
+function renderCameraToTexture(
+  nodeId: string,
+  renderer: THREE.WebGLRenderer,
+  scene: THREE.Scene,
+  poseMatrix: THREE.Matrix4,
+  fov: number,
+  resolution: number,
+): THREE.Texture {
+  let state = cameraRttCache.get(nodeId);
+  if (!state) {
+    state = {};
+    cameraRttCache.set(nodeId, state);
+  }
+
+  if (!state.target || state.resolution !== resolution) {
+    state.target?.dispose();
+    state.target = new THREE.WebGLRenderTarget(resolution, resolution, {
+      colorSpace: THREE.SRGBColorSpace,
+    });
+    state.resolution = resolution;
+  }
+  if (!state.camera) {
+    state.camera = new THREE.PerspectiveCamera(fov || DEFAULT_FOV, 1, NEAR, FAR);
+  }
+
+  const camera = state.camera;
+  camera.fov = fov || DEFAULT_FOV;
+  camera.aspect = 1;
+  camera.updateProjectionMatrix();
+  const position = new THREE.Vector3();
+  const quaternion = new THREE.Quaternion();
+  const scale = new THREE.Vector3();
+  poseMatrix.decompose(position, quaternion, scale);
+  camera.position.copy(position);
+  camera.quaternion.copy(quaternion);
+  camera.updateMatrixWorld(true);
+
+  const hiddenHelpers: THREE.Object3D[] = [];
+  scene.traverse((obj) => {
+    if (obj.userData?.isHelper && obj.visible) {
+      hiddenHelpers.push(obj);
+      obj.visible = false;
+    }
+  });
+
+  const previousTarget = renderer.getRenderTarget();
+  renderer.setRenderTarget(state.target);
+  renderer.render(scene, camera);
+  renderer.setRenderTarget(previousTarget);
+
+  for (const obj of hiddenHelpers) obj.visible = true;
+
+  return state.target.texture;
+}
+
 /**
  * Body box + frustum lines only — no pose here. The pose lives on the group
  * this content gets added into (see evaluate below), the same way every
@@ -187,6 +268,7 @@ export const CAMERA_NODE: NodeDefinition = {
     { id: "projection", label: "Projection", type: "matrix" },
     { id: "error", label: "Error", type: "value" },
     { id: "active", label: "Active", type: "value" },
+    { id: "texture", label: "Texture (RTT)", type: "texture" },
   ],
   defaultParams: {
     location: DEFAULT_LOCATION.clone(),
@@ -199,6 +281,7 @@ export const CAMERA_NODE: NodeDefinition = {
     mode: "manual",
     projectionType: "perspective",
     calibrationPicks: { ...DEFAULT_PICKS },
+    textureResolution: 512,
   },
   paramFields: [
     { id: "active", label: "Active", kind: "boolean" },
@@ -210,6 +293,7 @@ export const CAMERA_NODE: NodeDefinition = {
     { id: "target", label: "Target (fallback)", kind: "vector" },
     { id: "up", label: "Up", kind: "vector" },
     { id: "fov", label: "FOV (deg)", kind: "number" },
+    { id: "textureResolution", label: "Texture Output Resolution (px, only rendered when wired)", kind: "number", step: 64 },
   ],
   evaluate: (inputs, params, ctx) => {
     const rawActive = inputs.active !== undefined ? inputs.active : params.active;
@@ -271,6 +355,16 @@ export const CAMERA_NODE: NodeDefinition = {
     });
     group.add(helperContent);
 
+    // Only rendered when something is actually wired into `texture` — see
+    // renderCameraToTexture's doc comment. Skips the render (and the
+    // render target's GPU memory) entirely for the overwhelmingly common
+    // case of a Camera node that just drives the main view.
+    let texture: THREE.Texture | null = null;
+    if (ctx.connectedOutputs?.has("texture") && ctx.renderer && ctx.scene) {
+      const resolution = Math.max(16, Math.min(2048, Math.round(Number(params.textureResolution) || 512)));
+      texture = renderCameraToTexture(ctx.nodeId, ctx.renderer, ctx.scene, group.matrix, pose.fov, resolution);
+    }
+
     return {
       ...pose,
       // The group's matrix, not `pose.matrix` — they agree except during a
@@ -282,6 +376,7 @@ export const CAMERA_NODE: NodeDefinition = {
       projectionType: String(params.projectionType || "perspective"),
       geometry: group,
       active: isActive ? 1 : 0,
+      texture,
     };
   },
 };
