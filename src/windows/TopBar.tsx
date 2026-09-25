@@ -19,7 +19,7 @@ import {
 } from "../shared/ipc";
 import logoUrl from "../assets/logo.png";
 import { DemosMenu } from "./DemosMenu";
-import { ShareMenu } from "./ShareMenu";
+import { ExportSource, ShareMenu } from "./ShareMenu";
 import { DownloadMenu } from "./DownloadMenu";
 import { PreferencesModal } from "./PreferencesModal";
 import { createStarterProject } from "../shared/graph/starterGraph";
@@ -37,8 +37,8 @@ export interface TopBarProps {
   onUndo?: () => void;
   onRedo?: () => void;
   /** Absent hides the button entirely — e.g. no Render node to read frame count/fps from. */
-  onExportVideo?: () => void;
-  onExportSequence?: () => void;
+  onExportVideo?: (source: ExportSource) => void;
+  onExportSequence?: (source: ExportSource) => void;
   isExporting?: boolean;
   exportMode?: "video" | "sequence" | null;
   /** 0-1. */

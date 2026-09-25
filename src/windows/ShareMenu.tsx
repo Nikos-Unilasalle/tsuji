@@ -1,6 +1,9 @@
 import React, { useEffect, useRef, useState } from "react";
 import "./share-menu.css";
 
+/** What an export captures: the Render node's 3D frame, or the 2D Render node's texture at its native size. */
+export type ExportSource = "3d" | "2d";
+
 export interface ShareMenuProps {
   isOutputOpen: boolean;
   onToggleOutput: () => void;
@@ -9,8 +12,8 @@ export interface ShareMenuProps {
   isView2DOpen?: boolean;
   onToggleView2D?: () => void;
   /** Absent hides the row entirely — e.g. no Render node to read frame count/fps from. */
-  onExportVideo?: () => void;
-  onExportSequence?: () => void;
+  onExportVideo?: (source: ExportSource) => void;
+  onExportSequence?: (source: ExportSource) => void;
   isExporting?: boolean;
   exportMode?: "video" | "sequence" | null;
   /** 0-1. */
@@ -40,6 +43,8 @@ export const ShareMenu: React.FC<ShareMenuProps> = ({
   exportProgress = 0,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [source, setSource] = useState<ExportSource>("3d");
+  const activeSource: ExportSource = hasView2DNode ? source : "3d";
   const [panelPos, setPanelPos] = useState<{ top: number; right: number } | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
 
@@ -128,13 +133,34 @@ export const ShareMenu: React.FC<ShareMenuProps> = ({
             </button>
           )}
 
+          {hasView2DNode && (onExportVideo || onExportSequence) && (
+            <div className="share-menu-source" role="radiogroup" aria-label="Export source">
+              <span className="share-menu-source-label">Export source</span>
+              <div className="share-menu-source-options">
+                {(["3d", "2d"] as const).map((value) => (
+                  <button
+                    key={value}
+                    type="button"
+                    role="radio"
+                    aria-checked={activeSource === value}
+                    className={`share-menu-source-option${activeSource === value ? " is-active" : ""}`}
+                    disabled={isExporting}
+                    onClick={() => setSource(value)}
+                  >
+                    {value === "3d" ? "3D Render" : "2D Render"}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {onExportVideo && (
             <button
               type="button"
               className="share-menu-item"
               disabled={isExporting}
               onClick={() => {
-                onExportVideo();
+                onExportVideo(activeSource);
                 setIsOpen(false);
               }}
             >
@@ -153,7 +179,7 @@ export const ShareMenu: React.FC<ShareMenuProps> = ({
               className="share-menu-item"
               disabled={isExporting}
               onClick={() => {
-                onExportSequence();
+                onExportSequence(activeSource);
                 setIsOpen(false);
               }}
             >
@@ -161,7 +187,9 @@ export const ShareMenu: React.FC<ShareMenuProps> = ({
                 {isExporting && exportMode === "sequence" ? `Exporting Sequence… ${Math.round(exportProgress * 100)}%` : "Export PNG Sequence"}
               </span>
               <span className="share-menu-item-desc">
-                Lossless frame-by-frame PNG sequence packaged as a ZIP.
+                {activeSource === "2d"
+                  ? "Lossless PNGs at the 2D texture's native size, with alpha, packaged as a ZIP."
+                  : "Lossless frame-by-frame PNG sequence packaged as a ZIP."}
               </span>
             </button>
           )}

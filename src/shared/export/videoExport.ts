@@ -67,6 +67,12 @@ export async function exportVideo(
     throw new Error("This browser/webview can't capture a canvas as a video stream");
   }
 
+  // The export canvas takes its final size from the first rendered frame (the
+  // Render node's resolution, or a 2D texture's native size). Render one
+  // before opening the stream: an encoder started at the placeholder size
+  // doesn't survive the resolution change.
+  await handle.captureFrame(0, opts.fps);
+
   const stream = (canvas as HTMLCanvasElement & { captureStream(fps: number): MediaStream }).captureStream(opts.fps);
   const track = stream.getVideoTracks()[0] as MediaStreamTrack & { requestFrame?: () => void };
 

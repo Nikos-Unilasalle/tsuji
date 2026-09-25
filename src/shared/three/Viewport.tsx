@@ -4,6 +4,7 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { TransformControls } from "three/examples/jsm/controls/TransformControls.js";
 import { ClockState, createClock, STEP_SECONDS, tickClock } from "../graph/clock";
 import { EvalResult, disposeEvalSession, evaluateGraph } from "../graph/evaluate";
+import { copyTextureToCanvas, textureSize } from "../graph/gpuTexture";
 import { CAMERA_FLY_TO_NODE, CAMERA_NODE } from "../graph/nodes/camera";
 import { TEXTURE_CAMERA_NODE } from "../graph/nodes/textureCamera";
 import { HubElement } from "../graph/nodes/hub";
@@ -5530,7 +5531,8 @@ export function Viewport({
 
       // Keep the export canvas at the render-node resolution (not the live
       // viewport size) so captureStream produces a full-resolution video.
-      if (rs && exportCtx && (exportCanvas.width !== rs.width || exportCanvas.height !== rs.height)) {
+      // In 2D Render mode the export canvas follows the 2D texture instead (see below).
+      if (!view2DNodeIdRef.current && rs && exportCtx && (exportCanvas.width !== rs.width || exportCanvas.height !== rs.height)) {
         exportCanvas.width = Math.round(rs.width);
         exportCanvas.height = Math.round(rs.height);
       }
@@ -6481,6 +6483,27 @@ export function Viewport({
           renderer.setScissorTest(true);
           renderer.render(view2DScene, view2DCamera);
           renderer.setScissorTest(false);
+        }
+        // Export reads the 2D texture's own pixels at its native size rather
+        // than this letterboxed canvas. The canvas is kept at that size on
+        // every tick, not only when capturing, so a video's captureStream
+        // starts at the right resolution.
+        const exportSize = textureSize(texture);
+        if (exportSize && exportCtx && (exportCanvas.width !== exportSize[0] || exportCanvas.height !== exportSize[1])) {
+          exportCanvas.width = exportSize[0];
+          exportCanvas.height = exportSize[1];
+        }
+        if (capture) {
+          // A 2D Camera renders the scene as assembled on the *previous* tick,
+          // so the first tick at a new frame index still shows the last frame's
+          // geometry (or nothing at all, right after the export view mounts).
+          // Evaluate the same frame once more before recording it.
+          capture.waited = (capture.waited ?? 0) + 1;
+          if (capture.waited < 2) return;
+          if (texture) copyTextureToCanvas(texture, exportCanvas);
+          else exportCtx?.clearRect(0, 0, exportCanvas.width, exportCanvas.height);
+          pendingCaptureRef.current = null;
+          capture.resolve();
         }
         // No explicit requestAnimationFrame here — tick()'s own try/finally
         // wrapper (below tickInner's definition) always reschedules once

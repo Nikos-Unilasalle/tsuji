@@ -103,6 +103,32 @@ export function markGpuTextureRendered(target: THREE.WebGLRenderTarget, renderer
   entry.revision += 1;
 }
 
+function isDrawableSource(image: unknown): image is CanvasImageSource {
+  return (
+    (typeof HTMLCanvasElement !== "undefined" && image instanceof HTMLCanvasElement) ||
+    (typeof HTMLImageElement !== "undefined" && image instanceof HTMLImageElement && image.complete) ||
+    (typeof ImageBitmap !== "undefined" && image instanceof ImageBitmap) ||
+    (typeof HTMLVideoElement !== "undefined" && image instanceof HTMLVideoElement)
+  );
+}
+
+/** A render-target texture's pixels, top-down rows, as stored (sRGB bytes for sRGB targets). Null for anything that isn't one. */
+function readGpuTexturePixels(texture: THREE.Texture): ImageData | null {
+  const entry = gpuTextures.get(texture);
+  if (!entry?.renderer || typeof ImageData === "undefined") return null;
+  const { width, height } = entry.target;
+  if (!entry.buffer || entry.buffer.length !== width * height * 4) entry.buffer = new Uint8Array(width * height * 4);
+  entry.renderer.readRenderTargetPixels(entry.target, 0, 0, width, height, entry.buffer);
+  const img = new ImageData(width, height);
+  const rowBytes = width * 4;
+  // GL rows are bottom-up; canvas rows are top-down.
+  for (let y = 0; y < height; y++) {
+    const src = (height - 1 - y) * rowBytes;
+    img.data.set(entry.buffer.subarray(src, src + rowBytes), y * rowBytes);
+  }
+  return img;
+}
+
 /**
  * Something `drawImage` accepts for this texture. Render-target textures are
  * read back on demand (and cached until they change), so CPU-side consumers
@@ -110,38 +136,58 @@ export function markGpuTextureRendered(target: THREE.WebGLRenderTarget, renderer
  */
 export function getDrawableImage(texture: THREE.Texture | null | undefined): CanvasImageSource | null {
   if (!texture) return null;
-  const image = texture.image as unknown;
-  if (
-    (typeof HTMLCanvasElement !== "undefined" && image instanceof HTMLCanvasElement) ||
-    (typeof HTMLImageElement !== "undefined" && image instanceof HTMLImageElement && image.complete) ||
-    (typeof ImageBitmap !== "undefined" && image instanceof ImageBitmap) ||
-    (typeof HTMLVideoElement !== "undefined" && image instanceof HTMLVideoElement)
-  ) {
-    return image as CanvasImageSource;
-  }
+  if (isDrawableSource(texture.image)) return texture.image;
   const entry = gpuTextures.get(texture);
   if (!entry?.renderer || typeof document === "undefined") return null;
   const { width, height } = entry.target;
   if (entry.canvas && entry.canvasRevision === entry.revision && entry.canvas.width === width && entry.canvas.height === height) {
     return entry.canvas;
   }
+  const img = readGpuTexturePixels(texture);
+  if (!img) return null;
   if (!entry.canvas) entry.canvas = document.createElement("canvas");
   entry.canvas.width = width;
   entry.canvas.height = height;
-  if (!entry.buffer || entry.buffer.length !== width * height * 4) entry.buffer = new Uint8Array(width * height * 4);
-  entry.renderer.readRenderTargetPixels(entry.target, 0, 0, width, height, entry.buffer);
   const ctx2d = entry.canvas.getContext("2d");
   if (!ctx2d) return null;
-  const img = ctx2d.createImageData(width, height);
-  const rowBytes = width * 4;
-  // GL rows are bottom-up; canvas rows are top-down.
-  for (let y = 0; y < height; y++) {
-    const src = (height - 1 - y) * rowBytes;
-    img.data.set(entry.buffer.subarray(src, src + rowBytes), y * rowBytes);
-  }
   ctx2d.putImageData(img, 0, 0);
   entry.canvasRevision = entry.revision;
   return entry.canvas;
+}
+
+/**
+ * Copies a texture into `canvas` at its native size, for export. Render
+ * targets hold premultiplied color (MSAA edges and blurs average against the
+ * transparent clear), so it is divided back out here — a PNG stores straight
+ * alpha, and skipping this leaves a dark fringe around every soft edge.
+ */
+export function copyTextureToCanvas(texture: THREE.Texture, canvas: HTMLCanvasElement): boolean {
+  const size = textureSize(texture);
+  const ctx2d = canvas.getContext("2d");
+  if (!size || !ctx2d) return false;
+  if (canvas.width !== size[0] || canvas.height !== size[1]) {
+    canvas.width = size[0];
+    canvas.height = size[1];
+  }
+  ctx2d.clearRect(0, 0, canvas.width, canvas.height);
+  if (isDrawableSource(texture.image)) {
+    ctx2d.drawImage(texture.image, 0, 0, canvas.width, canvas.height);
+    return true;
+  }
+  const img = readGpuTexturePixels(texture);
+  if (!img) return false;
+  const d = img.data;
+  for (let i = 0; i < d.length; i += 4) {
+    const a = d[i + 3];
+    if (a > 0 && a < 255) {
+      const k = 255 / a;
+      d[i] = Math.min(255, d[i] * k);
+      d[i + 1] = Math.min(255, d[i + 1] * k);
+      d[i + 2] = Math.min(255, d[i + 2] * k);
+    }
+  }
+  ctx2d.putImageData(img, 0, 0);
+  return true;
 }
 
 const PASS_VERTEX = /* glsl */ `

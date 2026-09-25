@@ -104,6 +104,7 @@ import { TimelineBar } from "./windows/TimelineBar";
 import { TimelineDrawer } from "./windows/TimelineDrawer";
 import { KeyframeClipboardItem } from "./windows/timelineUtils";
 import { TopBar } from "./windows/TopBar";
+import type { ExportSource } from "./windows/ShareMenu";
 
 export interface WorkspaceSpaces {
   view3D: boolean;
@@ -397,6 +398,7 @@ function MainEditor() {
   const exportCancelledRef = useRef(false);
   const [isExporting, setIsExporting] = useState(false);
   const [exportMode, setExportMode] = useState<"video" | "sequence" | null>(null);
+  const [exportSource, setExportSource] = useState<ExportSource>("3d");
   const [exportProgress, setExportProgress] = useState(0);
 
   const waitForExportHandle = useCallback(async () => {
@@ -412,14 +414,31 @@ function MainEditor() {
     return handle;
   }, []);
 
-  const handleExportVideo = useCallback(async () => {
-    if (!renderNodeInstance || totalFrames <= 0) {
-      alert("Add a Render node with at least one frame before exporting.");
-      return;
-    }
-    exportCancelledRef.current = false;
-    setIsExporting(true);
-    setExportMode("video");
+  /** Shared preflight for both export kinds; false means the export can't start. */
+  const beginExport = useCallback(
+    (mode: "video" | "sequence", source: ExportSource): boolean => {
+      if (!renderNodeInstance || totalFrames <= 0) {
+        alert("Add a Render node with at least one frame before exporting.");
+        return false;
+      }
+      if (source === "2d" && !findView2DNodeId(graph)) {
+        alert("Add a 2D Render node and wire a texture into it before exporting the 2D render.");
+        return false;
+      }
+      // The export Viewport is remounted per export; a handle left over from
+      // the previous one points at a dead render loop and would never resolve.
+      exportHandleRef.current = null;
+      exportCancelledRef.current = false;
+      setExportSource(source);
+      setIsExporting(true);
+      setExportMode(mode);
+      return true;
+    },
+    [renderNodeInstance, totalFrames, graph],
+  );
+
+  const handleExportVideo = useCallback(async (source: ExportSource = "3d") => {
+    if (!beginExport("video", source)) return;
     setExportProgress(0);
     try {
       const handle = await waitForExportHandle();
@@ -431,7 +450,7 @@ function MainEditor() {
         isCancelled: () => exportCancelledRef.current,
       });
 
-      const base = currentFilename.replace(/\.[^.]+$/, "") || "export";
+      const base = (currentFilename.replace(/\.[^.]+$/, "") || "export") + (source === "2d" ? "_2d" : "");
       const suggested = `${base}.${mimeToExtension(blob.type)}`;
       await saveVideoBlob(blob, suggested);
     } catch (err) {
@@ -445,16 +464,10 @@ function MainEditor() {
       setIsExporting(false);
       setExportMode(null);
     }
-  }, [renderNodeInstance, totalFrames, exportFps, currentFilename, waitForExportHandle]);
+  }, [beginExport, totalFrames, exportFps, currentFilename, waitForExportHandle]);
 
-  const handleExportSequence = useCallback(async () => {
-    if (!renderNodeInstance || totalFrames <= 0) {
-      alert("Add a Render node with at least one frame before exporting.");
-      return;
-    }
-    exportCancelledRef.current = false;
-    setIsExporting(true);
-    setExportMode("sequence");
+  const handleExportSequence = useCallback(async (source: ExportSource = "3d") => {
+    if (!beginExport("sequence", source)) return;
     setExportProgress(0);
     try {
       const handle = await waitForExportHandle();
@@ -466,7 +479,7 @@ function MainEditor() {
         isCancelled: () => exportCancelledRef.current,
       });
 
-      const base = currentFilename.replace(/\.[^.]+$/, "") || "export";
+      const base = (currentFilename.replace(/\.[^.]+$/, "") || "export") + (source === "2d" ? "_2d" : "");
       const suggested = `${base}_frames.zip`;
       await saveZipBlob(blob, suggested);
     } catch (err) {
@@ -477,7 +490,7 @@ function MainEditor() {
       setIsExporting(false);
       setExportMode(null);
     }
-  }, [renderNodeInstance, totalFrames, exportFps, currentFilename, waitForExportHandle]);
+  }, [beginExport, totalFrames, exportFps, currentFilename, waitForExportHandle]);
 
   const [isPlaying, setIsPlaying] = useState(false);
   // Per canvas: each has its own Render node and so its own frame count, and
@@ -2613,11 +2626,21 @@ function MainEditor() {
         // Off-screen (not display:none, which some webviews suspend rAF
         // for), sized to the real export resolution so captureStream reads
         // full-quality pixels regardless of what the editor panes show.
-        <div style={{ position: "fixed", left: -100000, top: 0, width: exportWidth, height: exportHeight }}>
+        // A 2D export reads the 2D texture at its own size, so this canvas only needs to exist.
+        <div
+          style={{
+            position: "fixed",
+            left: -100000,
+            top: 0,
+            width: exportSource === "2d" ? 256 : exportWidth,
+            height: exportSource === "2d" ? 256 : exportHeight,
+          }}
+        >
           <Viewport
             graph={graph}
             registry={DEFAULT_REGISTRY}
             renderNodeId={findRenderNodeId(graph) ?? ""}
+            view2DNodeId={exportSource === "2d" ? findView2DNodeId(graph) : undefined}
             epochMs={epochMs}
             outputMode
             exportHandleRef={exportHandleRef}
