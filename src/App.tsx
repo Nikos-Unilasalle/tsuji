@@ -42,6 +42,7 @@ import {
 import type { KeyframeDrawing } from "./shared/graph/nodes/greasePencil";
 import { randomId } from "./shared/randomId";
 import { findRenderNodeId } from "./shared/graph/nodes/render";
+import { findView2DNodeId } from "./shared/graph/nodes/view2d";
 import { rehydrateFileNodesFromDisk } from "./shared/graph/rehydrateFiles";
 import { cloneGraph, cloneParams, cloneParamValue } from "./shared/graph/cloneGraph";
 import { consumeCameraHandoffRequest } from "./shared/graph/cameraHandoffStore";
@@ -97,6 +98,7 @@ import { GIZMO_SELECTABLE_TYPES, resolveGizmoTarget } from "./shared/graph/trans
 import { CalibrationOverlay } from "./windows/CalibrationOverlay";
 import { GraphEditor } from "./windows/GraphEditor";
 import { OutputWindow } from "./windows/OutputWindow";
+import { View2DWindow } from "./windows/View2DWindow";
 import { parseVector3, ParamPanel } from "./windows/ParamPanel";
 import { TimelineBar } from "./windows/TimelineBar";
 import { TimelineDrawer } from "./windows/TimelineDrawer";
@@ -208,14 +210,19 @@ const MIN_PANE_PERCENT = 15;
 const MAX_PANE_PERCENT = 85;
 
 /**
- * Two windows, one bundle: the Rust side (`output_window.rs`) opens the
- * projector-facing window at `index.html#/output` — this hash is the sole
- * discriminator between "I'm the main editor" and "I'm the output," same
- * pattern OpenVMap 2D uses. No router library needed for two routes.
+ * Three windows, one bundle: the Rust side (`output_window.rs`,
+ * `view2d_window.rs`) opens the projector-facing output window at
+ * `index.html#/output` and the 2D View window at `index.html#/view2d` — the
+ * hash is the sole discriminator between "I'm the main editor" and "I'm one
+ * of the secondary windows," same pattern OpenVMap 2D uses. No router
+ * library needed for three routes.
  */
 function App() {
   if (window.location.hash === "#/output") {
     return <OutputWindow />;
+  }
+  if (window.location.hash === "#/view2d") {
+    return <View2DWindow />;
   }
   return <MainEditor />;
 }
@@ -2583,6 +2590,7 @@ function MainEditor() {
         onToggleTimeline={keyframesEnabled ? () => toggleSpace("timeline") : undefined}
         is2DMode={is2DMode}
         onToggle2DMode={toggle2DMode}
+        hasView2DNode={!!findView2DNodeId(graph)}
         isPlaying={isPlaying}
         onTogglePlay={() => setIsPlaying((p) => !p)}
         onResetSimulations={handleResetSimulations}

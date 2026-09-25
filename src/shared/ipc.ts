@@ -77,9 +77,33 @@ export async function closeOutputWindow(): Promise<void> {
   await invoke("close_output_window");
 }
 
+/**
+ * The 2D View window — a plain resizable window, no monitor targeting or
+ * fullscreen (unlike Output, which is projector-facing). Same "open or
+ * focus" Rust-side behavior as open_output_window; see view2d_window.rs.
+ */
+export async function openView2DWindow(): Promise<void> {
+  if (!isTauri()) {
+    const url = window.location.origin + window.location.pathname + "#/view2d";
+    window.open(url, "tsujiView2D", "width=960,height=540,resizable=yes");
+    return;
+  }
+  await invoke("open_view2d_window");
+}
+
+export async function closeView2DWindow(): Promise<void> {
+  if (!isTauri()) {
+    const ch = getBrowserChannel();
+    ch?.postMessage({ event: VIEW2D_CLOSED_EVENT });
+    return;
+  }
+  await invoke("close_view2d_window");
+}
+
 const GRAPH_UPDATE_EVENT = "graph:update";
 const OUTPUT_READY_EVENT = "output:ready";
 const OUTPUT_CLOSED_EVENT = "output:closed";
+const VIEW2D_CLOSED_EVENT = "view2d:closed";
 
 export interface GraphPayload {
   graph: Graph;
@@ -163,6 +187,32 @@ export function onOutputClosed(callback: () => void): () => void {
     return () => ch?.removeEventListener("message", handler);
   }
   const listenPromise = listen(OUTPUT_CLOSED_EVENT, callback);
+  return () => {
+    void listenPromise.then((unlisten) => unlisten());
+  };
+}
+
+export function notifyView2DClosed(): void {
+  if (!isTauri()) {
+    const ch = getBrowserChannel();
+    ch?.postMessage({ event: VIEW2D_CLOSED_EVENT });
+    return;
+  }
+  void emit(VIEW2D_CLOSED_EVENT);
+}
+
+export function onView2DClosed(callback: () => void): () => void {
+  if (!isTauri()) {
+    const ch = getBrowserChannel();
+    const handler = (ev: MessageEvent) => {
+      if (ev.data?.event === VIEW2D_CLOSED_EVENT) {
+        callback();
+      }
+    };
+    ch?.addEventListener("message", handler);
+    return () => ch?.removeEventListener("message", handler);
+  }
+  const listenPromise = listen(VIEW2D_CLOSED_EVENT, callback);
   return () => {
     void listenPromise.then((unlisten) => unlisten());
   };

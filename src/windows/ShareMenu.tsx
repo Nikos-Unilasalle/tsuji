@@ -4,6 +4,10 @@ import "./share-menu.css";
 export interface ShareMenuProps {
   isOutputOpen: boolean;
   onToggleOutput: () => void;
+  /** Only shown when the graph has a `view2d` node — nothing for that window to display otherwise. */
+  hasView2DNode?: boolean;
+  isView2DOpen?: boolean;
+  onToggleView2D?: () => void;
   /** Absent hides the row entirely — e.g. no Render node to read frame count/fps from. */
   onExportVideo?: () => void;
   onExportSequence?: () => void;
@@ -26,6 +30,9 @@ export interface ShareMenuProps {
 export const ShareMenu: React.FC<ShareMenuProps> = ({
   isOutputOpen,
   onToggleOutput,
+  hasView2DNode = false,
+  isView2DOpen = false,
+  onToggleView2D,
   onExportVideo,
   onExportSequence,
   isExporting = false,
@@ -104,6 +111,22 @@ export const ShareMenu: React.FC<ShareMenuProps> = ({
               {isOutputOpen ? "Closes the external output window." : "Fullscreen projection on external monitor or projector."}
             </span>
           </button>
+
+          {hasView2DNode && onToggleView2D && (
+            <button
+              type="button"
+              className={`share-menu-item${isView2DOpen ? " is-active" : ""}`}
+              onClick={() => {
+                onToggleView2D();
+                setIsOpen(false);
+              }}
+            >
+              <span className="share-menu-item-label">{isView2DOpen ? "Close 2D View" : "2D View"}</span>
+              <span className="share-menu-item-desc">
+                {isView2DOpen ? "Closes the 2D View window." : "Preview a view2d node's texture in its own window."}
+              </span>
+            </button>
+          )}
 
           {onExportVideo && (
             <button

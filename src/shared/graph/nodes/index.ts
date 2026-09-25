@@ -12,6 +12,7 @@ import { EDIT_MESH_POINTS_NODE } from "./editMeshPoints";
 import { CHART_AXIS_NODE, LINE_GRAPH_NODE, PIE_CHART_NODE, POINT_CLOUD_NODE, SCATTER_PLOT_NODE } from "./chart";
 import { CANVAS_GOTO_NODE } from "./canvas";
 import { RENDER_NODE } from "./render";
+import { VIEW2D_NODE } from "./view2d";
 import { FRAME_NODE, TIME_NODE } from "./time";
 import { MARKER_NODE } from "./marker";
 import { VECTOR_COMPOSE_NODE, VECTOR_DECOMPOSE_NODE, VECTOR_MATH_NODE } from "./vector";
@@ -312,6 +313,7 @@ export const STARTER_NODES = [
   LIGHT_AMBIENT_NODE,
   ENVIRONMENT_NODE,
   RENDER_NODE,
+  VIEW2D_NODE,
   CANVAS_GOTO_NODE,
   COMPARE_NODE,
   BOOLEAN_LOGIC_NODE,

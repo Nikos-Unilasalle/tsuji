@@ -7,6 +7,7 @@ fn greet(name: &str) -> String {
 mod gamepad;
 mod monitors;
 mod output_window;
+mod view2d_window;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -20,6 +21,8 @@ pub fn run() {
             monitors::list_monitors,
             output_window::open_output_window,
             output_window::close_output_window,
+            view2d_window::open_view2d_window,
+            view2d_window::close_view2d_window,
         ])
         .setup(|app| {
             gamepad::init(app);

@@ -664,6 +664,15 @@ interface ViewportProps {
    * the outline pass and the passe-partout guide treat as "the output".
    */
   renderNodeId: string;
+  /**
+   * When set, this Viewport becomes a 2D View: no 3D scene is drawn to the
+   * canvas at all — instead, every tick it looks up this node's evaluated
+   * `texture` output and blits it full-frame (letterboxed to the texture's
+   * own aspect). Scene assembly/evaluation still runs exactly as normal
+   * (a `texture/camera` source needs the real 3D scene to render from), only
+   * the final draw differs. See View2DWindow.tsx.
+   */
+  view2DNodeId?: string;
   epochMs?: number;
   /**
    * True for the projector-facing output window: no dev HUD, no orientation
@@ -764,6 +773,7 @@ export function Viewport({
   graph,
   registry,
   renderNodeId,
+  view2DNodeId,
   epochMs = 0,
   outputMode = false,
   suspended = false,
@@ -1098,6 +1108,8 @@ export function Viewport({
   registryRef.current = registry;
   const renderNodeIdRef = useRef(renderNodeId);
   renderNodeIdRef.current = renderNodeId;
+  const view2DNodeIdRef = useRef(view2DNodeId);
+  view2DNodeIdRef.current = view2DNodeId;
   const resetCameraRef = useRef<() => void>(() => {});
   const setAxisViewRef = useRef<(axis: "x" | "y" | "z", sign: 1 | -1) => void>(() => {});
   /** Which side each axis button last snapped to, so clicking it again flips to the opposite view (Left <-> Right, and so on). */
@@ -1244,6 +1256,17 @@ export function Viewport({
     }
     const elevationHUD = createElevationHUD();
     editorUiScene.add(elevationHUD.group);
+
+    // 2D View mode's whole "scene": a single unlit quad filling an
+    // orthographic frustum exactly, textured with whatever the `view2d`
+    // node resolves to. Built unconditionally (cheap — one quad) rather
+    // than only when view2DNodeId is set, so there's nothing to lazily
+    // construct on the tick() hot path.
+    const view2DMaterial = new THREE.MeshBasicMaterial({ map: null, toneMapped: false });
+    const view2DQuad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), view2DMaterial);
+    const view2DScene = new THREE.Scene();
+    view2DScene.add(view2DQuad);
+    const view2DCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
 
     const handleThemeColorsChanged = (e: Event) => {
       const colors = (e as CustomEvent<ThemeColors>).detail;
@@ -6411,6 +6434,46 @@ export function Viewport({
       const width = host.clientWidth;
       const height = host.clientHeight;
 
+      // 2D View mode: the 3D scene was still fully assembled and evaluated
+      // above (a texture/camera source needs that to render from), but
+      // nothing about it gets drawn here — just the `view2d` node's
+      // resolved texture, letterboxed to its own aspect. Every other
+      // per-frame concern below (postprocess chain, editor UI overlay,
+      // orientation gizmo, minimap) is 3D-viewport-specific and skipped
+      // outright by returning before reaching any of it.
+      if (view2DNodeIdRef.current) {
+        const view2DTexture = results.get(view2DNodeIdRef.current)?.texture;
+        const texture = view2DTexture instanceof THREE.Texture ? view2DTexture : null;
+        const texImage = texture?.image as { width?: number; height?: number } | undefined;
+        const texAspect = texImage?.width && texImage?.height ? texImage.width / texImage.height : width / height;
+        const containerAspect = width / height;
+        let bx = 0, by = 0, bw = width, bh = height;
+        if (containerAspect > texAspect) {
+          bh = height;
+          bw = height * texAspect;
+          bx = (width - bw) / 2;
+        } else {
+          bw = width;
+          bh = width / texAspect;
+          by = (height - bh) / 2;
+        }
+        renderer.setScissorTest(false);
+        renderer.setViewport(0, 0, width, height);
+        renderer.setClearColor(0x000000, 1);
+        renderer.clear();
+        if (texture) {
+          view2DMaterial.map = texture;
+          view2DMaterial.needsUpdate = true;
+          renderer.setViewport(bx, by, bw, bh);
+          renderer.setScissor(bx, by, bw, bh);
+          renderer.setScissorTest(true);
+          renderer.render(view2DScene, view2DCamera);
+          renderer.setScissorTest(false);
+        }
+        frameId = requestAnimationFrame(tick);
+        return;
+      }
+
       let viewX = 0;
       let viewY = 0;
       let viewWidth = width;
@@ -6714,6 +6777,8 @@ export function Viewport({
       sculptBrushGizmo.removeFromParent();
       textureBrushGizmo.removeFromParent();
       textureBrushGizmo.geometry.dispose();
+      view2DQuad.geometry.dispose();
+      view2DMaterial.dispose();
       sliceProxy.removeFromParent();
       sliceVisualGeometry.dispose();
       sliceVisual.material.dispose();

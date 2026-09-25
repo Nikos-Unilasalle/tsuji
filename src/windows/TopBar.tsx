@@ -8,9 +8,12 @@ import {
 import { Project } from "../shared/graph/types";
 import {
   closeOutputWindow,
+  closeView2DWindow,
   listMonitors,
   onOutputClosed,
+  onView2DClosed,
   openOutputWindow,
+  openView2DWindow,
   toggleFullscreen,
   watchFullscreen,
 } from "../shared/ipc";
@@ -44,6 +47,8 @@ export interface TopBarProps {
   onToggleTimeline?: () => void;
   is2DMode?: boolean;
   onToggle2DMode?: () => void;
+  /** Gates the Share menu's "2D View" row — true when the graph has a `view2d` node for that window to display. */
+  hasView2DNode?: boolean;
   isPlaying?: boolean;
   onTogglePlay?: () => void;
   /** Discards every simulation's accumulated state and returns to frame 0. */
@@ -71,6 +76,7 @@ export const TopBar: React.FC<TopBarProps> = ({
   onToggleTimeline: _onToggleTimeline,
   is2DMode = false,
   onToggle2DMode,
+  hasView2DNode = false,
   isPlaying = false,
   onTogglePlay,
   onResetSimulations,
@@ -82,6 +88,7 @@ export const TopBar: React.FC<TopBarProps> = ({
   const [isEditingFilename, setIsEditingFilename] = useState(false);
   const [filenameInput, setFilenameInput] = useState(currentFilename);
   const [isOutputOpen, setIsOutputOpen] = useState(false);
+  const [isView2DOpen, setIsView2DOpen] = useState(false);
   const [isPreferencesOpen, setIsPreferencesOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
@@ -161,6 +168,7 @@ export const TopBar: React.FC<TopBarProps> = ({
 
   // Tracks the OS-level close (red X on the output window), not just our own button.
   useEffect(() => onOutputClosed(() => setIsOutputOpen(false)), []);
+  useEffect(() => onView2DClosed(() => setIsView2DOpen(false)), []);
 
   // Keeps the Full Screen button's icon honest — Esc leaves fullscreen too,
   // not just this button, so the state is watched rather than flipped.
@@ -195,6 +203,21 @@ export const TopBar: React.FC<TopBarProps> = ({
     } catch (err: unknown) {
       const error = err as Error;
       showToast(`Output error: ${error.message}`, true);
+    }
+  };
+
+  const handleToggleView2D = async () => {
+    try {
+      if (isView2DOpen) {
+        await closeView2DWindow();
+        setIsView2DOpen(false);
+        return;
+      }
+      await openView2DWindow();
+      setIsView2DOpen(true);
+    } catch (err: unknown) {
+      const error = err as Error;
+      showToast(`2D View error: ${error.message}`, true);
     }
   };
 
@@ -533,6 +556,9 @@ export const TopBar: React.FC<TopBarProps> = ({
         <ShareMenu
           isOutputOpen={isOutputOpen}
           onToggleOutput={handleToggleOutput}
+          hasView2DNode={hasView2DNode}
+          isView2DOpen={isView2DOpen}
+          onToggleView2D={handleToggleView2D}
           onExportVideo={onExportVideo}
           onExportSequence={onExportSequence}
           isExporting={isExporting}
