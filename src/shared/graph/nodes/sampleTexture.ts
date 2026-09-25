@@ -108,7 +108,7 @@ function toTexelIndex(coord: number, size: number): number {
 export const SAMPLE_TEXTURE_NODE: NodeDefinition = {
   type: "texture/sample",
   label: "Sample Texture",
-  category: "texture",
+  category: "textureTools",
   inputs: [
     { id: "texture", label: "Texture", type: "texture" },
     { id: "positions", label: "Positions", type: "list" },

@@ -27,7 +27,7 @@ const wireframePulseCache = createNodeCache<THREE.ShaderMaterial>((m) => m.dispo
 export const MATERIAL_HOLOGRAM_NODE: NodeDefinition = {
   type: "material/hologram",
   label: "Hologram (Cyberpunk)",
-  category: "texture",
+  category: "material",
   inputs: [
     { id: "color", label: "Neon Color", type: "color" },
     { id: "rimColor", label: "Rim Color", type: "color" },
@@ -121,7 +121,7 @@ export const MATERIAL_HOLOGRAM_NODE: NodeDefinition = {
 export const MATERIAL_LIQUID_METAL_NODE: NodeDefinition = {
   type: "material/liquid-metal",
   label: "Liquid Metal (Warp)",
-  category: "texture",
+  category: "material",
   inputs: [
     { id: "baseColor", label: "Base Color", type: "color" },
     { id: "reflectionColor", label: "Reflection Color", type: "color" },
@@ -205,7 +205,7 @@ export const MATERIAL_LIQUID_METAL_NODE: NodeDefinition = {
 export const MATERIAL_CEL_SHADE_NODE: NodeDefinition = {
   type: "material/cel-shade",
   label: "Cel-Shading (Toon / BD)",
-  category: "texture",
+  category: "material",
   inputs: [
     { id: "color", label: "Color", type: "color" },
     { id: "shadowColor", label: "Shadow Color", type: "color" },
@@ -295,7 +295,7 @@ export const MATERIAL_CEL_SHADE_NODE: NodeDefinition = {
 export const MATERIAL_IRIDESCENT_NODE: NodeDefinition = {
   type: "material/iridescent",
   label: "Iridescent (Thin Film)",
-  category: "texture",
+  category: "material",
   inputs: [
     { id: "baseColor", label: "Base Color", type: "color" },
     { id: "specularColor", label: "Specular Color", type: "color" },
@@ -366,7 +366,7 @@ export const MATERIAL_IRIDESCENT_NODE: NodeDefinition = {
 export const MATERIAL_WIREFRAME_PULSE_NODE: NodeDefinition = {
   type: "material/wireframe-pulse",
   label: "Wireframe Pulse",
-  category: "texture",
+  category: "material",
   inputs: [
     { id: "fillColor", label: "Fill Color", type: "color" },
     { id: "fillOpacity", label: "Fill Opacity", type: "value" },

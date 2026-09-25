@@ -284,7 +284,7 @@ export const TEXTURE_IMAGE_NODE: NodeDefinition = {
 export const TEXTURE_PLANE_NODE: NodeDefinition = {
   type: "texture/plane",
   label: "Texture to Plane",
-  category: "texture",
+  category: "object",
   inputs: [
     { id: "visible", label: "Visible", type: "value" },
     { id: "texture", label: "Texture", type: "texture" },
@@ -461,7 +461,7 @@ export const TEXTURE_PLANE_NODE: NodeDefinition = {
 export const TEXTURE_TRANSFORM_NODE: NodeDefinition = {
   type: "texture/transform",
   label: "Texture Transform",
-  category: "texture",
+  category: "textureTools",
   inputs: [
     { id: "texture", label: "Texture", type: "texture" },
     { id: "scale", label: "Scale", type: "vector" },
@@ -942,7 +942,7 @@ function isDrawable(v: unknown): boolean {
 export const TEXTURE_TO_NORMAL_NODE: NodeDefinition = {
   type: "texture/to_normal",
   label: "Texture to Normal",
-  category: "texture",
+  category: "textureTools",
   inputs: [{ id: "texture", label: "Texture", type: "texture" }],
   outputs: [{ id: "normal", label: "Normal Map", type: "texture" }],
   defaultParams: { strength: 1, resolution: 256 },
@@ -1036,7 +1036,7 @@ function getToRoughnessState(nodeId: string): ToRoughnessState {
 export const TEXTURE_TO_ROUGHNESS_NODE: NodeDefinition = {
   type: "texture/to_roughness",
   label: "Texture to Roughness",
-  category: "texture",
+  category: "textureTools",
   inputs: [{ id: "texture", label: "Texture", type: "texture" }],
   outputs: [{ id: "roughness", label: "Roughness Map", type: "texture" }],
   defaultParams: { invert: false, contrast: 1, minRoughness: 0, maxRoughness: 1, resolution: 256 },
@@ -1102,7 +1102,7 @@ export const TEXTURE_TO_ROUGHNESS_NODE: NodeDefinition = {
 export const TEXTURE_MIX_NODE: NodeDefinition = {
   type: "texture/mix",
   label: "Mix Texture",
-  category: "texture",
+  category: "textureTools",
   inputs: [
     { id: "textureA", label: "Texture A", type: "texture" },
     { id: "textureB", label: "Texture B", type: "texture" },
@@ -1231,7 +1231,7 @@ const textureMathCache = createNodeCache<TextureMathState>((s) => s.texture?.dis
 export const TEXTURE_MATH_NODE: NodeDefinition = {
   type: "texture/math",
   label: "Texture Math",
-  category: "texture",
+  category: "textureTools",
   inputs: [
     { id: "textureA", label: "Texture A", type: "texture" },
     { id: "textureB", label: "Texture B", type: "texture" },
@@ -1334,7 +1334,7 @@ const textureMaskCache = createNodeCache<TextureMaskState>((s) => s.texture?.dis
 export const TEXTURE_MASK_NODE: NodeDefinition = {
   type: "texture/mask",
   label: "Mask",
-  category: "texture",
+  category: "textureTools",
   inputs: [
     { id: "textureA", label: "Texture A", type: "texture" },
     { id: "textureB", label: "Texture B (Combine)", type: "texture" },
@@ -1437,7 +1437,7 @@ const textureMapRangeCache = createNodeCache<TextureMapRangeState>((s) => s.text
 export const TEXTURE_MAP_RANGE_NODE: NodeDefinition = {
   type: "texture/map-range",
   label: "Map Range",
-  category: "texture",
+  category: "textureTools",
   inputs: [{ id: "texture", label: "Texture", type: "texture" }],
   outputs: [{ id: "texture", label: "Texture", type: "texture" }],
   defaultParams: { channelMode: "rgb", inMin: 0, inMax: 1, outMin: 0, outMax: 1, clamp: true, resolution: 256 },
@@ -1576,7 +1576,7 @@ function boxBlur(data: Uint8ClampedArray, size: number, radius: number): Uint8Cl
 export const TEXTURE_BLUR_NODE: NodeDefinition = {
   type: "texture/blur",
   label: "Blur",
-  category: "texture",
+  category: "textureTools",
   inputs: [
     { id: "texture", label: "Texture", type: "texture" },
     { id: "radius", label: "Radius", type: "value" },
@@ -1660,7 +1660,7 @@ function rampSignature(ramp: ColorRamp): string {
 export const TEXTURE_COLOR_RAMP_NODE: NodeDefinition = {
   type: "texture/color-ramp",
   label: "Color Ramp",
-  category: "texture",
+  category: "textureTools",
   inputs: [{ id: "texture", label: "Texture", type: "texture" }],
   outputs: [{ id: "texture", label: "Texture", type: "texture" }],
   defaultParams: { ramp: DEFAULT_COLOR_RAMP, resolution: 256 },
@@ -1748,7 +1748,7 @@ const textureCombineRGBCache = createNodeCache<TextureCombineRGBState>((s) => s.
 export const TEXTURE_COMBINE_RGB_NODE: NodeDefinition = {
   type: "texture/combine-rgb",
   label: "Combine RGB",
-  category: "texture",
+  category: "textureTools",
   inputs: [
     { id: "r", label: "R", type: "texture" },
     { id: "g", label: "G", type: "texture" },
@@ -1843,7 +1843,7 @@ const textureSeparateRGBCache = createNodeCache<TextureSeparateRGBState>((s) => 
 export const TEXTURE_SEPARATE_RGB_NODE: NodeDefinition = {
   type: "texture/separate-rgb",
   label: "Separate RGB",
-  category: "texture",
+  category: "textureTools",
   inputs: [{ id: "texture", label: "Texture", type: "texture" }],
   outputs: [
     { id: "r", label: "R", type: "texture" },
@@ -1925,7 +1925,7 @@ const textureThresholdCache = createNodeCache<TextureThresholdState>((s) => s.te
 export const TEXTURE_THRESHOLD_NODE: NodeDefinition = {
   type: "texture/threshold",
   label: "Threshold",
-  category: "texture",
+  category: "textureTools",
   inputs: [
     { id: "texture", label: "Texture", type: "texture" },
     { id: "cutoff", label: "Cutoff", type: "value" },
@@ -2012,7 +2012,7 @@ const textureInvertCache = createNodeCache<TextureInvertState>((s) => s.texture?
 export const TEXTURE_INVERT_NODE: NodeDefinition = {
   type: "texture/invert",
   label: "Invert",
-  category: "texture",
+  category: "textureTools",
   inputs: [
     { id: "texture", label: "Texture", type: "texture" },
     { id: "factor", label: "Factor", type: "value" },
@@ -2087,7 +2087,7 @@ const textureLevelsCache = createNodeCache<TextureLevelsState>((s) => s.texture?
 export const TEXTURE_LEVELS_NODE: NodeDefinition = {
   type: "texture/levels",
   label: "Levels",
-  category: "texture",
+  category: "textureTools",
   inputs: [{ id: "texture", label: "Texture", type: "texture" }],
   outputs: [{ id: "texture", label: "Texture", type: "texture" }],
   defaultParams: { inBlack: 0, inWhite: 1, gamma: 1, outBlack: 0, outWhite: 1, resolution: 256 },
@@ -2209,7 +2209,7 @@ const textureHueSatValCache = createNodeCache<TextureHueSatValState>((s) => s.te
 export const TEXTURE_HUE_SAT_VAL_NODE: NodeDefinition = {
   type: "texture/hue-sat-val",
   label: "Hue/Saturation/Value",
-  category: "texture",
+  category: "textureTools",
   inputs: [
     { id: "texture", label: "Texture", type: "texture" },
     { id: "hue", label: "Hue Shift (°)", type: "value" },
@@ -2302,7 +2302,7 @@ const textureRgbCurvesCache = createNodeCache<TextureRgbCurvesState>((s) => s.te
 export const TEXTURE_RGB_CURVES_NODE: NodeDefinition = {
   type: "texture/rgb-curves",
   label: "RGB Curves",
-  category: "texture",
+  category: "textureTools",
   inputs: [{ id: "texture", label: "Texture", type: "texture" }],
   outputs: [{ id: "texture", label: "Texture", type: "texture" }],
   defaultParams: {

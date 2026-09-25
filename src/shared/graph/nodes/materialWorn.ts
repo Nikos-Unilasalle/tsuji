@@ -710,7 +710,7 @@ const wornMaterialCache = createNodeCache<THREE.MeshStandardMaterial>((m) => m.d
 export const MATERIAL_WORN_NODE: NodeDefinition = {
   type: "material/worn",
   label: "Worn Material",
-  category: "texture",
+  category: "material",
   inputs: [
     { id: "base", label: "Base Material", type: "material" },
     { id: "worn", label: "Worn Material (Convex)", type: "material" },

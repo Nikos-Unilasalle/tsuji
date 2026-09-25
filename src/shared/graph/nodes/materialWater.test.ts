@@ -20,7 +20,7 @@ function evaluate(inputs: Record<string, unknown>, nodeId = CTX.nodeId): WaterRe
 describe("MATERIAL_STYLIZED_WATER_NODE", () => {
   it("has the expected node schema", () => {
     expect(MATERIAL_STYLIZED_WATER_NODE.type).toBe("material/stylized-water");
-    expect(MATERIAL_STYLIZED_WATER_NODE.category).toBe("texture");
+    expect(MATERIAL_STYLIZED_WATER_NODE.category).toBe("material");
     expect(MATERIAL_STYLIZED_WATER_NODE.outputs.some((o) => o.id === "material")).toBe(true);
   });
 

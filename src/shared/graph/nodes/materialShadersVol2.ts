@@ -25,7 +25,7 @@ function toBool(val: unknown, fallback: boolean): boolean {
 export const MATERIAL_THERMAL_NODE: NodeDefinition = {
   type: "material/thermal",
   label: "Thermal Vision (FLIR)",
-  category: "texture",
+  category: "material",
   inputs: [
     { id: "coldColor", label: "Cold Color", type: "color" },
     { id: "hotColor", label: "Hot Color", type: "color" },
@@ -95,7 +95,7 @@ export const MATERIAL_THERMAL_NODE: NodeDefinition = {
 export const MATERIAL_XRAY_NODE: NodeDefinition = {
   type: "material/xray",
   label: "X-Ray / Radiology",
-  category: "texture",
+  category: "material",
   inputs: [
     { id: "color", label: "Tint Color", type: "color" },
     { id: "coreColor", label: "Core Density Color", type: "color" },
@@ -156,7 +156,7 @@ export const MATERIAL_XRAY_NODE: NodeDefinition = {
 export const MATERIAL_ENERGY_SHIELD_NODE: NodeDefinition = {
   type: "material/energy-shield",
   label: "Energy Shield (Hex)",
-  category: "texture",
+  category: "material",
   inputs: [
     { id: "shieldColor", label: "Shield Color", type: "color" },
     { id: "gridColor", label: "Hex Grid Color", type: "color" },
@@ -226,7 +226,7 @@ export const MATERIAL_ENERGY_SHIELD_NODE: NodeDefinition = {
 export const MATERIAL_STYLIZED_FIRE_NODE: NodeDefinition = {
   type: "material/stylized_fire",
   label: "Stylized Flame (SDF)",
-  category: "texture",
+  category: "material",
   inputs: [
     { id: "smoothness", label: "Smoothness (k)", type: "value" },
     { id: "colorSoftness", label: "Color Softness", type: "value" },
@@ -361,7 +361,7 @@ export const MATERIAL_STYLIZED_FIRE_NODE: NodeDefinition = {
 export const MATERIAL_MIYAZAKI_CLOUD_NODE: NodeDefinition = {
   type: "material/miyazaki_cloud",
   label: "Miyazaki Cloud (Ghibli)",
-  category: "texture",
+  category: "material",
   inputs: [
     { id: "seed", label: "Seed", type: "value" },
     { id: "cumulusHeight", label: "Cumulus Height", type: "value" },

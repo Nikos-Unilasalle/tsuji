@@ -187,7 +187,7 @@ export function decalSignature(
 export const DECAL_NODE: NodeDefinition = {
   type: "object/decal",
   label: "Decal",
-  category: "texture",
+  category: "material",
   inputs: [
     // Deliberately not `owns`: the surface being painted on has to keep
     // rendering. A decal adds to a scene, it does not consume its target.

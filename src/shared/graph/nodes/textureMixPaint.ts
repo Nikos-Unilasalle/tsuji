@@ -55,7 +55,7 @@ function textureSockets(connections: Connection[]): SocketDef[] {
 export const TEXTURE_MIX_PAINT_NODE: NodeDefinition = {
   type: "texture/mix-paint",
   label: "Texture Mix",
-  category: "texture",
+  category: "textureTools",
   inputs: [
     { id: "geometry", label: "Geometry", type: "geometry", owns: true },
     { id: "matrix", label: "Matrix", type: "matrix" },

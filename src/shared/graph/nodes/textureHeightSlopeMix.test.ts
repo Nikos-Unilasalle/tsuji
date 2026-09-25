@@ -9,7 +9,7 @@ describe("TEXTURE_HEIGHT_SLOPE_MIX_NODE", () => {
   it("has correct metadata and sockets", () => {
     expect(TEXTURE_HEIGHT_SLOPE_MIX_NODE.type).toBe("texture/height-slope-mix");
     expect(TEXTURE_HEIGHT_SLOPE_MIX_NODE.label).toBe("Topography Texture Mix");
-    expect(TEXTURE_HEIGHT_SLOPE_MIX_NODE.category).toBe("texture");
+    expect(TEXTURE_HEIGHT_SLOPE_MIX_NODE.category).toBe("textureTools");
     expect(TEXTURE_HEIGHT_SLOPE_MIX_NODE.inputs.some((i) => i.id === "geometry")).toBe(true);
     expect(TEXTURE_HEIGHT_SLOPE_MIX_NODE.outputs.some((o) => o.id === "texture")).toBe(true);
     expect(TEXTURE_HEIGHT_SLOPE_MIX_NODE.outputs.some((o) => o.id === "splatMap")).toBe(true);

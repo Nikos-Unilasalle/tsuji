@@ -36,7 +36,7 @@ describe("TEXTURE_MIX_PAINT_NODE", () => {
   it("has dynamic texture sockets", () => {
     expect(TEXTURE_MIX_PAINT_NODE.type).toBe("texture/mix-paint");
     expect(TEXTURE_MIX_PAINT_NODE.label).toBe("Texture Mix");
-    expect(TEXTURE_MIX_PAINT_NODE.category).toBe("texture");
+    expect(TEXTURE_MIX_PAINT_NODE.category).toBe("textureTools");
 
     const dynamicInputs = TEXTURE_MIX_PAINT_NODE.dynamicInputs!([]);
     expect(dynamicInputs.some((i) => i.id === "texture0")).toBe(true);

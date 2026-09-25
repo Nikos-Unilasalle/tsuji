@@ -63,7 +63,7 @@ const WATER_PARAM_FIELDS: ParamFieldDef[] = [
 export const MATERIAL_STYLIZED_WATER_NODE: NodeDefinition = {
   type: "material/stylized-water",
   label: "Stylized Water",
-  category: "texture",
+  category: "material",
   inputs: [
     { id: "shoreMap", label: "Terrain Heightmap", type: "texture" },
     { id: "surfaceElevation", label: "Surface Elevation (Y)", type: "value" },

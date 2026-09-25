@@ -10,6 +10,7 @@ export type NodeCategory =
   | "lighting"
   | "list"
   | "logic"
+  | "material"
   | "math"
   | "object"
   | "particles"
@@ -20,6 +21,7 @@ export type NodeCategory =
   | "structure"
   | "text"
   | "texture"
+  | "textureTools"
   | "time"
   | "transform"
   | "utility";
@@ -36,6 +38,7 @@ export const CATEGORY_ORDER: NodeCategory[] = [
   "lighting",
   "list",
   "logic",
+  "material",
   "math",
   "object",
   "particles",
@@ -46,6 +49,7 @@ export const CATEGORY_ORDER: NodeCategory[] = [
   "structure",
   "text",
   "texture",
+  "textureTools",
   "time",
   "transform",
   "utility",
@@ -62,6 +66,7 @@ export const CATEGORY_LABEL: Record<NodeCategory, string> = {
   lighting: "Lighting & Shadows",
   list: "List",
   logic: "Logic",
+  material: "Material",
   math: "Math",
   object: "Object",
   particles: "Particles",
@@ -71,7 +76,8 @@ export const CATEGORY_LABEL: Record<NodeCategory, string> = {
   sound: "Sound / Audio",
   structure: "Structure",
   text: "Text",
-  texture: "Texture",
+  texture: "Textures",
+  textureTools: "Texture Tools",
   time: "Time / Animation",
   transform: "Transform",
   utility: "Utility",
@@ -91,6 +97,7 @@ export const CATEGORY_COLOR: Record<NodeCategory, string> = {
   lighting: "#f59e0b",
   list: "#8b5cf6",
   logic: "#fb923c",
+  material: "#d97706",
   math: "#f2c14e",
   object: "#0284c7",
   particles: "#2dd4bf",
@@ -101,6 +108,7 @@ export const CATEGORY_COLOR: Record<NodeCategory, string> = {
   structure: "#38bdf8",
   text: "#f97316",
   texture: "#2dd4bf",
+  textureTools: "#0d9488",
   time: "#ec4899",
   transform: "#a855f7",
   utility: "#64748b",

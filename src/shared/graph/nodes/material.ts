@@ -7,7 +7,7 @@ import { COMMON_MATERIAL_PARAM_FIELDS, asColor, extractMaterialParams, numberInp
 export const MATERIAL_NODE: NodeDefinition = {
   type: "material/standard",
   label: "Material",
-  category: "texture",
+  category: "material",
   inputs: [
     { id: "color", label: "Color", type: "color" },
     { id: "emissive", label: "Emissive Color", type: "color" },
@@ -46,7 +46,7 @@ const shadowCatcherCache = createNodeCache<THREE.ShadowMaterial>((m) => m.dispos
 export const MATERIAL_SHADOW_CATCHER_NODE: NodeDefinition = {
   type: "material/shadow-catcher",
   label: "Shadow Catcher",
-  category: "texture",
+  category: "material",
   inputs: [
     { id: "opacity", label: "Shadow Opacity", type: "value" },
     { id: "color", label: "Shadow Color", type: "color" },

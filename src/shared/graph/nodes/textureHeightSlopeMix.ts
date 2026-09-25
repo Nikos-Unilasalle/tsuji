@@ -93,7 +93,7 @@ export function getHeightSlopeMixState(nodeId: string): TextureHeightSlopeState 
 export const TEXTURE_HEIGHT_SLOPE_MIX_NODE: NodeDefinition = {
   type: "texture/height-slope-mix",
   label: "Topography Texture Mix",
-  category: "texture",
+  category: "textureTools",
   inputs: [
     { id: "geometry", label: "Geometry", type: "geometry" },
     { id: "texture0", label: "Texture 0 (Base / Flat)", type: "texture" },
