@@ -57,6 +57,7 @@ const RADIAN_VECTOR_SOCKETS = [
   "modifier/extrude.rotation",
   "structure/geometry-transform.rotation",
   "text/animator.rotationDelta",
+  "texture/camera.rotation",
   "transform.rotation",
   "transform/matrix-transform.rotation",
   "transform/pivot.rotation",

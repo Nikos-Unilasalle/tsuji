@@ -12,6 +12,7 @@ import { EDIT_MESH_POINTS_NODE } from "./editMeshPoints";
 import { CHART_AXIS_NODE, LINE_GRAPH_NODE, PIE_CHART_NODE, POINT_CLOUD_NODE, SCATTER_PLOT_NODE } from "./chart";
 import { CANVAS_GOTO_NODE } from "./canvas";
 import { RENDER_NODE } from "./render";
+import { TEXTURE_CAMERA_NODE } from "./textureCamera";
 import { VIEW2D_NODE } from "./view2d";
 import { FRAME_NODE, TIME_NODE } from "./time";
 import { MARKER_NODE } from "./marker";
@@ -277,6 +278,7 @@ export const STARTER_NODES = [
   OBJECT_FROZEN_NODE,
   OBJECT_RACCOON_NODE,
   TEXTURE_IMAGE_NODE,
+  TEXTURE_CAMERA_NODE,
   TEXTURE_PLANE_NODE,
   TEXTURE_PROCEDURAL_NODE,
   TEXTURE_TO_NORMAL_NODE,
