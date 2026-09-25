@@ -109,6 +109,83 @@ const num = (inputValue: unknown, paramValue: unknown, fallback: number): number
   return Number.isFinite(v) ? v : fallback;
 };
 
+// ---------------------------------------------------------------- Transform
+
+const transformCache = createNodeCache<GpuPassState>(disposeGpuPassState);
+
+/**
+ * UV repeat/offset/rotation — the same semantics as three.js's own
+ * `Texture.repeat/offset/rotation/center` (built from the exact matrix
+ * `Matrix3.setUvTransform` produces), applied as a GPU pass instead of
+ * mutating those properties on a cloned `THREE.Texture`.
+ *
+ * The old implementation cloned the input texture and set its repeat/
+ * offset/rotation, which only ever worked when a standard three.js material
+ * (MeshStandardMaterial, etc.) later read `texture.matrix` itself — every
+ * texture/* pass in this file instead samples a plain `texture2D(t, uv)` in
+ * a fullscreen-quad shader, which never applies that matrix. Worse, cloning
+ * a WebGLRenderTarget's texture (what every GPU-pipeline source now is —
+ * texture/camera, texture/noise, texture/voronoi, …) produces a `Texture`
+ * with no backing GPU storage of its own, sampling as solid black. Baking
+ * the transform into the sampled UV directly fixes both: it works for any
+ * source, GPU pass or not, and every downstream texture/* node sees it.
+ */
+export const TEXTURE_TRANSFORM_NODE: NodeDefinition = {
+  type: "texture/transform",
+  label: "Transform",
+  category: "textureTools",
+  inputs: [
+    { id: "texture", label: "Texture", type: "texture" },
+    { id: "scaleX", label: "Scale X", type: "value" },
+    { id: "scaleY", label: "Scale Y", type: "value" },
+    { id: "offsetX", label: "Offset X", type: "value" },
+    { id: "offsetY", label: "Offset Y", type: "value" },
+    { id: "rotation", label: "Rotation (°)", type: "value" },
+  ],
+  outputs: [{ id: "texture", label: "Texture", type: "texture" }],
+  defaultParams: { scaleX: 1, scaleY: 1, offsetX: 0, offsetY: 0, rotation: 0, ...SIZE_DEFAULTS },
+  dynamicParamFields: (instance) => [
+    { id: "scaleX", label: "Scale X", kind: "number", step: 0.1 },
+    { id: "scaleY", label: "Scale Y", kind: "number", step: 0.1 },
+    { id: "offsetX", label: "Offset X", kind: "number", step: 0.05 },
+    { id: "offsetY", label: "Offset Y", kind: "number", step: 0.05 },
+    { id: "rotation", label: "Rotation (°)", kind: "number", step: 5 },
+    ...outputSizeFields(instance.params),
+  ],
+  evaluate: (inputs, rawParams, ctx) => {
+    const params = withInputs(rawParams, inputs);
+
+    const scaleX = num(inputs.scaleX, params.scaleX, 1);
+    const scaleY = num(inputs.scaleY, params.scaleY, 1);
+    const offsetX = num(inputs.offsetX, params.offsetX, 0);
+    const offsetY = num(inputs.offsetY, params.offsetY, 0);
+    const rotDeg = num(inputs.rotation, params.rotation, 0);
+    const rotRad = (rotDeg * Math.PI) / 180;
+
+    const uvMatrix = new THREE.Matrix3().setUvTransform(offsetX, offsetY, scaleX || 1, scaleY || 1, rotRad, 0.5, 0.5);
+
+    const texture = runFilter({
+      ctx,
+      cache: transformCache,
+      params,
+      inputs: [asTexture(inputs.texture)],
+      colorSpace: SRGB,
+      signature: [uvMatrix.elements],
+      extraUniforms: () => ({ uvMatrix: { value: new THREE.Matrix3() } }),
+      setUniforms: (m) => {
+        (m.uniforms.uvMatrix.value as THREE.Matrix3).copy(uvMatrix);
+      },
+      body: /* glsl */ `
+        uniform mat3 uvMatrix;
+        vec4 process(vec2 uv) {
+          vec2 sampleUv = (uvMatrix * vec3(uv, 1.0)).xy;
+          return readA(fract(sampleUv));
+        }`,
+    });
+    return { texture };
+  },
+};
+
 // ---------------------------------------------------------------- Mix
 
 const MIX_MODES = ["mix", "add", "multiply", "screen", "overlay", "subtract", "difference", "darken", "lighten"];
@@ -1619,6 +1696,7 @@ export const TEXTURE_FILM_GRAIN_NODE: NodeDefinition = {
 // "roughness" -> Material, "intensity" -> Light Settings) — right for 3D
 // objects, misleading on a texture filter whose settings are all one thing.
 for (const def of [
+  TEXTURE_TRANSFORM_NODE,
   TEXTURE_MIX_NODE,
   TEXTURE_MATH_NODE,
   TEXTURE_MASK_NODE,

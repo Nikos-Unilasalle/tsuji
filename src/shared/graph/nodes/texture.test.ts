@@ -76,19 +76,17 @@ describe("TEXTURE NODES", () => {
     expect((wiredRes.geometry as THREE.Mesh).visible).toBe(true);
   });
 
-  it("TEXTURE_TRANSFORM_NODE modifies texture repeat and rotation", () => {
+  it("TEXTURE_TRANSFORM_NODE degrades gracefully without a renderer", () => {
+    // Headless (no ctx.renderer, as in every unit test): the GPU pass
+    // pipeline has nothing to render with, so it returns null rather than
+    // crashing — same contract as every other texture/* GPU node.
     const tex = new THREE.Texture();
     const res = TEXTURE_TRANSFORM_NODE.evaluate(
       { texture: tex, rotation: 90 },
       { scaleX: 2, scaleY: 3, offsetX: 0.5, offsetY: 0.5, rotation: 0 },
       CTX
     );
-
-    const transformedTex = res.texture as THREE.Texture;
-    expect(transformedTex).toBeInstanceOf(THREE.Texture);
-    expect(transformedTex.repeat.x).toBe(2);
-    expect(transformedTex.repeat.y).toBe(3);
-    expect(transformedTex.rotation).toBeCloseTo(Math.PI / 2);
+    expect(res.texture).toBeNull();
   });
 
   it("TEXTURE_PIXEL_SPAWNER_NODE registers properly and handles missing DOM / empty inputs gracefully", () => {

@@ -58,8 +58,6 @@ const textureCache = createNodeCache<TextureNodeState>((s) => {
   }
 });
 
-const textureTransformCache = createNodeCache<{ texture?: THREE.Texture; lastSig?: string }>((s) => s.texture?.dispose());
-
 function getState(nodeId: string): TextureNodeState {
   let state = textureCache.get(nodeId);
   if (!state) {
@@ -453,85 +451,6 @@ export const TEXTURE_PLANE_NODE: NodeDefinition = {
     }
 
     return primitiveOutputs(mesh);
-  },
-};
-
-/** Texture Transform node — modifies UV repeat, offset, and rotation of a THREE.Texture. */
-export const TEXTURE_TRANSFORM_NODE: NodeDefinition = {
-  type: "texture/transform",
-  label: "Texture Transform",
-  category: "textureTools",
-  inputs: [
-    { id: "texture", label: "Texture", type: "texture" },
-    { id: "scale", label: "Scale", type: "vector" },
-    { id: "offset", label: "Offset", type: "vector" },
-    { id: "rotation", label: "Rotation (°)", type: "value" },
-  ],
-  outputs: [{ id: "texture", label: "Texture", type: "texture" }],
-  defaultParams: {
-    scaleX: 1,
-    scaleY: 1,
-    offsetX: 0,
-    offsetY: 0,
-    rotation: 0,
-  },
-  paramFields: [
-    { id: "scaleX", label: "Scale X", kind: "number", step: 0.1 },
-    { id: "scaleY", label: "Scale Y", kind: "number", step: 0.1 },
-    { id: "offsetX", label: "Offset X", kind: "number", step: 0.05 },
-    { id: "offsetY", label: "Offset Y", kind: "number", step: 0.05 },
-    { id: "rotation", label: "Rotation (°)", kind: "number", step: 5 },
-  ],
-  evaluate: (inputs, params, ctx) => {
-    const source = inputs.texture instanceof THREE.Texture ? inputs.texture : new THREE.Texture();
-
-    let scaleX = Number(params.scaleX) || 1;
-    let scaleY = Number(params.scaleY) || 1;
-    if (inputs.scale instanceof THREE.Vector3) {
-      scaleX = inputs.scale.x;
-      scaleY = inputs.scale.y;
-    }
-
-    let offsetX = Number(params.offsetX) || 0;
-    let offsetY = Number(params.offsetY) || 0;
-    if (inputs.offset instanceof THREE.Vector3) {
-      offsetX = inputs.offset.x;
-      offsetY = inputs.offset.y;
-    }
-
-    const rotDeg = inputs.rotation !== undefined ? Number(inputs.rotation) : Number(params.rotation) || 0;
-
-    // Cache the transformed clone per node: re-cloning + re-uploading the source
-    // image every frame (needsUpdate) is wasted GPU traffic for an unchanged input.
-    const sig = [
-      source.uuid,
-      source.image?.width ?? 0,
-      source.image?.height ?? 0,
-      scaleX,
-      scaleY,
-      offsetX,
-      offsetY,
-      rotDeg,
-    ].join("|");
-
-    let state = textureTransformCache.get(ctx.nodeId);
-    if (!state) {
-      state = {};
-      textureTransformCache.set(ctx.nodeId, state);
-    }
-    if (state.lastSig !== sig) {
-      state.lastSig = sig;
-      if (state.texture) state.texture.dispose();
-      const texture = source.clone();
-      texture.repeat.set(scaleX, scaleY);
-      texture.offset.set(offsetX, offsetY);
-      texture.rotation = (rotDeg * Math.PI) / 180;
-      texture.center.set(0.5, 0.5);
-      texture.needsUpdate = true;
-      state.texture = texture;
-    }
-
-    return { texture: state.texture! };
   },
 };
 
