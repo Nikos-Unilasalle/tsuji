@@ -77,6 +77,14 @@ function runFilter(run: FilterRun): THREE.Texture | null {
   return target.texture;
 }
 
+/** A color param as display-referred (sRGB) components, the space pass math runs in. */
+function srgbColor(value: unknown, fallback: number): THREE.Vector3 {
+  const color = value instanceof THREE.Color ? value : new THREE.Color(typeof value === "number" || typeof value === "string" ? value : fallback);
+  const rgb = { r: 0, g: 0, b: 0 };
+  color.getRGB(rgb, THREE.SRGBColorSpace);
+  return new THREE.Vector3(rgb.r, rgb.g, rgb.b);
+}
+
 const num = (inputValue: unknown, paramValue: unknown, fallback: number): number => {
   const v = inputValue !== undefined ? Number(inputValue) : Number(paramValue);
   return Number.isFinite(v) ? v : fallback;
@@ -87,7 +95,7 @@ const num = (inputValue: unknown, paramValue: unknown, fallback: number): number
 const MIX_MODES = ["mix", "add", "multiply", "screen", "overlay", "subtract", "difference", "darken", "lighten"];
 const mixCache = createNodeCache<GpuPassState>(disposeGpuPassState);
 
-/** Same blend formulas as Blender's Mix Color node. A missing A or B reads as flat white. */
+/** Same blend formulas as Blender's Mix Color node. A missing A or B reads as its flat fallback color (white by default). */
 export const TEXTURE_MIX_NODE: NodeDefinition = {
   type: "texture/mix",
   label: "Mix Texture",
@@ -99,30 +107,38 @@ export const TEXTURE_MIX_NODE: NodeDefinition = {
     { id: "factorTexture", label: "Factor (Texture)", type: "texture" },
   ],
   outputs: [{ id: "texture", label: "Texture", type: "texture" }],
-  defaultParams: { blendMode: "mix", factor: 0.5, ...SIZE_DEFAULTS },
+  defaultParams: { blendMode: "mix", factor: 0.5, colorA: new THREE.Color(0xffffff), colorB: new THREE.Color(0xffffff), ...SIZE_DEFAULTS },
   dynamicParamFields: (instance) => [
     { id: "blendMode", label: "Blend Mode", kind: "select", options: MIX_MODES },
     { id: "factor", label: "Factor (fallback)", kind: "number", step: 0.05 },
+    { id: "colorA", label: "Color A (when unwired)", kind: "color" },
+    { id: "colorB", label: "Color B (when unwired)", kind: "color" },
     ...outputSizeFields(instance.params),
   ],
   evaluate: (inputs, params, ctx) => {
     const mode = Math.max(0, MIX_MODES.indexOf(String(params.blendMode || "mix")));
     const factor = Math.max(0, Math.min(1, num(inputs.factor, params.factor, 0.5)));
+    const colorA = srgbColor(params.colorA, 0xffffff);
+    const colorB = srgbColor(params.colorB, 0xffffff);
     const texture = runFilter({
       ctx,
       cache: mixCache,
       params,
       inputs: [asTexture(inputs.textureA), asTexture(inputs.textureB), asTexture(inputs.factorTexture)],
       colorSpace: SRGB,
-      signature: [mode, factor],
-      extraUniforms: () => ({ mode: { value: 0 }, factor: { value: 0.5 } }),
+      signature: [mode, factor, colorA.toArray(), colorB.toArray()],
+      extraUniforms: () => ({ mode: { value: 0 }, factor: { value: 0.5 }, colorA: { value: new THREE.Vector3(1, 1, 1) }, colorB: { value: new THREE.Vector3(1, 1, 1) } }),
       setUniforms: (m) => {
         m.uniforms.mode.value = mode;
         m.uniforms.factor.value = factor;
+        (m.uniforms.colorA.value as THREE.Vector3).copy(colorA);
+        (m.uniforms.colorB.value as THREE.Vector3).copy(colorB);
       },
       body: /* glsl */ `
         uniform float mode;
         uniform float factor;
+        uniform vec3 colorA;
+        uniform vec3 colorB;
         vec3 blendOp(vec3 a, vec3 b) {
           if (mode < 0.5) return b;
           if (mode < 1.5) return a + b;
@@ -135,8 +151,8 @@ export const TEXTURE_MIX_NODE: NodeDefinition = {
           return max(a, b);
         }
         vec4 process(vec2 uv) {
-          vec3 a = hA > 0.5 ? readA(uv).rgb : vec3(1.0);
-          vec3 b = hB > 0.5 ? readB(uv).rgb : vec3(1.0);
+          vec3 a = hA > 0.5 ? readA(uv).rgb : colorA;
+          vec3 b = hB > 0.5 ? readB(uv).rgb : colorB;
           float t = hC > 0.5 ? luma(readC(uv).rgb) : factor;
           return vec4(clamp(a + (blendOp(a, b) - a) * t, 0.0, 1.0), 1.0);
         }`,
@@ -160,30 +176,34 @@ export const TEXTURE_MATH_NODE: NodeDefinition = {
     { id: "textureB", label: "Texture B", type: "texture" },
   ],
   outputs: [{ id: "texture", label: "Texture", type: "texture" }],
-  defaultParams: { op: "add", channelMode: "rgb", ...SIZE_DEFAULTS },
+  defaultParams: { op: "add", channelMode: "rgb", b: 1, ...SIZE_DEFAULTS },
   dynamicParamFields: (instance) => [
     { id: "op", label: "Operation", kind: "select", options: MATH_OPS },
+    { id: "b", label: "B (when unwired)", kind: "number", step: 0.05 },
     { id: "channelMode", label: "Channel Mode", kind: "select", options: ["rgb", "luminance"] },
     ...outputSizeFields(instance.params),
   ],
   evaluate: (inputs, params, ctx) => {
     const op = Math.max(0, MATH_OPS.indexOf(String(params.op || "add")));
     const lum = String(params.channelMode || "rgb") === "luminance" ? 1 : 0;
+    const bValue = num(undefined, params.b, 1);
     const texture = runFilter({
       ctx,
       cache: mathCache,
       params,
       inputs: [asTexture(inputs.textureA), asTexture(inputs.textureB)],
       colorSpace: LINEAR,
-      signature: [op, lum],
-      extraUniforms: () => ({ op: { value: 0 }, lum: { value: 0 } }),
+      signature: [op, lum, bValue],
+      extraUniforms: () => ({ op: { value: 0 }, lum: { value: 0 }, bValue: { value: 1 } }),
       setUniforms: (m) => {
         m.uniforms.op.value = op;
         m.uniforms.lum.value = lum;
+        m.uniforms.bValue.value = bValue;
       },
       body: /* glsl */ `
         uniform float op;
         uniform float lum;
+        uniform float bValue;
         vec3 apply(vec3 a, vec3 b) {
           if (op < 0.5) return a + b;
           if (op < 1.5) return a - b;
@@ -199,7 +219,7 @@ export const TEXTURE_MATH_NODE: NodeDefinition = {
         }
         vec4 process(vec2 uv) {
           vec3 a = hA > 0.5 ? readA(uv).rgb : vec3(1.0);
-          vec3 b = hB > 0.5 ? readB(uv).rgb : vec3(1.0);
+          vec3 b = hB > 0.5 ? readB(uv).rgb : vec3(bValue);
           if (lum > 0.5) { a = vec3(luma(a)); b = vec3(luma(b)); }
           return vec4(apply(a, b), 1.0);
         }`,
@@ -283,15 +303,19 @@ export const TEXTURE_MAP_RANGE_NODE: NodeDefinition = {
   type: "texture/map-range",
   label: "Map Range",
   category: "textureTools",
-  inputs: [{ id: "texture", label: "Texture", type: "texture" }],
+  inputs: [
+    { id: "texture", label: "Texture", type: "texture" },
+    { id: "outMinTexture", label: "Out Min (Texture)", type: "texture" },
+    { id: "outMaxTexture", label: "Out Max (Texture)", type: "texture" },
+  ],
   outputs: [{ id: "texture", label: "Texture", type: "texture" }],
   defaultParams: { channelMode: "rgb", inMin: 0, inMax: 1, outMin: 0, outMax: 1, clamp: true, ...SIZE_DEFAULTS },
   dynamicParamFields: (instance) => [
     { id: "channelMode", label: "Channel Mode", kind: "select", options: ["rgb", "luminance"] },
     { id: "inMin", label: "In Min", kind: "number", step: 0.05 },
     { id: "inMax", label: "In Max", kind: "number", step: 0.05 },
-    { id: "outMin", label: "Out Min", kind: "number", step: 0.05 },
-    { id: "outMax", label: "Out Max", kind: "number", step: 0.05 },
+    { id: "outMin", label: "Out Min (fallback)", kind: "number", step: 0.01 },
+    { id: "outMax", label: "Out Max (fallback)", kind: "number", step: 0.01 },
     { id: "clamp", label: "Clamp", kind: "boolean" },
     ...outputSizeFields(instance.params),
   ],
@@ -303,7 +327,7 @@ export const TEXTURE_MAP_RANGE_NODE: NodeDefinition = {
       ctx,
       cache: mapRangeCache,
       params,
-      inputs: [asTexture(inputs.texture)],
+      inputs: [asTexture(inputs.texture), asTexture(inputs.outMinTexture), asTexture(inputs.outMaxTexture)],
       colorSpace: LINEAR,
       signature: [lum, range.toArray(), clampOn],
       extraUniforms: () => ({ lum: { value: 0 }, range: { value: new THREE.Vector4() }, clampOn: { value: 1 } }),
@@ -316,16 +340,19 @@ export const TEXTURE_MAP_RANGE_NODE: NodeDefinition = {
         uniform float lum;
         uniform vec4 range;
         uniform float clampOn;
-        vec3 remap(vec3 v) {
+        vec3 remap(vec3 v, float outMin, float outMax) {
           float span = range.y - range.x;
           vec3 t = span == 0.0 ? vec3(0.0) : (v - range.x) / span;
           if (clampOn > 0.5) t = clamp(t, 0.0, 1.0);
-          return range.z + t * (range.w - range.z);
+          return outMin + t * (outMax - outMin);
         }
         vec4 process(vec2 uv) {
           vec4 a = readA(uv);
           vec3 v = lum > 0.5 ? vec3(luma(a.rgb)) : a.rgb;
-          return vec4(remap(v), a.a);
+          // A wired Out Min / Out Max texture overrides the scalar per pixel (by luminance).
+          float outMin = hB > 0.5 ? luma(readB(uv).rgb) : range.z;
+          float outMax = hC > 0.5 ? luma(readC(uv).rgb) : range.w;
+          return vec4(remap(v, outMin, outMax), a.a);
         }`,
     });
     return { texture };
@@ -1154,6 +1181,96 @@ export const TEXTURE_WAVE_NODE: NodeDefinition = {
         }`,
     });
     return { texture };
+  },
+};
+
+const VORONOI_METRICS = ["euclidean", "manhattan", "chebyshev"];
+const voronoiCache = createNodeCache<GpuPassState>(disposeGpuPassState);
+
+const VORONOI_BODY = /* glsl */ `
+  uniform vec4 vor;
+  uniform float mode;
+  ${NOISE_GLSL}
+  vec2 hash22(vec2 p) {
+    vec3 p3 = fract(vec3(p.xyx) * vec3(0.1031, 0.1030, 0.0973));
+    p3 += dot(p3, p3.yzx + 33.33);
+    return fract((p3.xx + p3.yz) * p3.zy);
+  }
+  float metricDistance(vec2 d) {
+    if (vor.z < 0.5) return length(d);
+    if (vor.z < 1.5) return abs(d.x) + abs(d.y);
+    return max(abs(d.x), abs(d.y));
+  }
+  vec4 process(vec2 uv) {
+    vec2 p = aspectCoords(uv, vec2(0.5)) * vor.x + vor.w * vec2(13.13, 7.71);
+    vec2 cell = floor(p);
+    vec2 f = p - cell;
+    float best = 1e9;
+    vec2 bestCell = cell;
+    for (int j = -1; j <= 1; j++) {
+      for (int i = -1; i <= 1; i++) {
+        vec2 o = vec2(float(i), float(j));
+        float d = metricDistance(o + hash22(cell + o) * vor.y - f);
+        if (d < best) { best = d; bestCell = cell + o; }
+      }
+    }
+    if (mode < 0.5) return vec4(vec3(best), 1.0);
+    return vec4(hash22(bestCell + 11.3), hash22(bestCell + 71.9).x, 1.0);
+  }`;
+
+/**
+ * Voronoi Texture — Blender's F1 Voronoi: Distance to the nearest feature
+ * point (in cell units) and a random Color per cell. Randomness 0 puts every
+ * point on a regular lattice centered in the frame — the basis of a halftone
+ * dot grid (Distance < per-pixel radius).
+ */
+export const TEXTURE_VORONOI_NODE: NodeDefinition = {
+  type: "texture/voronoi",
+  label: "Voronoi Texture",
+  category: "texture",
+  inputs: [
+    { id: "scale", label: "Scale", type: "value" },
+    { id: "randomness", label: "Randomness", type: "value" },
+  ],
+  outputs: [
+    { id: "distance", label: "Distance", type: "texture" },
+    { id: "color", label: "Color", type: "texture" },
+  ],
+  defaultParams: { scale: 5, randomness: 1, metric: "euclidean", seed: 0, ...GENERATOR_SIZE_DEFAULTS },
+  dynamicParamFields: (instance) => [
+    { id: "scale", label: "Scale (fallback)", kind: "number", step: 1 },
+    { id: "randomness", label: "Randomness (fallback)", kind: "number", step: 0.05 },
+    { id: "metric", label: "Distance Metric", kind: "select", options: VORONOI_METRICS },
+    { id: "seed", label: "Seed", kind: "number", step: 1 },
+    ...outputSizeFields(instance.params, false),
+  ],
+  evaluate: (inputs, params, ctx) => {
+    const renderer = ctx.renderer;
+    if (!renderer) return { distance: null, color: null };
+    const scale = Math.max(0, num(inputs.scale, params.scale, 5));
+    const randomness = Math.max(0, Math.min(1, num(inputs.randomness, params.randomness, 1)));
+    const metric = Math.max(0, VORONOI_METRICS.indexOf(String(params.metric ?? "euclidean")));
+    const seed = Math.round(num(undefined, params.seed, 0));
+    const [width, height] = resolveOutputSize(params, []);
+    const wantColor = !ctx.connectedOutputs || ctx.connectedOutputs.has("color");
+
+    const state = stateFor(voronoiCache, ctx.nodeId);
+    const distance = (state.targets.distance = ensurePassTarget(state.targets.distance, width, height, LINEAR));
+    const color = wantColor ? (state.targets.color = ensurePassTarget(state.targets.color, width, height, SRGB)) : state.targets.color;
+    const sig = JSON.stringify([scale, randomness, metric, seed, distance.texture.uuid, wantColor ? color?.texture.uuid : ""]);
+    if (state.signatures.get(renderer) !== sig) {
+      const material = (state.materials.main ??= createPassMaterial(VORONOI_BODY, { vor: { value: new THREE.Vector4() }, mode: { value: 0 } }));
+      bindPassInputs(material, []);
+      (material.uniforms.vor.value as THREE.Vector4).set(scale, randomness, metric, seed);
+      material.uniforms.mode.value = 0;
+      renderPass(renderer, material, distance);
+      if (wantColor && color) {
+        material.uniforms.mode.value = 1;
+        renderPass(renderer, material, color);
+      }
+      state.signatures.set(renderer, sig);
+    }
+    return { distance: distance.texture, color: color?.texture ?? null };
   },
 };
 

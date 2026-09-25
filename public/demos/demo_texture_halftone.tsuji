@@ -1,0 +1,371 @@
+{
+  "canvases": [
+    {
+      "nodes": [
+        {
+          "id": "glyph",
+          "type": "object/text",
+          "position": {
+            "x": 0,
+            "y": 0
+          },
+          "params": {
+            "text": "a",
+            "fontPreset": "Helvetiker",
+            "fontSize": 64,
+            "depth": 0.02,
+            "location": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "color": 16777215,
+            "shadeless": 1
+          }
+        },
+        {
+          "id": "world",
+          "type": "lighting/environment",
+          "position": {
+            "x": 0,
+            "y": 260
+          },
+          "params": {
+            "color": 0,
+            "intensity": 1,
+            "background": 1,
+            "ambientIntensity": 0,
+            "sunIntensity": 0
+          }
+        },
+        {
+          "id": "output3d",
+          "type": "render",
+          "position": {
+            "x": 320,
+            "y": 80
+          },
+          "params": {
+            "frameCount": 240,
+            "fps": 30
+          }
+        },
+        {
+          "id": "cam2d",
+          "type": "texture/camera",
+          "position": {
+            "x": 320,
+            "y": 420
+          },
+          "params": {
+            "location": {
+              "x": 0,
+              "y": 0,
+              "z": 1.4
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "fov": 50,
+            "resolutionPreset": "Custom",
+            "width": 1800,
+            "height": 1800,
+            "updateEvery": 1
+          }
+        },
+        {
+          "id": "blur",
+          "type": "texture/blur",
+          "position": {
+            "x": 620,
+            "y": 420
+          },
+          "params": {
+            "mode": "gaussian",
+            "radius": 185
+          }
+        },
+        {
+          "id": "emission5",
+          "type": "texture/levels",
+          "position": {
+            "x": 860,
+            "y": 420
+          },
+          "params": {
+            "inBlack": 0,
+            "inWhite": 0.8,
+            "gamma": 1,
+            "outBlack": 0,
+            "outWhite": 1
+          }
+        },
+        {
+          "id": "noise",
+          "type": "texture/noise",
+          "position": {
+            "x": 620,
+            "y": 700
+          },
+          "params": {
+            "scale": 3,
+            "detail": 2,
+            "roughness": 0.5,
+            "speed": 0.08,
+            "size": "Custom",
+            "width": 1800,
+            "height": 1800
+          }
+        },
+        {
+          "id": "noiseRange",
+          "type": "texture/map-range",
+          "position": {
+            "x": 860,
+            "y": 700
+          },
+          "params": {
+            "channelMode": "luminance",
+            "inMin": 0.3,
+            "inMax": 0.7,
+            "outMin": 0.28,
+            "outMax": 0.62,
+            "clamp": true
+          }
+        },
+        {
+          "id": "dotRadius",
+          "type": "texture/map-range",
+          "position": {
+            "x": 1100,
+            "y": 420
+          },
+          "params": {
+            "channelMode": "luminance",
+            "inMin": 0,
+            "inMax": 1,
+            "outMin": 0.03,
+            "outMax": 0.5,
+            "clamp": true
+          }
+        },
+        {
+          "id": "grid",
+          "type": "texture/voronoi",
+          "position": {
+            "x": 1100,
+            "y": 700
+          },
+          "params": {
+            "scale": 40,
+            "randomness": 0,
+            "metric": "euclidean",
+            "size": "Custom",
+            "width": 1800,
+            "height": 1800
+          }
+        },
+        {
+          "id": "dots",
+          "type": "texture/math",
+          "position": {
+            "x": 1340,
+            "y": 520
+          },
+          "params": {
+            "op": "less-than",
+            "channelMode": "luminance"
+          }
+        },
+        {
+          "id": "centerShift",
+          "type": "texture/math",
+          "position": {
+            "x": 1100,
+            "y": 200
+          },
+          "params": {
+            "op": "add",
+            "channelMode": "luminance",
+            "b": 0.08
+          }
+        },
+        {
+          "id": "palette",
+          "type": "texture/color-ramp",
+          "position": {
+            "x": 1340,
+            "y": 200
+          },
+          "params": {
+            "ramp": {
+              "stops": [
+                {
+                  "position": 0.25,
+                  "color": 10482384
+                },
+                {
+                  "position": 0.55,
+                  "color": 10274559
+                },
+                {
+                  "position": 0.9,
+                  "color": 16762589
+                }
+              ],
+              "interpolation": "b-spline"
+            }
+          }
+        },
+        {
+          "id": "colorize",
+          "type": "texture/mix",
+          "position": {
+            "x": 1580,
+            "y": 420
+          },
+          "params": {
+            "blendMode": "mix",
+            "colorA": 0
+          }
+        },
+        {
+          "id": "grain",
+          "type": "texture/film-grain",
+          "position": {
+            "x": 1820,
+            "y": 420
+          },
+          "params": {
+            "amount": 0.05,
+            "grainSize": 1.5,
+            "animated": true,
+            "monochrome": true
+          }
+        },
+        {
+          "id": "output2d",
+          "type": "view2d",
+          "position": {
+            "x": 2060,
+            "y": 420
+          },
+          "params": {}
+        }
+      ],
+      "connections": [
+        {
+          "id": "glyph.geometry->output3d.geometry",
+          "fromNode": "glyph",
+          "fromSocket": "geometry",
+          "toNode": "output3d",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "world.environment->output3d.environment",
+          "fromNode": "world",
+          "fromSocket": "environment",
+          "toNode": "output3d",
+          "toSocket": "environment"
+        },
+        {
+          "id": "cam2d.texture->blur.texture",
+          "fromNode": "cam2d",
+          "fromSocket": "texture",
+          "toNode": "blur",
+          "toSocket": "texture"
+        },
+        {
+          "id": "blur.texture->emission5.texture",
+          "fromNode": "blur",
+          "fromSocket": "texture",
+          "toNode": "emission5",
+          "toSocket": "texture"
+        },
+        {
+          "id": "noise.texture->noiseRange.texture",
+          "fromNode": "noise",
+          "fromSocket": "texture",
+          "toNode": "noiseRange",
+          "toSocket": "texture"
+        },
+        {
+          "id": "emission5.texture->dotRadius.texture",
+          "fromNode": "emission5",
+          "fromSocket": "texture",
+          "toNode": "dotRadius",
+          "toSocket": "texture"
+        },
+        {
+          "id": "noiseRange.texture->dotRadius.outMaxTexture",
+          "fromNode": "noiseRange",
+          "fromSocket": "texture",
+          "toNode": "dotRadius",
+          "toSocket": "outMaxTexture"
+        },
+        {
+          "id": "grid.distance->dots.textureA",
+          "fromNode": "grid",
+          "fromSocket": "distance",
+          "toNode": "dots",
+          "toSocket": "textureA"
+        },
+        {
+          "id": "dotRadius.texture->dots.textureB",
+          "fromNode": "dotRadius",
+          "fromSocket": "texture",
+          "toNode": "dots",
+          "toSocket": "textureB"
+        },
+        {
+          "id": "emission5.texture->centerShift.textureA",
+          "fromNode": "emission5",
+          "fromSocket": "texture",
+          "toNode": "centerShift",
+          "toSocket": "textureA"
+        },
+        {
+          "id": "centerShift.texture->palette.texture",
+          "fromNode": "centerShift",
+          "fromSocket": "texture",
+          "toNode": "palette",
+          "toSocket": "texture"
+        },
+        {
+          "id": "palette.texture->colorize.textureB",
+          "fromNode": "palette",
+          "fromSocket": "texture",
+          "toNode": "colorize",
+          "toSocket": "textureB"
+        },
+        {
+          "id": "dots.texture->colorize.factorTexture",
+          "fromNode": "dots",
+          "fromSocket": "texture",
+          "toNode": "colorize",
+          "toSocket": "factorTexture"
+        },
+        {
+          "id": "colorize.texture->grain.texture",
+          "fromNode": "colorize",
+          "fromSocket": "texture",
+          "toNode": "grain",
+          "toSocket": "texture"
+        },
+        {
+          "id": "grain.texture->output2d.texture",
+          "fromNode": "grain",
+          "fromSocket": "texture",
+          "toNode": "output2d",
+          "toSocket": "texture"
+        }
+      ],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    }
+  ],
+  "activeCanvas": 0
+}

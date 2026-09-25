@@ -70,3 +70,22 @@ describe("new texture nodes", () => {
     }
   });
 });
+
+describe("halftone building blocks", () => {
+  it("Voronoi exposes Distance and Color outputs and a generator size", async () => {
+    const { TEXTURE_VORONOI_NODE } = await import("./nodes/textureTools");
+    expect(TEXTURE_VORONOI_NODE.outputs.map((o) => o.id)).toEqual(["distance", "color"]);
+    expect(TEXTURE_VORONOI_NODE.evaluate({}, TEXTURE_VORONOI_NODE.defaultParams, { nodeId: "vor" } as never)).toEqual({ distance: null, color: null });
+  });
+
+  it("Map Range accepts per-pixel Out Min / Out Max textures", async () => {
+    const { TEXTURE_MAP_RANGE_NODE } = await import("./nodes/textureTools");
+    expect(TEXTURE_MAP_RANGE_NODE.inputs.map((i) => i.id)).toEqual(["texture", "outMinTexture", "outMaxTexture"]);
+  });
+
+  it("Mix and Math keep their old unwired behavior by default (white / 1)", async () => {
+    const { TEXTURE_MIX_NODE, TEXTURE_MATH_NODE } = await import("./nodes/textureTools");
+    expect((TEXTURE_MIX_NODE.defaultParams.colorA as THREE.Color).getHex()).toBe(0xffffff);
+    expect(TEXTURE_MATH_NODE.defaultParams.b).toBe(1);
+  });
+});

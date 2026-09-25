@@ -466,6 +466,12 @@ export const DEMO_CATALOG: DemoCategory[] = [
           "Compositor-style 2D chain: bold text blurred by a noise mask, cut by moving wave rings, then bloom, invert, B-Spline color ramp and film grain.",
       },
       {
+        file: "demo_texture_halftone.tsuji",
+        label: "Halftone Glyph",
+        description:
+          "A heavily blurred letter turned into a regular dot screen: Voronoi distance vs. a Map Range radius with noisy max, colored through a B-Spline ramp.",
+      },
+      {
         file: "demo_texture_to_geometry.tsuji",
         label: "Texture to Geometry",
         description: "A texture's pixels spawning objects.",
