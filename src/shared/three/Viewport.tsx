@@ -6480,7 +6480,13 @@ export function Viewport({
           renderer.render(view2DScene, view2DCamera);
           renderer.setScissorTest(false);
         }
-        frameId = requestAnimationFrame(tick);
+        // No explicit requestAnimationFrame here — tick()'s own try/finally
+        // wrapper (below tickInner's definition) always reschedules once
+        // this call returns, early return included. Doing it here too
+        // double-scheduled every frame: each tick queued two more, which
+        // queued four, then eight — an exponential rAF pileup that froze
+        // the tab within a couple of seconds of switching a pane into 2D
+        // View mode.
         return;
       }
 
