@@ -6,6 +6,7 @@ import { toBoolean } from "../sockets";
 import { createNodeCache, disposeObject3D } from "../nodeCaches";
 import { requestCameraHandoff } from "../cameraHandoffStore";
 import { extractPositionFromInput } from "./transform";
+import { replaceCanvasTexture } from "./texture";
 
 const ZERO = new THREE.Vector3(0, 0, 0);
 const ONE = new THREE.Vector3(1, 1, 1);
@@ -47,9 +48,15 @@ interface CameraRttState {
   target?: THREE.WebGLRenderTarget;
   camera?: THREE.PerspectiveCamera;
   resolution?: number;
+  buffer?: Uint8Array;
+  canvas?: HTMLCanvasElement;
+  texture?: THREE.CanvasTexture;
 }
 
-const cameraRttCache = createNodeCache<CameraRttState>((s) => s.target?.dispose());
+const cameraRttCache = createNodeCache<CameraRttState>((s) => {
+  s.target?.dispose();
+  s.texture?.dispose();
+});
 
 /**
  * Renders the scene through a standalone camera at `pose`/`fov` into an
@@ -58,6 +65,18 @@ const cameraRttCache = createNodeCache<CameraRttState>((s) => s.target?.dispose(
  * called when `texture` is actually wired (see the `connectedOutputs` check
  * in evaluate below); an unwired output costs nothing beyond the check
  * itself, same as before this existed.
+ *
+ * Reads the render target back into a CanvasTexture rather than handing out
+ * `target.texture` directly: every existing texture/* node (Mix, Mask,
+ * Levels, …) reads its input via `source.image` on a plain 2D canvas —
+ * that's how Mix Texture, Mask, etc. get pixels at all — and a
+ * WebGLRenderTarget's texture has no `.image`, so it read as blank/white the
+ * moment it passed through any of them (direct "Camera texture -> Plane"
+ * worked, since a material's `map` just needs *a* THREE.Texture; "Camera
+ * texture -> Mix -> Plane" didn't). One `readRenderTargetPixels` per call
+ * keeps this output usable by the entire toolkit at the cost of a GPU
+ * readback each frame it's wired — acceptable for the resolutions this
+ * output targets (a texture within a scene, not the final frame).
  *
  * Every `userData.isHelper` object (camera frustums, empty crosshairs) is
  * force-hidden for the duration of this one render and restored right after
@@ -89,6 +108,13 @@ function renderCameraToTexture(
       colorSpace: THREE.SRGBColorSpace,
     });
     state.resolution = resolution;
+    state.buffer = new Uint8Array(resolution * resolution * 4);
+    state.canvas = document.createElement("canvas");
+    state.canvas.width = resolution;
+    state.canvas.height = resolution;
+    // Rebuilt only on resize, not every frame — see the note below on
+    // reusing the same CanvasTexture object across frames.
+    state.texture = replaceCanvasTexture(state.texture, state.canvas, THREE.SRGBColorSpace);
   }
   if (!state.camera) {
     state.camera = new THREE.PerspectiveCamera(fov || DEFAULT_FOV, 1, NEAR, FAR);
@@ -117,11 +143,30 @@ function renderCameraToTexture(
   const previousTarget = renderer.getRenderTarget();
   renderer.setRenderTarget(state.target);
   renderer.render(scene, camera);
+  renderer.readRenderTargetPixels(state.target, 0, 0, resolution, resolution, state.buffer!);
   renderer.setRenderTarget(previousTarget);
 
   for (const obj of hiddenHelpers) obj.visible = true;
 
-  return state.target.texture;
+  // readRenderTargetPixels reads bottom-up (GL convention); ImageData is
+  // top-down, so each row lands mirrored vertically without this flip.
+  const canvas = state.canvas!;
+  const ctx2d = canvas.getContext("2d")!;
+  const img = ctx2d.createImageData(resolution, resolution);
+  const rowBytes = resolution * 4;
+  for (let y = 0; y < resolution; y++) {
+    const srcOffset = (resolution - 1 - y) * rowBytes;
+    img.data.set(state.buffer!.subarray(srcOffset, srcOffset + rowBytes), y * rowBytes);
+  }
+  ctx2d.putImageData(img, 0, 0);
+  // Same CanvasTexture object every frame at a given resolution — unlike the
+  // other texture/* nodes' occasional rebuilds, this canvas's *content*
+  // changes every single frame it's wired (a live camera view), so the only
+  // thing worth avoiding here is the GPU texture object churn, not the
+  // upload itself.
+  state.texture!.needsUpdate = true;
+
+  return state.texture!;
 }
 
 /**
