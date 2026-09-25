@@ -1,0 +1,385 @@
+{
+  "canvases": [
+    {
+      "nodes": [
+        {
+          "id": "title",
+          "type": "object/text",
+          "position": {
+            "x": 0,
+            "y": 0
+          },
+          "params": {
+            "text": "TSUJI",
+            "fontPreset": "Anton",
+            "fontSize": 96,
+            "depth": 0.05,
+            "location": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "color": 16777215,
+            "shadeless": 1
+          }
+        },
+        {
+          "id": "world",
+          "type": "lighting/environment",
+          "position": {
+            "x": 0,
+            "y": 260
+          },
+          "params": {
+            "color": 0,
+            "intensity": 1,
+            "background": 1,
+            "ambientIntensity": 0,
+            "sunIntensity": 0
+          }
+        },
+        {
+          "id": "output3d",
+          "type": "render",
+          "position": {
+            "x": 320,
+            "y": 80
+          },
+          "params": {
+            "frameCount": 240,
+            "fps": 30
+          }
+        },
+        {
+          "id": "cam2d",
+          "type": "texture/camera",
+          "position": {
+            "x": 320,
+            "y": 420
+          },
+          "params": {
+            "location": {
+              "x": 0,
+              "y": 0,
+              "z": 3.8
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "fov": 50,
+            "resolutionPreset": "1920 \u00d7 1080 (Full HD)",
+            "updateEvery": 1
+          }
+        },
+        {
+          "id": "blurSoft",
+          "type": "texture/blur",
+          "position": {
+            "x": 640,
+            "y": 340
+          },
+          "params": {
+            "mode": "gaussian",
+            "radius": 22
+          }
+        },
+        {
+          "id": "blurWide",
+          "type": "texture/blur",
+          "position": {
+            "x": 640,
+            "y": 520
+          },
+          "params": {
+            "mode": "gaussian",
+            "radius": 100
+          }
+        },
+        {
+          "id": "noise",
+          "type": "texture/noise",
+          "position": {
+            "x": 640,
+            "y": 720
+          },
+          "params": {
+            "scale": 4,
+            "detail": 0,
+            "roughness": 0.5,
+            "speed": 0.12
+          }
+        },
+        {
+          "id": "noiseRamp",
+          "type": "texture/color-ramp",
+          "position": {
+            "x": 900,
+            "y": 720
+          },
+          "params": {
+            "ramp": {
+              "stops": [
+                {
+                  "position": 0.48,
+                  "color": 0
+                },
+                {
+                  "position": 0.62,
+                  "color": 16777215
+                }
+              ],
+              "interpolation": "linear"
+            }
+          }
+        },
+        {
+          "id": "mixBlur",
+          "type": "texture/mix",
+          "position": {
+            "x": 1160,
+            "y": 440
+          },
+          "params": {
+            "blendMode": "mix",
+            "factor": 0.5
+          }
+        },
+        {
+          "id": "emission2",
+          "type": "texture/levels",
+          "position": {
+            "x": 1400,
+            "y": 440
+          },
+          "params": {
+            "inBlack": 0,
+            "inWhite": 0.72,
+            "gamma": 1,
+            "outBlack": 0,
+            "outWhite": 1
+          }
+        },
+        {
+          "id": "rings",
+          "type": "texture/wave",
+          "position": {
+            "x": 1400,
+            "y": 700
+          },
+          "params": {
+            "waveType": "rings",
+            "profile": "sine",
+            "scale": 10,
+            "speed": -2
+          }
+        },
+        {
+          "id": "lessThan",
+          "type": "texture/math",
+          "position": {
+            "x": 1660,
+            "y": 520
+          },
+          "params": {
+            "op": "less-than",
+            "channelMode": "luminance"
+          }
+        },
+        {
+          "id": "bloom",
+          "type": "texture/bloom",
+          "position": {
+            "x": 1900,
+            "y": 520
+          },
+          "params": {
+            "threshold": 0,
+            "intensity": 0.85,
+            "radius": 150
+          }
+        },
+        {
+          "id": "invert",
+          "type": "texture/invert",
+          "position": {
+            "x": 2140,
+            "y": 520
+          },
+          "params": {
+            "factor": 1
+          }
+        },
+        {
+          "id": "palette",
+          "type": "texture/color-ramp",
+          "position": {
+            "x": 2380,
+            "y": 520
+          },
+          "params": {
+            "ramp": {
+              "stops": [
+                {
+                  "position": 0.18,
+                  "color": 16734746
+                },
+                {
+                  "position": 0.45,
+                  "color": 16759180
+                },
+                {
+                  "position": 0.75,
+                  "color": 11062771
+                }
+              ],
+              "interpolation": "b-spline"
+            }
+          }
+        },
+        {
+          "id": "grain",
+          "type": "texture/film-grain",
+          "position": {
+            "x": 2620,
+            "y": 520
+          },
+          "params": {
+            "amount": 0.06,
+            "grainSize": 1.5,
+            "animated": true,
+            "monochrome": true
+          }
+        },
+        {
+          "id": "output2d",
+          "type": "view2d",
+          "position": {
+            "x": 2860,
+            "y": 520
+          },
+          "params": {}
+        }
+      ],
+      "connections": [
+        {
+          "id": "title.geometry->output3d.geometry",
+          "fromNode": "title",
+          "fromSocket": "geometry",
+          "toNode": "output3d",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "world.environment->output3d.environment",
+          "fromNode": "world",
+          "fromSocket": "environment",
+          "toNode": "output3d",
+          "toSocket": "environment"
+        },
+        {
+          "id": "cam2d.texture->blurSoft.texture",
+          "fromNode": "cam2d",
+          "fromSocket": "texture",
+          "toNode": "blurSoft",
+          "toSocket": "texture"
+        },
+        {
+          "id": "cam2d.texture->blurWide.texture",
+          "fromNode": "cam2d",
+          "fromSocket": "texture",
+          "toNode": "blurWide",
+          "toSocket": "texture"
+        },
+        {
+          "id": "noise.texture->noiseRamp.texture",
+          "fromNode": "noise",
+          "fromSocket": "texture",
+          "toNode": "noiseRamp",
+          "toSocket": "texture"
+        },
+        {
+          "id": "blurSoft.texture->mixBlur.textureA",
+          "fromNode": "blurSoft",
+          "fromSocket": "texture",
+          "toNode": "mixBlur",
+          "toSocket": "textureA"
+        },
+        {
+          "id": "blurWide.texture->mixBlur.textureB",
+          "fromNode": "blurWide",
+          "fromSocket": "texture",
+          "toNode": "mixBlur",
+          "toSocket": "textureB"
+        },
+        {
+          "id": "noiseRamp.texture->mixBlur.factorTexture",
+          "fromNode": "noiseRamp",
+          "fromSocket": "texture",
+          "toNode": "mixBlur",
+          "toSocket": "factorTexture"
+        },
+        {
+          "id": "mixBlur.texture->emission2.texture",
+          "fromNode": "mixBlur",
+          "fromSocket": "texture",
+          "toNode": "emission2",
+          "toSocket": "texture"
+        },
+        {
+          "id": "rings.texture->lessThan.textureA",
+          "fromNode": "rings",
+          "fromSocket": "texture",
+          "toNode": "lessThan",
+          "toSocket": "textureA"
+        },
+        {
+          "id": "emission2.texture->lessThan.textureB",
+          "fromNode": "emission2",
+          "fromSocket": "texture",
+          "toNode": "lessThan",
+          "toSocket": "textureB"
+        },
+        {
+          "id": "lessThan.texture->bloom.texture",
+          "fromNode": "lessThan",
+          "fromSocket": "texture",
+          "toNode": "bloom",
+          "toSocket": "texture"
+        },
+        {
+          "id": "bloom.texture->invert.texture",
+          "fromNode": "bloom",
+          "fromSocket": "texture",
+          "toNode": "invert",
+          "toSocket": "texture"
+        },
+        {
+          "id": "invert.texture->palette.texture",
+          "fromNode": "invert",
+          "fromSocket": "texture",
+          "toNode": "palette",
+          "toSocket": "texture"
+        },
+        {
+          "id": "palette.texture->grain.texture",
+          "fromNode": "palette",
+          "fromSocket": "texture",
+          "toNode": "grain",
+          "toSocket": "texture"
+        },
+        {
+          "id": "grain.texture->output2d.texture",
+          "fromNode": "grain",
+          "fromSocket": "texture",
+          "toNode": "output2d",
+          "toSocket": "texture"
+        }
+      ],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    }
+  ],
+  "activeCanvas": 0
+}

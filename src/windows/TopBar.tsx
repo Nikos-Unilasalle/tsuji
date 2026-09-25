@@ -47,7 +47,7 @@ export interface TopBarProps {
   onToggleTimeline?: () => void;
   is2DMode?: boolean;
   onToggle2DMode?: () => void;
-  /** Gates the Share menu's "2D View" row — true when the graph has a `view2d` node for that window to display. */
+  /** Gates the Share menu's "2D Render" row — true when the graph has a `view2d` node for that window to display. */
   hasView2DNode?: boolean;
   isPlaying?: boolean;
   onTogglePlay?: () => void;
@@ -217,7 +217,7 @@ export const TopBar: React.FC<TopBarProps> = ({
       setIsView2DOpen(true);
     } catch (err: unknown) {
       const error = err as Error;
-      showToast(`2D View error: ${error.message}`, true);
+      showToast(`2D Render error: ${error.message}`, true);
     }
   };
 
@@ -443,7 +443,7 @@ export const TopBar: React.FC<TopBarProps> = ({
               type="button"
               className={`top-bar-space-btn ${spaces.view3D ? "active" : ""}`}
               onClick={() => onToggleSpace("view3D")}
-              title={is2DMode ? "Toggle 2D Viewport (2)" : "Toggle 3D Viewport (2)"}
+              title={is2DMode ? "Toggle 2D Renderport (2)" : "Toggle 3D Viewport (2)"}
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 {is2DMode ? (
@@ -476,7 +476,7 @@ export const TopBar: React.FC<TopBarProps> = ({
               type="button"
               className={`top-bar-space-btn ${spaces.view2D ? "active" : ""}`}
               onClick={() => onToggleSpace("view2D")}
-              title="Toggle 2D View (view2d node's texture) (5)"
+              title="Toggle 2D Render (5)"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <rect x="3" y="5" width="18" height="13" rx="2" />

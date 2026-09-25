@@ -7,7 +7,7 @@ import { GraphPayload, notifyView2DClosed, startReceiving } from "../shared/ipc"
 import { Viewport } from "../shared/three/Viewport";
 
 /**
- * The 2D View window — a separate OS window (see ipc.ts/view2d_window.rs),
+ * The 2D Render window — a separate OS window (see ipc.ts/view2d_window.rs),
  * same reasoning as OutputWindow: its own webview means whatever's wired
  * into the `view2d` node (a CPU-heavy texture chain, in particular) runs on
  * its own thread/rAF, so it can never make the main editor's 3D viewport

@@ -460,6 +460,12 @@ export const DEMO_CATALOG: DemoCategory[] = [
         description: "Two patterns mixed, transformed, and used as a normal map.",
       },
       {
+        file: "demo_texture_ring_distortion.tsuji",
+        label: "Ring Distortion Type",
+        description:
+          "Compositor-style 2D chain: bold text blurred by a noise mask, cut by moving wave rings, then bloom, invert, B-Spline color ramp and film grain.",
+      },
+      {
         file: "demo_texture_to_geometry.tsuji",
         label: "Texture to Geometry",
         description: "A texture's pixels spawning objects.",

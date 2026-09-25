@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import * as THREE from "three";
-import { ColorRamp, ColorStop, DEFAULT_COLOR_RAMP, evalColorRamp } from "../shared/graph/colorRamp";
+import { COLOR_RAMP_INTERPOLATIONS, ColorRamp, ColorRampInterpolation, ColorStop, DEFAULT_COLOR_RAMP, evalColorRamp } from "../shared/graph/colorRamp";
 import { ColorPickerInput } from "./ColorPickerInput";
 import { DragNumberInput } from "./DragNumberInput";
 import "./color-ramp-editor.css";
@@ -202,10 +202,13 @@ export const ColorRampEditor: React.FC<ColorRampEditorProps> = ({ value, onChang
         <select
           className="color-ramp-select"
           value={ramp.interpolation}
-          onChange={(e) => onChange({ ...ramp, interpolation: e.target.value === "constant" ? "constant" : "linear" })}
+          onChange={(e) => onChange({ ...ramp, interpolation: e.target.value as ColorRampInterpolation })}
         >
-          <option value="linear">Linear</option>
-          <option value="constant">Constant</option>
+          {COLOR_RAMP_INTERPOLATIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
         </select>
       </div>
       <canvas

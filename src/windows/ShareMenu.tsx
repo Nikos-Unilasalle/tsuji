@@ -121,9 +121,9 @@ export const ShareMenu: React.FC<ShareMenuProps> = ({
                 setIsOpen(false);
               }}
             >
-              <span className="share-menu-item-label">{isView2DOpen ? "Close 2D View" : "2D View"}</span>
+              <span className="share-menu-item-label">{isView2DOpen ? "Close 2D Render" : "2D Render"}</span>
               <span className="share-menu-item-desc">
-                {isView2DOpen ? "Closes the 2D View window." : "Preview a view2d node's texture in its own window."}
+                {isView2DOpen ? "Closes the 2D Render window." : "Show the 2D Render node's texture in its own window."}
               </span>
             </button>
           )}

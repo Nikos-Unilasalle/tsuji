@@ -1,9 +1,8 @@
 import * as THREE from "three";
 import { NodeDefinition } from "../types";
-import { toBoolean } from "../sockets";
 import { createNodeCache, disposeObject3D } from "../nodeCaches";
 import { manualPose } from "./camera";
-import { replaceCanvasTexture } from "./texture";
+import { markGpuTextureRendered, registerGpuTexture } from "../gpuTexture";
 
 const NEAR = 0.05;
 const FAR = 500;
@@ -80,33 +79,43 @@ interface TextureCameraState {
   camera?: THREE.PerspectiveCamera;
   width?: number;
   height?: number;
-  buffer?: Uint8Array;
-  canvas?: HTMLCanvasElement;
-  texture?: THREE.CanvasTexture;
   /** Ticks up once per evaluate() call — throttle skips the render unless this hits `updateEvery`. */
   tickCount: number;
 }
 
 const textureCameraCache = createNodeCache<TextureCameraState>((s) => {
   s.target?.dispose();
-  s.texture?.dispose();
 });
 
 const RESOLUTION_PRESETS: Record<string, [number, number] | null> = {
+  "1920 × 1080 (Full HD)": [1920, 1080],
+  "1280 × 720 (HD)": [1280, 720],
+  "3840 × 2160 (4K UHD)": [3840, 2160],
+  "1080 × 1920 (Vertical)": [1080, 1920],
+  "1080 × 1080 (Square)": [1080, 1080],
+  "1024 × 1024": [1024, 1024],
+  "512 × 512": [512, 512],
+  "256 × 256": [256, 256],
+  Custom: null,
+};
+
+/** Preset names used before the "W × H" labels, so saved graphs keep their size. */
+const LEGACY_RESOLUTION_PRESETS: Record<string, [number, number]> = {
   "1:1 (256x256)": [256, 256],
   "1:1 (512x512)": [512, 512],
   "1:1 (1024x1024)": [1024, 1024],
   "16:9 (1280x720)": [1280, 720],
   "16:9 (1920x1080)": [1920, 1080],
   "9:16 (720x1280)": [720, 1280],
-  Custom: null,
 };
+
+const DEFAULT_PRESET = "1920 × 1080 (Full HD)";
 
 /**
  * A camera dedicated to feeding a texture, separate from `calibration/camera`
  * (which drives the main 3D view) for two reasons: it never costs anything
- * unless actually wired up, and it carries its own resolution/throttle/
- * readback controls tuned for that one job instead of inheriting the main
+ * unless actually wired up, and it carries its own resolution and throttle
+ * controls tuned for that one job instead of inheriting the main
  * Camera's calibration mode, helper geometry and active-view plumbing.
  *
  * Two very different things share this one node on purpose: a low-res,
@@ -138,14 +147,13 @@ export const TEXTURE_CAMERA_NODE: NodeDefinition = {
     target: new THREE.Vector3(0, 0, 0),
     up: new THREE.Vector3(0, 1, 0),
     fov: DEFAULT_FOV,
-    resolutionPreset: "1:1 (512x512)",
-    width: 512,
-    height: 512,
+    resolutionPreset: DEFAULT_PRESET,
+    width: 1920,
+    height: 1080,
     updateEvery: 1,
-    cpuReadback: true,
   },
   dynamicParamFields: (instance) => {
-    const isCustom = String(instance.params.resolutionPreset ?? "1:1 (512x512)") === "Custom";
+    const isCustom = String(instance.params.resolutionPreset ?? DEFAULT_PRESET) === "Custom";
     return [
       { id: "location", label: "Location", kind: "vector" },
       { id: "rotation", label: "Rotation (°)", kind: "vector", step: 1, degrees: true },
@@ -166,11 +174,6 @@ export const TEXTURE_CAMERA_NODE: NodeDefinition = {
         kind: "number",
         step: 1,
       },
-      {
-        id: "cpuReadback",
-        label: "CPU Readback (needed for Blur/Mix/Mask/etc downstream — off is faster if only feeding a material)",
-        kind: "boolean",
-      },
     ];
   },
   evaluate: (inputs, params, ctx) => {
@@ -182,7 +185,8 @@ export const TEXTURE_CAMERA_NODE: NodeDefinition = {
 
     const pose = manualPose(inputs, params, ctx.connectedInputs);
 
-    const preset = RESOLUTION_PRESETS[String(params.resolutionPreset ?? "1:1 (512x512)")];
+    const presetKey = String(params.resolutionPreset ?? DEFAULT_PRESET);
+    const preset = RESOLUTION_PRESETS[presetKey] ?? LEGACY_RESOLUTION_PRESETS[presetKey];
     const [width, height] = preset ?? [
       Math.max(16, Math.round(Number(params.width) || 512)),
       Math.max(16, Math.round(Number(params.height) || 512)),
@@ -209,34 +213,28 @@ export const TEXTURE_CAMERA_NODE: NodeDefinition = {
       return { geometry: group, texture: null };
     }
 
-    const cpuReadback = toBoolean(params.cpuReadback ?? true);
     const updateEvery = Math.max(1, Math.round(Number(params.updateEvery) || 1));
 
     state.tickCount += 1;
     const dueForUpdate = (state.tickCount - 1) % updateEvery === 0;
 
-    if (!dueForUpdate && (state.texture || state.target)) {
-      return { geometry: group, texture: cpuReadback ? state.texture ?? null : state.target?.texture ?? null };
+    if (!dueForUpdate && state.target) {
+      return { geometry: group, texture: state.target.texture };
     }
 
     if (!state.target || state.width !== width || state.height !== height) {
       state.target?.dispose();
-      state.target = new THREE.WebGLRenderTarget(width, height, { colorSpace: THREE.SRGBColorSpace });
+      state.target = new THREE.WebGLRenderTarget(width, height, {
+        colorSpace: THREE.SRGBColorSpace,
+        generateMipmaps: true,
+        minFilter: THREE.LinearMipmapLinearFilter,
+        samples: 4,
+      });
+      state.target.texture.wrapS = THREE.RepeatWrapping;
+      state.target.texture.wrapT = THREE.RepeatWrapping;
+      registerGpuTexture(state.target);
       state.width = width;
       state.height = height;
-      // Force the canvas/texture pair below to rebuild at the new size too.
-      state.buffer = undefined;
-      state.canvas = undefined;
-    }
-    // Independent of the resolution check above — cpuReadback can be
-    // toggled at runtime without a resolution change, and the canvas/
-    // texture pair only needs to exist at all when it's on.
-    if (cpuReadback && !state.canvas) {
-      state.buffer = new Uint8Array(width * height * 4);
-      state.canvas = document.createElement("canvas");
-      state.canvas.width = width;
-      state.canvas.height = height;
-      state.texture = replaceCanvasTexture(state.texture, state.canvas, THREE.SRGBColorSpace);
     }
     if (!state.camera) {
       state.camera = new THREE.PerspectiveCamera(DEFAULT_FOV, width / height, NEAR, FAR);
@@ -263,32 +261,21 @@ export const TEXTURE_CAMERA_NODE: NodeDefinition = {
     });
 
     const previousTarget = ctx.renderer.getRenderTarget();
+    const previousClearColor = ctx.renderer.getClearColor(new THREE.Color());
+    const previousClearAlpha = ctx.renderer.getClearAlpha();
     ctx.renderer.setRenderTarget(state.target);
+    // Viewports run with autoClear off, so without this every frame draws over the last one.
+    ctx.renderer.setClearColor(0x000000, 0);
+    ctx.renderer.clear(true, true, true);
     ctx.renderer.render(ctx.scene, camera);
-    if (cpuReadback && state.buffer) {
-      ctx.renderer.readRenderTargetPixels(state.target, 0, 0, width, height, state.buffer);
-    }
     ctx.renderer.setRenderTarget(previousTarget);
+    ctx.renderer.setClearColor(previousClearColor, previousClearAlpha);
+    markGpuTextureRendered(state.target, ctx.renderer);
 
     for (const obj of hiddenHelpers) obj.visible = true;
 
-    if (!cpuReadback) {
-      return { geometry: group, texture: state.target.texture };
-    }
-
-    // Same bottom-up-to-top-down row flip as Camera's own RTT readback —
-    // required any time readRenderTargetPixels output lands in a canvas.
-    const canvas = state.canvas!;
-    const ctx2d = canvas.getContext("2d")!;
-    const img = ctx2d.createImageData(width, height);
-    const rowBytes = width * 4;
-    for (let y = 0; y < height; y++) {
-      const srcOffset = (height - 1 - y) * rowBytes;
-      img.data.set(state.buffer!.subarray(srcOffset, srcOffset + rowBytes), y * rowBytes);
-    }
-    ctx2d.putImageData(img, 0, 0);
-    state.texture!.needsUpdate = true;
-
-    return { geometry: group, texture: state.texture };
+    // Stays on the GPU: texture tools downstream are shader passes, and the
+    // few CPU consumers (Pixel Spawner, Sample Texture) read it back lazily.
+    return { geometry: group, texture: state.target.texture };
   },
 };

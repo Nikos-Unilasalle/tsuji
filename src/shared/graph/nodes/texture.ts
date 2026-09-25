@@ -5,8 +5,7 @@ import { createNodeCache, disposeObject3D } from "../nodeCaches";
 import { composeNativeMatrix, getSourcePivot } from "./transform";
 import { COMMON_PRIMITIVE_OUTPUTS, primitiveOutputs } from "./object";
 import { InstancedItemSpec, renderInstanced } from "./instancedRender";
-import { ColorRamp, DEFAULT_COLOR_RAMP, sampleColorRamp } from "../colorRamp";
-import { evalProfileCurve, ProfilePoint } from "../profileCurve";
+import { getDrawableImage, OUTPUT_SIZE_PRESETS, outputSizeFields, resolveOutputSize } from "../gpuTexture";
 
 /**
  * Points a CanvasTexture at `canvas`, forcing a fresh texture object rather
@@ -629,13 +628,14 @@ function colorAt(a: THREE.Color, b: THREE.Color, t: number): [number, number, nu
 function drawPerPixel(canvas: HTMLCanvasElement, fn: (x: number, y: number) => [number, number, number]): void {
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
-  const size = canvas.width;
-  const img = ctx.createImageData(size, size);
+  const w = canvas.width;
+  const h = canvas.height;
+  const img = ctx.createImageData(w, h);
   const d = img.data;
-  for (let y = 0; y < size; y++) {
-    for (let x = 0; x < size; x++) {
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
       const [r, g, b] = fn(x, y);
-      const i = (y * size + x) * 4;
+      const i = (y * w + x) * 4;
       d[i] = r;
       d[i + 1] = g;
       d[i + 2] = b;
@@ -656,9 +656,12 @@ function drawProcedural(
 ): void {
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
-  const size = canvas.width;
+  const w = canvas.width;
+  const h = canvas.height;
+  // Scale counts cells down the height; cells stay square on wide/tall outputs.
   const cells = Math.max(1, Math.round(scale));
-  const cell = size / cells;
+  const cell = h / cells;
+  const cols = Math.ceil(w / cell);
   const hex = (c: THREE.Color) => `#${c.getHexString()}`;
 
   if (type === "perlin" || type === "turbulence" || type === "voronoi" || type === "wave" || type === "noise" || type === "dots") {
@@ -716,62 +719,64 @@ function drawProcedural(
   }
 
   ctx.fillStyle = hex(colorA);
-  ctx.fillRect(0, 0, size, size);
+  ctx.fillRect(0, 0, w, h);
 
   if (type === "checker") {
     ctx.fillStyle = hex(colorB);
-    for (let i = 0; i < cells; i++) {
+    for (let i = 0; i < cols; i++) {
       for (let j = 0; j < cells; j++) {
         if ((i + j) % 2 === 1) ctx.fillRect(i * cell, j * cell, cell + 1, cell + 1);
       }
     }
   } else if (type === "stripes") {
     ctx.fillStyle = hex(colorB);
-    for (let i = 1; i < cells; i += 2) ctx.fillRect(i * cell, 0, cell + 1, size);
+    for (let i = 1; i < cols; i += 2) ctx.fillRect(i * cell, 0, cell + 1, h);
   } else if (type === "grid") {
     ctx.strokeStyle = hex(colorB);
     ctx.lineWidth = Math.max(1, cell * 0.12);
-    for (let i = 0; i <= cells; i++) {
+    for (let i = 0; i <= cols; i++) {
       ctx.beginPath();
       ctx.moveTo(i * cell, 0);
-      ctx.lineTo(i * cell, size);
+      ctx.lineTo(i * cell, h);
       ctx.stroke();
+    }
+    for (let i = 0; i <= cells; i++) {
       ctx.beginPath();
       ctx.moveTo(0, i * cell);
-      ctx.lineTo(size, i * cell);
+      ctx.lineTo(w, i * cell);
       ctx.stroke();
     }
   } else if (type === "gradient") {
-    const g = ctx.createLinearGradient(0, 0, size, size);
+    const g = ctx.createLinearGradient(0, 0, w, h);
     g.addColorStop(0, hex(colorA));
     g.addColorStop(1, hex(colorB));
     ctx.fillStyle = g;
-    ctx.fillRect(0, 0, size, size);
+    ctx.fillRect(0, 0, w, h);
   } else if (type === "rings") {
-    const c = size / 2;
+    const c = h / 2;
     ctx.strokeStyle = hex(colorB);
     ctx.lineWidth = Math.max(1, cell * 0.25);
     for (let r = 1; r <= cells; r++) {
       ctx.beginPath();
-      ctx.arc(c, c, (r / cells) * c, 0, Math.PI * 2);
+      ctx.arc(w / 2, c, (r / cells) * c, 0, Math.PI * 2);
       ctx.stroke();
     }
   } else if (type === "radial") {
-    const c = size / 2;
-    const g = ctx.createRadialGradient(c, c, 0, c, c, c);
+    const c = h / 2;
+    const g = ctx.createRadialGradient(w / 2, c, 0, w / 2, c, c);
     g.addColorStop(0, hex(colorA));
     g.addColorStop(1, hex(colorB));
     ctx.fillStyle = g;
-    ctx.fillRect(0, 0, size, size);
+    ctx.fillRect(0, 0, w, h);
   } else if (type === "brick") {
     ctx.fillStyle = hex(colorB);
     ctx.lineWidth = Math.max(1, cell * 0.08);
     const rowH = cell;
-    const rows = Math.max(1, Math.round(size / rowH));
+    const rows = Math.max(1, Math.round(h / rowH));
     for (let row = 0; row < rows; row++) {
       const y = row * rowH;
       const offset = row % 2 === 0 ? 0 : cell / 2;
-      for (let x = -cell; x < size + cell; x += cell) {
+      for (let x = -cell; x < w + cell; x += cell) {
         ctx.strokeRect(x + offset, y, cell, rowH);
       }
     }
@@ -797,7 +802,9 @@ export const TEXTURE_PROCEDURAL_NODE: NodeDefinition = {
     scale: 8,
     seed: 1,
     octaves: 3,
-    resolution: 256,
+    size: "1024 × 1024",
+    width: 1920,
+    height: 1080,
     uvScaleX: 1,
     uvScaleY: 1,
     uvOffsetX: 0,
@@ -817,7 +824,7 @@ export const TEXTURE_PROCEDURAL_NODE: NodeDefinition = {
       { id: "scale", label: "Scale / Density", kind: "number", step: 1 },
       ...(type === "perlin" || type === "turbulence" ? [{ id: "octaves", label: "Octaves", kind: "number", step: 1 } as const] : []),
       { id: "seed", label: "Seed", kind: "number", step: 1 },
-      { id: "resolution", label: "Resolution (px)", kind: "number", step: 64 },
+      ...outputSizeFields(instance.params, false),
     ];
   },
   evaluate: (inputs, params, ctx) => {
@@ -825,7 +832,9 @@ export const TEXTURE_PROCEDURAL_NODE: NodeDefinition = {
     if (typeof document === "undefined") return { texture: null };
 
     const type = String(params.type || "checker");
-    const resolution = Math.max(16, Math.min(1024, Math.round(Number(params.resolution) || 256)));
+    // No input to inherit from; anything else (incl. graphs saved with the old square `resolution`) gets the default.
+    const sizeParams = String(params.size) in OUTPUT_SIZE_PRESETS ? params : { ...params, size: "1024 × 1024" };
+    const [width, height] = resolveOutputSize(sizeParams, [], [1024, 1024]);
     const rawScale = inputs.scale !== undefined ? inputs.scale : params.scale;
     const scale = Math.max(0.0001, Number(rawScale) || 8);
     const rawSeed = inputs.seed !== undefined ? inputs.seed : params.seed;
@@ -835,11 +844,11 @@ export const TEXTURE_PROCEDURAL_NODE: NodeDefinition = {
     const colorB = asColor(params.colorB, new THREE.Color(0x222222));
 
     if (!state.canvas) state.canvas = document.createElement("canvas");
-    const sig = JSON.stringify([type, resolution, scale, seed, octaves, colorA.getHexString(), colorB.getHexString()]);
+    const sig = JSON.stringify([type, width, height, scale, seed, octaves, colorA.getHexString(), colorB.getHexString()]);
     if (sig !== state.signature) {
       state.signature = sig;
-      state.canvas.width = resolution;
-      state.canvas.height = resolution;
+      state.canvas.width = width;
+      state.canvas.height = height;
       drawProcedural(state.canvas, type, colorA, colorB, scale, seed, octaves);
       state.texture = replaceCanvasTexture(state.texture, state.canvas, THREE.SRGBColorSpace);
     }
@@ -854,1533 +863,20 @@ export const TEXTURE_PROCEDURAL_NODE: NodeDefinition = {
   },
 };
 
-interface MixTextureState {
-  texture?: THREE.CanvasTexture;
-  canvas?: HTMLCanvasElement;
-  aCanvas?: HTMLCanvasElement;
-  bCanvas?: HTMLCanvasElement;
-  signature?: string;
-}
-
-const mixTextureCache = createNodeCache<MixTextureState>((s) => s.texture?.dispose());
-
-function getMixState(nodeId: string): MixTextureState {
-  let state = mixTextureCache.get(nodeId);
-  if (!state) {
-    state = {};
-    mixTextureCache.set(nodeId, state);
-  }
-  return state;
-}
-
-/** Per-channel blend, 0..1 in, 0..1 out — same formulas as Blender's Mix Color node. */
-function blendChannel(mode: string, a: number, b: number): number {
-  switch (mode) {
-    case "add":
-      return a + b;
-    case "multiply":
-      return a * b;
-    case "screen":
-      return 1 - (1 - a) * (1 - b);
-    case "overlay":
-      return a < 0.5 ? 2 * a * b : 1 - 2 * (1 - a) * (1 - b);
-    case "subtract":
-      return a - b;
-    case "difference":
-      return Math.abs(a - b);
-    case "darken":
-      return Math.min(a, b);
-    case "lighten":
-      return Math.max(a, b);
-    default: // mix
-      return b;
-  }
-}
-
 /** Draws `source` (any drawable texture image, or flat white if absent) into `canvas` at `resolution`. */
 export function drawSourceToCanvas(canvas: HTMLCanvasElement, source: THREE.Texture | null, resolution: number): void {
   canvas.width = resolution;
   canvas.height = resolution;
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
-  if (source && isDrawable(source.image)) {
-    ctx.drawImage(source.image as CanvasImageSource, 0, 0, resolution, resolution);
+  const image = getDrawableImage(source);
+  if (image) {
+    ctx.drawImage(image, 0, 0, resolution, resolution);
   } else {
     ctx.fillStyle = "#ffffff";
     ctx.fillRect(0, 0, resolution, resolution);
   }
 }
-
-interface ToNormalState {
-  texture?: THREE.CanvasTexture;
-  canvas?: HTMLCanvasElement;
-  heightCanvas?: HTMLCanvasElement;
-  signature?: string;
-}
-
-const toNormalCache = createNodeCache<ToNormalState>((s) => s.texture?.dispose());
-
-function getToNormalState(nodeId: string): ToNormalState {
-  let state = toNormalCache.get(nodeId);
-  if (!state) {
-    state = {};
-    toNormalCache.set(nodeId, state);
-  }
-  return state;
-}
-
-function isDrawable(v: unknown): boolean {
-  return (
-    (typeof HTMLCanvasElement !== "undefined" && v instanceof HTMLCanvasElement) ||
-    (typeof HTMLImageElement !== "undefined" && v instanceof HTMLImageElement) ||
-    (typeof ImageBitmap !== "undefined" && v instanceof ImageBitmap) ||
-    (typeof HTMLVideoElement !== "undefined" && v instanceof HTMLVideoElement)
-  );
-}
-
-/** Texture to Normal node — derives a tangent-space normal map from a texture's luminance. */
-export const TEXTURE_TO_NORMAL_NODE: NodeDefinition = {
-  type: "texture/to_normal",
-  label: "Texture to Normal",
-  category: "textureTools",
-  inputs: [{ id: "texture", label: "Texture", type: "texture" }],
-  outputs: [{ id: "normal", label: "Normal Map", type: "texture" }],
-  defaultParams: { strength: 1, resolution: 256 },
-  dynamicParamFields: () => [
-    { id: "strength", label: "Strength", kind: "number", step: 0.1 },
-    { id: "resolution", label: "Resolution (px)", kind: "number", step: 64 },
-  ],
-  evaluate: (inputs, params, ctx) => {
-    const state = getToNormalState(ctx.nodeId);
-    if (typeof document === "undefined") return { normal: null };
-    const source = inputs.texture instanceof THREE.Texture ? inputs.texture : null;
-    if (!source || !isDrawable(source.image)) return { normal: null };
-
-    const strength = Math.max(0, Number(params.strength) || 1);
-    const resolution = Math.max(16, Math.min(1024, Math.round(Number(params.resolution) || 256)));
-    const sig = JSON.stringify([strength, resolution, source.uuid, source.version]);
-    if (sig !== state.signature) {
-      state.signature = sig;
-      if (!state.heightCanvas) state.heightCanvas = document.createElement("canvas");
-      if (!state.canvas) state.canvas = document.createElement("canvas");
-
-      const hc = state.heightCanvas;
-      hc.width = resolution;
-      hc.height = resolution;
-      const hctx = hc.getContext("2d");
-      if (!hctx) return { normal: null };
-      hctx.drawImage(source.image as CanvasImageSource, 0, 0, resolution, resolution);
-      const hData = hctx.getImageData(0, 0, resolution, resolution).data;
-
-      // Grayscale height map.
-      const height = new Float32Array(resolution * resolution);
-      for (let i = 0; i < height.length; i++) {
-        height[i] = (0.299 * hData[i * 4] + 0.587 * hData[i * 4 + 1] + 0.114 * hData[i * 4 + 2]) / 255;
-      }
-
-      const nc = state.canvas;
-      nc.width = resolution;
-      nc.height = resolution;
-      const nctx = nc.getContext("2d");
-      if (!nctx) return { normal: null };
-      const nImg = nctx.createImageData(resolution, resolution);
-      const nd = nImg.data;
-      const at = (x: number, y: number) =>
-        (((y + resolution) % resolution) * resolution) + ((x + resolution) % resolution);
-      const n = new THREE.Vector3();
-      for (let y = 0; y < resolution; y++) {
-        for (let x = 0; x < resolution; x++) {
-          const dx = (height[at(x + 1, y)] - height[at(x - 1, y)]) * 0.5;
-          const dy = (height[at(x, y + 1)] - height[at(x, y - 1)]) * 0.5;
-          n.set(-dx * strength, -dy * strength, 1).normalize();
-          const i = (y * resolution + x) * 4;
-          nd[i] = (n.x * 0.5 + 0.5) * 255;
-          nd[i + 1] = (n.y * 0.5 + 0.5) * 255;
-          nd[i + 2] = (n.z * 0.5 + 0.5) * 255;
-          nd[i + 3] = 255;
-        }
-      }
-      nctx.putImageData(nImg, 0, 0);
-
-      // normal maps stay linear, not sRGB
-      state.texture = replaceCanvasTexture(state.texture, nc, THREE.LinearSRGBColorSpace);
-    }
-
-    return { normal: state.texture };
-  },
-};
-
-interface ToRoughnessState {
-  texture?: THREE.CanvasTexture;
-  canvas?: HTMLCanvasElement;
-  signature?: string;
-}
-
-const toRoughnessCache = createNodeCache<ToRoughnessState>((s) => s.texture?.dispose());
-
-function getToRoughnessState(nodeId: string): ToRoughnessState {
-  let state = toRoughnessCache.get(nodeId);
-  if (!state) {
-    state = {};
-    toRoughnessCache.set(nodeId, state);
-  }
-  return state;
-}
-
-/**
- * Texture to Roughness node — approximates a roughness map from a texture's
- * luminance: darker areas read as rougher (or the reverse, when inverted).
- * Contrast pushes mid-tones away from 0.5 so flat-looking source textures
- * still produce a usable range of roughness values.
- */
-export const TEXTURE_TO_ROUGHNESS_NODE: NodeDefinition = {
-  type: "texture/to_roughness",
-  label: "Texture to Roughness",
-  category: "textureTools",
-  inputs: [{ id: "texture", label: "Texture", type: "texture" }],
-  outputs: [{ id: "roughness", label: "Roughness Map", type: "texture" }],
-  defaultParams: { invert: false, contrast: 1, minRoughness: 0, maxRoughness: 1, resolution: 256 },
-  dynamicParamFields: () => [
-    { id: "invert", label: "Invert", kind: "boolean" },
-    { id: "contrast", label: "Contrast", kind: "number", step: 0.1 },
-    { id: "minRoughness", label: "Min Roughness", kind: "number", step: 0.05 },
-    { id: "maxRoughness", label: "Max Roughness", kind: "number", step: 0.05 },
-    { id: "resolution", label: "Resolution (px)", kind: "number", step: 64 },
-  ],
-  evaluate: (inputs, params, ctx) => {
-    const state = getToRoughnessState(ctx.nodeId);
-    if (typeof document === "undefined") return { roughness: null };
-    const source = inputs.texture instanceof THREE.Texture ? inputs.texture : null;
-    if (!source || !isDrawable(source.image)) return { roughness: null };
-
-    const invert = Boolean(params.invert);
-    const contrast = Math.max(0, Number(params.contrast) || 1);
-    const minRoughness = Math.max(0, Math.min(1, Number(params.minRoughness) ?? 0));
-    const maxRoughness = Math.max(0, Math.min(1, Number(params.maxRoughness) ?? 1));
-    const resolution = Math.max(16, Math.min(1024, Math.round(Number(params.resolution) || 256)));
-
-    const sig = JSON.stringify([invert, contrast, minRoughness, maxRoughness, resolution, source.uuid, source.version]);
-    if (sig !== state.signature) {
-      state.signature = sig;
-      if (!state.canvas) state.canvas = document.createElement("canvas");
-      const canvas = state.canvas;
-      canvas.width = resolution;
-      canvas.height = resolution;
-      const ctx2d = canvas.getContext("2d");
-      if (!ctx2d) return { roughness: null };
-      ctx2d.drawImage(source.image as CanvasImageSource, 0, 0, resolution, resolution);
-      const img = ctx2d.getImageData(0, 0, resolution, resolution);
-      const data = img.data;
-      const lo = Math.min(minRoughness, maxRoughness);
-      const hi = Math.max(minRoughness, maxRoughness);
-      for (let i = 0; i < data.length; i += 4) {
-        let l = (0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]) / 255;
-        if (invert) l = 1 - l;
-        l = Math.max(0, Math.min(1, (l - 0.5) * contrast + 0.5));
-        const v = Math.round((lo + l * (hi - lo)) * 255);
-        data[i] = v;
-        data[i + 1] = v;
-        data[i + 2] = v;
-        data[i + 3] = 255;
-      }
-      ctx2d.putImageData(img, 0, 0);
-
-      // roughness maps stay linear, not sRGB
-      state.texture = replaceCanvasTexture(state.texture, canvas, THREE.LinearSRGBColorSpace);
-    }
-
-    return { roughness: state.texture };
-  },
-};
-
-/**
- * Mix Texture node — blends two textures per-pixel by a factor (scalar or a
- * third texture's luminance as a mask), same blend modes as Blender's Mix
- * Color node. A missing A or B input reads as flat white, so wiring only one
- * side still previews something instead of a blank/black result.
- */
-export const TEXTURE_MIX_NODE: NodeDefinition = {
-  type: "texture/mix",
-  label: "Mix Texture",
-  category: "textureTools",
-  inputs: [
-    { id: "textureA", label: "Texture A", type: "texture" },
-    { id: "textureB", label: "Texture B", type: "texture" },
-    { id: "factor", label: "Factor", type: "value" },
-    { id: "factorTexture", label: "Factor (Texture)", type: "texture" },
-  ],
-  outputs: [{ id: "texture", label: "Texture", type: "texture" }],
-  defaultParams: {
-    blendMode: "mix",
-    factor: 0.5,
-    resolution: 256,
-  },
-  dynamicParamFields: () => [
-    {
-      id: "blendMode",
-      label: "Blend Mode",
-      kind: "select",
-      options: ["mix", "add", "multiply", "screen", "overlay", "subtract", "difference", "darken", "lighten"],
-    },
-    { id: "factor", label: "Factor (fallback)", kind: "number", step: 0.05 },
-    { id: "resolution", label: "Resolution (px)", kind: "number", step: 64 },
-  ],
-  evaluate: (inputs, params, ctx) => {
-    const state = getMixState(ctx.nodeId);
-    if (typeof document === "undefined") return { texture: null };
-
-    const sourceA = inputs.textureA instanceof THREE.Texture ? inputs.textureA : null;
-    const sourceB = inputs.textureB instanceof THREE.Texture ? inputs.textureB : null;
-    const factorTexture = inputs.factorTexture instanceof THREE.Texture ? inputs.factorTexture : null;
-    const blendMode = String(params.blendMode || "mix");
-    const factor = Math.max(0, Math.min(1, inputs.factor !== undefined ? Number(inputs.factor) : Number(params.factor) ?? 0.5));
-    const resolution = Math.max(16, Math.min(1024, Math.round(Number(params.resolution) || 256)));
-
-    const sig = [
-      blendMode,
-      factor,
-      resolution,
-      sourceA?.uuid ?? "",
-      sourceA?.version ?? 0,
-      sourceB?.uuid ?? "",
-      sourceB?.version ?? 0,
-      factorTexture?.uuid ?? "",
-      factorTexture?.version ?? 0,
-    ].join("|");
-
-    if (sig !== state.signature) {
-      state.signature = sig;
-      if (!state.aCanvas) state.aCanvas = document.createElement("canvas");
-      if (!state.bCanvas) state.bCanvas = document.createElement("canvas");
-      if (!state.canvas) state.canvas = document.createElement("canvas");
-
-      drawSourceToCanvas(state.aCanvas, sourceA, resolution);
-      drawSourceToCanvas(state.bCanvas, sourceB, resolution);
-
-      const aCtx = state.aCanvas.getContext("2d");
-      const bCtx = state.bCanvas.getContext("2d");
-      if (!aCtx || !bCtx) return { texture: state.texture ?? null };
-      const aData = aCtx.getImageData(0, 0, resolution, resolution).data;
-      const bData = bCtx.getImageData(0, 0, resolution, resolution).data;
-
-      let maskData: Uint8ClampedArray | null = null;
-      if (factorTexture) {
-        const maskCanvas = document.createElement("canvas");
-        drawSourceToCanvas(maskCanvas, factorTexture, resolution);
-        maskData = maskCanvas.getContext("2d")?.getImageData(0, 0, resolution, resolution).data ?? null;
-      }
-
-      const out = state.canvas;
-      out.width = resolution;
-      out.height = resolution;
-      const outCtx = out.getContext("2d");
-      if (!outCtx) return { texture: state.texture ?? null };
-      const outImg = outCtx.createImageData(resolution, resolution);
-      const outData = outImg.data;
-
-      for (let i = 0; i < outData.length; i += 4) {
-        const t = maskData ? (0.299 * maskData[i] + 0.587 * maskData[i + 1] + 0.114 * maskData[i + 2]) / 255 : factor;
-        for (let c = 0; c < 3; c++) {
-          const a = aData[i + c] / 255;
-          const b = bData[i + c] / 255;
-          const blended = blendChannel(blendMode, a, b);
-          const mixed = a + (blended - a) * t;
-          outData[i + c] = Math.round(Math.max(0, Math.min(1, mixed)) * 255);
-        }
-        outData[i + 3] = 255;
-      }
-      outCtx.putImageData(outImg, 0, 0);
-
-      state.texture = replaceCanvasTexture(state.texture, out, THREE.SRGBColorSpace);
-    }
-
-    return { texture: state.texture ?? null };
-  },
-};
-
-const TEXTURE_MATH_OPS: Record<string, (a: number, b: number) => number> = {
-  add: (a, b) => a + b,
-  subtract: (a, b) => a - b,
-  multiply: (a, b) => a * b,
-  divide: (a, b) => (b === 0 ? 0 : a / b),
-  min: Math.min,
-  max: Math.max,
-  power: (a, b) => Math.pow(a, b),
-  abs: (a) => Math.abs(a),
-  invert: (a) => 1 - a,
-};
-
-const TEXTURE_MATH_UNARY = new Set(["abs", "invert"]);
-
-interface TextureMathState {
-  texture?: THREE.CanvasTexture;
-  canvas?: HTMLCanvasElement;
-  aCanvas?: HTMLCanvasElement;
-  bCanvas?: HTMLCanvasElement;
-  signature?: string;
-}
-
-const textureMathCache = createNodeCache<TextureMathState>((s) => s.texture?.dispose());
-
-/**
- * Math Texture node — per-pixel arithmetic on one or two textures, same
- * operator set as Value Math but applied across every pixel instead of a
- * single scalar. "Luminance" mode collapses each input to grayscale first
- * (for combining masks/height data); "RGB" applies the op per channel.
- */
-export const TEXTURE_MATH_NODE: NodeDefinition = {
-  type: "texture/math",
-  label: "Texture Math",
-  category: "textureTools",
-  inputs: [
-    { id: "textureA", label: "Texture A", type: "texture" },
-    { id: "textureB", label: "Texture B", type: "texture" },
-  ],
-  outputs: [{ id: "texture", label: "Texture", type: "texture" }],
-  defaultParams: { op: "add", channelMode: "rgb", resolution: 256 },
-  paramFields: [
-    { id: "op", label: "Operation", kind: "select", options: Object.keys(TEXTURE_MATH_OPS) },
-    { id: "channelMode", label: "Channel Mode", kind: "select", options: ["rgb", "luminance"] },
-    { id: "resolution", label: "Resolution (px)", kind: "number", step: 64 },
-  ],
-  evaluate: (inputs, params, ctx) => {
-    const state = textureMathCache.get(ctx.nodeId) ?? (() => {
-      const s: TextureMathState = {};
-      textureMathCache.set(ctx.nodeId, s);
-      return s;
-    })();
-    if (typeof document === "undefined") return { texture: null };
-
-    const sourceA = inputs.textureA instanceof THREE.Texture ? inputs.textureA : null;
-    const sourceB = inputs.textureB instanceof THREE.Texture ? inputs.textureB : null;
-    const op = String(params.op || "add");
-    const opFn = TEXTURE_MATH_OPS[op] ?? TEXTURE_MATH_OPS.add;
-    const isUnary = TEXTURE_MATH_UNARY.has(op);
-    const luminance = String(params.channelMode || "rgb") === "luminance";
-    const resolution = Math.max(16, Math.min(1024, Math.round(Number(params.resolution) || 256)));
-
-    const sig = [op, luminance, resolution, sourceA?.uuid ?? "", sourceA?.version ?? 0, sourceB?.uuid ?? "", sourceB?.version ?? 0].join("|");
-    if (sig !== state.signature) {
-      state.signature = sig;
-      if (!state.aCanvas) state.aCanvas = document.createElement("canvas");
-      if (!state.bCanvas) state.bCanvas = document.createElement("canvas");
-      if (!state.canvas) state.canvas = document.createElement("canvas");
-
-      drawSourceToCanvas(state.aCanvas, sourceA, resolution);
-      drawSourceToCanvas(state.bCanvas, sourceB, resolution);
-      const aCtx = state.aCanvas.getContext("2d");
-      const bCtx = state.bCanvas.getContext("2d");
-      if (!aCtx || !bCtx) return { texture: state.texture ?? null };
-      const aData = aCtx.getImageData(0, 0, resolution, resolution).data;
-      const bData = bCtx.getImageData(0, 0, resolution, resolution).data;
-
-      const out = state.canvas;
-      out.width = resolution;
-      out.height = resolution;
-      const outCtx = out.getContext("2d");
-      if (!outCtx) return { texture: state.texture ?? null };
-      const outImg = outCtx.createImageData(resolution, resolution);
-      const outData = outImg.data;
-
-      for (let i = 0; i < outData.length; i += 4) {
-        if (luminance) {
-          const la = (0.299 * aData[i] + 0.587 * aData[i + 1] + 0.114 * aData[i + 2]) / 255;
-          const lb = (0.299 * bData[i] + 0.587 * bData[i + 1] + 0.114 * bData[i + 2]) / 255;
-          const v = Math.round(Math.max(0, Math.min(1, opFn(la, isUnary ? 0 : lb))) * 255);
-          outData[i] = v;
-          outData[i + 1] = v;
-          outData[i + 2] = v;
-        } else {
-          for (let c = 0; c < 3; c++) {
-            const a = aData[i + c] / 255;
-            const b = bData[i + c] / 255;
-            outData[i + c] = Math.round(Math.max(0, Math.min(1, opFn(a, isUnary ? 0 : b))) * 255);
-          }
-        }
-        outData[i + 3] = 255;
-      }
-      outCtx.putImageData(outImg, 0, 0);
-      state.texture = replaceCanvasTexture(state.texture, out, THREE.LinearSRGBColorSpace);
-    }
-
-    return { texture: state.texture ?? null };
-  },
-};
-
-const TEXTURE_MASK_COMBINE_OPS: Record<string, (a: number, b: number) => number> = {
-  and: Math.min,
-  or: Math.max,
-  subtract: (a, b) => Math.max(0, a - b),
-  xor: (a, b) => Math.abs(a - b),
-};
-
-interface TextureMaskState {
-  texture?: THREE.CanvasTexture;
-  canvas?: HTMLCanvasElement;
-  aCanvas?: HTMLCanvasElement;
-  bCanvas?: HTMLCanvasElement;
-  signature?: string;
-}
-
-const textureMaskCache = createNodeCache<TextureMaskState>((s) => s.texture?.dispose());
-
-/**
- * Mask Texture node — two modes on one node (like Mix Texture's blendMode
- * switch): "Extract" pulls a single channel (or luminance) out of Texture A
- * as a grayscale mask; "Combine" boolean-combines that extracted channel
- * with Texture B's, for building a mask from more than one source (e.g.
- * "this AND NOT that").
- */
-export const TEXTURE_MASK_NODE: NodeDefinition = {
-  type: "texture/mask",
-  label: "Mask",
-  category: "textureTools",
-  inputs: [
-    { id: "textureA", label: "Texture A", type: "texture" },
-    { id: "textureB", label: "Texture B (Combine)", type: "texture" },
-  ],
-  outputs: [{ id: "mask", label: "Mask", type: "texture" }],
-  defaultParams: { mode: "extract", channel: "luminance", op: "and", invert: false, resolution: 256 },
-  dynamicParamFields: (instance) => {
-    const mode = String(instance.params.mode || "extract");
-    return [
-      { id: "mode", label: "Mode", kind: "select", options: ["extract", "combine"] },
-      ...(mode === "extract"
-        ? [{ id: "channel", label: "Channel", kind: "select" as const, options: ["luminance", "r", "g", "b", "a"] }]
-        : [{ id: "op", label: "Operation", kind: "select" as const, options: Object.keys(TEXTURE_MASK_COMBINE_OPS) }]),
-      { id: "invert", label: "Invert", kind: "boolean" },
-      { id: "resolution", label: "Resolution (px)", kind: "number", step: 64 },
-    ];
-  },
-  evaluate: (inputs, params, ctx) => {
-    const state = textureMaskCache.get(ctx.nodeId) ?? (() => {
-      const s: TextureMaskState = {};
-      textureMaskCache.set(ctx.nodeId, s);
-      return s;
-    })();
-    if (typeof document === "undefined") return { mask: null };
-
-    const sourceA = inputs.textureA instanceof THREE.Texture ? inputs.textureA : null;
-    const sourceB = inputs.textureB instanceof THREE.Texture ? inputs.textureB : null;
-    const mode = String(params.mode || "extract");
-    const channel = String(params.channel || "luminance");
-    const op = TEXTURE_MASK_COMBINE_OPS[String(params.op || "and")] ?? TEXTURE_MASK_COMBINE_OPS.and;
-    const invert = Boolean(params.invert);
-    const resolution = Math.max(16, Math.min(1024, Math.round(Number(params.resolution) || 256)));
-
-    const sig = [mode, channel, params.op, invert, resolution, sourceA?.uuid ?? "", sourceA?.version ?? 0, sourceB?.uuid ?? "", sourceB?.version ?? 0].join("|");
-    if (sig !== state.signature) {
-      state.signature = sig;
-      if (!state.aCanvas) state.aCanvas = document.createElement("canvas");
-      if (!state.bCanvas) state.bCanvas = document.createElement("canvas");
-      if (!state.canvas) state.canvas = document.createElement("canvas");
-
-      drawSourceToCanvas(state.aCanvas, sourceA, resolution);
-      const aCtx = state.aCanvas.getContext("2d");
-      if (!aCtx) return { mask: state.texture ?? null };
-      const aData = aCtx.getImageData(0, 0, resolution, resolution).data;
-
-      let bData: Uint8ClampedArray | null = null;
-      if (mode === "combine") {
-        drawSourceToCanvas(state.bCanvas, sourceB, resolution);
-        const bCtx = state.bCanvas.getContext("2d");
-        bData = bCtx?.getImageData(0, 0, resolution, resolution).data ?? null;
-      }
-
-      const out = state.canvas;
-      out.width = resolution;
-      out.height = resolution;
-      const outCtx = out.getContext("2d");
-      if (!outCtx) return { mask: state.texture ?? null };
-      const outImg = outCtx.createImageData(resolution, resolution);
-      const outData = outImg.data;
-
-      const channelOf = (data: Uint8ClampedArray, i: number): number => {
-        if (channel === "r") return data[i] / 255;
-        if (channel === "g") return data[i + 1] / 255;
-        if (channel === "b") return data[i + 2] / 255;
-        if (channel === "a") return data[i + 3] / 255;
-        return (0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]) / 255;
-      };
-
-      for (let i = 0; i < outData.length; i += 4) {
-        let v = channelOf(aData, i);
-        if (mode === "combine" && bData) {
-          const lb = (0.299 * bData[i] + 0.587 * bData[i + 1] + 0.114 * bData[i + 2]) / 255;
-          v = op(v, lb);
-        }
-        if (invert) v = 1 - v;
-        const px = Math.round(Math.max(0, Math.min(1, v)) * 255);
-        outData[i] = px;
-        outData[i + 1] = px;
-        outData[i + 2] = px;
-        outData[i + 3] = 255;
-      }
-      outCtx.putImageData(outImg, 0, 0);
-      state.texture = replaceCanvasTexture(state.texture, out, THREE.LinearSRGBColorSpace);
-    }
-
-    return { mask: state.texture ?? null };
-  },
-};
-
-interface TextureMapRangeState {
-  texture?: THREE.CanvasTexture;
-  canvas?: HTMLCanvasElement;
-  aCanvas?: HTMLCanvasElement;
-  signature?: string;
-}
-
-const textureMapRangeCache = createNodeCache<TextureMapRangeState>((s) => s.texture?.dispose());
-
-/** Map Range Texture node — per-pixel rescale, same semantics as Value Map Range but across every pixel. */
-export const TEXTURE_MAP_RANGE_NODE: NodeDefinition = {
-  type: "texture/map-range",
-  label: "Map Range",
-  category: "textureTools",
-  inputs: [{ id: "texture", label: "Texture", type: "texture" }],
-  outputs: [{ id: "texture", label: "Texture", type: "texture" }],
-  defaultParams: { channelMode: "rgb", inMin: 0, inMax: 1, outMin: 0, outMax: 1, clamp: true, resolution: 256 },
-  paramFields: [
-    { id: "channelMode", label: "Channel Mode", kind: "select", options: ["rgb", "luminance"] },
-    { id: "inMin", label: "In Min", kind: "number", step: 0.05 },
-    { id: "inMax", label: "In Max", kind: "number", step: 0.05 },
-    { id: "outMin", label: "Out Min", kind: "number", step: 0.05 },
-    { id: "outMax", label: "Out Max", kind: "number", step: 0.05 },
-    { id: "clamp", label: "Clamp", kind: "boolean" },
-    { id: "resolution", label: "Resolution (px)", kind: "number", step: 64 },
-  ],
-  evaluate: (inputs, params, ctx) => {
-    const state = textureMapRangeCache.get(ctx.nodeId) ?? (() => {
-      const s: TextureMapRangeState = {};
-      textureMapRangeCache.set(ctx.nodeId, s);
-      return s;
-    })();
-    if (typeof document === "undefined") return { texture: null };
-
-    const source = inputs.texture instanceof THREE.Texture ? inputs.texture : null;
-    const luminance = String(params.channelMode || "rgb") === "luminance";
-    const inMin = Number(params.inMin) || 0;
-    const inMax = Number(params.inMax) || 0;
-    const outMin = Number(params.outMin) || 0;
-    const outMax = Number(params.outMax) || 0;
-    const clamp = Boolean(params.clamp ?? true);
-    const resolution = Math.max(16, Math.min(1024, Math.round(Number(params.resolution) || 256)));
-
-    const sig = [luminance, inMin, inMax, outMin, outMax, clamp, resolution, source?.uuid ?? "", source?.version ?? 0].join("|");
-    if (sig !== state.signature) {
-      state.signature = sig;
-      if (!state.aCanvas) state.aCanvas = document.createElement("canvas");
-      if (!state.canvas) state.canvas = document.createElement("canvas");
-
-      drawSourceToCanvas(state.aCanvas, source, resolution);
-      const aCtx = state.aCanvas.getContext("2d");
-      if (!aCtx) return { texture: state.texture ?? null };
-      const aData = aCtx.getImageData(0, 0, resolution, resolution).data;
-
-      const out = state.canvas;
-      out.width = resolution;
-      out.height = resolution;
-      const outCtx = out.getContext("2d");
-      if (!outCtx) return { texture: state.texture ?? null };
-      const outImg = outCtx.createImageData(resolution, resolution);
-      const outData = outImg.data;
-
-      const span = inMax - inMin;
-      const remap = (v: number): number => {
-        let t = span === 0 ? 0 : (v - inMin) / span;
-        if (clamp) t = Math.min(1, Math.max(0, t));
-        return outMin + t * (outMax - outMin);
-      };
-
-      for (let i = 0; i < outData.length; i += 4) {
-        if (luminance) {
-          const l = (0.299 * aData[i] + 0.587 * aData[i + 1] + 0.114 * aData[i + 2]) / 255;
-          const v = Math.round(Math.max(0, Math.min(1, remap(l))) * 255);
-          outData[i] = v;
-          outData[i + 1] = v;
-          outData[i + 2] = v;
-        } else {
-          for (let c = 0; c < 3; c++) {
-            outData[i + c] = Math.round(Math.max(0, Math.min(1, remap(aData[i + c] / 255))) * 255);
-          }
-        }
-        outData[i + 3] = aData[i + 3];
-      }
-      outCtx.putImageData(outImg, 0, 0);
-      state.texture = replaceCanvasTexture(state.texture, out, THREE.LinearSRGBColorSpace);
-    }
-
-    return { texture: state.texture ?? null };
-  },
-};
-
-interface TextureBlurState {
-  texture?: THREE.CanvasTexture;
-  canvas?: HTMLCanvasElement;
-  aCanvas?: HTMLCanvasElement;
-  signature?: string;
-}
-
-const textureBlurCache = createNodeCache<TextureBlurState>((s) => s.texture?.dispose());
-
-/**
- * Separable box blur, run `passes` times — three box passes approximate a
- * gaussian closely enough for a motion-design texture pass, at a fraction of
- * the cost of a true gaussian kernel at large radii.
- */
-function boxBlur(data: Uint8ClampedArray, size: number, radius: number): Uint8ClampedArray {
-  if (radius < 1) return data;
-  const tmp = new Uint8ClampedArray(data.length);
-  const out = new Uint8ClampedArray(data.length);
-  const windowSize = radius * 2 + 1;
-
-  // Horizontal pass: data -> tmp
-  for (let y = 0; y < size; y++) {
-    for (let c = 0; c < 4; c++) {
-      let sum = 0;
-      for (let x = -radius; x <= radius; x++) {
-        const xi = Math.min(size - 1, Math.max(0, x));
-        sum += data[(y * size + xi) * 4 + c];
-      }
-      for (let x = 0; x < size; x++) {
-        tmp[(y * size + x) * 4 + c] = Math.round(sum / windowSize);
-        const addX = Math.min(size - 1, x + radius + 1);
-        const subX = Math.max(0, x - radius);
-        sum += data[(y * size + addX) * 4 + c] - data[(y * size + subX) * 4 + c];
-      }
-    }
-  }
-
-  // Vertical pass: tmp -> out
-  for (let x = 0; x < size; x++) {
-    for (let c = 0; c < 4; c++) {
-      let sum = 0;
-      for (let y = -radius; y <= radius; y++) {
-        const yi = Math.min(size - 1, Math.max(0, y));
-        sum += tmp[(yi * size + x) * 4 + c];
-      }
-      for (let y = 0; y < size; y++) {
-        out[(y * size + x) * 4 + c] = Math.round(sum / windowSize);
-        const addY = Math.min(size - 1, y + radius + 1);
-        const subY = Math.max(0, y - radius);
-        sum += tmp[(addY * size + x) * 4 + c] - tmp[(subY * size + x) * 4 + c];
-      }
-    }
-  }
-
-  return out;
-}
-
-/** Blur Texture node — box or gaussian-approximate blur (3 box passes) at a pixel radius. */
-export const TEXTURE_BLUR_NODE: NodeDefinition = {
-  type: "texture/blur",
-  label: "Blur",
-  category: "textureTools",
-  inputs: [
-    { id: "texture", label: "Texture", type: "texture" },
-    { id: "radius", label: "Radius", type: "value" },
-  ],
-  outputs: [{ id: "texture", label: "Texture", type: "texture" }],
-  defaultParams: { mode: "gaussian", radius: 4, resolution: 256 },
-  paramFields: [
-    { id: "mode", label: "Mode", kind: "select", options: ["box", "gaussian"] },
-    { id: "radius", label: "Radius (px, fallback)", kind: "number", step: 1 },
-    { id: "resolution", label: "Resolution (px)", kind: "number", step: 64 },
-  ],
-  evaluate: (inputs, params, ctx) => {
-    const state = textureBlurCache.get(ctx.nodeId) ?? (() => {
-      const s: TextureBlurState = {};
-      textureBlurCache.set(ctx.nodeId, s);
-      return s;
-    })();
-    if (typeof document === "undefined") return { texture: null };
-
-    const source = inputs.texture instanceof THREE.Texture ? inputs.texture : null;
-    const mode = String(params.mode || "gaussian");
-    const resolution = Math.max(16, Math.min(1024, Math.round(Number(params.resolution) || 256)));
-    const rawRadius = inputs.radius !== undefined ? Number(inputs.radius) : Number(params.radius) || 0;
-    const radius = Math.max(0, Math.min(64, Math.round(rawRadius)));
-
-    const sig = [mode, radius, resolution, source?.uuid ?? "", source?.version ?? 0].join("|");
-    if (sig !== state.signature) {
-      state.signature = sig;
-      if (!state.aCanvas) state.aCanvas = document.createElement("canvas");
-      if (!state.canvas) state.canvas = document.createElement("canvas");
-
-      drawSourceToCanvas(state.aCanvas, source, resolution);
-      const aCtx = state.aCanvas.getContext("2d");
-      if (!aCtx) return { texture: state.texture ?? null };
-      let data = aCtx.getImageData(0, 0, resolution, resolution).data;
-
-      if (radius > 0) {
-        // Gaussian ~= 3 successive box blurs at a smaller radius (Kovesi's
-        // approximation) — visually close to a true gaussian, still O(n)
-        // per pixel via the sliding-window sums above.
-        const passes = mode === "gaussian" ? 3 : 1;
-        const passRadius = mode === "gaussian" ? Math.max(1, Math.round(radius / Math.sqrt(passes))) : radius;
-        for (let p = 0; p < passes; p++) data = boxBlur(data, resolution, passRadius);
-      }
-
-      const out = state.canvas;
-      out.width = resolution;
-      out.height = resolution;
-      const outCtx = out.getContext("2d");
-      if (!outCtx) return { texture: state.texture ?? null };
-      outCtx.putImageData(new ImageData(data, resolution, resolution), 0, 0);
-      state.texture = replaceCanvasTexture(state.texture, out, THREE.SRGBColorSpace);
-    }
-
-    return { texture: state.texture ?? null };
-  },
-};
-
-interface TextureColorRampState {
-  texture?: THREE.CanvasTexture;
-  canvas?: HTMLCanvasElement;
-  aCanvas?: HTMLCanvasElement;
-  signature?: string;
-}
-
-const textureColorRampCache = createNodeCache<TextureColorRampState>((s) => s.texture?.dispose());
-
-function rampSignature(ramp: ColorRamp): string {
-  return JSON.stringify({
-    i: ramp.interpolation,
-    s: ramp.stops.map((s) => [s.position, s.color instanceof THREE.Color ? s.color.getHexString() : s.color]),
-  });
-}
-
-/**
- * Color Ramp Texture node — samples a texture's luminance through a
- * Blender-style color ramp, turning any grayscale mask/noise/math output
- * into a graded color texture. Same "color_ramp" param kind and
- * `sampleColorRamp` as Color Palette List, so the ramp editor is identical.
- */
-export const TEXTURE_COLOR_RAMP_NODE: NodeDefinition = {
-  type: "texture/color-ramp",
-  label: "Color Ramp",
-  category: "textureTools",
-  inputs: [{ id: "texture", label: "Texture", type: "texture" }],
-  outputs: [{ id: "texture", label: "Texture", type: "texture" }],
-  defaultParams: { ramp: DEFAULT_COLOR_RAMP, resolution: 256 },
-  paramFields: [
-    { id: "ramp", label: "Ramp", kind: "color_ramp" },
-    { id: "resolution", label: "Resolution (px)", kind: "number", step: 64 },
-  ],
-  evaluate: (inputs, params, ctx) => {
-    const state = textureColorRampCache.get(ctx.nodeId) ?? (() => {
-      const s: TextureColorRampState = {};
-      textureColorRampCache.set(ctx.nodeId, s);
-      return s;
-    })();
-    if (typeof document === "undefined") return { texture: null };
-
-    const source = inputs.texture instanceof THREE.Texture ? inputs.texture : null;
-    const ramp = params.ramp && typeof params.ramp === "object" ? (params.ramp as ColorRamp) : DEFAULT_COLOR_RAMP;
-    const resolution = Math.max(16, Math.min(1024, Math.round(Number(params.resolution) || 256)));
-
-    const sig = [rampSignature(ramp), resolution, source?.uuid ?? "", source?.version ?? 0].join("|");
-    if (sig !== state.signature) {
-      state.signature = sig;
-      if (!state.aCanvas) state.aCanvas = document.createElement("canvas");
-      if (!state.canvas) state.canvas = document.createElement("canvas");
-
-      drawSourceToCanvas(state.aCanvas, source, resolution);
-      const aCtx = state.aCanvas.getContext("2d");
-      if (!aCtx) return { texture: state.texture ?? null };
-      const aData = aCtx.getImageData(0, 0, resolution, resolution).data;
-
-      // Sampling the ramp is a handful of lerps, cheap enough per pixel, but
-      // it still allocates a THREE.Color each call — a 256-entry LUT keyed
-      // by luminance keeps that off the hot path.
-      const lutSize = 256;
-      const lut: [number, number, number][] = new Array(lutSize);
-      for (let i = 0; i < lutSize; i++) {
-        const c = sampleColorRamp(ramp, i / (lutSize - 1));
-        lut[i] = [Math.round(c.r * 255), Math.round(c.g * 255), Math.round(c.b * 255)];
-      }
-
-      const out = state.canvas;
-      out.width = resolution;
-      out.height = resolution;
-      const outCtx = out.getContext("2d");
-      if (!outCtx) return { texture: state.texture ?? null };
-      const outImg = outCtx.createImageData(resolution, resolution);
-      const outData = outImg.data;
-
-      for (let i = 0; i < outData.length; i += 4) {
-        const l = (0.299 * aData[i] + 0.587 * aData[i + 1] + 0.114 * aData[i + 2]) / 255;
-        const [r, g, b] = lut[Math.max(0, Math.min(lutSize - 1, Math.round(l * (lutSize - 1))))];
-        outData[i] = r;
-        outData[i + 1] = g;
-        outData[i + 2] = b;
-        outData[i + 3] = aData[i + 3];
-      }
-      outCtx.putImageData(outImg, 0, 0);
-      state.texture = replaceCanvasTexture(state.texture, out, THREE.SRGBColorSpace);
-    }
-
-    return { texture: state.texture ?? null };
-  },
-};
-
-interface TextureCombineRGBState {
-  texture?: THREE.CanvasTexture;
-  canvas?: HTMLCanvasElement;
-  rCanvas?: HTMLCanvasElement;
-  gCanvas?: HTMLCanvasElement;
-  bCanvas?: HTMLCanvasElement;
-  aCanvas?: HTMLCanvasElement;
-  signature?: string;
-}
-
-const textureCombineRGBCache = createNodeCache<TextureCombineRGBState>((s) => s.texture?.dispose());
-
-/**
- * Combine RGB node — packs up to 4 grayscale textures (each read by
- * luminance, same convention as Mask's channel extract) into one texture's
- * R/G/B/A channels. Pairs with Mask's "extract" mode: build several masks,
- * pack them into one texture's channels for a single downstream wire.
- * Any missing channel input reads as 0 (1 for Alpha, so an unwired result
- * stays opaque).
- */
-export const TEXTURE_COMBINE_RGB_NODE: NodeDefinition = {
-  type: "texture/combine-rgb",
-  label: "Combine RGB",
-  category: "textureTools",
-  inputs: [
-    { id: "r", label: "R", type: "texture" },
-    { id: "g", label: "G", type: "texture" },
-    { id: "b", label: "B", type: "texture" },
-    { id: "a", label: "A", type: "texture" },
-  ],
-  outputs: [{ id: "texture", label: "Texture", type: "texture" }],
-  defaultParams: { resolution: 256 },
-  paramFields: [{ id: "resolution", label: "Resolution (px)", kind: "number", step: 64 }],
-  evaluate: (inputs, params, ctx) => {
-    const state = textureCombineRGBCache.get(ctx.nodeId) ?? (() => {
-      const s: TextureCombineRGBState = {};
-      textureCombineRGBCache.set(ctx.nodeId, s);
-      return s;
-    })();
-    if (typeof document === "undefined") return { texture: null };
-
-    const rSrc = inputs.r instanceof THREE.Texture ? inputs.r : null;
-    const gSrc = inputs.g instanceof THREE.Texture ? inputs.g : null;
-    const bSrc = inputs.b instanceof THREE.Texture ? inputs.b : null;
-    const aSrc = inputs.a instanceof THREE.Texture ? inputs.a : null;
-    const resolution = Math.max(16, Math.min(1024, Math.round(Number(params.resolution) || 256)));
-
-    const sig = [
-      resolution,
-      rSrc?.uuid ?? "", rSrc?.version ?? 0,
-      gSrc?.uuid ?? "", gSrc?.version ?? 0,
-      bSrc?.uuid ?? "", bSrc?.version ?? 0,
-      aSrc?.uuid ?? "", aSrc?.version ?? 0,
-    ].join("|");
-    if (sig !== state.signature) {
-      state.signature = sig;
-      if (!state.rCanvas) state.rCanvas = document.createElement("canvas");
-      if (!state.gCanvas) state.gCanvas = document.createElement("canvas");
-      if (!state.bCanvas) state.bCanvas = document.createElement("canvas");
-      if (!state.aCanvas) state.aCanvas = document.createElement("canvas");
-      if (!state.canvas) state.canvas = document.createElement("canvas");
-
-      const readLuma = (canvas: HTMLCanvasElement, source: THREE.Texture | null): Uint8ClampedArray | null => {
-        if (!source) return null;
-        drawSourceToCanvas(canvas, source, resolution);
-        return canvas.getContext("2d")?.getImageData(0, 0, resolution, resolution).data ?? null;
-      };
-
-      const rData = readLuma(state.rCanvas, rSrc);
-      const gData = readLuma(state.gCanvas, gSrc);
-      const bData = readLuma(state.bCanvas, bSrc);
-      const aData = readLuma(state.aCanvas, aSrc);
-
-      const out = state.canvas;
-      out.width = resolution;
-      out.height = resolution;
-      const outCtx = out.getContext("2d");
-      if (!outCtx) return { texture: state.texture ?? null };
-      const outImg = outCtx.createImageData(resolution, resolution);
-      const outData = outImg.data;
-
-      const lumaAt = (data: Uint8ClampedArray | null, i: number, fallback: number): number =>
-        data ? Math.round(0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]) : fallback;
-
-      for (let i = 0; i < outData.length; i += 4) {
-        outData[i] = lumaAt(rData, i, 0);
-        outData[i + 1] = lumaAt(gData, i, 0);
-        outData[i + 2] = lumaAt(bData, i, 0);
-        outData[i + 3] = lumaAt(aData, i, 255);
-      }
-      outCtx.putImageData(outImg, 0, 0);
-      state.texture = replaceCanvasTexture(state.texture, out, THREE.LinearSRGBColorSpace);
-    }
-
-    return { texture: state.texture ?? null };
-  },
-};
-
-interface TextureSeparateRGBState {
-  sourceCanvas?: HTMLCanvasElement;
-  rTex?: THREE.CanvasTexture;
-  gTex?: THREE.CanvasTexture;
-  bTex?: THREE.CanvasTexture;
-  aTex?: THREE.CanvasTexture;
-  signature?: string;
-}
-
-const textureSeparateRGBCache = createNodeCache<TextureSeparateRGBState>((s) => {
-  s.rTex?.dispose();
-  s.gTex?.dispose();
-  s.bTex?.dispose();
-  s.aTex?.dispose();
-});
-
-/** Separate RGB node — splits a texture's R/G/B/A channels out as four grayscale textures. */
-export const TEXTURE_SEPARATE_RGB_NODE: NodeDefinition = {
-  type: "texture/separate-rgb",
-  label: "Separate RGB",
-  category: "textureTools",
-  inputs: [{ id: "texture", label: "Texture", type: "texture" }],
-  outputs: [
-    { id: "r", label: "R", type: "texture" },
-    { id: "g", label: "G", type: "texture" },
-    { id: "b", label: "B", type: "texture" },
-    { id: "a", label: "A", type: "texture" },
-  ],
-  defaultParams: { resolution: 256 },
-  paramFields: [{ id: "resolution", label: "Resolution (px)", kind: "number", step: 64 }],
-  evaluate: (inputs, params, ctx) => {
-    const state = textureSeparateRGBCache.get(ctx.nodeId) ?? (() => {
-      const s: TextureSeparateRGBState = {};
-      textureSeparateRGBCache.set(ctx.nodeId, s);
-      return s;
-    })();
-    if (typeof document === "undefined") return { r: null, g: null, b: null, a: null };
-
-    const source = inputs.texture instanceof THREE.Texture ? inputs.texture : null;
-    const resolution = Math.max(16, Math.min(1024, Math.round(Number(params.resolution) || 256)));
-
-    const sig = [resolution, source?.uuid ?? "", source?.version ?? 0].join("|");
-    if (sig !== state.signature) {
-      state.signature = sig;
-      if (!state.sourceCanvas) state.sourceCanvas = document.createElement("canvas");
-      drawSourceToCanvas(state.sourceCanvas, source, resolution);
-      const data = state.sourceCanvas.getContext("2d")?.getImageData(0, 0, resolution, resolution).data ?? null;
-
-      const makeChannelTexture = (channelIndex: number): THREE.CanvasTexture => {
-        const canvas = document.createElement("canvas");
-        canvas.width = resolution;
-        canvas.height = resolution;
-        const cCtx = canvas.getContext("2d")!;
-        const img = cCtx.createImageData(resolution, resolution);
-        const out = img.data;
-        for (let i = 0; i < out.length; i += 4) {
-          const v = data ? data[i + channelIndex] : channelIndex === 3 ? 255 : 0;
-          out[i] = v;
-          out[i + 1] = v;
-          out[i + 2] = v;
-          out[i + 3] = 255;
-        }
-        cCtx.putImageData(img, 0, 0);
-        return replaceCanvasTexture(undefined, canvas, THREE.LinearSRGBColorSpace);
-      };
-
-      state.rTex?.dispose();
-      state.gTex?.dispose();
-      state.bTex?.dispose();
-      state.aTex?.dispose();
-      state.rTex = makeChannelTexture(0);
-      state.gTex = makeChannelTexture(1);
-      state.bTex = makeChannelTexture(2);
-      state.aTex = makeChannelTexture(3);
-    }
-
-    return {
-      r: state.rTex ?? null,
-      g: state.gTex ?? null,
-      b: state.bTex ?? null,
-      a: state.aTex ?? null,
-    };
-  },
-};
-
-interface TextureThresholdState {
-  texture?: THREE.CanvasTexture;
-  canvas?: HTMLCanvasElement;
-  aCanvas?: HTMLCanvasElement;
-  signature?: string;
-}
-
-const textureThresholdCache = createNodeCache<TextureThresholdState>((s) => s.texture?.dispose());
-
-/**
- * Threshold Texture node — steps a texture's luminance to 0/1 at a cutoff,
- * with an optional smoothstep width for an anti-aliased edge instead of a
- * hard cut. The per-pixel counterpart to Value Math's `less-than`.
- */
-export const TEXTURE_THRESHOLD_NODE: NodeDefinition = {
-  type: "texture/threshold",
-  label: "Threshold",
-  category: "textureTools",
-  inputs: [
-    { id: "texture", label: "Texture", type: "texture" },
-    { id: "cutoff", label: "Cutoff", type: "value" },
-  ],
-  outputs: [{ id: "mask", label: "Mask", type: "texture" }],
-  defaultParams: { cutoff: 0.5, smoothing: 0, invert: false, resolution: 256 },
-  paramFields: [
-    { id: "cutoff", label: "Cutoff (fallback)", kind: "number", step: 0.05 },
-    { id: "smoothing", label: "Smoothing (soft edge width)", kind: "number", step: 0.01 },
-    { id: "invert", label: "Invert", kind: "boolean" },
-    { id: "resolution", label: "Resolution (px)", kind: "number", step: 64 },
-  ],
-  evaluate: (inputs, params, ctx) => {
-    const state = textureThresholdCache.get(ctx.nodeId) ?? (() => {
-      const s: TextureThresholdState = {};
-      textureThresholdCache.set(ctx.nodeId, s);
-      return s;
-    })();
-    if (typeof document === "undefined") return { mask: null };
-
-    const source = inputs.texture instanceof THREE.Texture ? inputs.texture : null;
-    const cutoff = Math.max(0, Math.min(1, inputs.cutoff !== undefined ? Number(inputs.cutoff) : Number(params.cutoff) ?? 0.5));
-    const smoothing = Math.max(0, Number(params.smoothing) || 0);
-    const invert = Boolean(params.invert);
-    const resolution = Math.max(16, Math.min(1024, Math.round(Number(params.resolution) || 256)));
-
-    const sig = [cutoff, smoothing, invert, resolution, source?.uuid ?? "", source?.version ?? 0].join("|");
-    if (sig !== state.signature) {
-      state.signature = sig;
-      if (!state.aCanvas) state.aCanvas = document.createElement("canvas");
-      if (!state.canvas) state.canvas = document.createElement("canvas");
-
-      drawSourceToCanvas(state.aCanvas, source, resolution);
-      const aCtx = state.aCanvas.getContext("2d");
-      if (!aCtx) return { mask: state.texture ?? null };
-      const aData = aCtx.getImageData(0, 0, resolution, resolution).data;
-
-      const out = state.canvas;
-      out.width = resolution;
-      out.height = resolution;
-      const outCtx = out.getContext("2d");
-      if (!outCtx) return { mask: state.texture ?? null };
-      const outImg = outCtx.createImageData(resolution, resolution);
-      const outData = outImg.data;
-
-      const half = smoothing * 0.5;
-      const lo = cutoff - half;
-      const hi = cutoff + half;
-
-      for (let i = 0; i < outData.length; i += 4) {
-        const l = (0.299 * aData[i] + 0.587 * aData[i + 1] + 0.114 * aData[i + 2]) / 255;
-        let v: number;
-        if (half <= 1e-6) {
-          v = l < cutoff ? 0 : 1;
-        } else {
-          const t = Math.max(0, Math.min(1, (l - lo) / (hi - lo)));
-          v = t * t * (3 - 2 * t);
-        }
-        if (invert) v = 1 - v;
-        const px = Math.round(v * 255);
-        outData[i] = px;
-        outData[i + 1] = px;
-        outData[i + 2] = px;
-        outData[i + 3] = 255;
-      }
-      outCtx.putImageData(outImg, 0, 0);
-      state.texture = replaceCanvasTexture(state.texture, out, THREE.LinearSRGBColorSpace);
-    }
-
-    return { mask: state.texture ?? null };
-  },
-};
-
-interface TextureInvertState {
-  texture?: THREE.CanvasTexture;
-  canvas?: HTMLCanvasElement;
-  aCanvas?: HTMLCanvasElement;
-  signature?: string;
-}
-
-const textureInvertCache = createNodeCache<TextureInvertState>((s) => s.texture?.dispose());
-
-/** Invert Texture node — 1-minus-color per channel, alpha untouched. */
-export const TEXTURE_INVERT_NODE: NodeDefinition = {
-  type: "texture/invert",
-  label: "Invert",
-  category: "textureTools",
-  inputs: [
-    { id: "texture", label: "Texture", type: "texture" },
-    { id: "factor", label: "Factor", type: "value" },
-  ],
-  outputs: [{ id: "texture", label: "Texture", type: "texture" }],
-  defaultParams: { factor: 1, resolution: 256 },
-  paramFields: [
-    { id: "factor", label: "Factor (fallback)", kind: "number", step: 0.05 },
-    { id: "resolution", label: "Resolution (px)", kind: "number", step: 64 },
-  ],
-  evaluate: (inputs, params, ctx) => {
-    const state = textureInvertCache.get(ctx.nodeId) ?? (() => {
-      const s: TextureInvertState = {};
-      textureInvertCache.set(ctx.nodeId, s);
-      return s;
-    })();
-    if (typeof document === "undefined") return { texture: null };
-
-    const source = inputs.texture instanceof THREE.Texture ? inputs.texture : null;
-    const factor = Math.max(0, Math.min(1, inputs.factor !== undefined ? Number(inputs.factor) : Number(params.factor) ?? 1));
-    const resolution = Math.max(16, Math.min(1024, Math.round(Number(params.resolution) || 256)));
-
-    const sig = [factor, resolution, source?.uuid ?? "", source?.version ?? 0].join("|");
-    if (sig !== state.signature) {
-      state.signature = sig;
-      if (!state.aCanvas) state.aCanvas = document.createElement("canvas");
-      if (!state.canvas) state.canvas = document.createElement("canvas");
-
-      drawSourceToCanvas(state.aCanvas, source, resolution);
-      const aCtx = state.aCanvas.getContext("2d");
-      if (!aCtx) return { texture: state.texture ?? null };
-      const aData = aCtx.getImageData(0, 0, resolution, resolution).data;
-
-      const out = state.canvas;
-      out.width = resolution;
-      out.height = resolution;
-      const outCtx = out.getContext("2d");
-      if (!outCtx) return { texture: state.texture ?? null };
-      const outImg = outCtx.createImageData(resolution, resolution);
-      const outData = outImg.data;
-
-      for (let i = 0; i < outData.length; i += 4) {
-        for (let c = 0; c < 3; c++) {
-          const v = aData[i + c] / 255;
-          outData[i + c] = Math.round((v + (1 - v - v) * factor) * 255);
-        }
-        outData[i + 3] = aData[i + 3];
-      }
-      outCtx.putImageData(outImg, 0, 0);
-      state.texture = replaceCanvasTexture(state.texture, out, THREE.SRGBColorSpace);
-    }
-
-    return { texture: state.texture ?? null };
-  },
-};
-
-interface TextureLevelsState {
-  texture?: THREE.CanvasTexture;
-  canvas?: HTMLCanvasElement;
-  aCanvas?: HTMLCanvasElement;
-  signature?: string;
-}
-
-const textureLevelsCache = createNodeCache<TextureLevelsState>((s) => s.texture?.dispose());
-
-/**
- * Levels Texture node — Photoshop-style input black/white point remap plus
- * gamma, then an output black/white point. Same shape as Photoshop/GIMP
- * Levels: `((v - inBlack) / (inWhite - inBlack)) ^ (1/gamma)`, remapped into
- * `[outBlack, outWhite]`.
- */
-export const TEXTURE_LEVELS_NODE: NodeDefinition = {
-  type: "texture/levels",
-  label: "Levels",
-  category: "textureTools",
-  inputs: [{ id: "texture", label: "Texture", type: "texture" }],
-  outputs: [{ id: "texture", label: "Texture", type: "texture" }],
-  defaultParams: { inBlack: 0, inWhite: 1, gamma: 1, outBlack: 0, outWhite: 1, resolution: 256 },
-  paramFields: [
-    { id: "inBlack", label: "Input Black", kind: "number", step: 0.01 },
-    { id: "inWhite", label: "Input White", kind: "number", step: 0.01 },
-    { id: "gamma", label: "Gamma", kind: "number", step: 0.05 },
-    { id: "outBlack", label: "Output Black", kind: "number", step: 0.01 },
-    { id: "outWhite", label: "Output White", kind: "number", step: 0.01 },
-    { id: "resolution", label: "Resolution (px)", kind: "number", step: 64 },
-  ],
-  evaluate: (inputs, params, ctx) => {
-    const state = textureLevelsCache.get(ctx.nodeId) ?? (() => {
-      const s: TextureLevelsState = {};
-      textureLevelsCache.set(ctx.nodeId, s);
-      return s;
-    })();
-    if (typeof document === "undefined") return { texture: null };
-
-    const source = inputs.texture instanceof THREE.Texture ? inputs.texture : null;
-    const inBlack = Number(params.inBlack) || 0;
-    const inWhite = Number(params.inWhite) ?? 1;
-    const gamma = Math.max(0.01, Number(params.gamma) || 1);
-    const outBlack = Number(params.outBlack) || 0;
-    const outWhite = Number(params.outWhite) ?? 1;
-    const resolution = Math.max(16, Math.min(1024, Math.round(Number(params.resolution) || 256)));
-
-    const sig = [inBlack, inWhite, gamma, outBlack, outWhite, resolution, source?.uuid ?? "", source?.version ?? 0].join("|");
-    if (sig !== state.signature) {
-      state.signature = sig;
-      if (!state.aCanvas) state.aCanvas = document.createElement("canvas");
-      if (!state.canvas) state.canvas = document.createElement("canvas");
-
-      drawSourceToCanvas(state.aCanvas, source, resolution);
-      const aCtx = state.aCanvas.getContext("2d");
-      if (!aCtx) return { texture: state.texture ?? null };
-      const aData = aCtx.getImageData(0, 0, resolution, resolution).data;
-
-      const out = state.canvas;
-      out.width = resolution;
-      out.height = resolution;
-      const outCtx = out.getContext("2d");
-      if (!outCtx) return { texture: state.texture ?? null };
-      const outImg = outCtx.createImageData(resolution, resolution);
-      const outData = outImg.data;
-
-      const inSpan = inWhite - inBlack;
-      const invGamma = 1 / gamma;
-
-      // 256-entry LUT: the levels formula is the same for every pixel of a
-      // given input value, so computing it once per 0-255 level (not once
-      // per pixel) is a straight ~1000x fewer Math.pow calls at 1024².
-      const lut = new Uint8ClampedArray(256);
-      for (let v = 0; v < 256; v++) {
-        let t = inSpan === 0 ? 0 : (v / 255 - inBlack) / inSpan;
-        t = Math.max(0, Math.min(1, t));
-        t = Math.pow(t, invGamma);
-        lut[v] = Math.round((outBlack + t * (outWhite - outBlack)) * 255);
-      }
-
-      for (let i = 0; i < outData.length; i += 4) {
-        outData[i] = lut[aData[i]];
-        outData[i + 1] = lut[aData[i + 1]];
-        outData[i + 2] = lut[aData[i + 2]];
-        outData[i + 3] = aData[i + 3];
-      }
-      outCtx.putImageData(outImg, 0, 0);
-      state.texture = replaceCanvasTexture(state.texture, out, THREE.SRGBColorSpace);
-    }
-
-    return { texture: state.texture ?? null };
-  },
-};
-
-/** RGB [0,1] -> HSV, each channel [0,1]. */
-function rgbToHsv(r: number, g: number, b: number): [number, number, number] {
-  const max = Math.max(r, g, b);
-  const min = Math.min(r, g, b);
-  const d = max - min;
-  let h = 0;
-  if (d > 1e-6) {
-    if (max === r) h = ((g - b) / d) % 6;
-    else if (max === g) h = (b - r) / d + 2;
-    else h = (r - g) / d + 4;
-    h /= 6;
-    if (h < 0) h += 1;
-  }
-  const s = max <= 1e-6 ? 0 : d / max;
-  return [h, s, max];
-}
-
-/** HSV [0,1] -> RGB [0,1]. */
-function hsvToRgb(h: number, s: number, v: number): [number, number, number] {
-  const i = Math.floor(h * 6) % 6;
-  const f = h * 6 - Math.floor(h * 6);
-  const p = v * (1 - s);
-  const q = v * (1 - f * s);
-  const t = v * (1 - (1 - f) * s);
-  switch (((i % 6) + 6) % 6) {
-    case 0: return [v, t, p];
-    case 1: return [q, v, p];
-    case 2: return [p, v, t];
-    case 3: return [p, q, v];
-    case 4: return [t, p, v];
-    default: return [v, p, q];
-  }
-}
-
-interface TextureHueSatValState {
-  texture?: THREE.CanvasTexture;
-  canvas?: HTMLCanvasElement;
-  aCanvas?: HTMLCanvasElement;
-  signature?: string;
-}
-
-const textureHueSatValCache = createNodeCache<TextureHueSatValState>((s) => s.texture?.dispose());
-
-/** Hue/Saturation/Value node — Blender-style hue rotate, saturation scale, value scale, converted through HSV. */
-export const TEXTURE_HUE_SAT_VAL_NODE: NodeDefinition = {
-  type: "texture/hue-sat-val",
-  label: "Hue/Saturation/Value",
-  category: "textureTools",
-  inputs: [
-    { id: "texture", label: "Texture", type: "texture" },
-    { id: "hue", label: "Hue Shift (°)", type: "value" },
-    { id: "saturation", label: "Saturation", type: "value" },
-    { id: "value", label: "Value", type: "value" },
-  ],
-  outputs: [{ id: "texture", label: "Texture", type: "texture" }],
-  defaultParams: { hue: 0, saturation: 1, value: 1, resolution: 256 },
-  paramFields: [
-    { id: "hue", label: "Hue Shift (° fallback)", kind: "number", step: 5 },
-    { id: "saturation", label: "Saturation (fallback)", kind: "number", step: 0.05 },
-    { id: "value", label: "Value (fallback)", kind: "number", step: 0.05 },
-    { id: "resolution", label: "Resolution (px)", kind: "number", step: 64 },
-  ],
-  evaluate: (inputs, params, ctx) => {
-    const state = textureHueSatValCache.get(ctx.nodeId) ?? (() => {
-      const s: TextureHueSatValState = {};
-      textureHueSatValCache.set(ctx.nodeId, s);
-      return s;
-    })();
-    if (typeof document === "undefined") return { texture: null };
-
-    const source = inputs.texture instanceof THREE.Texture ? inputs.texture : null;
-    const hueDeg = inputs.hue !== undefined ? Number(inputs.hue) : Number(params.hue) || 0;
-    const saturation = Math.max(0, inputs.saturation !== undefined ? Number(inputs.saturation) : Number(params.saturation) ?? 1);
-    const value = Math.max(0, inputs.value !== undefined ? Number(inputs.value) : Number(params.value) ?? 1);
-    const resolution = Math.max(16, Math.min(1024, Math.round(Number(params.resolution) || 256)));
-
-    const sig = [hueDeg, saturation, value, resolution, source?.uuid ?? "", source?.version ?? 0].join("|");
-    if (sig !== state.signature) {
-      state.signature = sig;
-      if (!state.aCanvas) state.aCanvas = document.createElement("canvas");
-      if (!state.canvas) state.canvas = document.createElement("canvas");
-
-      drawSourceToCanvas(state.aCanvas, source, resolution);
-      const aCtx = state.aCanvas.getContext("2d");
-      if (!aCtx) return { texture: state.texture ?? null };
-      const aData = aCtx.getImageData(0, 0, resolution, resolution).data;
-
-      const out = state.canvas;
-      out.width = resolution;
-      out.height = resolution;
-      const outCtx = out.getContext("2d");
-      if (!outCtx) return { texture: state.texture ?? null };
-      const outImg = outCtx.createImageData(resolution, resolution);
-      const outData = outImg.data;
-
-      const hueShift = hueDeg / 360;
-
-      for (let i = 0; i < outData.length; i += 4) {
-        const [h, s, v] = rgbToHsv(aData[i] / 255, aData[i + 1] / 255, aData[i + 2] / 255);
-        let hh = (h + hueShift) % 1;
-        if (hh < 0) hh += 1;
-        const [r, g, b] = hsvToRgb(hh, Math.max(0, Math.min(1, s * saturation)), Math.max(0, v * value));
-        outData[i] = Math.round(Math.max(0, Math.min(1, r)) * 255);
-        outData[i + 1] = Math.round(Math.max(0, Math.min(1, g)) * 255);
-        outData[i + 2] = Math.round(Math.max(0, Math.min(1, b)) * 255);
-        outData[i + 3] = aData[i + 3];
-      }
-      outCtx.putImageData(outImg, 0, 0);
-      state.texture = replaceCanvasTexture(state.texture, out, THREE.SRGBColorSpace);
-    }
-
-    return { texture: state.texture ?? null };
-  },
-};
-
-const IDENTITY_CURVE_POINTS: ProfilePoint[] = [
-  { x: 0, y: 0 },
-  { x: 1, y: 1 },
-];
-
-interface TextureRgbCurvesState {
-  texture?: THREE.CanvasTexture;
-  canvas?: HTMLCanvasElement;
-  aCanvas?: HTMLCanvasElement;
-  signature?: string;
-}
-
-const textureRgbCurvesCache = createNodeCache<TextureRgbCurvesState>((s) => s.texture?.dispose());
-
-/**
- * RGB Curves node — a master curve (applied to all channels) plus per-R/G/B
- * curves, same "curve_profile" editor and `evalProfileCurve` sampler as
- * Curve to Mesh's thickness profile. Master curve default and per-channel
- * defaults are identity (straight diagonal) — unlike `curve_profile`'s own
- * DEFAULT_PROFILE_POINTS bump shape, which is tuned for a thickness profile,
- * not a color remap, and would darken/distort every texture on drop.
- */
-export const TEXTURE_RGB_CURVES_NODE: NodeDefinition = {
-  type: "texture/rgb-curves",
-  label: "RGB Curves",
-  category: "textureTools",
-  inputs: [{ id: "texture", label: "Texture", type: "texture" }],
-  outputs: [{ id: "texture", label: "Texture", type: "texture" }],
-  defaultParams: {
-    curveMaster: [...IDENTITY_CURVE_POINTS],
-    curveR: [...IDENTITY_CURVE_POINTS],
-    curveG: [...IDENTITY_CURVE_POINTS],
-    curveB: [...IDENTITY_CURVE_POINTS],
-    resolution: 256,
-  },
-  paramFields: [
-    { id: "curveMaster", label: "Master", kind: "curve_profile" },
-    { id: "curveR", label: "Red", kind: "curve_profile" },
-    { id: "curveG", label: "Green", kind: "curve_profile" },
-    { id: "curveB", label: "Blue", kind: "curve_profile" },
-    { id: "resolution", label: "Resolution (px)", kind: "number", step: 64 },
-  ],
-  evaluate: (inputs, params, ctx) => {
-    const state = textureRgbCurvesCache.get(ctx.nodeId) ?? (() => {
-      const s: TextureRgbCurvesState = {};
-      textureRgbCurvesCache.set(ctx.nodeId, s);
-      return s;
-    })();
-    if (typeof document === "undefined") return { texture: null };
-
-    const source = inputs.texture instanceof THREE.Texture ? inputs.texture : null;
-    const curveMaster = Array.isArray(params.curveMaster) ? (params.curveMaster as ProfilePoint[]) : IDENTITY_CURVE_POINTS;
-    const curveR = Array.isArray(params.curveR) ? (params.curveR as ProfilePoint[]) : IDENTITY_CURVE_POINTS;
-    const curveG = Array.isArray(params.curveG) ? (params.curveG as ProfilePoint[]) : IDENTITY_CURVE_POINTS;
-    const curveB = Array.isArray(params.curveB) ? (params.curveB as ProfilePoint[]) : IDENTITY_CURVE_POINTS;
-    const resolution = Math.max(16, Math.min(1024, Math.round(Number(params.resolution) || 256)));
-
-    const sig = [
-      JSON.stringify(curveMaster), JSON.stringify(curveR), JSON.stringify(curveG), JSON.stringify(curveB),
-      resolution, source?.uuid ?? "", source?.version ?? 0,
-    ].join("|");
-    if (sig !== state.signature) {
-      state.signature = sig;
-      if (!state.aCanvas) state.aCanvas = document.createElement("canvas");
-      if (!state.canvas) state.canvas = document.createElement("canvas");
-
-      drawSourceToCanvas(state.aCanvas, source, resolution);
-      const aCtx = state.aCanvas.getContext("2d");
-      if (!aCtx) return { texture: state.texture ?? null };
-      const aData = aCtx.getImageData(0, 0, resolution, resolution).data;
-
-      const out = state.canvas;
-      out.width = resolution;
-      out.height = resolution;
-      const outCtx = out.getContext("2d");
-      if (!outCtx) return { texture: state.texture ?? null };
-      const outImg = outCtx.createImageData(resolution, resolution);
-      const outData = outImg.data;
-
-      // 256-entry LUT per curve — evalProfileCurve does a Catmull-Rom solve,
-      // too costly to re-run per pixel at up to 1024².
-      const buildLut = (curve: ProfilePoint[]): Uint8ClampedArray => {
-        const lut = new Uint8ClampedArray(256);
-        for (let v = 0; v < 256; v++) lut[v] = Math.round(evalProfileCurve(curve, v / 255) * 255);
-        return lut;
-      };
-      const lutMaster = buildLut(curveMaster);
-      const lutR = buildLut(curveR);
-      const lutG = buildLut(curveG);
-      const lutB = buildLut(curveB);
-
-      for (let i = 0; i < outData.length; i += 4) {
-        outData[i] = lutMaster[lutR[aData[i]]];
-        outData[i + 1] = lutMaster[lutG[aData[i + 1]]];
-        outData[i + 2] = lutMaster[lutB[aData[i + 2]]];
-        outData[i + 3] = aData[i + 3];
-      }
-      outCtx.putImageData(outImg, 0, 0);
-      state.texture = replaceCanvasTexture(state.texture, out, THREE.SRGBColorSpace);
-    }
-
-    return { texture: state.texture ?? null };
-  },
-};
 
 interface PixelSpawnerState {
   group?: THREE.Group;
@@ -2460,7 +956,7 @@ export const TEXTURE_PIXEL_SPAWNER_NODE: NodeDefinition = {
     const group = state.group!;
 
     const texture = inputs.texture instanceof THREE.Texture ? inputs.texture : null;
-    if (!texture || !isDrawable(texture.image) || typeof document === "undefined") {
+    if (!texture || !getDrawableImage(texture) || typeof document === "undefined") {
       return { geometry: group, colors: [], positions: [], intensities: [], count: 0 };
     }
 
@@ -2598,3 +1094,4 @@ export const TEXTURE_PIXEL_SPAWNER_NODE: NodeDefinition = {
   },
 };
 
+export * from "./textureTools";

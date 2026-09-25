@@ -16,7 +16,14 @@ export interface ColorStop {
   color: THREE.Color;
 }
 
-export type ColorRampInterpolation = "linear" | "constant";
+export type ColorRampInterpolation = "linear" | "constant" | "ease" | "b-spline";
+
+export const COLOR_RAMP_INTERPOLATIONS: { value: ColorRampInterpolation; label: string }[] = [
+  { value: "linear", label: "Linear" },
+  { value: "ease", label: "Ease" },
+  { value: "b-spline", label: "B-Spline" },
+  { value: "constant", label: "Constant" },
+];
 
 export const DEFAULT_COLOR_STOPS: ColorStop[] = [
   { position: 0, color: new THREE.Color(0x38bdf8) },
@@ -70,7 +77,33 @@ export function evalColorRamp(
     if (interpolation === "constant") return a.color.clone();
     const span = b.position - a.position;
     const localT = span > 1e-6 ? (clampedT - a.position) / span : 0;
+    if (interpolation === "ease") return a.color.clone().lerp(b.color, localT * localT * (3 - 2 * localT));
+    if (interpolation === "b-spline") return bSplineColor(pts, i, localT);
     return a.color.clone().lerp(b.color, localT);
   }
   return pts[pts.length - 1].color.clone();
+}
+
+/**
+ * Uniform cubic B-spline over the stop colors, ends clamped by repeating the
+ * first/last stop — like Blender's B-Spline ramp it smooths through the stops
+ * rather than hitting their exact colors, which softens hard bands.
+ */
+function bSplineColor(pts: ColorStop[], i: number, t: number): THREE.Color {
+  const at = (k: number) => pts[Math.max(0, Math.min(pts.length - 1, k))].color;
+  const p0 = at(i - 1);
+  const p1 = at(i);
+  const p2 = at(i + 1);
+  const p3 = at(i + 2);
+  const t2 = t * t;
+  const t3 = t2 * t;
+  const w0 = (1 - 3 * t + 3 * t2 - t3) / 6;
+  const w1 = (4 - 6 * t2 + 3 * t3) / 6;
+  const w2 = (1 + 3 * t + 3 * t2 - 3 * t3) / 6;
+  const w3 = t3 / 6;
+  return new THREE.Color(
+    p0.r * w0 + p1.r * w1 + p2.r * w2 + p3.r * w3,
+    p0.g * w0 + p1.g * w1 + p2.g * w2 + p3.g * w3,
+    p0.b * w0 + p1.b * w1 + p2.b * w2 + p3.b * w3,
+  );
 }

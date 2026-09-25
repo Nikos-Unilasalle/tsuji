@@ -477,14 +477,14 @@ export function SplitViewport({
         onMouseDown={handleMouseDown2D}
         onPointerDown={handleMouseDown2D}
         style={{ display: bothRowGroupsVisible ? "block" : "none" }}
-        title="Resize 2D View (drag horizontally)"
+        title="Resize 2D Render (drag horizontally)"
       >
         <button
           type="button"
           className="viewport-split-handle-btn viewport-split-handle-btn-top"
           onMouseDown={handleMouseDown2D}
           onPointerDown={handleMouseDown2D}
-          title="Resize 2D View (drag horizontally)"
+          title="Resize 2D Render (drag horizontally)"
         >
           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="7 8 3 12 7 16" />
@@ -538,7 +538,7 @@ export function SplitViewport({
                 padding: 24,
               }}
             >
-              Add a "2D View" node (Structure category) and wire a texture into it.
+              Add a "2D Render" node (Structure category) and wire a texture into it.
             </div>
           )
         )}

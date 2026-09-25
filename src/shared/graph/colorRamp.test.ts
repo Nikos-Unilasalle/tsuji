@@ -101,3 +101,22 @@ describe("sampleColorRamp", () => {
     expect(sampleColorRamp(ramp, 0.9).getHex()).toBe(0xff0000);
   });
 });
+
+describe("ease and b-spline interpolation", () => {
+  const stops = [
+    { position: 0, color: new THREE.Color(0, 0, 0) },
+    { position: 0.5, color: new THREE.Color(1, 1, 1) },
+    { position: 1, color: new THREE.Color(0, 0, 0) },
+  ];
+  it("ease matches linear at the ends and midpoint, slower near stops", async () => {
+    const { evalColorRamp } = await import("./colorRamp");
+    expect(evalColorRamp(stops, 0.25, "ease").r).toBeCloseTo(0.5);
+    expect(evalColorRamp(stops, 0.05, "ease").r).toBeLessThan(evalColorRamp(stops, 0.05, "linear").r);
+  });
+  it("b-spline smooths through stops instead of hitting them", async () => {
+    const { evalColorRamp } = await import("./colorRamp");
+    const peak = evalColorRamp(stops, 0.4999, "b-spline").r;
+    expect(peak).toBeGreaterThan(0.5);
+    expect(peak).toBeLessThan(1);
+  });
+});

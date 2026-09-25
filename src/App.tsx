@@ -213,7 +213,7 @@ const MAX_PANE_PERCENT = 85;
 /**
  * Three windows, one bundle: the Rust side (`output_window.rs`,
  * `view2d_window.rs`) opens the projector-facing output window at
- * `index.html#/output` and the 2D View window at `index.html#/view2d` — the
+ * `index.html#/output` and the 2D Render window at `index.html#/view2d` — the
  * hash is the sole discriminator between "I'm the main editor" and "I'm one
  * of the secondary windows," same pattern OpenVMap 2D uses. No router
  * library needed for three routes.

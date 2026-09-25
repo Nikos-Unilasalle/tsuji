@@ -78,7 +78,7 @@ export async function closeOutputWindow(): Promise<void> {
 }
 
 /**
- * The 2D View window — a plain resizable window, no monitor targeting or
+ * The 2D Render window — a plain resizable window, no monitor targeting or
  * fullscreen (unlike Output, which is projector-facing). Same "open or
  * focus" Rust-side behavior as open_output_window; see view2d_window.rs.
  */

@@ -2,11 +2,12 @@ import * as THREE from "three";
 import { NodeDefinition } from "../types";
 import { createNodeCache } from "../nodeCaches";
 import { extractPositionFromInput } from "./transform";
+import { getDrawableImage, textureRevision } from "../gpuTexture";
 
 interface TextureSampleState {
   canvas?: HTMLCanvasElement;
   lastTexture?: THREE.Texture;
-  lastVersion?: number;
+  lastRevision?: string;
   pixelData?: Uint8ClampedArray | Uint8Array | Float32Array;
   width?: number;
   height?: number;
@@ -37,18 +38,9 @@ function asVector3(v: unknown, fallback: THREE.Vector3): THREE.Vector3 {
   return fallback;
 }
 
-function isDrawable(v: unknown): boolean {
-  return (
-    (typeof HTMLCanvasElement !== "undefined" && v instanceof HTMLCanvasElement) ||
-    (typeof HTMLImageElement !== "undefined" && v instanceof HTMLImageElement) ||
-    (typeof ImageBitmap !== "undefined" && v instanceof ImageBitmap) ||
-    (typeof HTMLVideoElement !== "undefined" && v instanceof HTMLVideoElement)
-  );
-}
-
 function getPixelBuffer(state: TextureSampleState, texture: THREE.Texture): { data: Uint8ClampedArray | Uint8Array | Float32Array; width: number; height: number } | null {
-  const version = texture.version ?? 0;
-  if (state.lastTexture === texture && state.lastVersion === version && state.pixelData && state.width && state.height) {
+  const revision = textureRevision(texture);
+  if (state.lastTexture === texture && state.lastRevision === revision && state.pixelData && state.width && state.height) {
     return { data: state.pixelData, width: state.width, height: state.height };
   }
 
@@ -56,7 +48,7 @@ function getPixelBuffer(state: TextureSampleState, texture: THREE.Texture): { da
   const image = texture.image as any;
   if (image && image.data && image.width && image.height) {
     state.lastTexture = texture;
-    state.lastVersion = version;
+    state.lastRevision = revision;
     state.pixelData = image.data;
     state.width = image.width;
     state.height = image.height;
@@ -64,23 +56,24 @@ function getPixelBuffer(state: TextureSampleState, texture: THREE.Texture): { da
   }
 
   // 2. Drawable HTML Canvas/Image in browser DOM
-  if (image && isDrawable(image) && typeof document !== "undefined") {
+  const drawable = getDrawableImage(texture) as (CanvasImageSource & { width?: number; height?: number; videoWidth?: number; videoHeight?: number }) | null;
+  if (drawable && typeof document !== "undefined") {
     if (!state.canvas) {
       state.canvas = document.createElement("canvas");
     }
     const canvas = state.canvas;
-    const w = Math.max(1, Math.min(2048, image.width || 256));
-    const h = Math.max(1, Math.min(2048, image.height || 256));
+    const w = Math.max(1, Math.min(2048, Number(drawable.videoWidth || drawable.width) || 256));
+    const h = Math.max(1, Math.min(2048, Number(drawable.videoHeight || drawable.height) || 256));
     canvas.width = w;
     canvas.height = h;
     const ctx = canvas.getContext("2d");
     if (!ctx) return null;
 
-    ctx.drawImage(image, 0, 0, w, h);
+    ctx.drawImage(drawable, 0, 0, w, h);
     const imgData = ctx.getImageData(0, 0, w, h);
 
     state.lastTexture = texture;
-    state.lastVersion = version;
+    state.lastRevision = revision;
     state.pixelData = imgData.data;
     state.width = w;
     state.height = h;

@@ -666,7 +666,7 @@ interface ViewportProps {
    */
   renderNodeId: string;
   /**
-   * When set, this Viewport becomes a 2D View: no 3D scene is drawn to the
+   * When set, this Viewport becomes a 2D Render: no 3D scene is drawn to the
    * canvas at all — instead, every tick it looks up this node's evaluated
    * `texture` output and blits it full-frame (letterboxed to the texture's
    * own aspect). Scene assembly/evaluation still runs exactly as normal
@@ -1258,7 +1258,7 @@ export function Viewport({
     const elevationHUD = createElevationHUD();
     editorUiScene.add(elevationHUD.group);
 
-    // 2D View mode's whole "scene": a single unlit quad filling an
+    // 2D Render mode's whole "scene": a single unlit quad filling an
     // orthographic frustum exactly, textured with whatever the `view2d`
     // node resolves to. Built unconditionally (cheap — one quad) rather
     // than only when view2DNodeId is set, so there's nothing to lazily
@@ -6444,7 +6444,7 @@ export function Viewport({
       const width = host.clientWidth;
       const height = host.clientHeight;
 
-      // 2D View mode: the 3D scene was still fully assembled and evaluated
+      // 2D Render mode: the 3D scene was still fully assembled and evaluated
       // above (a texture/camera source needs that to render from), but
       // nothing about it gets drawn here — just the `view2d` node's
       // resolved texture, letterboxed to its own aspect. Every other
@@ -6472,8 +6472,10 @@ export function Viewport({
         renderer.setClearColor(0x000000, 1);
         renderer.clear();
         if (texture) {
-          view2DMaterial.map = texture;
-          view2DMaterial.needsUpdate = true;
+          if (view2DMaterial.map !== texture) {
+            view2DMaterial.map = texture;
+            view2DMaterial.needsUpdate = true;
+          }
           renderer.setViewport(bx, by, bw, bh);
           renderer.setScissor(bx, by, bw, bh);
           renderer.setScissorTest(true);
