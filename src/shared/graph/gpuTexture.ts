@@ -280,13 +280,24 @@ export function bindPassInputs(material: THREE.ShaderMaterial, inputs: (THREE.Te
  * A pass output (or scratch) target at exactly `width`×`height`. Recreated
  * rather than resized on change so downstream signatures (keyed on the
  * texture uuid) notice.
+ *
+ * `mipmaps` defaults to false: every pass in this pipeline reads its input
+ * at the same resolution it renders its output (a fullscreen quad, 1:1 UV
+ * sampling) — nothing here ever minifies, so a mip chain is pure waste. It
+ * used to default true, which meant `gl.generateMipmap` ran on essentially
+ * every pass target, every frame a live source (a `texture/camera`, say)
+ * changed — dozens of GPU-side mip regenerations a second for a 1800×1800+
+ * chain that were never once sampled, measured as the actual cause of a
+ * "3D viewport laggy while nothing changed" report (12fps, no JS long
+ * tasks — the frame time was going into these on the GPU). Passed `true`
+ * explicitly by anything that actually resamples across resolutions.
  */
 export function ensurePassTarget(
   existing: THREE.WebGLRenderTarget | undefined,
   width: number,
   height: number,
   colorSpace: THREE.ColorSpace,
-  mipmaps = true,
+  mipmaps = false,
   type: THREE.TextureDataType = THREE.UnsignedByteType,
 ): THREE.WebGLRenderTarget {
   if (

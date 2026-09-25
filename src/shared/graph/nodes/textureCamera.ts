@@ -226,8 +226,13 @@ export const TEXTURE_CAMERA_NODE: NodeDefinition = {
       state.target?.dispose();
       state.target = new THREE.WebGLRenderTarget(width, height, {
         colorSpace: THREE.SRGBColorSpace,
-        generateMipmaps: true,
-        minFilter: THREE.LinearMipmapLinearFilter,
+        // Every downstream texture/* pass samples this 1:1 (a fullscreen
+        // quad, no minification) — mipmaps would only cost a GPU-side
+        // regeneration on every live frame for nothing ever reading them.
+        // `samples` (MSAA) stays: unlike mipmaps, it's a real antialiasing
+        // win for the 3D scene this actually captures.
+        generateMipmaps: false,
+        minFilter: THREE.LinearFilter,
         samples: 4,
       });
       state.target.texture.wrapS = THREE.RepeatWrapping;

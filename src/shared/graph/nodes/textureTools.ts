@@ -397,25 +397,27 @@ const BLUR_MAX_TAPS = 48;
 const BLUR_MAX_RADIUS = 250;
 const blurCache = createNodeCache<GpuPassState>(disposeGpuPassState);
 
+// Gaussian weights depend only on (radius, tap index) — the same for every
+// pixel in a pass — so they're precomputed once on the CPU per signature
+// change (see evaluate below) and passed in as a uniform array, rather than
+// every one of a pass's pixels calling exp() up to ${BLUR_MAX_TAPS * 2 + 1}
+// times redundantly. At 1080p+ that redundant transcendental math, not the
+// texture reads, was the actual cost of a "just a blur" chain feeling laggy.
 const BLUR_BODY = /* glsl */ `
   uniform vec2 dir;
   uniform float radius;
-  uniform float gaussian;
+  uniform float weights[${BLUR_MAX_TAPS * 2 + 1}];
   vec4 process(vec2 uv) {
     if (radius < 0.5) return readA(uv);
-    // Past ${BLUR_MAX_TAPS} taps per side the samples spread out and lean on
-    // bilinear filtering — keeps a 250px radius as cheap as a 48px one.
     float taps = min(radius, ${BLUR_MAX_TAPS}.0);
     float stepPx = radius / taps;
-    float sigma = max(radius * 0.5, 0.5);
     vec4 sum = vec4(0.0);
     float wsum = 0.0;
     for (int i = -${BLUR_MAX_TAPS}; i <= ${BLUR_MAX_TAPS}; i++) {
       float fi = float(i);
       if (abs(fi) > taps) continue;
-      float x = fi * stepPx;
-      float w = gaussian > 0.5 ? exp(-(x * x) / (2.0 * sigma * sigma)) : 1.0;
-      sum += readA(uv + dir * x) * w;
+      float w = weights[i + ${BLUR_MAX_TAPS}];
+      sum += readA(uv + dir * fi * stepPx) * w;
       wsum += w;
     }
     return sum / wsum;
@@ -451,12 +453,27 @@ export const TEXTURE_BLUR_NODE: NodeDefinition = {
     const scratch = (state.targets.scratch = ensurePassTarget(state.targets.scratch, width, height, LINEAR, false));
     const sig = JSON.stringify([gaussian, radius, out.texture.uuid, textureRevision(source)]);
     if (state.signatures.get(renderer) !== sig) {
-      const extra = () => ({ dir: { value: new THREE.Vector2() }, radius: { value: 0 }, gaussian: { value: 1 } });
+      const extra = () => ({
+        dir: { value: new THREE.Vector2() },
+        radius: { value: 0 },
+        weights: { value: new Float32Array(BLUR_MAX_TAPS * 2 + 1) },
+      });
       const h = (state.materials.h ??= createPassMaterial(BLUR_BODY, extra()));
       const v = (state.materials.v ??= createPassMaterial(BLUR_BODY, extra()));
+
+      const taps = Math.min(radius, BLUR_MAX_TAPS);
+      const stepPx = taps > 0 ? radius / taps : 0;
+      const sigma = Math.max(radius * 0.5, 0.5);
+      const weights = new Float32Array(BLUR_MAX_TAPS * 2 + 1);
+      for (let i = -BLUR_MAX_TAPS; i <= BLUR_MAX_TAPS; i++) {
+        if (Math.abs(i) > taps) continue;
+        const x = i * stepPx;
+        weights[i + BLUR_MAX_TAPS] = gaussian ? Math.exp(-(x * x) / (2 * sigma * sigma)) : 1;
+      }
+
       for (const m of [h, v]) {
         m.uniforms.radius.value = radius;
-        m.uniforms.gaussian.value = gaussian;
+        (m.uniforms.weights.value as Float32Array).set(weights);
       }
       bindPassInputs(h, [source]);
       (h.uniforms.dir.value as THREE.Vector2).set(1 / width, 0);

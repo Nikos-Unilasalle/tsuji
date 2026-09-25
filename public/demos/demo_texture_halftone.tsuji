@@ -72,7 +72,7 @@
             "resolutionPreset": "Custom",
             "width": 1800,
             "height": 1800,
-            "updateEvery": 1
+            "updateEvery": 30
           }
         },
         {
