@@ -5,6 +5,7 @@ import { TransformControls } from "three/examples/jsm/controls/TransformControls
 import { ClockState, createClock, STEP_SECONDS, tickClock } from "../graph/clock";
 import { EvalResult, disposeEvalSession, evaluateGraph } from "../graph/evaluate";
 import { CAMERA_FLY_TO_NODE, CAMERA_NODE } from "../graph/nodes/camera";
+import { TEXTURE_CAMERA_NODE } from "../graph/nodes/textureCamera";
 import { HubElement } from "../graph/nodes/hub";
 import { asVector3, composeNativeMatrixWithPivot, PIVOT_TRANSFORM_NODE } from "../graph/nodes/transform";
 import { resetAllParticleSimulations } from "../graph/particleRuntime";
@@ -5164,9 +5165,18 @@ export function Viewport({
     snapSelectedCameraToEditorRef.current = () => {
       if (!onTransformChangeRef.current) return;
 
-      // Target selected camera node if selected, otherwise find the active or first camera node in graph
+      // Target whichever camera is selected — 3D (calibration/camera) or 2D
+      // (texture/camera) — so this works for a texture camera being lined
+      // up for its shot too. Only a 3D Camera node has an "active" concept
+      // to fall back to when nothing's selected; a texture/camera never
+      // drives the main view, so there's nothing sensible to fall back to
+      // for one — the button/shortcut simply does nothing in that case.
       let targetNode = selectedNodeIdRef.current
-        ? graphRef.current.nodes.find((n) => n.id === selectedNodeIdRef.current && n.type === CAMERA_NODE.type)
+        ? graphRef.current.nodes.find(
+            (n) =>
+              n.id === selectedNodeIdRef.current &&
+              (n.type === CAMERA_NODE.type || n.type === TEXTURE_CAMERA_NODE.type),
+          )
         : undefined;
 
       if (!targetNode) {
@@ -9237,42 +9247,44 @@ export function Viewport({
           <div className="viewport-hud">
             {!elevationView && (
               <>
-            {graph.nodes.some((n) => n.type === CAMERA_NODE.type) && (
+            {graph.nodes.some((n) => n.type === CAMERA_NODE.type || n.type === TEXTURE_CAMERA_NODE.type) && (
               <>
                 <button
                   type="button"
                   className="viewport-hud-button"
                   onClick={() => snapSelectedCameraToEditorRef.current?.()}
-                  title="Align Active Camera to current 3D View (Ctrl+Alt+0)"
+                  title="Align selected camera (3D or 2D) to current 3D View — falls back to the active camera when nothing's selected (Ctrl+Alt+0)"
                 >
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
                     <circle cx="12" cy="13" r="4" />
                   </svg>
                 </button>
-                <button
-                  type="button"
-                  className={`viewport-hud-button ${lockCameraToView ? "viewport-hud-button-active" : ""}`}
-                  onClick={() => {
-                    setLockCameraToView((prev) => {
-                      const next = !prev;
-                      if (next) {
-                        snapSelectedCameraToEditorRef.current?.();
-                      }
-                      return next;
-                    });
-                  }}
-                  title={
-                    lockCameraToView
-                      ? "Camera lock active: camera tracks viewport in real-time (Lock Camera to View)"
-                      : "Lock camera to 3D viewport continuously (Lock Camera to View)"
-                  }
-                >
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-                    <path d={lockCameraToView ? "M7 11V7a5 5 0 0 1 10 0v4" : "M7 11V7a5 5 0 0 1 9.9-1"} />
-                  </svg>
-                </button>
+                {graph.nodes.some((n) => n.type === CAMERA_NODE.type) && (
+                  <button
+                    type="button"
+                    className={`viewport-hud-button ${lockCameraToView ? "viewport-hud-button-active" : ""}`}
+                    onClick={() => {
+                      setLockCameraToView((prev) => {
+                        const next = !prev;
+                        if (next) {
+                          snapSelectedCameraToEditorRef.current?.();
+                        }
+                        return next;
+                      });
+                    }}
+                    title={
+                      lockCameraToView
+                        ? "Camera lock active: camera tracks viewport in real-time (Lock Camera to View)"
+                        : "Lock camera to 3D viewport continuously (Lock Camera to View)"
+                    }
+                  >
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                      <path d={lockCameraToView ? "M7 11V7a5 5 0 0 1 10 0v4" : "M7 11V7a5 5 0 0 1 9.9-1"} />
+                    </svg>
+                  </button>
+                )}
               </>
             )}
             <button

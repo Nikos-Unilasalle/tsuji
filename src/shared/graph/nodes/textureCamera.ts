@@ -1,13 +1,79 @@
 import * as THREE from "three";
 import { NodeDefinition } from "../types";
 import { toBoolean } from "../sockets";
-import { createNodeCache } from "../nodeCaches";
+import { createNodeCache, disposeObject3D } from "../nodeCaches";
 import { manualPose } from "./camera";
 import { replaceCanvasTexture } from "./texture";
 
 const NEAR = 0.05;
 const FAR = 500;
 const DEFAULT_FOV = 50;
+
+/** Teal, matching the Textures category color — distinct from the 3D Camera node's blue, the point being to tell the two apart at a glance in the viewport. */
+const HELPER_COLOR = 0x2dd4bf;
+
+const groupCache = createNodeCache<THREE.Group>(disposeObject3D);
+function getGroup(nodeId: string): THREE.Group {
+  let group = groupCache.get(nodeId);
+  if (!group) {
+    group = new THREE.Group();
+    groupCache.set(nodeId, group);
+  }
+  return group;
+}
+
+/**
+ * A flat wedge body (not a box) plus a frustum ending in an outlined
+ * rectangle — the rectangle is the part `calibration/camera`'s helper
+ * doesn't have, standing in for "this one captures a flat frame, not a 3D
+ * view." Built at the texture's own aspect ratio rather than a fixed 16:9,
+ * so the frustum's proportions already hint at the output shape.
+ */
+function buildTextureCameraHelperGeometry(fov: number, aspect: number): THREE.Group {
+  const group = new THREE.Group();
+  const color = HELPER_COLOR;
+
+  const bodyGeo = new THREE.ConeGeometry(0.14, 0.3, 4);
+  const bodyMat = new THREE.MeshBasicMaterial({ color, wireframe: true });
+  const body = new THREE.Mesh(bodyGeo, bodyMat);
+  body.rotation.x = -Math.PI / 2;
+  body.rotation.y = Math.PI / 4;
+  body.position.set(0, 0, 0.1);
+  group.add(body);
+
+  const radFov = THREE.MathUtils.degToRad(fov || DEFAULT_FOV);
+  const dist = 1.2;
+  const h = Math.tan(radFov / 2) * dist;
+  const w = h * (aspect || 1);
+
+  const points = [
+    new THREE.Vector3(0, 0, 0), new THREE.Vector3(-w, h, -dist),
+    new THREE.Vector3(0, 0, 0), new THREE.Vector3(w, h, -dist),
+    new THREE.Vector3(0, 0, 0), new THREE.Vector3(w, -h, -dist),
+    new THREE.Vector3(0, 0, 0), new THREE.Vector3(-w, -h, -dist),
+  ];
+  const lineGeo = new THREE.BufferGeometry().setFromPoints(points);
+  const lineMat = new THREE.LineBasicMaterial({ color });
+  group.add(new THREE.LineSegments(lineGeo, lineMat));
+
+  // The captured-frame rectangle, thicker than the frustum lines so it
+  // reads as "the frame" rather than another frustum edge.
+  const framePoints = [
+    new THREE.Vector3(-w, h, -dist), new THREE.Vector3(w, h, -dist),
+    new THREE.Vector3(w, h, -dist), new THREE.Vector3(w, -h, -dist),
+    new THREE.Vector3(w, -h, -dist), new THREE.Vector3(-w, -h, -dist),
+    new THREE.Vector3(-w, -h, -dist), new THREE.Vector3(-w, h, -dist),
+  ];
+  const frameGeo = new THREE.BufferGeometry().setFromPoints(framePoints);
+  const frameMat = new THREE.LineBasicMaterial({ color, linewidth: 2 });
+  group.add(new THREE.LineSegments(frameGeo, frameMat));
+
+  group.traverse((child) => {
+    child.userData.isHelper = true;
+  });
+
+  return group;
+}
 
 interface TextureCameraState {
   target?: THREE.WebGLRenderTarget;
@@ -53,7 +119,7 @@ const RESOLUTION_PRESETS: Record<string, [number, number] | null> = {
  */
 export const TEXTURE_CAMERA_NODE: NodeDefinition = {
   type: "texture/camera",
-  label: "Camera",
+  label: "2D Camera",
   category: "texture",
   inputs: [
     { id: "location", label: "Location", type: "vector" },
@@ -61,7 +127,10 @@ export const TEXTURE_CAMERA_NODE: NodeDefinition = {
     { id: "target", label: "Target", type: "any" },
     { id: "fov", label: "FOV", type: "value" },
   ],
-  outputs: [{ id: "texture", label: "Texture", type: "texture" }],
+  outputs: [
+    { id: "geometry", label: "Geometry", type: "geometry" },
+    { id: "texture", label: "Texture", type: "texture" },
+  ],
   defaultParams: {
     location: new THREE.Vector3(0, 0, 5),
     rotation: new THREE.Vector3(0, 0, 0),
@@ -111,15 +180,35 @@ export const TEXTURE_CAMERA_NODE: NodeDefinition = {
       textureCameraCache.set(ctx.nodeId, state);
     }
 
-    if (!ctx.connectedOutputs?.has("texture") || !ctx.renderer || !ctx.scene || typeof document === "undefined") {
-      return { texture: null };
-    }
+    const pose = manualPose(inputs, params, ctx.connectedInputs);
 
     const preset = RESOLUTION_PRESETS[String(params.resolutionPreset ?? "1:1 (512x512)")];
     const [width, height] = preset ?? [
       Math.max(16, Math.round(Number(params.width) || 512)),
       Math.max(16, Math.round(Number(params.height) || 512)),
     ];
+
+    // Helper geometry is always built — a texture camera has to be visible
+    // and gizmo-positionable in the 3D view whether or not anything is
+    // wired to its `texture` output yet. Only the actual scene render
+    // (below) is gated on that wiring.
+    const group = getGroup(ctx.nodeId);
+    group.clear();
+    group.matrixAutoUpdate = false;
+    if (ctx.nodeId !== ctx.liveEditNodeId) {
+      group.matrix.copy(pose.matrix);
+    }
+    group.userData.nodeId = ctx.nodeId;
+    const helperContent = buildTextureCameraHelperGeometry(pose.fov, width / height);
+    helperContent.traverse((child) => {
+      child.userData.nodeId = ctx.nodeId;
+    });
+    group.add(helperContent);
+
+    if (!ctx.connectedOutputs?.has("texture") || !ctx.renderer || !ctx.scene || typeof document === "undefined") {
+      return { geometry: group, texture: null };
+    }
+
     const cpuReadback = toBoolean(params.cpuReadback ?? true);
     const updateEvery = Math.max(1, Math.round(Number(params.updateEvery) || 1));
 
@@ -127,7 +216,7 @@ export const TEXTURE_CAMERA_NODE: NodeDefinition = {
     const dueForUpdate = (state.tickCount - 1) % updateEvery === 0;
 
     if (!dueForUpdate && (state.texture || state.target)) {
-      return { texture: cpuReadback ? state.texture ?? null : state.target?.texture ?? null };
+      return { geometry: group, texture: cpuReadback ? state.texture ?? null : state.target?.texture ?? null };
     }
 
     if (!state.target || state.width !== width || state.height !== height) {
@@ -153,7 +242,6 @@ export const TEXTURE_CAMERA_NODE: NodeDefinition = {
       state.camera = new THREE.PerspectiveCamera(DEFAULT_FOV, width / height, NEAR, FAR);
     }
 
-    const pose = manualPose(inputs, params, ctx.connectedInputs);
     const camera = state.camera;
     camera.fov = pose.fov || DEFAULT_FOV;
     camera.aspect = width / height;
@@ -185,7 +273,7 @@ export const TEXTURE_CAMERA_NODE: NodeDefinition = {
     for (const obj of hiddenHelpers) obj.visible = true;
 
     if (!cpuReadback) {
-      return { texture: state.target.texture };
+      return { geometry: group, texture: state.target.texture };
     }
 
     // Same bottom-up-to-top-down row flip as Camera's own RTT readback —
@@ -201,6 +289,6 @@ export const TEXTURE_CAMERA_NODE: NodeDefinition = {
     ctx2d.putImageData(img, 0, 0);
     state.texture!.needsUpdate = true;
 
-    return { texture: state.texture };
+    return { geometry: group, texture: state.texture };
   },
 };

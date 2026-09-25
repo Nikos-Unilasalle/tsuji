@@ -44,6 +44,7 @@ export const GIZMO_SELECTABLE_TYPES = [
   "light/spot",
   "light/probe",
   "calibration/camera",
+  "texture/camera",
   "calibration/grid",
   "modifier/lattice",
   "modifier/edit-mesh",
