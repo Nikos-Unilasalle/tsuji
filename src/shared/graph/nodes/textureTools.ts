@@ -399,10 +399,11 @@ const blurCache = createNodeCache<GpuPassState>(disposeGpuPassState);
 
 // Gaussian weights depend only on (radius, tap index) — the same for every
 // pixel in a pass — so they're precomputed once on the CPU per signature
-// change (see evaluate below) and passed in as a uniform array, rather than
-// every one of a pass's pixels calling exp() up to ${BLUR_MAX_TAPS * 2 + 1}
-// times redundantly. At 1080p+ that redundant transcendental math, not the
-// texture reads, was the actual cost of a "just a blur" chain feeling laggy.
+// change (see computeGaussianWeights below) and passed in as a uniform
+// array, rather than every one of a pass's pixels calling exp() up to
+// ${BLUR_MAX_TAPS * 2 + 1} times redundantly. At 1080p+ that redundant
+// transcendental math, not the texture reads, was part of the actual cost
+// of a "just a blur" chain feeling laggy.
 const BLUR_BODY = /* glsl */ `
   uniform vec2 dir;
   uniform float radius;
@@ -422,6 +423,48 @@ const BLUR_BODY = /* glsl */ `
     }
     return sum / wsum;
   }`;
+
+/** Shared by every BLUR_BODY user (Blur, Bloom) — keeps them from drifting apart the way Bloom's own copy once did when this moved from a `gaussian` uniform to precomputed weights. */
+function computeGaussianWeights(radius: number, gaussian: number | boolean): Float32Array {
+  const taps = Math.min(radius, BLUR_MAX_TAPS);
+  const stepPx = taps > 0 ? radius / taps : 0;
+  const sigma = Math.max(radius * 0.5, 0.5);
+  const weights = new Float32Array(BLUR_MAX_TAPS * 2 + 1);
+  for (let i = -BLUR_MAX_TAPS; i <= BLUR_MAX_TAPS; i++) {
+    if (Math.abs(i) > taps) continue;
+    const x = i * stepPx;
+    weights[i + BLUR_MAX_TAPS] = gaussian ? Math.exp(-(x * x) / (2 * sigma * sigma)) : 1;
+  }
+  return weights;
+}
+
+/** 4-tap box average, same supersampling Bloom's own bright-pass downsample already uses — softens aliasing from shrinking the image before a blur that will hide it anyway. */
+const DOWNSAMPLE_BODY = /* glsl */ `
+  vec4 process(vec2 uv) {
+    vec2 o = outTexel * 0.25;
+    return (readA(uv + vec2(-o.x, -o.y)) + readA(uv + vec2(o.x, -o.y))
+          + readA(uv + vec2(-o.x, o.y)) + readA(uv + vec2(o.x, o.y))) * 0.25;
+  }`;
+
+/** Plain resample — used to bring a blurred-at-reduced-resolution result back up to full size; the magnification is what does the smoothing, same as any upscaled render target. */
+const COPY_BODY = /* glsl */ `
+  vec4 process(vec2 uv) { return readA(uv); }`;
+
+/**
+ * Above this many pixels, Blur (and Bloom, whose own blur is always at
+ * quarter-res already) shrinks the source first, blurs the small version,
+ * then resamples back up — a wide blur can't resolve detail at full
+ * resolution anyway, so paying full-res cost for it is wasted work. Chosen
+ * so the *effective* radius in the shrunk image stays in the ~24-33px band
+ * regardless of how wide the requested blur is — nowhere near the 48-tap
+ * cap, and small enough that the softening from the downsample itself is
+ * imperceptible next to the blur radius requested.
+ */
+const BLUR_DOWNSAMPLE_THRESHOLD = 32;
+
+function blurDownsampleFactor(radius: number): number {
+  return radius <= BLUR_DOWNSAMPLE_THRESHOLD ? 1 : Math.min(8, Math.round(radius / BLUR_DOWNSAMPLE_THRESHOLD));
+}
 
 /** Separable blur, radius in output pixels — the same number means the same softness at any resolution. */
 export const TEXTURE_BLUR_NODE: NodeDefinition = {
@@ -448,10 +491,21 @@ export const TEXTURE_BLUR_NODE: NodeDefinition = {
     const radius = Math.max(0, Math.min(BLUR_MAX_RADIUS, num(inputs.radius, params.radius, 0)));
     const [width, height] = resolveOutputSize(params, [source]);
 
+    const factor = blurDownsampleFactor(radius);
+    const dw = Math.max(1, Math.round(width / factor));
+    const dh = Math.max(1, Math.round(height / factor));
+    const effectiveRadius = radius / factor;
+
     const state = stateFor(blurCache, ctx.nodeId);
-    const out = (state.targets.out = ensurePassTarget(state.targets.out, width, height, SRGB));
-    const scratch = (state.targets.scratch = ensurePassTarget(state.targets.scratch, width, height, LINEAR, false));
-    const sig = JSON.stringify([gaussian, radius, out.texture.uuid, textureRevision(source)]);
+    // At factor 1, `blurred` (dw×dh == width×height) is the final result —
+    // `out` only gets allocated and used for the extra upsample copy when
+    // there's an actual downsample step to reverse.
+    const scratch = (state.targets.scratch = ensurePassTarget(state.targets.scratch, dw, dh, LINEAR, false));
+    const blurred = (state.targets.blurred = ensurePassTarget(state.targets.blurred, dw, dh, factor > 1 ? LINEAR : SRGB, false));
+    const small = factor > 1 ? (state.targets.small = ensurePassTarget(state.targets.small, dw, dh, LINEAR, false)) : null;
+    const out = factor > 1 ? (state.targets.out = ensurePassTarget(state.targets.out, width, height, SRGB)) : null;
+
+    const sig = JSON.stringify([gaussian, radius, factor, blurred.texture.uuid, textureRevision(source)]);
     if (state.signatures.get(renderer) !== sig) {
       const extra = () => ({
         dir: { value: new THREE.Vector2() },
@@ -460,30 +514,38 @@ export const TEXTURE_BLUR_NODE: NodeDefinition = {
       });
       const h = (state.materials.h ??= createPassMaterial(BLUR_BODY, extra()));
       const v = (state.materials.v ??= createPassMaterial(BLUR_BODY, extra()));
-
-      const taps = Math.min(radius, BLUR_MAX_TAPS);
-      const stepPx = taps > 0 ? radius / taps : 0;
-      const sigma = Math.max(radius * 0.5, 0.5);
-      const weights = new Float32Array(BLUR_MAX_TAPS * 2 + 1);
-      for (let i = -BLUR_MAX_TAPS; i <= BLUR_MAX_TAPS; i++) {
-        if (Math.abs(i) > taps) continue;
-        const x = i * stepPx;
-        weights[i + BLUR_MAX_TAPS] = gaussian ? Math.exp(-(x * x) / (2 * sigma * sigma)) : 1;
-      }
-
+      const weights = computeGaussianWeights(effectiveRadius, gaussian);
       for (const m of [h, v]) {
-        m.uniforms.radius.value = radius;
+        m.uniforms.radius.value = effectiveRadius;
         (m.uniforms.weights.value as Float32Array).set(weights);
       }
-      bindPassInputs(h, [source]);
-      (h.uniforms.dir.value as THREE.Vector2).set(1 / width, 0);
+
+      let blurSource = source;
+      if (factor > 1) {
+        const down = (state.materials.down ??= createPassMaterial(DOWNSAMPLE_BODY));
+        bindPassInputs(down, [source]);
+        renderPass(renderer, down, small!);
+        blurSource = small!.texture;
+      }
+
+      bindPassInputs(h, [blurSource]);
+      (h.uniforms.dir.value as THREE.Vector2).set(1 / dw, 0);
       renderPass(renderer, h, scratch);
       bindPassInputs(v, [scratch.texture]);
-      (v.uniforms.dir.value as THREE.Vector2).set(0, 1 / height);
-      renderPass(renderer, v, out);
+      (v.uniforms.dir.value as THREE.Vector2).set(0, 1 / dh);
+      renderPass(renderer, v, blurred);
+
+      // At factor 1 `blurred` already IS the final full-res result — an
+      // upsample copy back into an identically-sized `out` would just be a
+      // wasted extra blit, so `out` doesn't even exist in that case.
+      if (factor > 1) {
+        const copy = (state.materials.copy ??= createPassMaterial(COPY_BODY));
+        bindPassInputs(copy, [blurred.texture]);
+        renderPass(renderer, copy, out!);
+      }
       state.signatures.set(renderer, sig);
     }
-    return { texture: out.texture };
+    return { texture: (factor > 1 ? out : blurred)!.texture };
   },
 };
 
@@ -1440,7 +1502,11 @@ export const TEXTURE_BLOOM_NODE: NodeDefinition = {
 
     const sig = JSON.stringify([threshold, intensity, radius, glowOnly, out.texture.uuid, bright.texture.uuid, textureRevision(source)]);
     if (state.signatures.get(renderer) !== sig) {
-      const blurUniforms = () => ({ dir: { value: new THREE.Vector2() }, radius: { value: 0 }, gaussian: { value: 1 } });
+      const blurUniforms = () => ({
+        dir: { value: new THREE.Vector2() },
+        radius: { value: 0 },
+        weights: { value: new Float32Array(BLUR_MAX_TAPS * 2 + 1) },
+      });
       const brightMat = (state.materials.bright ??= createPassMaterial(BLOOM_BRIGHT_BODY, { threshold: { value: 0.6 } }));
       const blurH = (state.materials.blurH ??= createPassMaterial(BLUR_BODY, blurUniforms()));
       const blurV = (state.materials.blurV ??= createPassMaterial(BLUR_BODY, blurUniforms()));
@@ -1455,8 +1521,11 @@ export const TEXTURE_BLOOM_NODE: NodeDefinition = {
 
       BLOOM_SCALES.forEach((scale, i) => {
         const r = Math.min(BLUR_MAX_RADIUS, (radius * scale) / 4);
+        const weights = computeGaussianWeights(r, 1);
         blurH.uniforms.radius.value = r;
         blurV.uniforms.radius.value = r;
+        (blurH.uniforms.weights.value as Float32Array).set(weights);
+        (blurV.uniforms.weights.value as Float32Array).set(weights);
         bindPassInputs(blurH, [bright.texture]);
         (blurH.uniforms.dir.value as THREE.Vector2).set(1 / qw, 0);
         renderPass(renderer, blurH, scratch);
