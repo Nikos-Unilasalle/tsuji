@@ -80,12 +80,26 @@ describe("halftone building blocks", () => {
 
   it("Map Range accepts per-pixel Out Min / Out Max textures", async () => {
     const { TEXTURE_MAP_RANGE_NODE } = await import("./nodes/textureTools");
-    expect(TEXTURE_MAP_RANGE_NODE.inputs.map((i) => i.id)).toEqual(["texture", "outMinTexture", "outMaxTexture"]);
+    expect(TEXTURE_MAP_RANGE_NODE.inputs.map((i) => i.id)).toEqual(expect.arrayContaining(["texture", "outMinTexture", "outMaxTexture"]));
   });
 
   it("Mix and Math keep their old unwired behavior by default (white / 1)", async () => {
     const { TEXTURE_MIX_NODE, TEXTURE_MATH_NODE } = await import("./nodes/textureTools");
     expect((TEXTURE_MIX_NODE.defaultParams.colorA as THREE.Color).getHex()).toBe(0xffffff);
     expect(TEXTURE_MATH_NODE.defaultParams.b).toBe(1);
+  });
+});
+
+describe("exposed params", () => {
+  it("every numeric/boolean/color param of the texture tools is also an input socket of the same id", async () => {
+    const tools = await import("./nodes/textureTools");
+    const skip = new Set(["width", "height"]);
+    for (const def of Object.values(tools).filter((v): v is import("./types").NodeDefinition => typeof v === "object" && v !== null && "evaluate" in v)) {
+      const socketIds = new Set(def.inputs.map((i) => i.id));
+      for (const [key, value] of Object.entries(def.defaultParams)) {
+        const exposable = typeof value === "number" || typeof value === "boolean" || value instanceof THREE.Color;
+        if (exposable && !skip.has(key)) expect(socketIds, `${def.type}.${key}`).toContain(key);
+      }
+    }
   });
 });

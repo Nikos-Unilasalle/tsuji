@@ -77,9 +77,28 @@ function runFilter(run: FilterRun): THREE.Texture | null {
   return target.texture;
 }
 
+/**
+ * Params with every exposed input folded in. The evaluator fills an unwired
+ * socket from the param of the same id, so a node reading `params.x` gets the
+ * wire when there is one and the panel value otherwise. Texture sockets are
+ * left out: they carry images, not settings.
+ */
+function withInputs(params: Record<string, unknown>, inputs: Record<string, unknown>): Record<string, unknown> {
+  const merged: Record<string, unknown> = { ...params };
+  for (const [key, value] of Object.entries(inputs)) {
+    if (value !== undefined && value !== null && !(value instanceof THREE.Texture)) merged[key] = value;
+  }
+  return merged;
+}
+
 /** A color param as display-referred (sRGB) components, the space pass math runs in. */
 function srgbColor(value: unknown, fallback: number): THREE.Vector3 {
-  const color = value instanceof THREE.Color ? value : new THREE.Color(typeof value === "number" || typeof value === "string" ? value : fallback);
+  let color: THREE.Color;
+  if (value instanceof THREE.Color) color = value;
+  else if (value && typeof value === "object" && "r" in value && "g" in value && "b" in value) {
+    const { r, g, b } = value as { r: number; g: number; b: number };
+    color = new THREE.Color(Number(r) || 0, Number(g) || 0, Number(b) || 0);
+  } else color = new THREE.Color(typeof value === "number" || typeof value === "string" ? value : fallback);
   const rgb = { r: 0, g: 0, b: 0 };
   color.getRGB(rgb, THREE.SRGBColorSpace);
   return new THREE.Vector3(rgb.r, rgb.g, rgb.b);
@@ -105,17 +124,20 @@ export const TEXTURE_MIX_NODE: NodeDefinition = {
     { id: "textureB", label: "Texture B", type: "texture" },
     { id: "factor", label: "Factor", type: "value" },
     { id: "factorTexture", label: "Factor (Texture)", type: "texture" },
+    { id: "colorA", label: "Color A", type: "color" },
+    { id: "colorB", label: "Color B", type: "color" },
   ],
   outputs: [{ id: "texture", label: "Texture", type: "texture" }],
   defaultParams: { blendMode: "mix", factor: 0.5, colorA: new THREE.Color(0xffffff), colorB: new THREE.Color(0xffffff), ...SIZE_DEFAULTS },
   dynamicParamFields: (instance) => [
     { id: "blendMode", label: "Blend Mode", kind: "select", options: MIX_MODES },
-    { id: "factor", label: "Factor (fallback)", kind: "number", step: 0.05 },
+    { id: "factor", label: "Factor", kind: "number", step: 0.05 },
     { id: "colorA", label: "Color A (when unwired)", kind: "color" },
     { id: "colorB", label: "Color B (when unwired)", kind: "color" },
     ...outputSizeFields(instance.params),
   ],
-  evaluate: (inputs, params, ctx) => {
+  evaluate: (inputs, rawParams, ctx) => {
+    const params = withInputs(rawParams, inputs);
     const mode = Math.max(0, MIX_MODES.indexOf(String(params.blendMode || "mix")));
     const factor = Math.max(0, Math.min(1, num(inputs.factor, params.factor, 0.5)));
     const colorA = srgbColor(params.colorA, 0xffffff);
@@ -174,6 +196,7 @@ export const TEXTURE_MATH_NODE: NodeDefinition = {
   inputs: [
     { id: "textureA", label: "Texture A", type: "texture" },
     { id: "textureB", label: "Texture B", type: "texture" },
+    { id: "b", label: "B (value)", type: "value" },
   ],
   outputs: [{ id: "texture", label: "Texture", type: "texture" }],
   defaultParams: { op: "add", channelMode: "rgb", b: 1, ...SIZE_DEFAULTS },
@@ -183,7 +206,8 @@ export const TEXTURE_MATH_NODE: NodeDefinition = {
     { id: "channelMode", label: "Channel Mode", kind: "select", options: ["rgb", "luminance"] },
     ...outputSizeFields(instance.params),
   ],
-  evaluate: (inputs, params, ctx) => {
+  evaluate: (inputs, rawParams, ctx) => {
+    const params = withInputs(rawParams, inputs);
     const op = Math.max(0, MATH_OPS.indexOf(String(params.op || "add")));
     const lum = String(params.channelMode || "rgb") === "luminance" ? 1 : 0;
     const bValue = num(undefined, params.b, 1);
@@ -242,6 +266,7 @@ export const TEXTURE_MASK_NODE: NodeDefinition = {
   inputs: [
     { id: "textureA", label: "Texture A", type: "texture" },
     { id: "textureB", label: "Texture B (Combine)", type: "texture" },
+    { id: "invert", label: "Invert", type: "value" },
   ],
   outputs: [{ id: "mask", label: "Mask", type: "texture" }],
   defaultParams: { mode: "extract", channel: "luminance", op: "and", invert: false, ...SIZE_DEFAULTS },
@@ -256,7 +281,8 @@ export const TEXTURE_MASK_NODE: NodeDefinition = {
       ...outputSizeFields(instance.params),
     ];
   },
-  evaluate: (inputs, params, ctx) => {
+  evaluate: (inputs, rawParams, ctx) => {
+    const params = withInputs(rawParams, inputs);
     const combine = String(params.mode || "extract") === "combine" ? 1 : 0;
     const channel = Math.max(0, MASK_CHANNELS.indexOf(String(params.channel || "luminance")));
     const op = Math.max(0, MASK_OPS.indexOf(String(params.op || "and")));
@@ -307,6 +333,11 @@ export const TEXTURE_MAP_RANGE_NODE: NodeDefinition = {
     { id: "texture", label: "Texture", type: "texture" },
     { id: "outMinTexture", label: "Out Min (Texture)", type: "texture" },
     { id: "outMaxTexture", label: "Out Max (Texture)", type: "texture" },
+    { id: "inMin", label: "In Min", type: "value" },
+    { id: "inMax", label: "In Max", type: "value" },
+    { id: "outMin", label: "Out Min", type: "value" },
+    { id: "outMax", label: "Out Max", type: "value" },
+    { id: "clamp", label: "Clamp", type: "value" },
   ],
   outputs: [{ id: "texture", label: "Texture", type: "texture" }],
   defaultParams: { channelMode: "rgb", inMin: 0, inMax: 1, outMin: 0, outMax: 1, clamp: true, ...SIZE_DEFAULTS },
@@ -314,12 +345,13 @@ export const TEXTURE_MAP_RANGE_NODE: NodeDefinition = {
     { id: "channelMode", label: "Channel Mode", kind: "select", options: ["rgb", "luminance"] },
     { id: "inMin", label: "In Min", kind: "number", step: 0.05 },
     { id: "inMax", label: "In Max", kind: "number", step: 0.05 },
-    { id: "outMin", label: "Out Min (fallback)", kind: "number", step: 0.01 },
-    { id: "outMax", label: "Out Max (fallback)", kind: "number", step: 0.01 },
+    { id: "outMin", label: "Out Min", kind: "number", step: 0.01 },
+    { id: "outMax", label: "Out Max", kind: "number", step: 0.01 },
     { id: "clamp", label: "Clamp", kind: "boolean" },
     ...outputSizeFields(instance.params),
   ],
-  evaluate: (inputs, params, ctx) => {
+  evaluate: (inputs, rawParams, ctx) => {
+    const params = withInputs(rawParams, inputs);
     const lum = String(params.channelMode || "rgb") === "luminance" ? 1 : 0;
     const range = new THREE.Vector4(num(undefined, params.inMin, 0), num(undefined, params.inMax, 1), num(undefined, params.outMin, 0), num(undefined, params.outMax, 1));
     const clampOn = (params.clamp ?? true) ? 1 : 0;
@@ -402,10 +434,11 @@ export const TEXTURE_BLUR_NODE: NodeDefinition = {
   defaultParams: { mode: "gaussian", radius: 8, ...SIZE_DEFAULTS },
   dynamicParamFields: (instance) => [
     { id: "mode", label: "Mode", kind: "select", options: ["box", "gaussian"] },
-    { id: "radius", label: "Radius (px, fallback)", kind: "number", step: 1 },
+    { id: "radius", label: "Radius (px)", kind: "number", step: 1 },
     ...outputSizeFields(instance.params),
   ],
-  evaluate: (inputs, params, ctx) => {
+  evaluate: (inputs, rawParams, ctx) => {
+    const params = withInputs(rawParams, inputs);
     const renderer = ctx.renderer;
     if (!renderer) return { texture: null };
     const source = usable(asTexture(inputs.texture));
@@ -461,7 +494,8 @@ export const TEXTURE_COLOR_RAMP_NODE: NodeDefinition = {
   outputs: [{ id: "texture", label: "Texture", type: "texture" }],
   defaultParams: { ramp: DEFAULT_COLOR_RAMP, ...SIZE_DEFAULTS },
   dynamicParamFields: (instance) => [{ id: "ramp", label: "Ramp", kind: "color_ramp" }, ...outputSizeFields(instance.params)],
-  evaluate: (inputs, params, ctx) => {
+  evaluate: (inputs, rawParams, ctx) => {
+    const params = withInputs(rawParams, inputs);
     const ramp = params.ramp && typeof params.ramp === "object" ? (params.ramp as ColorRamp) : DEFAULT_COLOR_RAMP;
     const rampSig = rampSignature(ramp);
     const texture = runFilter({
@@ -515,7 +549,8 @@ export const TEXTURE_COMBINE_RGB_NODE: NodeDefinition = {
   outputs: [{ id: "texture", label: "Texture", type: "texture" }],
   defaultParams: { ...SIZE_DEFAULTS },
   dynamicParamFields: (instance) => outputSizeFields(instance.params),
-  evaluate: (inputs, params, ctx) => {
+  evaluate: (inputs, rawParams, ctx) => {
+    const params = withInputs(rawParams, inputs);
     const texture = runFilter({
       ctx,
       cache: combineCache,
@@ -552,7 +587,8 @@ export const TEXTURE_SEPARATE_RGB_NODE: NodeDefinition = {
   ],
   defaultParams: { ...SIZE_DEFAULTS },
   dynamicParamFields: (instance) => outputSizeFields(instance.params),
-  evaluate: (inputs, params, ctx) => {
+  evaluate: (inputs, rawParams, ctx) => {
+    const params = withInputs(rawParams, inputs);
     const renderer = ctx.renderer;
     if (!renderer) return { r: null, g: null, b: null, a: null };
     const source = usable(asTexture(inputs.texture));
@@ -595,16 +631,19 @@ export const TEXTURE_THRESHOLD_NODE: NodeDefinition = {
   inputs: [
     { id: "texture", label: "Texture", type: "texture" },
     { id: "cutoff", label: "Cutoff", type: "value" },
+    { id: "smoothing", label: "Smoothing", type: "value" },
+    { id: "invert", label: "Invert", type: "value" },
   ],
   outputs: [{ id: "mask", label: "Mask", type: "texture" }],
   defaultParams: { cutoff: 0.5, smoothing: 0, invert: false, ...SIZE_DEFAULTS },
   dynamicParamFields: (instance) => [
-    { id: "cutoff", label: "Cutoff (fallback)", kind: "number", step: 0.05 },
+    { id: "cutoff", label: "Cutoff", kind: "number", step: 0.05 },
     { id: "smoothing", label: "Smoothing (soft edge width)", kind: "number", step: 0.01 },
     { id: "invert", label: "Invert", kind: "boolean" },
     ...outputSizeFields(instance.params),
   ],
-  evaluate: (inputs, params, ctx) => {
+  evaluate: (inputs, rawParams, ctx) => {
+    const params = withInputs(rawParams, inputs);
     const cutoff = Math.max(0, Math.min(1, num(inputs.cutoff, params.cutoff, 0.5)));
     const smoothing = Math.max(0, num(undefined, params.smoothing, 0));
     const invert = params.invert ? 1 : 0;
@@ -652,10 +691,11 @@ export const TEXTURE_INVERT_NODE: NodeDefinition = {
   outputs: [{ id: "texture", label: "Texture", type: "texture" }],
   defaultParams: { factor: 1, ...SIZE_DEFAULTS },
   dynamicParamFields: (instance) => [
-    { id: "factor", label: "Factor (fallback)", kind: "number", step: 0.05 },
+    { id: "factor", label: "Factor", kind: "number", step: 0.05 },
     ...outputSizeFields(instance.params),
   ],
-  evaluate: (inputs, params, ctx) => {
+  evaluate: (inputs, rawParams, ctx) => {
+    const params = withInputs(rawParams, inputs);
     const factor = Math.max(0, Math.min(1, num(inputs.factor, params.factor, 1)));
     const texture = runFilter({
       ctx,
@@ -688,7 +728,14 @@ export const TEXTURE_LEVELS_NODE: NodeDefinition = {
   type: "texture/levels",
   label: "Levels",
   category: "textureTools",
-  inputs: [{ id: "texture", label: "Texture", type: "texture" }],
+  inputs: [
+    { id: "texture", label: "Texture", type: "texture" },
+    { id: "inBlack", label: "Input Black", type: "value" },
+    { id: "inWhite", label: "Input White", type: "value" },
+    { id: "gamma", label: "Gamma", type: "value" },
+    { id: "outBlack", label: "Output Black", type: "value" },
+    { id: "outWhite", label: "Output White", type: "value" },
+  ],
   outputs: [{ id: "texture", label: "Texture", type: "texture" }],
   defaultParams: { inBlack: 0, inWhite: 1, gamma: 1, outBlack: 0, outWhite: 1, ...SIZE_DEFAULTS },
   dynamicParamFields: (instance) => [
@@ -699,7 +746,8 @@ export const TEXTURE_LEVELS_NODE: NodeDefinition = {
     { id: "outWhite", label: "Output White", kind: "number", step: 0.01 },
     ...outputSizeFields(instance.params),
   ],
-  evaluate: (inputs, params, ctx) => {
+  evaluate: (inputs, rawParams, ctx) => {
+    const params = withInputs(rawParams, inputs);
     const levels = new THREE.Vector4(num(undefined, params.inBlack, 0), num(undefined, params.inWhite, 1), num(undefined, params.outBlack, 0), num(undefined, params.outWhite, 1));
     const gamma = Math.max(0.01, num(undefined, params.gamma, 1));
     const texture = runFilter({
@@ -746,12 +794,13 @@ export const TEXTURE_HUE_SAT_VAL_NODE: NodeDefinition = {
   outputs: [{ id: "texture", label: "Texture", type: "texture" }],
   defaultParams: { hue: 0, saturation: 1, value: 1, ...SIZE_DEFAULTS },
   dynamicParamFields: (instance) => [
-    { id: "hue", label: "Hue Shift (° fallback)", kind: "number", step: 5 },
-    { id: "saturation", label: "Saturation (fallback)", kind: "number", step: 0.05 },
-    { id: "value", label: "Value (fallback)", kind: "number", step: 0.05 },
+    { id: "hue", label: "Hue Shift (°)", kind: "number", step: 5 },
+    { id: "saturation", label: "Saturation", kind: "number", step: 0.05 },
+    { id: "value", label: "Value", kind: "number", step: 0.05 },
     ...outputSizeFields(instance.params),
   ],
-  evaluate: (inputs, params, ctx) => {
+  evaluate: (inputs, rawParams, ctx) => {
+    const params = withInputs(rawParams, inputs);
     const hsv = new THREE.Vector3(
       num(inputs.hue, params.hue, 0) / 360,
       Math.max(0, num(inputs.saturation, params.saturation, 1)),
@@ -824,7 +873,8 @@ export const TEXTURE_RGB_CURVES_NODE: NodeDefinition = {
     { id: "curveB", label: "Blue", kind: "curve_profile" },
     ...outputSizeFields(instance.params),
   ],
-  evaluate: (inputs, params, ctx) => {
+  evaluate: (inputs, rawParams, ctx) => {
+    const params = withInputs(rawParams, inputs);
     const curve = (v: unknown) => (Array.isArray(v) ? (v as ProfilePoint[]) : IDENTITY_CURVE_POINTS);
     const curves = [curve(params.curveR), curve(params.curveG), curve(params.curveB), curve(params.curveMaster)];
     const texture = runFilter({
@@ -866,14 +916,18 @@ export const TEXTURE_TO_NORMAL_NODE: NodeDefinition = {
   type: "texture/to_normal",
   label: "Texture to Normal",
   category: "textureTools",
-  inputs: [{ id: "texture", label: "Texture", type: "texture" }],
+  inputs: [
+    { id: "texture", label: "Texture", type: "texture" },
+    { id: "strength", label: "Strength", type: "value" },
+  ],
   outputs: [{ id: "normal", label: "Normal Map", type: "texture" }],
   defaultParams: { strength: 1, ...SIZE_DEFAULTS },
   dynamicParamFields: (instance) => [
     { id: "strength", label: "Strength", kind: "number", step: 0.1 },
     ...outputSizeFields(instance.params),
   ],
-  evaluate: (inputs, params, ctx) => {
+  evaluate: (inputs, rawParams, ctx) => {
+    const params = withInputs(rawParams, inputs);
     const strength = Math.max(0, num(undefined, params.strength, 1));
     const normal = runFilter({
       ctx,
@@ -908,7 +962,13 @@ export const TEXTURE_TO_ROUGHNESS_NODE: NodeDefinition = {
   type: "texture/to_roughness",
   label: "Texture to Roughness",
   category: "textureTools",
-  inputs: [{ id: "texture", label: "Texture", type: "texture" }],
+  inputs: [
+    { id: "texture", label: "Texture", type: "texture" },
+    { id: "invert", label: "Invert", type: "value" },
+    { id: "contrast", label: "Contrast", type: "value" },
+    { id: "minRoughness", label: "Min Roughness", type: "value" },
+    { id: "maxRoughness", label: "Max Roughness", type: "value" },
+  ],
   outputs: [{ id: "roughness", label: "Roughness Map", type: "texture" }],
   defaultParams: { invert: false, contrast: 1, minRoughness: 0, maxRoughness: 1, ...SIZE_DEFAULTS },
   dynamicParamFields: (instance) => [
@@ -918,7 +978,8 @@ export const TEXTURE_TO_ROUGHNESS_NODE: NodeDefinition = {
     { id: "maxRoughness", label: "Max Roughness", kind: "number", step: 0.05 },
     ...outputSizeFields(instance.params),
   ],
-  evaluate: (inputs, params, ctx) => {
+  evaluate: (inputs, rawParams, ctx) => {
+    const params = withInputs(rawParams, inputs);
     const invert = params.invert ? 1 : 0;
     const contrast = Math.max(0, num(undefined, params.contrast, 1));
     const lo = Math.max(0, Math.min(1, num(undefined, params.minRoughness, 0)));
@@ -1016,21 +1077,27 @@ export const TEXTURE_NOISE_NODE: NodeDefinition = {
   inputs: [
     { id: "scale", label: "Scale", type: "value" },
     { id: "w", label: "W (evolution)", type: "value" },
+    { id: "detail", label: "Detail", type: "value" },
+    { id: "roughness", label: "Roughness", type: "value" },
+    { id: "distortion", label: "Distortion", type: "value" },
+    { id: "speed", label: "Speed", type: "value" },
+    { id: "seed", label: "Seed", type: "value" },
   ],
   outputs: [{ id: "texture", label: "Texture", type: "texture" }],
   defaultParams: { scale: 5, detail: 2, roughness: 0.5, distortion: 0, w: 0, speed: 0, seed: 0, colorMode: "grayscale", ...GENERATOR_SIZE_DEFAULTS },
   dynamicParamFields: (instance) => [
-    { id: "scale", label: "Scale (fallback)", kind: "number", step: 0.5 },
+    { id: "scale", label: "Scale", kind: "number", step: 0.5 },
     { id: "detail", label: "Detail", kind: "number", step: 0.5 },
     { id: "roughness", label: "Roughness", kind: "number", step: 0.05 },
     { id: "distortion", label: "Distortion", kind: "number", step: 0.1 },
-    { id: "w", label: "W (fallback)", kind: "number", step: 0.1 },
+    { id: "w", label: "W", kind: "number", step: 0.1 },
     { id: "speed", label: "Speed (W per second)", kind: "number", step: 0.05 },
     { id: "seed", label: "Seed", kind: "number", step: 1 },
     { id: "colorMode", label: "Output", kind: "select", options: ["grayscale", "color"] },
     ...outputSizeFields(instance.params, false),
   ],
-  evaluate: (inputs, params, ctx) => {
+  evaluate: (inputs, rawParams, ctx) => {
+    const params = withInputs(rawParams, inputs);
     const scale = Math.max(0, num(inputs.scale, params.scale, 5));
     const detail = Math.max(0, Math.min(15, num(undefined, params.detail, 2)));
     const roughness = Math.max(0, Math.min(1, num(undefined, params.roughness, 0.5)));
@@ -1085,6 +1152,13 @@ export const TEXTURE_WAVE_NODE: NodeDefinition = {
   inputs: [
     { id: "scale", label: "Scale", type: "value" },
     { id: "phase", label: "Phase", type: "value" },
+    { id: "distortion", label: "Distortion", type: "value" },
+    { id: "detail", label: "Detail", type: "value" },
+    { id: "detailScale", label: "Detail Scale", type: "value" },
+    { id: "roughness", label: "Detail Roughness", type: "value" },
+    { id: "speed", label: "Speed", type: "value" },
+    { id: "centerX", label: "Center X", type: "value" },
+    { id: "centerY", label: "Center Y", type: "value" },
   ],
   outputs: [{ id: "texture", label: "Texture", type: "texture" }],
   defaultParams: {
@@ -1114,7 +1188,7 @@ export const TEXTURE_WAVE_NODE: NodeDefinition = {
             { id: "centerY", label: "Center Y (0-1)", kind: "number" as const, step: 0.05 },
           ]),
       { id: "profile", label: "Profile", kind: "select", options: WAVE_PROFILES },
-      { id: "scale", label: "Scale (fallback)", kind: "number", step: 0.5 },
+      { id: "scale", label: "Scale", kind: "number", step: 0.5 },
       { id: "distortion", label: "Distortion", kind: "number", step: 0.5 },
       ...(distorted
         ? [
@@ -1123,12 +1197,13 @@ export const TEXTURE_WAVE_NODE: NodeDefinition = {
             { id: "roughness", label: "Detail Roughness", kind: "number" as const, step: 0.05 },
           ]
         : []),
-      { id: "phase", label: "Phase Offset (fallback)", kind: "number", step: 0.1 },
+      { id: "phase", label: "Phase Offset", kind: "number", step: 0.1 },
       { id: "speed", label: "Speed (phase per second)", kind: "number", step: 0.1 },
       ...outputSizeFields(instance.params, false),
     ];
   },
-  evaluate: (inputs, params, ctx) => {
+  evaluate: (inputs, rawParams, ctx) => {
+    const params = withInputs(rawParams, inputs);
     const rings = String(params.waveType ?? "rings") === "rings" ? 1 : 0;
     const direction = Math.max(0, WAVE_DIRECTIONS.indexOf(String(params.direction ?? "diagonal")));
     const profile = Math.max(0, WAVE_PROFILES.indexOf(String(params.profile ?? "sine")));
@@ -1231,6 +1306,7 @@ export const TEXTURE_VORONOI_NODE: NodeDefinition = {
   inputs: [
     { id: "scale", label: "Scale", type: "value" },
     { id: "randomness", label: "Randomness", type: "value" },
+    { id: "seed", label: "Seed", type: "value" },
   ],
   outputs: [
     { id: "distance", label: "Distance", type: "texture" },
@@ -1238,13 +1314,14 @@ export const TEXTURE_VORONOI_NODE: NodeDefinition = {
   ],
   defaultParams: { scale: 5, randomness: 1, metric: "euclidean", seed: 0, ...GENERATOR_SIZE_DEFAULTS },
   dynamicParamFields: (instance) => [
-    { id: "scale", label: "Scale (fallback)", kind: "number", step: 1 },
-    { id: "randomness", label: "Randomness (fallback)", kind: "number", step: 0.05 },
+    { id: "scale", label: "Scale", kind: "number", step: 1 },
+    { id: "randomness", label: "Randomness", kind: "number", step: 0.05 },
     { id: "metric", label: "Distance Metric", kind: "select", options: VORONOI_METRICS },
     { id: "seed", label: "Seed", kind: "number", step: 1 },
     ...outputSizeFields(instance.params, false),
   ],
-  evaluate: (inputs, params, ctx) => {
+  evaluate: (inputs, rawParams, ctx) => {
+    const params = withInputs(rawParams, inputs);
     const renderer = ctx.renderer;
     if (!renderer) return { distance: null, color: null };
     const scale = Math.max(0, num(inputs.scale, params.scale, 5));
@@ -1310,17 +1387,21 @@ export const TEXTURE_BLOOM_NODE: NodeDefinition = {
   inputs: [
     { id: "texture", label: "Texture", type: "texture" },
     { id: "intensity", label: "Intensity", type: "value" },
+    { id: "threshold", label: "Threshold", type: "value" },
+    { id: "radius", label: "Size (px)", type: "value" },
+    { id: "glowOnly", label: "Glow Only", type: "value" },
   ],
   outputs: [{ id: "texture", label: "Texture", type: "texture" }],
   defaultParams: { threshold: 0.6, intensity: 1, radius: 80, glowOnly: false, ...SIZE_DEFAULTS },
   dynamicParamFields: (instance) => [
     { id: "threshold", label: "Threshold", kind: "number", step: 0.05 },
-    { id: "intensity", label: "Intensity (fallback)", kind: "number", step: 0.1 },
+    { id: "intensity", label: "Intensity", kind: "number", step: 0.1 },
     { id: "radius", label: "Size (px)", kind: "number", step: 5 },
     { id: "glowOnly", label: "Glow Only", kind: "boolean" },
     ...outputSizeFields(instance.params),
   ],
-  evaluate: (inputs, params, ctx) => {
+  evaluate: (inputs, rawParams, ctx) => {
+    const params = withInputs(rawParams, inputs);
     const renderer = ctx.renderer;
     if (!renderer) return { texture: null };
     const source = usable(asTexture(inputs.texture));
@@ -1389,18 +1470,23 @@ export const TEXTURE_FILM_GRAIN_NODE: NodeDefinition = {
   inputs: [
     { id: "texture", label: "Texture", type: "texture" },
     { id: "amount", label: "Amount", type: "value" },
+    { id: "grainSize", label: "Grain Size (px)", type: "value" },
+    { id: "animated", label: "Animated", type: "value" },
+    { id: "monochrome", label: "Monochrome", type: "value" },
+    { id: "seed", label: "Seed", type: "value" },
   ],
   outputs: [{ id: "texture", label: "Texture", type: "texture" }],
   defaultParams: { amount: 0.12, grainSize: 1.5, animated: true, monochrome: true, seed: 0, ...SIZE_DEFAULTS },
   dynamicParamFields: (instance) => [
-    { id: "amount", label: "Amount (fallback)", kind: "number", step: 0.01 },
+    { id: "amount", label: "Amount", kind: "number", step: 0.01 },
     { id: "grainSize", label: "Grain Size (px)", kind: "number", step: 0.25 },
     { id: "animated", label: "Animated", kind: "boolean" },
     { id: "monochrome", label: "Monochrome", kind: "boolean" },
     { id: "seed", label: "Seed", kind: "number", step: 1 },
     ...outputSizeFields(instance.params),
   ],
-  evaluate: (inputs, params, ctx) => {
+  evaluate: (inputs, rawParams, ctx) => {
+    const params = withInputs(rawParams, inputs);
     const amount = Math.max(0, num(inputs.amount, params.amount, 0.12));
     const grainSize = Math.max(0.5, num(undefined, params.grainSize, 1.5));
     const animated = params.animated ?? true;
@@ -1442,3 +1528,32 @@ export const TEXTURE_FILM_GRAIN_NODE: NodeDefinition = {
     return { texture };
   },
 };
+
+// The panel guesses a group from a field's id ("scale" -> Transform,
+// "roughness" -> Material, "intensity" -> Light Settings) — right for 3D
+// objects, misleading on a texture filter whose settings are all one thing.
+for (const def of [
+  TEXTURE_MIX_NODE,
+  TEXTURE_MATH_NODE,
+  TEXTURE_MASK_NODE,
+  TEXTURE_MAP_RANGE_NODE,
+  TEXTURE_BLUR_NODE,
+  TEXTURE_COLOR_RAMP_NODE,
+  TEXTURE_COMBINE_RGB_NODE,
+  TEXTURE_SEPARATE_RGB_NODE,
+  TEXTURE_THRESHOLD_NODE,
+  TEXTURE_INVERT_NODE,
+  TEXTURE_LEVELS_NODE,
+  TEXTURE_HUE_SAT_VAL_NODE,
+  TEXTURE_RGB_CURVES_NODE,
+  TEXTURE_TO_NORMAL_NODE,
+  TEXTURE_TO_ROUGHNESS_NODE,
+  TEXTURE_NOISE_NODE,
+  TEXTURE_WAVE_NODE,
+  TEXTURE_VORONOI_NODE,
+  TEXTURE_BLOOM_NODE,
+  TEXTURE_FILM_GRAIN_NODE,
+] as NodeDefinition[]) {
+  const fields = def.dynamicParamFields;
+  if (fields) def.dynamicParamFields = (instance) => fields(instance).map((f) => (f.group ? f : { ...f, group: "General" }));
+}
