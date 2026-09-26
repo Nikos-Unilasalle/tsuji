@@ -79,8 +79,23 @@ interface TextureCameraState {
   camera?: THREE.PerspectiveCamera;
   width?: number;
   height?: number;
-  /** Ticks up once per evaluate() call — throttle skips the render unless this hits `updateEvery`. */
-  tickCount: number;
+  /**
+   * Ticks up once per evaluate() call, per renderer — throttle skips the
+   * render unless this hits `updateEvery`. Keyed by renderer, not a single
+   * shared counter: `state.target` is one WebGLRenderTarget *object*, but
+   * each THREE.WebGLRenderer that touches it keeps its own separate GPU-side
+   * backing for it (three.js allows several renderers to share render
+   * targets/textures this way). A single shared tick count meant only
+   * whichever renderer happened to land on the qualifying tick actually
+   * called `renderer.render()` — e.g. with both the 3D viewport and a 2D
+   * View pane evaluating the same graph, the tick landed on one renderer's
+   * call roughly half the time, and the OTHER renderer's copy of this
+   * target was never once written to. Every downstream texture/* node
+   * sampling `cam2d`'s texture through that renderer then read whatever
+   * uninitialized/garbage data sat in its own never-rendered backing store
+   * — the "2D Render pane is black or full of static" bug this fixes.
+   */
+  tickCounts: Map<THREE.WebGLRenderer, number>;
 }
 
 const textureCameraCache = createNodeCache<TextureCameraState>((s) => {
@@ -179,7 +194,7 @@ export const TEXTURE_CAMERA_NODE: NodeDefinition = {
   evaluate: (inputs, params, ctx) => {
     let state = textureCameraCache.get(ctx.nodeId);
     if (!state) {
-      state = { tickCount: 0 };
+      state = { tickCounts: new Map() };
       textureCameraCache.set(ctx.nodeId, state);
     }
 
@@ -215,8 +230,14 @@ export const TEXTURE_CAMERA_NODE: NodeDefinition = {
 
     const updateEvery = Math.max(1, Math.round(Number(params.updateEvery) || 1));
 
-    state.tickCount += 1;
-    const dueForUpdate = (state.tickCount - 1) % updateEvery === 0;
+    // Per-renderer: a renderer this node has never rendered for yet has no
+    // GPU-side backing for `state.target` at all (see the interface's own
+    // doc comment) and must render regardless of where the shared throttle
+    // cycle happens to be, or its very first read would come back
+    // uninitialized.
+    const tick = (state.tickCounts.get(ctx.renderer) ?? 0) + 1;
+    state.tickCounts.set(ctx.renderer, tick);
+    const dueForUpdate = (tick - 1) % updateEvery === 0;
 
     if (!dueForUpdate && state.target) {
       return { geometry: group, texture: state.target.texture };
