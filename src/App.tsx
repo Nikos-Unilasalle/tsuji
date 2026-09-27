@@ -30,10 +30,10 @@ import {
   geometrySignature,
   quadMeshToBufferGeometry,
   extrudeFaces,
-  insetFaces,
   deleteFaces,
   extractFaces,
 } from "./shared/graph/quadMesh";
+import { insetRegion } from "./shared/graph/mesh/tools";
 import { extractPointsFromMesh } from "./shared/graph/nodes/pointsGeometry";
 import { findFirstMesh } from "./shared/graph/meshRequired";
 import {
@@ -1489,8 +1489,9 @@ function MainEditor() {
         const selectedFaces: number[] = Array.isArray(node.params.selectedFaces)
           ? (node.params.selectedFaces as number[])
           : [];
-        const ratio = Number(node.params.insetRatio) || 0.25;
-        const result = insetFaces(meshData, selectedFaces, ratio);
+        const thickness = Number.isFinite(Number(node.params.insetThickness)) ? Number(node.params.insetThickness) : 0.1;
+        const depth = Number(node.params.insetDepth) || 0;
+        const result = insetRegion(meshData, selectedFaces, thickness, depth);
         onParamChange({
           meshData: result.mesh,
           selectMode: "faces",

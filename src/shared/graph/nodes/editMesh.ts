@@ -376,7 +376,8 @@ function editMeshParamFields(instance?: NodeInstance): ParamFieldDef[] {
     ...NATIVE_TRANSFORM_PARAM_FIELDS,
     { id: "shading", label: "Shading", kind: "select", options: ["auto", "smooth", "flat"] },
     { id: "extrudeDistance", label: "Extrude Distance", kind: "number", step: 0.05 },
-    { id: "insetRatio", label: "Inset Amount (%)", kind: "number", step: 5, percent: true },
+    { id: "insetThickness", label: "Inset Thickness", kind: "number", step: 0.01 },
+    { id: "insetDepth", label: "Inset Depth", kind: "number", step: 0.01 },
     { id: "flatAngle", label: "Flat Region Angle (°)", kind: "number", step: 1 },
     { id: "proportionalEditing", label: "Proportional Editing", kind: "boolean" },
   );
@@ -430,6 +431,11 @@ export const EDIT_MESH_NODE: NodeDefinition = {
     shading: "auto" as QuadMeshShading,
     extrudeDistance: 0.5,
     insetRatio: 0.25,
+    // The Inset button's (and the I tool's starting) border width and depth, in object units.
+    insetThickness: 0.1,
+    insetDepth: 0,
+    // Edits mirror across the object's local X axis.
+    mirrorX: false,
     proportionalEditing: false,
     proportionalDiameter: 1.0,
     // Pick through the surface (Alt+Z); off, hidden points/faces can't be selected.

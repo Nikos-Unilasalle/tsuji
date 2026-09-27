@@ -36,6 +36,15 @@ export interface TransformPatch {
   axis?: THREE.Vector3;
   /** Particle Emitter velocity — written directly by its dedicated viewport proxy. */
   velocity?: THREE.Vector3;
+  /**
+   * Edit Mesh's live edits — a gizmo drag, or a modal tool's preview —
+   * written through this history-free path so the whole gesture is the one
+   * undo step recorded when it started (see onTransformStart).
+   */
+  meshData?: unknown;
+  selectMode?: string;
+  selectedPoints?: number[];
+  selectedEdges?: [number, number][];
 }
 
 export interface GizmoWritebackInput {

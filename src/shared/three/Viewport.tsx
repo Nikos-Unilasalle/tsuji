@@ -48,6 +48,7 @@ import { circleRegion, createEditMeshHandles, polygonRegion, rectRegion, ScreenR
 import {
   combineSelection,
   emptySelection,
+  EdgeRef,
   flatFaces,
   growSelection,
   linkedSelection,
@@ -59,6 +60,21 @@ import {
   shrinkSelection,
 } from "../graph/mesh/selection";
 import { edgeLoop, edgeRing, quadRing } from "../graph/mesh/loops";
+import {
+  dissolveEdges,
+  dissolveFaces,
+  dissolveVertices,
+  duplicateFaces,
+  extrudeFacesIndividual,
+  fillVertices,
+  flipFaces,
+  insetRegion,
+  mergeVertices,
+  mirrorMovesX,
+  mirrorXMap,
+  subdivideFaces,
+} from "../graph/mesh/tools";
+import { convertSelection } from "../graph/mesh/selection";
 import { layoutKey } from "./layoutKey";
 import {
   QuadMesh,
@@ -67,6 +83,9 @@ import {
   bufferGeometryToQuadMesh,
   getLoopCutPreviewSegments,
   loopCut,
+  extrudeFaces,
+  deleteFaces,
+  computeFaceNormal,
   transformSelectionByMatrix,
   gizmoWorldDelta,
   worldDeltaToLocal,
@@ -511,6 +530,13 @@ function editMeshQuadMesh(
 
 /** The Edit Mesh paint-select brush radius, in CSS px (the drawn circle matches). */
 const EDIT_MESH_BRUSH_RADIUS_PX = 28;
+
+/** X-mirror matching tolerance: a small fraction of the mesh's size. */
+function mirrorTolerance(mesh: QuadMesh): number {
+  let size = 0;
+  for (const p of mesh.positions) size = Math.max(size, Math.abs(p[0]), Math.abs(p[1]), Math.abs(p[2]));
+  return Math.max(1e-6, size * 1e-4);
+}
 
 const exportImageCache = new Map<string, HTMLImageElement>();
 function getExportImage(url: string): HTMLImageElement | null {
@@ -1027,8 +1053,8 @@ export function Viewport({
   const gpFinishPolylineRef = useRef<((closeShape: boolean) => void) | null>(null);
 
   // Edit Mesh modeling state
-  const [editMeshTool, setEditMeshTool] = useState<"select" | "extrude" | "loopcut" | "inset">("select");
-  const editMeshToolRef = useRef<"select" | "extrude" | "loopcut" | "inset">("select");
+  const [editMeshTool, setEditMeshTool] = useState<"select" | "loopcut" | "modal">("select");
+  const editMeshToolRef = useRef<"select" | "loopcut" | "modal">("select");
   editMeshToolRef.current = editMeshTool;
   const editMeshHoverFaceRef = useRef<number | null>(null);
   const editMeshPreviewLoopRef = useRef<[ [number, number, number], [number, number, number] ][] | null>(null);
@@ -1045,6 +1071,13 @@ export function Viewport({
   const editMeshMarqueeShapeRef = useRef<"box" | "lasso">("box");
   editMeshMarqueeShapeRef.current = editMeshMarqueeShape;
   const [lassoPath, setLassoPath] = useState<string | null>(null);
+  /** The running Edit Mesh modal tool's readout, or null when none is running. */
+  const [editModalHud, setEditModalHud] = useState<string | null>(null);
+  /** Edit Mesh operations for the HUD buttons, bound by the viewport effect. */
+  const editMeshCommandsRef = useRef<{
+    run(op: "merge" | "dissolve" | "fill" | "flip" | "subdivide" | "delete"): boolean;
+    duplicate(): boolean;
+  } | null>(null);
   const editMeshPaintDragRef = useRef<boolean>(false);
   const [editMeshPaintCursor, setEditMeshPaintCursor] = useState<{ x: number; y: number } | null>(null);
   const [editMeshLoopCuts, setEditMeshLoopCuts] = useState<number>(1);
@@ -1794,7 +1827,405 @@ export function Viewport({
       const { x, y } = canvasPoint(clientX, clientY);
       return pickEditRegion(target, circleRegion(x, y, EDIT_MESH_BRUSH_RADIUS_PX));
     }
+
+    // --- Edit Mesh modal tools --------------------------------------------
+    // Extrude (E, Alt+E individual), Inset (I), Loop Cut & Slide, and the
+    // move that follows Duplicate (Shift+D) all run the same way: the mouse
+    // (or a typed number) drives the amount with a live preview; click or
+    // Enter confirms, Escape or right-click cancels. The whole gesture is one
+    // undo step: it's recorded once when the tool starts (onTransformStart),
+    // and every preview is written through the history-free transform path.
+
+    type EditModalKind = "extrude" | "inset" | "loopslide" | "move";
+    interface EditModal {
+      kind: EditModalKind;
+      nodeId: string;
+      /** The mesh the tool works from; every preview is recomputed from it. */
+      base: QuadMesh;
+      /** The node's params before the tool, put back on cancel. */
+      restore: Record<string, unknown>;
+      mode: SelectMode;
+      selection: MeshSelection;
+      matrix: THREE.Matrix4;
+      individual: boolean;
+      value: number;
+      depth: number;
+      /** A typed amount; overrides the mouse while non-empty. */
+      typed: string;
+      lastX: number;
+      lastY: number;
+      startX: number;
+      startY: number;
+      /** Screen px per local unit along the extrude normal (client space). */
+      axis: THREE.Vector2;
+      /** The selection's centre on screen (client space). */
+      center: THREE.Vector2;
+      /** Screen px per local unit at the selection's depth. */
+      pxPerUnit: number;
+      edge?: EdgeRef;
+      edgeA?: THREE.Vector2;
+      edgeB?: THREE.Vector2;
+      /** Move: the selection centre in world space, and the resulting local offset. */
+      moveOrigin?: THREE.Vector3;
+      moveDelta?: THREE.Vector3;
+    }
+    let editModal: EditModal | null = null;
+
+    function localToClient(p: THREE.Vector3, matrix: THREE.Matrix4): THREE.Vector2 {
+      const rect = renderer.domElement.getBoundingClientRect();
+      const v = p.clone().applyMatrix4(matrix).project(camera);
+      return new THREE.Vector2(rect.left + (v.x * 0.5 + 0.5) * rect.width, rect.top + (-v.y * 0.5 + 0.5) * rect.height);
+    }
+
+    /** The world point under a client position, at `depthOf`'s depth. */
+    function clientToWorldAtDepth(clientX: number, clientY: number, depthOf: THREE.Vector3): THREE.Vector3 {
+      const rect = renderer.domElement.getBoundingClientRect();
+      const z = depthOf.clone().project(camera).z;
+      return new THREE.Vector3(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1, z).unproject(camera);
+    }
+
+    const EDIT_MODAL_LABELS: Record<EditModalKind, string> = {
+      extrude: "Extrude",
+      inset: "Inset",
+      loopslide: "Loop Cut — slide",
+      move: "Move",
+    };
+
+    function editModalAmount(modal: EditModal): number {
+      const typed = parseFloat(modal.typed);
+      return modal.typed !== "" && Number.isFinite(typed) ? typed : modal.value;
+    }
+
+    /** The params the tool would leave at its current amount. */
+    function editModalResult(modal: EditModal): Record<string, unknown> {
+      const amount = editModalAmount(modal);
+      const faces = modal.selection.faces;
+      if (modal.kind === "extrude") {
+        const r = modal.individual ? extrudeFacesIndividual(modal.base, faces, amount) : extrudeFaces(modal.base, faces, amount);
+        return { meshData: r.mesh, selectMode: "faces", selectedFaces: r.newFaces };
+      }
+      if (modal.kind === "inset") {
+        const r = insetRegion(modal.base, faces, Math.max(0, amount), modal.depth, modal.individual);
+        return { meshData: r.mesh, selectMode: "faces", selectedFaces: r.newFaces };
+      }
+      if (modal.kind === "loopslide") {
+        const r = loopCut(modal.base, modal.edge!, Math.min(0.98, Math.max(0.02, amount)));
+        return {
+          meshData: r.mesh,
+          selectMode: "edges",
+          selectedEdges: r.newEdgeIndices.map(([a, b]) => (a < b ? [a, b] : [b, a])),
+        };
+      }
+      const delta = modal.moveDelta ?? new THREE.Vector3();
+      const vertices = [...selectionVertices(modal.base, modal.mode, modal.selection)];
+      const moved = transformSelectionByMatrix(modal.base, "points", vertices, new THREE.Matrix4().makeTranslation(delta.x, delta.y, delta.z));
+      return { meshData: moved };
+    }
+
+    function previewEditModal() {
+      if (!editModal) return;
+      onTransformChangeRef.current?.(editModal.nodeId, editModalResult(editModal));
+      const amount = editModalAmount(editModal);
+      const parts = [`${EDIT_MODAL_LABELS[editModal.kind]}: ${editModal.typed !== "" ? editModal.typed : amount.toFixed(3)}`];
+      if (editModal.kind === "inset") parts.push(`depth ${editModal.depth.toFixed(3)} (Cmd/Ctrl)`);
+      if (editModal.kind === "extrude" || editModal.kind === "inset") parts.push(editModal.individual ? "individual (I)" : "region (I)");
+      if (editModal.kind === "move" && editModal.moveDelta) {
+        const d = editModal.moveDelta;
+        parts[0] = `Move: ${d.x.toFixed(3)}, ${d.y.toFixed(3)}, ${d.z.toFixed(3)}`;
+      }
+      setEditModalHud(parts.join(" · "));
+    }
+
+    /**
+     * Starts a modal tool on the target. `base`/`selection`/`restore` default
+     * to the node as it is; Duplicate passes its own (the duplicated mesh, the
+     * copies, and the pre-duplicate params so cancelling removes the copies).
+     */
+    function startEditModal(
+      kind: EditModalKind,
+      target: EditMeshTarget,
+      clientX: number,
+      clientY: number,
+      opts: {
+        individual?: boolean;
+        edge?: EdgeRef;
+        base?: QuadMesh;
+        selection?: MeshSelection;
+        mode?: SelectMode;
+        restore?: Record<string, unknown>;
+        startValue?: number;
+      } = {},
+    ): boolean {
+      if (target.node.type !== EDIT_MESH_NODE.type || editModal) return false;
+      const base = opts.base ?? target.quadMesh;
+      const mode = opts.mode ?? target.mode;
+      const selection = opts.selection ?? target.selection;
+      const matrix = target.srcMesh.matrixWorld.clone();
+
+      // Centre, and the averaged normal of the faces involved.
+      const center = new THREE.Vector3();
+      const normal = new THREE.Vector3();
+      if (kind === "loopslide" && opts.edge) {
+        const [a, b] = opts.edge;
+        center.set(...base.positions[a]).add(new THREE.Vector3(...base.positions[b])).multiplyScalar(0.5);
+      } else {
+        const vertices = selectionVertices(base, mode, selection);
+        if (vertices.size === 0) return false;
+        for (const v of vertices) center.add(new THREE.Vector3(...base.positions[v]));
+        center.divideScalar(vertices.size);
+        for (const f of selection.faces) normal.add(computeFaceNormal(base.positions, base.faces[f] ?? []));
+      }
+      if (normal.lengthSq() < 1e-12) normal.set(0, 0, 1);
+      normal.normalize();
+
+      const c = localToClient(center, matrix);
+      const axis = localToClient(center.clone().add(normal), matrix).sub(c);
+      const worldCenter = center.clone().applyMatrix4(matrix);
+      const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+      const pxPerWorld = Math.max(1e-6, localToClient(worldCenter.clone().add(right), new THREE.Matrix4()).distanceTo(c));
+      const pxPerUnit = pxPerWorld * Math.max(1e-6, matrix.getMaxScaleOnAxis());
+      // A normal pointing (nearly) at the camera gives no usable screen
+      // direction: fall back to screen-up.
+      if (axis.length() < 4) axis.set(0, -pxPerUnit);
+
+      const node = target.node;
+      const restore = opts.restore ?? {
+        meshData: node.params.meshData ?? null,
+        selectMode: node.params.selectMode ?? "faces",
+        selectedPoints: node.params.selectedPoints ?? [],
+        selectedEdges: node.params.selectedEdges ?? [],
+        selectedFaces: node.params.selectedFaces ?? [],
+      };
+
+      const modal: EditModal = {
+        kind,
+        nodeId: node.id,
+        base,
+        restore,
+        mode,
+        selection,
+        matrix,
+        individual: Boolean(opts.individual),
+        value: opts.startValue ?? 0,
+        depth: 0,
+        typed: "",
+        lastX: clientX,
+        lastY: clientY,
+        startX: clientX,
+        startY: clientY,
+        axis,
+        center: c,
+        pxPerUnit,
+      };
+      if (kind === "loopslide" && opts.edge) {
+        modal.edge = opts.edge;
+        modal.edgeA = localToClient(new THREE.Vector3(...base.positions[opts.edge[0]]), matrix);
+        modal.edgeB = localToClient(new THREE.Vector3(...base.positions[opts.edge[1]]), matrix);
+      }
+      if (kind === "move") {
+        modal.moveOrigin = worldCenter;
+        modal.moveDelta = new THREE.Vector3();
+      }
+
+      onTransformStartRef.current?.();
+      editModal = modal;
+      setEditMeshTool("modal");
+      previewEditModal();
+      return true;
+    }
+
+    function updateEditModal(clientX: number, clientY: number, e: { shiftKey: boolean; ctrlKey: boolean; metaKey: boolean }) {
+      const modal = editModal;
+      if (!modal) return;
+      const dx = clientX - modal.lastX;
+      const dy = clientY - modal.lastY;
+      modal.lastX = clientX;
+      modal.lastY = clientY;
+      // Shift: ten times finer, as in Blender.
+      const precision = e.shiftKey ? 0.1 : 1;
+      if (modal.kind === "extrude") {
+        modal.value += ((dx * modal.axis.x + dy * modal.axis.y) / modal.axis.lengthSq()) * precision;
+      } else if (modal.kind === "inset") {
+        if (e.ctrlKey || e.metaKey) {
+          modal.depth += (-dy / modal.pxPerUnit) * precision;
+        } else {
+          // Towards the centre thickens the inset.
+          const before = Math.hypot(clientX - dx - modal.center.x, clientY - dy - modal.center.y);
+          const after = Math.hypot(clientX - modal.center.x, clientY - modal.center.y);
+          modal.value = Math.max(0, modal.value + ((before - after) / modal.pxPerUnit) * precision);
+        }
+      } else if (modal.kind === "loopslide" && modal.edgeA && modal.edgeB) {
+        const ab = modal.edgeB.clone().sub(modal.edgeA);
+        const t = ab.lengthSq() > 1e-6 ? new THREE.Vector2(clientX, clientY).sub(modal.edgeA).dot(ab) / ab.lengthSq() : 0.5;
+        modal.value = Math.min(0.98, Math.max(0.02, t));
+      } else if (modal.kind === "move" && modal.moveOrigin) {
+        const from = clientToWorldAtDepth(modal.startX, modal.startY, modal.moveOrigin);
+        const to = clientToWorldAtDepth(clientX, clientY, modal.moveOrigin);
+        const worldDelta = to.sub(from);
+        // To local: difference of two transformed points, so translation cancels.
+        const inv = modal.matrix.clone().invert();
+        modal.moveDelta = modal.moveOrigin.clone().add(worldDelta).applyMatrix4(inv).sub(modal.moveOrigin.clone().applyMatrix4(inv));
+      }
+      previewEditModal();
+    }
+
+    function endEditModal() {
+      editModal = null;
+      setEditModalHud(null);
+      setEditMeshTool("select");
+    }
+
+    function confirmEditModal() {
+      if (!editModal) return;
+      // The graph already holds the last preview; that is the result.
+      endEditModal();
+    }
+
+    function cancelEditModal() {
+      if (!editModal) return;
+      onTransformChangeRef.current?.(editModal.nodeId, editModal.restore);
+      endEditModal();
+    }
+
+    /** Keys while a modal tool runs: the amount, the options, confirm and cancel. Returns true when handled. */
+    function editModalKey(e: KeyboardEvent, key: string): boolean {
+      const modal = editModal;
+      if (!modal) return false;
+      e.preventDefault();
+      e.stopPropagation();
+      if (key === "escape") cancelEditModal();
+      else if (e.key === "Enter") confirmEditModal();
+      else if (/^[0-9.]$/.test(e.key) || (e.key === "-" && modal.typed === "")) {
+        modal.typed += e.key;
+        previewEditModal();
+      } else if (e.key === "Backspace") {
+        modal.typed = modal.typed.slice(0, -1);
+        previewEditModal();
+      } else if (key === "i" && (modal.kind === "inset" || modal.kind === "extrude")) {
+        modal.individual = !modal.individual;
+        previewEditModal();
+      }
+      return true;
+    }
+
+    // --- Edit Mesh one-shot operations ---------------------------------------
+    // Merge, dissolve, fill, flip, subdivide, delete: applied at once, one
+    // undo step each, with the selection set to what they produced.
+
+    function applyEditOp(target: EditMeshTarget, patch: Record<string, unknown>) {
+      onParamChangeRef.current?.(patch, target.node.id, undefined, { coalesce: false });
+    }
+
+    /** The faces an operation should act on in any mode: the selected ones, or those fully selected. */
+    function targetFaces(target: EditMeshTarget): number[] {
+      return target.mode === "faces"
+        ? target.selection.faces
+        : convertSelection(target.quadMesh, target.mode, target.selection, "faces").faces;
+    }
+
+    function runEditOp(target: EditMeshTarget, op: "merge" | "dissolve" | "fill" | "flip" | "subdivide" | "delete" | "duplicate"): boolean {
+      if (target.node.type !== EDIT_MESH_NODE.type) return false;
+      const mesh = target.quadMesh;
+      const vertices = [...selectionVertices(mesh, target.mode, target.selection)];
+      if (vertices.length === 0) return false;
+
+      if (op === "merge") {
+        const r = mergeVertices(mesh, vertices, "center");
+        applyEditOp(target, {
+          meshData: r.mesh,
+          selectMode: "points",
+          selectedPoints: r.vertex === null ? [] : [r.vertex],
+          selectedEdges: [],
+          selectedFaces: [],
+        });
+        return true;
+      }
+      if (op === "dissolve") {
+        const r =
+          target.mode === "points"
+            ? dissolveVertices(mesh, target.selection.points)
+            : target.mode === "edges"
+              ? dissolveEdges(mesh, target.selection.edges)
+              : dissolveFaces(mesh, target.selection.faces);
+        applyEditOp(target, { meshData: r.mesh, selectMode: "faces", selectedFaces: r.newFaces, selectedPoints: [], selectedEdges: [] });
+        return true;
+      }
+      if (op === "fill") {
+        const r = fillVertices(mesh, vertices);
+        if (r.newFaces.length === 0) return false;
+        applyEditOp(target, { meshData: r.mesh, selectMode: "faces", selectedFaces: r.newFaces });
+        return true;
+      }
+      const faces = targetFaces(target);
+      if (faces.length === 0 && op !== "delete") return false;
+      if (op === "flip") {
+        applyEditOp(target, { meshData: flipFaces(mesh, faces) });
+        return true;
+      }
+      if (op === "subdivide") {
+        const r = subdivideFaces(mesh, faces);
+        applyEditOp(target, { meshData: r.mesh, selectMode: "faces", selectedFaces: r.newFaces });
+        return true;
+      }
+      if (op === "delete") {
+        // Points/edges: every face touching them goes (Blender's Delete Vertices / Edges).
+        const touched = new Set(vertices);
+        const doomed =
+          target.mode === "faces"
+            ? faces
+            : mesh.faces.flatMap((face, f) => {
+                if (target.mode === "points") return face.some((v) => touched.has(v)) ? [f] : [];
+                const keys = new Set(target.selection.edges.map(([a, b]) => `${a}_${b}`));
+                return face.some((v, i) => {
+                  const w = face[(i + 1) % face.length];
+                  return keys.has(v < w ? `${v}_${w}` : `${w}_${v}`);
+                })
+                  ? [f]
+                  : [];
+              });
+        if (doomed.length === 0) return false;
+        applyEditOp(target, { meshData: deleteFaces(mesh, doomed), selectedPoints: [], selectedEdges: [], selectedFaces: [] });
+        return true;
+      }
+      return false;
+    }
+
+    /** Shift+D: copy the selected faces, then move the copies with the mouse. */
+    function duplicateAndMove(target: EditMeshTarget, clientX: number, clientY: number): boolean {
+      if (target.node.type !== EDIT_MESH_NODE.type) return false;
+      const faces = targetFaces(target);
+      if (faces.length === 0) return false;
+      const node = target.node;
+      const restore = {
+        meshData: node.params.meshData ?? null,
+        selectMode: node.params.selectMode ?? "faces",
+        selectedPoints: node.params.selectedPoints ?? [],
+        selectedEdges: node.params.selectedEdges ?? [],
+        selectedFaces: node.params.selectedFaces ?? [],
+      };
+      const r = duplicateFaces(target.quadMesh, faces);
+      const selection = { ...emptySelection(), faces: r.newFaces };
+      // The duplicate, selected, is the new state the move starts from.
+      onTransformChangeRef.current?.(node.id, { meshData: r.mesh, selectMode: "faces", selectedFaces: r.newFaces });
+      return startEditModal("move", target, clientX, clientY, { base: r.mesh, selection, mode: "faces", restore });
+    }
+
+    editMeshCommandsRef.current = {
+      run(op) {
+        const target = editMeshTarget();
+        return target ? runEditOp(target, op) : false;
+      },
+      duplicate() {
+        const target = editMeshTarget();
+        if (!target) return false;
+        const rect = renderer.domElement.getBoundingClientRect();
+        return duplicateAndMove(target, rect.left + rect.width / 2, rect.top + rect.height / 2);
+      },
+    };
+
     let dragStartMeshData: QuadMesh | null = null;
+    /** X-mirror counterparts for the drag in progress, when the node has X-mirror on. */
+    let dragStartMirrorMap: Int32Array | null = null;
     let dragStartPointPositionsList: THREE.Vector3[] | null = null;
 
     // Points Influence editing — same generic point-cloud handles again, this
@@ -2068,9 +2499,24 @@ export function Viewport({
       return true;
     }
 
+    /**
+     * The viewport's keys, heard first (capture phase). While editing a mesh
+     * — an Edit Mesh node selected, or one of its tools running — a key the
+     * viewport acted on stops there: every panel listens on window, and the
+     * graph editor would otherwise *also* delete the Edit Mesh node on Delete
+     * or duplicate it on Cmd+D, and the timeline drop a marker on M.
+     */
+    function onViewportKeyDownCaptured(e: KeyboardEvent) {
+      const editing = editModal !== null || (keyboardViewport() === keyboardToken && editMeshTarget() !== null);
+      onViewportKeyDown(e);
+      if (editing && e.defaultPrevented) e.stopImmediatePropagation();
+    }
+
     function onViewportKeyDown(e: KeyboardEvent) {
       if (isInputElement(document.activeElement)) return;
       if (keyboardViewport() !== keyboardToken) return;
+      // A running Edit Mesh tool owns the keyboard until it's confirmed or cancelled.
+      if (editModalKey(e, layoutKey(e))) return;
       // A running scene owns the keys its Keyboard nodes listen for: S must
       // walk the character rather than arm the scale gizmo behind it.
       if (isKeyReservedForPlayback(e)) return;
@@ -2162,6 +2608,33 @@ export function Viewport({
           commitEditSelection(target, next);
           return;
         }
+
+        // Modelling tools (Blender's keys). The modal ones start from the
+        // pointer's position over the canvas, or its centre.
+        const rect = renderer.domElement.getBoundingClientRect();
+        const px = editPointer?.clientX ?? rect.left + rect.width / 2;
+        const py = editPointer?.clientY ?? rect.top + rect.height / 2;
+        const hasFaces = target.mode === "faces" && target.selection.faces.length > 0;
+        let handled = false;
+        if (key === "e" && !mod && !e.shiftKey && hasFaces) {
+          handled = startEditModal("extrude", target, px, py, { individual: e.altKey });
+        } else if (key === "i" && !mod && !e.altKey && !e.shiftKey && hasFaces) {
+          handled = startEditModal("inset", target, px, py);
+        } else if (key === "d" && e.shiftKey && !mod && !e.altKey) {
+          handled = duplicateAndMove(target, px, py);
+        } else if (key === "m" && !mod && !e.altKey && !e.shiftKey) {
+          handled = runEditOp(target, "merge");
+        } else if (key === "x" && mod && !e.altKey) {
+          handled = runEditOp(target, "dissolve");
+        } else if (key === "f" && !mod && !e.altKey && !e.shiftKey && target.mode !== "faces") {
+          handled = runEditOp(target, "fill");
+        } else if ((key === "delete" || key === "backspace") && !mod && !e.altKey) {
+          handled = runEditOp(target, "delete");
+        }
+        if (handled) {
+          e.preventDefault();
+          return;
+        }
       }
 
       if (e.metaKey || e.ctrlKey || e.altKey) return;
@@ -2187,15 +2660,9 @@ export function Viewport({
         ? graphRef.current.nodes.find((n) => n.id === selectedNodeIdRef.current && n.type === EDIT_MESH_NODE.type)
         : null;
       if (activeEditMeshNode) {
-        if (key === "e") {
-          e.preventDefault();
-          onParamActionRef.current?.(activeEditMeshNode.id, EDIT_MESH_EXTRUDE_ACTION);
-          return;
-        } else if (key === "i") {
-          e.preventDefault();
-          onParamActionRef.current?.(activeEditMeshNode.id, EDIT_MESH_INSET_ACTION);
-          return;
-        } else if (key === "o") {
+        // E / I / Delete are handled with the selection keys above, as modal
+        // tools and one-shot operations.
+        if (key === "o") {
           e.preventDefault();
           onParamChangeRef.current?.(
             "proportionalEditing",
@@ -2203,13 +2670,6 @@ export function Viewport({
             activeEditMeshNode.id,
           );
           return;
-        } else if ((key === "delete" || key === "backspace") && activeEditMeshNode.params.selectMode === "faces") {
-          const faces = Array.isArray(activeEditMeshNode.params.selectedFaces) ? (activeEditMeshNode.params.selectedFaces as number[]) : [];
-          if (faces.length > 0) {
-            e.preventDefault();
-            onParamActionRef.current?.(activeEditMeshNode.id, EDIT_MESH_DELETE_FACES_ACTION);
-            return;
-          }
         } else if (key === "p" && activeEditMeshNode.params.selectMode === "faces") {
           const faces = Array.isArray(activeEditMeshNode.params.selectedFaces) ? (activeEditMeshNode.params.selectedFaces as number[]) : [];
           if (faces.length > 0) {
@@ -2337,7 +2797,7 @@ export function Viewport({
     }
     if (!outputMode) {
       window.addEventListener("keydown", onSnapKeyDown);
-      window.addEventListener("keydown", onViewportKeyDown);
+      window.addEventListener("keydown", onViewportKeyDownCaptured, true);
       window.addEventListener("keyup", onSnapKeyUp);
       window.addEventListener("blur", onSnapWindowBlur);
     }
@@ -2377,6 +2837,7 @@ export function Viewport({
             const node = graphRef.current.nodes.find((n) => n.id === selectedNodeIdRef.current);
             if (node?.type === EDIT_MESH_NODE.type) {
               dragStartMeshData = cloneQuadMesh(resolveEditMeshData(node, latestResultsRef.current));
+              dragStartMirrorMap = node.params.mirrorX === true ? mirrorXMap(dragStartMeshData, mirrorTolerance(dragStartMeshData)) : null;
               dragStartPointPositionsList = null;
             } else if (node?.type === EDIT_MESH_POINTS_NODE.type) {
               const meshObj = latestResultsRef.current?.get(node.id)?.geometry;
@@ -2394,6 +2855,7 @@ export function Viewport({
         if (!event.value) {
           suppressNextClick = true;
           dragStartMeshData = null;
+          dragStartMirrorMap = null;
           dragStartPointPositionsList = null;
         }
       });
@@ -2712,7 +3174,7 @@ export function Viewport({
             return;
           }
 
-          if (!onParamChangeRef.current) return;
+          if (!onTransformChangeRef.current) return;
 
           // Every mode moves the vertices it covers — a face's corners, an
           // edge's ends — so the drag works on points whatever the mode.
@@ -2727,7 +3189,24 @@ export function Viewport({
             diameter: proportionalDiameter,
           });
 
-          onParamChangeRef.current("meshData", updatedMesh, node.id);
+          // X-mirror: every vertex this drag moved has its counterpart across
+          // local X = 0 follow it, mirrored (and one on the plane stays on it).
+          if (dragStartMirrorMap) {
+            const moved = new Map<number, [number, number, number]>();
+            updatedMesh.positions.forEach((p, i) => {
+              const o = dragStartMeshData!.positions[i];
+              if (p[0] !== o[0] || p[1] !== o[1] || p[2] !== o[2]) moved.set(i, p);
+            });
+            for (const [v, p] of mirrorMovesX(dragStartMeshData, moved, dragStartMirrorMap, mirrorTolerance(dragStartMeshData))) {
+              updatedMesh.positions[v] = p;
+            }
+          }
+
+          // History-free: the drag's one undo step was recorded when it began
+          // (dragging-changed → onTransformStart). Writing through
+          // onParamChange recorded another whenever the drag paused longer
+          // than the coalescing window.
+          onTransformChangeRef.current(node.id, { meshData: updatedMesh });
           return;
         }
 
@@ -3234,6 +3713,17 @@ export function Viewport({
       }
 
       pointerDownAt = { x: e.clientX, y: e.clientY };
+
+      // A running Edit Mesh tool: left click confirms, right click cancels,
+      // and the click goes no further (no orbit, no selection change).
+      if (editModal) {
+        if (e.button === 2) cancelEditModal();
+        else confirmEditModal();
+        suppressNextClick = true;
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        return;
+      }
 
       // Edit Mesh gestures: Cmd/Ctrl-drag (paint select) & Shift-drag (marquee select / shift-click)
       const editMeshNodeOnDown = !outputMode && selectedNodeIdRef.current
@@ -3756,6 +4246,11 @@ export function Viewport({
     }
 
     function onCanvasPointerMove(e: PointerEvent) {
+      // A running Edit Mesh tool follows the mouse and nothing else does.
+      if (editModal) {
+        updateEditModal(e.clientX, e.clientY, e);
+        return;
+      }
       const terrainNode = selectedNodeIdRef.current
         ? graphRef.current.nodes.find((n) => n.id === selectedNodeIdRef.current && isTerrainNode(n))
         : null;
@@ -4793,15 +5288,21 @@ export function Viewport({
           if (activeEditMesh.type === EDIT_MESH_NODE.type && editMeshToolRef.current === "loopcut") {
             const edge = editMeshHandles.pickEdge(ndc, camera, rect.width, rect.height, quadMesh, srcMesh.matrixWorld);
             if (edge) {
-              const res = loopCut(quadMesh, edge, editMeshLoopCutsRef.current);
               editMeshPreviewLoopRef.current = null;
               editMeshHoverEdgeRef.current = null;
               setEditMeshTool("select");
+              // One cut: slide it along the ring with the mouse before it's
+              // placed (Blender's Loop Cut and Slide). Several: evenly spaced.
+              const slideTarget = editMeshLoopCutsRef.current === 1 ? editMeshTarget() : null;
+              if (slideTarget && startEditModal("loopslide", slideTarget, e.clientX, e.clientY, { edge, startValue: 0.5 })) {
+                return;
+              }
+              const res = loopCut(quadMesh, edge, editMeshLoopCutsRef.current);
               onParamChangeRef.current?.(
                 {
                   meshData: res.mesh,
-                  selectMode: "points",
-                  selectedPoints: res.newVertexIndices,
+                  selectMode: "edges",
+                  selectedEdges: res.newEdgeIndices.map(([a, b]) => (a < b ? [a, b] : [b, a])),
                 },
                 activeEditMesh.id,
               );
@@ -5883,6 +6384,10 @@ export function Viewport({
         selectedFacesSet.clear();
       }
 
+      // A modal tool left running on a node that's no longer selected (the
+      // selection changed from the graph) is cancelled, not left dangling.
+      if (editModal && editModal.nodeId !== selectedNodeIdRef.current) cancelEditModal();
+
       // Edit Mesh handling: sync handles and anchor editMeshCentroidProxy
       let editMeshHasSelection = false;
       let xrayMesh: THREE.Mesh | null = null;
@@ -6755,7 +7260,7 @@ export function Viewport({
         controls.removeEventListener("start", handleOrbitStart);
         controls.removeEventListener("change", emitCameraPose);
         window.removeEventListener("keydown", onSnapKeyDown);
-        window.removeEventListener("keydown", onViewportKeyDown);
+        window.removeEventListener("keydown", onViewportKeyDownCaptured, true);
         window.removeEventListener("keyup", onSnapKeyUp);
         window.removeEventListener("blur", onSnapWindowBlur);
       }
@@ -6992,6 +7497,30 @@ export function Viewport({
             zIndex: 40,
           }}
         />
+      )}
+      {/* Edit Mesh modal tool readout */}
+      {!outputMode && editModalHud && (
+        <div
+          style={{
+            position: "absolute",
+            top: 12,
+            left: "50%",
+            transform: "translateX(-50%)",
+            padding: "6px 12px",
+            borderRadius: 6,
+            background: "rgba(24, 28, 38, 0.92)",
+            border: "1px solid rgba(250, 204, 21, 0.5)",
+            color: "#fde68a",
+            fontSize: 12,
+            fontFamily: "var(--font-mono, ui-monospace, monospace)",
+            pointerEvents: "none",
+            zIndex: 46,
+            whiteSpace: "nowrap",
+          }}
+        >
+          {editModalHud}
+          <span style={{ color: "#94a3b8" }}> · type a value · Shift finer · click/Enter ✓ · right-click/Esc ✕</span>
+        </div>
       )}
       {/* Edit Mesh Lasso Overlay (Shift+Drag, lasso shape) */}
       {!outputMode && lassoPath && (
@@ -8144,6 +8673,100 @@ export function Viewport({
                 )}
               </button>
 
+              {!isPointsOnly && selectedCount > 0 && (
+                <>
+                  <div style={{ width: 1, height: 16, background: "rgba(255, 255, 255, 0.15)" }} />
+                  {/* One-shot operations */}
+                  <button
+                    type="button"
+                    className="viewport-hud-button"
+                    onClick={() => editMeshCommandsRef.current?.run("merge")}
+                    title="Merge at Center (Shortcut: M)"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                      <circle cx="12" cy="12" r="2.5" fill="currentColor" />
+                      <path d="M4 4l5 5M20 4l-5 5M4 20l5-5M20 20l-5-5" />
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
+                    className="viewport-hud-button"
+                    onClick={() => editMeshCommandsRef.current?.run("dissolve")}
+                    title="Dissolve — points, edges or faces merge into the faces around them (Shortcut: Cmd/Ctrl+X)"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                      <rect x="3" y="5" width="18" height="14" rx="1" />
+                      <line x1="12" y1="5" x2="12" y2="19" strokeDasharray="2 2" opacity="0.5" />
+                    </svg>
+                  </button>
+                  {selectMode !== "faces" && (
+                    <button
+                      type="button"
+                      className="viewport-hud-button"
+                      onClick={() => editMeshCommandsRef.current?.run("fill")}
+                      title="Fill — make a face from the selected points / edges (Shortcut: F)"
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="1.5">
+                        <path d="M5 18L8 6h9l2 12z" fillOpacity="0.35" />
+                      </svg>
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="viewport-hud-button"
+                    onClick={() => editMeshCommandsRef.current?.run("subdivide")}
+                    title="Subdivide the selected faces"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
+                      <rect x="4" y="4" width="16" height="16" />
+                      <line x1="12" y1="4" x2="12" y2="20" />
+                      <line x1="4" y1="12" x2="20" y2="12" />
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
+                    className="viewport-hud-button"
+                    onClick={() => editMeshCommandsRef.current?.run("flip")}
+                    title="Flip Normals of the selected faces"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                      <path d="M4 12h16" />
+                      <path d="M8 8l-4 4 4 4M16 8l4 4-4 4" />
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
+                    className="viewport-hud-button"
+                    onClick={() => editMeshCommandsRef.current?.duplicate()}
+                    title="Duplicate, then move with the mouse (Shortcut: Shift+D)"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                      <rect x="3" y="3" width="12" height="12" rx="1" />
+                      <rect x="9" y="9" width="12" height="12" rx="1" fill="currentColor" fillOpacity="0.3" />
+                    </svg>
+                  </button>
+                </>
+              )}
+
+              {/* X-mirror: edits mirror across the object's local X axis */}
+              {!isPointsOnly && (
+                <button
+                  type="button"
+                  className={`viewport-hud-button ${editMeshNode.params.mirrorX === true ? "viewport-hud-button-active" : ""}`}
+                  onClick={() => onParamChange?.("mirrorX", editMeshNode.params.mirrorX !== true, editMeshNode.id)}
+                  title={
+                    editMeshNode.params.mirrorX === true
+                      ? "X-Mirror ON — moving a vertex moves its mirror image across local X too"
+                      : "X-Mirror OFF — click to mirror edits across the object's local X axis"
+                  }
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round">
+                    <line x1="12" y1="3" x2="12" y2="21" strokeDasharray="2 2" />
+                    <path d="M9 7L4 12l5 5zM15 7l5 5-5 5z" fill="currentColor" fillOpacity="0.3" />
+                  </svg>
+                </button>
+              )}
+
               {/* X-ray: pick through the surface */}
               <button
                 type="button"
@@ -8192,7 +8815,7 @@ export function Viewport({
                     className="viewport-hud-button"
                     disabled={!isFacesActive}
                     onClick={() => onParamAction?.(editMeshNode.id, EDIT_MESH_EXTRUDE_ACTION)}
-                    title="Extrude (Shortcut: E) — Extrude selected face(s)"
+                    title="Extrude by Extrude Distance — or press E over the viewport to drag it (Alt+E: each face on its own)"
                   >
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M12 19V5M5 12l7-7 7 7" />
@@ -8234,7 +8857,7 @@ export function Viewport({
                     className="viewport-hud-button"
                     disabled={!isFacesActive}
                     onClick={() => onParamAction?.(editMeshNode.id, EDIT_MESH_INSET_ACTION)}
-                    title="Inset (Shortcut: I) — Inset selected face(s)"
+                    title="Inset by Inset Thickness / Depth — or press I over the viewport to drag it (I again: each face on its own, Cmd/Ctrl: depth)"
                   >
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                       <rect x="3" y="3" width="18" height="18" rx="2" />
