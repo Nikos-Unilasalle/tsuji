@@ -9,6 +9,12 @@ export interface QuadMesh {
   faceUVs?: [number, number][][];
   shading?: QuadMeshShading;
   faceShading?: QuadMeshShading[];
+  /**
+   * geometrySignature() of the input this mesh was frozen from. Lets Edit
+   * Mesh tell the operator the input has moved on since — otherwise the
+   * frozen copy silently ignores every upstream change.
+   */
+  sourceSignature?: string;
 }
 
 export function cloneQuadMesh(mesh: QuadMesh): QuadMesh {
@@ -19,7 +25,74 @@ export function cloneQuadMesh(mesh: QuadMesh): QuadMesh {
     faceUVs: mesh.faceUVs ? mesh.faceUVs.map((fuv) => fuv.map((uv) => [uv[0], uv[1]])) : undefined,
     shading: mesh.shading,
     faceShading: mesh.faceShading ? [...mesh.faceShading] : undefined,
+    sourceSignature: mesh.sourceSignature,
   };
+}
+
+/**
+ * A content fingerprint of the edited mesh, because identity cannot be used
+ * here and equality would be a full deep compare every frame.
+ *
+ * The cache used to hold `cloneQuadMesh(quadMesh)` and then test
+ * `state.lastQuadMesh === quadMesh` — a clone is never identical to what it
+ * was cloned from, so the comparison was false every single time and the
+ * geometry was rebuilt (and re-uploaded to the GPU) on every frame, 30 out of
+ * 30 at rest. It cost nothing visible and broke nothing, which is exactly why
+ * it lasted; it also made every rigid body downstream reset itself, back when
+ * physics keyed on geometry identity.
+ *
+ * Positions are quantised to 1e-5 rather than hashed as floats: the viewport
+ * writes them back from a drag, and a bit of float noise below what a pixel
+ * can express should not force a rebuild. Face UVs are in the hash because
+ * Recalculate UVs changes nothing else, and leaving them out made that button
+ * do nothing.
+ */
+export function quadMeshSignature(mesh: QuadMesh): string {
+  let hash = 0x811c9dc5;
+  const mix = (n: number) => {
+    hash = Math.imul(hash ^ (n | 0), 16777619) >>> 0;
+  };
+
+  for (const [x, y, z] of mesh.positions) {
+    mix(Math.round(x * 1e5));
+    mix(Math.round(y * 1e5));
+    mix(Math.round(z * 1e5));
+  }
+  for (const face of mesh.faces) {
+    mix(face.length);
+    for (const index of face) mix(index);
+  }
+  if (mesh.faceUVs) {
+    for (const face of mesh.faceUVs) {
+      for (const [u, v] of face) {
+        mix(Math.round(u * 1e5));
+        mix(Math.round(v * 1e5));
+      }
+    }
+  }
+  return `${mesh.positions.length}:${mesh.faces.length}:${hash.toString(36)}`;
+}
+
+/**
+ * A content fingerprint of a BufferGeometry's positions and index. Positions
+ * are quantised to 1e-5 so float noise below what a pixel can show doesn't
+ * register as a change.
+ */
+export function geometrySignature(geometry: THREE.BufferGeometry): string {
+  let hash = 0x811c9dc5;
+  const mix = (n: number) => {
+    hash = Math.imul(hash ^ (n | 0), 16777619) >>> 0;
+  };
+  const pos = geometry.attributes.position;
+  const count = pos ? pos.count : 0;
+  for (let i = 0; i < count; i++) {
+    mix(Math.round(pos.getX(i) * 1e5));
+    mix(Math.round(pos.getY(i) * 1e5));
+    mix(Math.round(pos.getZ(i) * 1e5));
+  }
+  const index = geometry.index;
+  if (index) for (let i = 0; i < index.count; i++) mix(index.getX(i));
+  return `${count}:${index ? index.count : 0}:${hash.toString(36)}`;
 }
 
 /**
@@ -978,6 +1051,64 @@ export function transformSelection(
   centroid: THREE.Vector3,
   proportionalOptions?: ProportionalOptions,
 ): QuadMesh {
+  const matrix = new THREE.Matrix4()
+    .makeTranslation(centroid.x + delta.position.x, centroid.y + delta.position.y, centroid.z + delta.position.z)
+    .multiply(new THREE.Matrix4().makeRotationFromQuaternion(delta.rotation))
+    .multiply(new THREE.Matrix4().makeScale(delta.scale.x, delta.scale.y, delta.scale.z))
+    .multiply(new THREE.Matrix4().makeTranslation(-centroid.x, -centroid.y, -centroid.z));
+  return transformSelectionByMatrix(mesh, mode, selectedIndices, matrix, proportionalOptions);
+}
+
+/**
+ * The gizmo works in world space, the mesh data lives in local space. A
+ * rotation or scale delta read straight off the gizmo and applied to local
+ * coordinates is only right while the object has an identity rotation and a
+ * uniform scale — on anything else the selection turned about the wrong axis.
+ * Conjugating the world-space delta by the object's world matrix
+ * (`M⁻¹ · D · M`) gives the exact local-space equivalent for any pose,
+ * non-uniform scale included.
+ */
+export function worldDeltaToLocal(worldDelta: THREE.Matrix4, meshWorldMatrix: THREE.Matrix4): THREE.Matrix4 {
+  const inv = meshWorldMatrix.clone().invert();
+  return inv.multiply(worldDelta).multiply(meshWorldMatrix);
+}
+
+/**
+ * The world-space delta of a gizmo drag around the selection centroid:
+ * `T(position) · R · S · T(-startPosition)`, where R and S are the rotation and
+ * scale the gizmo has accumulated since the drag began.
+ */
+export function gizmoWorldDelta(
+  startPosition: THREE.Vector3,
+  startQuaternion: THREE.Quaternion,
+  startScale: THREE.Vector3,
+  position: THREE.Vector3,
+  quaternion: THREE.Quaternion,
+  scale: THREE.Vector3,
+): THREE.Matrix4 {
+  const deltaQuat = quaternion.clone().multiply(startQuaternion.clone().invert());
+  const sx = startScale.x !== 0 ? scale.x / startScale.x : 1;
+  const sy = startScale.y !== 0 ? scale.y / startScale.y : 1;
+  const sz = startScale.z !== 0 ? scale.z / startScale.z : 1;
+  return new THREE.Matrix4()
+    .makeTranslation(position.x, position.y, position.z)
+    .multiply(new THREE.Matrix4().makeRotationFromQuaternion(deltaQuat))
+    .multiply(new THREE.Matrix4().makeScale(sx, sy, sz))
+    .multiply(new THREE.Matrix4().makeTranslation(-startPosition.x, -startPosition.y, -startPosition.z));
+}
+
+/**
+ * Applies a local-space affine `matrix` to the selected points / faces, with
+ * optional Blender-style Proportional Editing (unselected vertices within the
+ * influence radius get the same displacement, weighted by a smooth falloff).
+ */
+export function transformSelectionByMatrix(
+  mesh: QuadMesh,
+  mode: "points" | "faces",
+  selectedIndices: number[],
+  matrix: THREE.Matrix4,
+  proportionalOptions?: ProportionalOptions,
+): QuadMesh {
   if (selectedIndices.length === 0) return cloneQuadMesh(mesh);
 
   const targetVertexIndices = new Set<number>();
@@ -1002,13 +1133,8 @@ export function transformSelection(
   const radiusSq = radius * radius;
 
   const p = new THREE.Vector3();
-  const computeFullTransformed = (raw: [number, number, number]): THREE.Vector3 => {
-    p.set(raw[0] - centroid.x, raw[1] - centroid.y, raw[2] - centroid.z);
-    p.multiply(delta.scale);
-    p.applyQuaternion(delta.rotation);
-    p.add(centroid).add(delta.position);
-    return p;
-  };
+  const computeFullTransformed = (raw: [number, number, number]): THREE.Vector3 =>
+    p.set(raw[0], raw[1], raw[2]).applyMatrix4(matrix);
 
   if (!isProportional) {
     for (const vIdx of targetVertexIndices) {
@@ -1109,6 +1235,7 @@ export function deleteFaces(mesh: QuadMesh, faceIndices: number[]): QuadMesh {
       faceUVs: [],
       shading: mesh.shading,
       faceShading: [],
+      sourceSignature: mesh.sourceSignature,
     };
   }
 
@@ -1145,6 +1272,7 @@ export function deleteFaces(mesh: QuadMesh, faceIndices: number[]): QuadMesh {
     faceUVs: mesh.faceUVs ? remainingFaceUVs : undefined,
     shading: mesh.shading,
     faceShading: mesh.faceShading ? remainingFaceShading : undefined,
+    sourceSignature: mesh.sourceSignature,
   };
 }
 

@@ -26,6 +26,7 @@ import {
   createQuadBox,
   boxProjectUVs,
   bufferGeometryToQuadMesh,
+  geometrySignature,
   quadMeshToBufferGeometry,
   extrudeFaces,
   insetFaces,
@@ -1446,13 +1447,14 @@ function MainEditor() {
         let quadMesh: QuadMesh;
         if (mesh && mesh.geometry) {
           quadMesh = bufferGeometryToQuadMesh(mesh.geometry);
+          quadMesh.sourceSignature = geometrySignature(mesh.geometry);
         } else {
           quadMesh = createQuadBox(1, 1, 1);
         }
         onParamChange({
           meshData: quadMesh,
           selectMode: "faces",
-          selectedFaces: [0],
+          selectedFaces: [],
           selectedPoints: [],
         }, nodeId);
         return;
@@ -1463,7 +1465,7 @@ function MainEditor() {
         const meshData: QuadMesh = resolveEditMeshData(node, evaluatedResults);
         const selectedFaces: number[] = Array.isArray(node.params.selectedFaces)
           ? (node.params.selectedFaces as number[])
-          : [0];
+          : [];
         const dist = Number(node.params.extrudeDistance) || 0.5;
         const result = extrudeFaces(meshData, selectedFaces, dist);
         onParamChange({
@@ -1479,7 +1481,7 @@ function MainEditor() {
         const meshData: QuadMesh = resolveEditMeshData(node, evaluatedResults);
         const selectedFaces: number[] = Array.isArray(node.params.selectedFaces)
           ? (node.params.selectedFaces as number[])
-          : [0];
+          : [];
         const ratio = Number(node.params.insetRatio) || 0.25;
         const result = insetFaces(meshData, selectedFaces, ratio);
         onParamChange({

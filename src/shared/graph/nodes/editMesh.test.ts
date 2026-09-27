@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import * as THREE from "three";
-import { EDIT_MESH_NODE, EDIT_MESH_RESEED_ACTION, resolveEditMeshData } from "./editMesh";
+import { EDIT_MESH_NODE, EDIT_MESH_RESEED_ACTION, editMeshFreezeStatus, resolveEditMeshData } from "./editMesh";
 import { EvalContext } from "../types";
 import { cloneQuadMesh, createQuadBox, quadMeshToBufferGeometry, QuadMesh, transformSelection } from "../quadMesh";
 
@@ -277,6 +277,48 @@ describe("EDIT_MESH_NODE", () => {
       const resolved = resolveEditMeshData(node, evaluatedResults);
       expect(resolved).toBe(frozenMesh);
       expect(resolved.positions.length).toBe(4);
+    });
+  });
+
+  describe("freeze status", () => {
+    const noteIds = (id: string, params: Record<string, unknown>) =>
+      EDIT_MESH_NODE.dynamicParamFields!({ id, type: EDIT_MESH_NODE.type, position: { x: 0, y: 0 }, params } as never)
+        .filter((f) => f.kind === "note")
+        .map((f) => f.id);
+
+    it("flags a frozen mesh once its input changes, and only then", () => {
+      const id = "freeze-status";
+      const ctx = { nodeId: id } as EvalContext;
+      const input = new THREE.Mesh(quadMeshToBufferGeometry(createQuadBox(1, 1, 1)));
+
+      const live = EDIT_MESH_NODE.evaluate({ geometry: input }, { ...EDIT_MESH_NODE.defaultParams }, ctx);
+      expect(editMeshFreezeStatus(id)).toEqual({ frozen: false, inputChanged: false });
+      expect(noteIds(id, {})).toEqual([]);
+
+      // What the viewport does on the first edit: clone the evaluated quad mesh.
+      const meshData = cloneQuadMesh((live.geometry as THREE.Mesh).geometry.userData.quadMesh as QuadMesh);
+      expect(meshData.sourceSignature).toBeTruthy();
+      const params = { ...EDIT_MESH_NODE.defaultParams, meshData };
+
+      EDIT_MESH_NODE.evaluate({ geometry: input }, params, ctx);
+      expect(editMeshFreezeStatus(id)).toEqual({ frozen: true, inputChanged: false });
+      expect(noteIds(id, params)).toEqual(["frozenNote"]);
+
+      const changed = new THREE.Mesh(quadMeshToBufferGeometry(createQuadBox(2, 1, 1)));
+      EDIT_MESH_NODE.evaluate({ geometry: changed }, params, ctx);
+      expect(editMeshFreezeStatus(id)).toEqual({ frozen: true, inputChanged: true });
+      expect(noteIds(id, params)).toEqual(["inputChangedNote"]);
+    });
+
+    it("never flags a copy frozen before signatures existed", () => {
+      const id = "freeze-legacy";
+      const input = new THREE.Mesh(quadMeshToBufferGeometry(createQuadBox(2, 1, 1)));
+      EDIT_MESH_NODE.evaluate(
+        { geometry: input },
+        { ...EDIT_MESH_NODE.defaultParams, meshData: createQuadBox(1, 1, 1) },
+        { nodeId: id } as EvalContext,
+      );
+      expect(editMeshFreezeStatus(id)).toEqual({ frozen: true, inputChanged: false });
     });
   });
 

@@ -42,6 +42,7 @@ import {
   resolveEditMeshData,
 } from "../graph/nodes/editMesh";
 import { createEditMeshHandles } from "./editMeshHandles";
+import { layoutKey } from "./layoutKey";
 import {
   QuadMesh,
   cloneQuadMesh,
@@ -49,7 +50,9 @@ import {
   bufferGeometryToQuadMesh,
   getLoopCutPreviewSegments,
   loopCut,
-  transformSelection,
+  transformSelectionByMatrix,
+  gizmoWorldDelta,
+  worldDeltaToLocal,
 } from "../graph/quadMesh";
 import { createPostProcessChain } from "./postProcessChain";
 import { computeGizmoWriteback, TransformGizmoMode, TransformPatch } from "./gizmoWriteback";
@@ -442,6 +445,52 @@ const MAX_CAPTURE_WAIT_TICKS = 60;
  */
 const EDIT_MESH_POINTS_HANDLE_CAP = 2000;
 let editMeshPointsCapWarned = false;
+
+/**
+ * Which editor viewport the keyboard currently belongs to. Every non-output
+ * Viewport listens for keydown on `window`, and in 2D mode two of them are
+ * mounted at once (the main view and the elevation view) — so E extruded
+ * twice, Escape cleared twice, and so on. Keys go to the viewport the pointer
+ * last entered or pressed in; the first one mounted holds them until then.
+ */
+const liveKeyboardViewports = new Map<symbol, () => boolean>();
+let keyboardViewportOwner: symbol | null = null;
+
+/** The owner if it can still take keys, else the first live, unsuspended one. */
+function keyboardViewport(): symbol | null {
+  const ownerSuspended = keyboardViewportOwner ? liveKeyboardViewports.get(keyboardViewportOwner) : undefined;
+  if (ownerSuspended && !ownerSuspended()) return keyboardViewportOwner;
+  for (const [token, isSuspended] of liveKeyboardViewports) {
+    if (!isSuspended()) return token;
+  }
+  return null;
+}
+
+/**
+ * Edit Mesh Points' quad topology, rebuilt only when its geometry actually
+ * changed. bufferGeometryToQuadMesh welds and re-pairs every triangle, and it
+ * used to run on every frame (and every pointermove) for as long as the node
+ * stayed selected. The result is shared: callers treat it as read-only.
+ */
+const pointsQuadMeshCache = new WeakMap<THREE.BufferGeometry, { version: number; mesh: QuadMesh }>();
+
+function editMeshQuadMesh(
+  node: { id: string; type: string; params: Record<string, unknown> },
+  results: Map<string, Record<string, unknown>> | null | undefined,
+  srcMesh: THREE.Mesh | null,
+): QuadMesh {
+  if (node.type === EDIT_MESH_NODE.type) return resolveEditMeshData(node, results);
+  const geometry = srcMesh?.geometry;
+  if (!geometry) return createQuadBox(1, 1, 1);
+  const position = geometry.attributes.position;
+  const version = position && !("isInterleavedBufferAttribute" in position) ? position.version : -1;
+  let cached = pointsQuadMeshCache.get(geometry);
+  if (!cached || cached.version !== version) {
+    cached = { version, mesh: bufferGeometryToQuadMesh(geometry) };
+    pointsQuadMeshCache.set(geometry, cached);
+  }
+  return cached.mesh;
+}
 
 const exportImageCache = new Map<string, HTMLImageElement>();
 function getExportImage(url: string): HTMLImageElement | null {
@@ -970,6 +1019,14 @@ export function Viewport({
   const editMeshLoopCutsRef = useRef<number>(1);
   editMeshLoopCutsRef.current = editMeshLoopCuts;
   const editMeshHoverEdgeRef = useRef<[number, number] | null>(null);
+  // The tool lives on the viewport, not the node, so an armed Loop Cut would
+  // otherwise follow the operator to the next Edit Mesh they select — and
+  // withhold that node's gizmo with no visible reason why.
+  useEffect(() => {
+    setEditMeshTool("select");
+    editMeshPreviewLoopRef.current = null;
+    editMeshHoverEdgeRef.current = null;
+  }, [selectedNodeId]);
 
   // Terrain sculpting state
   const [terrainBrushTool, setTerrainBrushTool] = useState<TerrainBrushTool>("sculpt");
@@ -1581,6 +1638,17 @@ export function Viewport({
     // Edit Mesh editing — box modeling tools (extrude, inset, loop cut)
     // with pure quad wireframe and centroid-anchored gizmo
     const editMeshHandles = createEditMeshHandles();
+    // X-ray's look: the edited mesh drawn see-through (and writing no depth,
+    // so the cage's hidden edges show through it) — in this viewport's own
+    // render only, swapped in and back out around it. See xrayMesh in tick().
+    const editMeshXrayMaterial = new THREE.MeshStandardMaterial({
+      color: 0xcbd5e1,
+      roughness: 0.6,
+      transparent: true,
+      opacity: 0.3,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    });
     const editMeshCentroidProxy = new THREE.Object3D();
     editMeshCentroidProxy.userData.isEditMeshCentroidProxy = true;
     let dragStartMeshData: QuadMesh | null = null;
@@ -1859,6 +1927,7 @@ export function Viewport({
 
     function onViewportKeyDown(e: KeyboardEvent) {
       if (isInputElement(document.activeElement)) return;
+      if (keyboardViewport() !== keyboardToken) return;
       // A running scene owns the keys its Keyboard nodes listen for: S must
       // walk the character rather than arm the scale gizmo behind it.
       if (isKeyReservedForPlayback(e)) return;
@@ -1870,7 +1939,7 @@ export function Viewport({
         return;
       }
 
-      const key = e.key.toLowerCase();
+      const key = layoutKey(e);
 
       // Edit Mesh shortcut: Ctrl+R (or Cmd+R) for Loop Cut
       if ((e.ctrlKey || e.metaKey) && !e.altKey && key === "r") {
@@ -1880,6 +1949,22 @@ export function Viewport({
         if (activeEditMeshNode) {
           e.preventDefault();
           setEditMeshTool((t) => (t === "loopcut" ? "select" : "loopcut"));
+          return;
+        }
+      }
+
+      // X-ray toggle (Blender's Alt+Z): pick through the surface
+      if (e.altKey && !e.ctrlKey && !e.metaKey && key === "z") {
+        const activeEditMeshNode = selectedNodeIdRef.current
+          ? graphRef.current.nodes.find(
+              (n) =>
+                n.id === selectedNodeIdRef.current &&
+                (n.type === EDIT_MESH_NODE.type || n.type === EDIT_MESH_POINTS_NODE.type),
+            )
+          : null;
+        if (activeEditMeshNode) {
+          e.preventDefault();
+          onParamChangeRef.current?.("xray", activeEditMeshNode.params.xray !== true, activeEditMeshNode.id);
           return;
         }
       }
@@ -1899,6 +1984,19 @@ export function Viewport({
           onParamChangeRef.current?.("selectedFaces", [], activeEditMeshNode.id);
           return;
         }
+      }
+
+      // Escape leaves Loop Cut before it touches the selection: the gizmo is
+      // withheld for as long as that tool is armed, so treating Escape as
+      // "deselect" there emptied the selection and left the tool armed —
+      // every selection made afterwards then showed no gizmo at all.
+      if (key === "escape" && editMeshToolRef.current !== "select") {
+        e.preventDefault();
+        e.stopPropagation();
+        editMeshPreviewLoopRef.current = null;
+        editMeshHoverEdgeRef.current = null;
+        setEditMeshTool("select");
+        return;
       }
 
       // Escape shortcut: Deselect All in Edit Mesh / Edit Mesh Points
@@ -1938,10 +2036,7 @@ export function Viewport({
           const meshObj = latestResultsRef.current?.get(activeEditMeshNode.id)?.geometry;
           const srcMesh = meshObj instanceof THREE.Object3D ? findFirstMesh(meshObj) : null;
           if (srcMesh) {
-            const quadMesh: QuadMesh =
-              activeEditMeshNode.type === EDIT_MESH_NODE.type
-                ? resolveEditMeshData(activeEditMeshNode, latestResultsRef.current)
-                : (srcMesh.geometry ? bufferGeometryToQuadMesh(srcMesh.geometry) : createQuadBox(1, 1, 1));
+            const quadMesh: QuadMesh = editMeshQuadMesh(activeEditMeshNode, latestResultsRef.current, srcMesh);
             const selectMode = activeEditMeshNode.type === EDIT_MESH_POINTS_NODE.type
               ? "points"
               : ((activeEditMeshNode.params.selectMode as "points" | "faces") || "faces");
@@ -1979,6 +2074,11 @@ export function Viewport({
         e.preventDefault();
         return;
       }
+
+      // Everything below is a bare single-key shortcut. With a modifier held
+      // it's someone else's chord (Cmd+S is Save, not Scale; Option+E on a
+      // Mac is not Extrude), so it stops here.
+      if (e.altKey || e.ctrlKey || e.metaKey) return;
 
       // Edit Mesh keyboard shortcuts
       const activeEditMeshNode = selectedNodeIdRef.current
@@ -2461,18 +2561,22 @@ export function Viewport({
           const node = graphRef.current.nodes.find((n) => n.id === selectedNodeIdRef.current);
           if (!node || !dragStartMeshData || !onParamChangeRef.current) return;
 
-          const deltaQuat = new THREE.Quaternion().copy(object.quaternion).multiply(dragStartCentroidQuat.clone().invert());
-          const deltaScaleX = dragStartCentroidScale.x !== 0 ? object.scale.x / dragStartCentroidScale.x : 1;
-          const deltaScaleY = dragStartCentroidScale.y !== 0 ? object.scale.y / dragStartCentroidScale.y : 1;
-          const deltaScaleZ = dragStartCentroidScale.z !== 0 ? object.scale.z / dragStartCentroidScale.z : 1;
-          const worldDeltaPos = new THREE.Vector3().subVectors(object.position, dragStartCentroidPos);
-
           const meshObj = latestResultsRef.current?.get(node.id)?.geometry;
           const srcMesh = meshObj instanceof THREE.Object3D ? findFirstMesh(meshObj) : null;
           const meshWorldMat = srcMesh ? srcMesh.matrixWorld : new THREE.Matrix4();
-          const invWorldMat = meshWorldMat.clone().invert();
-
-          const localDeltaPos = worldDeltaPos.clone().applyMatrix4(invWorldMat).sub(new THREE.Vector3().applyMatrix4(invWorldMat));
+          // The whole drag as one local-space matrix — see worldDeltaToLocal
+          // for why rotation and scale can't be applied as read off the gizmo.
+          const localDelta = worldDeltaToLocal(
+            gizmoWorldDelta(
+              dragStartCentroidPos,
+              dragStartCentroidQuat,
+              dragStartCentroidScale,
+              object.position,
+              object.quaternion,
+              object.scale,
+            ),
+            meshWorldMat,
+          );
 
           if (node.type === EDIT_MESH_POINTS_NODE.type) {
             if (!onTransformChangeRef.current || !dragStartPointPositionsList) return;
@@ -2481,28 +2585,11 @@ export function Viewport({
               : [];
             if (selectedIndices.length === 0) return;
 
-            const localCentroid = new THREE.Vector3();
-            let count = 0;
-            for (const idx of selectedIndices) {
-              const p = dragStartMeshData.positions[idx];
-              if (p) {
-                localCentroid.add(new THREE.Vector3(p[0], p[1], p[2]));
-                count++;
-              }
-            }
-            if (count > 0) localCentroid.divideScalar(count);
-
             const transformedUniquePoints = new Map<number, THREE.Vector3>();
-            const p = new THREE.Vector3();
-            const scaleVec = new THREE.Vector3(deltaScaleX, deltaScaleY, deltaScaleZ);
             for (const idx of selectedIndices) {
               const raw = dragStartMeshData.positions[idx];
               if (!raw) continue;
-              p.set(raw[0] - localCentroid.x, raw[1] - localCentroid.y, raw[2] - localCentroid.z);
-              p.multiply(scaleVec);
-              p.applyQuaternion(deltaQuat);
-              p.add(localCentroid).add(localDeltaPos);
-              transformedUniquePoints.set(idx, p.clone());
+              transformedUniquePoints.set(idx, new THREE.Vector3(raw[0], raw[1], raw[2]).applyMatrix4(localDelta));
             }
 
             const originPos = new THREE.Vector3();
@@ -2530,42 +2617,13 @@ export function Viewport({
             ? (Array.isArray(node.params.selectedPoints) ? (node.params.selectedPoints as number[]) : [])
             : (Array.isArray(node.params.selectedFaces) ? (node.params.selectedFaces as number[]) : []);
 
-          const localCentroid = new THREE.Vector3();
-          const targetVertices = new Set<number>();
-          if (selectMode === "points") {
-            for (const idx of selectedIndices) targetVertices.add(idx);
-          } else {
-            for (const fIdx of selectedIndices) {
-              const face = dragStartMeshData.faces[fIdx];
-              if (face) face.forEach((v) => targetVertices.add(v));
-            }
-          }
-          if (targetVertices.size > 0) {
-            for (const vIdx of targetVertices) {
-              const p = dragStartMeshData.positions[vIdx];
-              if (p) localCentroid.add(new THREE.Vector3(p[0], p[1], p[2]));
-            }
-            localCentroid.divideScalar(targetVertices.size);
-          }
-
           const proportionalEditing = Boolean(node.params.proportionalEditing);
           const proportionalDiameter = Number(node.params.proportionalDiameter) || 1.0;
 
-          const updatedMesh = transformSelection(
-            dragStartMeshData,
-            selectMode,
-            selectedIndices,
-            {
-              position: localDeltaPos,
-              rotation: deltaQuat,
-              scale: new THREE.Vector3(deltaScaleX, deltaScaleY, deltaScaleZ),
-            },
-            localCentroid,
-            {
-              enabled: proportionalEditing,
-              diameter: proportionalDiameter,
-            },
-          );
+          const updatedMesh = transformSelectionByMatrix(dragStartMeshData, selectMode, selectedIndices, localDelta, {
+            enabled: proportionalEditing,
+            diameter: proportionalDiameter,
+          });
 
           onParamChangeRef.current("meshData", updatedMesh, node.id);
           return;
@@ -3096,10 +3154,7 @@ export function Viewport({
           const meshObj = latestResultsRef.current?.get(editMeshNodeOnDown.id)?.geometry;
           const srcMesh = meshObj instanceof THREE.Object3D ? findFirstMesh(meshObj) : null;
           if (srcMesh && raycaster) {
-            const quadMesh: QuadMesh =
-              editMeshNodeOnDown.type === EDIT_MESH_NODE.type
-                ? resolveEditMeshData(editMeshNodeOnDown, latestResultsRef.current)
-                : (srcMesh.geometry ? bufferGeometryToQuadMesh(srcMesh.geometry) : createQuadBox(1, 1, 1));
+            const quadMesh: QuadMesh = editMeshQuadMesh(editMeshNodeOnDown, latestResultsRef.current, srcMesh);
             const selectMode = editMeshNodeOnDown.type === EDIT_MESH_POINTS_NODE.type
               ? "points"
               : ((editMeshNodeOnDown.params.selectMode as "points" | "faces") || "faces");
@@ -3989,10 +4044,7 @@ export function Viewport({
           const meshObj = latestResultsRef.current?.get(activeEditMesh.id)?.geometry;
           const srcMesh = meshObj instanceof THREE.Object3D ? findFirstMesh(meshObj) : null;
           if (srcMesh) {
-            const quadMesh: QuadMesh =
-              activeEditMesh.type === EDIT_MESH_NODE.type
-                ? resolveEditMeshData(activeEditMesh, latestResultsRef.current)
-                : (srcMesh.geometry ? bufferGeometryToQuadMesh(srcMesh.geometry) : createQuadBox(1, 1, 1));
+            const quadMesh: QuadMesh = editMeshQuadMesh(activeEditMesh, latestResultsRef.current, srcMesh);
             const selectMode = activeEditMesh.type === EDIT_MESH_POINTS_NODE.type
               ? "points"
               : ((activeEditMesh.params.selectMode as "points" | "faces") || "faces");
@@ -4052,7 +4104,10 @@ export function Viewport({
       const activeEditMesh = !outputMode && selectedNodeIdRef.current
         ? graphRef.current.nodes.find((n) => n.id === selectedNodeIdRef.current && n.type === EDIT_MESH_NODE.type)
         : null;
-      if (activeEditMesh && host && raycaster) {
+      // Only while the pointer is over *this* canvas: pointermove is heard on
+      // window, so with two editor viewports mounted each one used to track
+      // hover (and draw a Loop Cut preview) for a pointer in the other.
+      if (activeEditMesh && host && raycaster && e.target === renderer.domElement) {
         const meshObj = latestResultsRef.current?.get(activeEditMesh.id)?.geometry;
         const srcMesh = meshObj instanceof THREE.Object3D ? findFirstMesh(meshObj) : null;
         if (srcMesh) {
@@ -4065,19 +4120,25 @@ export function Viewport({
           raycaster.setFromCamera(mouseNorm, camera);
 
           if (editMeshToolRef.current === "loopcut") {
-            const edge = editMeshHandles.pickEdge(raycaster, quadMesh, srcMesh.matrixWorld);
+            const edge = editMeshHandles.pickEdge(mouseNorm, camera, rect.width, rect.height, quadMesh, srcMesh.matrixWorld);
+            const prev = editMeshHoverEdgeRef.current;
+            const sameEdge = Boolean(edge && prev && edge[0] === prev[0] && edge[1] === prev[1]);
             editMeshHoverEdgeRef.current = edge;
-            if (edge) {
-              const segments = getLoopCutPreviewSegments(quadMesh, edge, editMeshLoopCutsRef.current);
-              editMeshPreviewLoopRef.current = segments;
-            } else {
-              editMeshPreviewLoopRef.current = null;
+            // A new preview array on every mousemove would rebuild the
+            // overlay each time; keep it while the hovered edge is the same.
+            if (!sameEdge) {
+              editMeshPreviewLoopRef.current = edge
+                ? getLoopCutPreviewSegments(quadMesh, edge, editMeshLoopCutsRef.current)
+                : null;
             }
+            editMeshHoverFaceRef.current = null;
           } else {
             editMeshHoverEdgeRef.current = null;
             editMeshPreviewLoopRef.current = null;
-            const hitFace = editMeshHandles.pickFace(raycaster, quadMesh, srcMesh.matrixWorld);
-            editMeshHoverFaceRef.current = hitFace;
+            const faceMode = ((activeEditMesh.params.selectMode as "points" | "faces") || "faces") === "faces";
+            editMeshHoverFaceRef.current = faceMode
+              ? editMeshHandles.pickFace(raycaster, quadMesh, srcMesh.matrixWorld)
+              : null;
           }
         }
       } else {
@@ -4325,10 +4386,7 @@ export function Viewport({
           const meshObj = latestResultsRef.current?.get(activeEditMesh.id)?.geometry;
           const srcMesh = meshObj instanceof THREE.Object3D ? findFirstMesh(meshObj) : null;
           if (srcMesh && raycaster) {
-            const quadMesh: QuadMesh =
-              activeEditMesh.type === EDIT_MESH_NODE.type
-                ? resolveEditMeshData(activeEditMesh, latestResultsRef.current)
-                : (srcMesh.geometry ? bufferGeometryToQuadMesh(srcMesh.geometry) : createQuadBox(1, 1, 1));
+            const quadMesh: QuadMesh = editMeshQuadMesh(activeEditMesh, latestResultsRef.current, srcMesh);
             const selectMode = activeEditMesh.type === EDIT_MESH_POINTS_NODE.type
               ? "points"
               : ((activeEditMesh.params.selectMode as "points" | "faces") || "faces");
@@ -4802,15 +4860,13 @@ export function Viewport({
         const srcMesh = meshObj instanceof THREE.Object3D ? findFirstMesh(meshObj) : null;
         if (srcMesh) {
           const quadMesh: QuadMesh =
-            activeEditMesh.type === EDIT_MESH_NODE.type
-              ? resolveEditMeshData(activeEditMesh, latestResultsRef.current)
-              : (srcMesh.geometry ? bufferGeometryToQuadMesh(srcMesh.geometry) : createQuadBox(1, 1, 1));
+            editMeshQuadMesh(activeEditMesh, latestResultsRef.current, srcMesh);
           const selectMode = activeEditMesh.type === EDIT_MESH_POINTS_NODE.type
             ? "points"
             : ((activeEditMesh.params.selectMode as "points" | "faces") || "faces");
 
           if (activeEditMesh.type === EDIT_MESH_NODE.type && editMeshToolRef.current === "loopcut") {
-            const edge = editMeshHandles.pickEdge(raycaster, quadMesh, srcMesh.matrixWorld);
+            const edge = editMeshHandles.pickEdge(ndc, camera, rect.width, rect.height, quadMesh, srcMesh.matrixWorld);
             if (edge) {
               const res = loopCut(quadMesh, edge, editMeshLoopCutsRef.current);
               editMeshPreviewLoopRef.current = null;
@@ -4826,6 +4882,12 @@ export function Viewport({
               );
               return;
             }
+            // A click that misses every edge is a selection click: disarm
+            // the tool rather than change the selection silently while the
+            // gizmo stays withheld.
+            editMeshPreviewLoopRef.current = null;
+            editMeshHoverEdgeRef.current = null;
+            setEditMeshTool("select");
           }
 
           if (selectMode === "points") {
@@ -5021,8 +5083,11 @@ export function Viewport({
         ? graphRef.current.nodes.find((n) => n.id === selectedNodeIdRef.current && n.type === EDIT_MESH_NODE.type)
         : null;
       if (activeEditMesh && editMeshToolRef.current === "loopcut") {
+        // Registered in the capture phase and stopped *immediately*: orbit
+        // controls listen for wheel on this same canvas, registered first, so
+        // a plain stopPropagation still let every notch zoom the camera too.
         e.preventDefault();
-        e.stopPropagation();
+        e.stopImmediatePropagation();
         const delta = e.deltaY < 0 ? 1 : -1;
         const nextCuts = Math.max(1, Math.min(32, editMeshLoopCutsRef.current + delta));
         if (nextCuts !== editMeshLoopCutsRef.current) {
@@ -5061,9 +5126,17 @@ export function Viewport({
     renderer.domElement.addEventListener("contextmenu", onCanvasContextMenu);
     removeContextMenu = () => renderer.domElement.removeEventListener("contextmenu", onCanvasContextMenu);
 
+    const keyboardToken = Symbol("viewport-keyboard");
+    const claimKeyboard = () => {
+      keyboardViewportOwner = keyboardToken;
+    };
     if (!outputMode) {
+      liveKeyboardViewports.set(keyboardToken, () => suspendedRef.current);
+      if (keyboardViewportOwner === null) keyboardViewportOwner = keyboardToken;
+      renderer.domElement.addEventListener("pointerenter", claimKeyboard);
+      renderer.domElement.addEventListener("pointerdown", claimKeyboard, { capture: true });
       renderer.domElement.addEventListener("pointerdown", onCanvasPointerDown, { capture: true });
-      renderer.domElement.addEventListener("wheel", onCanvasWheel, { passive: false });
+      renderer.domElement.addEventListener("wheel", onCanvasWheel, { passive: false, capture: true });
       window.addEventListener("pointermove", onCanvasPointerMove);
       window.addEventListener("pointerup", onCanvasPointerUp);
       window.addEventListener("pointercancel", onCanvasPointerUp);
@@ -5925,6 +5998,7 @@ export function Viewport({
 
       // Edit Mesh handling: sync handles and anchor editMeshCentroidProxy
       let editMeshHasSelection = false;
+      let xrayMesh: THREE.Mesh | null = null;
       const editMeshNode = !outputMode
         ? graphRef.current.nodes.find(
             (n) =>
@@ -5938,9 +6012,7 @@ export function Viewport({
         if (srcMesh) srcMesh.updateMatrixWorld(true);
 
         const quadMesh: QuadMesh =
-          editMeshNode.type === EDIT_MESH_NODE.type
-            ? resolveEditMeshData(editMeshNode, results)
-            : (srcMesh?.geometry ? bufferGeometryToQuadMesh(srcMesh.geometry) : createQuadBox(1, 1, 1));
+          editMeshQuadMesh(editMeshNode, results, srcMesh);
 
         const selectMode = editMeshNode.type === EDIT_MESH_POINTS_NODE.type
           ? "points"
@@ -5955,7 +6027,7 @@ export function Viewport({
             ? []
             : (Array.isArray(editMeshNode.params.selectedFaces)
                 ? (editMeshNode.params.selectedFaces as number[])
-                : [0]),
+                : []),
         );
 
         const propDiameter =
@@ -5963,6 +6035,8 @@ export function Viewport({
             ? Number(editMeshNode.params.proportionalDiameter) || 1.0
             : null;
 
+        editMeshHandles.setXray(editMeshNode.params.xray === true);
+        if (editMeshNode.params.xray === true && srcMesh) xrayMesh = srcMesh;
         editMeshHandles.sync(
           srcMesh,
           quadMesh,
@@ -6692,38 +6766,46 @@ export function Viewport({
       // chemin composer : la passe séparée ne peut pas s'exécuter autrement.
       const volumetric = findVolumetricSettings(scene);
 
-      if (postChain.isActive(effectivePostConfigs, motionBlur, volumetric)) {
-        postChainWasActive = true;
-        scene.background = bgScene.background;
-        // Le volume est rendu par sa propre passe : l'exclure du rendu de scène
-        // sans quoi il serait dessiné deux fois.
-        if (volumetric) camera.layers.disable(LAYER_VOLUMETRIC);
-        postChain.render({
-          scene,
-          camera,
-          configs: effectivePostConfigs,
-          motionBlur,
-          width,
-          height,
-          outlineTarget: currentObject,
-          time: clock.time,
-          volumetric,
-        });
-        if (volumetric) camera.layers.enable(LAYER_VOLUMETRIC);
-      } else {
-        // Nothing in the chain this frame — release the passes once we actually
-        // turn the chain off (not every idle frame, which would re-allocate all
-        // the cached passes the moment an effect switches back on).
-        if (postChainWasActive) {
-          postChain.dispose();
-          postChainWasActive = false;
-        }
+      // Restored in the finally below even if a render throws: the material
+      // swap must never outlive this frame's draw.
+      const xrayOriginalMaterial = xrayMesh ? xrayMesh.material : null;
+      if (xrayMesh) xrayMesh.material = editMeshXrayMaterial;
+      try {
+        if (postChain.isActive(effectivePostConfigs, motionBlur, volumetric)) {
+          postChainWasActive = true;
+          scene.background = bgScene.background;
+          // Le volume est rendu par sa propre passe : l'exclure du rendu de scène
+          // sans quoi il serait dessiné deux fois.
+          if (volumetric) camera.layers.disable(LAYER_VOLUMETRIC);
+          postChain.render({
+            scene,
+            camera,
+            configs: effectivePostConfigs,
+            motionBlur,
+            width,
+            height,
+            outlineTarget: currentObject,
+            time: clock.time,
+            volumetric,
+          });
+          if (volumetric) camera.layers.enable(LAYER_VOLUMETRIC);
+        } else {
+          // Nothing in the chain this frame — release the passes once we actually
+          // turn the chain off (not every idle frame, which would re-allocate all
+          // the cached passes the moment an effect switches back on).
+          if (postChainWasActive) {
+            postChain.dispose();
+            postChainWasActive = false;
+          }
 
-        scene.fog = null;
-        scene.background = bgScene.background;
-        (scene as any).backgroundBlurriness = (bgScene as any).backgroundBlurriness ?? 0;
-        renderer.clear();
-        renderer.render(scene, camera);
+          scene.fog = null;
+          scene.background = bgScene.background;
+          (scene as any).backgroundBlurriness = (bgScene as any).backgroundBlurriness ?? 0;
+          renderer.clear();
+          renderer.render(scene, camera);
+        }
+      } finally {
+        if (xrayMesh && xrayOriginalMaterial) xrayMesh.material = xrayOriginalMaterial;
       }
 
       // 1b. Render Editor UI Overlay (Grid, Transform Controls, Light Helpers) - isolated from Postprocess
@@ -6794,8 +6876,12 @@ export function Viewport({
       resizeObserver.disconnect();
       removeContextMenu?.();
       if (!outputMode) {
+        liveKeyboardViewports.delete(keyboardToken);
+        if (keyboardViewportOwner === keyboardToken) keyboardViewportOwner = null;
+        renderer.domElement.removeEventListener("pointerenter", claimKeyboard);
+        renderer.domElement.removeEventListener("pointerdown", claimKeyboard, { capture: true });
         renderer.domElement.removeEventListener("pointerdown", onCanvasPointerDown, { capture: true });
-        renderer.domElement.removeEventListener("wheel", onCanvasWheel);
+        renderer.domElement.removeEventListener("wheel", onCanvasWheel, { capture: true });
         window.removeEventListener("pointermove", onCanvasPointerMove);
         window.removeEventListener("pointerup", onCanvasPointerUp);
         window.removeEventListener("pointercancel", onCanvasPointerUp);
@@ -8074,6 +8160,23 @@ export function Viewport({
                   </svg>
                 </button>
               )}
+
+              {/* X-ray: pick through the surface */}
+              <button
+                type="button"
+                className={`viewport-hud-button ${editMeshNode.params.xray === true ? "viewport-hud-button-active" : ""}`}
+                onClick={() => onParamChange?.("xray", editMeshNode.params.xray !== true, editMeshNode.id)}
+                title={
+                  editMeshNode.params.xray === true
+                    ? "X-Ray ON — hidden points and faces can be selected (Shortcut: Alt+Z)"
+                    : "X-Ray OFF — only what the camera sees can be selected (Shortcut: Alt+Z)"
+                }
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                  <rect x="4" y="4" width="11" height="11" rx="1" />
+                  <rect x="9" y="9" width="11" height="11" rx="1" strokeDasharray="2 2" />
+                </svg>
+              </button>
 
               {selectedCount > 0 && (
                 <>

@@ -21,6 +21,8 @@ import {
   cloneQuadMesh,
   quadMeshToBufferGeometry,
   bufferGeometryToQuadMesh,
+  geometrySignature,
+  quadMeshSignature,
 } from "../quadMesh";
 
 export const EDIT_MESH_RESEED_ACTION = "edit-mesh/reseed";
@@ -79,6 +81,14 @@ interface EditMeshState {
   lastQuadMesh?: string;
   lastShading?: string;
   sourceGeometry?: THREE.BufferGeometry | null;
+  /** geometrySignature() of the wired input, cached against its identity/version. */
+  sourceSignature?: string;
+  sourceSignatureKey?: string;
+  sourceSignatureGeometry?: THREE.BufferGeometry | null;
+  /** Whether the node is working from a stored copy (meshData) rather than the live input. */
+  frozen?: boolean;
+  /** Frozen, and the input no longer matches what it was frozen from. */
+  inputChanged?: boolean;
 }
 
 const editMeshCache = createNodeCache<EditMeshState>((s) => {
@@ -92,6 +102,29 @@ function getState(cache: typeof editMeshCache, nodeId: string): EditMeshState {
     cache.set(nodeId, state);
   }
   return state;
+}
+
+/**
+ * The input's signature, recomputed only when the geometry object or its
+ * position/index buffers actually changed — an upstream node that rebuilds
+ * nothing hands back the same geometry every frame.
+ */
+function sourceSignatureOf(state: EditMeshState, geom: THREE.BufferGeometry): string {
+  const pos = geom.attributes.position;
+  const posVersion = !pos ? -1 : "isInterleavedBufferAttribute" in pos ? pos.data.version : pos.version;
+  const key = `${posVersion}:${geom.index?.version ?? -1}`;
+  if (state.sourceSignatureGeometry !== geom || state.sourceSignatureKey !== key || !state.sourceSignature) {
+    state.sourceSignature = geometrySignature(geom);
+    state.sourceSignatureKey = key;
+    state.sourceSignatureGeometry = geom;
+  }
+  return state.sourceSignature;
+}
+
+/** Freeze status for the param panel — see EditMeshState. */
+export function editMeshFreezeStatus(nodeId: string): { frozen: boolean; inputChanged: boolean } {
+  const state = editMeshCache.get(nodeId);
+  return { frozen: Boolean(state?.frozen), inputChanged: Boolean(state?.inputChanged) };
 }
 
 function applyEditMeshMaterial(
@@ -229,50 +262,6 @@ function applyEditMeshPose(
 }
 
 /**
- * A content fingerprint of the edited mesh, because identity cannot be used
- * here and equality would be a full deep compare every frame.
- *
- * The cache used to hold `cloneQuadMesh(quadMesh)` and then test
- * `state.lastQuadMesh === quadMesh` — a clone is never identical to what it
- * was cloned from, so the comparison was false every single time and the
- * geometry was rebuilt (and re-uploaded to the GPU) on every frame, 30 out of
- * 30 at rest. It cost nothing visible and broke nothing, which is exactly why
- * it lasted; it also made every rigid body downstream reset itself, back when
- * physics keyed on geometry identity.
- *
- * Positions are quantised to 1e-5 rather than hashed as floats: the viewport
- * writes them back from a drag, and a bit of float noise below what a pixel
- * can express should not force a rebuild. Face UVs are in the hash because
- * Recalculate UVs changes nothing else, and leaving them out made that button
- * do nothing.
- */
-function quadMeshSignature(mesh: QuadMesh): string {
-  let hash = 0x811c9dc5;
-  const mix = (n: number) => {
-    hash = Math.imul(hash ^ (n | 0), 16777619) >>> 0;
-  };
-
-  for (const [x, y, z] of mesh.positions) {
-    mix(Math.round(x * 1e5));
-    mix(Math.round(y * 1e5));
-    mix(Math.round(z * 1e5));
-  }
-  for (const face of mesh.faces) {
-    mix(face.length);
-    for (const index of face) mix(index);
-  }
-  if (mesh.faceUVs) {
-    for (const face of mesh.faceUVs) {
-      for (const [u, v] of face) {
-        mix(Math.round(u * 1e5));
-        mix(Math.round(v * 1e5));
-      }
-    }
-  }
-  return `${mesh.positions.length}:${mesh.faces.length}:${hash.toString(36)}`;
-}
-
-/**
  * This node owns a Pivot Offset of its own, and a node that has one
  * legitimately replaces the source's — but only once it has actually been
  * set. Left at its default of (0, 0, 0) it used to erase whatever the source
@@ -285,6 +274,46 @@ function pivotParams(params: Record<string, unknown>, mesh: THREE.Mesh): Record<
   if (own.lengthSq() > 1e-9) return params;
   const inherited = mesh.userData?.pivot;
   return inherited ? { ...params, pivot: inherited } : params;
+}
+
+/**
+ * One list for both the static and the dynamic field set, so the two can't
+ * drift apart. Without an instance every optional field is included.
+ */
+function editMeshParamFields(instance?: NodeInstance): ParamFieldDef[] {
+  const fields: ParamFieldDef[] = [];
+  if (instance) {
+    const status = editMeshFreezeStatus(instance.id);
+    if (status.inputChanged) {
+      fields.push({
+        id: "inputChangedNote",
+        label: "⚠ The input changed since this mesh was frozen. Freeze / Reset from Input picks it up — and discards the edits.",
+        kind: "note",
+        tone: "warn",
+      });
+    } else if (status.frozen) {
+      fields.push({
+        id: "frozenNote",
+        label: "Frozen: edits apply to a stored copy of the input; upstream changes are ignored.",
+        kind: "note",
+      });
+    }
+  }
+  fields.push(
+    ...NATIVE_TRANSFORM_PARAM_FIELDS,
+    { id: "shading", label: "Shading", kind: "select", options: ["auto", "smooth", "flat"] },
+    { id: "extrudeDistance", label: "Extrude Distance", kind: "number", step: 0.05 },
+    { id: "insetRatio", label: "Inset Amount (%)", kind: "number", step: 5, percent: true },
+    { id: "proportionalEditing", label: "Proportional Editing", kind: "boolean" },
+  );
+  if (!instance || instance.params?.proportionalEditing) {
+    fields.push({ id: "proportionalDiameter", label: "Influence Diameter", kind: "number", step: 0.1 });
+  }
+  fields.push(
+    { id: "reseedButton", label: "Freeze / Reset from Input", kind: "button", action: EDIT_MESH_RESEED_ACTION },
+    { id: "unwrapButton", label: "Recalculate UVs", kind: "button", action: EDIT_MESH_UNWRAP_UVS_ACTION },
+  );
+  return fields;
 }
 
 /**
@@ -321,13 +350,15 @@ export const EDIT_MESH_NODE: NodeDefinition = {
     meshData: null as QuadMesh | null,
     selectMode: "faces" as "points" | "faces",
     selectedPoints: [] as number[],
-    selectedFaces: [0] as number[],
+    selectedFaces: [] as number[],
     activeTool: "select" as "select" | "extrude" | "loopcut" | "inset",
     shading: "auto" as QuadMeshShading,
     extrudeDistance: 0.5,
     insetRatio: 0.25,
     proportionalEditing: false,
     proportionalDiameter: 1.0,
+    // Pick through the surface (Alt+Z); off, hidden points/faces can't be selected.
+    xray: false,
     uvScale: [1, 1] as [number, number],
     uvOffset: [0, 0] as [number, number],
     // The same native pose every geometry node owns (see
@@ -343,95 +374,36 @@ export const EDIT_MESH_NODE: NodeDefinition = {
     inheritRotation: "parent",
     inheritScale: "parent",
   },
-  paramFields: [
-    ...NATIVE_TRANSFORM_PARAM_FIELDS,
-    {
-      id: "shading",
-      label: "Shading",
-      kind: "select",
-      options: ["auto", "smooth", "flat"],
-    },
-    {
-      id: "proportionalEditing",
-      label: "Proportional Editing",
-      kind: "boolean",
-    },
-    {
-      id: "proportionalDiameter",
-      label: "Influence Diameter",
-      kind: "number",
-      step: 0.1,
-    },
-    {
-      id: "reseedButton",
-      label: "Freeze / Reset from Input",
-      kind: "button",
-      action: EDIT_MESH_RESEED_ACTION,
-    },
-    {
-      id: "unwrapButton",
-      label: "Recalculate UVs",
-      kind: "button",
-      action: EDIT_MESH_UNWRAP_UVS_ACTION,
-    },
-  ],
-  dynamicParamFields: (instance: NodeInstance) => {
-    const fields: ParamFieldDef[] = [
-      ...NATIVE_TRANSFORM_PARAM_FIELDS,
-      {
-        id: "shading",
-        label: "Shading",
-        kind: "select",
-        options: ["auto", "smooth", "flat"],
-      },
-      {
-        id: "proportionalEditing",
-        label: "Proportional Editing",
-        kind: "boolean",
-      },
-    ];
-
-    if (instance?.params?.proportionalEditing) {
-      fields.push({
-        id: "proportionalDiameter",
-        label: "Influence Diameter",
-        kind: "number",
-        step: 0.1,
-      });
-    }
-
-    fields.push(
-      {
-        id: "reseedButton",
-        label: "Freeze / Reset from Input",
-        kind: "button",
-        action: EDIT_MESH_RESEED_ACTION,
-      },
-      {
-        id: "unwrapButton",
-        label: "Recalculate UVs",
-        kind: "button",
-        action: EDIT_MESH_UNWRAP_UVS_ACTION,
-      },
-    );
-
-    return fields;
-  },
+  paramFields: editMeshParamFields(),
+  dynamicParamFields: (instance: NodeInstance) => editMeshParamFields(instance),
   evaluate: (inputs, params, ctx) => {
     const inputObj = inputs.geometry instanceof THREE.Object3D ? inputs.geometry : null;
     const srcMesh = inputObj ? findFirstMesh(inputObj) : null;
     const srcGeom = srcMesh?.geometry;
 
+    const state = getState(editMeshCache, ctx.nodeId);
+    const sourceSig = srcGeom ? sourceSignatureOf(state, srcGeom) : undefined;
+
     let quadMesh: QuadMesh;
     if (params.meshData && typeof params.meshData === "object" && Array.isArray((params.meshData as QuadMesh).positions)) {
       quadMesh = params.meshData as QuadMesh;
+      state.frozen = true;
+      // A copy frozen before signatures existed has nothing to compare
+      // against, so it is never flagged rather than always flagged.
+      state.inputChanged = Boolean(sourceSig && quadMesh.sourceSignature && quadMesh.sourceSignature !== sourceSig);
     } else if (srcGeom) {
       quadMesh = bufferGeometryToQuadMesh(srcGeom);
+      // Carried into geometry.userData.quadMesh, which is what the viewport
+      // clones into meshData the moment an edit freezes this node.
+      quadMesh.sourceSignature = sourceSig;
+      state.frozen = false;
+      state.inputChanged = false;
     } else {
       quadMesh = createQuadBox(1, 1, 1);
+      state.frozen = false;
+      state.inputChanged = false;
     }
 
-    const state = getState(editMeshCache, ctx.nodeId);
     const shadeMode = (params.shading as QuadMeshShading) || "auto";
     const texParams = extractTextureParams(inputs, params, ctx.nodeId);
 

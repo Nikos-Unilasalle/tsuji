@@ -12,6 +12,9 @@ import {
   getLoopCutPreviewSegments,
   boxProjectUVs,
   transformSelection,
+  transformSelectionByMatrix,
+  gizmoWorldDelta,
+  worldDeltaToLocal,
   deleteFaces,
   extractFaces,
 } from "./quadMesh";
@@ -131,6 +134,46 @@ describe("QuadMesh", () => {
       expect(moved.positions[vIdx][1]).toBeCloseTo(1.5, 4);
       expect(Math.abs(moved.positions[vIdx][0])).toBeCloseTo(1.0, 4);
     }
+  });
+
+  it("applies a gizmo drag in world space on a rotated, non-uniformly scaled object", () => {
+    // An object turned 90° about Y and stretched 2x along its local X: the
+    // case where reading the gizmo's rotation straight into local
+    // coordinates turned the selection about the wrong axis.
+    const meshWorld = new THREE.Matrix4().compose(
+      new THREE.Vector3(3, 0, 0),
+      new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI / 2),
+      new THREE.Vector3(2, 1, 1),
+    );
+    const box = createQuadBox(1, 1, 1);
+    const vIdx = 6; // (0.5, 0.5, 0.5)
+    const pivotWorld = new THREE.Vector3(0.5, 0.5, 0.5).applyMatrix4(meshWorld);
+
+    // A quarter turn about *world* X around the vertex's own position, plus
+    // a 1-unit move along world Y.
+    const turn = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 2);
+    const worldDelta = gizmoWorldDelta(
+      pivotWorld,
+      new THREE.Quaternion(),
+      new THREE.Vector3(1, 1, 1),
+      pivotWorld.clone().add(new THREE.Vector3(0, 1, 0)),
+      turn,
+      new THREE.Vector3(1, 1, 1),
+    );
+    const localDelta = worldDeltaToLocal(worldDelta, meshWorld);
+
+    // Selecting the vertex *and* its neighbour 7 (-0.5, 0.5, 0.5): the
+    // neighbour's world position must end up exactly where the world-space
+    // delta sends it.
+    const moved = transformSelectionByMatrix(box, "points", [vIdx, 7], localDelta);
+    for (const idx of [vIdx, 7]) {
+      const src = box.positions[idx];
+      const expected = new THREE.Vector3(src[0], src[1], src[2]).applyMatrix4(meshWorld).applyMatrix4(worldDelta);
+      const got = new THREE.Vector3(...moved.positions[idx]).applyMatrix4(meshWorld);
+      expect(got.distanceTo(expected)).toBeLessThan(1e-6);
+    }
+    // Unselected vertices untouched.
+    expect(moved.positions[0]).toEqual(box.positions[0]);
   });
 
   it("calculates 3D loop cut preview segments across quads", () => {
