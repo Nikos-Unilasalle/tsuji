@@ -45,6 +45,8 @@ export interface TransformPatch {
   selectMode?: string;
   selectedPoints?: number[];
   selectedEdges?: [number, number][];
+  /** Edit Mesh's proportional radius, resized with the mouse wheel mid-drag. */
+  proportionalDiameter?: number;
 }
 
 export interface GizmoWritebackInput {

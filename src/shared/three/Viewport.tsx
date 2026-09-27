@@ -55,6 +55,8 @@ import {
   MeshSelection,
   selectAll,
   selectionVertices,
+  selectionIslands,
+  selectionOrientation,
   SelectionOp,
   SelectMode,
   shrinkSelection,
@@ -75,6 +77,9 @@ import {
   subdivideFaces,
 } from "../graph/mesh/tools";
 import { convertSelection } from "../graph/mesh/selection";
+import { bevelEdges } from "../graph/mesh/bevel";
+import { bridgeEdgeLoops, bridgeFaces, spinEdges } from "../graph/mesh/bridge";
+import { knifeCut, KnifePoint } from "../graph/mesh/knife";
 import { layoutKey } from "./layoutKey";
 import {
   QuadMesh,
@@ -87,6 +92,8 @@ import {
   deleteFaces,
   computeFaceNormal,
   transformSelectionByMatrix,
+  transformVertexGroups,
+  ProportionalFalloff,
   gizmoWorldDelta,
   worldDeltaToLocal,
 } from "../graph/quadMesh";
@@ -1071,12 +1078,24 @@ export function Viewport({
   const editMeshMarqueeShapeRef = useRef<"box" | "lasso">("box");
   editMeshMarqueeShapeRef.current = editMeshMarqueeShape;
   const [lassoPath, setLassoPath] = useState<string | null>(null);
+  // Edit Mesh transform settings, per viewport like Blender's header: the
+  // gizmo's orientation, what it pivots about, and what a move snaps to.
+  const [editOrientation, setEditOrientation] = useState<"global" | "local" | "normal">("global");
+  const editOrientationRef = useRef(editOrientation);
+  editOrientationRef.current = editOrientation;
+  const [editPivot, setEditPivot] = useState<"median" | "individual" | "origin">("median");
+  const editPivotRef = useRef(editPivot);
+  editPivotRef.current = editPivot;
+  const [editSnap, setEditSnap] = useState<"off" | "increment" | "vertex">("off");
+  const editSnapRef = useRef(editSnap);
+  editSnapRef.current = editSnap;
   /** The running Edit Mesh modal tool's readout, or null when none is running. */
   const [editModalHud, setEditModalHud] = useState<string | null>(null);
   /** Edit Mesh operations for the HUD buttons, bound by the viewport effect. */
   const editMeshCommandsRef = useRef<{
     run(op: "merge" | "dissolve" | "fill" | "flip" | "subdivide" | "delete"): boolean;
     duplicate(): boolean;
+    tool(tool: "bevel" | "spin" | "knife" | "bridge"): boolean;
   } | null>(null);
   const editMeshPaintDragRef = useRef<boolean>(false);
   const [editMeshPaintCursor, setEditMeshPaintCursor] = useState<{ x: number; y: number } | null>(null);
@@ -1836,7 +1855,7 @@ export function Viewport({
     // undo step: it's recorded once when the tool starts (onTransformStart),
     // and every preview is written through the history-free transform path.
 
-    type EditModalKind = "extrude" | "inset" | "loopslide" | "move";
+    type EditModalKind = "extrude" | "inset" | "loopslide" | "move" | "bevel" | "spin" | "knife";
     interface EditModal {
       kind: EditModalKind;
       nodeId: string;
@@ -1868,6 +1887,14 @@ export function Viewport({
       /** Move: the selection centre in world space, and the resulting local offset. */
       moveOrigin?: THREE.Vector3;
       moveDelta?: THREE.Vector3;
+      /** Bevel / Spin: the edges they act on, and their step count (mouse wheel). */
+      edges?: EdgeRef[];
+      segments?: number;
+      /** Spin: the local axis (X / Y / Z keys switch it). */
+      axis3?: "x" | "y" | "z";
+      /** Knife: the points placed so far, and the one under the cursor. */
+      knifePoints?: KnifePoint[];
+      knifeCandidate?: KnifePoint | null;
     }
     let editModal: EditModal | null = null;
 
@@ -1889,6 +1916,9 @@ export function Viewport({
       inset: "Inset",
       loopslide: "Loop Cut — slide",
       move: "Move",
+      bevel: "Bevel",
+      spin: "Spin",
+      knife: "Knife",
     };
 
     function editModalAmount(modal: EditModal): number {
@@ -1916,19 +1946,54 @@ export function Viewport({
           selectedEdges: r.newEdgeIndices.map(([a, b]) => (a < b ? [a, b] : [b, a])),
         };
       }
+      if (modal.kind === "bevel") {
+        const r = bevelEdges(modal.base, modal.edges ?? [], Math.max(0, amount), modal.segments ?? 1);
+        return { meshData: r.mesh, selectMode: "faces", selectedFaces: r.newFaces };
+      }
+      if (modal.kind === "spin") {
+        const r = spinEdges(modal.base, modal.edges ?? [], modal.axis3 ?? "y", amount, modal.segments ?? 12);
+        return { meshData: r.mesh, selectMode: "faces", selectedFaces: r.newFaces };
+      }
+      if (modal.kind === "knife") {
+        const r = knifeCut(modal.base, modal.knifePoints ?? []);
+        return { meshData: r.mesh, selectMode: "edges", selectedEdges: r.newEdges };
+      }
       const delta = modal.moveDelta ?? new THREE.Vector3();
       const vertices = [...selectionVertices(modal.base, modal.mode, modal.selection)];
       const moved = transformSelectionByMatrix(modal.base, "points", vertices, new THREE.Matrix4().makeTranslation(delta.x, delta.y, delta.z));
       return { meshData: moved };
     }
 
+    /** A knife point's local position on the tool's base mesh. */
+    function knifePosition(modal: EditModal, p: KnifePoint): [number, number, number] {
+      if ("vertex" in p) return modal.base.positions[p.vertex];
+      const a = modal.base.positions[p.edge[0]];
+      const b = modal.base.positions[p.edge[1]];
+      return [a[0] + (b[0] - a[0]) * p.t, a[1] + (b[1] - a[1]) * p.t, a[2] + (b[2] - a[2]) * p.t];
+    }
+
     function previewEditModal() {
       if (!editModal) return;
+      if (editModal.kind === "knife") {
+        // The knife cuts only on confirm; until then, its path is drawn.
+        const pts = [...(editModal.knifePoints ?? [])];
+        if (editModal.knifeCandidate) pts.push(editModal.knifeCandidate);
+        const positions = pts.map((p) => knifePosition(editModal!, p));
+        editMeshPreviewLoopRef.current = positions.slice(1).map((p, i) => [positions[i], p]);
+        const placed = editModal.knifePoints?.length ?? 0;
+        setEditModalHud(`Knife: ${placed} point${placed === 1 ? "" : "s"} · click to add · Backspace removes the last · Enter cuts`);
+        return;
+      }
       onTransformChangeRef.current?.(editModal.nodeId, editModalResult(editModal));
       const amount = editModalAmount(editModal);
       const parts = [`${EDIT_MODAL_LABELS[editModal.kind]}: ${editModal.typed !== "" ? editModal.typed : amount.toFixed(3)}`];
       if (editModal.kind === "inset") parts.push(`depth ${editModal.depth.toFixed(3)} (Cmd/Ctrl)`);
       if (editModal.kind === "extrude" || editModal.kind === "inset") parts.push(editModal.individual ? "individual (I)" : "region (I)");
+      if (editModal.kind === "bevel") parts.push(`${editModal.segments ?? 1} segment${editModal.segments === 1 ? "" : "s"} (wheel)`);
+      if (editModal.kind === "spin") {
+        parts[0] = `Spin: ${editModal.typed !== "" ? editModal.typed : amount.toFixed(1)}°`;
+        parts.push(`${editModal.segments ?? 12} steps (wheel)`, `axis ${(editModal.axis3 ?? "y").toUpperCase()} (X/Y/Z)`);
+      }
       if (editModal.kind === "move" && editModal.moveDelta) {
         const d = editModal.moveDelta;
         parts[0] = `Move: ${d.x.toFixed(3)}, ${d.y.toFixed(3)}, ${d.z.toFixed(3)}`;
@@ -1954,6 +2019,9 @@ export function Viewport({
         mode?: SelectMode;
         restore?: Record<string, unknown>;
         startValue?: number;
+        edges?: EdgeRef[];
+        segments?: number;
+        axis3?: "x" | "y" | "z";
       } = {},
     ): boolean {
       if (target.node.type !== EDIT_MESH_NODE.type || editModal) return false;
@@ -1968,7 +2036,12 @@ export function Viewport({
       if (kind === "loopslide" && opts.edge) {
         const [a, b] = opts.edge;
         center.set(...base.positions[a]).add(new THREE.Vector3(...base.positions[b])).multiplyScalar(0.5);
-      } else {
+      } else if (kind === "bevel" || kind === "spin") {
+        if (!opts.edges || opts.edges.length === 0) return false;
+        const vertices = new Set(opts.edges.flat());
+        for (const v of vertices) center.add(new THREE.Vector3(...base.positions[v]));
+        center.divideScalar(vertices.size);
+      } else if (kind !== "knife") {
         const vertices = selectionVertices(base, mode, selection);
         if (vertices.size === 0) return false;
         for (const v of vertices) center.add(new THREE.Vector3(...base.positions[v]));
@@ -2026,12 +2099,35 @@ export function Viewport({
         modal.moveOrigin = worldCenter;
         modal.moveDelta = new THREE.Vector3();
       }
+      if (kind === "bevel" || kind === "spin") {
+        modal.edges = opts.edges;
+        modal.segments = opts.segments ?? (kind === "spin" ? 12 : 1);
+        modal.axis3 = opts.axis3 ?? "y";
+      }
+      if (kind === "knife") {
+        modal.knifePoints = [];
+        modal.knifeCandidate = null;
+      }
 
       onTransformStartRef.current?.();
       editModal = modal;
       setEditMeshTool("modal");
       previewEditModal();
       return true;
+    }
+
+    /** The knife point under the cursor: a vertex within reach, else the nearest edge. */
+    function knifeSnap(modal: EditModal, clientX: number, clientY: number): KnifePoint | null {
+      const { rect, ndc } = canvasPoint(clientX, clientY);
+      const v = editMeshHandles.pickPoint(ndc, camera, rect.width, rect.height, modal.base, modal.matrix);
+      if (v !== null) return { vertex: v };
+      const edge = editMeshHandles.pickEdge(ndc, camera, rect.width, rect.height, modal.base, modal.matrix);
+      if (!edge) return null;
+      const a = localToClient(new THREE.Vector3(...modal.base.positions[edge[0]]), modal.matrix);
+      const b = localToClient(new THREE.Vector3(...modal.base.positions[edge[1]]), modal.matrix);
+      const ab = b.clone().sub(a);
+      const t = ab.lengthSq() > 1e-6 ? new THREE.Vector2(clientX, clientY).sub(a).dot(ab) / ab.lengthSq() : 0.5;
+      return { edge, t: Math.min(0.98, Math.max(0.02, t)) };
     }
 
     function updateEditModal(clientX: number, clientY: number, e: { shiftKey: boolean; ctrlKey: boolean; metaKey: boolean }) {
@@ -2054,6 +2150,15 @@ export function Viewport({
           const after = Math.hypot(clientX - modal.center.x, clientY - modal.center.y);
           modal.value = Math.max(0, modal.value + ((before - after) / modal.pxPerUnit) * precision);
         }
+      } else if (modal.kind === "bevel") {
+        // Away from the centre widens the bevel.
+        const before = Math.hypot(clientX - dx - modal.center.x, clientY - dy - modal.center.y);
+        const after = Math.hypot(clientX - modal.center.x, clientY - modal.center.y);
+        modal.value = Math.max(0, modal.value + ((after - before) / modal.pxPerUnit) * precision);
+      } else if (modal.kind === "spin") {
+        modal.value += dx * 0.5 * precision;
+      } else if (modal.kind === "knife") {
+        modal.knifeCandidate = knifeSnap(modal, clientX, clientY);
       } else if (modal.kind === "loopslide" && modal.edgeA && modal.edgeB) {
         const ab = modal.edgeB.clone().sub(modal.edgeA);
         const t = ab.lengthSq() > 1e-6 ? new THREE.Vector2(clientX, clientY).sub(modal.edgeA).dot(ab) / ab.lengthSq() : 0.5;
@@ -2077,14 +2182,41 @@ export function Viewport({
 
     function confirmEditModal() {
       if (!editModal) return;
-      // The graph already holds the last preview; that is the result.
+      if (editModal.kind === "knife") {
+        editMeshPreviewLoopRef.current = null;
+        if ((editModal.knifePoints?.length ?? 0) >= 2) onTransformChangeRef.current?.(editModal.nodeId, editModalResult(editModal));
+      }
+      // Otherwise the graph already holds the last preview: that's the result.
       endEditModal();
     }
 
     function cancelEditModal() {
       if (!editModal) return;
-      onTransformChangeRef.current?.(editModal.nodeId, editModal.restore);
+      if (editModal.kind === "knife") editMeshPreviewLoopRef.current = null;
+      else onTransformChangeRef.current?.(editModal.nodeId, editModal.restore);
       endEditModal();
+    }
+
+    /** A left click while a tool runs: the knife places a point, everything else confirms. */
+    function clickEditModal() {
+      const modal = editModal;
+      if (!modal) return;
+      if (modal.kind !== "knife") return confirmEditModal();
+      if (modal.knifeCandidate) {
+        modal.knifePoints!.push(modal.knifeCandidate);
+        previewEditModal();
+      }
+    }
+
+    /** The mouse wheel while Bevel or Spin runs: segments / steps. */
+    function wheelEditModal(deltaY: number): boolean {
+      const modal = editModal;
+      if (!modal || (modal.kind !== "bevel" && modal.kind !== "spin")) return false;
+      const step = deltaY < 0 ? 1 : -1;
+      const max = modal.kind === "spin" ? 256 : 16;
+      modal.segments = Math.max(1, Math.min(max, (modal.segments ?? 1) + step));
+      previewEditModal();
+      return true;
     }
 
     /** Keys while a modal tool runs: the amount, the options, confirm and cancel. Returns true when handled. */
@@ -2095,6 +2227,15 @@ export function Viewport({
       e.stopPropagation();
       if (key === "escape") cancelEditModal();
       else if (e.key === "Enter") confirmEditModal();
+      else if (modal.kind === "knife") {
+        if (e.key === "Backspace" && modal.knifePoints!.length > 0) {
+          modal.knifePoints!.pop();
+          previewEditModal();
+        }
+      } else if (modal.kind === "spin" && (key === "x" || key === "y" || key === "z")) {
+        modal.axis3 = key;
+        previewEditModal();
+      }
       else if (/^[0-9.]$/.test(e.key) || (e.key === "-" && modal.typed === "")) {
         modal.typed += e.key;
         previewEditModal();
@@ -2210,7 +2351,61 @@ export function Viewport({
       return startEditModal("move", target, clientX, clientY, { base: r.mesh, selection, mode: "faces", restore });
     }
 
+    /** The edges Bevel / Spin / Bridge act on in any mode: the selected ones, or those of the selection. */
+    function targetEdges(target: EditMeshTarget): EdgeRef[] {
+      return target.mode === "edges"
+        ? target.selection.edges
+        : convertSelection(target.quadMesh, target.mode, target.selection, "edges").edges;
+    }
+
+    function startBevel(target: EditMeshTarget, clientX: number, clientY: number): boolean {
+      const edges = targetEdges(target);
+      return edges.length > 0 && startEditModal("bevel", target, clientX, clientY, { edges, startValue: 0 });
+    }
+
+    function startSpin(target: EditMeshTarget, clientX: number, clientY: number): boolean {
+      const edges = targetEdges(target);
+      return edges.length > 0 && startEditModal("spin", target, clientX, clientY, { edges, startValue: 360, segments: 12, axis3: "y" });
+    }
+
+    /** Bridge: two edge loops, or two groups of faces (removed and joined). */
+    function runBridge(target: EditMeshTarget): boolean {
+      if (target.node.type !== EDIT_MESH_NODE.type) return false;
+      const r = target.mode === "faces" ? bridgeFaces(target.quadMesh, target.selection.faces) : bridgeEdgeLoops(target.quadMesh, targetEdges(target));
+      if (r.error) {
+        flashEditMessage(`Bridge: ${r.error}`);
+        return false;
+      }
+      applyEditOp(target, { meshData: r.mesh, selectMode: "faces", selectedFaces: r.newFaces, selectedPoints: [], selectedEdges: [] });
+      return true;
+    }
+
+    let flashTimer: ReturnType<typeof setTimeout> | null = null;
+    /** A short message in the tool readout, for an operation that couldn't run. */
+    function flashEditMessage(text: string) {
+      if (editModal) return;
+      setEditModalHud(text);
+      if (flashTimer) clearTimeout(flashTimer);
+      flashTimer = setTimeout(() => {
+        if (!editModal) setEditModalHud(null);
+      }, 2500);
+    }
+
+    const canvasCentre = () => {
+      const rect = renderer.domElement.getBoundingClientRect();
+      return [rect.left + rect.width / 2, rect.top + rect.height / 2] as const;
+    };
+
     editMeshCommandsRef.current = {
+      tool(tool) {
+        const target = editMeshTarget();
+        if (!target) return false;
+        const [x, y] = canvasCentre();
+        if (tool === "bevel") return startBevel(target, x, y);
+        if (tool === "spin") return startSpin(target, x, y);
+        if (tool === "knife") return startEditModal("knife", target, x, y);
+        return runBridge(target);
+      },
       run(op) {
         const target = editMeshTarget();
         return target ? runEditOp(target, op) : false;
@@ -2223,9 +2418,150 @@ export function Viewport({
       },
     };
 
+    /**
+     * Writes an Edit Mesh gizmo drag back to the mesh: snapping, the pivot
+     * mode (one matrix, or one per island for Individual Origins),
+     * proportional editing and X-mirror. Runs on every gizmo change, and again
+     * when the mouse wheel resizes the proportional radius mid-drag.
+     */
+    function applyEditMeshDrag(object: THREE.Object3D) {
+      const node = graphRef.current.nodes.find((n) => n.id === selectedNodeIdRef.current);
+      if (!node || !dragStartMeshData || !onParamChangeRef.current) return;
+
+      const meshObj = latestResultsRef.current?.get(node.id)?.geometry;
+      const srcMesh = meshObj instanceof THREE.Object3D ? findFirstMesh(meshObj) : null;
+      const meshWorldMat = srcMesh ? srcMesh.matrixWorld : new THREE.Matrix4();
+
+      // Snapping a move: onto the vertex under the pointer (Vertex), or in
+      // steps of Snap Increment along the gizmo's own axes (Increment, or
+      // Shift held). Rotate and scale snap through transformControls itself.
+      if (transformModeRef.current === "translate" && node.type === EDIT_MESH_NODE.type) {
+        const snap = editSnapRef.current;
+        let snapped = false;
+        if (snap === "vertex" && editPointer) {
+          const { mode: m, selection: sel } = readEditMeshSelection(node);
+          const exclude = selectionVertices(dragStartMeshData, m, sel);
+          const { rect, ndc } = canvasPoint(editPointer.clientX, editPointer.clientY);
+          const v = editMeshHandles.pickPoint(ndc, camera, rect.width, rect.height, dragStartMeshData, meshWorldMat, exclude);
+          if (v !== null) {
+            object.position.set(...dragStartMeshData.positions[v]).applyMatrix4(meshWorldMat);
+            snapped = true;
+          }
+        }
+        if (!snapped && (snap === "increment" || snapEnabled)) {
+          const step = (Number(node.params.snapIncrement) || 0.1) * meshWorldMat.getMaxScaleOnAxis();
+          const toGizmo = dragStartCentroidQuat.clone().invert();
+          const d = object.position.clone().sub(dragStartCentroidPos).applyQuaternion(toGizmo);
+          d.set(Math.round(d.x / step) * step, Math.round(d.y / step) * step, Math.round(d.z / step) * step);
+          object.position.copy(dragStartCentroidPos).add(d.applyQuaternion(dragStartCentroidQuat));
+        }
+        object.updateMatrix();
+      }
+
+      // The whole drag as one local-space matrix — see worldDeltaToLocal
+      // for why rotation and scale can't be applied as read off the gizmo.
+      const localDelta = worldDeltaToLocal(
+        gizmoWorldDelta(
+          dragStartCentroidPos,
+          dragStartCentroidQuat,
+          dragStartCentroidScale,
+          object.position,
+          object.quaternion,
+          object.scale,
+        ),
+        meshWorldMat,
+      );
+
+      if (node.type === EDIT_MESH_POINTS_NODE.type) {
+        if (!onTransformChangeRef.current || !dragStartPointPositionsList) return;
+        const selectedIndices = Array.isArray(node.params.selectedPoints)
+          ? (node.params.selectedPoints as number[])
+          : [];
+        if (selectedIndices.length === 0) return;
+
+        const transformedUniquePoints = new Map<number, THREE.Vector3>();
+        for (const idx of selectedIndices) {
+          const raw = dragStartMeshData.positions[idx];
+          if (!raw) continue;
+          transformedUniquePoints.set(idx, new THREE.Vector3(raw[0], raw[1], raw[2]).applyMatrix4(localDelta));
+        }
+
+        const originPos = new THREE.Vector3();
+        const resultList = dragStartPointPositionsList.map((pt) => pt.clone());
+        for (let i = 0; i < dragStartPointPositionsList.length; i++) {
+          const pt = dragStartPointPositionsList[i];
+          for (const [uniqueIdx, targetPos] of transformedUniquePoints) {
+            const orig = dragStartMeshData.positions[uniqueIdx];
+            originPos.set(orig[0], orig[1], orig[2]);
+            if (pt.distanceToSquared(originPos) <= 1e-6) {
+              resultList[i].copy(targetPos);
+              break;
+            }
+          }
+        }
+
+        onTransformChangeRef.current(node.id, { pointsList: resultList });
+        return;
+      }
+
+      if (!onTransformChangeRef.current) return;
+
+      // Every mode moves the vertices it covers — a face's corners, an
+      // edge's ends — so the drag works on points whatever the mode.
+      const { mode, selection } = readEditMeshSelection(node);
+      const vertices = [...selectionVertices(dragStartMeshData, mode, selection)];
+
+      // Individual Origins: each island turns and scales about its own
+      // centre; the move itself is shared.
+      let groups: { vertices: number[]; matrix: THREE.Matrix4 }[] = [{ vertices, matrix: localDelta }];
+      if (dragStartIslands && dragStartIslands.length > 1) {
+        const linear = localDelta.clone().setPosition(0, 0, 0);
+        const pivot = dragStartCentroidPos.clone().applyMatrix4(meshWorldMat.clone().invert());
+        const move = pivot.clone().applyMatrix4(localDelta).sub(pivot);
+        groups = dragStartIslands.map(({ vertices: island, center }) => ({
+          vertices: island,
+          matrix: new THREE.Matrix4()
+            .makeTranslation(center.x + move.x, center.y + move.y, center.z + move.z)
+            .multiply(linear)
+            .multiply(new THREE.Matrix4().makeTranslation(-center.x, -center.y, -center.z)),
+        }));
+      }
+
+      const updatedMesh = transformVertexGroups(dragStartMeshData, groups, {
+        enabled: Boolean(node.params.proportionalEditing),
+        diameter: dragDiameterOverride ?? (Number(node.params.proportionalDiameter) || 1.0),
+        falloff: (node.params.proportionalFalloff as ProportionalFalloff) || "smooth",
+        connected: node.params.proportionalConnected === true,
+      });
+
+      // X-mirror: every vertex this drag moved has its counterpart across
+      // local X = 0 follow it, mirrored (and one on the plane stays on it).
+      if (dragStartMirrorMap) {
+        const moved = new Map<number, [number, number, number]>();
+        updatedMesh.positions.forEach((p, i) => {
+          const o = dragStartMeshData!.positions[i];
+          if (p[0] !== o[0] || p[1] !== o[1] || p[2] !== o[2]) moved.set(i, p);
+        });
+        for (const [v, p] of mirrorMovesX(dragStartMeshData, moved, dragStartMirrorMap, mirrorTolerance(dragStartMeshData))) {
+          updatedMesh.positions[v] = p;
+        }
+      }
+
+      // History-free: the drag's one undo step was recorded when it began
+      // (dragging-changed → onTransformStart). Writing through
+      // onParamChange recorded another whenever the drag paused longer
+      // than the coalescing window.
+      onTransformChangeRef.current(node.id, { meshData: updatedMesh });
+      return;
+    }
+
     let dragStartMeshData: QuadMesh | null = null;
     /** X-mirror counterparts for the drag in progress, when the node has X-mirror on. */
     let dragStartMirrorMap: Int32Array | null = null;
+    /** Individual Origins: the selection's islands and their centres, when the drag began. */
+    let dragStartIslands: { vertices: number[]; center: THREE.Vector3 }[] | null = null;
+    /** The proportional radius as the mouse wheel set it during this drag. */
+    let dragDiameterOverride: number | null = null;
     let dragStartPointPositionsList: THREE.Vector3[] | null = null;
 
     // Points Influence editing — same generic point-cloud handles again, this
@@ -2622,6 +2958,10 @@ export function Viewport({
           handled = startEditModal("inset", target, px, py);
         } else if (key === "d" && e.shiftKey && !mod && !e.altKey) {
           handled = duplicateAndMove(target, px, py);
+        } else if (key === "b" && mod && !e.altKey && !e.shiftKey) {
+          handled = startBevel(target, px, py);
+        } else if (key === "k" && !mod && !e.altKey && !e.shiftKey) {
+          handled = startEditModal("knife", target, px, py);
         } else if (key === "m" && !mod && !e.altKey && !e.shiftKey) {
           handled = runEditOp(target, "merge");
         } else if (key === "x" && mod && !e.altKey) {
@@ -2838,6 +3178,17 @@ export function Viewport({
             if (node?.type === EDIT_MESH_NODE.type) {
               dragStartMeshData = cloneQuadMesh(resolveEditMeshData(node, latestResultsRef.current));
               dragStartMirrorMap = node.params.mirrorX === true ? mirrorXMap(dragStartMeshData, mirrorTolerance(dragStartMeshData)) : null;
+              dragDiameterOverride = null;
+              dragStartIslands = null;
+              if (editPivotRef.current === "individual") {
+                const { mode, selection } = readEditMeshSelection(node);
+                const start = dragStartMeshData;
+                dragStartIslands = selectionIslands(start, mode, selection).map((island) => {
+                  const center = new THREE.Vector3();
+                  for (const v of island) center.add(new THREE.Vector3(...start.positions[v]));
+                  return { vertices: island, center: center.divideScalar(island.length) };
+                });
+              }
               dragStartPointPositionsList = null;
             } else if (node?.type === EDIT_MESH_POINTS_NODE.type) {
               const meshObj = latestResultsRef.current?.get(node.id)?.geometry;
@@ -2856,6 +3207,8 @@ export function Viewport({
           suppressNextClick = true;
           dragStartMeshData = null;
           dragStartMirrorMap = null;
+          dragStartIslands = null;
+          dragDiameterOverride = null;
           dragStartPointPositionsList = null;
         }
       });
@@ -2871,7 +3224,9 @@ export function Viewport({
         // assignment, no matrixWorld involved) — rounding it directly, before
         // updateMatrix() below, is what makes the *displayed* mesh snap, not
         // just whatever eventually gets written back to the graph.
-        if (snapEnabled && transformModeRef.current === "translate") {
+        // (Edit Mesh's selection proxy snaps relative to where the drag began,
+        // in applyEditMeshDrag, not to this absolute grid.)
+        if (snapEnabled && transformModeRef.current === "translate" && object !== editMeshCentroidProxy) {
           object.position.set(
             Math.round(object.position.x / TRANSLATION_SNAP) * TRANSLATION_SNAP,
             Math.round(object.position.y / TRANSLATION_SNAP) * TRANSLATION_SNAP,
@@ -3122,91 +3477,7 @@ export function Viewport({
 
         // Edit Mesh selection centroid drag: loc/rot/scale
         if (object.userData?.isEditMeshCentroidProxy) {
-          const node = graphRef.current.nodes.find((n) => n.id === selectedNodeIdRef.current);
-          if (!node || !dragStartMeshData || !onParamChangeRef.current) return;
-
-          const meshObj = latestResultsRef.current?.get(node.id)?.geometry;
-          const srcMesh = meshObj instanceof THREE.Object3D ? findFirstMesh(meshObj) : null;
-          const meshWorldMat = srcMesh ? srcMesh.matrixWorld : new THREE.Matrix4();
-          // The whole drag as one local-space matrix — see worldDeltaToLocal
-          // for why rotation and scale can't be applied as read off the gizmo.
-          const localDelta = worldDeltaToLocal(
-            gizmoWorldDelta(
-              dragStartCentroidPos,
-              dragStartCentroidQuat,
-              dragStartCentroidScale,
-              object.position,
-              object.quaternion,
-              object.scale,
-            ),
-            meshWorldMat,
-          );
-
-          if (node.type === EDIT_MESH_POINTS_NODE.type) {
-            if (!onTransformChangeRef.current || !dragStartPointPositionsList) return;
-            const selectedIndices = Array.isArray(node.params.selectedPoints)
-              ? (node.params.selectedPoints as number[])
-              : [];
-            if (selectedIndices.length === 0) return;
-
-            const transformedUniquePoints = new Map<number, THREE.Vector3>();
-            for (const idx of selectedIndices) {
-              const raw = dragStartMeshData.positions[idx];
-              if (!raw) continue;
-              transformedUniquePoints.set(idx, new THREE.Vector3(raw[0], raw[1], raw[2]).applyMatrix4(localDelta));
-            }
-
-            const originPos = new THREE.Vector3();
-            const resultList = dragStartPointPositionsList.map((pt) => pt.clone());
-            for (let i = 0; i < dragStartPointPositionsList.length; i++) {
-              const pt = dragStartPointPositionsList[i];
-              for (const [uniqueIdx, targetPos] of transformedUniquePoints) {
-                const orig = dragStartMeshData.positions[uniqueIdx];
-                originPos.set(orig[0], orig[1], orig[2]);
-                if (pt.distanceToSquared(originPos) <= 1e-6) {
-                  resultList[i].copy(targetPos);
-                  break;
-                }
-              }
-            }
-
-            onTransformChangeRef.current(node.id, { pointsList: resultList });
-            return;
-          }
-
-          if (!onTransformChangeRef.current) return;
-
-          // Every mode moves the vertices it covers — a face's corners, an
-          // edge's ends — so the drag works on points whatever the mode.
-          const { mode, selection } = readEditMeshSelection(node);
-          const vertices = [...selectionVertices(dragStartMeshData, mode, selection)];
-
-          const proportionalEditing = Boolean(node.params.proportionalEditing);
-          const proportionalDiameter = Number(node.params.proportionalDiameter) || 1.0;
-
-          const updatedMesh = transformSelectionByMatrix(dragStartMeshData, "points", vertices, localDelta, {
-            enabled: proportionalEditing,
-            diameter: proportionalDiameter,
-          });
-
-          // X-mirror: every vertex this drag moved has its counterpart across
-          // local X = 0 follow it, mirrored (and one on the plane stays on it).
-          if (dragStartMirrorMap) {
-            const moved = new Map<number, [number, number, number]>();
-            updatedMesh.positions.forEach((p, i) => {
-              const o = dragStartMeshData!.positions[i];
-              if (p[0] !== o[0] || p[1] !== o[1] || p[2] !== o[2]) moved.set(i, p);
-            });
-            for (const [v, p] of mirrorMovesX(dragStartMeshData, moved, dragStartMirrorMap, mirrorTolerance(dragStartMeshData))) {
-              updatedMesh.positions[v] = p;
-            }
-          }
-
-          // History-free: the drag's one undo step was recorded when it began
-          // (dragging-changed → onTransformStart). Writing through
-          // onParamChange recorded another whenever the drag paused longer
-          // than the coalescing window.
-          onTransformChangeRef.current(node.id, { meshData: updatedMesh });
+          applyEditMeshDrag(object);
           return;
         }
 
@@ -3718,7 +3989,7 @@ export function Viewport({
       // and the click goes no further (no orbit, no selection change).
       if (editModal) {
         if (e.button === 2) cancelEditModal();
-        else confirmEditModal();
+        else clickEditModal();
         suppressNextClick = true;
         e.preventDefault();
         e.stopImmediatePropagation();
@@ -5467,6 +5738,25 @@ export function Viewport({
     }
 
     const onCanvasWheel = (e: WheelEvent) => {
+      // Mid-drag with proportional editing: the wheel resizes the influence
+      // (Blender's page up / down), updating the drag at once.
+      if (transformControls?.dragging && transformControls.object === editMeshCentroidProxy) {
+        const node = graphRef.current.nodes.find((n) => n.id === selectedNodeIdRef.current);
+        if (node?.params.proportionalEditing) {
+          const current = dragDiameterOverride ?? (Number(node.params.proportionalDiameter) || 1.0);
+          dragDiameterOverride = Math.max(1e-3, current * (e.deltaY < 0 ? 1.15 : 1 / 1.15));
+          onTransformChangeRef.current?.(node.id, { proportionalDiameter: dragDiameterOverride });
+          applyEditMeshDrag(editMeshCentroidProxy);
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          return;
+        }
+      }
+      if (wheelEditModal(e.deltaY)) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        return;
+      }
       const activeEditMesh = selectedNodeIdRef.current
         ? graphRef.current.nodes.find((n) => n.id === selectedNodeIdRef.current && n.type === EDIT_MESH_NODE.type)
         : null;
@@ -6441,8 +6731,20 @@ export function Viewport({
             }
             localCentroid.divideScalar(targetVertices.size);
             const worldCentroid = localCentroid.clone().applyMatrix4(meshMat);
-            editMeshCentroidProxy.position.copy(worldCentroid);
-            editMeshCentroidProxy.quaternion.identity();
+            // Pivot: the selection's centre, or the object's origin. (Individual
+            // Origins shows the gizmo at the centre too; each island pivots on
+            // its own when the drag is applied.)
+            editMeshCentroidProxy.position.copy(
+              editPivotRef.current === "origin" ? new THREE.Vector3().applyMatrix4(meshMat) : worldCentroid,
+            );
+            // Orientation: world axes, the object's own, or the selection's
+            // (Z along its normal).
+            const objectQuat = new THREE.Quaternion();
+            meshMat.decompose(new THREE.Vector3(), objectQuat, new THREE.Vector3());
+            const orientation = editOrientationRef.current;
+            if (orientation === "global") editMeshCentroidProxy.quaternion.identity();
+            else if (orientation === "local") editMeshCentroidProxy.quaternion.copy(objectQuat);
+            else editMeshCentroidProxy.quaternion.copy(objectQuat).multiply(selectionOrientation(quadMesh, selectMode, selection));
             editMeshCentroidProxy.scale.set(1, 1, 1);
             editMeshCentroidProxy.updateMatrixWorld(true);
 
@@ -6451,6 +6753,10 @@ export function Viewport({
                 transformControls.attach(editMeshCentroidProxy);
               }
               transformControls.setMode(transformModeRef.current);
+              transformControls.setSpace(orientation === "global" ? "world" : "local");
+              const incremental = snapEnabled || editSnapRef.current === "increment";
+              transformControls.rotationSnap = incremental ? ROTATION_SNAP : null;
+              transformControls.scaleSnap = incremental ? 0.1 : null;
               transformControls.enabled = true;
               transformControls.showX = true;
               transformControls.showY = true;
@@ -6862,6 +7168,14 @@ export function Viewport({
         for (const parked of [...gizmoAnchorScene.children]) {
           if (parked !== targetObject) gizmoAnchorScene.remove(parked);
         }
+      }
+
+      // Orientation and step snapping set for Edit Mesh's proxy don't carry
+      // over to whatever the gizmo holds next.
+      if (transformControls && !transformControls.dragging && transformControls.object !== editMeshCentroidProxy) {
+        if (transformControls.space !== "world") transformControls.setSpace("world");
+        transformControls.rotationSnap = snapEnabled ? ROTATION_SNAP : null;
+        transformControls.scaleSnap = snapEnabled ? SCALE_SNAP : null;
       }
 
       if (transformControls?.dragging && transformControls.object) {
@@ -7498,6 +7812,139 @@ export function Viewport({
           }}
         />
       )}
+      {/* Edit Mesh Transform panel: gizmo orientation, pivot, snapping, and
+          the selection's median position to type into. */}
+      {!outputMode &&
+        selectedNodeId &&
+        !editModalHud &&
+        (() => {
+          const node = graph.nodes.find((n) => n.id === selectedNodeId && n.type === EDIT_MESH_NODE.type);
+          if (!node) return null;
+          const { mode, selection } = readEditMeshSelection(node);
+          const meshObj = latestResultsRef.current?.get(node.id)?.geometry;
+          const srcMesh = meshObj instanceof THREE.Object3D ? findFirstMesh(meshObj) : null;
+          const quadMesh = srcMesh ? editMeshQuadMesh(node, latestResultsRef.current, srcMesh) : null;
+          const vertices = quadMesh ? [...selectionVertices(quadMesh, mode, selection)] : [];
+          const median = new THREE.Vector3();
+          if (quadMesh && vertices.length > 0) {
+            for (const v of vertices) median.add(new THREE.Vector3(...quadMesh.positions[v]));
+            median.divideScalar(vertices.length);
+          }
+          const setMedian = (axis: 0 | 1 | 2, text: string) => {
+            const value = parseFloat(text);
+            if (!quadMesh || vertices.length === 0 || !Number.isFinite(value)) return;
+            const delta = new THREE.Vector3();
+            delta.setComponent(axis, value - median.getComponent(axis));
+            if (Math.abs(delta.getComponent(axis)) < 1e-9) return;
+            const moved = transformSelectionByMatrix(quadMesh, "points", vertices, new THREE.Matrix4().makeTranslation(delta.x, delta.y, delta.z));
+            if (node.params.mirrorX === true) {
+              const map = mirrorXMap(quadMesh, mirrorTolerance(quadMesh));
+              const changes = new Map<number, [number, number, number]>(vertices.map((v) => [v, moved.positions[v]]));
+              for (const [v, p] of mirrorMovesX(quadMesh, changes, map, mirrorTolerance(quadMesh))) moved.positions[v] = p;
+            }
+            onParamChange?.({ meshData: moved }, node.id, undefined, { coalesce: false });
+          };
+          const segmented = <T extends string>(
+            value: T,
+            options: { id: T; label: string; title: string }[],
+            set: (v: T) => void,
+          ) => (
+            <div style={{ display: "flex", gap: 2 }}>
+              {options.map((o) => (
+                <button
+                  key={o.id}
+                  type="button"
+                  className={`viewport-hud-button ${value === o.id ? "viewport-hud-button-active" : ""}`}
+                  style={{ fontSize: 10, padding: "2px 6px", minWidth: 0, width: "auto" }}
+                  onClick={() => set(o.id)}
+                  title={o.title}
+                >
+                  {o.label}
+                </button>
+              ))}
+            </div>
+          );
+          const row = { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 } as const;
+          const label = { color: "#94a3b8", fontSize: 10 } as const;
+          return (
+            <div
+              className="viewport-gp-hud"
+              style={{
+                position: "absolute",
+                right: 12,
+                bottom: 64,
+                display: "flex",
+                flexDirection: "column",
+                gap: 6,
+                padding: "8px 10px",
+                background: "rgba(24, 28, 38, 0.92)",
+                border: "1px solid rgba(56, 189, 248, 0.3)",
+                borderRadius: 8,
+                color: "#fff",
+                fontSize: 11,
+                zIndex: 44,
+                pointerEvents: "auto",
+              }}
+            >
+              <div style={row}>
+                <span style={label}>Orientation</span>
+                {segmented(editOrientation, [
+                  { id: "global", label: "Global", title: "Gizmo along the world axes" },
+                  { id: "local", label: "Local", title: "Gizmo along the object's own axes" },
+                  { id: "normal", label: "Normal", title: "Gizmo along the selection: Z out of its surface" },
+                ], setEditOrientation)}
+              </div>
+              <div style={row}>
+                <span style={label}>Pivot</span>
+                {segmented(editPivot, [
+                  { id: "median", label: "Median", title: "Rotate and scale about the selection's centre" },
+                  { id: "individual", label: "Individual", title: "Each separate piece of the selection rotates and scales about its own centre" },
+                  { id: "origin", label: "Origin", title: "Rotate and scale about the object's origin" },
+                ], setEditPivot)}
+              </div>
+              <div style={row}>
+                <span style={label}>Snap</span>
+                {segmented(editSnap, [
+                  { id: "off", label: "Off", title: "No snapping (hold Shift for steps)" },
+                  { id: "increment", label: "Step", title: `Moves in steps of Snap Increment along the gizmo's axes, rotation in 15° steps` },
+                  { id: "vertex", label: "Vertex", title: "A move snaps onto the vertex under the pointer" },
+                ], setEditSnap)}
+              </div>
+              {vertices.length > 0 && (
+                <div style={row}>
+                  <span style={label} title="The selection's median position, in the object's own space — type a value to move it there">
+                    Median
+                  </span>
+                  <div style={{ display: "flex", gap: 3 }}>
+                    {(["x", "y", "z"] as const).map((axisName, axis) => (
+                      <input
+                        key={`${axisName}:${median.getComponent(axis).toFixed(4)}`}
+                        type="number"
+                        step={0.01}
+                        defaultValue={Number(median.getComponent(axis).toFixed(4))}
+                        title={axisName.toUpperCase()}
+                        onKeyDown={(e) => {
+                          e.stopPropagation();
+                          if (e.key === "Enter") setMedian(axis as 0 | 1 | 2, (e.target as HTMLInputElement).value);
+                        }}
+                        onBlur={(e) => setMedian(axis as 0 | 1 | 2, e.target.value)}
+                        style={{
+                          width: 58,
+                          background: "rgba(15, 23, 42, 0.9)",
+                          color: ["#f87171", "#4ade80", "#60a5fa"][axis],
+                          border: "1px solid rgba(148, 163, 184, 0.3)",
+                          borderRadius: 4,
+                          fontSize: 11,
+                          padding: "2px 4px",
+                        }}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })()}
       {/* Edit Mesh modal tool readout */}
       {!outputMode && editModalHud && (
         <div
@@ -8582,7 +9029,7 @@ export function Viewport({
                   }}
                   title={
                     editMeshNode.params.proportionalEditing
-                      ? `Proportional Editing ON (Influence Diameter: ${editMeshNode.params.proportionalDiameter ?? 1.0}) — Click to turn OFF (Shortcut: O)`
+                      ? `Proportional Editing ON (Influence Diameter: ${editMeshNode.params.proportionalDiameter ?? 1.0}; mouse wheel while dragging resizes it) — Click to turn OFF (Shortcut: O)`
                       : "Proportional Editing OFF — Click to turn ON (Shortcut: O)"
                   }
                 >
@@ -8745,7 +9192,55 @@ export function Viewport({
                       <rect x="9" y="9" width="12" height="12" rx="1" fill="currentColor" fillOpacity="0.3" />
                     </svg>
                   </button>
+                  <button
+                    type="button"
+                    className="viewport-hud-button"
+                    onClick={() => editMeshCommandsRef.current?.tool("bevel")}
+                    title="Bevel the selected edges — drag for width, wheel for segments (Shortcut: Cmd/Ctrl+B)"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round">
+                      <path d="M4 20V9l5-5h11" />
+                      <path d="M4 9h5V4" strokeDasharray="2 2" opacity="0.6" />
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
+                    className="viewport-hud-button"
+                    onClick={() => editMeshCommandsRef.current?.tool("bridge")}
+                    title="Bridge two edge loops — or two groups of faces, removed and joined into a tunnel"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                      <ellipse cx="6" cy="12" rx="2.5" ry="6" />
+                      <ellipse cx="18" cy="12" rx="2.5" ry="6" />
+                      <path d="M6 6h12M6 18h12" />
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
+                    className="viewport-hud-button"
+                    onClick={() => editMeshCommandsRef.current?.tool("spin")}
+                    title="Spin the selected edges around the object's axis (a lathe) — drag for angle, wheel for steps, X/Y/Z for the axis"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+                      <line x1="12" y1="3" x2="12" y2="21" strokeDasharray="2 2" />
+                      <path d="M5 8a7 3 0 0 0 14 0M5 16a7 3 0 0 0 14 0" />
+                    </svg>
+                  </button>
                 </>
+              )}
+
+              {!isPointsOnly && (
+                <button
+                  type="button"
+                  className="viewport-hud-button"
+                  onClick={() => editMeshCommandsRef.current?.tool("knife")}
+                  title="Knife — click along vertices and edges, Enter to cut (Shortcut: K)"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round">
+                    <path d="M4 20L16 8l3 3L7 20z" fill="currentColor" fillOpacity="0.3" />
+                    <path d="M16 8l3-3" />
+                  </svg>
+                </button>
               )}
 
               {/* X-mirror: edits mirror across the object's local X axis */}

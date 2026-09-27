@@ -730,9 +730,39 @@ export function getLoopCutPreviewSegments(
   return segments;
 }
 
+export type ProportionalFalloff = "smooth" | "sphere" | "root" | "linear" | "sharp" | "constant";
+
 export interface ProportionalOptions {
   enabled?: boolean;
   diameter?: number;
+  /** How influence fades with distance (Blender's falloff curves). Default smooth. */
+  falloff?: ProportionalFalloff;
+  /**
+   * Measure distance along the mesh's edges rather than straight through
+   * space, so only geometry connected to the selection moves — two fingers
+   * of a hand no longer drag each other along.
+   */
+  connected?: boolean;
+}
+
+/** Influence weight at `t` = distance / radius, in [0, 1]. */
+export function proportionalWeight(t: number, falloff: ProportionalFalloff = "smooth"): number {
+  if (t >= 1) return 0;
+  const u = 1 - Math.max(0, t);
+  switch (falloff) {
+    case "sphere":
+      return Math.sqrt(Math.max(0, 1 - t * t));
+    case "root":
+      return Math.sqrt(u);
+    case "linear":
+      return u;
+    case "sharp":
+      return u * u;
+    case "constant":
+      return 1;
+    default:
+      return u * u * (3 - 2 * u);
+  }
 }
 
 /**
@@ -770,8 +800,10 @@ export function worldDeltaToLocal(worldDelta: THREE.Matrix4, meshWorldMatrix: TH
 
 /**
  * The world-space delta of a gizmo drag around the selection centroid:
- * `T(position) · R · S · T(-startPosition)`, where R and S are the rotation and
- * scale the gizmo has accumulated since the drag began.
+ * `T(position) · R(quaternion) · S · R(startQuaternion)⁻¹ · T(-startPosition)`
+ * — the scale S applies along the gizmo's own axes as they were when the drag
+ * began, so it's right for a gizmo oriented Local or Normal, not just Global.
+ * With an identity start orientation this is `T · ΔR · S · T⁻¹`.
  */
 export function gizmoWorldDelta(
   startPosition: THREE.Vector3,
@@ -781,21 +813,21 @@ export function gizmoWorldDelta(
   quaternion: THREE.Quaternion,
   scale: THREE.Vector3,
 ): THREE.Matrix4 {
-  const deltaQuat = quaternion.clone().multiply(startQuaternion.clone().invert());
   const sx = startScale.x !== 0 ? scale.x / startScale.x : 1;
   const sy = startScale.y !== 0 ? scale.y / startScale.y : 1;
   const sz = startScale.z !== 0 ? scale.z / startScale.z : 1;
   return new THREE.Matrix4()
     .makeTranslation(position.x, position.y, position.z)
-    .multiply(new THREE.Matrix4().makeRotationFromQuaternion(deltaQuat))
+    .multiply(new THREE.Matrix4().makeRotationFromQuaternion(quaternion))
     .multiply(new THREE.Matrix4().makeScale(sx, sy, sz))
+    .multiply(new THREE.Matrix4().makeRotationFromQuaternion(startQuaternion.clone().invert()))
     .multiply(new THREE.Matrix4().makeTranslation(-startPosition.x, -startPosition.y, -startPosition.z));
 }
 
 /**
  * Applies a local-space affine `matrix` to the selected points / faces, with
  * optional Blender-style Proportional Editing (unselected vertices within the
- * influence radius get the same displacement, weighted by a smooth falloff).
+ * influence radius get the same displacement, weighted by the falloff).
  */
 export function transformSelectionByMatrix(
   mesh: QuadMesh,
@@ -804,98 +836,114 @@ export function transformSelectionByMatrix(
   matrix: THREE.Matrix4,
   proportionalOptions?: ProportionalOptions,
 ): QuadMesh {
-  if (selectedIndices.length === 0) return cloneQuadMesh(mesh);
-
-  const targetVertexIndices = new Set<number>();
+  const vertices = new Set<number>();
   if (mode === "points") {
-    for (const idx of selectedIndices) {
-      if (idx >= 0 && idx < mesh.positions.length) targetVertexIndices.add(idx);
-    }
+    for (const idx of selectedIndices) if (idx >= 0 && idx < mesh.positions.length) vertices.add(idx);
   } else {
-    for (const fIdx of selectedIndices) {
-      const face = mesh.faces[fIdx];
-      if (!face) continue;
-      for (const v of face) targetVertexIndices.add(v);
-    }
+    for (const f of selectedIndices) for (const v of mesh.faces[f] ?? []) vertices.add(v);
   }
+  return transformVertexGroups(mesh, [{ vertices: [...vertices], matrix }], proportionalOptions);
+}
 
-  if (targetVertexIndices.size === 0) return cloneQuadMesh(mesh);
-
+/**
+ * Applies one local-space matrix per group of vertices — several groups for
+ * the Individual Origins pivot, where each island turns about its own centre.
+ * With proportional editing, an unselected vertex follows the group of the
+ * selected vertex nearest to it, weighted by distance (straight-line, or
+ * along edges when `connected`).
+ */
+export function transformVertexGroups(
+  mesh: QuadMesh,
+  groups: { vertices: number[]; matrix: THREE.Matrix4 }[],
+  proportional?: ProportionalOptions,
+): QuadMesh {
   const next = cloneQuadMesh(mesh);
-  const isProportional = Boolean(proportionalOptions?.enabled);
-  const diameter = Math.max(1e-4, Number(proportionalOptions?.diameter) || 1.0);
-  const radius = diameter / 2;
-  const radiusSq = radius * radius;
+  const groupOf = new Map<number, number>();
+  groups.forEach((g, gi) => {
+    for (const v of g.vertices) if (v >= 0 && v < mesh.positions.length) groupOf.set(v, gi);
+  });
+  if (groupOf.size === 0) return next;
 
   const p = new THREE.Vector3();
-  const computeFullTransformed = (raw: [number, number, number]): THREE.Vector3 =>
-    p.set(raw[0], raw[1], raw[2]).applyMatrix4(matrix);
-
-  if (!isProportional) {
-    for (const vIdx of targetVertexIndices) {
-      const raw = mesh.positions[vIdx];
-      if (!raw) continue;
-      const full = computeFullTransformed(raw);
-      next.positions[vIdx] = [full.x, full.y, full.z];
-    }
-    return next;
+  const moved = (v: number, gi: number) => {
+    const raw = mesh.positions[v];
+    return p.set(raw[0], raw[1], raw[2]).applyMatrix4(groups[gi].matrix);
+  };
+  for (const [v, gi] of groupOf) {
+    const q = moved(v, gi);
+    next.positions[v] = [q.x, q.y, q.z];
   }
+  if (!proportional?.enabled) return next;
 
-  // Pre-gather selected vertex positions for fast distance checking
-  const selectedPositions: [number, number, number][] = [];
-  for (const vIdx of targetVertexIndices) {
-    const sp = mesh.positions[vIdx];
-    if (sp) selectedPositions.push(sp);
+  const radius = Math.max(1e-4, Number(proportional.diameter) || 1.0) / 2;
+  const falloff = proportional.falloff ?? "smooth";
+  // Nearest selected vertex (and its distance) for every vertex in reach.
+  const nearest = proportional.connected
+    ? connectedDistances(mesh, groupOf, radius)
+    : straightDistances(mesh, groupOf, radius);
+  for (const [v, { dist, source }] of nearest) {
+    if (groupOf.has(v)) continue;
+    const w = proportionalWeight(dist / radius, falloff);
+    if (w <= 0) continue;
+    const raw = mesh.positions[v];
+    const q = moved(v, groupOf.get(source)!);
+    next.positions[v] = [raw[0] + (q.x - raw[0]) * w, raw[1] + (q.y - raw[1]) * w, raw[2] + (q.z - raw[2]) * w];
   }
+  return next;
+}
 
-  for (let i = 0; i < mesh.positions.length; i++) {
-    const raw = mesh.positions[i];
-    if (!raw) continue;
+type Reach = Map<number, { dist: number; source: number }>;
 
-    if (targetVertexIndices.has(i)) {
-      const full = computeFullTransformed(raw);
-      next.positions[i] = [full.x, full.y, full.z];
-      continue;
-    }
-
-    // Find min distance to any selected vertex
-    let minDistSq = Infinity;
-    const px = raw[0];
-    const py = raw[1];
-    const pz = raw[2];
-    for (let s = 0; s < selectedPositions.length; s++) {
-      const sp = selectedPositions[s];
-      const dx = px - sp[0];
-      const dy = py - sp[1];
-      const dz = pz - sp[2];
-      const distSq = dx * dx + dy * dy + dz * dz;
-      if (distSq < minDistSq) {
-        minDistSq = distSq;
-        if (minDistSq <= 0) break;
+function straightDistances(mesh: QuadMesh, selected: Map<number, number>, radius: number): Reach {
+  const out: Reach = new Map();
+  const sources = [...selected.keys()];
+  mesh.positions.forEach((raw, v) => {
+    if (selected.has(v)) return;
+    let best = Infinity;
+    let source = -1;
+    for (const s of sources) {
+      const q = mesh.positions[s];
+      const d = (raw[0] - q[0]) ** 2 + (raw[1] - q[1]) ** 2 + (raw[2] - q[2]) ** 2;
+      if (d < best) {
+        best = d;
+        source = s;
       }
     }
+    const dist = Math.sqrt(best);
+    if (dist < radius) out.set(v, { dist, source });
+  });
+  return out;
+}
 
-    if (minDistSq < radiusSq) {
-      const dist = Math.sqrt(minDistSq);
-      const t = dist / radius; // 0 (closest) to 1 (at influence boundary)
-      // Smoothstep falloff (Blender smooth curve): u = 1 - t, weight = u^2 * (3 - 2u)
-      const u = 1 - t;
-      const weight = u * u * (3 - 2 * u);
-
-      const full = computeFullTransformed(raw);
-      const dispX = full.x - raw[0];
-      const dispY = full.y - raw[1];
-      const dispZ = full.z - raw[2];
-
-      next.positions[i] = [
-        raw[0] + dispX * weight,
-        raw[1] + dispY * weight,
-        raw[2] + dispZ * weight,
-      ];
+/** Shortest distance along edges from the selection (Dijkstra), up to `radius`. */
+function connectedDistances(mesh: QuadMesh, selected: Map<number, number>, radius: number): Reach {
+  const neighbours: number[][] = Array.from({ length: mesh.positions.length }, () => []);
+  for (const [a, b] of getQuadMeshEdges(mesh)) {
+    neighbours[a].push(b);
+    neighbours[b].push(a);
+  }
+  const out: Reach = new Map();
+  const queue: { v: number; dist: number; source: number }[] = [];
+  for (const s of selected.keys()) {
+    out.set(s, { dist: 0, source: s });
+    queue.push({ v: s, dist: 0, source: s });
+  }
+  // A plain sorted queue: meshes edited by hand are small enough.
+  while (queue.length) {
+    let bi = 0;
+    for (let i = 1; i < queue.length; i++) if (queue[i].dist < queue[bi].dist) bi = i;
+    const { v, dist, source } = queue.splice(bi, 1)[0];
+    if (dist > (out.get(v)?.dist ?? Infinity)) continue;
+    const pv = mesh.positions[v];
+    for (const n of neighbours[v]) {
+      const pn = mesh.positions[n];
+      const d = dist + Math.hypot(pv[0] - pn[0], pv[1] - pn[1], pv[2] - pn[2]);
+      if (d >= radius || d >= (out.get(n)?.dist ?? Infinity)) continue;
+      out.set(n, { dist: d, source });
+      queue.push({ v: n, dist: d, source });
     }
   }
-
-  return next;
+  return out;
 }
 
 /**

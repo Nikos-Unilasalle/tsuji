@@ -1,3 +1,4 @@
+import * as THREE from "three";
 import type { QuadMesh } from "../quadMesh";
 import { computeFaceNormal } from "../quadMesh";
 import { getTopology } from "./topology";
@@ -273,4 +274,74 @@ export function selectAll(mesh: QuadMesh, mode: SelectMode, current: MeshSelecti
   else if (mode === "edges") out.edges = getTopology(mesh).edges.map(([a, b]) => [a, b] as EdgeRef);
   else out.faces = mesh.faces.map((_, i) => i);
   return out;
+}
+
+/**
+ * The selection's own frame, for the gizmo's Normal orientation (local
+ * space): Z along the selection's average normal — its faces', or for
+ * points/edges the faces around them — and X along its first edge where it
+ * has one (else any direction square to Z).
+ */
+export function selectionOrientation(mesh: QuadMesh, mode: SelectMode, sel: MeshSelection): THREE.Quaternion {
+  const topo = getTopology(mesh);
+  const normal = new THREE.Vector3();
+  const faces = new Set<number>();
+  if (mode === "faces") for (const f of sel.faces) faces.add(f);
+  else for (const v of selectionVertices(mesh, mode, sel)) for (const f of topo.vertexFaces(v)) faces.add(f);
+  for (const f of faces) if (mesh.faces[f]) normal.add(computeFaceNormal(mesh.positions, mesh.faces[f]));
+  if (normal.lengthSq() < 1e-12) return new THREE.Quaternion();
+  normal.normalize();
+
+  let edge: [number, number] | undefined;
+  if (mode === "edges") edge = sel.edges[0];
+  else if (mode === "faces" && mesh.faces[sel.faces[0]]) edge = [mesh.faces[sel.faces[0]][0], mesh.faces[sel.faces[0]][1]];
+  else if (mode === "points" && sel.points.length >= 2) edge = [sel.points[0], sel.points[1]];
+  const x = new THREE.Vector3();
+  if (edge) x.subVectors(new THREE.Vector3(...mesh.positions[edge[1]]), new THREE.Vector3(...mesh.positions[edge[0]]));
+  x.addScaledVector(normal, -x.dot(normal));
+  if (x.lengthSq() < 1e-12) {
+    x.set(1, 0, 0).addScaledVector(normal, -normal.x);
+    if (x.lengthSq() < 1e-6) x.set(0, 1, 0).addScaledVector(normal, -normal.y);
+  }
+  x.normalize();
+  const y = new THREE.Vector3().crossVectors(normal, x);
+  return new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(x, y, normal));
+}
+
+/**
+ * The selection split into connected islands of vertices — each face patch,
+ * edge chain, or run of selected points joined by edges — for the Individual
+ * Origins pivot.
+ */
+export function selectionIslands(mesh: QuadMesh, mode: SelectMode, sel: MeshSelection): number[][] {
+  const parent = new Map<number, number>();
+  const find = (v: number): number => {
+    let r = v;
+    while (parent.get(r) !== r) r = parent.get(r)!;
+    let c = v;
+    while (parent.get(c) !== r) {
+      const n = parent.get(c)!;
+      parent.set(c, r);
+      c = n;
+    }
+    return r;
+  };
+  const union = (a: number, b: number) => parent.set(find(a), find(b));
+  const vertices = selectionVertices(mesh, mode, sel);
+  for (const v of vertices) parent.set(v, v);
+  if (mode === "faces") {
+    for (const f of sel.faces) {
+      const face = mesh.faces[f] ?? [];
+      for (let i = 1; i < face.length; i++) union(face[0], face[i]);
+    }
+  } else {
+    const edges = mode === "edges" ? sel.edges : getTopology(mesh).edges.filter(([a, b]) => vertices.has(a) && vertices.has(b));
+    for (const [a, b] of edges) if (parent.has(a) && parent.has(b)) union(a, b);
+  }
+  const islands = new Map<number, number[]>();
+  for (const v of vertices) {
+    const r = find(v);
+    islands.set(r, [...(islands.get(r) ?? []), v]);
+  }
+  return [...islands.values()];
 }

@@ -382,8 +382,18 @@ function editMeshParamFields(instance?: NodeInstance): ParamFieldDef[] {
     { id: "proportionalEditing", label: "Proportional Editing", kind: "boolean" },
   );
   if (!instance || instance.params?.proportionalEditing) {
-    fields.push({ id: "proportionalDiameter", label: "Influence Diameter", kind: "number", step: 0.1 });
+    fields.push(
+      { id: "proportionalDiameter", label: "Influence Diameter", kind: "number", step: 0.1 },
+      {
+        id: "proportionalFalloff",
+        label: "Falloff",
+        kind: "select",
+        options: ["smooth", "sphere", "root", "linear", "sharp", "constant"],
+      },
+      { id: "proportionalConnected", label: "Connected Only", kind: "boolean" },
+    );
   }
+  fields.push({ id: "snapIncrement", label: "Snap Increment", kind: "number", step: 0.01 });
   fields.push(
     { id: "reseedButton", label: "Freeze / Reset from Input", kind: "button", action: EDIT_MESH_RESEED_ACTION },
     { id: "unwrapButton", label: "Recalculate UVs", kind: "button", action: EDIT_MESH_UNWRAP_UVS_ACTION },
@@ -438,6 +448,12 @@ export const EDIT_MESH_NODE: NodeDefinition = {
     mirrorX: false,
     proportionalEditing: false,
     proportionalDiameter: 1.0,
+    // How influence fades with distance, and whether it only reaches
+    // geometry connected to the selection (measured along edges).
+    proportionalFalloff: "smooth",
+    proportionalConnected: false,
+    // Step for snapped moves (Snap: Step, or Shift), in object units.
+    snapIncrement: 0.1,
     // Pick through the surface (Alt+Z); off, hidden points/faces can't be selected.
     xray: false,
     // Select Flat Region grows across edges bending less than this, in degrees.

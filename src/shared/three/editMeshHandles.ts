@@ -187,6 +187,7 @@ export interface EditMeshHandles {
    */
   setXray(xray: boolean): void;
   pickFace(raycaster: THREE.Raycaster, quadMesh: QuadMesh, meshWorldMatrix: THREE.Matrix4): number | null;
+  /** The visible vertex nearest the cursor, within 16 px; `exclude` ones are skipped (snapping past the selection). */
   pickPoint(
     ndc: THREE.Vector2,
     camera: THREE.Camera,
@@ -194,6 +195,7 @@ export interface EditMeshHandles {
     heightPx: number,
     quadMesh: QuadMesh,
     meshWorldMatrix: THREE.Matrix4,
+    exclude?: ReadonlySet<number>,
   ): number | null;
   pickEdge(
     ndc: THREE.Vector2,
@@ -734,7 +736,7 @@ export function createEditMeshHandles(): EditMeshHandles {
       return picked;
     },
 
-    pickPoint(ndc, camera, widthPx, heightPx, quadMesh, meshWorldMatrix) {
+    pickPoint(ndc, camera, widthPx, heightPx, quadMesh, meshWorldMatrix, exclude) {
       const cursorX = (ndc.x * 0.5 + 0.5) * widthPx;
       const cursorY = (-(ndc.y * 0.5) + 0.5) * heightPx;
       const screen = new THREE.Vector2();
@@ -745,6 +747,7 @@ export function createEditMeshHandles(): EditMeshHandles {
       const candidates: { idx: number; dist: number }[] = [];
       for (let i = 0; i < quadMesh.positions.length; i++) {
         const raw = quadMesh.positions[i];
+        if (exclude?.has(i)) continue;
         if (!raw || !toScreen(raw, camera, meshWorldMatrix, widthPx, heightPx, screen)) continue;
         const dist = Math.hypot(screen.x - cursorX, screen.y - cursorY);
         if (dist < 16) candidates.push({ idx: i, dist });
