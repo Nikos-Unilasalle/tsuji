@@ -3,6 +3,7 @@ import { createNodeCache } from "../nodeCaches";
 import { NodeDefinition } from "../types";
 import { clearMeshWarning, collectMeshes, warnMeshRequired } from "../meshRequired";
 import { numberInput } from "./object";
+import { getSourcePivot } from "./transform";
 
 interface DeformTarget {
   source: THREE.Mesh;
@@ -241,6 +242,15 @@ export const GEOMETRY_TWIST_BEND_TAPER_NODE: NodeDefinition = {
     const uIdx = (axisIdx + 1) % 3;
     const vIdx = (axisIdx + 2) % 3;
 
+    // Twist/taper rotate and scale the cross-section around the u/v origin —
+    // which is the object's local origin unless a pivot says otherwise. The
+    // pivot lives in the same local/geometry space as the vertices (see
+    // composeNativeMatrixWithPivot), so it's a direct offset here too.
+    const pivot = getSourcePivot(raw);
+    const pivotU = pivot.getComponent(uIdx);
+    const pivotV = pivot.getComponent(vIdx);
+    const pivotH = pivot.getComponent(axisIdx);
+
     // Determine overall bounds along chosen axis
     let minAxis = Infinity;
     let maxAxis = -Infinity;
@@ -266,8 +276,8 @@ export const GEOMETRY_TWIST_BEND_TAPER_NODE: NodeDefinition = {
 
       for (let i = 0; i < count; i++) {
         let hVal = pos.getComponent(i, axisIdx);
-        let uVal = pos.getComponent(i, uIdx);
-        let vVal = pos.getComponent(i, vIdx);
+        let uVal = pos.getComponent(i, uIdx) - pivotU;
+        let vVal = pos.getComponent(i, vIdx) - pivotV;
 
         const normH = diff > 1e-6 ? (hVal - minAxis) / height : 0.5;
 
@@ -289,11 +299,13 @@ export const GEOMETRY_TWIST_BEND_TAPER_NODE: NodeDefinition = {
           vVal = nextV;
         }
 
-        // 3. Bend: curve along axis
+        // 3. Bend: curve along axis, fixed at the pivot's own height rather
+        // than the bounding-box minimum — the pivot marks the one point the
+        // bend shouldn't move, same as it does for twist/taper above.
         if (Math.abs(bendRad) > 1e-4 && diff > 1e-6) {
           const radius = height / bendRad;
-          const alpha = bendRad * normH;
-          hVal = minAxis + radius * Math.sin(alpha);
+          const alpha = (bendRad * (hVal - pivotH)) / height;
+          hVal = pivotH + radius * Math.sin(alpha);
           uVal += radius * (1.0 - Math.cos(alpha));
         }
 
@@ -302,8 +314,8 @@ export const GEOMETRY_TWIST_BEND_TAPER_NODE: NodeDefinition = {
         if (!Number.isFinite(vVal)) vVal = 0;
 
         pos.setComponent(i, axisIdx, hVal);
-        pos.setComponent(i, uIdx, uVal);
-        pos.setComponent(i, vIdx, vVal);
+        pos.setComponent(i, uIdx, uVal + pivotU);
+        pos.setComponent(i, vIdx, vVal + pivotV);
       }
 
       pos.needsUpdate = true;
