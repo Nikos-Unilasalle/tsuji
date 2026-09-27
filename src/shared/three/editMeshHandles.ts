@@ -239,10 +239,15 @@ export function createEditMeshHandles(): EditMeshHandles {
   // every frame, a live one a fresh clone whose content usually hasn't moved.
   let keyedMesh: QuadMesh | null = null;
   let keyedValue = "";
+  let dragFrame = 0;
   function keyOf(mesh: QuadMesh): string {
     if (mesh !== keyedMesh) {
+      // A new mesh sharing the last one's faces is a drag frame: its
+      // vertices moved (that's the only reason to make one), so it gets a
+      // fresh key without hashing every position to confirm it.
+      const moved = keyedMesh !== null && mesh.faces === keyedMesh.faces && mesh.positions !== keyedMesh.positions;
+      keyedValue = moved ? `moved:${++dragFrame}` : quadMeshSignature(mesh);
       keyedMesh = mesh;
-      keyedValue = quadMeshSignature(mesh);
     }
     return keyedValue;
   }
@@ -362,6 +367,11 @@ export function createEditMeshHandles(): EditMeshHandles {
   selectedEdgeLines.renderOrder = RENDER_ORDER + 3;
   const hoverEdgeLines = new LineSegments2(new LineSegmentsGeometry(), hoverEdgeMat);
   hoverEdgeLines.renderOrder = RENDER_ORDER + 4;
+  // Marked edges, coloured by what marks them: sharp cyan, seam red, crease
+  // magenta (drawn over the wireframe, same depth test).
+  const markedMat = new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 1, depthWrite: false });
+  const markedEdgeLines = new THREE.LineSegments(new THREE.BufferGeometry(), markedMat);
+  markedEdgeLines.renderOrder = RENDER_ORDER + 1;
   const loopCutLines = new THREE.LineSegments(new THREE.BufferGeometry(), loopCutMat);
   loopCutLines.renderOrder = RENDER_ORDER + 4;
   const proportionalCircleLines = new THREE.LineSegments(new THREE.BufferGeometry(), proportionalMat);
@@ -379,6 +389,7 @@ export function createEditMeshHandles(): EditMeshHandles {
 
   const overlays: THREE.Object3D[] = [
     wireframeLines,
+    markedEdgeLines,
     faceHighlightMesh,
     unselectedPointsMesh,
     selectedPointsMesh,
@@ -427,6 +438,7 @@ export function createEditMeshHandles(): EditMeshHandles {
   let lastMesh: QuadMesh | null = null;
   let meshKey = "";
   let wireKey = "";
+  let markedKey = "";
   let facesKey = "";
   let pointsKey = "";
   let edgesKey = "";
@@ -437,7 +449,7 @@ export function createEditMeshHandles(): EditMeshHandles {
   function clear() {
     for (const o of overlays) o.visible = false;
     lastMesh = null;
-    meshKey = wireKey = facesKey = pointsKey = edgesKey = hoverEdgeKey = proportionalKey = "";
+    meshKey = wireKey = markedKey = facesKey = pointsKey = edgesKey = hoverEdgeKey = proportionalKey = "";
     loopKey = null;
   }
 
@@ -493,6 +505,34 @@ export function createEditMeshHandles(): EditMeshHandles {
           if (pu && pv) wirePositions.push(pu[0], pu[1], pu[2], pv[0], pv[1], pv[2]);
         }
         setPositions(wireframeLines, wirePositions);
+      }
+
+      // 1b. Marked edges (sharp / seam / crease). The mesh signature covers
+      // the marks, so this rebuilds exactly when they change.
+      if (markedKey !== meshKey) {
+        markedKey = meshKey;
+        const pos: number[] = [];
+        const col: number[] = [];
+        const push = (edges: ReadonlyArray<readonly number[]> | undefined, color: THREE.Color) => {
+          for (const e of edges ?? []) {
+            const pa = positions[e[0]];
+            const pb = positions[e[1]];
+            if (!pa || !pb) continue;
+            pos.push(pa[0], pa[1], pa[2], pb[0], pb[1], pb[2]);
+            col.push(color.r, color.g, color.b, color.r, color.g, color.b);
+          }
+        };
+        push(quadMesh.sharpEdges, new THREE.Color(0x22d3ee));
+        push(quadMesh.edgeCreases, new THREE.Color(0xe879f9));
+        push(quadMesh.seamEdges, new THREE.Color(0xef4444));
+        markedEdgeLines.geometry.dispose();
+        const geometry = new THREE.BufferGeometry();
+        if (pos.length > 0) {
+          geometry.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+          geometry.setAttribute("color", new THREE.Float32BufferAttribute(col, 3));
+        }
+        markedEdgeLines.geometry = geometry;
+        markedEdgeLines.visible = pos.length > 0;
       }
 
       // 2. Face selection overlay (faces mode)

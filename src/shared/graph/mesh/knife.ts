@@ -1,5 +1,6 @@
 import { QuadMesh, cloneQuadMesh, withFaceUVs } from "../quadMesh";
 import { lerpUV, UV } from "./uv";
+import { splitEdgeAttributes } from "./attributes";
 
 /** A knife cut point: on a vertex, or on an edge at `t` from its first vertex. */
 export type KnifePoint = { vertex: number } | { edge: [number, number]; t: number };
@@ -57,6 +58,7 @@ export function knifeCut(
     });
     list.push({ t, v });
     splits.set(key, list);
+    splitEdgeAttributes(next, from.v, to.v, [v]);
     return v;
   }
 

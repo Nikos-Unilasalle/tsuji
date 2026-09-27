@@ -15,6 +15,7 @@ import {
   EDIT_MESH_EXTRUDE_ACTION,
   EDIT_MESH_INSET_ACTION,
   EDIT_MESH_UNWRAP_UVS_ACTION,
+  EDIT_MESH_SMART_UNWRAP_ACTION,
   EDIT_MESH_DELETE_FACES_ACTION,
   EDIT_MESH_SEPARATE_FACES_ACTION,
   resolveEditMeshData,
@@ -34,6 +35,7 @@ import {
   extractFaces,
 } from "./shared/graph/quadMesh";
 import { insetRegion } from "./shared/graph/mesh/tools";
+import { smartUnwrap } from "./shared/graph/mesh/unwrap";
 import { extractPointsFromMesh } from "./shared/graph/nodes/pointsGeometry";
 import { findFirstMesh } from "./shared/graph/meshRequired";
 import {
@@ -1554,6 +1556,14 @@ function MainEditor() {
           connections: [...prev.connections, ...carriedConnections],
         }));
         setSelectedNodeId(mixNode.id);
+        return;
+      }
+      if (action === EDIT_MESH_SMART_UNWRAP_ACTION) {
+        const node = graph.nodes.find((n) => n.id === nodeId);
+        if (!node) return;
+        const meshData: QuadMesh = resolveEditMeshData(node, evaluatedResults);
+        const angle = Number(node.params.uvAngleLimit) || 66;
+        onParamChange("meshData", smartUnwrap(meshData, { angleLimitDeg: angle }), nodeId);
         return;
       }
       if (action === EDIT_MESH_UNWRAP_UVS_ACTION) {

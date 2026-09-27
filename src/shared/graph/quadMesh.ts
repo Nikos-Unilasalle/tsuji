@@ -3,6 +3,7 @@ import { triangulateFace } from "./mesh/triangulate";
 import { averageUV, boxProjectFace, lerpUV, UV, uvBounds } from "./mesh/uv";
 import { quadRing } from "./mesh/loops";
 import { importBufferGeometry } from "./mesh/importGeometry";
+import { cloneEdgeAttributes, cornerColor, remapEdgeAttributes, splitEdgeAttributes } from "./mesh/attributes";
 
 export type QuadMeshShading = "auto" | "smooth" | "flat";
 
@@ -25,6 +26,14 @@ export interface QuadMesh {
    * frozen copy silently ignores every upstream change.
    */
   sourceSignature?: string;
+  /** Edges shading keeps hard (normals don't blend across them), as vertex pairs. */
+  sharpEdges?: [number, number][];
+  /** Edges Smart UV Unwrap cuts the UV layout along. */
+  seamEdges?: [number, number][];
+  /** Subdivision crease weights (0..1) as [a, b, weight]: 1 keeps the edge sharp through Catmull-Clark. */
+  edgeCreases?: [number, number, number][];
+  /** Vertex colour per face corner (parallel to faceUVs); null / missing = white. */
+  faceColors?: ([number, number, number][] | null)[];
 }
 
 export function cloneQuadMesh(mesh: QuadMesh): QuadMesh {
@@ -37,6 +46,7 @@ export function cloneQuadMesh(mesh: QuadMesh): QuadMesh {
     faceShading: mesh.faceShading ? [...mesh.faceShading] : undefined,
     faceMaterials: mesh.faceMaterials ? [...mesh.faceMaterials] : undefined,
     sourceSignature: mesh.sourceSignature,
+    ...cloneEdgeAttributes(mesh),
   };
 }
 
@@ -58,7 +68,24 @@ export function cloneQuadMesh(mesh: QuadMesh): QuadMesh {
  * Recalculate UVs changes nothing else, and leaving them out made that button
  * do nothing.
  */
+const signatureCache = new WeakMap<QuadMesh, string>();
+
+/**
+ * Memoised per mesh object: stored and preview meshes are never mutated
+ * after they're built (every edit makes a new one), and at 50k vertices the
+ * hash is ~15 ms — the node and the viewport overlay each used to pay it
+ * every frame of a drag.
+ */
 export function quadMeshSignature(mesh: QuadMesh): string {
+  let cached = signatureCache.get(mesh);
+  if (cached === undefined) {
+    cached = computeQuadMeshSignature(mesh);
+    signatureCache.set(mesh, cached);
+  }
+  return cached;
+}
+
+function computeQuadMeshSignature(mesh: QuadMesh): string {
   let hash = 0x811c9dc5;
   const mix = (n: number) => {
     hash = Math.imul(hash ^ (n | 0), 16777619) >>> 0;
@@ -82,6 +109,16 @@ export function quadMeshSignature(mesh: QuadMesh): string {
     }
   }
   if (mesh.faceMaterials) for (const m of mesh.faceMaterials) mix(m);
+  // Shading-relevant extras: sharp edges and corner colours change the
+  // built geometry; seams and creases don't, but are cheap to include.
+  for (const list of [mesh.sharpEdges, mesh.seamEdges]) if (list) for (const [a, b] of list) mix(a * 7919 + b);
+  if (mesh.edgeCreases) for (const [a, b, w] of mesh.edgeCreases) mix(a * 7919 + b + Math.round(w * 1000));
+  if (mesh.faceColors) {
+    for (const c of mesh.faceColors) {
+      if (!c) continue;
+      for (const [r, g, b] of c) mix(Math.round(r * 255) * 65536 + Math.round(g * 255) * 256 + Math.round(b * 255));
+    }
+  }
   return `${mesh.positions.length}:${mesh.faces.length}:${hash.toString(36)}`;
 }
 
@@ -230,8 +267,22 @@ export function createQuadPlane(width = 1, height = 1, segX = 1, segY = 1): Quad
  * Returns the unique undirected edges of the quad mesh,
  * omitting any internal triangulation diagonals.
  */
+const edgesCache = new WeakMap<number[][], [number, number][]>();
+
+/** Memoised per faces array (shared, unchanged, while a drag only moves vertices). */
 export function getQuadMeshEdges(mesh: QuadMesh): [number, number][] {
-  const edgeSet = new Set<string>();
+  let edges = edgesCache.get(mesh.faces);
+  if (!edges) {
+    edges = computeQuadMeshEdges(mesh);
+    edgesCache.set(mesh.faces, edges);
+  }
+  return edges;
+}
+
+function computeQuadMeshEdges(mesh: QuadMesh): [number, number][] {
+  // Numeric keys (a·N + b): several times faster than string keys at mesh sizes.
+  const n = mesh.positions.length + 1;
+  const edgeSet = new Set<number>();
   const edges: [number, number][] = [];
 
   for (const face of mesh.faces) {
@@ -239,9 +290,9 @@ export function getQuadMeshEdges(mesh: QuadMesh): [number, number][] {
     for (let i = 0; i < len; i++) {
       const u = face[i];
       const v = face[(i + 1) % len];
-      const a = Math.min(u, v);
-      const b = Math.max(u, v);
-      const key = `${a}_${b}`;
+      const a = u < v ? u : v;
+      const b = u < v ? v : u;
+      const key = a * n + b;
       if (!edgeSet.has(key)) {
         edgeSet.add(key);
         edges.push([a, b]);
@@ -280,7 +331,7 @@ function setGroupedIndex(geometry: THREE.BufferGeometry, byMaterial: Map<number,
 /**
  * Converts a QuadMesh to a Three.js BufferGeometry (triangulated for GPU rendering).
  * Supports "auto" (crease angle), "smooth", and "flat" shading.
- * Attaches the original QuadMesh in `geometry.userData.quadMesh`.
+ * Attaches the QuadMesh it was built from in `geometry.userData.quadMesh` — by reference, read-only.
  */
 export function quadMeshToBufferGeometry(
   inputMesh: QuadMesh,
@@ -302,25 +353,50 @@ export function quadMeshToBufferGeometry(
     faceNormals[f] = computeFaceNormal(mesh.positions, mesh.faces[f]);
   }
 
-  const vertexFaces = new Map<number, number[]>();
+  const vertexFaceLists: number[][] = new Array(mesh.positions.length);
   for (let f = 0; f < numFaces; f++) {
-    for (const v of mesh.faces[f]) {
-      let list = vertexFaces.get(v);
-      if (!list) {
-        list = [];
-        vertexFaces.set(v, list);
-      }
-      list.push(f);
-    }
+    for (const v of mesh.faces[f]) (vertexFaceLists[v] ??= []).push(f);
   }
+  const vertexFaces = { get: (v: number): number[] | undefined => vertexFaceLists[v] };
 
   const COS_CREASE = Math.cos((35 * Math.PI) / 180); // ~0.819 crease angle
 
-  const isPureSmooth = globalShading === "smooth" && !hasPerFaceShading && !mesh.faceUVs;
+  // Sharp edges split smoothing: around a vertex on one, the faces fall into
+  // groups separated by its sharp edges, and a corner's normal only blends
+  // the faces of its own group.
+  const sharp = new Set((mesh.sharpEdges ?? []).map(([a, b]) => (a < b ? `${a}_${b}` : `${b}_${a}`)));
+  const smoothingGroup = new Map<string, number[]>();
+  if (sharp.size > 0) {
+    const sharpVerts = new Set<number>();
+    for (const key of sharp) for (const v of key.split("_").map(Number)) sharpVerts.add(v);
+    for (const v of sharpVerts) {
+      const around = vertexFaces.get(v) ?? [];
+      const parent = new Map(around.map((f) => [f, f]));
+      const find = (f: number): number => (parent.get(f) === f ? f : find(parent.get(f)!));
+      const byEdge = new Map<string, number[]>();
+      for (const f of around) {
+        const face = mesh.faces[f];
+        const i = face.indexOf(v);
+        for (const x of [face[(i + 1) % face.length], face[(i + face.length - 1) % face.length]]) {
+          const key = v < x ? `${v}_${x}` : `${x}_${v}`;
+          byEdge.set(key, [...(byEdge.get(key) ?? []), f]);
+        }
+      }
+      for (const [key, fs] of byEdge) {
+        if (sharp.has(key) || fs.length < 2) continue;
+        for (let k = 1; k < fs.length; k++) parent.set(find(fs[k]), find(fs[0]));
+      }
+      for (const f of around) smoothingGroup.set(`${v}:${f}`, around.filter((g) => find(g) === find(f)));
+    }
+  }
+  const hasColors = Boolean(mesh.faceColors && mesh.faceColors.some((c) => c));
+
+  const isPureSmooth = globalShading === "smooth" && !hasPerFaceShading && !mesh.faceUVs && sharp.size === 0 && !hasColors;
 
   const positions: number[] = [];
   const normals: number[] = [];
   const uvs: number[] = [];
+  const colors: number[] = [];
 
   if (isPureSmooth) {
     for (const p of mesh.positions) {
@@ -347,70 +423,92 @@ export function quadMeshToBufferGeometry(
     geometry.computeVertexNormals();
     geometry.computeBoundingBox();
     geometry.computeBoundingSphere();
-    geometry.userData.quadMesh = cloneQuadMesh(mesh);
+    geometry.userData.quadMesh = mesh; // read-only: consumers copy it (bufferGeometryToQuadMesh, resolveEditMeshData)
+    buildPlans.set(geometry, { kind: "shared", mesh: inputMesh, shading: globalShading });
     return geometry;
   }
 
-  // Split-vertex geometry: respects sharp crease angles and per-face UVs
-  const vertexLookup = new Map<string, number>();
+  // Split-vertex geometry: respects sharp crease angles, per-face UVs and
+  // corner colours. A face corner reuses an output vertex already made for
+  // the same mesh vertex when normal, UV and colour all match (quantised);
+  // the candidates are the few made for that vertex so far, compared as
+  // numbers — no string keys or per-corner allocations, which at 50k
+  // vertices made this the slowest step of every edit.
+  const fnx = new Float64Array(numFaces);
+  const fny = new Float64Array(numFaces);
+  const fnz = new Float64Array(numFaces);
+  for (let f = 0; f < numFaces; f++) {
+    fnx[f] = faceNormals[f].x;
+    fny[f] = faceNormals[f].y;
+    fnz[f] = faceNormals[f].z;
+  }
+  /** Per mesh vertex: the output vertices made for it, flat runs of [index, qnx, qny, qnz, qu, qv, qc]. */
+  const madeFor: number[][] = new Array(mesh.positions.length);
+  const q = (x: number, s: number) => Math.round(x * s);
 
   function addVertex(vIdx: number, faceIdx: number, inFaceIdx: number): number {
     const faceMode = mesh.faceShading?.[faceIdx] || globalShading;
-    const fn = faceNormals[faceIdx];
-
-    const normal = new THREE.Vector3();
+    let nx = 0, ny = 0, nz = 0;
     if (faceMode === "flat") {
-      normal.copy(fn);
-    } else if (faceMode === "smooth") {
-      const neighborFaces = vertexFaces.get(vIdx) ?? [faceIdx];
-      for (const nF of neighborFaces) {
-        normal.add(faceNormals[nF]);
-      }
-      normal.normalize();
+      nx = fnx[faceIdx]; ny = fny[faceIdx]; nz = fnz[faceIdx];
     } else {
-      // "auto": accumulate adjacent faces within crease angle
-      const neighborFaces = vertexFaces.get(vIdx) ?? [faceIdx];
+      const neighborFaces =
+        (smoothingGroup.size > 0 ? smoothingGroup.get(`${vIdx}:${faceIdx}`) : undefined) ?? vertexFaces.get(vIdx) ?? [faceIdx];
+      const ax = fnx[faceIdx], ay = fny[faceIdx], az = fnz[faceIdx];
       for (const nF of neighborFaces) {
-        const nfn = faceNormals[nF];
-        if (fn.dot(nfn) >= COS_CREASE) {
-          normal.add(nfn);
-        }
+        // "auto": only faces within the crease angle of this one.
+        if (faceMode !== "smooth" && ax * fnx[nF] + ay * fny[nF] + az * fnz[nF] < COS_CREASE) continue;
+        nx += fnx[nF]; ny += fny[nF]; nz += fnz[nF];
       }
-      normal.normalize();
+      const len = Math.hypot(nx, ny, nz) || 1;
+      nx /= len; ny /= len; nz /= len;
     }
 
-    const p = mesh.positions[vIdx];
     let u = 0;
     let v = 0;
-    if (mesh.faceUVs?.[faceIdx]?.[inFaceIdx]) {
-      u = mesh.faceUVs[faceIdx][inFaceIdx][0];
-      v = mesh.faceUVs[faceIdx][inFaceIdx][1];
+    const cornerUV = mesh.faceUVs?.[faceIdx]?.[inFaceIdx];
+    if (cornerUV) {
+      u = cornerUV[0];
+      v = cornerUV[1];
     } else if (mesh.uvs?.[vIdx]) {
       u = mesh.uvs[vIdx][0];
       v = mesh.uvs[vIdx][1];
     }
+    const color = hasColors ? cornerColor(mesh, faceIdx, inFaceIdx) : null;
 
-    const key = `${vIdx}|${Math.round(normal.x * 100)}_${Math.round(normal.y * 100)}_${Math.round(normal.z * 100)}|${Math.round(u * 1000)}_${Math.round(v * 1000)}`;
-    const existing = vertexLookup.get(key);
-    if (existing !== undefined) return existing;
+    const k0 = q(nx, 100), k1 = q(ny, 100), k2 = q(nz, 100), k3 = q(u, 1000), k4 = q(v, 1000);
+    const k5 = color ? q(color[0], 255) * 65536 + q(color[1], 255) * 256 + q(color[2], 255) : -1;
+    // Made-for list, flat: [index, k0..k5] per candidate.
+    const list = (madeFor[vIdx] ??= []);
+    for (let i = 0; i < list.length; i += 7) {
+      if (list[i + 1] === k0 && list[i + 2] === k1 && list[i + 3] === k2 && list[i + 4] === k3 && list[i + 5] === k4 && list[i + 6] === k5) {
+        return list[i];
+      }
+    }
 
+    const p = mesh.positions[vIdx];
     const newIdx = positions.length / 3;
     positions.push(p[0], p[1], p[2]);
-    normals.push(normal.x, normal.y, normal.z);
+    normals.push(nx, ny, nz);
     uvs.push(u, v);
-    vertexLookup.set(key, newIdx);
+    if (color) colors.push(color[0], color[1], color[2]);
+    list.push(newIdx, k0, k1, k2, k3, k4, k5);
     return newIdx;
   }
 
   const byMaterial = new Map<number, number[]>();
+  const cornerOut: number[] = [];
   for (let f = 0; f < numFaces; f++) {
     const face = mesh.faces[f];
     const vertIndices: number[] = [];
     for (let i = 0; i < face.length; i++) {
-      vertIndices.push(addVertex(face[i], f, i));
+      const out = addVertex(face[i], f, i);
+      vertIndices.push(out);
+      cornerOut.push(out);
     }
     const list = materialList(byMaterial, mesh.faceMaterials?.[f] ?? 0);
-    for (const [a, b, c] of triangulateFace(mesh.positions, face)) {
+    const n = faceNormals[f];
+    for (const [a, b, c] of triangulateFace(mesh.positions, face, [n.x, n.y, n.z])) {
       list.push(vertIndices[a], vertIndices[b], vertIndices[c]);
     }
   }
@@ -421,11 +519,106 @@ export function quadMeshToBufferGeometry(
   if (uvs.length > 0) {
     geometry.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
   }
+  if (hasColors) geometry.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
   setGroupedIndex(geometry, byMaterial, Boolean(mesh.faceMaterials));
   geometry.computeBoundingBox();
   geometry.computeBoundingSphere();
-  geometry.userData.quadMesh = cloneQuadMesh(mesh);
+  geometry.userData.quadMesh = mesh; // read-only: consumers copy it (bufferGeometryToQuadMesh, resolveEditMeshData)
+  buildPlans.set(geometry, { kind: "split", mesh: inputMesh, shading: globalShading, cornerOut: Int32Array.from(cornerOut), smoothingGroup });
   return geometry;
+}
+
+interface BuildPlan {
+  kind: "split" | "shared";
+  /** The mesh the geometry was built from (for the same-topology check). */
+  mesh: QuadMesh;
+  shading: QuadMeshShading;
+  /** Split build: the output vertex of every face corner, in face order. */
+  cornerOut?: Int32Array;
+  smoothingGroup?: Map<string, number[]>;
+}
+const buildPlans = new WeakMap<THREE.BufferGeometry, BuildPlan>();
+
+/**
+ * Moves an existing geometry's vertices to `mesh`'s positions and refreshes
+ * its normals, in place, when `mesh` has the same topology as the one it was
+ * built from (same faces, UVs, colours, marks and shading — compared by
+ * reference, since a vertex drag shares all of those). Returns false when it
+ * can't, and the caller rebuilds. Where the corners were split into separate
+ * vertices stays as it was at the last full build; for a drag that's exact
+ * in flat and smooth shading and near enough in auto.
+ */
+export function updateQuadMeshGeometry(geometry: THREE.BufferGeometry, mesh: QuadMesh, forcedShading?: QuadMeshShading): boolean {
+  const plan = buildPlans.get(geometry);
+  if (!plan) return false;
+  const prev = plan.mesh;
+  const shading = forcedShading || mesh.shading || "auto";
+  if (
+    shading !== plan.shading ||
+    prev.faces !== mesh.faces ||
+    prev.faceUVs !== mesh.faceUVs ||
+    prev.uvs !== mesh.uvs ||
+    prev.faceColors !== mesh.faceColors ||
+    prev.faceShading !== mesh.faceShading ||
+    prev.faceMaterials !== mesh.faceMaterials ||
+    prev.sharpEdges !== mesh.sharpEdges ||
+    prev.positions.length !== mesh.positions.length
+  ) {
+    return false;
+  }
+  const pos = geometry.attributes.position as THREE.BufferAttribute;
+  if (plan.kind === "shared") {
+    mesh.positions.forEach((p, i) => pos.setXYZ(i, p[0], p[1], p[2]));
+    pos.needsUpdate = true;
+    geometry.computeVertexNormals();
+  } else {
+    const nor = geometry.attributes.normal as THREE.BufferAttribute;
+    const numFaces = mesh.faces.length;
+    const fnx = new Float64Array(numFaces);
+    const fny = new Float64Array(numFaces);
+    const fnz = new Float64Array(numFaces);
+    for (let f = 0; f < numFaces; f++) {
+      const n = computeFaceNormal(mesh.positions, mesh.faces[f]);
+      fnx[f] = n.x; fny[f] = n.y; fnz[f] = n.z;
+    }
+    const vertexFaceLists: number[][] = new Array(mesh.positions.length);
+    for (let f = 0; f < numFaces; f++) for (const v of mesh.faces[f]) (vertexFaceLists[v] ??= []).push(f);
+    const COS_CREASE = Math.cos((35 * Math.PI) / 180);
+    const done = new Uint8Array(pos.count);
+    const groups = plan.smoothingGroup!;
+    let k = 0;
+    for (let f = 0; f < numFaces; f++) {
+      const face = mesh.faces[f];
+      const faceMode = mesh.faceShading?.[f] || shading;
+      for (let i = 0; i < face.length; i++, k++) {
+        const out = plan.cornerOut![k];
+        if (done[out]) continue;
+        done[out] = 1;
+        const v = face[i];
+        const p = mesh.positions[v];
+        pos.setXYZ(out, p[0], p[1], p[2]);
+        let nx = fnx[f], ny = fny[f], nz = fnz[f];
+        if (faceMode !== "flat") {
+          nx = ny = nz = 0;
+          const around = (groups.size > 0 ? groups.get(`${v}:${f}`) : undefined) ?? vertexFaceLists[v] ?? [f];
+          for (const g of around) {
+            if (faceMode !== "smooth" && fnx[f] * fnx[g] + fny[f] * fny[g] + fnz[f] * fnz[g] < COS_CREASE) continue;
+            nx += fnx[g]; ny += fny[g]; nz += fnz[g];
+          }
+          const len = Math.sqrt(nx * nx + ny * ny + nz * nz) || 1;
+          nx /= len; ny /= len; nz /= len;
+        }
+        nor.setXYZ(out, nx, ny, nz);
+      }
+    }
+    pos.needsUpdate = true;
+    nor.needsUpdate = true;
+  }
+  geometry.computeBoundingBox();
+  geometry.computeBoundingSphere();
+  geometry.userData.quadMesh = mesh; // read-only: consumers copy it (bufferGeometryToQuadMesh, resolveEditMeshData)
+  plan.mesh = mesh;
+  return true;
 }
 
 /**
@@ -665,9 +858,14 @@ export function loopCut(
     const index = next.positions.length;
     next.positions.push([pu[0] + (pv[0] - pu[0]) * t, pu[1] + (pv[1] - pu[1]) * t, pu[2] + (pv[2] - pu[2]) * t]);
     edgePoints.set(key, index);
+    const along = splitAlong.get(`${u}_${v}`) ?? [];
+    along.push({ t, v: index });
+    splitAlong.set(`${u}_${v}`, along);
     newVertexIndices.push(index);
     return index;
   }
+  /** New vertices on each original edge (keyed low_high), with their position along it. */
+  const splitAlong = new Map<string, { t: number; v: number }[]>();
 
   const newEdgeIndices: [number, number][] = [];
   const pending: number[] = [];
@@ -693,6 +891,11 @@ export function loopCut(
     for (let i = 1; i < rowA.length - 1; i++) {
       appendFace(next, [rowA[i], rowA[i + 1], rowB[i + 1], rowB[i]], f, [uvA[i], uvA[i + 1], uvB[i + 1], uvB[i]], pending);
     }
+  }
+
+  for (const [key, points] of splitAlong) {
+    const [u, v] = key.split("_").map(Number);
+    splitEdgeAttributes(next, u, v, points.sort((x, y) => x.t - y.t).map((p) => p.v));
   }
 
   return { mesh: next, newEdgeIndices, newVertexIndices };
@@ -857,7 +1060,11 @@ export function transformVertexGroups(
   groups: { vertices: number[]; matrix: THREE.Matrix4 }[],
   proportional?: ProportionalOptions,
 ): QuadMesh {
-  const next = cloneQuadMesh(mesh);
+  // Only positions change: everything else is shared with the input rather
+  // than copied (meshes are never mutated once built). That's what lets the
+  // geometry build see "same topology" by reference and just move vertices
+  // — see updateQuadMeshGeometry — on every frame of a drag.
+  const next: QuadMesh = { ...mesh, positions: mesh.positions.map((p) => [p[0], p[1], p[2]] as [number, number, number]) };
   const groupOf = new Map<number, number>();
   groups.forEach((g, gi) => {
     for (const v of g.vertices) if (v >= 0 && v < mesh.positions.length) groupOf.set(v, gi);
@@ -969,7 +1176,7 @@ function subsetFaces(mesh: QuadMesh, keep: (face: number) => boolean): QuadMesh 
   }
 
   const hasFaceShading = Boolean(mesh.faceShading && mesh.faceShading.length > 0);
-  return {
+  const out: QuadMesh = {
     positions,
     faces: kept.map((f) => mesh.faces[f].map((v) => oldToNew.get(v)!)),
     uvs: mesh.uvs ? uvs : undefined,
@@ -977,8 +1184,13 @@ function subsetFaces(mesh: QuadMesh, keep: (face: number) => boolean): QuadMesh 
     shading: mesh.shading,
     faceShading: mesh.faceShading ? (hasFaceShading ? kept.map((f) => mesh.faceShading![f]) : []) : undefined,
     faceMaterials: mesh.faceMaterials ? kept.map((f) => mesh.faceMaterials![f] ?? 0) : undefined,
+    faceColors: mesh.faceColors ? kept.map((f) => mesh.faceColors![f] ?? null) : undefined,
     sourceSignature: mesh.sourceSignature,
   };
+  const remap = new Int32Array(mesh.positions.length).fill(-1);
+  for (const [v, n] of oldToNew) remap[v] = n;
+  remapEdgeAttributes(mesh, out, remap);
+  return out;
 }
 
 /**

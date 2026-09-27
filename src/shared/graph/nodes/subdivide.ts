@@ -5,6 +5,8 @@ import { IndexedMesh, subdivide as runSubdivide, SubdivisionMode } from "../subd
 import { NodeDefinition } from "../types";
 import { clearMeshWarning, findFirstMesh, warnMeshRequired } from "../meshRequired";
 import { createModifierMesh, emitModifiedMesh, primitiveOutputs } from "./object";
+import { QuadMesh, quadMeshToBufferGeometry } from "../quadMesh";
+import { catmullClarkQuadMesh } from "../mesh/subdivide";
 
 
 interface SubdivideState {
@@ -210,7 +212,12 @@ export const SUBDIVIDE_NODE: NodeDefinition = {
 
     const state = getState(ctx.nodeId);
 
-    const signature = `${mode}:${levels}:${srcGeom.attributes.position.count}:${srcGeom.index?.count ?? -1}:${srcGeom.attributes.uv?.count ?? -1}`;
+    // The geometry's identity and position version, not just its sizes: a
+    // vertex moved in an Edit Mesh upstream keeps every count the same, and
+    // with counts alone the subdivided result stayed frozen at its old shape.
+    const positionAttr = srcGeom.attributes.position;
+    const positionVersion = "isInterleavedBufferAttribute" in positionAttr ? positionAttr.data.version : positionAttr.version;
+    const signature = `${mode}:${levels}:${srcGeom.uuid}:${positionVersion}:${positionAttr.count}:${srcGeom.index?.count ?? -1}:${srcGeom.attributes.uv?.count ?? -1}`;
     // Topology unchanged since last run means the subdivision is skipped —
     // but everything else emitModifiedMesh does still has to happen every
     // call. An upstream animation moves the source every frame without ever
@@ -219,7 +226,13 @@ export const SUBDIVIDE_NODE: NodeDefinition = {
     const rebuild = !state.mesh || state.lastSignature !== signature;
 
     let geometry: THREE.BufferGeometry | undefined;
-    if (rebuild) {
+    // A polygon cage (Edit Mesh, or any node that carries its quad mesh):
+    // Catmull-Clark on the polygons, with creases, instead of on triangles.
+    const quadSource = srcGeom.userData?.quadMesh as QuadMesh | undefined;
+    if (rebuild && quadSource && mode === "catmull-clark" && levels > 0) {
+      geometry = quadMeshToBufferGeometry(catmullClarkQuadMesh(quadSource, levels), "smooth");
+      state.lastSignature = signature;
+    } else if (rebuild) {
       const indexedMesh = toIndexedMesh(srcGeom);
       if (!indexedMesh) return primitiveOutputs(inputObj);
 

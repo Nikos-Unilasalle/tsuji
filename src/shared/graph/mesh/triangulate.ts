@@ -15,12 +15,17 @@ type Vec3 = readonly [number, number, number];
  * - N-gons: ear clipping in the face's own plane (Newell normal), falling back
  *   to a fan if the polygon is too degenerate to clip.
  */
-export function triangulateFace(positions: ReadonlyArray<Vec3>, face: ReadonlyArray<number>): [number, number, number][] {
+export function triangulateFace(
+  positions: ReadonlyArray<Vec3>,
+  face: ReadonlyArray<number>,
+  /** The face's normal when the caller already has it (saves recomputing it per face). */
+  knownNormal?: Vec3,
+): [number, number, number][] {
   const n = face.length;
   if (n < 3) return [];
   if (n === 3) return [[0, 1, 2]];
 
-  const normal = newellNormal(positions, face);
+  const normal = knownNormal ?? newellNormal(positions, face);
 
   if (n === 4) {
     // The 0–2 split is valid when both of its triangles face the same way as

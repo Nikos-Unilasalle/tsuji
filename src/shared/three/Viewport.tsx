@@ -80,6 +80,7 @@ import { convertSelection } from "../graph/mesh/selection";
 import { bevelEdges } from "../graph/mesh/bevel";
 import { bridgeEdgeLoops, bridgeFaces, spinEdges } from "../graph/mesh/bridge";
 import { knifeCut, KnifePoint } from "../graph/mesh/knife";
+import { creaseMap, edgeKey, paintCorners, setEdgeCrease, setEdgeFlag } from "../graph/mesh/attributes";
 import { layoutKey } from "./layoutKey";
 import {
   QuadMesh,
@@ -544,6 +545,20 @@ function mirrorTolerance(mesh: QuadMesh): number {
   for (const p of mesh.positions) size = Math.max(size, Math.abs(p[0]), Math.abs(p[1]), Math.abs(p[2]));
   return Math.max(1e-6, size * 1e-4);
 }
+
+/** Edit Mesh one-shot operations on the selection (see runEditOp). */
+type EditMeshOp =
+  | "merge"
+  | "dissolve"
+  | "fill"
+  | "flip"
+  | "subdivide"
+  | "delete"
+  | "sharp"
+  | "seam"
+  | "crease"
+  | "assign"
+  | "paint";
 
 const exportImageCache = new Map<string, HTMLImageElement>();
 function getExportImage(url: string): HTMLImageElement | null {
@@ -1093,7 +1108,7 @@ export function Viewport({
   const [editModalHud, setEditModalHud] = useState<string | null>(null);
   /** Edit Mesh operations for the HUD buttons, bound by the viewport effect. */
   const editMeshCommandsRef = useRef<{
-    run(op: "merge" | "dissolve" | "fill" | "flip" | "subdivide" | "delete"): boolean;
+    run(op: EditMeshOp): boolean;
     duplicate(): boolean;
     tool(tool: "bevel" | "spin" | "knife" | "bridge"): boolean;
   } | null>(null);
@@ -2264,11 +2279,50 @@ export function Viewport({
         : convertSelection(target.quadMesh, target.mode, target.selection, "faces").faces;
     }
 
-    function runEditOp(target: EditMeshTarget, op: "merge" | "dissolve" | "fill" | "flip" | "subdivide" | "delete" | "duplicate"): boolean {
+    function runEditOp(target: EditMeshTarget, op: EditMeshOp): boolean {
       if (target.node.type !== EDIT_MESH_NODE.type) return false;
       const mesh = target.quadMesh;
       const vertices = [...selectionVertices(mesh, target.mode, target.selection)];
       if (vertices.length === 0) return false;
+
+      // Marking edges: a toggle — already all marked, it clears them.
+      if (op === "sharp" || op === "seam") {
+        const edges = targetEdges(target);
+        if (edges.length === 0) return false;
+        const attribute = op === "sharp" ? "sharpEdges" : "seamEdges";
+        const marked = new Set((mesh[attribute] ?? []).map(([a, b]) => edgeKey(a, b)));
+        const allMarked = edges.every(([a, b]) => marked.has(edgeKey(a, b)));
+        applyEditOp(target, { meshData: setEdgeFlag(mesh, attribute, edges, allMarked) });
+        return true;
+      }
+      if (op === "crease") {
+        const edges = targetEdges(target);
+        if (edges.length === 0) return false;
+        const weight = Math.max(0, Math.min(1, Number(target.node.params.creaseWeight ?? 1)));
+        const current = creaseMap(mesh);
+        const already = edges.every(([a, b]) => current.get(edgeKey(a, b)) === weight);
+        applyEditOp(target, { meshData: setEdgeCrease(mesh, edges, already ? 0 : weight) });
+        return true;
+      }
+      if (op === "assign") {
+        const faces = targetFaces(target);
+        if (faces.length === 0) return false;
+        const slot = Math.max(0, Math.min(3, Math.round(Number(target.node.params.assignSlot ?? 1))));
+        const faceMaterials = mesh.faces.map((_, f) => mesh.faceMaterials?.[f] ?? 0);
+        for (const f of faces) faceMaterials[f] = slot;
+        applyEditOp(target, { meshData: { ...cloneQuadMesh(mesh), faceMaterials } });
+        return true;
+      }
+      if (op === "paint") {
+        const hex = new THREE.Color(Number(target.node.params.paintColor ?? 0xff6b6b));
+        const color: [number, number, number] = [hex.r, hex.g, hex.b];
+        const painted =
+          target.mode === "faces"
+            ? paintCorners(mesh, color, { faces: target.selection.faces })
+            : paintCorners(mesh, color, { vertices });
+        applyEditOp(target, { meshData: painted });
+        return true;
+      }
 
       if (op === "merge") {
         const r = mergeVertices(mesh, vertices, "center");
@@ -7812,8 +7866,8 @@ export function Viewport({
           }}
         />
       )}
-      {/* Edit Mesh Transform panel: gizmo orientation, pivot, snapping, and
-          the selection's median position to type into. */}
+      {/* Edit Mesh panel: gizmo orientation, pivot, snapping, edge marks,
+          face material slot / colour, and the selection's median position. */}
       {!outputMode &&
         selectedNodeId &&
         !editModalHud &&
@@ -7910,6 +7964,66 @@ export function Viewport({
                   { id: "vertex", label: "Vertex", title: "A move snaps onto the vertex under the pointer" },
                 ], setEditSnap)}
               </div>
+              {vertices.length > 0 && (
+                <div style={row}>
+                  <span style={label} title="Marks on the selected edges (the edges of the selection in points / faces mode). Clicking again clears them.">
+                    Mark
+                  </span>
+                  <div style={{ display: "flex", gap: 2 }}>
+                    {(
+                      [
+                        { op: "sharp", label: "Sharp", color: "#22d3ee", title: "Sharp: shading stays hard across these edges" },
+                        { op: "seam", label: "Seam", color: "#ef4444", title: "Seam: Smart UV Unwrap cuts the layout here" },
+                        { op: "crease", label: "Crease", color: "#e879f9", title: "Crease (Crease Weight): Subdivide keeps these edges tight" },
+                      ] as const
+                    ).map((b) => (
+                      <button
+                        key={b.op}
+                        type="button"
+                        className="viewport-hud-button"
+                        style={{ fontSize: 10, padding: "2px 6px", minWidth: 0, width: "auto", color: b.color }}
+                        onClick={() => editMeshCommandsRef.current?.run(b.op)}
+                        title={b.title}
+                      >
+                        {b.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {vertices.length > 0 && (
+                <div style={row}>
+                  <span style={label}>Paint</span>
+                  <div style={{ display: "flex", gap: 2 }}>
+                    <button
+                      type="button"
+                      className="viewport-hud-button"
+                      style={{ fontSize: 10, padding: "2px 6px", minWidth: 0, width: "auto" }}
+                      onClick={() => editMeshCommandsRef.current?.run("assign")}
+                      title={`Assign material slot ${Number(node.params.assignSlot ?? 1)} (Material ${Number(node.params.assignSlot ?? 1) + 1} input; 0 = Material) to the selected faces`}
+                    >
+                      Slot {Number(node.params.assignSlot ?? 1)}
+                    </button>
+                    <button
+                      type="button"
+                      className="viewport-hud-button"
+                      style={{ fontSize: 10, padding: "2px 6px", minWidth: 0, width: "auto", display: "flex", alignItems: "center", gap: 4 }}
+                      onClick={() => editMeshCommandsRef.current?.run("paint")}
+                      title="Paint the selection with Paint Colour (vertex colours)"
+                    >
+                      <span
+                        style={{
+                          width: 10,
+                          height: 10,
+                          borderRadius: 2,
+                          background: `#${new THREE.Color(Number(node.params.paintColor ?? 0xff6b6b)).getHexString()}`,
+                        }}
+                      />
+                      Colour
+                    </button>
+                  </div>
+                </div>
+              )}
               {vertices.length > 0 && (
                 <div style={row}>
                   <span style={label} title="The selection's median position, in the object's own space — type a value to move it there">

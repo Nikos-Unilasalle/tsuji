@@ -23,6 +23,7 @@ import {
   bufferGeometryToQuadMesh,
   geometrySignature,
   quadMeshSignature,
+  updateQuadMeshGeometry,
 } from "../quadMesh";
 import { convertSelection, MeshSelection, normalizeEdges, SelectMode } from "../mesh/selection";
 
@@ -32,6 +33,7 @@ export const EDIT_MESH_RESEED_ACTION = "edit-mesh/reseed";
 export const EDIT_MESH_EXTRUDE_ACTION = "edit-mesh/extrude";
 export const EDIT_MESH_INSET_ACTION = "edit-mesh/inset";
 export const EDIT_MESH_UNWRAP_UVS_ACTION = "edit-mesh/unwrap-uvs";
+export const EDIT_MESH_SMART_UNWRAP_ACTION = "edit-mesh/smart-unwrap";
 export const EDIT_MESH_DELETE_FACES_ACTION = "edit-mesh/delete-faces";
 export const EDIT_MESH_SEPARATE_FACES_ACTION = "edit-mesh/separate-faces";
 
@@ -150,6 +152,8 @@ export function editMeshModeSwitchParams(
 interface EditMeshState {
   mesh?: THREE.Mesh;
   lastQuadMesh?: string;
+  /** The mesh object last built from (identity check before any hashing). */
+  lastQuadMeshObject?: QuadMesh;
   lastShading?: string;
   sourceGeometry?: THREE.BufferGeometry | null;
   /** geometrySignature() of the wired input, cached against its identity/version. */
@@ -160,6 +164,12 @@ interface EditMeshState {
   frozen?: boolean;
   /** Frozen, and the input no longer matches what it was frozen from. */
   inputChanged?: boolean;
+  /** Slot 0's material as applyEditMeshMaterial left it, before slots/colours were layered on. */
+  baseMaterial?: THREE.Material | THREE.Material[];
+  /** Holders whose materials are slots 1..3 (Material 2..4 inputs). */
+  slotHolders?: THREE.Mesh[];
+  /** Vertex-colour copies of materials this node doesn't own (shared from its source). */
+  colorClones?: Map<THREE.Material, THREE.Material>;
 }
 
 const editMeshCache = createNodeCache<EditMeshState>((s) => {
@@ -258,6 +268,71 @@ function applyEditMeshMaterial(
   applyMaterialParams(mesh, defaultParams, THREE.DoubleSide, undefined);
   (mesh.material as any).__isDefaultClay = true;
   delete (mesh.material as any).__isSharedFromSrc;
+}
+
+/** Material 2..4 inputs: slots 1..3 for faces assigned to them. */
+const EXTRA_MATERIAL_INPUTS = ["material2", "material3", "material4"] as const;
+
+/**
+ * Applies the material inputs, then layers on what the mesh data asks for:
+ * per-face material slots (Material 2..4 inputs, falling back to slot 0) and
+ * vertex colours. The mesh's own slot-0 material is put back first every
+ * time — applyMaterialParams would otherwise dispose the array this leaves
+ * on the mesh — and a material shared from the source is copied rather than
+ * switched to vertex colours in place, which would repaint the source too.
+ */
+function applyEditMeshMaterials(
+  state: EditMeshState,
+  mesh: THREE.Mesh,
+  srcMesh: THREE.Mesh | null,
+  inputs: Record<string, unknown>,
+  texParams: TextureParams | undefined,
+  quadMesh: QuadMesh,
+) {
+  if (state.baseMaterial) mesh.material = state.baseMaterial;
+  applyEditMeshMaterial(mesh, srcMesh, inputs.material, texParams);
+  state.baseMaterial = mesh.material;
+
+  let materials: THREE.Material[] | THREE.Material = mesh.material;
+  const maxSlot = quadMesh.faceMaterials ? Math.max(0, ...quadMesh.faceMaterials) : 0;
+  const extra = EXTRA_MATERIAL_INPUTS.map((id) => materialParamsFromValue(inputs[id]));
+  if (maxSlot > 0 && !Array.isArray(materials) && extra.some(Boolean)) {
+    const base = materials;
+    state.slotHolders ??= EXTRA_MATERIAL_INPUTS.map(() => new THREE.Mesh());
+    materials = [base];
+    for (let slot = 1; slot <= Math.min(maxSlot, EXTRA_MATERIAL_INPUTS.length); slot++) {
+      const params = extra[slot - 1];
+      if (!params) {
+        materials.push(base);
+        continue;
+      }
+      const holder = state.slotHolders[slot - 1];
+      applyMaterialParams(holder, params, THREE.DoubleSide);
+      materials.push(holder.material as THREE.Material);
+    }
+  }
+
+  const hasColors = Boolean(mesh.geometry.attributes.color);
+  const withColors = (m: THREE.Material): THREE.Material => {
+    const shared = (m as any).__isSharedFromSrc || (srcMesh && (srcMesh.material === m || (Array.isArray(srcMesh.material) && srcMesh.material.includes(m))));
+    if (!shared) {
+      if ((m as any).vertexColors !== hasColors) {
+        (m as any).vertexColors = hasColors;
+        m.needsUpdate = true;
+      }
+      return m;
+    }
+    if (!hasColors) return m;
+    state.colorClones ??= new Map();
+    let copy = state.colorClones.get(m);
+    if (!copy) {
+      copy = m.clone();
+      (copy as any).vertexColors = true;
+      state.colorClones.set(m, copy);
+    }
+    return copy;
+  };
+  mesh.material = Array.isArray(materials) ? materials.map(withColors) : withColors(materials);
 }
 
 /**
@@ -396,7 +471,12 @@ function editMeshParamFields(instance?: NodeInstance): ParamFieldDef[] {
   fields.push({ id: "snapIncrement", label: "Snap Increment", kind: "number", step: 0.01 });
   fields.push(
     { id: "reseedButton", label: "Freeze / Reset from Input", kind: "button", action: EDIT_MESH_RESEED_ACTION },
-    { id: "unwrapButton", label: "Recalculate UVs", kind: "button", action: EDIT_MESH_UNWRAP_UVS_ACTION },
+    { id: "unwrapButton", label: "Recalculate UVs (box)", kind: "button", action: EDIT_MESH_UNWRAP_UVS_ACTION },
+    { id: "uvAngleLimit", label: "Unwrap Angle Limit (°)", kind: "number", step: 1 },
+    { id: "smartUnwrapButton", label: "Smart UV Unwrap (seams)", kind: "button", action: EDIT_MESH_SMART_UNWRAP_ACTION },
+    { id: "assignSlot", label: "Assign Material Slot", kind: "number", step: 1 },
+    { id: "paintColor", label: "Paint Colour", kind: "color" },
+    { id: "creaseWeight", label: "Crease Weight", kind: "number", step: 0.1 },
   );
   return fields;
 }
@@ -421,6 +501,10 @@ export const EDIT_MESH_NODE: NodeDefinition = {
     // the source geometry's world matrix when one is wired into Geometry.
     { id: "matrix", label: "Matrix", type: "matrix" },
     { id: "material", label: "Material", type: "material" },
+    // Slots 1..3 for faces assigned to them (Assign Material in the viewport).
+    { id: "material2", label: "Material 2", type: "material" },
+    { id: "material3", label: "Material 3", type: "material" },
+    { id: "material4", label: "Material 4", type: "material" },
     { id: "texture", label: "Texture Map", type: "texture" },
     { id: "normal", label: "Normal Map", type: "texture" },
     { id: "roughnessMap", label: "Roughness Map", type: "texture" },
@@ -458,6 +542,12 @@ export const EDIT_MESH_NODE: NodeDefinition = {
     xray: false,
     // Select Flat Region grows across edges bending less than this, in degrees.
     flatAngle: 10,
+    // Smart UV Unwrap: faces bending more than this from their island start a new one.
+    uvAngleLimit: 66,
+    // What Assign Material / Paint Colour / Crease in the viewport apply.
+    assignSlot: 1,
+    paintColor: 0xff6b6b,
+    creaseWeight: 1,
     uvScale: [1, 1] as [number, number],
     uvOffset: [0, 0] as [number, number],
     // The same native pose every geometry node owns (see
@@ -507,16 +597,37 @@ export const EDIT_MESH_NODE: NodeDefinition = {
     const texParams = extractTextureParams(inputs, params, ctx.nodeId);
 
     const isSameSourceGeom = state.sourceGeometry === (srcGeom ?? null);
-    const signature = quadMeshSignature(quadMesh);
+    const reusable = Boolean(state.mesh && state.lastShading === shadeMode && isSameSourceGeom);
 
+    // Same mesh object as last frame (a frozen mesh at rest): nothing to do,
+    // and no need to hash 50k vertices to find that out.
+    if (reusable && state.lastQuadMeshObject === quadMesh) {
+      applyEditMeshPose(state.mesh!, inputObj, srcMesh, inputs.matrix, params, ctx.nodeId);
+      applyEditMeshMaterials(state, state.mesh!, srcMesh, inputs, texParams, quadMesh);
+      return primitiveOutputs(state.mesh!, pivotParams(params, state.mesh!));
+    }
+
+    // Same topology, vertices moved (every frame of a drag): update the
+    // existing geometry in place instead of rebuilding it — again without
+    // hashing, the shared face arrays say it all.
+    if (reusable && updateQuadMeshGeometry(state.mesh!.geometry, quadMesh, shadeMode)) {
+      state.lastQuadMeshObject = quadMesh;
+      state.lastQuadMesh = undefined;
+      applyEditMeshMaterials(state, state.mesh!, srcMesh, inputs, texParams, quadMesh);
+      applyEditMeshPose(state.mesh!, inputObj, srcMesh, inputs.matrix, params, ctx.nodeId);
+      return primitiveOutputs(state.mesh!, pivotParams(params, state.mesh!));
+    }
+
+    const signature = quadMeshSignature(quadMesh);
     if (
       state.mesh &&
       state.lastQuadMesh === signature &&
       state.lastShading === shadeMode &&
       isSameSourceGeom
     ) {
+      state.lastQuadMeshObject = quadMesh;
       applyEditMeshPose(state.mesh, inputObj, srcMesh, inputs.matrix, params, ctx.nodeId);
-      applyEditMeshMaterial(state.mesh, srcMesh, inputs.material, texParams);
+      applyEditMeshMaterials(state, state.mesh, srcMesh, inputs, texParams, quadMesh);
       return primitiveOutputs(state.mesh, pivotParams(params, state.mesh));
     }
 
@@ -531,11 +642,12 @@ export const EDIT_MESH_NODE: NodeDefinition = {
       state.mesh.geometry = geometry;
     }
 
-    applyEditMeshMaterial(state.mesh, srcMesh, inputs.material, texParams);
+    applyEditMeshMaterials(state, state.mesh, srcMesh, inputs, texParams, quadMesh);
 
     applyEditMeshPose(state.mesh, inputObj, srcMesh, inputs.matrix, params, ctx.nodeId);
 
     state.lastQuadMesh = signature;
+    state.lastQuadMeshObject = quadMesh;
     state.lastShading = shadeMode;
     state.sourceGeometry = srcGeom ?? null;
 

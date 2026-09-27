@@ -9,6 +9,7 @@ import {
 } from "../quadMesh";
 import { buildTopology } from "./topology";
 import { averageUV, boxProjectFace, lerpUV, UV, uvBounds } from "./uv";
+import { mapEdgeAttributesInPlace, remapEdgeAttributes, splitEdgeAttributes } from "./attributes";
 
 type V3 = [number, number, number];
 
@@ -99,26 +100,32 @@ export function compactMesh(mesh: QuadMesh): { mesh: QuadMesh; remapFace: Int32A
   const faceUVs: UV[][] = [];
   const faceMaterials: number[] = [];
   const faceShading: NonNullable<QuadMesh["faceShading"]> = [];
+  const faceColors: NonNullable<QuadMesh["faceColors"]> = [];
   const hasShading = Boolean(mesh.faceShading && mesh.faceShading.length > 0);
 
   mesh.faces.forEach((face, f) => {
     const uvs = (mesh.faceUVs?.[f] ?? []) as UV[];
+    const colors = mesh.faceColors?.[f] ?? null;
     const kept: number[] = [];
     const keptUVs: UV[] = [];
+    const keptColors: [number, number, number][] = [];
     face.forEach((v, i) => {
       if (kept.length > 0 && kept[kept.length - 1] === v) return;
       kept.push(v);
       keptUVs.push(uvs[i] ?? [0, 0]);
+      if (colors) keptColors.push(colors[i] ?? colors[0] ?? [1, 1, 1]);
     });
     while (kept.length > 1 && kept[0] === kept[kept.length - 1]) {
       kept.pop();
       keptUVs.pop();
+      if (colors) keptColors.pop();
     }
     if (new Set(kept).size < 3) return;
     remapFace[f] = faces.length;
     faces.push(kept);
     faceUVs.push(keptUVs);
     faceMaterials.push(mesh.faceMaterials?.[f] ?? 0);
+    faceColors.push(colors ? keptColors : null);
     if (hasShading) faceShading.push(mesh.faceShading![f]);
   });
 
@@ -139,19 +146,18 @@ export function compactMesh(mesh: QuadMesh): { mesh: QuadMesh; remapFace: Int32A
     }
   }
 
-  return {
-    mesh: {
-      positions,
-      faces: faces.map((face) => face.map((v) => remapVertex[v])),
-      faceUVs: mesh.faceUVs ? faceUVs : undefined,
-      shading: mesh.shading,
-      faceShading: mesh.faceShading ? (hasShading ? faceShading : []) : undefined,
-      faceMaterials: mesh.faceMaterials ? faceMaterials : undefined,
-      sourceSignature: mesh.sourceSignature,
-    },
-    remapFace,
-    remapVertex,
+  const out: QuadMesh = {
+    positions,
+    faces: faces.map((face) => face.map((v) => remapVertex[v])),
+    faceUVs: mesh.faceUVs ? faceUVs : undefined,
+    shading: mesh.shading,
+    faceShading: mesh.faceShading ? (hasShading ? faceShading : []) : undefined,
+    faceMaterials: mesh.faceMaterials ? faceMaterials : undefined,
+    faceColors: mesh.faceColors ? faceColors : undefined,
+    sourceSignature: mesh.sourceSignature,
   };
+  remapEdgeAttributes(mesh, out, remapVertex);
+  return { mesh: out, remapFace, remapVertex };
 }
 
 function remapList(list: number[], remap: Int32Array): number[] {
@@ -325,6 +331,7 @@ export function mergeVertices(
   }
   const merged = new Set(valid);
   next.faces = next.faces.map((face) => face.map((v) => (merged.has(v) ? keep : v)));
+  mapEdgeAttributesInPlace(next, (v) => (merged.has(v) ? keep : v));
   const { mesh: out, remapVertex } = compactMesh(next);
   return { mesh: out, vertex: remapVertex[keep] >= 0 ? remapVertex[keep] : null };
 }
@@ -375,6 +382,7 @@ export function mergeByDistance(
   if (removed === 0) return { mesh: cloneQuadMesh(mesh), removed: 0, remapVertex: target.map((_, i) => i) };
   const next = withFaceUVs(cloneQuadMesh(mesh));
   next.faces = next.faces.map((face) => face.map((v) => target[v]));
+  mapEdgeAttributesInPlace(next, (v) => target[v]);
   const { mesh: out, remapVertex } = compactMesh(next);
   const finalMap = new Int32Array(mesh.positions.length);
   for (let v = 0; v < mesh.positions.length; v++) finalMap[v] = remapVertex[target[v]];
@@ -715,6 +723,11 @@ export function subdivideFaces(mesh: QuadMesh, faces: number[]): { mesh: QuadMes
         newFaces.push(pushFace(next, quad, quadUVs, f));
       }
     }
+  }
+
+  for (const [key, m] of midpoints) {
+    const [a, b] = key.split("_").map(Number);
+    splitEdgeAttributes(next, a, b, [m]);
   }
 
   // Neighbours: insert each midpoint on their shared edge.

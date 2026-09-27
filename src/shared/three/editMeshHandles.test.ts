@@ -85,7 +85,7 @@ describe("editMeshHandles overlays", () => {
     const handles = createEditMeshHandles();
     const host = new THREE.Mesh();
     const mesh = createQuadBox(1, 1, 1);
-    const [wire, faces] = handles.group.children as THREE.Mesh[];
+    const [wire, , faces] = handles.group.children as THREE.Mesh[]; // wireframe, marked edges, faces
 
     const state = (m: typeof mesh, faces: number[]): EditMeshDisplayState => ({
       mesh: host, quadMesh: m, mode: "faces", points: new Set(), edges: [], faces: new Set(faces),
