@@ -70,6 +70,11 @@ export const DEMO_CATALOG: DemoCategory[] = [
         description: "Faces pushed out, and a shell opened then flipped.",
       },
       {
+        file: "demo_modifier_edit_mesh.tsuji",
+        label: "Edit Mesh",
+        description: "A pedestal modelled by inset and extrude, creased so Subdivide keeps its plinth crisp, with a second material on the capital.",
+      },
+      {
         file: "demo_modifier_extrude_tree.tsuji",
         label: "Extrude Tree",
         description: "A tube's top ring extruded over and over, tilting and tapering — a tree from one node.",

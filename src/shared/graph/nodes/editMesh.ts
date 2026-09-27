@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { NodeDefinition, NodeInstance, ParamFieldDef } from "../types";
+import type { SocketDef } from "../sockets";
 import { createNodeCache, disposeObject3D } from "../nodeCaches";
 import { findFirstMesh } from "../meshRequired";
 import {
@@ -270,8 +271,35 @@ function applyEditMeshMaterial(
   delete (mesh.material as any).__isSharedFromSrc;
 }
 
-/** Material 2..4 inputs: slots 1..3 for faces assigned to them. */
-const EXTRA_MATERIAL_INPUTS = ["material2", "material3", "material4"] as const;
+/**
+ * Material slot ↔ input socket: slot 0 is the plain `material` input, slot n
+ * is `material{n+1}` ("Material 2", "Material 3", …) — the ids the fixed
+ * Material 2..4 inputs already had, so saved projects keep their wiring.
+ */
+export function materialSocketOfSlot(slot: number): string {
+  return slot === 0 ? "material" : `material${slot + 1}`;
+}
+
+export function materialSlotOfSocket(socket: string): number | null {
+  if (socket === "material") return 0;
+  const m = /^material(\d+)$/.exec(socket);
+  const n = m ? Number(m[1]) : NaN;
+  return Number.isInteger(n) && n >= 2 ? n - 1 : null;
+}
+
+/** The material inputs for these connections: every slot up to the last wired one, plus one free. */
+export function materialInputSockets(connections: { toSocket: string }[]): SocketDef[] {
+  let last = 0;
+  for (const c of connections) {
+    const slot = materialSlotOfSocket(c.toSocket);
+    if (slot !== null && slot > last) last = slot;
+  }
+  return Array.from({ length: last + 2 }, (_, slot) => ({
+    id: materialSocketOfSlot(slot),
+    label: slot === 0 ? "Material" : `Material ${slot + 1}`,
+    type: "material" as const,
+  }));
+}
 
 /**
  * Applies the material inputs, then layers on what the mesh data asks for:
@@ -294,19 +322,21 @@ function applyEditMeshMaterials(
   state.baseMaterial = mesh.material;
 
   let materials: THREE.Material[] | THREE.Material = mesh.material;
-  const maxSlot = quadMesh.faceMaterials ? Math.max(0, ...quadMesh.faceMaterials) : 0;
-  const extra = EXTRA_MATERIAL_INPUTS.map((id) => materialParamsFromValue(inputs[id]));
+  let maxSlot = 0;
+  for (const slot of quadMesh.faceMaterials ?? []) if (slot > maxSlot) maxSlot = slot;
+  // Slots 1..maxSlot from the Material 2, 3, … inputs; an unwired slot shows slot 0's material.
+  const extra = Array.from({ length: maxSlot }, (_, i) => materialParamsFromValue(inputs[materialSocketOfSlot(i + 1)]));
   if (maxSlot > 0 && !Array.isArray(materials) && extra.some(Boolean)) {
     const base = materials;
-    state.slotHolders ??= EXTRA_MATERIAL_INPUTS.map(() => new THREE.Mesh());
+    state.slotHolders ??= [];
     materials = [base];
-    for (let slot = 1; slot <= Math.min(maxSlot, EXTRA_MATERIAL_INPUTS.length); slot++) {
+    for (let slot = 1; slot <= maxSlot; slot++) {
       const params = extra[slot - 1];
       if (!params) {
         materials.push(base);
         continue;
       }
-      const holder = state.slotHolders[slot - 1];
+      const holder = (state.slotHolders[slot - 1] ??= new THREE.Mesh());
       applyMaterialParams(holder, params, THREE.DoubleSide);
       materials.push(holder.material as THREE.Material);
     }
@@ -474,7 +504,6 @@ function editMeshParamFields(instance?: NodeInstance): ParamFieldDef[] {
     { id: "unwrapButton", label: "Recalculate UVs (box)", kind: "button", action: EDIT_MESH_UNWRAP_UVS_ACTION },
     { id: "uvAngleLimit", label: "Unwrap Angle Limit (°)", kind: "number", step: 1 },
     { id: "smartUnwrapButton", label: "Smart UV Unwrap (seams)", kind: "button", action: EDIT_MESH_SMART_UNWRAP_ACTION },
-    { id: "assignSlot", label: "Assign Material Slot", kind: "number", step: 1 },
     { id: "paintColor", label: "Paint Colour", kind: "color" },
     { id: "creaseWeight", label: "Crease Weight", kind: "number", step: 0.1 },
   );
@@ -500,11 +529,9 @@ export const EDIT_MESH_NODE: NodeDefinition = {
     // *outside* this node's own location/rotation/scale, composed on top of
     // the source geometry's world matrix when one is wired into Geometry.
     { id: "matrix", label: "Matrix", type: "matrix" },
+    // Material slots grow as they're wired: see materialInputSockets.
     { id: "material", label: "Material", type: "material" },
-    // Slots 1..3 for faces assigned to them (Assign Material in the viewport).
     { id: "material2", label: "Material 2", type: "material" },
-    { id: "material3", label: "Material 3", type: "material" },
-    { id: "material4", label: "Material 4", type: "material" },
     { id: "texture", label: "Texture Map", type: "texture" },
     { id: "normal", label: "Normal Map", type: "texture" },
     { id: "roughnessMap", label: "Roughness Map", type: "texture" },
@@ -514,6 +541,16 @@ export const EDIT_MESH_NODE: NodeDefinition = {
   outputs: [
     { id: "geometry", label: "Geometry", type: "geometry" },
     { id: "matrix", label: "Matrix", type: "matrix" },
+  ],
+  dynamicInputs: (connections) => [
+    { id: "geometry", label: "Geometry", type: "geometry", owns: true },
+    { id: "matrix", label: "Matrix", type: "matrix" },
+    ...materialInputSockets(connections),
+    { id: "texture", label: "Texture Map", type: "texture" },
+    { id: "normal", label: "Normal Map", type: "texture" },
+    { id: "roughnessMap", label: "Roughness Map", type: "texture" },
+    { id: "uvScale", label: "UV Scale", type: "vector" },
+    { id: "uvOffset", label: "UV Offset", type: "vector" },
   ],
   defaultParams: {
     meshData: null as QuadMesh | null,
@@ -544,7 +581,8 @@ export const EDIT_MESH_NODE: NodeDefinition = {
     flatAngle: 10,
     // Smart UV Unwrap: faces bending more than this from their island start a new one.
     uvAngleLimit: 66,
-    // What Assign Material / Paint Colour / Crease in the viewport apply.
+    // What Assign Material / Paint Colour / Crease in the viewport apply
+    // (assignSlot: 0 = the Material input, n = Material n+1).
     assignSlot: 1,
     paintColor: 0xff6b6b,
     creaseWeight: 1,

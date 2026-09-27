@@ -452,3 +452,34 @@ describe("EDIT_MESH_NODE", () => {
   });
 });
 
+
+describe("Edit Mesh material slots", () => {
+  it("grows material inputs as they're wired, keeping the old ids", async () => {
+    const { materialInputSockets, materialSlotOfSocket, materialSocketOfSlot } = await import("./editMesh");
+    expect(materialInputSockets([]).map((s) => s.id)).toEqual(["material", "material2"]);
+    expect(materialInputSockets([{ toSocket: "material4" }]).map((s) => s.id)).toEqual([
+      "material", "material2", "material3", "material4", "material5",
+    ]);
+    expect(materialSlotOfSocket("material")).toBe(0);
+    expect(materialSlotOfSocket("material3")).toBe(2);
+    expect(materialSlotOfSocket("materialX")).toBeNull();
+    expect(materialSocketOfSlot(4)).toBe("material5");
+  });
+
+  it("gives faces in slot 2 the Material 3 input", () => {
+    const box = createQuadBox();
+    box.faceMaterials = [0, 0, 2, 0, 0, 0];
+    const red = new THREE.MeshStandardMaterial({ color: 0xff0000 });
+    const res = EDIT_MESH_NODE.evaluate(
+      { material3: red },
+      { ...EDIT_MESH_NODE.defaultParams, meshData: box },
+      { nodeId: "slots-test" } as EvalContext,
+    );
+    const mesh = res.geometry as THREE.Mesh;
+    expect(Array.isArray(mesh.material)).toBe(true);
+    const mats = mesh.material as THREE.Material[];
+    expect(mats).toHaveLength(3);
+    expect(mats[1]).toBe(mats[0]); // slot 1 unwired: slot 0's material
+    expect(mesh.geometry.groups.map((g) => g.materialIndex)).toEqual([0, 2]);
+  });
+});
