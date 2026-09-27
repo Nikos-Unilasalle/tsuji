@@ -317,6 +317,18 @@ export function extractPositionFromInput(val: unknown, fallback: THREE.Vector3):
   if (val instanceof THREE.Matrix4) return new THREE.Vector3().setFromMatrixPosition(val);
   if (val instanceof THREE.Object3D) {
     val.updateMatrixWorld(true);
+    // The object's local origin moves under its own pivot offset (the pivot
+    // cancels out of getWorldPosition() by construction — see
+    // composeNativeMatrixWithPivot), so a Target aimed at getWorldPosition()
+    // never tracks the pivot. Transform the pivot point itself instead — but
+    // through `val`'s own matrixWorld, since that's the object the pivot was
+    // actually baked into (e.g. the glTF Loader's wrapper Group, whose
+    // userData.pivot the descend-into-children loop below would otherwise
+    // step right past).
+    const pivot = getSourcePivot(val);
+    if (pivot.lengthSq() > 1e-12) {
+      return pivot.clone().applyMatrix4(val.matrixWorld);
+    }
     let target: THREE.Object3D = val;
     while (target instanceof THREE.Group && target.children.length > 0) {
       target = target.children[0];

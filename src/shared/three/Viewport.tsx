@@ -5596,8 +5596,10 @@ export function Viewport({
           projectionOverridden = true;
         } else if (camera instanceof THREE.PerspectiveCamera) {
           const fov = Number(cameraResult?.fov) || camera.fov;
-          if (camera.fov !== fov) camera.fov = fov;
+          const fovChanged = camera.fov !== fov;
+          if (fovChanged) camera.fov = fov;
           restoreProjection();
+          if (fovChanged) camera.updateProjectionMatrix();
         } else {
           restoreProjection();
         }

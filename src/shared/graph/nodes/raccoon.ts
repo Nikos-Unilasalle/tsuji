@@ -72,6 +72,6 @@ export const OBJECT_RACCOON_NODE: NodeDefinition = {
     const texParams = extractTextureParams(inputs, params, ctx.nodeId);
     applyMaterialParams(mesh, matParams, THREE.FrontSide, texParams);
 
-    return primitiveOutputs(mesh);
+    return primitiveOutputs(mesh, params);
   },
 };
