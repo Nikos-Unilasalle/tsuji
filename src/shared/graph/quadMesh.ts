@@ -1,4 +1,8 @@
 import * as THREE from "three";
+import { triangulateFace } from "./mesh/triangulate";
+import { averageUV, boxProjectFace, lerpUV, UV, uvBounds } from "./mesh/uv";
+import { quadRing } from "./mesh/loops";
+import { importBufferGeometry } from "./mesh/importGeometry";
 
 export type QuadMeshShading = "auto" | "smooth" | "flat";
 
@@ -9,6 +13,12 @@ export interface QuadMesh {
   faceUVs?: [number, number][][];
   shading?: QuadMeshShading;
   faceShading?: QuadMeshShading[];
+  /**
+   * Material slot per face (a BufferGeometry group's materialIndex), carried
+   * through every operation so a multi-material import keeps its materials.
+   * Absent means every face uses slot 0.
+   */
+  faceMaterials?: number[];
   /**
    * geometrySignature() of the input this mesh was frozen from. Lets Edit
    * Mesh tell the operator the input has moved on since — otherwise the
@@ -25,6 +35,7 @@ export function cloneQuadMesh(mesh: QuadMesh): QuadMesh {
     faceUVs: mesh.faceUVs ? mesh.faceUVs.map((fuv) => fuv.map((uv) => [uv[0], uv[1]])) : undefined,
     shading: mesh.shading,
     faceShading: mesh.faceShading ? [...mesh.faceShading] : undefined,
+    faceMaterials: mesh.faceMaterials ? [...mesh.faceMaterials] : undefined,
     sourceSignature: mesh.sourceSignature,
   };
 }
@@ -70,6 +81,7 @@ export function quadMeshSignature(mesh: QuadMesh): string {
       }
     }
   }
+  if (mesh.faceMaterials) for (const m of mesh.faceMaterials) mix(m);
   return `${mesh.positions.length}:${mesh.faces.length}:${hash.toString(36)}`;
 }
 
@@ -133,72 +145,10 @@ export function computeFaceCentroid(positions: [number, number, number][], face:
  */
 export function boxProjectUVs(mesh: QuadMesh): QuadMesh {
   const next = cloneQuadMesh(mesh);
-  const faceUVs: [number, number][][] = [];
-
-  // Calculate overall mesh bounding box and uniform isotropic span
-  let minX = Infinity, maxX = -Infinity;
-  let minY = Infinity, maxY = -Infinity;
-  let minZ = Infinity, maxZ = -Infinity;
-
-  for (const p of next.positions) {
-    if (p[0] < minX) minX = p[0];
-    if (p[0] > maxX) maxX = p[0];
-    if (p[1] < minY) minY = p[1];
-    if (p[1] > maxY) maxY = p[1];
-    if (p[2] < minZ) minZ = p[2];
-    if (p[2] > maxZ) maxZ = p[2];
-  }
-
-  const spanX = maxX - minX || 1;
-  const spanY = maxY - minY || 1;
-  const spanZ = maxZ - minZ || 1;
-  const span = Math.max(spanX, spanY, spanZ) || 1;
-
-  for (let f = 0; f < next.faces.length; f++) {
-    const face = next.faces[f];
-    if (face.length === 0) {
-      faceUVs.push([]);
-      continue;
-    }
-    const n = computeFaceNormal(next.positions, face);
-    const absX = Math.abs(n.x);
-    const absY = Math.abs(n.y);
-    const absZ = Math.abs(n.z);
-
-    const uvsForFace: [number, number][] = [];
-
-    for (const vIdx of face) {
-      const p = next.positions[vIdx];
-      let u = 0;
-      let v = 0;
-
-      if (absX >= absY && absX >= absZ) {
-        // YZ plane (Right/Left)
-        // Right (+X): look from +X towards origin -> U along -Z, V along +Y
-        // Left (-X): look from -X towards origin -> U along +Z, V along +Y
-        u = n.x > 0 ? (maxZ - p[2]) / span : (p[2] - minZ) / span;
-        v = (p[1] - minY) / span;
-      } else if (absY >= absX && absY >= absZ) {
-        // XZ plane (Top/Bottom)
-        // Top (+Y): look from +Y down -> U along +X, V along -Z
-        // Bottom (-Y): look from -Y up -> U along +X, V along +Z
-        u = (p[0] - minX) / span;
-        v = n.y > 0 ? (maxZ - p[2]) / span : (p[2] - minZ) / span;
-      } else {
-        // XY plane (Front/Back)
-        // Front (+Z): look from +Z towards origin -> U along +X, V along +Y
-        // Back (-Z): look from -Z towards origin -> U along -X, V along +Y
-        u = n.z > 0 ? (p[0] - minX) / span : (maxX - p[0]) / span;
-        v = (p[1] - minY) / span;
-      }
-
-      uvsForFace.push([u, v]);
-    }
-
-    faceUVs.push(uvsForFace);
-  }
-
-  next.faceUVs = faceUVs;
+  const bounds = uvBounds(next);
+  next.faceUVs = next.faces.map((face) =>
+    face.length === 0 ? [] : boxProjectFace(next, face, computeFaceNormal(next.positions, face), bounds),
+  );
   return next;
 }
 
@@ -302,6 +252,31 @@ export function getQuadMeshEdges(mesh: QuadMesh): [number, number][] {
   return edges;
 }
 
+function materialList(byMaterial: Map<number, number[]>, material: number): number[] {
+  let list = byMaterial.get(material);
+  if (!list) {
+    list = [];
+    byMaterial.set(material, list);
+  }
+  return list;
+}
+
+/**
+ * Writes the index sorted by material slot, one BufferGeometry group per slot,
+ * so a multi-material mesh renders each face with its own material. A mesh
+ * with no faceMaterials gets a plain index and no groups, as before.
+ */
+function setGroupedIndex(geometry: THREE.BufferGeometry, byMaterial: Map<number, number[]>, grouped: boolean) {
+  const slots = [...byMaterial.keys()].sort((a, b) => a - b);
+  const indices: number[] = [];
+  for (const slot of slots) {
+    const list = byMaterial.get(slot)!;
+    if (grouped) geometry.addGroup(indices.length, list.length, slot);
+    for (const i of list) indices.push(i);
+  }
+  geometry.setIndex(indices);
+}
+
 /**
  * Converts a QuadMesh to a Three.js BufferGeometry (triangulated for GPU rendering).
  * Supports "auto" (crease angle), "smooth", and "flat" shading.
@@ -346,7 +321,6 @@ export function quadMeshToBufferGeometry(
   const positions: number[] = [];
   const normals: number[] = [];
   const uvs: number[] = [];
-  const indices: number[] = [];
 
   if (isPureSmooth) {
     for (const p of mesh.positions) {
@@ -358,25 +332,18 @@ export function quadMeshToBufferGeometry(
       }
     }
 
-    for (const face of mesh.faces) {
-      if (face.length === 4) {
-        indices.push(face[0], face[1], face[2]);
-        indices.push(face[0], face[2], face[3]);
-      } else if (face.length === 3) {
-        indices.push(face[0], face[1], face[2]);
-      } else if (face.length > 4) {
-        for (let i = 1; i < face.length - 1; i++) {
-          indices.push(face[0], face[i], face[i + 1]);
-        }
-      }
-    }
+    const byMaterial = new Map<number, number[]>();
+    mesh.faces.forEach((face, f) => {
+      const list = materialList(byMaterial, mesh.faceMaterials?.[f] ?? 0);
+      for (const [a, b, c] of triangulateFace(mesh.positions, face)) list.push(face[a], face[b], face[c]);
+    });
 
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
     if (uvs.length > 0) {
       geometry.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
     }
-    geometry.setIndex(indices);
+    setGroupedIndex(geometry, byMaterial, Boolean(mesh.faceMaterials));
     geometry.computeVertexNormals();
     geometry.computeBoundingBox();
     geometry.computeBoundingSphere();
@@ -435,22 +402,16 @@ export function quadMeshToBufferGeometry(
     return newIdx;
   }
 
+  const byMaterial = new Map<number, number[]>();
   for (let f = 0; f < numFaces; f++) {
     const face = mesh.faces[f];
     const vertIndices: number[] = [];
     for (let i = 0; i < face.length; i++) {
       vertIndices.push(addVertex(face[i], f, i));
     }
-
-    if (face.length === 4) {
-      indices.push(vertIndices[0], vertIndices[1], vertIndices[2]);
-      indices.push(vertIndices[0], vertIndices[2], vertIndices[3]);
-    } else if (face.length === 3) {
-      indices.push(vertIndices[0], vertIndices[1], vertIndices[2]);
-    } else if (face.length > 4) {
-      for (let i = 1; i < face.length - 1; i++) {
-        indices.push(vertIndices[0], vertIndices[i], vertIndices[i + 1]);
-      }
+    const list = materialList(byMaterial, mesh.faceMaterials?.[f] ?? 0);
+    for (const [a, b, c] of triangulateFace(mesh.positions, face)) {
+      list.push(vertIndices[a], vertIndices[b], vertIndices[c]);
     }
   }
 
@@ -460,7 +421,7 @@ export function quadMeshToBufferGeometry(
   if (uvs.length > 0) {
     geometry.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
   }
-  geometry.setIndex(indices);
+  setGroupedIndex(geometry, byMaterial, Boolean(mesh.faceMaterials));
   geometry.computeBoundingBox();
   geometry.computeBoundingSphere();
   geometry.userData.quadMesh = cloneQuadMesh(mesh);
@@ -470,568 +431,302 @@ export function quadMeshToBufferGeometry(
 /**
  * Converts a BufferGeometry to a QuadMesh.
  * If `userData.quadMesh` exists, uses that directly.
- * Otherwise reconstructs quads from adjacent coplanar triangles and preserves UVs.
+ * Otherwise rebuilds quads, UVs and material slots — see importBufferGeometry.
  */
 export function bufferGeometryToQuadMesh(geometry: THREE.BufferGeometry): QuadMesh {
   if (geometry.userData.quadMesh) {
     return cloneQuadMesh(geometry.userData.quadMesh);
   }
+  const imported = importBufferGeometry(geometry);
+  if (!imported) return createQuadBox();
+  return imported.faceUVs ? imported : boxProjectUVs(imported);
+}
 
-  const posAttr = geometry.attributes.position;
-  if (!posAttr) return createQuadBox();
-  const uvAttr = geometry.attributes.uv;
-
-  // Simple conversion: extract welded positions and find quad pairs
-  const vertexMap = new Map<string, number>();
-  const positions: [number, number, number][] = [];
-  const vertexRemap: number[] = [];
-
-  for (let i = 0; i < posAttr.count; i++) {
-    const x = Math.round(posAttr.getX(i) * 10000) / 10000;
-    const y = Math.round(posAttr.getY(i) * 10000) / 10000;
-    const z = Math.round(posAttr.getZ(i) * 10000) / 10000;
-    const key = `${x},${y},${z}`;
-    let idx = vertexMap.get(key);
-    if (idx === undefined) {
-      idx = positions.length;
-      positions.push([posAttr.getX(i), posAttr.getY(i), posAttr.getZ(i)]);
-      vertexMap.set(key, idx);
-    }
-    vertexRemap.push(idx);
+/**
+ * The mesh with a per-corner UV for every face, which every operation below
+ * carries through and extends: existing faceUVs as-is, per-vertex `uvs` (a
+ * createQuadPlane grid) turned into per-corner ones, otherwise a box
+ * projection. Returns the input itself when it already qualifies.
+ */
+export function withFaceUVs(mesh: QuadMesh): QuadMesh {
+  if (mesh.faceUVs && mesh.faceUVs.length === mesh.faces.length &&
+      mesh.faceUVs.every((uvs, f) => uvs.length === mesh.faces[f].length)) {
+    return mesh;
   }
-
-  const index = geometry.index;
-  const triCount = index ? index.count / 3 : posAttr.count / 3;
-  const triangles: [number, number, number][] = [];
-  const triUVs: [number, number][][] = [];
-
-  for (let t = 0; t < triCount; t++) {
-    const i0 = index ? index.getX(t * 3) : t * 3;
-    const i1 = index ? index.getX(t * 3 + 1) : t * 3 + 1;
-    const i2 = index ? index.getX(t * 3 + 2) : t * 3 + 2;
-    const a = vertexRemap[i0];
-    const b = vertexRemap[i1];
-    const c = vertexRemap[i2];
-    if (a !== b && b !== c && c !== a) {
-      triangles.push([a, b, c]);
-      if (uvAttr) {
-        triUVs.push([
-          [uvAttr.getX(i0), uvAttr.getY(i0)],
-          [uvAttr.getX(i1), uvAttr.getY(i1)],
-          [uvAttr.getX(i2), uvAttr.getY(i2)],
-        ]);
-      }
-    }
+  if (mesh.uvs && mesh.uvs.length === mesh.positions.length) {
+    const next = cloneQuadMesh(mesh);
+    next.faceUVs = mesh.faces.map((face) => face.map((v) => [mesh.uvs![v][0], mesh.uvs![v][1]] as [number, number]));
+    return next;
   }
+  return boxProjectUVs(mesh);
+}
 
-  // Pair up adjacent coplanar triangles into quads
-  const edgeToTriangles = new Map<string, number[]>();
-  for (let t = 0; t < triangles.length; t++) {
-    const tri = triangles[t];
-    for (let e = 0; e < 3; e++) {
-      const u = Math.min(tri[e], tri[(e + 1) % 3]);
-      const v = Math.max(tri[e], tri[(e + 1) % 3]);
-      const key = `${u}_${v}`;
-      const arr = edgeToTriangles.get(key) ?? [];
-      arr.push(t);
-      edgeToTriangles.set(key, arr);
-    }
+/**
+ * Appends a face created by an operation, with its per-face attributes: UVs
+ * (given, or box-projected when omitted — `pending` collects those so they are
+ * projected in one pass against the final bounds), material slot and shading
+ * inherited from the face it came from.
+ */
+function appendFace(
+  next: QuadMesh,
+  face: number[],
+  from: number,
+  uvs: [number, number][] | null,
+  pending: number[],
+): number {
+  const index = next.faces.length;
+  next.faces.push(face);
+  next.faceUVs!.push(uvs ?? []);
+  if (!uvs) pending.push(index);
+  if (next.faceMaterials) next.faceMaterials.push(next.faceMaterials[from] ?? 0);
+  if (next.faceShading && next.faceShading.length > 0) next.faceShading.push(next.faceShading[from] ?? next.shading ?? "auto");
+  return index;
+}
+
+function projectPendingUVs(next: QuadMesh, pending: number[]) {
+  if (pending.length === 0) return;
+  const bounds = uvBounds(next);
+  for (const f of pending) {
+    next.faceUVs![f] = boxProjectFace(next, next.faces[f], computeFaceNormal(next.positions, next.faces[f]), bounds);
   }
+}
 
-  const paired = new Set<number>();
-  const faces: number[][] = [];
-  const faceUVs: [number, number][][] = [];
-
-  function getTriCornerUV(tIdx: number, vIdx: number): [number, number] {
-    if (!uvAttr || !triUVs[tIdx]) return [0, 0];
-    const tri = triangles[tIdx];
-    const pos = tri.indexOf(vIdx);
-    return pos >= 0 ? triUVs[tIdx][pos] : [0, 0];
-  }
-
-  for (const [edgeKey, triIndices] of edgeToTriangles.entries()) {
-    if (triIndices.length !== 2) continue;
-    const [t0, t1] = triIndices;
-    if (paired.has(t0) || paired.has(t1)) continue;
-
-    const tri0 = triangles[t0];
-    const tri1 = triangles[t1];
-    const norm0 = computeFaceNormal(positions, tri0);
-    const norm1 = computeFaceNormal(positions, tri1);
-
-    // If normals are parallel (coplanar)
-    if (norm0.dot(norm1) > 0.99) {
-      const [uStr, vStr] = edgeKey.split("_");
-      const u = Number(uStr);
-      const v = Number(vStr);
-
-      const other0 = tri0.find((idx) => idx !== u && idx !== v)!;
-      const other1 = tri1.find((idx) => idx !== u && idx !== v)!;
-
-      // Construct quad preserving orientation
-      const e0 = tri0.indexOf(u);
-      const next0 = tri0[(e0 + 1) % 3];
-      let quad: number[];
-      if (next0 === v) {
-        // u -> v in tri0
-        quad = [other0, u, other1, v];
-      } else {
-        // v -> u in tri0
-        quad = [other0, v, other1, u];
-      }
-      faces.push(quad);
-
-      if (uvAttr) {
-        const uvsForQuad: [number, number][] = quad.map((vIdx) => {
-          if (tri0.includes(vIdx)) return getTriCornerUV(t0, vIdx);
-          return getTriCornerUV(t1, vIdx);
-        });
-        faceUVs.push(uvsForQuad);
-      }
-
-      paired.add(t0);
-      paired.add(t1);
-    }
-  }
-
-  // Add remaining un-paired triangles
-  for (let t = 0; t < triangles.length; t++) {
-    if (!paired.has(t)) {
-      faces.push(triangles[t]);
-      if (uvAttr && triUVs[t]) {
-        faceUVs.push(triUVs[t]);
-      }
-    }
-  }
-
-  const result: QuadMesh = { positions, faces };
-  if (uvAttr && faceUVs.length === faces.length) {
-    result.faceUVs = faceUVs;
-  } else {
-    return boxProjectUVs(result);
-  }
-
-  return result;
+/** Selected face indices that exist, deduplicated, in ascending order. */
+function validFaces(mesh: QuadMesh, indices: number[]): number[] {
+  return [...new Set(indices)].filter((f) => Number.isInteger(f) && f >= 0 && f < mesh.faces.length).sort((a, b) => a - b);
 }
 
 /**
  * Extrudes the selected face(s) outward along their averaged face normal.
- * Duplicates vertices, shifts them along the normal, updates cap faces,
- * and stitches quad side walls around the boundary edges of the selection.
+ * Duplicates the region's vertices, moves the cap faces onto them and
+ * stitches a quad wall along every edge on the region's border.
+ *
+ * The caps keep their UVs (same corners, moved) and every untouched face
+ * keeps its own; only the new walls are box-projected. Walls inherit the
+ * material and shading of the cap face they border.
  */
 export function extrudeFaces(
   mesh: QuadMesh,
   selectedFaceIndices: number[],
   distance = 0.5,
 ): { mesh: QuadMesh; newFaces: number[] } {
-  if (selectedFaceIndices.length === 0 || distance === 0) {
-    return { mesh: cloneQuadMesh(mesh), newFaces: [...selectedFaceIndices] };
+  const selected = validFaces(mesh, selectedFaceIndices);
+  if (selected.length === 0 || distance === 0) {
+    return { mesh: cloneQuadMesh(mesh), newFaces: selected };
   }
 
-  const next = cloneQuadMesh(mesh);
+  const base = withFaceUVs(mesh);
+  const next = cloneQuadMesh(base);
 
-  // Map each selected vertex to its average normal
+  // Each region vertex moves along the average of its selected faces' normals.
   const vertexNormals = new Map<number, THREE.Vector3>();
-  for (const fIdx of selectedFaceIndices) {
-    const face = next.faces[fIdx];
-    if (!face) continue;
-    const norm = computeFaceNormal(next.positions, face);
-    for (const v of face) {
-      const existing = vertexNormals.get(v) ?? new THREE.Vector3();
-      existing.add(norm);
-      vertexNormals.set(v, existing);
+  for (const f of selected) {
+    const normal = computeFaceNormal(base.positions, base.faces[f]);
+    for (const v of base.faces[f]) {
+      const sum = vertexNormals.get(v) ?? new THREE.Vector3();
+      vertexNormals.set(v, sum.add(normal));
     }
   }
 
-  // Duplicate vertices for the extruded patch
   const oldToNew = new Map<number, number>();
-  for (const [vIdx, sumNorm] of vertexNormals.entries()) {
-    const norm = sumNorm.normalize();
-    const oldP = next.positions[vIdx];
-    const newP: [number, number, number] = [
-      oldP[0] + norm.x * distance,
-      oldP[1] + norm.y * distance,
-      oldP[2] + norm.z * distance,
-    ];
-    const newIdx = next.positions.length;
-    next.positions.push(newP);
-    oldToNew.set(vIdx, newIdx);
+  for (const [v, sum] of vertexNormals) {
+    const n = sum.normalize();
+    const p = base.positions[v];
+    oldToNew.set(v, next.positions.length);
+    next.positions.push([p[0] + n.x * distance, p[1] + n.y * distance, p[2] + n.z * distance]);
   }
 
-  // Update extruded cap faces to reference the new vertices
-  for (const fIdx of selectedFaceIndices) {
-    const face = next.faces[fIdx];
-    if (!face) continue;
-    next.faces[fIdx] = face.map((v) => oldToNew.get(v) ?? v);
-  }
+  for (const f of selected) next.faces[f] = base.faces[f].map((v) => oldToNew.get(v) ?? v);
 
-  // Find boundary directed edges of the selected face patch
-  interface DirectedEdge {
-    u: number;
-    v: number;
-  }
-  const edgeCounts = new Map<string, { count: number; edge: DirectedEdge }>();
-  for (const fIdx of selectedFaceIndices) {
-    const face = mesh.faces[fIdx]; // use original vertex indices before duplication
-    if (!face) continue;
-    const len = face.length;
-    for (let i = 0; i < len; i++) {
+  // Border edges of the region: used by exactly one selected face. Each wall
+  // runs along that face's own edge direction, so it winds outward.
+  const edgeUse = new Map<string, { count: number; u: number; v: number; face: number }>();
+  for (const f of selected) {
+    const face = base.faces[f];
+    for (let i = 0; i < face.length; i++) {
       const u = face[i];
-      const v = face[(i + 1) % len];
+      const v = face[(i + 1) % face.length];
       const key = u < v ? `${u}_${v}` : `${v}_${u}`;
-      const entry = edgeCounts.get(key) ?? { count: 0, edge: { u, v } };
+      const entry = edgeUse.get(key) ?? { count: 0, u, v, face: f };
       entry.count++;
-      edgeCounts.set(key, entry);
+      edgeUse.set(key, entry);
     }
   }
 
-  // An edge with count === 1 is on the boundary of the selected region: create a quad wall
-  for (const { count, edge } of edgeCounts.values()) {
-    if (count === 1) {
-      const { u, v } = edge;
-      const u2 = oldToNew.get(u);
-      const v2 = oldToNew.get(v);
-      if (u2 !== undefined && v2 !== undefined) {
-        // Wall winding: [u, v, v2, u2]
-        next.faces.push([u, v, v2, u2]);
-      }
-    }
+  const pending: number[] = [];
+  for (const { count, u, v, face } of edgeUse.values()) {
+    if (count !== 1) continue;
+    appendFace(next, [u, v, oldToNew.get(v)!, oldToNew.get(u)!], face, null, pending);
   }
+  projectPendingUVs(next, pending);
 
-  return { mesh: boxProjectUVs(next), newFaces: [...selectedFaceIndices] };
+  return { mesh: next, newFaces: selected };
 }
 
 /**
- * Insets the selected face(s) by scaling inner vertices toward the centroid.
- * Creates an inner quad and 4 surrounding quad border faces.
+ * Insets the selected face(s): each face shrinks toward its centroid into an
+ * inner face, ringed by one quad per original edge. Works for triangles and
+ * n-gons as well as quads.
+ *
+ * UVs are exact: inner corners are interpolated between each corner's UV and
+ * the face's UV centroid by the same ratio as the positions, and the border
+ * quads reuse the original and inner corner UVs.
  */
 export function insetFaces(
   mesh: QuadMesh,
   selectedFaceIndices: number[],
   insetRatio = 0.25,
 ): { mesh: QuadMesh; newFaces: number[] } {
-  if (selectedFaceIndices.length === 0 || insetRatio <= 0) {
-    return { mesh: cloneQuadMesh(mesh), newFaces: [...selectedFaceIndices] };
+  const selected = validFaces(mesh, selectedFaceIndices);
+  if (selected.length === 0 || insetRatio <= 0) {
+    return { mesh: cloneQuadMesh(mesh), newFaces: selected };
   }
 
-  const next = cloneQuadMesh(mesh);
+  const base = withFaceUVs(mesh);
+  const next = cloneQuadMesh(base);
   const ratio = Math.max(0.01, Math.min(0.95, insetRatio));
-  const newInnerFaceIndices: number[] = [];
+  const pending: number[] = [];
 
-  for (const fIdx of selectedFaceIndices) {
-    const face = next.faces[fIdx];
-    if (!face || face.length !== 4) continue;
+  for (const f of selected) {
+    const face = base.faces[f];
+    const faceUVs = base.faceUVs![f] as UV[];
+    const c = computeFaceCentroid(base.positions, face);
+    const cUV = averageUV(faceUVs);
 
-    const [v0, v1, v2, v3] = face;
-    const c = computeFaceCentroid(next.positions, face);
+    const inner = face.map((v) => {
+      const p = base.positions[v];
+      next.positions.push([p[0] + (c.x - p[0]) * ratio, p[1] + (c.y - p[1]) * ratio, p[2] + (c.z - p[2]) * ratio]);
+      return next.positions.length - 1;
+    });
+    const innerUVs = faceUVs.map((uv) => lerpUV(uv, cUV, ratio));
 
-    // Create 4 inner vertices
-    const innerIndices: number[] = [];
-    for (const v of [v0, v1, v2, v3]) {
-      const p = next.positions[v];
-      const newX = p[0] + (c.x - p[0]) * ratio;
-      const newY = p[1] + (c.y - p[1]) * ratio;
-      const newZ = p[2] + (c.z - p[2]) * ratio;
-      const newIdx = next.positions.length;
-      next.positions.push([newX, newY, newZ]);
-      innerIndices.push(newIdx);
+    next.faces[f] = inner;
+    next.faceUVs![f] = innerUVs;
+
+    const n = face.length;
+    for (let i = 0; i < n; i++) {
+      const j = (i + 1) % n;
+      appendFace(
+        next,
+        [face[i], face[j], inner[j], inner[i]],
+        f,
+        [faceUVs[i], faceUVs[j], innerUVs[j], innerUVs[i]],
+        pending,
+      );
     }
-
-    const [i0, i1, i2, i3] = innerIndices;
-
-    // Replace original face with the inner quad
-    next.faces[fIdx] = [i0, i1, i2, i3];
-    newInnerFaceIndices.push(fIdx);
-
-    // Add 4 surrounding border quads
-    next.faces.push([v0, v1, i1, i0]);
-    next.faces.push([v1, v2, i2, i1]);
-    next.faces.push([v2, v3, i3, i2]);
-    next.faces.push([v3, v0, i0, i3]);
   }
 
-  return { mesh: boxProjectUVs(next), newFaces: newInnerFaceIndices };
+  return { mesh: next, newFaces: selected };
+}
+
+/** Cut ratios along an edge: `cutsOrRatio` cuts evenly spaced, or a single cut at that ratio when it's in (0, 1). */
+function cutRatios(cutsOrRatio: number): number[] {
+  if (cutsOrRatio > 0 && cutsOrRatio < 1) return [Math.max(0.05, Math.min(0.95, cutsOrRatio))];
+  const cuts = Math.max(1, Math.min(32, Math.round(cutsOrRatio)));
+  return Array.from({ length: cuts }, (_, k) => (k + 1) / (cuts + 1));
 }
 
 /**
- * Performs a loop cut across a continuous loop of quads.
- * Splits every quad in the loop into two quads at ratio `t` (default 0.5).
- */
-/**
- * Performs a loop cut across a continuous loop of quads.
- * Splits every quad in the loop into `cuts + 1` quads.
- * `cutsOrRatio`: either the number of cuts (integer >= 1) or a specific cut ratio t (0 < t < 1).
+ * Performs a loop cut across the ring of quads through `startEdge` (see
+ * quadRing: both directions, stopping at boundaries and non-quads), splitting
+ * each into `cuts + 1` quads — or in two at a given ratio when `cutsOrRatio`
+ * is in (0, 1). The ratio is measured along the start edge and kept
+ * consistent all the way around, so neighbouring quads share their new
+ * vertices whatever the ratio.
+ *
+ * UVs are interpolated per face along the split edges; sub-faces inherit
+ * material and shading.
  */
 export function loopCut(
   mesh: QuadMesh,
   startEdge: [number, number],
   cutsOrRatio: number = 1,
 ): { mesh: QuadMesh; newEdgeIndices: [number, number][]; newVertexIndices: number[] } {
-  const next = cloneQuadMesh(mesh);
+  const base = withFaceUVs(mesh);
+  const next = cloneQuadMesh(base);
+  const { faces: ring } = quadRing(base, startEdge[0], startEdge[1]);
+  if (ring.length === 0) return { mesh: next, newEdgeIndices: [], newVertexIndices: [] };
 
-  const isSingleRatio = cutsOrRatio > 0 && cutsOrRatio < 1;
-  const numCuts = isSingleRatio ? 1 : Math.max(1, Math.min(32, Math.round(cutsOrRatio)));
-
-  const ratios: number[] = [];
-  if (isSingleRatio) {
-    ratios.push(Math.max(0.05, Math.min(0.95, cutsOrRatio)));
-  } else {
-    for (let k = 0; k < numCuts; k++) {
-      ratios.push((k + 1) / (numCuts + 1));
-    }
-  }
-
-  const [u0, v0] = startEdge;
-  const edgeKey = (a: number, b: number) => (a < b ? `${a}_${b}` : `${b}_${a}`);
-
-  // Map each undirected edge to faces that contain it
-  const edgeToFaces = new Map<string, number[]>();
-  for (let f = 0; f < next.faces.length; f++) {
-    const face = next.faces[f];
-    for (let i = 0; i < face.length; i++) {
-      const a = face[i];
-      const b = face[(i + 1) % face.length];
-      const key = edgeKey(a, b);
-      const arr = edgeToFaces.get(key) ?? [];
-      arr.push(f);
-      edgeToFaces.set(key, arr);
-    }
-  }
-
-  // Find start face containing the start edge
-  const initialFaces = edgeToFaces.get(edgeKey(u0, v0));
-  if (!initialFaces || initialFaces.length === 0) {
-    return { mesh: next, newEdgeIndices: [], newVertexIndices: [] };
-  }
-
-  // Traverse quads across opposite edges
-  const visitedFaces = new Set<number>();
-  const facesToSplit: { faceIndex: number; edgeA: [number, number]; edgeB: [number, number] }[] = [];
-
-  let currentFace = initialFaces[0];
-  let inEdge: [number, number] = [u0, v0];
-
-  const maxSteps = next.faces.length;
-  for (let step = 0; step < maxSteps; step++) {
-    if (visitedFaces.has(currentFace)) break;
-    visitedFaces.add(currentFace);
-
-    const face = next.faces[currentFace];
-    if (face.length !== 4) break;
-
-    // Find inEdge in face
-    let inIdx = -1;
-    for (let i = 0; i < 4; i++) {
-      const a = face[i];
-      const b = face[(i + 1) % 4];
-      if ((a === inEdge[0] && b === inEdge[1]) || (a === inEdge[1] && b === inEdge[0])) {
-        inIdx = i;
-        break;
-      }
-    }
-    if (inIdx === -1) break;
-
-    // The opposite edge is at (inIdx + 2) % 4
-    const oppA = face[(inIdx + 2) % 4];
-    const oppB = face[(inIdx + 3) % 4];
-    const oppEdge: [number, number] = [oppA, oppB];
-
-    facesToSplit.push({
-      faceIndex: currentFace,
-      edgeA: [face[inIdx], face[(inIdx + 1) % 4]],
-      edgeB: oppEdge,
-    });
-
-    // Find next face sharing oppEdge
-    const neighbors = edgeToFaces.get(edgeKey(oppA, oppB));
-    const nextFace = neighbors?.find((f) => f !== currentFace);
-    if (nextFace === undefined || visitedFaces.has(nextFace)) {
-      break;
-    }
-    currentFace = nextFace;
-    inEdge = oppEdge;
-  }
-
-  if (facesToSplit.length === 0) {
-    return { mesh: next, newEdgeIndices: [], newVertexIndices: [] };
-  }
-
-  // Canonical edge division points: ensures vertices on shared edges are identical across adjacent faces
+  const ratios = cutRatios(cutsOrRatio);
   const edgePoints = new Map<string, number>();
   const newVertexIndices: number[] = [];
 
-  function getOrAddEdgePoint(a: number, b: number, tFromA: number): number {
+  // One shared vertex per (edge, position along it), keyed from the edge's
+  // lower-index end so both faces on an edge land on the same vertex.
+  function edgePoint(a: number, b: number, tFromA: number): number {
     const u = Math.min(a, b);
     const v = Math.max(a, b);
-    const tFromU = a < b ? tFromA : 1 - tFromA;
-    const tKey = Math.round(tFromU * 10000);
-    const key = `${u}_${v}_${tKey}`;
+    const t = a < b ? tFromA : 1 - tFromA;
+    const key = `${u}_${v}_${Math.round(t * 100000)}`;
     const existing = edgePoints.get(key);
     if (existing !== undefined) return existing;
-
-    const pu = next.positions[u];
-    const pv = next.positions[v];
-    const pt: [number, number, number] = [
-      pu[0] + (pv[0] - pu[0]) * tFromU,
-      pu[1] + (pv[1] - pu[1]) * tFromU,
-      pu[2] + (pv[2] - pu[2]) * tFromU,
-    ];
-    const newIdx = next.positions.length;
-    next.positions.push(pt);
-    edgePoints.set(key, newIdx);
-    newVertexIndices.push(newIdx);
-    return newIdx;
+    const pu = base.positions[u];
+    const pv = base.positions[v];
+    const index = next.positions.length;
+    next.positions.push([pu[0] + (pv[0] - pu[0]) * t, pu[1] + (pv[1] - pu[1]) * t, pu[2] + (pv[2] - pu[2]) * t]);
+    edgePoints.set(key, index);
+    newVertexIndices.push(index);
+    return index;
   }
 
   const newEdgeIndices: [number, number][] = [];
+  const pending: number[] = [];
 
-  for (const item of facesToSplit) {
-    const face = next.faces[item.faceIndex];
-    let idxA = -1;
-    for (let i = 0; i < 4; i++) {
-      const a = face[i];
-      const b = face[(i + 1) % 4];
-      if ((a === item.edgeA[0] && b === item.edgeA[1]) || (a === item.edgeA[1] && b === item.edgeA[0])) {
-        idxA = i;
-        break;
-      }
-    }
-    if (idxA === -1) continue;
+  for (const { face: f, corner, flipped } of ring) {
+    const face = base.faces[f];
+    const uvs = base.faceUVs![f] as UV[];
+    const k = [corner, (corner + 1) % 4, (corner + 2) % 4, (corner + 3) % 4];
+    const [v0, v1, v2, v3] = k.map((i) => face[i]);
+    const [t0, t1, t2, t3] = k.map((i) => uvs[i]);
 
-    const v0 = face[idxA];
-    const v1 = face[(idxA + 1) % 4];
-    const v2 = face[(idxA + 2) % 4];
-    const v3 = face[(idxA + 3) % 4];
+    // Along the entry edge v0 → v1 and the opposite edge v3 → v2, in order.
+    const local = ratios.map((r) => (flipped ? 1 - r : r)).sort((a, b) => a - b);
+    const rowA = [v0, ...local.map((r) => edgePoint(v0, v1, r)), v1];
+    const rowB = [v3, ...local.map((r) => edgePoint(v3, v2, r)), v2];
+    const uvA = [t0, ...local.map((r) => lerpUV(t0, t1, r)), t1];
+    const uvB = [t3, ...local.map((r) => lerpUV(t3, t2, r)), t2];
+    for (let i = 1; i < rowA.length - 1; i++) newEdgeIndices.push([rowA[i], rowB[i]]);
 
-    // Division points along (v0 -> v1) and opposite (v3 -> v2)
-    const ptsA: number[] = [];
-    const ptsB: number[] = [];
-    for (const r of ratios) {
-      const mA = getOrAddEdgePoint(v0, v1, r);
-      const mB = getOrAddEdgePoint(v3, v2, r);
-      ptsA.push(mA);
-      ptsB.push(mB);
-      newEdgeIndices.push([mA, mB]);
-    }
-
-    const rowA = [v0, ...ptsA, v1];
-    const rowB = [v3, ...ptsB, v2];
-
-    // First sub-quad replaces the original face
-    next.faces[item.faceIndex] = [rowA[0], rowA[1], rowB[1], rowB[0]];
-
-    // Remaining sub-quads are appended
-    for (let i = 1; i <= numCuts; i++) {
-      next.faces.push([rowA[i], rowA[i + 1], rowB[i + 1], rowB[i]]);
+    // The first strip replaces the face (keeping its index), the rest are appended.
+    next.faces[f] = [rowA[0], rowA[1], rowB[1], rowB[0]];
+    next.faceUVs![f] = [uvA[0], uvA[1], uvB[1], uvB[0]];
+    for (let i = 1; i < rowA.length - 1; i++) {
+      appendFace(next, [rowA[i], rowA[i + 1], rowB[i + 1], rowB[i]], f, [uvA[i], uvA[i + 1], uvB[i + 1], uvB[i]], pending);
     }
   }
 
-  // Update UVs for all faces
-  const unwrapped = boxProjectUVs(next);
-
-  return { mesh: unwrapped, newEdgeIndices, newVertexIndices };
+  return { mesh: next, newEdgeIndices, newVertexIndices };
 }
 
 /**
- * Calculates 3D line segments representing the loop cut preview lines across quads.
- * Used for real-time hover feedback in the viewport before clicking.
- * `cutsOrRatio`: either the number of cuts (integer >= 1) or a specific cut ratio t (0 < t < 1).
+ * The lines a loop cut through `startEdge` would add, for the hover preview —
+ * the same ring and ratios loopCut uses.
  */
 export function getLoopCutPreviewSegments(
   mesh: QuadMesh,
   startEdge: [number, number],
   cutsOrRatio: number = 1,
 ): [ [number, number, number], [number, number, number] ][] {
-  const isSingleRatio = cutsOrRatio > 0 && cutsOrRatio < 1;
-  const numCuts = isSingleRatio ? 1 : Math.max(1, Math.min(32, Math.round(cutsOrRatio)));
-
-  const ratios: number[] = [];
-  if (isSingleRatio) {
-    ratios.push(Math.max(0.05, Math.min(0.95, cutsOrRatio)));
-  } else {
-    for (let k = 0; k < numCuts; k++) {
-      ratios.push((k + 1) / (numCuts + 1));
-    }
-  }
-
-  const [u0, v0] = startEdge;
-  const edgeKey = (a: number, b: number) => (a < b ? `${a}_${b}` : `${b}_${a}`);
-
-  const edgeToFaces = new Map<string, number[]>();
-  for (let f = 0; f < mesh.faces.length; f++) {
-    const face = mesh.faces[f];
-    for (let i = 0; i < face.length; i++) {
-      const a = face[i];
-      const b = face[(i + 1) % face.length];
-      const key = edgeKey(a, b);
-      const arr = edgeToFaces.get(key) ?? [];
-      arr.push(f);
-      edgeToFaces.set(key, arr);
-    }
-  }
-
-  const initialFaces = edgeToFaces.get(edgeKey(u0, v0));
-  if (!initialFaces || initialFaces.length === 0) return [];
-
+  const { faces: ring } = quadRing(mesh, startEdge[0], startEdge[1]);
+  const ratios = cutRatios(cutsOrRatio);
   const segments: [ [number, number, number], [number, number, number] ][] = [];
-  const visitedFaces = new Set<number>();
-
-  let currentFace = initialFaces[0];
-  let inEdge: [number, number] = [u0, v0];
-
-  const maxSteps = mesh.faces.length;
-  for (let step = 0; step < maxSteps; step++) {
-    if (visitedFaces.has(currentFace)) break;
-    visitedFaces.add(currentFace);
-
-    const face = mesh.faces[currentFace];
-    if (face.length !== 4) break;
-
-    let inIdx = -1;
-    for (let i = 0; i < 4; i++) {
-      const a = face[i];
-      const b = face[(i + 1) % 4];
-      if ((a === inEdge[0] && b === inEdge[1]) || (a === inEdge[1] && b === inEdge[0])) {
-        inIdx = i;
-        break;
-      }
+  const lerp = (a: number[], b: number[], t: number): [number, number, number] => [
+    a[0] + (b[0] - a[0]) * t,
+    a[1] + (b[1] - a[1]) * t,
+    a[2] + (b[2] - a[2]) * t,
+  ];
+  for (const { face: f, corner, flipped } of ring) {
+    const face = mesh.faces[f];
+    const p0 = mesh.positions[face[corner]];
+    const p1 = mesh.positions[face[(corner + 1) % 4]];
+    const p2 = mesh.positions[face[(corner + 2) % 4]];
+    const p3 = mesh.positions[face[(corner + 3) % 4]];
+    if (!p0 || !p1 || !p2 || !p3) continue;
+    for (const r of ratios) {
+      const t = flipped ? 1 - r : r;
+      segments.push([lerp(p0, p1, t), lerp(p3, p2, t)]);
     }
-    if (inIdx === -1) break;
-
-    const oppA = face[(inIdx + 2) % 4];
-    const oppB = face[(inIdx + 3) % 4];
-    const oppEdge: [number, number] = [oppA, oppB];
-
-    const pa = mesh.positions[face[inIdx]];
-    const pb = mesh.positions[face[(inIdx + 1) % 4]];
-    const pc = mesh.positions[oppA];
-    const pd = mesh.positions[oppB];
-
-    if (pa && pb && pc && pd) {
-      for (const r of ratios) {
-        const midA: [number, number, number] = [
-          pa[0] + (pb[0] - pa[0]) * r,
-          pa[1] + (pb[1] - pa[1]) * r,
-          pa[2] + (pb[2] - pa[2]) * r,
-        ];
-        const midB: [number, number, number] = [
-          pd[0] + (pc[0] - pd[0]) * r,
-          pd[1] + (pc[1] - pd[1]) * r,
-          pd[2] + (pc[2] - pd[2]) * r,
-        ];
-        segments.push([midA, midB]);
-      }
-    }
-
-    const neighbors = edgeToFaces.get(edgeKey(oppA, oppB));
-    const nextFace = neighbors?.find((f) => f !== currentFace);
-    if (nextFace === undefined || visitedFaces.has(nextFace)) {
-      break;
-    }
-    currentFace = nextFace;
-    inEdge = oppEdge;
   }
-
   return segments;
 }
 
@@ -1204,144 +899,56 @@ export function transformSelectionByMatrix(
 }
 
 /**
- * Deletes the specified faces from a QuadMesh, reindexing vertices and
- * cleaning up any orphaned vertices, UVs, and per-face shading attributes.
+ * The faces for which `keep` is true, with every per-face attribute (UVs,
+ * shading, material) carried along and the vertices compacted: unused ones
+ * dropped, the rest renumbered in their original order.
  */
-export function deleteFaces(mesh: QuadMesh, faceIndices: number[]): QuadMesh {
-  if (faceIndices.length === 0) return cloneQuadMesh(mesh);
-  const toDelete = new Set(faceIndices.map(Number));
-
-  const remainingFaces: number[][] = [];
-  const remainingFaceUVs: [number, number][][] = [];
-  const remainingFaceShading: QuadMeshShading[] = [];
-
-  for (let i = 0; i < mesh.faces.length; i++) {
-    if (!toDelete.has(i)) {
-      remainingFaces.push([...mesh.faces[i]]);
-      if (mesh.faceUVs && mesh.faceUVs[i]) {
-        remainingFaceUVs.push(mesh.faceUVs[i].map((uv) => [uv[0], uv[1]]));
-      }
-      if (mesh.faceShading && mesh.faceShading[i]) {
-        remainingFaceShading.push(mesh.faceShading[i]);
-      }
-    }
-  }
-
-  if (remainingFaces.length === 0) {
-    return {
-      positions: [],
-      faces: [],
-      uvs: [],
-      faceUVs: [],
-      shading: mesh.shading,
-      faceShading: [],
-      sourceSignature: mesh.sourceSignature,
-    };
-  }
-
-  const usedVertexIndices = new Set<number>();
-  for (const face of remainingFaces) {
-    for (const vIdx of face) {
-      usedVertexIndices.add(vIdx);
-    }
-  }
+function subsetFaces(mesh: QuadMesh, keep: (face: number) => boolean): QuadMesh {
+  const kept: number[] = [];
+  for (let f = 0; f < mesh.faces.length; f++) if (keep(f)) kept.push(f);
 
   const oldToNew = new Map<number, number>();
-  const newPositions: [number, number, number][] = [];
-  const newUVs: [number, number][] = [];
-
-  for (let oldIdx = 0; oldIdx < mesh.positions.length; oldIdx++) {
-    if (usedVertexIndices.has(oldIdx)) {
-      oldToNew.set(oldIdx, newPositions.length);
-      const p = mesh.positions[oldIdx];
-      newPositions.push([p[0], p[1], p[2]]);
-      if (mesh.uvs && mesh.uvs[oldIdx]) {
-        newUVs.push([mesh.uvs[oldIdx][0], mesh.uvs[oldIdx][1]]);
-      }
-    }
+  const used = new Uint8Array(mesh.positions.length);
+  for (const f of kept) for (const v of mesh.faces[f]) used[v] = 1;
+  const positions: [number, number, number][] = [];
+  const uvs: [number, number][] = [];
+  for (let v = 0; v < mesh.positions.length; v++) {
+    if (!used[v]) continue;
+    oldToNew.set(v, positions.length);
+    const p = mesh.positions[v];
+    positions.push([p[0], p[1], p[2]]);
+    if (mesh.uvs?.[v]) uvs.push([mesh.uvs[v][0], mesh.uvs[v][1]]);
   }
 
-  const remappedFaces = remainingFaces.map((face) =>
-    face.map((v) => oldToNew.get(v) ?? 0),
-  );
-
+  const hasFaceShading = Boolean(mesh.faceShading && mesh.faceShading.length > 0);
   return {
-    positions: newPositions,
-    faces: remappedFaces,
-    uvs: mesh.uvs ? newUVs : undefined,
-    faceUVs: mesh.faceUVs ? remainingFaceUVs : undefined,
+    positions,
+    faces: kept.map((f) => mesh.faces[f].map((v) => oldToNew.get(v)!)),
+    uvs: mesh.uvs ? uvs : undefined,
+    faceUVs: mesh.faceUVs ? kept.map((f) => (mesh.faceUVs![f] ?? []).map((uv) => [uv[0], uv[1]] as [number, number])) : undefined,
     shading: mesh.shading,
-    faceShading: mesh.faceShading ? remainingFaceShading : undefined,
+    faceShading: mesh.faceShading ? (hasFaceShading ? kept.map((f) => mesh.faceShading![f]) : []) : undefined,
+    faceMaterials: mesh.faceMaterials ? kept.map((f) => mesh.faceMaterials![f] ?? 0) : undefined,
     sourceSignature: mesh.sourceSignature,
   };
 }
 
 /**
- * Extracts the specified faces from a QuadMesh into a new QuadMesh,
- * preserving their geometry, UVs, and shading with compact vertex indexing.
+ * Deletes the specified faces from a QuadMesh, reindexing vertices and
+ * dropping any left unused, with UVs, shading and materials kept in step.
  */
-export function extractFaces(mesh: QuadMesh, faceIndices: number[]): QuadMesh {
-  if (faceIndices.length === 0) {
-    return {
-      positions: [],
-      faces: [],
-      uvs: [],
-      faceUVs: [],
-      shading: mesh.shading,
-      faceShading: [],
-    };
-  }
-  const toExtract = new Set(faceIndices.map(Number));
-
-  const extractedFaces: number[][] = [];
-  const extractedFaceUVs: [number, number][][] = [];
-  const extractedFaceShading: QuadMeshShading[] = [];
-
-  for (let i = 0; i < mesh.faces.length; i++) {
-    if (toExtract.has(i)) {
-      extractedFaces.push([...mesh.faces[i]]);
-      if (mesh.faceUVs && mesh.faceUVs[i]) {
-        extractedFaceUVs.push(mesh.faceUVs[i].map((uv) => [uv[0], uv[1]]));
-      }
-      if (mesh.faceShading && mesh.faceShading[i]) {
-        extractedFaceShading.push(mesh.faceShading[i]);
-      }
-    }
-  }
-
-  const usedVertexIndices = new Set<number>();
-  for (const face of extractedFaces) {
-    for (const vIdx of face) {
-      usedVertexIndices.add(vIdx);
-    }
-  }
-
-  const oldToNew = new Map<number, number>();
-  const newPositions: [number, number, number][] = [];
-  const newUVs: [number, number][] = [];
-
-  for (let oldIdx = 0; oldIdx < mesh.positions.length; oldIdx++) {
-    if (usedVertexIndices.has(oldIdx)) {
-      oldToNew.set(oldIdx, newPositions.length);
-      const p = mesh.positions[oldIdx];
-      newPositions.push([p[0], p[1], p[2]]);
-      if (mesh.uvs && mesh.uvs[oldIdx]) {
-        newUVs.push([mesh.uvs[oldIdx][0], mesh.uvs[oldIdx][1]]);
-      }
-    }
-  }
-
-  const remappedFaces = extractedFaces.map((face) =>
-    face.map((v) => oldToNew.get(v) ?? 0),
-  );
-
-  return {
-    positions: newPositions,
-    faces: remappedFaces,
-    uvs: mesh.uvs ? newUVs : undefined,
-    faceUVs: mesh.faceUVs ? extractedFaceUVs : undefined,
-    shading: mesh.shading,
-    faceShading: mesh.faceShading ? extractedFaceShading : undefined,
-  };
+export function deleteFaces(mesh: QuadMesh, faceIndices: number[]): QuadMesh {
+  if (faceIndices.length === 0) return cloneQuadMesh(mesh);
+  const toDelete = new Set(faceIndices.map(Number));
+  return subsetFaces(mesh, (f) => !toDelete.has(f));
 }
 
+/**
+ * Extracts the specified faces from a QuadMesh into a new QuadMesh,
+ * preserving their geometry, UVs, shading and materials with compact vertex
+ * indexing.
+ */
+export function extractFaces(mesh: QuadMesh, faceIndices: number[]): QuadMesh {
+  const toExtract = new Set(faceIndices.map(Number));
+  return subsetFaces(mesh, (f) => toExtract.has(f));
+}

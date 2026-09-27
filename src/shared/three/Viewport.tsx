@@ -40,6 +40,7 @@ import {
   EDIT_MESH_DELETE_FACES_ACTION,
   EDIT_MESH_SEPARATE_FACES_ACTION,
   resolveEditMeshData,
+  editMeshSelectionPatch,
 } from "../graph/nodes/editMesh";
 import { createEditMeshHandles } from "./editMeshHandles";
 import { layoutKey } from "./layoutKey";
@@ -2044,18 +2045,10 @@ export function Viewport({
             e.preventDefault();
             if (selectMode === "points") {
               const allPoints = Array.from({ length: quadMesh.positions.length }, (_, i) => i);
-              if (activeEditMeshNode.type === EDIT_MESH_NODE.type && !activeEditMeshNode.params.meshData) {
-                onParamChangeRef.current?.({ selectedPoints: allPoints, meshData: cloneQuadMesh(quadMesh) }, activeEditMeshNode.id);
-              } else {
-                onParamChangeRef.current?.("selectedPoints", allPoints, activeEditMeshNode.id);
-              }
+              onParamChangeRef.current?.(editMeshSelectionPatch(activeEditMeshNode, "selectedPoints", allPoints, quadMesh), activeEditMeshNode.id);
             } else {
               const allFaces = Array.from({ length: quadMesh.faces.length }, (_, i) => i);
-              if (activeEditMeshNode.type === EDIT_MESH_NODE.type && !activeEditMeshNode.params.meshData) {
-                onParamChangeRef.current?.({ selectedFaces: allFaces, meshData: cloneQuadMesh(quadMesh) }, activeEditMeshNode.id);
-              } else {
-                onParamChangeRef.current?.("selectedFaces", allFaces, activeEditMeshNode.id);
-              }
+              onParamChangeRef.current?.(editMeshSelectionPatch(activeEditMeshNode, "selectedFaces", allFaces, quadMesh), activeEditMeshNode.id);
             }
             return;
           }
@@ -3175,11 +3168,7 @@ export function Viewport({
                     )
                   : new Set<number>();
                 picked.forEach((p) => curPoints.add(p));
-                if (editMeshNodeOnDown.type === EDIT_MESH_NODE.type && !editMeshNodeOnDown.params.meshData) {
-                  onParamChangeRef.current?.({ selectedPoints: Array.from(curPoints), meshData: cloneQuadMesh(quadMesh) }, editMeshNodeOnDown.id);
-                } else {
-                  onParamChangeRef.current?.("selectedPoints", Array.from(curPoints), editMeshNodeOnDown.id);
-                }
+                onParamChangeRef.current?.(editMeshSelectionPatch(editMeshNodeOnDown, "selectedPoints", Array.from(curPoints), quadMesh), editMeshNodeOnDown.id);
               }
             } else {
               const faceIdx = editMeshHandles.pickFace(raycaster, quadMesh, srcMesh.matrixWorld);
@@ -3192,11 +3181,7 @@ export function Viewport({
                     )
                   : new Set<number>();
                 curFaces.add(faceIdx);
-                if (editMeshNodeOnDown.type === EDIT_MESH_NODE.type && !editMeshNodeOnDown.params.meshData) {
-                  onParamChangeRef.current?.({ selectedFaces: Array.from(curFaces), meshData: cloneQuadMesh(quadMesh) }, editMeshNodeOnDown.id);
-                } else {
-                  onParamChangeRef.current?.("selectedFaces", Array.from(curFaces), editMeshNodeOnDown.id);
-                }
+                onParamChangeRef.current?.(editMeshSelectionPatch(editMeshNodeOnDown, "selectedFaces", Array.from(curFaces), quadMesh), editMeshNodeOnDown.id);
               }
             }
           }
@@ -4070,11 +4055,7 @@ export function Viewport({
                   }
                 }
                 if (changed) {
-                  if (activeEditMesh.type === EDIT_MESH_NODE.type && !activeEditMesh.params.meshData) {
-                    onParamChangeRef.current?.({ selectedPoints: Array.from(curPoints), meshData: cloneQuadMesh(quadMesh) }, activeEditMesh.id);
-                  } else {
-                    onParamChangeRef.current?.("selectedPoints", Array.from(curPoints), activeEditMesh.id);
-                  }
+                  onParamChangeRef.current?.(editMeshSelectionPatch(activeEditMesh, "selectedPoints", Array.from(curPoints), quadMesh), activeEditMesh.id);
                 }
               }
             } else {
@@ -4087,11 +4068,7 @@ export function Viewport({
                 );
                 if (!curFaces.has(hitFace)) {
                   curFaces.add(hitFace);
-                  if (activeEditMesh.type === EDIT_MESH_NODE.type && !activeEditMesh.params.meshData) {
-                    onParamChangeRef.current?.({ selectedFaces: Array.from(curFaces), meshData: cloneQuadMesh(quadMesh) }, activeEditMesh.id);
-                  } else {
-                    onParamChangeRef.current?.("selectedFaces", Array.from(curFaces), activeEditMesh.id);
-                  }
+                  onParamChangeRef.current?.(editMeshSelectionPatch(activeEditMesh, "selectedFaces", Array.from(curFaces), quadMesh), activeEditMesh.id);
                 }
               }
             }
@@ -4410,11 +4387,7 @@ export function Viewport({
                     )
                   : new Set<number>();
                 picked.forEach((p) => curPoints.add(p));
-                if (activeEditMesh.type === EDIT_MESH_NODE.type && !activeEditMesh.params.meshData) {
-                  onParamChangeRef.current?.({ selectedPoints: Array.from(curPoints), meshData: cloneQuadMesh(quadMesh) }, activeEditMesh.id);
-                } else {
-                  onParamChangeRef.current?.("selectedPoints", Array.from(curPoints), activeEditMesh.id);
-                }
+                onParamChangeRef.current?.(editMeshSelectionPatch(activeEditMesh, "selectedPoints", Array.from(curPoints), quadMesh), activeEditMesh.id);
               } else {
                 const picked = editMeshHandles.pickFacesInRect(minX, minY, maxX, maxY, rect.width, rect.height, camera, quadMesh, srcMesh.matrixWorld);
                 const isAccumulate = e.altKey || e.ctrlKey || e.metaKey;
@@ -4426,11 +4399,7 @@ export function Viewport({
                     )
                   : new Set<number>();
                 picked.forEach((f) => curFaces.add(f));
-                if (activeEditMesh.type === EDIT_MESH_NODE.type && !activeEditMesh.params.meshData) {
-                  onParamChangeRef.current?.({ selectedFaces: Array.from(curFaces), meshData: cloneQuadMesh(quadMesh) }, activeEditMesh.id);
-                } else {
-                  onParamChangeRef.current?.("selectedFaces", Array.from(curFaces), activeEditMesh.id);
-                }
+                onParamChangeRef.current?.(editMeshSelectionPatch(activeEditMesh, "selectedFaces", Array.from(curFaces), quadMesh), activeEditMesh.id);
               }
               return;
             } else {
@@ -4450,11 +4419,7 @@ export function Viewport({
                   );
                   if (curPoints.has(ptIdx)) curPoints.delete(ptIdx);
                   else curPoints.add(ptIdx);
-                  if (activeEditMesh.type === EDIT_MESH_NODE.type && !activeEditMesh.params.meshData) {
-                    onParamChangeRef.current?.({ selectedPoints: Array.from(curPoints), meshData: cloneQuadMesh(quadMesh) }, activeEditMesh.id);
-                  } else {
-                    onParamChangeRef.current?.("selectedPoints", Array.from(curPoints), activeEditMesh.id);
-                  }
+                  onParamChangeRef.current?.(editMeshSelectionPatch(activeEditMesh, "selectedPoints", Array.from(curPoints), quadMesh), activeEditMesh.id);
                   return;
                 }
               } else {
@@ -4467,11 +4432,7 @@ export function Viewport({
                   );
                   if (curFaces.has(faceIdx)) curFaces.delete(faceIdx);
                   else curFaces.add(faceIdx);
-                  if (activeEditMesh.type === EDIT_MESH_NODE.type && !activeEditMesh.params.meshData) {
-                    onParamChangeRef.current?.({ selectedFaces: Array.from(curFaces), meshData: cloneQuadMesh(quadMesh) }, activeEditMesh.id);
-                  } else {
-                    onParamChangeRef.current?.("selectedFaces", Array.from(curFaces), activeEditMesh.id);
-                  }
+                  onParamChangeRef.current?.(editMeshSelectionPatch(activeEditMesh, "selectedFaces", Array.from(curFaces), quadMesh), activeEditMesh.id);
                   return;
                 }
               }
@@ -4905,11 +4866,7 @@ export function Viewport({
                 curPoints.clear();
                 curPoints.add(ptIdx);
               }
-              if (activeEditMesh.type === EDIT_MESH_NODE.type && !activeEditMesh.params.meshData) {
-                onParamChangeRef.current?.({ selectedPoints: Array.from(curPoints), meshData: cloneQuadMesh(quadMesh) }, activeEditMesh.id);
-              } else {
-                onParamChangeRef.current?.("selectedPoints", Array.from(curPoints), activeEditMesh.id);
-              }
+              onParamChangeRef.current?.(editMeshSelectionPatch(activeEditMesh, "selectedPoints", Array.from(curPoints), quadMesh), activeEditMesh.id);
               return;
             }
           } else if (selectMode === "faces") {
@@ -4927,11 +4884,7 @@ export function Viewport({
                 curFaces.clear();
                 curFaces.add(faceIdx);
               }
-              if (activeEditMesh.type === EDIT_MESH_NODE.type && !activeEditMesh.params.meshData) {
-                onParamChangeRef.current?.({ selectedFaces: Array.from(curFaces), meshData: cloneQuadMesh(quadMesh) }, activeEditMesh.id);
-              } else {
-                onParamChangeRef.current?.("selectedFaces", Array.from(curFaces), activeEditMesh.id);
-              }
+              onParamChangeRef.current?.(editMeshSelectionPatch(activeEditMesh, "selectedFaces", Array.from(curFaces), quadMesh), activeEditMesh.id);
               return;
             }
           }

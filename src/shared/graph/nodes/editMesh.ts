@@ -25,6 +25,8 @@ import {
   quadMeshSignature,
 } from "../quadMesh";
 
+const EDIT_MESH_NODE_TYPE = "modifier/edit-mesh";
+
 export const EDIT_MESH_RESEED_ACTION = "edit-mesh/reseed";
 export const EDIT_MESH_EXTRUDE_ACTION = "edit-mesh/extrude";
 export const EDIT_MESH_INSET_ACTION = "edit-mesh/inset";
@@ -75,6 +77,25 @@ export function resolveEditMeshData(
   return createQuadBox(1, 1, 1);
 }
 
+
+/**
+ * The param patch for a new point/face selection. Selection indices only mean
+ * something against one fixed mesh, so the first selection on a live (not yet
+ * frozen) Edit Mesh also freezes it: `quadMesh` — what the selection was made
+ * on — is stored as meshData in the same change. Edit Mesh Points has no
+ * meshData and just gets the selection.
+ */
+export function editMeshSelectionPatch(
+  node: { type: string; params: Record<string, unknown> },
+  key: "selectedPoints" | "selectedFaces",
+  indices: number[],
+  quadMesh: QuadMesh,
+): Record<string, unknown> {
+  if (node.type === EDIT_MESH_NODE_TYPE && !node.params.meshData) {
+    return { [key]: indices, meshData: cloneQuadMesh(quadMesh) };
+  }
+  return { [key]: indices };
+}
 
 interface EditMeshState {
   mesh?: THREE.Mesh;
@@ -161,7 +182,9 @@ function applyEditMeshMaterial(
     return;
   }
 
-  if (srcMesh && srcMesh.material instanceof THREE.Material) {
+  // A single material or a multi-material array alike: a multi-material
+  // import carries per-face slots (QuadMesh.faceMaterials) that index into it.
+  if (srcMesh && (srcMesh.material instanceof THREE.Material || Array.isArray(srcMesh.material))) {
     inheritSourceMaterial(mesh, srcMesh.material);
     clearAppliedMaterialSignature(mesh);
     (mesh.material as any).__isSharedFromSrc = true;
@@ -326,7 +349,7 @@ function editMeshParamFields(instance?: NodeInstance): ParamFieldDef[] {
  * - Shading options (auto, smooth, flat) and coherent UV unwrapping
  */
 export const EDIT_MESH_NODE: NodeDefinition = {
-  type: "modifier/edit-mesh",
+  type: EDIT_MESH_NODE_TYPE,
   label: "Edit Mesh",
   category: "transform",
   inputs: [

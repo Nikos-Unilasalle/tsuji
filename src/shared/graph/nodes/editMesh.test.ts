@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import * as THREE from "three";
-import { EDIT_MESH_NODE, EDIT_MESH_RESEED_ACTION, editMeshFreezeStatus, resolveEditMeshData } from "./editMesh";
+import { EDIT_MESH_NODE, EDIT_MESH_RESEED_ACTION, editMeshFreezeStatus, editMeshSelectionPatch, resolveEditMeshData } from "./editMesh";
 import { EvalContext } from "../types";
 import { cloneQuadMesh, createQuadBox, quadMeshToBufferGeometry, QuadMesh, transformSelection } from "../quadMesh";
 
@@ -277,6 +277,22 @@ describe("EDIT_MESH_NODE", () => {
       const resolved = resolveEditMeshData(node, evaluatedResults);
       expect(resolved).toBe(frozenMesh);
       expect(resolved.positions.length).toBe(4);
+    });
+  });
+
+  describe("editMeshSelectionPatch", () => {
+    it("freezes a live Edit Mesh on its first selection, and only then", () => {
+      const quad = createQuadBox();
+      const live = { type: EDIT_MESH_NODE.type, params: { meshData: null } };
+      const patch = editMeshSelectionPatch(live, "selectedFaces", [2], quad);
+      expect(patch.selectedFaces).toEqual([2]);
+      expect(patch.meshData).toEqual(quad);
+      expect(patch.meshData).not.toBe(quad);
+
+      const frozen = { type: EDIT_MESH_NODE.type, params: { meshData: quad } };
+      expect(editMeshSelectionPatch(frozen, "selectedPoints", [1], quad)).toEqual({ selectedPoints: [1] });
+      const points = { type: "object/edit_points", params: {} };
+      expect(editMeshSelectionPatch(points, "selectedPoints", [1], quad)).toEqual({ selectedPoints: [1] });
     });
   });
 

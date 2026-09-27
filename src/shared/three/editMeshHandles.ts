@@ -8,6 +8,7 @@ import {
   computeFaceCentroid,
   quadMeshSignature,
 } from "../graph/quadMesh";
+import { triangulateFace } from "../graph/mesh/triangulate";
 
 const WIREFRAME_COLOR = 0x38bdf8;
 const SELECTED_FACE_COLOR = 0x22c55e;
@@ -184,12 +185,9 @@ export function createEditMeshHandles(): EditMeshHandles {
       if (occluderGeometry) disposeGeometryBvh(occluderGeometry), occluderGeometry.dispose();
       const tris: number[] = [];
       for (const face of mesh.faces) {
-        const p0 = mesh.positions[face[0]];
-        if (!p0) continue;
-        for (let i = 1; i < face.length - 1; i++) {
-          const pi = mesh.positions[face[i]];
-          const pn = mesh.positions[face[i + 1]];
-          if (pi && pn) tris.push(p0[0], p0[1], p0[2], pi[0], pi[1], pi[2], pn[0], pn[1], pn[2]);
+        for (const tri of triangulateFace(mesh.positions, face)) {
+          const [a, b, c] = tri.map((corner) => mesh.positions[face[corner]]);
+          if (a && b && c) tris.push(a[0], a[1], a[2], b[0], b[1], b[2], c[0], c[1], c[2]);
         }
       }
       occluderGeometry = new THREE.BufferGeometry();
@@ -388,12 +386,11 @@ export function createEditMeshHandles(): EditMeshHandles {
           for (const fIdx of facesToHighlight) {
             const face = quadMesh.faces[fIdx];
             if (!face || face.length < 3) continue;
-            const p0 = positions[face[0]];
-            if (!p0) continue;
-            for (let i = 1; i < face.length - 1; i++) {
-              const pi = positions[face[i]];
-              const pn = positions[face[i + 1]];
-              if (pi && pn) faceVerts.push(p0[0], p0[1], p0[2], pi[0], pi[1], pi[2], pn[0], pn[1], pn[2]);
+            for (const tri of triangulateFace(positions, face)) {
+              for (const corner of tri) {
+                const p = positions[face[corner]];
+                if (p) faceVerts.push(p[0], p[1], p[2]);
+              }
             }
           }
         }
@@ -508,13 +505,12 @@ export function createEditMeshHandles(): EditMeshHandles {
         const worldNormal = computeFaceNormal(quadMesh.positions, face).applyMatrix3(normalMatrix).normalize();
         if (!xray && raycaster.ray.direction.dot(worldNormal) >= -1e-4) continue; // Backface
 
-        const rawA = quadMesh.positions[face[0]];
-        if (!rawA) continue;
-        pA.set(rawA[0], rawA[1], rawA[2]);
-        for (let i = 1; i < face.length - 1; i++) {
-          const rawB = quadMesh.positions[face[i]];
-          const rawC = quadMesh.positions[face[i + 1]];
-          if (!rawB || !rawC) continue;
+        for (const [ia, ib, ic] of triangulateFace(quadMesh.positions, face)) {
+          const rawA = quadMesh.positions[face[ia]];
+          const rawB = quadMesh.positions[face[ib]];
+          const rawC = quadMesh.positions[face[ic]];
+          if (!rawA || !rawB || !rawC) continue;
+          pA.set(rawA[0], rawA[1], rawA[2]);
           pB.set(rawB[0], rawB[1], rawB[2]);
           pC.set(rawC[0], rawC[1], rawC[2]);
           if (!localRay.intersectTriangle(pA, pB, pC, false, localHit)) continue;
