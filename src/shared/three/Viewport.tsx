@@ -40,9 +40,25 @@ import {
   EDIT_MESH_DELETE_FACES_ACTION,
   EDIT_MESH_SEPARATE_FACES_ACTION,
   resolveEditMeshData,
-  editMeshSelectionPatch,
+  readEditMeshSelection,
+  editMeshSelectionParams,
+  editMeshModeSwitchParams,
 } from "../graph/nodes/editMesh";
-import { createEditMeshHandles } from "./editMeshHandles";
+import { circleRegion, createEditMeshHandles, polygonRegion, rectRegion, ScreenRegion } from "./editMeshHandles";
+import {
+  combineSelection,
+  emptySelection,
+  flatFaces,
+  growSelection,
+  linkedSelection,
+  MeshSelection,
+  selectAll,
+  selectionVertices,
+  SelectionOp,
+  SelectMode,
+  shrinkSelection,
+} from "../graph/mesh/selection";
+import { edgeLoop, edgeRing, quadRing } from "../graph/mesh/loops";
 import { layoutKey } from "./layoutKey";
 import {
   QuadMesh,
@@ -492,6 +508,9 @@ function editMeshQuadMesh(
   }
   return cached.mesh;
 }
+
+/** The Edit Mesh paint-select brush radius, in CSS px (the drawn circle matches). */
+const EDIT_MESH_BRUSH_RADIUS_PX = 28;
 
 const exportImageCache = new Map<string, HTMLImageElement>();
 function getExportImage(url: string): HTMLImageElement | null {
@@ -1013,7 +1032,19 @@ export function Viewport({
   editMeshToolRef.current = editMeshTool;
   const editMeshHoverFaceRef = useRef<number | null>(null);
   const editMeshPreviewLoopRef = useRef<[ [number, number, number], [number, number, number] ][] | null>(null);
-  const editMeshRectDragRef = useRef<{ startX: number; startY: number; currentX: number; currentY: number } | null>(null);
+  const editMeshRectDragRef = useRef<{
+    startX: number;
+    startY: number;
+    currentX: number;
+    currentY: number;
+    /** The lasso's path so far, in client px (lasso shape only). */
+    path: { x: number; y: number }[];
+  } | null>(null);
+  // Shift+drag draws a box or a lasso, toggled from the Edit Mesh HUD.
+  const [editMeshMarqueeShape, setEditMeshMarqueeShape] = useState<"box" | "lasso">("box");
+  const editMeshMarqueeShapeRef = useRef<"box" | "lasso">("box");
+  editMeshMarqueeShapeRef.current = editMeshMarqueeShape;
+  const [lassoPath, setLassoPath] = useState<string | null>(null);
   const editMeshPaintDragRef = useRef<boolean>(false);
   const [editMeshPaintCursor, setEditMeshPaintCursor] = useState<{ x: number; y: number } | null>(null);
   const [editMeshLoopCuts, setEditMeshLoopCuts] = useState<number>(1);
@@ -1652,6 +1683,117 @@ export function Viewport({
     });
     const editMeshCentroidProxy = new THREE.Object3D();
     editMeshCentroidProxy.userData.isEditMeshCentroidProxy = true;
+
+    // --- Edit Mesh selection: one path for every gesture ------------------
+    // Click, Shift+click, Alt(+Ctrl)+click, box, lasso, brush and the
+    // keyboard all resolve the node the same way and write the result the
+    // same way; they differ only in what they pick and how it combines.
+
+    interface EditMeshTarget {
+      node: GraphNodeLike;
+      srcMesh: THREE.Mesh;
+      quadMesh: QuadMesh;
+      mode: SelectMode;
+      selection: MeshSelection;
+      isPointsOnly: boolean;
+    }
+    type GraphNodeLike = { id: string; type: string; params: Record<string, unknown> };
+
+    /** Where the pointer last was over this canvas — L selects what's under it. */
+    let editPointer: { clientX: number; clientY: number } | null = null;
+
+    /** The selected Edit Mesh / Edit Mesh Points node with what it's editing, or null. */
+    function editMeshTarget(): EditMeshTarget | null {
+      if (outputMode || !selectedNodeIdRef.current) return null;
+      const node = graphRef.current.nodes.find(
+        (n) =>
+          n.id === selectedNodeIdRef.current &&
+          (n.type === EDIT_MESH_NODE.type || n.type === EDIT_MESH_POINTS_NODE.type),
+      );
+      if (!node) return null;
+      const meshObj = latestResultsRef.current?.get(node.id)?.geometry;
+      const srcMesh = meshObj instanceof THREE.Object3D ? findFirstMesh(meshObj) : null;
+      if (!srcMesh) return null;
+      srcMesh.updateMatrixWorld(true);
+      const quadMesh = editMeshQuadMesh(node, latestResultsRef.current, srcMesh);
+      return { node, srcMesh, quadMesh, ...readEditMeshSelection(node) };
+    }
+
+    function commitEditSelection(target: EditMeshTarget, next: MeshSelection) {
+      onParamChangeRef.current?.(editMeshSelectionParams(target.node, target.mode, next, target.quadMesh), target.node.id);
+    }
+
+    function applyEditPick(target: EditMeshTarget, picked: MeshSelection | null, op: SelectionOp): boolean {
+      if (!picked) return false;
+      commitEditSelection(target, combineSelection(target.mode, target.selection, picked, op));
+      return true;
+    }
+
+    function canvasPoint(clientX: number, clientY: number) {
+      const rect = renderer.domElement.getBoundingClientRect();
+      const x = clientX - rect.left;
+      const y = clientY - rect.top;
+      return { rect, x, y, ndc: new THREE.Vector2((x / rect.width) * 2 - 1, -(y / rect.height) * 2 + 1) };
+    }
+
+    /** The one element under the cursor in the target's mode, or null. */
+    function pickEditElement(target: EditMeshTarget, clientX: number, clientY: number): MeshSelection | null {
+      const { rect, ndc } = canvasPoint(clientX, clientY);
+      const m = target.srcMesh.matrixWorld;
+      if (target.mode === "points") {
+        const p = editMeshHandles.pickPoint(ndc, camera, rect.width, rect.height, target.quadMesh, m);
+        return p === null ? null : { ...emptySelection(), points: [p] };
+      }
+      if (target.mode === "edges") {
+        const e = editMeshHandles.pickEdge(ndc, camera, rect.width, rect.height, target.quadMesh, m);
+        return e ? { ...emptySelection(), edges: [e] } : null;
+      }
+      if (!raycaster) return null;
+      raycaster.setFromCamera(ndc, camera);
+      const f = editMeshHandles.pickFace(raycaster, target.quadMesh, m);
+      return f === null ? null : { ...emptySelection(), faces: [f] };
+    }
+
+    /**
+     * The loop (or, with `ring`, the ring) through the edge under the cursor:
+     * an edge loop in points/edges mode, the quad ring in faces mode.
+     */
+    function pickEditLoop(target: EditMeshTarget, clientX: number, clientY: number, ring: boolean): MeshSelection | null {
+      const { rect, ndc } = canvasPoint(clientX, clientY);
+      const edge = editMeshHandles.pickEdge(ndc, camera, rect.width, rect.height, target.quadMesh, target.srcMesh.matrixWorld);
+      if (!edge) return null;
+      const out = emptySelection();
+      if (target.mode === "faces") {
+        out.faces = quadRing(target.quadMesh, edge[0], edge[1]).faces.map((r) => r.face);
+        return out;
+      }
+      const edges = ring ? edgeRing(target.quadMesh, edge[0], edge[1]) : edgeLoop(target.quadMesh, edge[0], edge[1]);
+      if (target.mode === "edges") out.edges = edges;
+      else out.points = [...new Set(edges.flat())];
+      return out;
+    }
+
+    /** Everything inside a screen region (box, lasso, brush) in the target's mode. */
+    function pickEditRegion(target: EditMeshTarget, region: ScreenRegion): MeshSelection {
+      const { rect } = canvasPoint(0, 0);
+      const m = target.srcMesh.matrixWorld;
+      const out = emptySelection();
+      if (target.mode === "points") {
+        out.points = editMeshHandles.pickPointsInRegion(region, rect.width, rect.height, camera, target.quadMesh, m);
+      } else if (target.mode === "edges") {
+        out.edges = editMeshHandles.pickEdgesInRegion(region, rect.width, rect.height, camera, target.quadMesh, m);
+      } else {
+        out.faces = editMeshHandles.pickFacesInRegion(region, rect.width, rect.height, camera, target.quadMesh, m);
+      }
+      return out;
+    }
+
+    /** The brush: points/edges under the circle, the face under its centre. */
+    function pickEditBrush(target: EditMeshTarget, clientX: number, clientY: number): MeshSelection | null {
+      if (target.mode === "faces") return pickEditElement(target, clientX, clientY);
+      const { x, y } = canvasPoint(clientX, clientY);
+      return pickEditRegion(target, circleRegion(x, y, EDIT_MESH_BRUSH_RADIUS_PX));
+    }
     let dragStartMeshData: QuadMesh | null = null;
     let dragStartPointPositionsList: THREE.Vector3[] | null = null;
 
@@ -1970,23 +2112,6 @@ export function Viewport({
         }
       }
 
-      // Deselect All shortcut: Alt+A or Cmd/Ctrl+D
-      if ((e.altKey && (key === "a" || key === "q")) || ((e.ctrlKey || e.metaKey) && key === "d")) {
-        const activeEditMeshNode = selectedNodeIdRef.current
-          ? graphRef.current.nodes.find(
-              (n) =>
-                n.id === selectedNodeIdRef.current &&
-                (n.type === EDIT_MESH_NODE.type || n.type === EDIT_MESH_POINTS_NODE.type),
-            )
-          : null;
-        if (activeEditMeshNode) {
-          e.preventDefault();
-          onParamChangeRef.current?.("selectedPoints", [], activeEditMeshNode.id);
-          onParamChangeRef.current?.("selectedFaces", [], activeEditMeshNode.id);
-          return;
-        }
-      }
-
       // Escape leaves Loop Cut before it touches the selection: the gizmo is
       // withheld for as long as that tool is armed, so treating Escape as
       // "deselect" there emptied the selection and left the tool armed —
@@ -2000,58 +2125,42 @@ export function Viewport({
         return;
       }
 
-      // Escape shortcut: Deselect All in Edit Mesh / Edit Mesh Points
-      if (key === "escape") {
-        const activeEditMeshNode = selectedNodeIdRef.current
-          ? graphRef.current.nodes.find(
-              (n) =>
-                n.id === selectedNodeIdRef.current &&
-                (n.type === EDIT_MESH_NODE.type || n.type === EDIT_MESH_POINTS_NODE.type),
-            )
-          : null;
-        if (activeEditMeshNode) {
-          const pts = activeEditMeshNode.params.selectedPoints;
-          const fcs = activeEditMeshNode.params.selectedFaces;
-          const hasSelectedPoints = Array.isArray(pts) && pts.length > 0;
-          const hasSelectedFaces = Array.isArray(fcs) && fcs.length > 0;
-          if (hasSelectedPoints || hasSelectedFaces) {
-            e.preventDefault();
+      // Edit Mesh selection keys (Blender's):
+      //   A select all · Alt+A / Cmd/Ctrl+D / Escape deselect all
+      //   L select linked under the cursor · Shift+L deselect linked
+      //   Cmd/Ctrl+L select everything linked to the selection
+      //   Cmd/Ctrl+= grow · Cmd/Ctrl+- shrink
+      const target = editMeshTarget();
+      if (target) {
+        const mod = e.ctrlKey || e.metaKey;
+        let next: MeshSelection | null = null;
+        if (key === "a" && !mod && !e.altKey) {
+          next = selectAll(target.quadMesh, target.mode, target.selection);
+        } else if ((e.altKey && (key === "a" || key === "q")) || (mod && key === "d")) {
+          next = emptySelection();
+        } else if (key === "escape") {
+          const hasSelection = selectionVertices(target.quadMesh, target.mode, target.selection).size > 0;
+          if (hasSelection) {
             e.stopPropagation();
-            onParamChangeRef.current?.("selectedPoints", [], activeEditMeshNode.id);
-            onParamChangeRef.current?.("selectedFaces", [], activeEditMeshNode.id);
-            return;
+            next = emptySelection();
           }
+        } else if (key === "l" && mod && !e.altKey) {
+          next = linkedSelection(target.quadMesh, target.mode, target.selection);
+        } else if (key === "l" && !mod && !e.altKey && editPointer) {
+          const picked = pickEditElement(target, editPointer.clientX, editPointer.clientY);
+          if (picked) {
+            const linked = linkedSelection(target.quadMesh, target.mode, picked);
+            next = combineSelection(target.mode, target.selection, linked, e.shiftKey ? "remove" : "add");
+          }
+        } else if (mod && !e.altKey && (e.key === "=" || e.key === "+")) {
+          next = growSelection(target.quadMesh, target.mode, target.selection);
+        } else if (mod && !e.altKey && (e.key === "-" || e.key === "_")) {
+          next = shrinkSelection(target.quadMesh, target.mode, target.selection);
         }
-      }
-
-      // Select All shortcut: A (without modifiers) in Edit Mesh / Edit Mesh Points
-      if (key === "a" && !e.metaKey && !e.ctrlKey && !e.altKey) {
-        const activeEditMeshNode = selectedNodeIdRef.current
-          ? graphRef.current.nodes.find(
-              (n) =>
-                n.id === selectedNodeIdRef.current &&
-                (n.type === EDIT_MESH_NODE.type || n.type === EDIT_MESH_POINTS_NODE.type),
-            )
-          : null;
-        if (activeEditMeshNode) {
-          const meshObj = latestResultsRef.current?.get(activeEditMeshNode.id)?.geometry;
-          const srcMesh = meshObj instanceof THREE.Object3D ? findFirstMesh(meshObj) : null;
-          if (srcMesh) {
-            const quadMesh: QuadMesh = editMeshQuadMesh(activeEditMeshNode, latestResultsRef.current, srcMesh);
-            const selectMode = activeEditMeshNode.type === EDIT_MESH_POINTS_NODE.type
-              ? "points"
-              : ((activeEditMeshNode.params.selectMode as "points" | "faces") || "faces");
-
-            e.preventDefault();
-            if (selectMode === "points") {
-              const allPoints = Array.from({ length: quadMesh.positions.length }, (_, i) => i);
-              onParamChangeRef.current?.(editMeshSelectionPatch(activeEditMeshNode, "selectedPoints", allPoints, quadMesh), activeEditMeshNode.id);
-            } else {
-              const allFaces = Array.from({ length: quadMesh.faces.length }, (_, i) => i);
-              onParamChangeRef.current?.(editMeshSelectionPatch(activeEditMeshNode, "selectedFaces", allFaces, quadMesh), activeEditMeshNode.id);
-            }
-            return;
-          }
+        if (next) {
+          e.preventDefault();
+          commitEditSelection(target, next);
+          return;
         }
       }
 
@@ -2605,15 +2714,15 @@ export function Viewport({
 
           if (!onParamChangeRef.current) return;
 
-          const selectMode = (node.params.selectMode as "points" | "faces") || "faces";
-          const selectedIndices = selectMode === "points"
-            ? (Array.isArray(node.params.selectedPoints) ? (node.params.selectedPoints as number[]) : [])
-            : (Array.isArray(node.params.selectedFaces) ? (node.params.selectedFaces as number[]) : []);
+          // Every mode moves the vertices it covers — a face's corners, an
+          // edge's ends — so the drag works on points whatever the mode.
+          const { mode, selection } = readEditMeshSelection(node);
+          const vertices = [...selectionVertices(dragStartMeshData, mode, selection)];
 
           const proportionalEditing = Boolean(node.params.proportionalEditing);
           const proportionalDiameter = Number(node.params.proportionalDiameter) || 1.0;
 
-          const updatedMesh = transformSelectionByMatrix(dragStartMeshData, selectMode, selectedIndices, localDelta, {
+          const updatedMesh = transformSelectionByMatrix(dragStartMeshData, "points", vertices, localDelta, {
             enabled: proportionalEditing,
             diameter: proportionalDiameter,
           });
@@ -3135,65 +3244,33 @@ export function Viewport({
           )
         : null;
 
-      if (editMeshNodeOnDown && e.button === 0) {
+      // Alt(+Cmd/Ctrl)+click is a loop/ring select, handled on release like
+      // any click — it must not start the brush or a marquee here.
+      if (editMeshNodeOnDown && e.button === 0 && !e.altKey) {
         if (e.metaKey || e.ctrlKey) {
-          // Paint selection start
+          // Brush selection start: Cmd/Ctrl+drag. Replaces the selection
+          // unless Shift is held too; every later stroke sample adds.
           editMeshPaintDragRef.current = true;
           controls.enabled = false;
           if (host) {
             const hostRect = host.getBoundingClientRect();
             setEditMeshPaintCursor({ x: e.clientX - hostRect.left, y: e.clientY - hostRect.top });
           }
-          const meshObj = latestResultsRef.current?.get(editMeshNodeOnDown.id)?.geometry;
-          const srcMesh = meshObj instanceof THREE.Object3D ? findFirstMesh(meshObj) : null;
-          if (srcMesh && raycaster) {
-            const quadMesh: QuadMesh = editMeshQuadMesh(editMeshNodeOnDown, latestResultsRef.current, srcMesh);
-            const selectMode = editMeshNodeOnDown.type === EDIT_MESH_POINTS_NODE.type
-              ? "points"
-              : ((editMeshNodeOnDown.params.selectMode as "points" | "faces") || "faces");
-            const rect = renderer.domElement.getBoundingClientRect();
-            const mouseX = e.clientX - rect.left;
-            const mouseY = e.clientY - rect.top;
-            const mouseNorm = new THREE.Vector2((mouseX / rect.width) * 2 - 1, -(mouseY / rect.height) * 2 + 1);
-            raycaster.setFromCamera(mouseNorm, camera);
-
-            if (selectMode === "points") {
-              const picked = editMeshHandles.pickPointsInRadius(mouseX, mouseY, 28, rect.width, rect.height, camera, quadMesh, srcMesh.matrixWorld);
-              if (picked.length > 0) {
-                const curPoints = e.shiftKey
-                  ? new Set<number>(
-                      Array.isArray(editMeshNodeOnDown.params.selectedPoints)
-                        ? (editMeshNodeOnDown.params.selectedPoints as number[])
-                        : [],
-                    )
-                  : new Set<number>();
-                picked.forEach((p) => curPoints.add(p));
-                onParamChangeRef.current?.(editMeshSelectionPatch(editMeshNodeOnDown, "selectedPoints", Array.from(curPoints), quadMesh), editMeshNodeOnDown.id);
-              }
-            } else {
-              const faceIdx = editMeshHandles.pickFace(raycaster, quadMesh, srcMesh.matrixWorld);
-              if (faceIdx !== null) {
-                const curFaces = e.shiftKey
-                  ? new Set<number>(
-                      Array.isArray(editMeshNodeOnDown.params.selectedFaces)
-                        ? (editMeshNodeOnDown.params.selectedFaces as number[])
-                        : [],
-                    )
-                  : new Set<number>();
-                curFaces.add(faceIdx);
-                onParamChangeRef.current?.(editMeshSelectionPatch(editMeshNodeOnDown, "selectedFaces", Array.from(curFaces), quadMesh), editMeshNodeOnDown.id);
-              }
-            }
+          const target = editMeshTarget();
+          if (target) {
+            const picked = pickEditBrush(target, e.clientX, e.clientY);
+            if (picked || !e.shiftKey) applyEditPick(target, picked ?? emptySelection(), e.shiftKey ? "add" : "replace");
           }
           e.stopImmediatePropagation();
           return;
         } else if (e.shiftKey && (editMeshNodeOnDown.type === EDIT_MESH_POINTS_NODE.type || editMeshToolRef.current !== "loopcut")) {
-          // Shift-drag (marquee) or Shift-click arming
+          // Shift-drag (box or lasso) or Shift-click arming
           editMeshRectDragRef.current = {
             startX: e.clientX,
             startY: e.clientY,
             currentX: e.clientX,
             currentY: e.clientY,
+            path: [{ x: e.clientX, y: e.clientY }],
           };
           controls.enabled = false;
           e.stopImmediatePropagation();
@@ -3995,15 +4072,24 @@ export function Viewport({
         textureBrushGizmo.visible = false;
       }
 
-      // Edit Mesh Marquee Dragging (Shift-drag)
+      // Edit Mesh marquee dragging (Shift-drag): a box, or a lasso path
       if (editMeshRectDragRef.current && host) {
-        editMeshRectDragRef.current.currentX = e.clientX;
-        editMeshRectDragRef.current.currentY = e.clientY;
+        const drag = editMeshRectDragRef.current;
+        drag.currentX = e.clientX;
+        drag.currentY = e.clientY;
         const rect = host.getBoundingClientRect();
-        const x1 = Math.min(editMeshRectDragRef.current.startX, e.clientX) - rect.left;
-        const x2 = Math.max(editMeshRectDragRef.current.startX, e.clientX) - rect.left;
-        const y1 = Math.min(editMeshRectDragRef.current.startY, e.clientY) - rect.top;
-        const y2 = Math.max(editMeshRectDragRef.current.startY, e.clientY) - rect.top;
+        if (editMeshMarqueeShapeRef.current === "lasso") {
+          const last = drag.path[drag.path.length - 1];
+          if (!last || Math.hypot(e.clientX - last.x, e.clientY - last.y) >= 3) {
+            drag.path.push({ x: e.clientX, y: e.clientY });
+            setLassoPath(drag.path.map((p) => `${p.x - rect.left},${p.y - rect.top}`).join(" "));
+          }
+          return;
+        }
+        const x1 = Math.min(drag.startX, e.clientX) - rect.left;
+        const x2 = Math.max(drag.startX, e.clientX) - rect.left;
+        const y1 = Math.min(drag.startY, e.clientY) - rect.top;
+        const y2 = Math.max(drag.startY, e.clientY) - rect.top;
         setMarqueeBox({
           left: x1,
           top: y1,
@@ -4013,112 +4099,58 @@ export function Viewport({
         return;
       }
 
-      // Edit Mesh Paint Selection Dragging (Cmd/Ctrl-drag)
+      // Edit Mesh brush selection dragging (Cmd/Ctrl-drag): add what passes under it
       if (editMeshPaintDragRef.current && host) {
         const hostRect = host.getBoundingClientRect();
         setEditMeshPaintCursor({ x: e.clientX - hostRect.left, y: e.clientY - hostRect.top });
-
-        const activeEditMesh = selectedNodeIdRef.current
-          ? graphRef.current.nodes.find(
-              (n) =>
-                n.id === selectedNodeIdRef.current &&
-                (n.type === EDIT_MESH_NODE.type || n.type === EDIT_MESH_POINTS_NODE.type),
-            )
-          : null;
-        if (activeEditMesh && raycaster) {
-          const meshObj = latestResultsRef.current?.get(activeEditMesh.id)?.geometry;
-          const srcMesh = meshObj instanceof THREE.Object3D ? findFirstMesh(meshObj) : null;
-          if (srcMesh) {
-            const quadMesh: QuadMesh = editMeshQuadMesh(activeEditMesh, latestResultsRef.current, srcMesh);
-            const selectMode = activeEditMesh.type === EDIT_MESH_POINTS_NODE.type
-              ? "points"
-              : ((activeEditMesh.params.selectMode as "points" | "faces") || "faces");
-            const rect = renderer.domElement.getBoundingClientRect();
-            const mouseX = e.clientX - rect.left;
-            const mouseY = e.clientY - rect.top;
-            const mouseNorm = new THREE.Vector2((mouseX / rect.width) * 2 - 1, -(mouseY / rect.height) * 2 + 1);
-            raycaster.setFromCamera(mouseNorm, camera);
-
-            if (selectMode === "points") {
-              const picked = editMeshHandles.pickPointsInRadius(mouseX, mouseY, 28, rect.width, rect.height, camera, quadMesh, srcMesh.matrixWorld);
-              if (picked.length > 0) {
-                const curPoints = new Set<number>(
-                  Array.isArray(activeEditMesh.params.selectedPoints)
-                    ? (activeEditMesh.params.selectedPoints as number[])
-                    : [],
-                );
-                let changed = false;
-                for (const p of picked) {
-                  if (!curPoints.has(p)) {
-                    curPoints.add(p);
-                    changed = true;
-                  }
-                }
-                if (changed) {
-                  onParamChangeRef.current?.(editMeshSelectionPatch(activeEditMesh, "selectedPoints", Array.from(curPoints), quadMesh), activeEditMesh.id);
-                }
-              }
-            } else {
-              const hitFace = editMeshHandles.pickFace(raycaster, quadMesh, srcMesh.matrixWorld);
-              if (hitFace !== null) {
-                const curFaces = new Set<number>(
-                  Array.isArray(activeEditMesh.params.selectedFaces)
-                    ? (activeEditMesh.params.selectedFaces as number[])
-                    : [],
-                );
-                if (!curFaces.has(hitFace)) {
-                  curFaces.add(hitFace);
-                  onParamChangeRef.current?.(editMeshSelectionPatch(activeEditMesh, "selectedFaces", Array.from(curFaces), quadMesh), activeEditMesh.id);
-                }
-              }
-            }
-          }
+        const target = editMeshTarget();
+        const picked = target ? pickEditBrush(target, e.clientX, e.clientY) : null;
+        if (target && picked) {
+          const next = combineSelection(target.mode, target.selection, picked, "add");
+          const size = (sel: MeshSelection) => sel.points.length + sel.edges.length + sel.faces.length;
+          if (size(next) !== size(target.selection)) commitEditSelection(target, next);
         }
         return;
       }
 
-      // Edit Mesh hover and loop cut preview
-      const activeEditMesh = !outputMode && selectedNodeIdRef.current
-        ? graphRef.current.nodes.find((n) => n.id === selectedNodeIdRef.current && n.type === EDIT_MESH_NODE.type)
-        : null;
-      // Only while the pointer is over *this* canvas: pointermove is heard on
-      // window, so with two editor viewports mounted each one used to track
-      // hover (and draw a Loop Cut preview) for a pointer in the other.
-      if (activeEditMesh && host && raycaster && e.target === renderer.domElement) {
-        const meshObj = latestResultsRef.current?.get(activeEditMesh.id)?.geometry;
-        const srcMesh = meshObj instanceof THREE.Object3D ? findFirstMesh(meshObj) : null;
-        if (srcMesh) {
-          const quadMesh: QuadMesh = resolveEditMeshData(activeEditMesh, latestResultsRef.current);
-          const rect = renderer.domElement.getBoundingClientRect();
-          const mouseNorm = new THREE.Vector2(
-            ((e.clientX - rect.left) / rect.width) * 2 - 1,
-            -((e.clientY - rect.top) / rect.height) * 2 + 1,
-          );
-          raycaster.setFromCamera(mouseNorm, camera);
+      // Edit Mesh hover and loop cut preview. Only while the pointer is over
+      // *this* canvas: pointermove is heard on window, so with two editor
+      // viewports mounted each one used to track hover (and draw a Loop Cut
+      // preview) for a pointer in the other.
+      const hoverTarget = e.target === renderer.domElement ? editMeshTarget() : null;
+      if (hoverTarget && raycaster) {
+        editPointer = { clientX: e.clientX, clientY: e.clientY };
+        const { quadMesh, srcMesh } = hoverTarget;
+        const { rect, ndc } = canvasPoint(e.clientX, e.clientY);
+        raycaster.setFromCamera(ndc, camera);
 
-          if (editMeshToolRef.current === "loopcut") {
-            const edge = editMeshHandles.pickEdge(mouseNorm, camera, rect.width, rect.height, quadMesh, srcMesh.matrixWorld);
-            const prev = editMeshHoverEdgeRef.current;
-            const sameEdge = Boolean(edge && prev && edge[0] === prev[0] && edge[1] === prev[1]);
-            editMeshHoverEdgeRef.current = edge;
-            // A new preview array on every mousemove would rebuild the
-            // overlay each time; keep it while the hovered edge is the same.
-            if (!sameEdge) {
-              editMeshPreviewLoopRef.current = edge
-                ? getLoopCutPreviewSegments(quadMesh, edge, editMeshLoopCutsRef.current)
-                : null;
-            }
-            editMeshHoverFaceRef.current = null;
-          } else {
-            editMeshHoverEdgeRef.current = null;
-            editMeshPreviewLoopRef.current = null;
-            const faceMode = ((activeEditMesh.params.selectMode as "points" | "faces") || "faces") === "faces";
-            editMeshHoverFaceRef.current = faceMode
-              ? editMeshHandles.pickFace(raycaster, quadMesh, srcMesh.matrixWorld)
+        if (hoverTarget.node.type === EDIT_MESH_NODE.type && editMeshToolRef.current === "loopcut") {
+          const edge = editMeshHandles.pickEdge(ndc, camera, rect.width, rect.height, quadMesh, srcMesh.matrixWorld);
+          const prev = editMeshHoverEdgeRef.current;
+          const sameEdge = Boolean(edge && prev && edge[0] === prev[0] && edge[1] === prev[1]);
+          editMeshHoverEdgeRef.current = edge;
+          // A new preview array on every mousemove would rebuild the
+          // overlay each time; keep it while the hovered edge is the same.
+          if (!sameEdge) {
+            editMeshPreviewLoopRef.current = edge
+              ? getLoopCutPreviewSegments(quadMesh, edge, editMeshLoopCutsRef.current)
               : null;
           }
+          editMeshHoverFaceRef.current = null;
+        } else {
+          editMeshPreviewLoopRef.current = null;
+          // The edge an edge click — or, with Alt held, a loop — would start from.
+          const edgeHover = hoverTarget.mode === "edges" || e.altKey;
+          const edge = edgeHover
+            ? editMeshHandles.pickEdge(ndc, camera, rect.width, rect.height, quadMesh, srcMesh.matrixWorld)
+            : null;
+          const prev = editMeshHoverEdgeRef.current;
+          if (!(edge && prev && edge[0] === prev[0] && edge[1] === prev[1])) editMeshHoverEdgeRef.current = edge;
+          editMeshHoverFaceRef.current =
+            hoverTarget.mode === "faces" && !e.altKey ? editMeshHandles.pickFace(raycaster, quadMesh, srcMesh.matrixWorld) : null;
         }
       } else {
+        editPointer = null;
         editMeshHoverEdgeRef.current = null;
         editMeshPreviewLoopRef.current = null;
         editMeshHoverFaceRef.current = null;
@@ -4348,96 +4380,31 @@ export function Viewport({
         const drag = editMeshRectDragRef.current;
         editMeshRectDragRef.current = null;
         setMarqueeBox(null);
+        setLassoPath(null);
         controls.enabled = true;
 
-        const dist = Math.hypot(e.clientX - drag.startX, e.clientY - drag.startY);
-        const activeEditMesh = selectedNodeIdRef.current
-          ? graphRef.current.nodes.find(
-              (n) =>
-                n.id === selectedNodeIdRef.current &&
-                (n.type === EDIT_MESH_NODE.type || n.type === EDIT_MESH_POINTS_NODE.type),
-            )
-          : null;
-
-        if (activeEditMesh) {
-          const meshObj = latestResultsRef.current?.get(activeEditMesh.id)?.geometry;
-          const srcMesh = meshObj instanceof THREE.Object3D ? findFirstMesh(meshObj) : null;
-          if (srcMesh && raycaster) {
-            const quadMesh: QuadMesh = editMeshQuadMesh(activeEditMesh, latestResultsRef.current, srcMesh);
-            const selectMode = activeEditMesh.type === EDIT_MESH_POINTS_NODE.type
-              ? "points"
-              : ((activeEditMesh.params.selectMode as "points" | "faces") || "faces");
-            const rect = renderer.domElement.getBoundingClientRect();
-
-            if (dist > CLICK_MOVE_THRESHOLD_PX) {
-              // Rectangular marquee selection (Shift-drag)
-              const minX = Math.min(drag.startX, e.clientX) - rect.left;
-              const maxX = Math.max(drag.startX, e.clientX) - rect.left;
-              const minY = Math.min(drag.startY, e.clientY) - rect.top;
-              const maxY = Math.max(drag.startY, e.clientY) - rect.top;
-
-              if (selectMode === "points") {
-                const picked = editMeshHandles.pickPointsInRect(minX, minY, maxX, maxY, rect.width, rect.height, camera, quadMesh, srcMesh.matrixWorld);
-                const isAccumulate = e.altKey || e.ctrlKey || e.metaKey;
-                const curPoints = isAccumulate
-                  ? new Set<number>(
-                      Array.isArray(activeEditMesh.params.selectedPoints)
-                        ? (activeEditMesh.params.selectedPoints as number[])
-                        : [],
-                    )
-                  : new Set<number>();
-                picked.forEach((p) => curPoints.add(p));
-                onParamChangeRef.current?.(editMeshSelectionPatch(activeEditMesh, "selectedPoints", Array.from(curPoints), quadMesh), activeEditMesh.id);
-              } else {
-                const picked = editMeshHandles.pickFacesInRect(minX, minY, maxX, maxY, rect.width, rect.height, camera, quadMesh, srcMesh.matrixWorld);
-                const isAccumulate = e.altKey || e.ctrlKey || e.metaKey;
-                const curFaces = isAccumulate
-                  ? new Set<number>(
-                      Array.isArray(activeEditMesh.params.selectedFaces)
-                        ? (activeEditMesh.params.selectedFaces as number[])
-                        : [],
-                    )
-                  : new Set<number>();
-                picked.forEach((f) => curFaces.add(f));
-                onParamChangeRef.current?.(editMeshSelectionPatch(activeEditMesh, "selectedFaces", Array.from(curFaces), quadMesh), activeEditMesh.id);
-              }
-              return;
-            } else {
-              // Shift-click individual toggle
-              const mouseX = e.clientX - rect.left;
-              const mouseY = e.clientY - rect.top;
-              const ndc = new THREE.Vector2((mouseX / rect.width) * 2 - 1, -(mouseY / rect.height) * 2 + 1);
-              raycaster.setFromCamera(ndc, camera);
-
-              if (selectMode === "points") {
-                const ptIdx = editMeshHandles.pickPoint(ndc, camera, rect.width, rect.height, quadMesh, srcMesh.matrixWorld);
-                if (ptIdx !== null) {
-                  const curPoints = new Set<number>(
-                    Array.isArray(activeEditMesh.params.selectedPoints)
-                      ? (activeEditMesh.params.selectedPoints as number[])
-                      : [],
+        const target = editMeshTarget();
+        if (target) {
+          const dist = Math.hypot(e.clientX - drag.startX, e.clientY - drag.startY);
+          if (dist > CLICK_MOVE_THRESHOLD_PX) {
+            // Box or lasso: replaces the selection, or adds to it with an
+            // extra modifier held at release.
+            const { rect } = canvasPoint(0, 0);
+            const local = (p: { x: number; y: number }) => ({ x: p.x - rect.left, y: p.y - rect.top });
+            const region =
+              editMeshMarqueeShapeRef.current === "lasso" && drag.path.length >= 3
+                ? polygonRegion([...drag.path, { x: e.clientX, y: e.clientY }].map(local))
+                : rectRegion(
+                    Math.min(drag.startX, e.clientX) - rect.left,
+                    Math.min(drag.startY, e.clientY) - rect.top,
+                    Math.max(drag.startX, e.clientX) - rect.left,
+                    Math.max(drag.startY, e.clientY) - rect.top,
                   );
-                  if (curPoints.has(ptIdx)) curPoints.delete(ptIdx);
-                  else curPoints.add(ptIdx);
-                  onParamChangeRef.current?.(editMeshSelectionPatch(activeEditMesh, "selectedPoints", Array.from(curPoints), quadMesh), activeEditMesh.id);
-                  return;
-                }
-              } else {
-                const faceIdx = editMeshHandles.pickFace(raycaster, quadMesh, srcMesh.matrixWorld);
-                if (faceIdx !== null) {
-                  const curFaces = new Set<number>(
-                    Array.isArray(activeEditMesh.params.selectedFaces)
-                      ? (activeEditMesh.params.selectedFaces as number[])
-                      : [],
-                  );
-                  if (curFaces.has(faceIdx)) curFaces.delete(faceIdx);
-                  else curFaces.add(faceIdx);
-                  onParamChangeRef.current?.(editMeshSelectionPatch(activeEditMesh, "selectedFaces", Array.from(curFaces), quadMesh), activeEditMesh.id);
-                  return;
-                }
-              }
-              return;
-            }
+            const accumulate = e.altKey || e.ctrlKey || e.metaKey;
+            applyEditPick(target, pickEditRegion(target, region), accumulate ? "add" : "replace");
+          } else {
+            // Shift-click toggles the element under the cursor
+            applyEditPick(target, pickEditElement(target, e.clientX, e.clientY), "toggle");
           }
         }
         return;
@@ -4822,9 +4789,6 @@ export function Viewport({
         if (srcMesh) {
           const quadMesh: QuadMesh =
             editMeshQuadMesh(activeEditMesh, latestResultsRef.current, srcMesh);
-          const selectMode = activeEditMesh.type === EDIT_MESH_POINTS_NODE.type
-            ? "points"
-            : ((activeEditMesh.params.selectMode as "points" | "faces") || "faces");
 
           if (activeEditMesh.type === EDIT_MESH_NODE.type && editMeshToolRef.current === "loopcut") {
             const edge = editMeshHandles.pickEdge(ndc, camera, rect.width, rect.height, quadMesh, srcMesh.matrixWorld);
@@ -4851,40 +4815,14 @@ export function Viewport({
             setEditMeshTool("select");
           }
 
-          if (selectMode === "points") {
-            const ptIdx = editMeshHandles.pickPoint(ndc, camera, rect.width, rect.height, quadMesh, srcMesh.matrixWorld);
-            if (ptIdx !== null) {
-              const curPoints = new Set<number>(
-                Array.isArray(activeEditMesh.params.selectedPoints)
-                  ? (activeEditMesh.params.selectedPoints as number[])
-                  : [],
-              );
-              if (e.shiftKey) {
-                if (curPoints.has(ptIdx)) curPoints.delete(ptIdx);
-                else curPoints.add(ptIdx);
-              } else {
-                curPoints.clear();
-                curPoints.add(ptIdx);
-              }
-              onParamChangeRef.current?.(editMeshSelectionPatch(activeEditMesh, "selectedPoints", Array.from(curPoints), quadMesh), activeEditMesh.id);
-              return;
-            }
-          } else if (selectMode === "faces") {
-            const faceIdx = editMeshHandles.pickFace(raycaster, quadMesh, srcMesh.matrixWorld);
-            if (faceIdx !== null) {
-              const curFaces = new Set<number>(
-                Array.isArray(activeEditMesh.params.selectedFaces)
-                  ? (activeEditMesh.params.selectedFaces as number[])
-                  : [],
-              );
-              if (e.shiftKey) {
-                if (curFaces.has(faceIdx)) curFaces.delete(faceIdx);
-                else curFaces.add(faceIdx);
-              } else {
-                curFaces.clear();
-                curFaces.add(faceIdx);
-              }
-              onParamChangeRef.current?.(editMeshSelectionPatch(activeEditMesh, "selectedFaces", Array.from(curFaces), quadMesh), activeEditMesh.id);
+          const target = editMeshTarget();
+          if (target) {
+            // Alt+click: the loop through the edge under the cursor;
+            // Cmd/Ctrl+Alt+click: its ring. Shift adds to the selection.
+            if (e.altKey) {
+              const loop = pickEditLoop(target, e.clientX, e.clientY, e.ctrlKey || e.metaKey);
+              if (applyEditPick(target, loop, e.shiftKey ? "add" : "replace")) return;
+            } else if (applyEditPick(target, pickEditElement(target, e.clientX, e.clientY), e.shiftKey ? "toggle" : "replace")) {
               return;
             }
           }
@@ -4942,11 +4880,7 @@ export function Viewport({
           if (!hitOtherNode && !e.shiftKey) {
             // Clicked empty space or clicked active mesh surface outside of points/faces:
             // clear element selection, keep EditMesh node selected!
-            if (selectMode === "points") {
-              onParamChangeRef.current?.("selectedPoints", [], activeEditMesh.id);
-            } else {
-              onParamChangeRef.current?.("selectedFaces", [], activeEditMesh.id);
-            }
+            if (target) commitEditSelection(target, emptySelection());
             return;
           }
         }
@@ -5967,21 +5901,7 @@ export function Viewport({
         const quadMesh: QuadMesh =
           editMeshQuadMesh(editMeshNode, results, srcMesh);
 
-        const selectMode = editMeshNode.type === EDIT_MESH_POINTS_NODE.type
-          ? "points"
-          : ((editMeshNode.params.selectMode as "points" | "faces") || "faces");
-        const selPoints = new Set<number>(
-          Array.isArray(editMeshNode.params.selectedPoints)
-            ? (editMeshNode.params.selectedPoints as number[])
-            : [],
-        );
-        const selFaces = new Set<number>(
-          editMeshNode.type === EDIT_MESH_POINTS_NODE.type
-            ? []
-            : (Array.isArray(editMeshNode.params.selectedFaces)
-                ? (editMeshNode.params.selectedFaces as number[])
-                : []),
-        );
+        const { mode: selectMode, selection } = readEditMeshSelection(editMeshNode);
 
         const propDiameter =
           editMeshNode.type === EDIT_MESH_NODE.type && editMeshNode.params.proportionalEditing
@@ -5990,30 +5910,24 @@ export function Viewport({
 
         editMeshHandles.setXray(editMeshNode.params.xray === true);
         if (editMeshNode.params.xray === true && srcMesh) xrayMesh = srcMesh;
-        editMeshHandles.sync(
-          srcMesh,
+        editMeshHandles.sync({
+          mesh: srcMesh,
           quadMesh,
-          selectMode,
-          selPoints,
-          selFaces,
-          editMeshHoverFaceRef.current,
-          editMeshPreviewLoopRef.current,
-          propDiameter,
-        );
+          mode: selectMode,
+          points: new Set(selectMode === "points" ? selection.points : []),
+          edges: selectMode === "edges" ? selection.edges : [],
+          faces: new Set(selectMode === "faces" ? selection.faces : []),
+          hoverFace: editMeshHoverFaceRef.current,
+          hoverEdge: editMeshHoverEdgeRef.current,
+          loopPreview: editMeshPreviewLoopRef.current,
+          proportionalDiameter: propDiameter,
+        });
 
         // Position editMeshCentroidProxy at selection centroid
         if (srcMesh && (!transformControls?.dragging || transformControls.object !== editMeshCentroidProxy)) {
           const meshMat = srcMesh.matrixWorld;
           const localCentroid = new THREE.Vector3();
-          const targetVertices = new Set<number>();
-          if (selectMode === "points") {
-            for (const idx of selPoints) targetVertices.add(idx);
-          } else {
-            for (const fIdx of selFaces) {
-              const face = quadMesh.faces[fIdx];
-              if (face) face.forEach((v) => targetVertices.add(v));
-            }
-          }
+          const targetVertices = selectionVertices(quadMesh, selectMode, selection);
           if (targetVertices.size > 0) {
             editMeshHasSelection = true;
             for (const vIdx of targetVertices) {
@@ -7079,15 +6993,29 @@ export function Viewport({
           }}
         />
       )}
+      {/* Edit Mesh Lasso Overlay (Shift+Drag, lasso shape) */}
+      {!outputMode && lassoPath && (
+        <svg
+          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none", zIndex: 40 }}
+        >
+          <polygon
+            points={lassoPath}
+            fill="rgba(56, 189, 248, 0.18)"
+            stroke="#38bdf8"
+            strokeWidth={1.5}
+            strokeDasharray="4 3"
+          />
+        </svg>
+      )}
       {/* Edit Mesh Paint Cursor Overlay (Cmd+Drag) */}
       {!outputMode && editMeshPaintCursor && (
         <div
           style={{
             position: "absolute",
-            left: `${editMeshPaintCursor.x - 28}px`,
-            top: `${editMeshPaintCursor.y - 28}px`,
-            width: "56px",
-            height: "56px",
+            left: `${editMeshPaintCursor.x - EDIT_MESH_BRUSH_RADIUS_PX}px`,
+            top: `${editMeshPaintCursor.y - EDIT_MESH_BRUSH_RADIUS_PX}px`,
+            width: `${EDIT_MESH_BRUSH_RADIUS_PX * 2}px`,
+            height: `${EDIT_MESH_BRUSH_RADIUS_PX * 2}px`,
             borderRadius: "50%",
             border: "1.5px solid #f97316",
             backgroundColor: "rgba(249, 115, 22, 0.18)",
@@ -7980,16 +7908,25 @@ export function Viewport({
               (n.type === EDIT_MESH_NODE.type || n.type === EDIT_MESH_POINTS_NODE.type),
           );
           if (!editMeshNode) return null;
-          const isPointsOnly = editMeshNode.type === EDIT_MESH_POINTS_NODE.type;
-          const selectMode = isPointsOnly ? "points" : ((editMeshNode.params.selectMode as "points" | "faces") || "faces");
-          const selectedFaces = Array.isArray(editMeshNode.params.selectedFaces)
-            ? (editMeshNode.params.selectedFaces as number[])
-            : [];
-          const selectedPoints = Array.isArray(editMeshNode.params.selectedPoints)
-            ? (editMeshNode.params.selectedPoints as number[])
-            : [];
-          const isFacesActive = !isPointsOnly && selectMode === "faces" && selectedFaces.length > 0;
-          const selectedCount = isPointsOnly || selectMode === "points" ? selectedPoints.length : selectedFaces.length;
+          const { mode: selectMode, selection, isPointsOnly } = readEditMeshSelection(editMeshNode);
+          const isFacesActive = !isPointsOnly && selectMode === "faces" && selection.faces.length > 0;
+          const selectedCount =
+            selectMode === "points" ? selection.points.length : selectMode === "edges" ? selection.edges.length : selection.faces.length;
+          // What the node is editing right now — the HUD's selection tools
+          // (mode switch, grow, shrink, linked, flat) all work on it.
+          const hudQuadMesh = (): QuadMesh | null => {
+            const meshObj = latestResultsRef.current?.get(editMeshNode.id)?.geometry;
+            const srcMesh = meshObj instanceof THREE.Object3D ? findFirstMesh(meshObj) : null;
+            return srcMesh ? editMeshQuadMesh(editMeshNode, latestResultsRef.current, srcMesh) : null;
+          };
+          const commitHudSelection = (next: (quadMesh: QuadMesh) => MeshSelection) => {
+            const quadMesh = hudQuadMesh();
+            if (quadMesh) onParamChange?.(editMeshSelectionParams(editMeshNode, selectMode, next(quadMesh), quadMesh), editMeshNode.id);
+          };
+          const switchMode = (to: SelectMode) => {
+            const quadMesh = hudQuadMesh();
+            onParamChange?.(quadMesh ? editMeshModeSwitchParams(editMeshNode, to, quadMesh) : { selectMode: to }, editMeshNode.id);
+          };
 
           return (
             <div
@@ -8014,12 +7951,12 @@ export function Viewport({
                 pointerEvents: "auto",
               }}
             >
-              {/* Mode: Points */}
+              {/* Select modes — switching converts the selection (Blender's 1 / 2 / 3) */}
               <button
                 type="button"
                 className={`viewport-hud-button ${selectMode === "points" ? "viewport-hud-button-active" : ""}`}
                 onClick={() => {
-                  if (!isPointsOnly) onParamChange?.("selectMode", "points", editMeshNode.id);
+                  if (!isPointsOnly) switchMode("points");
                 }}
                 title={isPointsOnly ? "Points Mode (Vertices)" : "Points Mode — Select and transform vertices"}
               >
@@ -8032,13 +7969,26 @@ export function Viewport({
                 </svg>
               </button>
 
-              {/* Mode: Faces */}
+              {!isPointsOnly && (
+                <button
+                  type="button"
+                  className={`viewport-hud-button ${selectMode === "edges" ? "viewport-hud-button-active" : ""}`}
+                  onClick={() => switchMode("edges")}
+                  title="Edges Mode — Select and transform edges (Alt+click: edge loop, Cmd/Ctrl+Alt+click: edge ring)"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                    <path d="M4 4h16v16H4z" strokeDasharray="2 2" />
+                    <line x1="4" y1="20" x2="20" y2="4" strokeWidth="3" strokeLinecap="round" />
+                  </svg>
+                </button>
+              )}
+
               {!isPointsOnly && (
                 <button
                   type="button"
                   className={`viewport-hud-button ${selectMode === "faces" ? "viewport-hud-button-active" : ""}`}
-                  onClick={() => onParamChange?.("selectMode", "faces", editMeshNode.id)}
-                  title="Faces Mode — Select and transform quads"
+                  onClick={() => switchMode("faces")}
+                  title="Faces Mode — Select and transform faces (Alt+click: face loop)"
                 >
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
                     <rect x="4" y="4" width="16" height="16" rx="2" fill="currentColor" fillOpacity="0.3" />
@@ -8114,6 +8064,86 @@ export function Viewport({
                 </button>
               )}
 
+              <div style={{ width: 1, height: 16, background: "rgba(255, 255, 255, 0.15)" }} />
+
+              {/* Selection tools */}
+              <button
+                type="button"
+                className="viewport-hud-button"
+                disabled={selectedCount === 0}
+                onClick={() => commitHudSelection((m) => growSelection(m, selectMode, selection))}
+                title="Grow Selection (Shortcut: Cmd/Ctrl + =)"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                  <rect x="9" y="9" width="6" height="6" rx="1" fill="currentColor" fillOpacity="0.4" />
+                  <path d="M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4" />
+                </svg>
+              </button>
+              <button
+                type="button"
+                className="viewport-hud-button"
+                disabled={selectedCount === 0}
+                onClick={() => commitHudSelection((m) => shrinkSelection(m, selectMode, selection))}
+                title="Shrink Selection (Shortcut: Cmd/Ctrl + -)"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                  <rect x="4" y="4" width="16" height="16" rx="1" strokeDasharray="2 2" />
+                  <path d="M9 5v4H5M15 5v4h4M19 15h-4v4M5 15h4v4" />
+                </svg>
+              </button>
+              <button
+                type="button"
+                className="viewport-hud-button"
+                disabled={selectedCount === 0}
+                onClick={() => commitHudSelection((m) => linkedSelection(m, selectMode, selection))}
+                title="Select Linked — the whole piece the selection is on (Shortcut: Cmd/Ctrl+L; L over the mesh picks the piece under the cursor, Shift+L deselects it)"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                  <path d="M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1" />
+                  <path d="M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1" />
+                </svg>
+              </button>
+              {selectMode === "faces" && !isPointsOnly && (
+                <button
+                  type="button"
+                  className="viewport-hud-button"
+                  disabled={selectedCount === 0}
+                  onClick={() =>
+                    commitHudSelection((m) => ({
+                      ...selection,
+                      faces: flatFaces(m, selection.faces, Number(editMeshNode.params.flatAngle) || 10),
+                    }))
+                  }
+                  title={`Select Flat Region — grow across edges bending less than ${Number(editMeshNode.params.flatAngle) || 10}° (Flat Angle)`}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round">
+                    <path d="M3 15l9-5 9 5-9 5z" fill="currentColor" fillOpacity="0.3" />
+                    <path d="M3 10l9-5 9 5" strokeDasharray="2 2" />
+                  </svg>
+                </button>
+              )}
+              <button
+                type="button"
+                className={`viewport-hud-button ${editMeshMarqueeShape === "lasso" ? "viewport-hud-button-active" : ""}`}
+                onClick={() => setEditMeshMarqueeShape((shape) => (shape === "box" ? "lasso" : "box"))}
+                title={
+                  editMeshMarqueeShape === "lasso"
+                    ? "Shift+drag draws a Lasso — click for Box"
+                    : "Shift+drag draws a Box — click for Lasso"
+                }
+              >
+                {editMeshMarqueeShape === "lasso" ? (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+                    <path d="M7 16c-3-1-4-4-3-7 2-5 12-6 15-2 2 3-1 7-6 7-2 0-4 0-6 2" />
+                    <path d="M7 16l-1 4" />
+                  </svg>
+                ) : (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                    <rect x="4" y="5" width="16" height="14" strokeDasharray="3 2" />
+                  </svg>
+                )}
+              </button>
+
               {/* X-ray: pick through the surface */}
               <button
                 type="button"
@@ -8137,13 +8167,7 @@ export function Viewport({
                   <button
                     type="button"
                     className="viewport-hud-button"
-                    onClick={() => {
-                      onParamChange?.(
-                        isPointsOnly || selectMode === "points" ? "selectedPoints" : "selectedFaces",
-                        [],
-                        editMeshNode.id,
-                      );
-                    }}
+                    onClick={() => commitHudSelection(() => emptySelection())}
                     title={`Deselect All (${selectedCount} selected) (Shortcut: Esc / Alt+A)`}
                     style={{
                       color: "#f87171",
@@ -8166,6 +8190,7 @@ export function Viewport({
                   <button
                     type="button"
                     className="viewport-hud-button"
+                    disabled={!isFacesActive}
                     onClick={() => onParamAction?.(editMeshNode.id, EDIT_MESH_EXTRUDE_ACTION)}
                     title="Extrude (Shortcut: E) — Extrude selected face(s)"
                   >
@@ -8207,6 +8232,7 @@ export function Viewport({
                   <button
                     type="button"
                     className="viewport-hud-button"
+                    disabled={!isFacesActive}
                     onClick={() => onParamAction?.(editMeshNode.id, EDIT_MESH_INSET_ACTION)}
                     title="Inset (Shortcut: I) — Inset selected face(s)"
                   >

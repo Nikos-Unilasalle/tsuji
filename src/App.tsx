@@ -18,6 +18,7 @@ import {
   EDIT_MESH_DELETE_FACES_ACTION,
   EDIT_MESH_SEPARATE_FACES_ACTION,
   resolveEditMeshData,
+  readEditMeshSelection,
 } from "./shared/graph/nodes/editMesh";
 import {
   QuadMesh,
@@ -1462,6 +1463,9 @@ function MainEditor() {
       if (action === EDIT_MESH_EXTRUDE_ACTION) {
         const node = graph.nodes.find((n) => n.id === nodeId);
         if (!node) return;
+        // A face operation: a points/edges selection would silently act on
+        // whatever face list was left over from the last face selection.
+        if (readEditMeshSelection(node).mode !== "faces") return;
         const meshData: QuadMesh = resolveEditMeshData(node, evaluatedResults);
         const selectedFaces: number[] = Array.isArray(node.params.selectedFaces)
           ? (node.params.selectedFaces as number[])
@@ -1478,6 +1482,9 @@ function MainEditor() {
       if (action === EDIT_MESH_INSET_ACTION) {
         const node = graph.nodes.find((n) => n.id === nodeId);
         if (!node) return;
+        // A face operation: a points/edges selection would silently act on
+        // whatever face list was left over from the last face selection.
+        if (readEditMeshSelection(node).mode !== "faces") return;
         const meshData: QuadMesh = resolveEditMeshData(node, evaluatedResults);
         const selectedFaces: number[] = Array.isArray(node.params.selectedFaces)
           ? (node.params.selectedFaces as number[])
@@ -1579,7 +1586,8 @@ function MainEditor() {
       if (action === EDIT_MESH_DELETE_FACES_ACTION) {
         const node = graph.nodes.find((n) => n.id === nodeId);
         if (!node) return;
-        if (node.params.selectMode === "points") return;
+        // Face operations: only on a face selection.
+        if (readEditMeshSelection(node).mode !== "faces") return;
         const selectedFaces: number[] = Array.isArray(node.params.selectedFaces)
           ? (node.params.selectedFaces as number[])
           : [];
@@ -1597,7 +1605,8 @@ function MainEditor() {
       if (action === EDIT_MESH_SEPARATE_FACES_ACTION) {
         const node = graph.nodes.find((n) => n.id === nodeId);
         if (!node) return;
-        if (node.params.selectMode === "points") return;
+        // Face operations: only on a face selection.
+        if (readEditMeshSelection(node).mode !== "faces") return;
         const selectedFaces: number[] = Array.isArray(node.params.selectedFaces)
           ? (node.params.selectedFaces as number[])
           : [];

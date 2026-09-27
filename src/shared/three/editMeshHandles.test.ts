@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, vi } from "vitest";
 import * as THREE from "three";
-import { createEditMeshHandles } from "./editMeshHandles";
+import { circleRegion, createEditMeshHandles, EditMeshDisplayState, polygonRegion, rectRegion } from "./editMeshHandles";
 import { initBvhRaycast } from "./bvh";
 import { createQuadBox, cloneQuadMesh } from "../graph/quadMesh";
 
@@ -41,12 +41,18 @@ describe("editMeshHandles picking", () => {
   it("box-selects only visible vertices and faces", () => {
     const handles = createEditMeshHandles();
     const camera = frontCamera(5);
-    expect(handles.pickPointsInRect(0, 0, W, H, W, H, camera, box, identity).sort()).toEqual([4, 5, 6, 7]);
-    expect(handles.pickFacesInRect(0, 0, W, H, W, H, camera, box, identity)).toEqual([0]);
+    const all = rectRegion(0, 0, W, H);
+    expect(handles.pickPointsInRegion(all, W, H, camera, box, identity).sort()).toEqual([4, 5, 6, 7]);
+    expect(handles.pickFacesInRegion(all, W, H, camera, box, identity)).toEqual([0]);
+    // The front face's four edges. The four running back project inside the
+    // front face, which hides their midpoints, so they don't count.
+    const edges = handles.pickEdgesInRegion(all, W, H, camera, box, identity).map((e) => e.join("_")).sort();
+    expect(edges).toEqual(["4_5", "4_7", "5_6", "6_7"]);
 
     handles.setXray(true);
-    expect(handles.pickPointsInRect(0, 0, W, H, W, H, camera, box, identity)).toHaveLength(8);
-    expect(handles.pickFacesInRect(0, 0, W, H, W, H, camera, box, identity)).toHaveLength(6);
+    expect(handles.pickPointsInRegion(all, W, H, camera, box, identity)).toHaveLength(8);
+    expect(handles.pickFacesInRegion(all, W, H, camera, box, identity)).toHaveLength(6);
+    expect(handles.pickEdgesInRegion(all, W, H, camera, box, identity)).toHaveLength(12);
   });
 
   it("picks edges in screen pixels, whatever the object's size", () => {
@@ -81,19 +87,22 @@ describe("editMeshHandles overlays", () => {
     const mesh = createQuadBox(1, 1, 1);
     const [wire, faces] = handles.group.children as THREE.Mesh[];
 
-    handles.sync(host, mesh, "faces", new Set(), new Set([0]), null, null);
+    const state = (m: typeof mesh, faces: number[]): EditMeshDisplayState => ({
+      mesh: host, quadMesh: m, mode: "faces", points: new Set(), edges: [], faces: new Set(faces),
+    });
+    handles.sync(state(mesh, [0]));
     const wireGeometry = wire.geometry;
     const faceGeometry = faces.geometry;
     expect(wire.visible).toBe(true);
     expect(faces.visible).toBe(true);
 
     // Same content, fresh clone (a live, unfrozen mesh): nothing rebuilt.
-    handles.sync(host, cloneQuadMesh(mesh), "faces", new Set(), new Set([0]), null, null);
+    handles.sync(state(cloneQuadMesh(mesh), [0]));
     expect(wire.geometry).toBe(wireGeometry);
     expect(faces.geometry).toBe(faceGeometry);
 
     // Selection changed: the face overlay is rebuilt, the wireframe isn't.
-    handles.sync(host, mesh, "faces", new Set(), new Set([1]), null, null);
+    handles.sync(state(mesh, [1]));
     expect(wire.geometry).toBe(wireGeometry);
     expect(faces.geometry).not.toBe(faceGeometry);
 
@@ -113,7 +122,10 @@ describe("editMeshHandles point handles", () => {
       const mesh = createQuadBox(1, 1, 1);
       const points = handles.group.children.filter((c): c is THREE.Points => c instanceof THREE.Points);
 
-      handles.sync(host, mesh, "points", new Set([0]), new Set(), null, null);
+      const pointsState: EditMeshDisplayState = {
+        mesh: host, quadMesh: mesh, mode: "points", points: new Set([0]), edges: [], faces: new Set(),
+      };
+      handles.sync(pointsState);
       const [unselected, selected] = points.map((p) => p.material as THREE.PointsMaterial);
       expect(unselected.depthTest).toBe(true);
       expect(selected.depthTest).toBe(true);
@@ -122,11 +134,51 @@ describe("editMeshHandles point handles", () => {
       expect(selected.size).toBeGreaterThan(unselected.size);
 
       handles.setXray(true);
-      handles.sync(host, mesh, "points", new Set([0]), new Set(), null, null);
+      handles.sync(pointsState);
       expect(unselected.depthTest).toBe(false);
       expect(selected.depthTest).toBe(false);
     } finally {
       vi.unstubAllGlobals();
     }
+  });
+});
+
+describe("editMeshHandles regions", () => {
+  beforeAll(() => initBvhRaycast());
+  const box = createQuadBox(1, 1, 1);
+  const identity = new THREE.Matrix4();
+
+  it("lasso-selects inside the drawn path only", () => {
+    const handles = createEditMeshHandles();
+    const camera = frontCamera(5);
+    // A triangle around the top-right front corner (vertex 6) only.
+    const p = new THREE.Vector3(0.5, 0.5, 0.5).project(camera);
+    const x = (p.x * 0.5 + 0.5) * W;
+    const y = (-p.y * 0.5 + 0.5) * H;
+    const lasso = polygonRegion([{ x: x - 20, y: y + 20 }, { x: x + 20, y: y + 20 }, { x, y: y - 20 }]);
+    expect(handles.pickPointsInRegion(lasso, W, H, camera, box, identity)).toEqual([6]);
+  });
+
+  it("brush-selects edges passing under the circle", () => {
+    const handles = createEditMeshHandles();
+    const camera = frontCamera(5);
+    // Centred on the front top edge's midpoint: catches that edge alone.
+    const p = new THREE.Vector3(0, 0.5, 0.5).project(camera);
+    const brush = circleRegion((p.x * 0.5 + 0.5) * W, (-p.y * 0.5 + 0.5) * H, 8);
+    expect(handles.pickEdgesInRegion(brush, W, H, camera, box, identity)).toEqual([[6, 7]]);
+  });
+});
+
+describe("editMeshHandles edge overlay", () => {
+  it("draws selected edges in edges mode only", () => {
+    const handles = createEditMeshHandles();
+    const host = new THREE.Mesh();
+    const mesh = createQuadBox(1, 1, 1);
+    const base = { mesh: host, quadMesh: mesh, points: new Set<number>(), faces: new Set<number>() };
+    handles.sync({ ...base, mode: "edges", edges: [[6, 7]] });
+    const thick = handles.group.children.filter((c) => c.type === "LineSegments2");
+    expect(thick[0].visible).toBe(true);
+    handles.sync({ ...base, mode: "faces", edges: [[6, 7]] });
+    expect(thick[0].visible).toBe(false);
   });
 });

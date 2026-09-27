@@ -24,6 +24,7 @@ import {
   geometrySignature,
   quadMeshSignature,
 } from "../quadMesh";
+import { convertSelection, MeshSelection, normalizeEdges, SelectMode } from "../mesh/selection";
 
 const EDIT_MESH_NODE_TYPE = "modifier/edit-mesh";
 
@@ -78,23 +79,72 @@ export function resolveEditMeshData(
 }
 
 
+const SELECTION_KEYS: Record<SelectMode, "selectedPoints" | "selectedEdges" | "selectedFaces"> = {
+  points: "selectedPoints",
+  edges: "selectedEdges",
+  faces: "selectedFaces",
+};
+
+const indexList = (value: unknown): number[] =>
+  Array.isArray(value) ? value.filter((v): v is number => Number.isInteger(v) && v >= 0) : [];
+
 /**
- * The param patch for a new point/face selection. Selection indices only mean
- * something against one fixed mesh, so the first selection on a live (not yet
- * frozen) Edit Mesh also freezes it: `quadMesh` — what the selection was made
- * on — is stored as meshData in the same change. Edit Mesh Points has no
- * meshData and just gets the selection.
+ * The select mode and the selection stored on an Edit Mesh (or Edit Mesh
+ * Points, which only ever selects points) node.
  */
-export function editMeshSelectionPatch(
+export function readEditMeshSelection(node: { type: string; params: Record<string, unknown> }): {
+  mode: SelectMode;
+  selection: MeshSelection;
+  isPointsOnly: boolean;
+} {
+  const isPointsOnly = node.type !== EDIT_MESH_NODE_TYPE;
+  const raw = node.params.selectMode;
+  const mode: SelectMode = isPointsOnly ? "points" : raw === "points" || raw === "edges" ? raw : "faces";
+  return {
+    mode,
+    isPointsOnly,
+    selection: {
+      points: indexList(node.params.selectedPoints),
+      edges: normalizeEdges(node.params.selectedEdges),
+      faces: indexList(node.params.selectedFaces),
+    },
+  };
+}
+
+/**
+ * The param patch storing `selection`'s list for `mode`. Selection indices
+ * only mean something against one fixed mesh, so the first non-empty
+ * selection on a live (not yet frozen) Edit Mesh also freezes it: `quadMesh`
+ * — what the selection was made on — is stored as meshData in the same
+ * change. Edit Mesh Points has no meshData and just gets the selection.
+ */
+export function editMeshSelectionParams(
   node: { type: string; params: Record<string, unknown> },
-  key: "selectedPoints" | "selectedFaces",
-  indices: number[],
+  mode: SelectMode,
+  selection: MeshSelection,
   quadMesh: QuadMesh,
 ): Record<string, unknown> {
-  if (node.type === EDIT_MESH_NODE_TYPE && !node.params.meshData) {
-    return { [key]: indices, meshData: cloneQuadMesh(quadMesh) };
+  const key = SELECTION_KEYS[mode];
+  const value = mode === "points" ? selection.points : mode === "edges" ? selection.edges : selection.faces;
+  if (node.type === EDIT_MESH_NODE_TYPE && !node.params.meshData && value.length > 0) {
+    return { [key]: value, meshData: cloneQuadMesh(quadMesh) };
   }
-  return { [key]: indices };
+  return { [key]: value };
+}
+
+/**
+ * Switching select mode carries the selection over (see convertSelection),
+ * as Blender does, rather than dropping it.
+ */
+export function editMeshModeSwitchParams(
+  node: { type: string; params: Record<string, unknown> },
+  to: SelectMode,
+  quadMesh: QuadMesh,
+): Record<string, unknown> {
+  const { mode, selection } = readEditMeshSelection(node);
+  if (mode === to) return {};
+  const converted = convertSelection(quadMesh, mode, selection, to);
+  return { selectMode: to, ...editMeshSelectionParams(node, to, converted, quadMesh) };
 }
 
 interface EditMeshState {
@@ -327,6 +377,7 @@ function editMeshParamFields(instance?: NodeInstance): ParamFieldDef[] {
     { id: "shading", label: "Shading", kind: "select", options: ["auto", "smooth", "flat"] },
     { id: "extrudeDistance", label: "Extrude Distance", kind: "number", step: 0.05 },
     { id: "insetRatio", label: "Inset Amount (%)", kind: "number", step: 5, percent: true },
+    { id: "flatAngle", label: "Flat Region Angle (°)", kind: "number", step: 1 },
     { id: "proportionalEditing", label: "Proportional Editing", kind: "boolean" },
   );
   if (!instance || instance.params?.proportionalEditing) {
@@ -371,8 +422,9 @@ export const EDIT_MESH_NODE: NodeDefinition = {
   ],
   defaultParams: {
     meshData: null as QuadMesh | null,
-    selectMode: "faces" as "points" | "faces",
+    selectMode: "faces" as SelectMode,
     selectedPoints: [] as number[],
+    selectedEdges: [] as [number, number][],
     selectedFaces: [] as number[],
     activeTool: "select" as "select" | "extrude" | "loopcut" | "inset",
     shading: "auto" as QuadMeshShading,
@@ -382,6 +434,8 @@ export const EDIT_MESH_NODE: NodeDefinition = {
     proportionalDiameter: 1.0,
     // Pick through the surface (Alt+Z); off, hidden points/faces can't be selected.
     xray: false,
+    // Select Flat Region grows across edges bending less than this, in degrees.
+    flatAngle: 10,
     uvScale: [1, 1] as [number, number],
     uvOffset: [0, 0] as [number, number],
     // The same native pose every geometry node owns (see

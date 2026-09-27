@@ -1,5 +1,8 @@
 import * as THREE from "three";
 import type { MeshBVH } from "three-mesh-bvh";
+import { LineSegments2 } from "three/examples/jsm/lines/LineSegments2.js";
+import { LineSegmentsGeometry } from "three/examples/jsm/lines/LineSegmentsGeometry.js";
+import { LineMaterial } from "three/examples/jsm/lines/LineMaterial.js";
 import { disposeGeometryBvh, getBoundsTree } from "./bvh";
 import {
   QuadMesh,
@@ -9,14 +12,33 @@ import {
   quadMeshSignature,
 } from "../graph/quadMesh";
 import { triangulateFace } from "../graph/mesh/triangulate";
+import type { EdgeRef, SelectMode } from "../graph/mesh/selection";
 
 const WIREFRAME_COLOR = 0x38bdf8;
 const SELECTED_FACE_COLOR = 0x22c55e;
 const POINT_COLOR = "#f8fafc";
 const SELECTED_POINT_COLOR = "#ff7700"; // User requirement: selected points must be orange
+const SELECTED_EDGE_COLOR = 0xff7700;
+const HOVER_EDGE_COLOR = 0xfde68a;
 const LOOPCUT_PREVIEW_COLOR = 0xfacc15;
 
 const RENDER_ORDER = 998;
+
+/** Point handle diameters, in px. */
+const POINT_SIZE = 7;
+const SELECTED_POINT_SIZE = 9;
+/** Selected / hovered edge width, in px. */
+const EDGE_WIDTH = 3;
+
+/**
+ * How far each point and edge handle is pulled toward the camera, as a
+ * fraction of its distance, before the depth test. A vertex or edge sits
+ * exactly on the faces around it, so without this it would z-fight with (and
+ * be hidden by) its own surface. Relative rather than absolute so it holds at
+ * any zoom or scale.
+ */
+const DEPTH_PULL = 0.004;
+const PULL = (1 - DEPTH_PULL).toFixed(6);
 
 function createCircleTexture(fillColor: string, strokeColor = "rgba(0,0,0,0.75)"): THREE.CanvasTexture {
   const canvas = document.createElement("canvas");
@@ -35,18 +57,6 @@ function createCircleTexture(fillColor: string, strokeColor = "rgba(0,0,0,0.75)"
   texture.needsUpdate = true;
   return texture;
 }
-
-/** Point handle diameters, in px. */
-const POINT_SIZE = 7;
-const SELECTED_POINT_SIZE = 9;
-
-/**
- * How far each point handle is pulled toward the camera, as a fraction of
- * its distance, before the depth test. A vertex sits exactly on the faces
- * around it, so without this it would z-fight with (and be hidden by) its own
- * surface. Relative rather than absolute so it holds at any zoom or scale.
- */
-const POINT_DEPTH_PULL = 0.004;
 
 /**
  * Point handles depth-tested against the scene, so a vertex behind the
@@ -67,11 +77,26 @@ function createPointMaterial(size: number, map: THREE.Texture): THREE.PointsMate
     shader.vertexShader = shader.vertexShader.replace(
       "#include <project_vertex>",
       `#include <project_vertex>
-      mvPosition.xyz *= ${(1 - POINT_DEPTH_PULL).toFixed(6)};
+      mvPosition.xyz *= ${PULL};
       gl_Position = projectionMatrix * mvPosition;`,
     );
   };
   material.customProgramCacheKey = () => "edit-mesh-point-depth-pull";
+  return material;
+}
+
+/** A screen-space-width line material with the same depth pull as the points. */
+function createEdgeMaterial(color: number): LineMaterial {
+  const material = new LineMaterial({ color, linewidth: EDGE_WIDTH, transparent: true, depthWrite: false });
+  material.onBeforeCompile = (shader) => {
+    shader.vertexShader = shader.vertexShader.replace(
+      "vec4 end = modelViewMatrix * vec4( instanceEnd, 1.0 );",
+      `vec4 end = modelViewMatrix * vec4( instanceEnd, 1.0 );
+      start.xyz *= ${PULL};
+      end.xyz *= ${PULL};`,
+    );
+  };
+  material.customProgramCacheKey = () => "edit-mesh-edge-depth-pull";
   return material;
 }
 
@@ -89,19 +114,78 @@ function getPointMaterials() {
   return pointMaterials;
 }
 
+type Segment = [[number, number, number], [number, number, number]];
+
+/** Everything the overlay draws for one frame. */
+export interface EditMeshDisplayState {
+  mesh: THREE.Mesh | null;
+  quadMesh: QuadMesh | null;
+  mode: SelectMode;
+  points: ReadonlySet<number>;
+  edges: ReadonlyArray<EdgeRef>;
+  faces: ReadonlySet<number>;
+  hoverFace?: number | null;
+  hoverEdge?: EdgeRef | null;
+  loopPreview?: Segment[] | null;
+  proportionalDiameter?: number | null;
+}
+
+/**
+ * A screen-space selection region, in CSS px relative to the canvas: a
+ * marquee box, a lasso, or the paint brush circle.
+ */
+export interface ScreenRegion {
+  contains(x: number, y: number): boolean;
+  /**
+   * Whether an edge's on-screen segment counts as inside. Absent: both ends
+   * must be inside (box, lasso). The brush circle instead catches any edge
+   * passing under it.
+   */
+  hitsSegment?(ax: number, ay: number, bx: number, by: number): boolean;
+}
+
+export function rectRegion(minX: number, minY: number, maxX: number, maxY: number): ScreenRegion {
+  return { contains: (x, y) => x >= minX && x <= maxX && y >= minY && y <= maxY };
+}
+
+export function circleRegion(cx: number, cy: number, radius: number): ScreenRegion {
+  return {
+    contains: (x, y) => Math.hypot(x - cx, y - cy) <= radius,
+    hitsSegment(ax, ay, bx, by) {
+      const dx = bx - ax;
+      const dy = by - ay;
+      const lenSq = dx * dx + dy * dy;
+      const t = lenSq > 1e-9 ? Math.max(0, Math.min(1, ((cx - ax) * dx + (cy - ay) * dy) / lenSq)) : 0;
+      return Math.hypot(ax + dx * t - cx, ay + dy * t - cy) <= radius;
+    },
+  };
+}
+
+/** A lasso: an even-odd point-in-polygon test on the drawn path. */
+export function polygonRegion(path: ReadonlyArray<{ x: number; y: number }>): ScreenRegion {
+  return {
+    contains(x, y) {
+      let inside = false;
+      for (let i = 0, j = path.length - 1; i < path.length; j = i++) {
+        const a = path[i];
+        const b = path[j];
+        if (a.y > y !== b.y > y && x < ((b.x - a.x) * (y - a.y)) / (b.y - a.y) + a.x) inside = !inside;
+      }
+      return inside;
+    },
+  };
+}
+
 export interface EditMeshHandles {
   readonly group: THREE.Group;
-  sync(
-    mesh: THREE.Mesh | null,
-    quadMesh: QuadMesh | null,
-    selectMode: "points" | "faces",
-    selectedPoints: Set<number>,
-    selectedFaces: Set<number>,
-    hoverFace: number | null,
-    previewLoopCutSegments: [ [number, number, number], [number, number, number] ][] | null,
-    proportionalDiameter?: number | null,
-  ): void;
+  sync(state: EditMeshDisplayState): void;
   clear(): void;
+  /**
+   * X-ray: pick through the surface. Off (the default), points, edges and
+   * faces hidden behind the mesh itself can't be clicked, box-selected or
+   * painted, and hidden handles aren't drawn.
+   */
+  setXray(xray: boolean): void;
   pickFace(raycaster: THREE.Raycaster, quadMesh: QuadMesh, meshWorldMatrix: THREE.Matrix4): number | null;
   pickPoint(
     ndc: THREE.Vector2,
@@ -118,38 +202,25 @@ export interface EditMeshHandles {
     heightPx: number,
     quadMesh: QuadMesh,
     meshWorldMatrix: THREE.Matrix4,
-  ): [number, number] | null;
-  /**
-   * X-ray: pick through the surface. Off (the default), points and faces
-   * hidden behind the mesh itself can't be clicked, box-selected or painted.
-   */
-  setXray(xray: boolean): void;
-  pickPointsInRect(
-    minX: number,
-    minY: number,
-    maxX: number,
-    maxY: number,
+  ): EdgeRef | null;
+  pickPointsInRegion(
+    region: ScreenRegion,
     widthPx: number,
     heightPx: number,
     camera: THREE.Camera,
     quadMesh: QuadMesh,
     meshWorldMatrix: THREE.Matrix4,
   ): number[];
-  pickFacesInRect(
-    minX: number,
-    minY: number,
-    maxX: number,
-    maxY: number,
+  pickEdgesInRegion(
+    region: ScreenRegion,
     widthPx: number,
     heightPx: number,
     camera: THREE.Camera,
     quadMesh: QuadMesh,
     meshWorldMatrix: THREE.Matrix4,
-  ): number[];
-  pickPointsInRadius(
-    screenX: number,
-    screenY: number,
-    radiusPx: number,
+  ): EdgeRef[];
+  pickFacesInRegion(
+    region: ScreenRegion,
     widthPx: number,
     heightPx: number,
     camera: THREE.Camera,
@@ -182,7 +253,10 @@ export function createEditMeshHandles(): EditMeshHandles {
   function occluderFor(mesh: QuadMesh): MeshBVH {
     const key = keyOf(mesh);
     if (!occluderGeometry || occluderKey !== key) {
-      if (occluderGeometry) disposeGeometryBvh(occluderGeometry), occluderGeometry.dispose();
+      if (occluderGeometry) {
+        disposeGeometryBvh(occluderGeometry);
+        occluderGeometry.dispose();
+      }
       const tris: number[] = [];
       for (const face of mesh.faces) {
         for (const tri of triangulateFace(mesh.positions, face)) {
@@ -227,7 +301,7 @@ export function createEditMeshHandles(): EditMeshHandles {
   /** Screen position (CSS px) of a local-space point, or null when behind the camera. */
   const projScratch = new THREE.Vector3();
   function toScreen(
-    raw: [number, number, number],
+    raw: readonly [number, number, number],
     camera: THREE.Camera,
     meshWorldMatrix: THREE.Matrix4,
     widthPx: number,
@@ -238,6 +312,7 @@ export function createEditMeshHandles(): EditMeshHandles {
     if (projScratch.z > 1 || projScratch.z < -1) return null;
     return out.set((projScratch.x * 0.5 + 0.5) * widthPx, (-(projScratch.y * 0.5) + 0.5) * heightPx);
   }
+
   const group = new THREE.Group();
   group.matrixAutoUpdate = false;
 
@@ -250,9 +325,6 @@ export function createEditMeshHandles(): EditMeshHandles {
     color: WIREFRAME_COLOR,
     transparent: true,
     opacity: 0.95,
-    polygonOffset: true,
-    polygonOffsetFactor: -1.5,
-    polygonOffsetUnits: -4,
     depthTest: true,
     depthWrite: false,
   });
@@ -265,13 +337,15 @@ export function createEditMeshHandles(): EditMeshHandles {
     polygonOffset: true,
     polygonOffsetFactor: -2,
   });
-  const loopCutMat = new THREE.LineBasicMaterial({ color: LOOPCUT_PREVIEW_COLOR, linewidth: 3, depthTest: false });
+  const loopCutMat = new THREE.LineBasicMaterial({ color: LOOPCUT_PREVIEW_COLOR, depthTest: false });
   const proportionalMat = new THREE.LineBasicMaterial({
     color: 0x38bdf8,
     transparent: true,
     opacity: 0.45,
     depthTest: false,
   });
+  const selectedEdgeMat = createEdgeMaterial(SELECTED_EDGE_COLOR);
+  const hoverEdgeMat = createEdgeMaterial(HOVER_EDGE_COLOR);
 
   const wireframeLines = new THREE.LineSegments(new THREE.BufferGeometry(), wireframeMat);
   wireframeLines.renderOrder = RENDER_ORDER;
@@ -282,16 +356,32 @@ export function createEditMeshHandles(): EditMeshHandles {
   unselectedPointsMesh.renderOrder = RENDER_ORDER + 2;
   const selectedPointsMesh = new THREE.Points(new THREE.BufferGeometry());
   selectedPointsMesh.renderOrder = RENDER_ORDER + 3;
+  const selectedEdgeLines = new LineSegments2(new LineSegmentsGeometry(), selectedEdgeMat);
+  selectedEdgeLines.renderOrder = RENDER_ORDER + 3;
+  const hoverEdgeLines = new LineSegments2(new LineSegmentsGeometry(), hoverEdgeMat);
+  hoverEdgeLines.renderOrder = RENDER_ORDER + 4;
   const loopCutLines = new THREE.LineSegments(new THREE.BufferGeometry(), loopCutMat);
   loopCutLines.renderOrder = RENDER_ORDER + 4;
   const proportionalCircleLines = new THREE.LineSegments(new THREE.BufferGeometry(), proportionalMat);
   proportionalCircleLines.renderOrder = RENDER_ORDER + 2;
+
+  // Screen-width lines need the viewport's size; read it off the renderer
+  // at draw time, so each viewport sharing these handles gets its own.
+  const sizeScratch = new THREE.Vector2();
+  for (const line of [selectedEdgeLines, hoverEdgeLines]) {
+    line.onBeforeRender = (renderer) => {
+      renderer.getSize(sizeScratch);
+      (line.material as LineMaterial).resolution.copy(sizeScratch);
+    };
+  }
 
   const overlays: THREE.Object3D[] = [
     wireframeLines,
     faceHighlightMesh,
     unselectedPointsMesh,
     selectedPointsMesh,
+    selectedEdgeLines,
+    hoverEdgeLines,
     loopCutLines,
     proportionalCircleLines,
   ];
@@ -312,6 +402,24 @@ export function createEditMeshHandles(): EditMeshHandles {
     object.visible = values.length > 0;
   }
 
+  function setSegments(object: LineSegments2, values: number[]) {
+    object.geometry.dispose();
+    const geometry = new LineSegmentsGeometry();
+    if (values.length > 0) geometry.setPositions(values);
+    object.geometry = geometry;
+    object.visible = values.length > 0;
+  }
+
+  function edgeSegments(mesh: QuadMesh, edges: ReadonlyArray<EdgeRef>): number[] {
+    const out: number[] = [];
+    for (const [a, b] of edges) {
+      const pa = mesh.positions[a];
+      const pb = mesh.positions[b];
+      if (pa && pb) out.push(pa[0], pa[1], pa[2], pb[0], pb[1], pb[2]);
+    }
+    return out;
+  }
+
   // What each overlay was last built from. A key that matches means the
   // overlay is already right and is left alone.
   let lastMesh: QuadMesh | null = null;
@@ -319,13 +427,15 @@ export function createEditMeshHandles(): EditMeshHandles {
   let wireKey = "";
   let facesKey = "";
   let pointsKey = "";
+  let edgesKey = "";
+  let hoverEdgeKey = "";
   let loopKey: unknown = null;
   let proportionalKey = "";
 
   function clear() {
     for (const o of overlays) o.visible = false;
     lastMesh = null;
-    meshKey = wireKey = facesKey = pointsKey = proportionalKey = "";
+    meshKey = wireKey = facesKey = pointsKey = edgesKey = hoverEdgeKey = proportionalKey = "";
     loopKey = null;
   }
 
@@ -333,7 +443,12 @@ export function createEditMeshHandles(): EditMeshHandles {
     group,
     clear,
 
-    sync(mesh, quadMesh, selectMode, selectedPoints, selectedFaces, hoverFace, previewLoopCutSegments, proportionalDiameter) {
+    setXray(next) {
+      xray = next;
+    },
+
+    sync(state) {
+      const { mesh, quadMesh, mode } = state;
       if (!mesh || !quadMesh) {
         if (lastMesh || wireframeLines.visible) clear();
         return;
@@ -345,11 +460,13 @@ export function createEditMeshHandles(): EditMeshHandles {
 
       // Outside X-ray, handles behind the geometry are hidden, matching what
       // can be picked; in X-ray every one of them shows (and is pickable).
-      if (selectMode === "points") {
+      if (mode === "points") {
         const mats = getPointMaterials();
         mats.unselected.depthTest = !xray;
         mats.selected.depthTest = !xray;
       }
+      selectedEdgeMat.depthTest = !xray;
+      hoverEdgeMat.depthTest = !xray;
 
       // Identity first: a frozen mesh hands back the same object every frame
       // until it's edited. A live one is a fresh clone each frame, so it
@@ -360,8 +477,9 @@ export function createEditMeshHandles(): EditMeshHandles {
       }
 
       const positions = quadMesh.positions;
-      const selPointsKey = selectMode === "points" ? Array.from(selectedPoints).join(",") : "";
-      const selFacesKey = selectMode === "faces" ? Array.from(selectedFaces).join(",") : "";
+      const selPointsKey = mode === "points" ? Array.from(state.points).join(",") : "";
+      const selEdgesKey = mode === "edges" ? state.edges.map((e) => `${e[0]}_${e[1]}`).join(",") : "";
+      const selFacesKey = mode === "faces" ? Array.from(state.faces).join(",") : "";
 
       // 1. Quad wireframe
       if (wireKey !== meshKey) {
@@ -376,12 +494,13 @@ export function createEditMeshHandles(): EditMeshHandles {
       }
 
       // 2. Face selection overlay (faces mode)
-      const nextFacesKey = selectMode === "faces" ? `${meshKey}|${selFacesKey}|${hoverFace ?? ""}` : "off";
+      const hoverFace = state.hoverFace ?? null;
+      const nextFacesKey = mode === "faces" ? `${meshKey}|${selFacesKey}|${hoverFace ?? ""}` : "off";
       if (facesKey !== nextFacesKey) {
         facesKey = nextFacesKey;
         const faceVerts: number[] = [];
-        if (selectMode === "faces") {
-          const facesToHighlight = new Set<number>(selectedFaces);
+        if (mode === "faces") {
+          const facesToHighlight = new Set<number>(state.faces);
           if (hoverFace !== null) facesToHighlight.add(hoverFace);
           for (const fIdx of facesToHighlight) {
             const face = quadMesh.faces[fIdx];
@@ -398,54 +517,65 @@ export function createEditMeshHandles(): EditMeshHandles {
       }
 
       // 3. Point handles (points mode): circular, zoom-independent, orange when selected
-      const nextPointsKey = selectMode === "points" ? `${meshKey}|${selPointsKey}` : "off";
+      const nextPointsKey = mode === "points" ? `${meshKey}|${selPointsKey}` : "off";
       if (pointsKey !== nextPointsKey) {
         pointsKey = nextPointsKey;
         const unselectedPos: number[] = [];
         const selectedPos: number[] = [];
-        if (selectMode === "points") {
+        if (mode === "points") {
           const mats = getPointMaterials();
           unselectedPointsMesh.material = mats.unselected;
           selectedPointsMesh.material = mats.selected;
           for (let idx = 0; idx < positions.length; idx++) {
             const p = positions[idx];
             if (!p) continue;
-            (selectedPoints.has(idx) ? selectedPos : unselectedPos).push(p[0], p[1], p[2]);
+            (state.points.has(idx) ? selectedPos : unselectedPos).push(p[0], p[1], p[2]);
           }
         }
         setPositions(unselectedPointsMesh, unselectedPos);
         setPositions(selectedPointsMesh, selectedPos);
       }
 
-      // 4. Loop cut preview (the viewport replaces the array on every hover change)
-      if (loopKey !== previewLoopCutSegments) {
-        loopKey = previewLoopCutSegments;
+      // 4. Selected edges (edges mode), drawn thick and orange
+      const nextEdgesKey = mode === "edges" ? `${meshKey}|${selEdgesKey}` : "off";
+      if (edgesKey !== nextEdgesKey) {
+        edgesKey = nextEdgesKey;
+        setSegments(selectedEdgeLines, mode === "edges" ? edgeSegments(quadMesh, state.edges) : []);
+      }
+
+      // 5. Hovered edge (edges mode, and whatever a loop select would start from)
+      const hoverEdge = state.hoverEdge ?? null;
+      const nextHoverKey = hoverEdge ? `${meshKey}|${hoverEdge[0]}_${hoverEdge[1]}` : "off";
+      if (hoverEdgeKey !== nextHoverKey) {
+        hoverEdgeKey = nextHoverKey;
+        setSegments(hoverEdgeLines, hoverEdge ? edgeSegments(quadMesh, [hoverEdge]) : []);
+      }
+
+      // 6. Loop cut preview (the viewport replaces the array on every hover change)
+      const loopPreview = state.loopPreview ?? null;
+      if (loopKey !== loopPreview) {
+        loopKey = loopPreview;
         const linePositions: number[] = [];
-        for (const [pA, pB] of previewLoopCutSegments ?? []) {
+        for (const [pA, pB] of loopPreview ?? []) {
           linePositions.push(pA[0], pA[1], pA[2], pB[0], pB[1], pB[2]);
         }
         setPositions(loopCutLines, linePositions);
       }
 
-      // 5. Proportional editing influence cage
-      const hasSelection = selectMode === "points" ? selectedPoints.size > 0 : selectedFaces.size > 0;
+      // 7. Proportional editing influence cage
+      const diameter = state.proportionalDiameter ?? null;
+      const selVerts = new Set<number>();
+      if (mode === "points") for (const p of state.points) selVerts.add(p);
+      else if (mode === "edges") for (const [a, b] of state.edges) selVerts.add(a).add(b);
+      else for (const f of state.faces) for (const v of quadMesh.faces[f] ?? []) selVerts.add(v);
       const nextPropKey =
-        proportionalDiameter && proportionalDiameter > 0 && hasSelection
-          ? `${meshKey}|${selectMode}|${selPointsKey}|${selFacesKey}|${proportionalDiameter}`
+        diameter && diameter > 0 && selVerts.size > 0
+          ? `${meshKey}|${mode}|${selPointsKey}|${selEdgesKey}|${selFacesKey}|${diameter}`
           : "off";
       if (proportionalKey !== nextPropKey) {
         proportionalKey = nextPropKey;
         const circleVerts: number[] = [];
         if (nextPropKey !== "off") {
-          const selVerts = new Set<number>();
-          if (selectMode === "points") {
-            for (const p of selectedPoints) selVerts.add(p);
-          } else {
-            for (const f of selectedFaces) {
-              const face = quadMesh.faces[f];
-              if (face) for (const v of face) selVerts.add(v);
-            }
-          }
           const cx = new THREE.Vector3();
           let count = 0;
           for (const v of selVerts) {
@@ -457,7 +587,7 @@ export function createEditMeshHandles(): EditMeshHandles {
           }
           if (count > 0) {
             cx.divideScalar(count);
-            const r = proportionalDiameter! / 2;
+            const r = diameter! / 2;
             const segments = 48;
             for (let i = 0; i < segments; i++) {
               const a1 = (i / segments) * Math.PI * 2;
@@ -474,10 +604,6 @@ export function createEditMeshHandles(): EditMeshHandles {
         }
         setPositions(proportionalCircleLines, circleVerts);
       }
-    },
-
-    setXray(next) {
-      xray = next;
     },
 
     pickFace(raycaster, quadMesh, meshWorldMatrix) {
@@ -526,24 +652,47 @@ export function createEditMeshHandles(): EditMeshHandles {
       return closestFaceIdx;
     },
 
-    pickPointsInRect(minX, minY, maxX, maxY, widthPx, heightPx, camera, quadMesh, meshWorldMatrix) {
+    pickPointsInRegion(region, widthPx, heightPx, camera, quadMesh, meshWorldMatrix) {
       const bvh = xray ? null : occluderFor(quadMesh);
-      const selectedIndices: number[] = [];
+      const picked: number[] = [];
       const screen = new THREE.Vector2();
       const local = new THREE.Vector3();
       for (let i = 0; i < quadMesh.positions.length; i++) {
         const raw = quadMesh.positions[i];
         if (!raw || !toScreen(raw, camera, meshWorldMatrix, widthPx, heightPx, screen)) continue;
-        if (screen.x < minX || screen.x > maxX || screen.y < minY || screen.y > maxY) continue;
+        if (!region.contains(screen.x, screen.y)) continue;
         if (!isVisible(local.set(raw[0], raw[1], raw[2]), camera, meshWorldMatrix, bvh)) continue;
-        selectedIndices.push(i);
+        picked.push(i);
       }
-      return selectedIndices;
+      return picked;
     },
 
-    pickFacesInRect(minX, minY, maxX, maxY, widthPx, heightPx, camera, quadMesh, meshWorldMatrix) {
+    pickEdgesInRegion(region, widthPx, heightPx, camera, quadMesh, meshWorldMatrix) {
       const bvh = xray ? null : occluderFor(quadMesh);
-      const selectedIndices: number[] = [];
+      const picked: EdgeRef[] = [];
+      const a = new THREE.Vector2();
+      const b = new THREE.Vector2();
+      const mid = new THREE.Vector3();
+      for (const [u, v] of getQuadMeshEdges(quadMesh)) {
+        const pu = quadMesh.positions[u];
+        const pv = quadMesh.positions[v];
+        if (!pu || !pv) continue;
+        if (!toScreen(pu, camera, meshWorldMatrix, widthPx, heightPx, a)) continue;
+        if (!toScreen(pv, camera, meshWorldMatrix, widthPx, heightPx, b)) continue;
+        const inside = region.hitsSegment
+          ? region.hitsSegment(a.x, a.y, b.x, b.y)
+          : region.contains(a.x, a.y) && region.contains(b.x, b.y);
+        if (!inside) continue;
+        mid.set((pu[0] + pv[0]) / 2, (pu[1] + pv[1]) / 2, (pu[2] + pv[2]) / 2);
+        if (!isVisible(mid, camera, meshWorldMatrix, bvh)) continue;
+        picked.push([u, v]);
+      }
+      return picked;
+    },
+
+    pickFacesInRegion(region, widthPx, heightPx, camera, quadMesh, meshWorldMatrix) {
+      const bvh = xray ? null : occluderFor(quadMesh);
+      const picked: number[] = [];
       const screen = new THREE.Vector2();
       const viewDir = new THREE.Vector3();
       const camPos = new THREE.Vector3();
@@ -569,37 +718,20 @@ export function createEditMeshHandles(): EditMeshHandles {
         }
 
         const c = localCentroid;
-        if (toScreen([c.x, c.y, c.z], camera, meshWorldMatrix, widthPx, heightPx, screen)) {
-          if (screen.x >= minX && screen.x <= maxX && screen.y >= minY && screen.y <= maxY) {
-            selectedIndices.push(f);
-            continue;
-          }
+        if (toScreen([c.x, c.y, c.z], camera, meshWorldMatrix, widthPx, heightPx, screen) && region.contains(screen.x, screen.y)) {
+          picked.push(f);
+          continue;
         }
         for (const vIdx of face) {
           const raw = quadMesh.positions[vIdx];
           if (!raw || !toScreen(raw, camera, meshWorldMatrix, widthPx, heightPx, screen)) continue;
-          if (screen.x >= minX && screen.x <= maxX && screen.y >= minY && screen.y <= maxY) {
-            selectedIndices.push(f);
+          if (region.contains(screen.x, screen.y)) {
+            picked.push(f);
             break;
           }
         }
       }
-      return selectedIndices;
-    },
-
-    pickPointsInRadius(screenX, screenY, radiusPx, widthPx, heightPx, camera, quadMesh, meshWorldMatrix) {
-      const bvh = xray ? null : occluderFor(quadMesh);
-      const result: number[] = [];
-      const screen = new THREE.Vector2();
-      const local = new THREE.Vector3();
-      for (let i = 0; i < quadMesh.positions.length; i++) {
-        const raw = quadMesh.positions[i];
-        if (!raw || !toScreen(raw, camera, meshWorldMatrix, widthPx, heightPx, screen)) continue;
-        if (Math.hypot(screen.x - screenX, screen.y - screenY) > radiusPx) continue;
-        if (!isVisible(local.set(raw[0], raw[1], raw[2]), camera, meshWorldMatrix, bvh)) continue;
-        result.push(i);
-      }
-      return result;
+      return picked;
     },
 
     pickPoint(ndc, camera, widthPx, heightPx, quadMesh, meshWorldMatrix) {
@@ -635,7 +767,7 @@ export function createEditMeshHandles(): EditMeshHandles {
       const a = new THREE.Vector2();
       const b = new THREE.Vector2();
       const ab = new THREE.Vector2();
-      const candidates: { edge: [number, number]; dist: number }[] = [];
+      const candidates: { edge: EdgeRef; dist: number }[] = [];
 
       for (const [u, v] of getQuadMeshEdges(quadMesh)) {
         const rawU = quadMesh.positions[u];

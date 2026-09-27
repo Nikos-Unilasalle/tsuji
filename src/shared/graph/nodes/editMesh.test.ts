@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import * as THREE from "three";
-import { EDIT_MESH_NODE, EDIT_MESH_RESEED_ACTION, editMeshFreezeStatus, editMeshSelectionPatch, resolveEditMeshData } from "./editMesh";
+import { EDIT_MESH_NODE, EDIT_MESH_RESEED_ACTION, editMeshFreezeStatus, editMeshModeSwitchParams, editMeshSelectionParams, readEditMeshSelection, resolveEditMeshData } from "./editMesh";
 import { EvalContext } from "../types";
 import { cloneQuadMesh, createQuadBox, quadMeshToBufferGeometry, QuadMesh, transformSelection } from "../quadMesh";
 
@@ -280,19 +280,45 @@ describe("EDIT_MESH_NODE", () => {
     });
   });
 
-  describe("editMeshSelectionPatch", () => {
-    it("freezes a live Edit Mesh on its first selection, and only then", () => {
+  describe("selection params", () => {
+    const sel = (patch: Partial<{ points: number[]; edges: [number, number][]; faces: number[] }>) => ({
+      points: [], edges: [], faces: [], ...patch,
+    });
+
+    it("freezes a live Edit Mesh on its first non-empty selection, and only then", () => {
       const quad = createQuadBox();
       const live = { type: EDIT_MESH_NODE.type, params: { meshData: null } };
-      const patch = editMeshSelectionPatch(live, "selectedFaces", [2], quad);
+      const patch = editMeshSelectionParams(live, "faces", sel({ faces: [2] }), quad);
       expect(patch.selectedFaces).toEqual([2]);
       expect(patch.meshData).toEqual(quad);
       expect(patch.meshData).not.toBe(quad);
+      // Clearing a selection is not an edit: nothing to freeze.
+      expect(editMeshSelectionParams(live, "faces", sel({}), quad)).toEqual({ selectedFaces: [] });
 
       const frozen = { type: EDIT_MESH_NODE.type, params: { meshData: quad } };
-      expect(editMeshSelectionPatch(frozen, "selectedPoints", [1], quad)).toEqual({ selectedPoints: [1] });
+      expect(editMeshSelectionParams(frozen, "edges", sel({ edges: [[1, 2]] }), quad)).toEqual({ selectedEdges: [[1, 2]] });
       const points = { type: "object/edit_points", params: {} };
-      expect(editMeshSelectionPatch(points, "selectedPoints", [1], quad)).toEqual({ selectedPoints: [1] });
+      expect(editMeshSelectionParams(points, "points", sel({ points: [1] }), quad)).toEqual({ selectedPoints: [1] });
+    });
+
+    it("reads the mode and selection, defaulting to faces", () => {
+      const read = readEditMeshSelection({
+        type: EDIT_MESH_NODE.type,
+        params: { selectMode: "edges", selectedEdges: [[3, 1], [1, 3]], selectedPoints: [1, -1, "x"] },
+      });
+      expect(read.mode).toBe("edges");
+      expect(read.selection.edges).toEqual([[1, 3]]);
+      expect(read.selection.points).toEqual([1]);
+      expect(readEditMeshSelection({ type: EDIT_MESH_NODE.type, params: { selectMode: "bogus" } }).mode).toBe("faces");
+      expect(readEditMeshSelection({ type: "object/edit_points", params: { selectMode: "faces" } }).mode).toBe("points");
+    });
+
+    it("converts the selection when the mode changes", () => {
+      const quad = createQuadBox();
+      const node = { type: EDIT_MESH_NODE.type, params: { meshData: quad, selectMode: "faces", selectedFaces: [2] } };
+      const patch = editMeshModeSwitchParams(node, "points", quad);
+      expect(patch.selectMode).toBe("points");
+      expect(patch.selectedPoints).toEqual([...quad.faces[2]].sort((a, b) => a - b));
     });
   });
 
