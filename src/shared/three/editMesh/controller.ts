@@ -55,6 +55,7 @@ import { bridgeEdgeLoops, bridgeFaces, spinEdges } from "../../graph/mesh/bridge
 import { knifeCut, KnifePoint } from "../../graph/mesh/knife";
 import { creaseMap, edgeKey, paintCorners, setEdgeCrease, setEdgeFlag } from "../../graph/mesh/attributes";
 import { asVector3 } from "../../graph/nodes/transform";
+import { asColor } from "../../graph/nodes/object";
 import { circleRegion, EditMeshHandles, ScreenRegion } from "../editMeshHandles";
 import type { TransformPatch } from "../gizmoWriteback";
 
@@ -749,7 +750,9 @@ export function createEditMeshController(ctx: EditMeshControllerContext) {
       return true;
     }
     if (op === "paint") {
-      const hex = new THREE.Color(Number(target.node.params.paintColor ?? 0xff6b6b));
+      // asColor, like every node's colour param: the picker stores a
+      // THREE.Color, which Number() turned into NaN — black.
+      const hex = asColor(target.node.params.paintColor, new THREE.Color(0xff6b6b));
       const color: [number, number, number] = [hex.r, hex.g, hex.b];
       const painted =
         target.mode === "faces"

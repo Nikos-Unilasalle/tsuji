@@ -48,6 +48,13 @@
   border-color: var(--accent-color);
 }
 
+.cp-popover-above-right {
+  top: auto !important;
+  bottom: 30px;
+  left: auto !important;
+  right: 0;
+}
+
 .cp-popover {
   position: absolute;
   top: 30px;

@@ -12,6 +12,12 @@ const PRESETS = [
 interface ColorPickerInputProps {
   value: unknown;
   onChange: (v: THREE.Color) => void;
+  /**
+   * Where the picker opens: below, left-aligned (the default, for the param
+   * panel), or above, right-aligned — for a picker near the bottom-right of
+   * the viewport, where the default would open off-screen.
+   */
+  placement?: "below" | "above-right";
 }
 
 /**
@@ -19,7 +25,7 @@ interface ColorPickerInputProps {
  * avoided: in WKWebView (Tauri on macOS) the OS colour panel does not emit
  * input/change events for swatches picked from its "Color Palettes" tab.
  */
-export function ColorPickerInput({ value, onChange }: ColorPickerInputProps) {
+export function ColorPickerInput({ value, onChange, placement = "below" }: ColorPickerInputProps) {
   const colorHex = parseColorToHex(value);
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -141,7 +147,7 @@ export function ColorPickerInput({ value, onChange }: ColorPickerInputProps) {
       </div>
 
       {isOpen && (
-        <div className="cp-popover">
+        <div className={`cp-popover${placement === "above-right" ? " cp-popover-above-right" : ""}`}>
           <div
             className="cp-square"
             ref={squareRef}

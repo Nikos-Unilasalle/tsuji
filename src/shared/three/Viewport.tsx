@@ -68,6 +68,7 @@ import {
 } from "../graph/mesh/selection";
 import { mirrorMovesX, mirrorXMap } from "../graph/mesh/tools";
 import { layoutKey } from "./layoutKey";
+import { ColorPickerInput } from "../../windows/ColorPickerInput";
 import { QuadMesh, getLoopCutPreviewSegments, loopCut, transformSelectionByMatrix } from "../graph/quadMesh";
 import { createPostProcessChain } from "./postProcessChain";
 import { computeGizmoWriteback, TransformGizmoMode, TransformPatch } from "./gizmoWriteback";
@@ -7075,7 +7076,7 @@ export function Viewport({
               )}
               {vertices.length > 0 && (
                 <div style={row}>
-                  <span style={label}>Paint</span>
+                  <span style={label}>Material</span>
                   <div style={{ display: "flex", gap: 2 }}>
                     {/* Which material input the selected faces use */}
                     <select
@@ -7107,22 +7108,29 @@ export function Viewport({
                     >
                       Assign
                     </button>
+                  </div>
+                </div>
+              )}
+              {vertices.length > 0 && (
+                <div style={row}>
+                  <span style={label}>Colour</span>
+                  <div style={{ display: "flex", gap: 2, alignItems: "center" }}>
+                    {/* Vertex colour: pick it here, then paint the selection with it */}
+                    <div style={{ width: 110 }} title="Paint Colour">
+                      <ColorPickerInput
+                        value={node.params.paintColor ?? 0xff6b6b}
+                        onChange={(color) => onParamChange?.("paintColor", color, node.id)}
+                        placement="above-right"
+                      />
+                    </div>
                     <button
                       type="button"
                       className="viewport-hud-button"
-                      style={{ fontSize: 10, padding: "2px 6px", minWidth: 0, width: "auto", display: "flex", alignItems: "center", gap: 4 }}
+                      style={{ fontSize: 10, padding: "2px 6px", minWidth: 0, width: "auto" }}
                       onClick={() => editMeshCommandsRef.current?.run("paint")}
-                      title="Paint the selection with Paint Colour (vertex colours)"
+                      title="Paint the selection with this colour (vertex colours)"
                     >
-                      <span
-                        style={{
-                          width: 10,
-                          height: 10,
-                          borderRadius: 2,
-                          background: `#${new THREE.Color(Number(node.params.paintColor ?? 0xff6b6b)).getHexString()}`,
-                        }}
-                      />
-                      Colour
+                      Paint
                     </button>
                   </div>
                 </div>
