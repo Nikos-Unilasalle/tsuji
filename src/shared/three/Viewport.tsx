@@ -1028,9 +1028,9 @@ export function Viewport({
   /** The running Edit Mesh modal tool's readout, or null when none is running. */
   const [editModalHud, setEditModalHud] = useState<string | null>(null);
   /**
-   * The Edit Mesh's material inputs for the Assign menu, by the name of what's
-   * wired into each ("Material 2 · Red Paint"), including the free one to
-   * wire next; slot 0 unwired reads as the source's own material.
+   * The Edit Mesh's material inputs for the Assign menu, each shown by the
+   * name of the material wired into it ("Gold"), including the free one to
+   * wire next ("Empty"); slot 0 unwired is the source's own material ("Default").
    */
   const materialSlotOptions = (node: { id: string; type: string; params: Record<string, unknown> }) => {
     const wired = graph.connections.filter((c) => c.toNode === node.id);
@@ -1038,8 +1038,8 @@ export function Viewport({
     return sockets.map((socket, slot) => {
       const conn = wired.find((c) => c.toSocket === socket.id);
       const from = conn ? graph.nodes.find((n) => n.id === conn.fromNode) : undefined;
-      const name = from ? String(from.params.name || registry.get(from.type)?.label || from.type) : slot === 0 ? "source / default" : "(unwired)";
-      return { slot, label: `${socket.label} · ${name}` };
+      const name = from ? String(from.params.name || registry.get(from.type)?.label || from.type) : slot === 0 ? "Default" : "Empty";
+      return { slot, label: name };
     });
   };
 
