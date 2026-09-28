@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import type { MutableRefObject } from "react";
 import { findFirstMesh } from "../../graph/meshRequired";
+import { findNodeDeep } from "../../graph/groups";
 import {
   EDIT_MESH_NODE,
   resolveEditMeshData,
@@ -97,6 +98,22 @@ export function editMeshQuadMesh(
   return cached.mesh;
 }
 
+/**
+ * The Edit Mesh (or, with `points`, Edit Mesh Points) node with this id, at
+ * any depth — inside a group as well as on the canvas itself (ids are unique
+ * across the whole tree).
+ */
+export function findEditMeshNode<T extends { id: string; type: string; params: Record<string, unknown>; subgraph?: unknown }>(
+  graph: { nodes: T[] },
+  id: string | null | undefined,
+  points: boolean,
+): T | undefined {
+  if (!id) return undefined;
+  const node = findNodeDeep(graph as never, id) as T | undefined;
+  if (!node) return undefined;
+  return node.type === EDIT_MESH_NODE.type || (points && node.type === EDIT_MESH_POINTS_NODE.type) ? node : undefined;
+}
+
 /** The Edit Mesh paint-select brush radius, in CSS px (the drawn circle matches). */
 export const EDIT_MESH_BRUSH_RADIUS_PX = 28;
 
@@ -127,7 +144,7 @@ export interface EditMeshCommands {
   tool(tool: "bevel" | "spin" | "knife" | "bridge"): boolean;
 }
 
-type GraphLike = { nodes: { id: string; type: string; params: Record<string, unknown> }[] };
+type GraphLike = { nodes: { id: string; type: string; params: Record<string, unknown>; subgraph?: unknown }[] };
 type ParamChange = (
   paramId: string | Record<string, unknown>,
   value?: unknown,
@@ -208,11 +225,7 @@ export function createEditMeshController(ctx: EditMeshControllerContext) {
   /** The selected Edit Mesh / Edit Mesh Points node with what it's editing, or null. */
   function editMeshTarget(): EditMeshTarget | null {
     if (outputMode || !selectedNodeIdRef.current) return null;
-    const node = graphRef.current.nodes.find(
-      (n) =>
-        n.id === selectedNodeIdRef.current &&
-        (n.type === EDIT_MESH_NODE.type || n.type === EDIT_MESH_POINTS_NODE.type),
-    );
+    const node = findEditMeshNode(graphRef.current, selectedNodeIdRef.current, true);
     if (!node) return null;
     const meshObj = latestResultsRef.current?.get(node.id)?.geometry;
     const srcMesh = meshObj instanceof THREE.Object3D ? findFirstMesh(meshObj) : null;
@@ -917,7 +930,7 @@ export function createEditMeshController(ctx: EditMeshControllerContext) {
    * when the mouse wheel resizes the proportional radius mid-drag.
    */
   function applyEditMeshDrag(object: THREE.Object3D) {
-    const node = graphRef.current.nodes.find((n) => n.id === selectedNodeIdRef.current);
+    const node = findEditMeshNode(graphRef.current, selectedNodeIdRef.current, true);
     if (!node || !dragStartMeshData || !onParamChangeRef.current) return;
 
     const meshObj = latestResultsRef.current?.get(node.id)?.geometry;
@@ -1063,7 +1076,7 @@ export function createEditMeshController(ctx: EditMeshControllerContext) {
     dragStartCentroidPos.copy(proxy.position);
     dragStartCentroidQuat.copy(proxy.quaternion);
     dragStartCentroidScale.copy(proxy.scale);
-    const node = graphRef.current.nodes.find((n) => n.id === selectedNodeIdRef.current);
+    const node = findEditMeshNode(graphRef.current, selectedNodeIdRef.current, true);
     if (node?.type === EDIT_MESH_NODE.type) {
       dragStartMeshData = cloneQuadMesh(resolveEditMeshData(node, latestResultsRef.current));
       dragStartMirrorMap = node.params.mirrorX === true ? mirrorXMap(dragStartMeshData, mirrorTolerance(dragStartMeshData)) : null;
@@ -1106,7 +1119,7 @@ export function createEditMeshController(ctx: EditMeshControllerContext) {
    * Returns false when it doesn't apply.
    */
   function wheelDuringDrag(proxy: THREE.Object3D, deltaY: number): boolean {
-    const node = graphRef.current.nodes.find((n) => n.id === selectedNodeIdRef.current);
+    const node = findEditMeshNode(graphRef.current, selectedNodeIdRef.current, true);
     if (!node?.params.proportionalEditing) return false;
     const current = dragDiameterOverride ?? (Number(node.params.proportionalDiameter) || 1.0);
     dragDiameterOverride = Math.max(1e-3, current * (deltaY < 0 ? 1.15 : 1 / 1.15));

@@ -114,7 +114,8 @@ export function paramPanelValues(
   }
 
   for (const [key, value] of Object.entries(evaluated ?? {})) {
-    if (key === "__evaluatedInputs") continue;
+    // Hidden evaluator bookkeeping (__evaluatedInputs, a group's __subResults), never params.
+    if (key.startsWith("__")) continue;
     if (key in def.defaultParams) continue;
     merged[key] = value;
   }

@@ -23,6 +23,7 @@ import { getGraphClipboard, setGraphClipboard } from "../shared/graph/clipboard"
 import { cloneKeyframes, cloneParams, cloneParamValue } from "../shared/graph/cloneGraph";
 import { groupSelection, materializeNewPort, ungroupNode } from "../shared/graph/groupSelection";
 import {
+  boundaryNodes,
   GROUP_INPUT_TYPE,
   GROUP_OUTPUT_TYPE,
   GROUP_TYPE,
@@ -1201,19 +1202,38 @@ function GraphEditorContent({
   }, [getSelectedNodeInstances, graph, onGraphChange, onSelectNode, onSelectNodes, registry]);
 
   /** Cmd+Shift+G — every selected group spills its contents back into this level. */
+  /**
+   * Ungroups these groups and selects what spills out of them (ids are kept;
+   * the boundary Input/Output nodes go), so the freed nodes can be moved
+   * together straight away rather than picked out one by one.
+   */
+  const ungroupGroups = useCallback(
+    (groupIds: string[]) => {
+      let next = graph;
+      const spilled: string[] = [];
+      for (const id of groupIds) {
+        const group = next.nodes.find((n) => n.id === id);
+        if (!group?.subgraph) continue;
+        const { input, output } = boundaryNodes(group.subgraph);
+        const ungrouped = ungroupNode(next, id);
+        if (!ungrouped) continue;
+        next = ungrouped;
+        for (const n of group.subgraph.nodes) if (n.id !== input?.id && n.id !== output?.id) spilled.push(n.id);
+      }
+      if (next === graph) return;
+
+      selectedIdsRef.current = new Set(spilled);
+      onGraphChange?.(next);
+      onSelectNode(spilled.length === 1 ? spilled[0] : null);
+      onSelectNodes?.(spilled);
+    },
+    [graph, onGraphChange, onSelectNode, onSelectNodes],
+  );
+
   const ungroupSelected = useCallback(() => {
     const groups = getSelectedNodeInstances().filter(isGroupInstance);
-    if (groups.length === 0) return;
-
-    let next = graph;
-    for (const group of groups) next = ungroupNode(next, group.id) ?? next;
-    if (next === graph) return;
-
-    selectedIdsRef.current = new Set();
-    onGraphChange?.(next);
-    onSelectNode(null);
-    onSelectNodes?.([]);
-  }, [getSelectedNodeInstances, graph, onGraphChange, onSelectNode, onSelectNodes]);
+    if (groups.length > 0) ungroupGroups(groups.map((g) => g.id));
+  }, [getSelectedNodeInstances, ungroupGroups]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -1702,7 +1722,7 @@ function GraphEditorContent({
             className="graph-context-menu"
             style={{
               left: Math.min(contextMenu.x, window.innerWidth - 180),
-              top: Math.min(contextMenu.y, window.innerHeight - 150),
+              top: Math.min(contextMenu.y, window.innerHeight - 190),
             }}
             onClick={(e) => e.stopPropagation()}
             onPointerDown={(e) => e.stopPropagation()}
@@ -1731,6 +1751,21 @@ function GraphEditorContent({
                   <span>Copy</span>
                   <span className="graph-context-menu-shortcut">Ctrl+C</span>
                 </button>
+                {isGroupInstance(graph.nodes.find((n) => n.id === contextMenu.nodeId)) && (
+                  <button
+                    type="button"
+                    className="graph-context-menu-item"
+                    onClick={() => {
+                      // The group right-clicked, not whatever else is selected:
+                      // spill its contents back onto this level, selected.
+                      if (contextMenu.nodeId) ungroupGroups([contextMenu.nodeId]);
+                      setContextMenu(null);
+                    }}
+                  >
+                    <span>Ungroup</span>
+                    <span className="graph-context-menu-shortcut">Ctrl+Shift+G</span>
+                  </button>
+                )}
                 <div className="graph-context-menu-divider" />
                 <button
                   type="button"

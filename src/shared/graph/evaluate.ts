@@ -348,6 +348,36 @@ export function topoSort(graph: Graph): TopoResult {
 /** Per-node outputs from the most recent evaluation, keyed by node id then socket id. */
 export type EvalResult = Map<string, Record<string, unknown>>;
 
+/**
+ * A graph's results that also answer for nodes inside its groups.
+ *
+ * A group evaluates its interior in a nested pass with its own results map,
+ * which it hands back under the hidden `__subResults` key. Ids are unique
+ * across the whole tree, so `get` can fall through to those nested maps when
+ * an id isn't one of this level's — letting the viewport and the app reach a
+ * node inside a group (an Edit Mesh being edited there) exactly as if it
+ * weren't. Iteration is unchanged: only this level's own entries.
+ */
+export class EvalResultMap extends Map<string, Record<string, unknown>> {
+  private nested: Map<string, Record<string, unknown>>[] = [];
+
+  set(key: string, value: Record<string, unknown>): this {
+    const sub = value?.__subResults;
+    if (sub instanceof Map) this.nested.push(sub as Map<string, Record<string, unknown>>);
+    return super.set(key, value);
+  }
+
+  get(key: string): Record<string, unknown> | undefined {
+    const own = super.get(key);
+    if (own !== undefined || this.nested.length === 0) return own;
+    for (const sub of this.nested) {
+      const found = sub.get(key);
+      if (found !== undefined) return found;
+    }
+    return undefined;
+  }
+}
+
 export function connectionInto(connections: Connection[], nodeId: string, socketId: string): Connection | undefined {
   return connections.find((c) => c.toNode === nodeId && c.toSocket === socketId);
 }
@@ -522,7 +552,7 @@ export function evaluateGraph(graph: Graph, registry: NodeRegistry, ctx: EvalCon
   const { order, cyclic } = topo;
   const slotKey = frameSlotKey(ctx);
   const previousFrameOutputs = previousFrameOutputsBySession.get(slotKey) ?? null;
-  const results: EvalResult = new Map();
+  const results: EvalResult = new EvalResultMap();
 
   for (const nodeId of [...order, ...cyclic]) {
     const instance = nodesById.get(nodeId);

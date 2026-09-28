@@ -46,8 +46,10 @@ import {
   materialInputSockets,
 } from "../graph/nodes/editMesh";
 import { createEditMeshHandles, polygonRegion, rectRegion } from "./editMeshHandles";
+import { findNodeWithGraph } from "../graph/groups";
 import {
   createEditMeshController,
+  findEditMeshNode,
   editMeshQuadMesh,
   EDIT_MESH_BRUSH_RADIUS_PX,
   mirrorTolerance,
@@ -1034,11 +1036,13 @@ export function Viewport({
    * wire next ("Empty"); slot 0 unwired is the source's own material ("Default").
    */
   const materialSlotOptions = (node: { id: string; type: string; params: Record<string, unknown> }) => {
-    const wired = graph.connections.filter((c) => c.toNode === node.id);
+    // The level that holds the node — a group's interior when it's in one.
+    const holder = findNodeWithGraph(graph, node.id)?.graph ?? graph;
+    const wired = holder.connections.filter((c) => c.toNode === node.id);
     const sockets = materialInputSockets(wired);
     return sockets.map((socket, slot) => {
       const conn = wired.find((c) => c.toSocket === socket.id);
-      const from = conn ? graph.nodes.find((n) => n.id === conn.fromNode) : undefined;
+      const from = conn ? holder.nodes.find((n) => n.id === conn.fromNode) : undefined;
       const name = from ? String(from.params.name || registry.get(from.type)?.label || from.type) : slot === 0 ? "Default" : "Empty";
       return { slot, label: name };
     });
@@ -2043,7 +2047,7 @@ export function Viewport({
       // Edit Mesh shortcut: Ctrl+R (or Cmd+R) for Loop Cut
       if ((e.ctrlKey || e.metaKey) && !e.altKey && key === "r") {
         const activeEditMeshNode = selectedNodeIdRef.current
-          ? graphRef.current.nodes.find((n) => n.id === selectedNodeIdRef.current && n.type === EDIT_MESH_NODE.type)
+          ? findEditMeshNode(graphRef.current, selectedNodeIdRef.current, false)
           : null;
         if (activeEditMeshNode) {
           e.preventDefault();
@@ -2055,11 +2059,7 @@ export function Viewport({
       // X-ray toggle (Blender's Alt+Z): pick through the surface
       if (e.altKey && !e.ctrlKey && !e.metaKey && key === "z") {
         const activeEditMeshNode = selectedNodeIdRef.current
-          ? graphRef.current.nodes.find(
-              (n) =>
-                n.id === selectedNodeIdRef.current &&
-                (n.type === EDIT_MESH_NODE.type || n.type === EDIT_MESH_POINTS_NODE.type),
-            )
+          ? findEditMeshNode(graphRef.current, selectedNodeIdRef.current, true)
           : null;
         if (activeEditMeshNode) {
           e.preventDefault();
@@ -2171,7 +2171,7 @@ export function Viewport({
 
       // Edit Mesh keyboard shortcuts
       const activeEditMeshNode = selectedNodeIdRef.current
-        ? graphRef.current.nodes.find((n) => n.id === selectedNodeIdRef.current && n.type === EDIT_MESH_NODE.type)
+        ? findEditMeshNode(graphRef.current, selectedNodeIdRef.current, false)
         : null;
       if (activeEditMeshNode) {
         // E / I / Delete are handled with the selection keys above, as modal
@@ -3138,11 +3138,7 @@ export function Viewport({
 
       // Edit Mesh gestures: Cmd/Ctrl-drag (paint select) & Shift-drag (marquee select / shift-click)
       const editMeshNodeOnDown = !outputMode && selectedNodeIdRef.current
-        ? graphRef.current.nodes.find(
-            (n) =>
-              n.id === selectedNodeIdRef.current &&
-              (n.type === EDIT_MESH_NODE.type || n.type === EDIT_MESH_POINTS_NODE.type),
-          )
+        ? findEditMeshNode(graphRef.current, selectedNodeIdRef.current, true)
         : null;
 
       // Alt(+Cmd/Ctrl)+click is a loop/ring select, handled on release like
@@ -4683,11 +4679,7 @@ export function Viewport({
 
       // Edit Mesh interaction: points/faces selection & loop cut
       const activeEditMesh = !outputMode && selectedNodeIdRef.current
-        ? graphRef.current.nodes.find(
-            (n) =>
-              n.id === selectedNodeIdRef.current &&
-              (n.type === EDIT_MESH_NODE.type || n.type === EDIT_MESH_POINTS_NODE.type),
-          )
+        ? findEditMeshNode(graphRef.current, selectedNodeIdRef.current, true)
         : null;
       if (activeEditMesh) {
         const meshObj = latestResultsRef.current?.get(activeEditMesh.id)?.geometry;
@@ -4895,7 +4887,7 @@ export function Viewport({
         return;
       }
       const activeEditMesh = selectedNodeIdRef.current
-        ? graphRef.current.nodes.find((n) => n.id === selectedNodeIdRef.current && n.type === EDIT_MESH_NODE.type)
+        ? findEditMeshNode(graphRef.current, selectedNodeIdRef.current, false)
         : null;
       if (activeEditMesh && editMeshToolRef.current === "loopcut") {
         // Registered in the capture phase and stopped *immediately*: orbit
@@ -5819,11 +5811,7 @@ export function Viewport({
       let editMeshHasSelection = false;
       let xrayMesh: THREE.Mesh | null = null;
       const editMeshNode = !outputMode
-        ? graphRef.current.nodes.find(
-            (n) =>
-              n.id === selectedNodeIdRef.current &&
-              (n.type === EDIT_MESH_NODE.type || n.type === EDIT_MESH_POINTS_NODE.type),
-          )
+        ? findEditMeshNode(graphRef.current, selectedNodeIdRef.current, true)
         : undefined;
       if (editMeshNode) {
         const srcObj = results.get(editMeshNode.id)?.geometry;
@@ -6955,7 +6943,7 @@ export function Viewport({
         selectedNodeId &&
         !editModalHud &&
         (() => {
-          const node = graph.nodes.find((n) => n.id === selectedNodeId && n.type === EDIT_MESH_NODE.type);
+          const node = findEditMeshNode(graph, selectedNodeId, false);
           if (!node) return null;
           const { mode, selection } = readEditMeshSelection(node);
           const meshObj = latestResultsRef.current?.get(node.id)?.geometry;
@@ -8103,11 +8091,7 @@ export function Viewport({
         !elevationView &&
         selectedNodeId &&
         (() => {
-          const editMeshNode = graph.nodes.find(
-            (n) =>
-              n.id === selectedNodeId &&
-              (n.type === EDIT_MESH_NODE.type || n.type === EDIT_MESH_POINTS_NODE.type),
-          );
+          const editMeshNode = findEditMeshNode(graph, selectedNodeId, true);
           if (!editMeshNode) return null;
           const { mode: selectMode, selection, isPointsOnly } = readEditMeshSelection(editMeshNode);
           const isFacesActive = !isPointsOnly && selectMode === "faces" && selection.faces.length > 0;

@@ -175,3 +175,26 @@ describe("structure/group", () => {
     expect(innerConnections).toHaveLength(1);
   });
 });
+
+describe("nodes inside a group, reached from outside", () => {
+  it("results answer for an interior node by id (an Edit Mesh being edited in there)", async () => {
+    const { findEditMeshNode } = await import("../../three/editMesh/controller");
+    const subgraph: Graph = { ...emptyGraph(), nodes: [node("inner-em", "modifier/edit-mesh", {})], connections: [] };
+    const graph: Graph = { ...emptyGraph(), nodes: [{ ...node("g", GROUP_TYPE), subgraph }], connections: [] };
+
+    const results = evaluateGraph(graph, DEFAULT_REGISTRY, CTX);
+    expect(results.get("inner-em")?.geometry).toBeInstanceOf(THREE.Mesh);
+    // Iteration stays this level's own.
+    expect([...results.keys()]).toEqual(["g"]);
+    expect(findEditMeshNode(graph, "inner-em", false)?.id).toBe("inner-em");
+  });
+
+  it("updateGraphHolding edits the level that holds the node", async () => {
+    const { updateGraphHolding } = await import("../groups");
+    const subgraph: Graph = { ...emptyGraph(), nodes: [node("a", "value/constant")], connections: [] };
+    const graph: Graph = { ...emptyGraph(), nodes: [{ ...node("g", GROUP_TYPE), subgraph }], connections: [] };
+    const next = updateGraphHolding(graph, "a", (holder) => ({ ...holder, nodes: [...holder.nodes, node("b", "value/constant")] }));
+    expect(next.nodes).toHaveLength(1);
+    expect(next.nodes[0].subgraph!.nodes.map((n) => n.id)).toEqual(["a", "b"]);
+  });
+});

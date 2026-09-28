@@ -320,6 +320,25 @@ export function updateNodeDeep(
 }
 
 /**
+ * The same graph with the (sub)graph that directly holds `nodeId` replaced by
+ * `update(thatGraph)` — for an edit that touches a node's own level (adding a
+ * sibling next to it, wiring it) rather than just the node, wherever it is.
+ * Returns the graph itself when the node isn't there.
+ */
+export function updateGraphHolding(graph: Graph, nodeId: string, update: (holder: Graph) => Graph): Graph {
+  if (graph.nodes.some((n) => n.id === nodeId)) return update(graph);
+  let changed = false;
+  const nodes = graph.nodes.map((node) => {
+    if (!node.subgraph) return node;
+    const subgraph = updateGraphHolding(node.subgraph, nodeId, update);
+    if (subgraph === node.subgraph) return node;
+    changed = true;
+    return { ...node, subgraph };
+  });
+  return changed ? { ...graph, nodes } : graph;
+}
+
+/**
  * The subgraph a path of group node ids leads to — how the editor addresses
  * "the level currently being edited" after a dive-in.
  *

@@ -121,7 +121,9 @@ export const GROUP_NODE: NodeDefinition = {
       groupInputs: inputs,
     });
 
-    const outputs: Record<string, unknown> = {};
+    // The interior's results, for EvalResultMap to reach nodes inside the
+    // group by id (an Edit Mesh being edited in here, for one).
+    const outputs: Record<string, unknown> = { __subResults: results };
     const output = boundaryNodes(subgraph).output;
     if (output) {
       const produced = results.get(output.id) ?? {};

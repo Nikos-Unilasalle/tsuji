@@ -59,7 +59,7 @@ import {
   setGraphKeyBindings,
   setPlaybackActive,
 } from "./shared/graph/playbackKeys";
-import { collectAllNodeIds, findNodeDeep, resolveDefinition, updateNodeDeep } from "./shared/graph/groups";
+import { collectAllNodeIds, findNodeDeep, resolveDefinition, updateGraphHolding, updateNodeDeep } from "./shared/graph/groups";
 import { disposeNodeCaches } from "./shared/graph/nodeCaches";
 import { AutosaveRecord, projectHasContent, readAutosave, writeAutosave } from "./shared/graph/autosave";
 import { rehydrateGraphParams } from "./shared/graph/rehydrateParams";
@@ -1410,7 +1410,7 @@ function MainEditor() {
   const onParamAction = useCallback(
     (nodeId: string, action: string) => {
       if (action === TOGGLE_POINTS_KEYFRAME_ACTION) {
-        const node = graph.nodes.find((n) => n.id === nodeId);
+        const node = findNodeDeep(graph, nodeId);
         if (!node || currentFrame < 0) return;
         let points = node.params.pointsList;
         if (node.type === EDIT_MESH_POINTS_NODE.type && (!Array.isArray(points) || points.length === 0)) {
@@ -1463,7 +1463,7 @@ function MainEditor() {
         return;
       }
       if (action === EDIT_MESH_EXTRUDE_ACTION) {
-        const node = graph.nodes.find((n) => n.id === nodeId);
+        const node = findNodeDeep(graph, nodeId);
         if (!node) return;
         // A face operation: a points/edges selection would silently act on
         // whatever face list was left over from the last face selection.
@@ -1482,7 +1482,7 @@ function MainEditor() {
         return;
       }
       if (action === EDIT_MESH_INSET_ACTION) {
-        const node = graph.nodes.find((n) => n.id === nodeId);
+        const node = findNodeDeep(graph, nodeId);
         if (!node) return;
         // A face operation: a points/edges selection would silently act on
         // whatever face list was left over from the last face selection.
@@ -1507,7 +1507,7 @@ function MainEditor() {
         return;
       }
       if (action === TOPOGRAPHY_BAKE_ACTION) {
-        const node = graph.nodes.find((n) => n.id === nodeId);
+        const node = findNodeDeep(graph, nodeId);
         if (!node) return;
 
         // Hand the procedural result over to the paintable node: same
@@ -1559,7 +1559,7 @@ function MainEditor() {
         return;
       }
       if (action === EDIT_MESH_SMART_UNWRAP_ACTION) {
-        const node = graph.nodes.find((n) => n.id === nodeId);
+        const node = findNodeDeep(graph, nodeId);
         if (!node) return;
         const meshData: QuadMesh = resolveEditMeshData(node, evaluatedResults);
         const angle = Number(node.params.uvAngleLimit) || 66;
@@ -1567,7 +1567,7 @@ function MainEditor() {
         return;
       }
       if (action === EDIT_MESH_UNWRAP_UVS_ACTION) {
-        const node = graph.nodes.find((n) => n.id === nodeId);
+        const node = findNodeDeep(graph, nodeId);
         if (!node) return;
         const meshData: QuadMesh = resolveEditMeshData(node, evaluatedResults);
         const unwrapped = boxProjectUVs(meshData);
@@ -1575,7 +1575,7 @@ function MainEditor() {
         return;
       }
       if (action === FROZEN_UNWRAP_UVS_ACTION) {
-        const node = graph.nodes.find((n) => n.id === nodeId);
+        const node = findNodeDeep(graph, nodeId);
         if (!node) return;
         const positions = Array.isArray(node.params.positions) ? (node.params.positions as number[]) : [];
         const index = Array.isArray(node.params.index) ? (node.params.index as number[]) : null;
@@ -1595,7 +1595,7 @@ function MainEditor() {
         return;
       }
       if (action === EDIT_MESH_DELETE_FACES_ACTION) {
-        const node = graph.nodes.find((n) => n.id === nodeId);
+        const node = findNodeDeep(graph, nodeId);
         if (!node) return;
         // Face operations: only on a face selection.
         if (readEditMeshSelection(node).mode !== "faces") return;
@@ -1614,7 +1614,7 @@ function MainEditor() {
         return;
       }
       if (action === EDIT_MESH_SEPARATE_FACES_ACTION) {
-        const node = graph.nodes.find((n) => n.id === nodeId);
+        const node = findNodeDeep(graph, nodeId);
         if (!node) return;
         // Face operations: only on a face selection.
         if (readEditMeshSelection(node).mode !== "faces") return;
@@ -1654,30 +1654,35 @@ function MainEditor() {
         // parent, Material and the texture maps) gets the same wire on the
         // new node, so the separated piece renders with the identical pose
         // and look instead of falling back to an unposed default-clay mesh.
-        const clonedConnections = graph.connections
-          .filter((c) => c.toNode === nodeId && EDIT_MESH_NODE.inputs.some((input) => input.id === c.toSocket))
-          .map((c) => ({ id: randomId(), fromNode: c.fromNode, fromSocket: c.fromSocket, toNode: newNodeId, toSocket: c.toSocket }));
-
-        setGraphWithHistory((prevGraph) => {
-          const updatedNodes = prevGraph.nodes.map((n) =>
-            n.id === nodeId
-              ? {
-                  ...n,
-                  params: {
-                    ...n.params,
-                    meshData: cloneQuadMesh(remainingMesh),
-                    selectedFaces: [],
-                    selectedPoints: [],
-                  },
-                }
-              : n,
-          );
-          return {
-            ...prevGraph,
-            nodes: [...updatedNodes, newNode],
-            connections: [...prevGraph.connections, ...clonedConnections],
-          };
-        }, `separate:${nodeId}`);
+        // Both are the same node type, so every wire the original has —
+        // dynamic material slots included — is valid on the copy. And both
+        // live on the original's own level: inside its group, if it's in one.
+        setGraphWithHistory((prevGraph) =>
+          updateGraphHolding(prevGraph, nodeId, (holder) => {
+            const clonedConnections = holder.connections
+              .filter((c) => c.toNode === nodeId)
+              .map((c) => ({ id: randomId(), fromNode: c.fromNode, fromSocket: c.fromSocket, toNode: newNodeId, toSocket: c.toSocket }));
+            const updatedNodes = holder.nodes.map((n) =>
+              n.id === nodeId
+                ? {
+                    ...n,
+                    params: {
+                      ...n.params,
+                      meshData: cloneQuadMesh(remainingMesh),
+                      selectedFaces: [],
+                      selectedPoints: [],
+                    },
+                  }
+                : n,
+            );
+            return {
+              ...holder,
+              nodes: [...updatedNodes, newNode],
+              connections: [...holder.connections, ...clonedConnections],
+            };
+          }),
+          `separate:${nodeId}`,
+        );
         return;
       }
       if (action === EXPLODE_GLTF_ACTION) {
@@ -1905,7 +1910,7 @@ function MainEditor() {
     setGraph((prevGraph) => {
       let fullPatch = { ...patch };
       if (fullPatch.pivot && !fullPatch.location) {
-        const node = prevGraph.nodes.find((n) => n.id === transformNodeId);
+        const node = findNodeDeep(prevGraph, transformNodeId);
         if (node && "location" in node.params) {
           const oldPiv = asVector3(node.params.pivot, new THREE.Vector3());
           const newPiv = asVector3(fullPatch.pivot, new THREE.Vector3());
@@ -1937,12 +1942,11 @@ function MainEditor() {
         }
       }
 
+      // At any depth: the node may sit inside a group (an Edit Mesh edited
+      // in there, whose drags and tool previews come through here).
       return {
-        ...prevGraph,
+        ...updateNodeDeep(prevGraph, transformNodeId, (n) => ({ ...n, params: { ...n.params, ...fullPatch } })),
         keyframes: nextKeyframes,
-        nodes: prevGraph.nodes.map((n) =>
-          n.id === transformNodeId ? { ...n, params: { ...n.params, ...fullPatch } } : n,
-        ),
       };
     });
   };
