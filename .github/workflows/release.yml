@@ -59,9 +59,12 @@ jobs:
         if: matrix.platform == 'ubuntu-22.04'
         # Tauri v2 renders through webkit2gtk-4.1 (v1 used 4.0), and patchelf
         # is what the AppImage bundler uses to rewrite the interpreter path.
+        # libudev-dev: gilrs (gamepad input) pulls in libudev-sys, which links
+        # against it; without it the Linux leg fails at build time.
         run: |
           sudo apt-get update
           sudo apt-get install -y \
+            libudev-dev \
             libwebkit2gtk-4.1-dev \
             libappindicator3-dev \
             librsvg2-dev \
