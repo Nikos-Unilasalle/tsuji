@@ -671,3 +671,34 @@ describe("FACE_SELECTION_NODE", () => {
     expect((res.selection as boolean[]).some(Boolean)).toBe(false);
   });
 });
+
+describe("Extrude leaves the source's material alone", () => {
+  const source = () => new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial({ color: 0x336699 }));
+  const redParams = { color: new THREE.Color(0xff0000), roughness: 0.4, metalness: 0.1, opacity: 1 };
+
+  it("when a Material is wired after it had borrowed the source's", () => {
+    const src = source();
+    const srcMat = src.material as THREE.MeshStandardMaterial;
+    const params = { ...EXTRUDE_MESH_NODE.defaultParams, distance: 0.5, passes: 1 };
+    const ctx = { ...CTX, nodeId: "extrude-borrow" };
+    expect((EXTRUDE_MESH_NODE.evaluate({ geometry: src }, params, ctx).geometry as THREE.Mesh).material).toBe(srcMat);
+
+    const out = EXTRUDE_MESH_NODE.evaluate({ geometry: src, material: redParams }, params, ctx).geometry as THREE.Mesh;
+    expect((out.material as THREE.MeshStandardMaterial).color.getHex()).toBe(0xff0000);
+    expect(src.material).toBe(srcMat);
+    expect(srcMat.color.getHex()).toBe(0x336699);
+  });
+
+  it("when there is nothing to extrude but a Material is wired", () => {
+    const src = source();
+    const srcMat = src.material as THREE.MeshStandardMaterial;
+    const params = { ...EXTRUDE_MESH_NODE.defaultParams, distance: 0 };
+    const ctx = { ...CTX, nodeId: "extrude-zero" };
+    const out = EXTRUDE_MESH_NODE.evaluate({ geometry: src, material: redParams }, params, ctx).geometry as THREE.Mesh;
+
+    expect(out).not.toBe(src);
+    expect((out.material as THREE.MeshStandardMaterial).color.getHex()).toBe(0xff0000);
+    expect(src.material).toBe(srcMat);
+    expect(srcMat.color.getHex()).toBe(0x336699);
+  });
+});

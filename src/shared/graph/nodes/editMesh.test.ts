@@ -67,6 +67,29 @@ describe("EDIT_MESH_NODE", () => {
     expect(mesh.geometry.attributes.uv.count).toBe(mesh.geometry.attributes.position.count);
   });
 
+  it("a texture wired into one of two nodes sharing a source leaves the source's material alone", () => {
+    // Separate: both halves read the same source mesh and borrow its material.
+    const srcMat = new THREE.MeshStandardMaterial({ color: 0x336699 });
+    const src = new THREE.Mesh(quadMeshToBufferGeometry(createQuadBox(2, 2, 2)), srcMat);
+    const params = { ...EDIT_MESH_NODE.defaultParams, meshData: null };
+    const evaluate = (inputs: Record<string, unknown>, nodeId: string) =>
+      EDIT_MESH_NODE.evaluate({ geometry: src, ...inputs }, params, { nodeId } as EvalContext).geometry as THREE.Mesh;
+
+    const kept = evaluate({}, "sep-kept");
+    expect(evaluate({}, "sep-textured").material).toBe(srcMat);
+
+    const texture = new THREE.Texture({} as any);
+    texture.image = { width: 16, height: 16 } as any;
+    const textured = evaluate({ texture }, "sep-textured");
+
+    expect((textured.material as THREE.MeshStandardMaterial).map).toBe(texture);
+    expect(textured.material).not.toBe(srcMat);
+    expect(srcMat.map).toBeNull();
+    expect(srcMat.color.getHex()).toBe(0x336699);
+    expect(evaluate({}, "sep-kept").material).toBe(srcMat);
+    expect(kept.material).toBe(srcMat);
+  });
+
   it("exports EDIT_MESH_DELETE_FACES_ACTION and EDIT_MESH_SEPARATE_FACES_ACTION", async () => {
     const { EDIT_MESH_DELETE_FACES_ACTION, EDIT_MESH_SEPARATE_FACES_ACTION } = await import("./editMesh");
     expect(EDIT_MESH_DELETE_FACES_ACTION).toBe("edit-mesh/delete-faces");

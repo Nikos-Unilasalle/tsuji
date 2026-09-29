@@ -654,10 +654,16 @@ export const EXTRUDE_MESH_NODE: NodeDefinition = {
         : selectFaces(welded.positions, welded.indices, faceCount, selection);
 
     if (passes === 0 || distance === 0 || !selected.some(Boolean)) {
-      if (inputs.material) {
-        applyExtrudeMaterial(srcMesh, srcMesh, inputs.material);
-      }
-      return primitiveOutputs(inputObj);
+      if (!inputs.material) return primitiveOutputs(inputObj);
+      // Nothing to extrude, but a material to show: on a copy of the source
+      // on this node's own mesh — the source mesh and its material belong to
+      // the upstream node, and every other branch reading it.
+      if (!state.mesh) state.mesh = createModifierMesh();
+      state.mesh.geometry?.dispose();
+      state.mesh.geometry = srcGeom.clone();
+      applyExtrudeMaterial(state.mesh, srcMesh, inputs.material);
+      state.lastSignature = signature;
+      return emitModifiedMesh(state.mesh, { inputObj, srcMesh, nodeId: ctx.nodeId, material: state.mesh.material });
     }
 
     const result = extrudeGrow(welded, selected, distance, {

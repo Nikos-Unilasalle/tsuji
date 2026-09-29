@@ -371,6 +371,32 @@ function isForeignSharedMaterial(material: THREE.Material | THREE.Material[] | n
   return !Array.isArray(material) && !!(material as any)?.__isSharedCustom;
 }
 
+/** The standard material applyMaterialParams made for each mesh, kept while something else sits on it. */
+const ownMaterials = new WeakMap<THREE.Mesh, THREE.Material>();
+/** Which mesh each of those was made for. */
+const materialOwners = new WeakMap<THREE.Material, THREE.Mesh>();
+/** What each mesh was last handed from elsewhere: a source's material, or a wired custom one. */
+const lentMaterials = new WeakMap<THREE.Mesh, THREE.Material | THREE.Material[]>();
+
+/**
+ * Whether `mesh` is only showing someone else's material: one lent to it by
+ * inheritSourceMaterial or a Material socket, one applyMaterialParams made
+ * for another mesh, or a Material node's cached instance. Such a material is
+ * shared — a modifier borrowing its source's, both halves of a Separate,
+ * a Merge override — so editing it in place (a Texture wired here, say)
+ * repaints every other mesh drawing it, and disposing it breaks them.
+ */
+function isLentMaterial(mesh: THREE.Mesh, material: THREE.Material | THREE.Material[] | null | undefined): boolean {
+  if (!material || material === ownMaterials.get(mesh)) return false;
+  if (lentMaterials.get(mesh) === material) return true;
+  for (const m of Array.isArray(material) ? material : [material]) {
+    if ((m as any)?.__isSharedCustom) return true;
+    const owner = materialOwners.get(m);
+    if (owner && owner !== mesh) return true;
+  }
+  return false;
+}
+
 /**
  * Some materials need geometry attributes only they know how to compute —
  * Worn's per-triangle curvature is the case in point — and expose a
@@ -453,6 +479,7 @@ export function recentreGeometry(geometry: THREE.BufferGeometry): THREE.Vector3 
 export function inheritSourceMaterial(mesh: THREE.Mesh, material: THREE.Material | THREE.Material[] | null | undefined): void {
   if (!material) return;
   mesh.material = material;
+  lentMaterials.set(mesh, material);
   prepareGeometryForMaterial(mesh, material);
 }
 
@@ -536,7 +563,9 @@ export function applyMaterialParams(
     if (appliedMaterialSignatures.get(mesh) === customSig && mesh.material === matParams.customMaterial) return;
     appliedMaterialSignatures.set(mesh, customSig);
     if (mesh.material !== matParams.customMaterial) {
-      if (Array.isArray(mesh.material)) {
+      if (isLentMaterial(mesh, mesh.material)) {
+        // Not ours to dispose — see isLentMaterial.
+      } else if (Array.isArray(mesh.material)) {
         mesh.material.forEach((m) => m.dispose());
       } else if (
         mesh.material &&
@@ -549,6 +578,7 @@ export function applyMaterialParams(
       }
       mesh.material = matParams.customMaterial;
     }
+    lentMaterials.set(mesh, matParams.customMaterial);
     if (matParams.customMaterial instanceof THREE.ShadowMaterial) {
       mesh.receiveShadow = true;
       mesh.castShadow = false;
@@ -558,6 +588,14 @@ export function applyMaterialParams(
     return;
   }
   mesh.castShadow = true;
+
+  // Everything below edits the material on the mesh in place, so it must be
+  // this mesh's own: take back the one made for it last time (so a Merge
+  // override or a borrowing modifier doesn't cost a new material per frame),
+  // or start a fresh one.
+  if (isLentMaterial(mesh, mesh.material)) {
+    mesh.material = ownMaterials.get(mesh) ?? new THREE.MeshStandardMaterial({ side: defaultSide });
+  }
 
   const alpha = texParams?.activeDiffuse ? textureHasAlpha(texParams.activeDiffuse) : false;
   const signature = [
@@ -719,6 +757,9 @@ export function applyMaterialParams(
     }
     (mat as any).__appliedSig = signature;
   }
+  const own = mesh.material as THREE.Material;
+  ownMaterials.set(mesh, own);
+  materialOwners.set(own, mesh);
 }
 
 export function clearAppliedMaterialSignature(mesh: THREE.Mesh): void {

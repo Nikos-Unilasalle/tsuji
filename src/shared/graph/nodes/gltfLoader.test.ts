@@ -636,3 +636,25 @@ describe("OBJECT_GLTF_NODE glTF-level buffer diagnostics", () => {
     expect(errorNoteOf("gltf-intact2")).toBeUndefined();
   });
 });
+
+describe("glTF Model material override", () => {
+  it("leaves the file's own materials intact, and hands them back when turned off", () => {
+    const ctx = { ...CTX, nodeId: "gltf-override" };
+    const meshOf = (params: Record<string, unknown>) => {
+      const group = OBJECT_GLTF_NODE.evaluate({}, { ...OBJECT_GLTF_NODE.defaultParams, ...params }, ctx).geometry as THREE.Group;
+      let mesh: THREE.Mesh | undefined;
+      group.traverse((c) => { if (c instanceof THREE.Mesh) mesh ??= c; });
+      return mesh!;
+    };
+
+    const own = meshOf({ useOwnMaterials: 1 }).material as THREE.MeshStandardMaterial;
+    const ownColor = own.color.getHex();
+
+    const overridden = meshOf({ useOwnMaterials: 0, color: new THREE.Color(0xff0000) });
+    expect(overridden.material).not.toBe(own);
+    expect((overridden.material as THREE.MeshStandardMaterial).color.getHex()).toBe(0xff0000);
+    expect(own.color.getHex()).toBe(ownColor);
+
+    expect(meshOf({ useOwnMaterials: 1 }).material).toBe(own);
+  });
+});

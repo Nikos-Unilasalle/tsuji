@@ -8,6 +8,7 @@ import {
   COMMON_PRIMITIVE_OUTPUTS,
   extractMaterialParams,
   extractTextureParams,
+  inheritSourceMaterial,
   primitiveOutputs,
 } from "./object";
 import { composeNativeMatrix } from "./transform";
@@ -18,8 +19,30 @@ const INPUT_PREFIX = "in";
  * Same GPU-resource-cache pattern as object.ts's meshCache — the group
  * needs to be the SAME THREE.Group across frames, not a fresh one every
  * evaluation, so the viewport can hold a stable reference to it.
+ *
+ * Only the group is this node's: its children are the upstream nodes' own
+ * objects (or clones sharing their geometry and materials), so dropping the
+ * node lets go of them rather than disposing them out from under their owners.
  */
-const groupCache = createNodeCache<THREE.Group>(disposeObject3D);
+const groupCache = createNodeCache<THREE.Group>((group) => group.clear());
+
+/**
+ * The override material's owner. Merge doesn't own its children's materials —
+ * each belongs to the node that made it, and may be shared further (a
+ * modifier borrowing its source's, both halves of a Separate) — so the
+ * override is built once on this node's own mesh and handed to every child,
+ * rather than edited into each child's material in place.
+ */
+const overrideCache = createNodeCache<THREE.Mesh>(disposeObject3D);
+
+function getOverrideHolder(nodeId: string): THREE.Mesh {
+  let holder = overrideCache.get(nodeId);
+  if (!holder) {
+    holder = new THREE.Mesh();
+    overrideCache.set(nodeId, holder);
+  }
+  return holder;
+}
 
 function getGroup(nodeId: string): THREE.Group {
   const existing = groupCache.get(nodeId);
@@ -145,9 +168,11 @@ export const MERGE_NODE: NodeDefinition = {
     if (shouldOverride) {
       const matParams = extractMaterialParams(inputs, params);
       const texParams = extractTextureParams(inputs, params, ctx.nodeId);
+      const holder = getOverrideHolder(ctx.nodeId);
+      applyMaterialParams(holder, matParams, THREE.FrontSide, texParams);
       group.traverse((obj) => {
         const mesh = obj as THREE.Mesh;
-        if (mesh.isMesh) applyMaterialParams(mesh, matParams, THREE.FrontSide, texParams);
+        if (mesh.isMesh) inheritSourceMaterial(mesh, holder.material);
       });
     }
 

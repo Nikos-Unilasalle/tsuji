@@ -5,7 +5,7 @@ import { MeshoptDecoder } from "three/examples/jsm/libs/meshopt_decoder.module.j
 import { NodeDefinition } from "../types";
 import { createNodeCache, disposeObject3D } from "../nodeCaches";
 import { composeNativeMatrixWithPivot } from "./transform";
-import { COMMON_PRIMITIVE_OUTPUTS, TextureParams, applyMaterialParams, extractMaterialParams, primitiveOutputs } from "./object";
+import { COMMON_PRIMITIVE_OUTPUTS, TextureParams, applyMaterialParams, extractMaterialParams, inheritSourceMaterial, primitiveOutputs } from "./object";
 import { isTauri } from "../../isTauri";
 import { describeMissingResources, directoryOf, externalResourceUris, resolveExternalResources } from "./gltfExternalResources";
 
@@ -450,9 +450,30 @@ interface GltfState {
   loadError?: string;
   /** Real meshes in the last successfully loaded model — undefined until one loads, which is what gates the Explode button. */
   meshCount?: number;
+  /** Each mesh's material as the file shipped it — what "Use Own Materials" puts back. */
+  originalMaterials: WeakMap<THREE.Mesh, THREE.Material | THREE.Material[]>;
+  /** Owner of the override material while "Use Own Materials" is off — see evaluate. */
+  overrideHolder?: THREE.Mesh;
 }
 
-const gltfStateCache = createNodeCache<GltfState>((s) => disposeObject3D(s.group));
+function recordOriginalMaterials(state: GltfState, root: THREE.Object3D): void {
+  root.traverse((child) => {
+    if (child instanceof THREE.Mesh && !state.originalMaterials.has(child)) {
+      state.originalMaterials.set(child, child.material);
+    }
+  });
+}
+
+const gltfStateCache = createNodeCache<GltfState>((s) => {
+  // The file's own materials go back first, so they're the ones disposed —
+  // the override on the meshes is the holder's, disposed with it.
+  s.group.traverse((child) => {
+    const original = child instanceof THREE.Mesh ? s.originalMaterials.get(child) : undefined;
+    if (original) (child as THREE.Mesh).material = original;
+  });
+  disposeObject3D(s.group);
+  if (s.overrideHolder) disposeObject3D(s.overrideHolder);
+});
 
 function getOrCreateGltfState(nodeId: string): GltfState {
   const existing = gltfStateCache.get(nodeId);
@@ -471,7 +492,8 @@ function getOrCreateGltfState(nodeId: string): GltfState {
   const group = new THREE.Group();
   group.add(defaultMesh);
 
-  const state: GltfState = { group };
+  const state: GltfState = { group, originalMaterials: new WeakMap() };
+  recordOriginalMaterials(state, group);
   gltfStateCache.set(nodeId, state);
   return state;
 }
@@ -580,6 +602,7 @@ export const OBJECT_GLTF_NODE: NodeDefinition = {
                 meshCount++;
               }
             });
+            recordOriginalMaterials(state, gltf.scene);
             state.group.clear();
             state.group.add(gltf.scene);
             state.loadError = undefined;
@@ -657,16 +680,25 @@ export const OBJECT_GLTF_NODE: NodeDefinition = {
     // model to a single flat color. Only override when the user explicitly
     // asks to (matching the graph a Material socket, or dialling in the
     // fallback color/roughness/etc. by hand).
+    //
+    // The override is built once on a mesh of this node's own and handed to
+    // every mesh, never edited into the file's materials: those have to
+    // survive it, so turning "Use Own Materials" back on can hand them back.
     const useOwnMaterials = params.useOwnMaterials !== undefined ? Boolean(params.useOwnMaterials) : true;
+    let override: THREE.Material | THREE.Material[] | undefined;
     if (!useOwnMaterials) {
       const matParams = extractMaterialParams(inputs, params);
       const texParams: TextureParams = { activeDiffuse: null, activeNormal: null, activeRoughness: null, scaleX: 1, scaleY: 1, offsetX: 0, offsetY: 0 };
-      group.traverse((child) => {
-        if (child instanceof THREE.Mesh) {
-          applyMaterialParams(child, matParams, THREE.FrontSide, texParams);
-        }
-      });
+      state.overrideHolder ??= new THREE.Mesh();
+      applyMaterialParams(state.overrideHolder, matParams, THREE.FrontSide, texParams);
+      override = state.overrideHolder.material;
     }
+    recordOriginalMaterials(state, group);
+    group.traverse((child) => {
+      if (!(child instanceof THREE.Mesh)) return;
+      if (override) inheritSourceMaterial(child, override);
+      else child.material = state.originalMaterials.get(child) ?? child.material;
+    });
 
     return primitiveOutputs(group, params);
   },

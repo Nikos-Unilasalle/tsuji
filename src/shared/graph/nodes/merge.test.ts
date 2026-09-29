@@ -3,6 +3,7 @@ import { describe, expect, test } from "vitest";
 import { evaluateGraph } from "../evaluate";
 import { createRegistry, EvalContext } from "../types";
 import { MERGE_NODE } from "./merge";
+import { disposeNodeCaches } from "../nodeCaches";
 import { OBJECT_BOX_NODE } from "./object";
 import { RENDER_NODE } from "./render";
 
@@ -118,5 +119,41 @@ describe("MERGE_NODE", () => {
 
     expect(group).toBeInstanceOf(THREE.Group);
     expect(group.children).toHaveLength(2);
+  });
+
+  test("an override leaves the children's own materials, and anything sharing them, alone", () => {
+    const shared = new THREE.MeshStandardMaterial({ color: 0x336699 });
+    const child = new THREE.Mesh(new THREE.BoxGeometry(), shared);
+    const sibling = new THREE.Mesh(new THREE.BoxGeometry(), shared); // e.g. the other half of a Separate
+    const texture = new THREE.Texture({} as any);
+    texture.image = { width: 4, height: 4 } as any;
+    const ctx = { ...CTX, nodeId: "merge-override", connectedInputs: new Set(["texture"]) };
+
+    const group = MERGE_NODE.evaluate({ in0: child, texture }, { ...MERGE_NODE.defaultParams }, ctx).geometry as THREE.Group;
+    const overridden = (group.children[0] as THREE.Mesh).material as THREE.MeshStandardMaterial;
+    expect(overridden.map).toBe(texture);
+    expect(overridden).not.toBe(shared);
+    expect(shared.map).toBeNull();
+    expect(sibling.material).toBe(shared);
+
+    // Every frame hands back the same override material, not a new one.
+    child.material = shared;
+    MERGE_NODE.evaluate({ in0: child, texture }, { ...MERGE_NODE.defaultParams }, ctx);
+    expect(child.material).toBe(overridden);
+  });
+
+  test("deleting the node leaves its children's geometry and materials to their own nodes", () => {
+    const material = new THREE.MeshStandardMaterial();
+    const geometry = new THREE.BoxGeometry();
+    const child = new THREE.Mesh(geometry, material);
+    let disposed = 0;
+    material.addEventListener("dispose", () => disposed++);
+    geometry.addEventListener("dispose", () => disposed++);
+
+    MERGE_NODE.evaluate({ in0: child }, { ...MERGE_NODE.defaultParams }, { ...CTX, nodeId: "merge-delete" });
+    disposeNodeCaches(["merge-delete"]);
+
+    expect(disposed).toBe(0);
+    expect(child.parent).toBeNull();
   });
 });
