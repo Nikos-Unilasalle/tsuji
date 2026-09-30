@@ -34,6 +34,12 @@ export interface QuadMesh {
   edgeCreases?: [number, number, number][];
   /** Vertex colour per face corner (parallel to faceUVs); null / missing = white. */
   faceColors?: ([number, number, number][] | null)[];
+  /**
+   * Loose edges: ones no face uses, as vertex pairs (lower index first) — a
+   * wire outline, Blender's edges-only mesh. Drawn as lines (see
+   * syncLooseEdgeLines); the faces' own edges are never listed here.
+   */
+  edges?: [number, number][];
 }
 
 export function cloneQuadMesh(mesh: QuadMesh): QuadMesh {
@@ -119,7 +125,8 @@ function computeQuadMeshSignature(mesh: QuadMesh): string {
       for (const [r, g, b] of c) mix(Math.round(r * 255) * 65536 + Math.round(g * 255) * 256 + Math.round(b * 255));
     }
   }
-  return `${mesh.positions.length}:${mesh.faces.length}:${hash.toString(36)}`;
+  if (mesh.edges) for (const [a, b] of mesh.edges) mix(a * 104729 + b);
+  return `${mesh.positions.length}:${mesh.faces.length}:${mesh.edges?.length ?? 0}:${hash.toString(36)}`;
 }
 
 /**
@@ -276,7 +283,55 @@ export function getQuadMeshEdges(mesh: QuadMesh): [number, number][] {
     edges = computeQuadMeshEdges(mesh);
     edgesCache.set(mesh.faces, edges);
   }
-  return edges;
+  if (!mesh.edges?.length) return edges;
+  // The loose edges after the faces' own, memoised on the pair of arrays.
+  const cached = withLooseCache.get(mesh.edges);
+  if (cached && cached.faceEdges === edges) return cached.all;
+  const all = [...edges, ...mesh.edges.map(([a, b]) => [a, b] as [number, number])];
+  withLooseCache.set(mesh.edges, { faceEdges: edges, all });
+  return all;
+}
+
+const withLooseCache = new WeakMap<[number, number][], { faceEdges: [number, number][]; all: [number, number][] }>();
+
+/**
+ * Draws the mesh's loose edges on `object`, as a LineSegments child it keeps
+ * (and removes once there are none). The faces are the object's own geometry;
+ * lines are the only way to show an edge no face uses. The colour follows the
+ * object's material, so an edges-only mesh still reads as its colour.
+ */
+export function syncLooseEdgeLines(object: THREE.Mesh, mesh: QuadMesh | null): void {
+  let lines = object.children.find((c) => c.userData.looseEdges) as THREE.LineSegments | undefined;
+  if (!mesh?.edges?.length) {
+    if (lines) {
+      object.remove(lines);
+      lines.geometry.dispose();
+      (lines.material as THREE.Material).dispose();
+    }
+    return;
+  }
+  if (!lines) {
+    lines = new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial());
+    lines.userData.looseEdges = true;
+    object.add(lines);
+  }
+  const key = `${quadMeshSignature(mesh)}`;
+  if (lines.userData.key !== key) {
+    lines.userData.key = key;
+    const positions: number[] = [];
+    for (const [a, b] of mesh.edges) {
+      const pa = mesh.positions[a];
+      const pb = mesh.positions[b];
+      if (pa && pb) positions.push(pa[0], pa[1], pa[2], pb[0], pb[1], pb[2]);
+    }
+    lines.geometry.dispose();
+    lines.geometry = new THREE.BufferGeometry();
+    lines.geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  }
+  const source = Array.isArray(object.material) ? object.material[0] : object.material;
+  const color = (source as THREE.MeshStandardMaterial | undefined)?.color;
+  const lineMaterial = lines.material as THREE.LineBasicMaterial;
+  if (color instanceof THREE.Color) lineMaterial.color.copy(color);
 }
 
 function computeQuadMeshEdges(mesh: QuadMesh): [number, number][] {
@@ -1165,6 +1220,7 @@ function subsetFaces(mesh: QuadMesh, keep: (face: number) => boolean): QuadMesh 
   const oldToNew = new Map<number, number>();
   const used = new Uint8Array(mesh.positions.length);
   for (const f of kept) for (const v of mesh.faces[f]) used[v] = 1;
+  for (const [a, b] of mesh.edges ?? []) used[a] = used[b] = 1;
   const positions: [number, number, number][] = [];
   const uvs: [number, number][] = [];
   for (let v = 0; v < mesh.positions.length; v++) {
@@ -1204,11 +1260,65 @@ export function deleteFaces(mesh: QuadMesh, faceIndices: number[]): QuadMesh {
 }
 
 /**
+ * Deletes vertices, as Blender does: with every edge and face using them.
+ * What else those faces had stays — their other edges become loose edges —
+ * so deleting one corner of a quad leaves the three edges opposite it.
+ */
+export function deleteVertices(mesh: QuadMesh, vertices: number[]): QuadMesh {
+  const gone = new Set(vertices.map(Number));
+  if (gone.size === 0) return cloneQuadMesh(mesh);
+  return deleteKeepingEdges(mesh, (face) => face.some((v) => gone.has(v)), (a, b) => gone.has(a) || gone.has(b));
+}
+
+/**
+ * Deletes edges, as Blender does: with every face using them. Those faces'
+ * other edges stay, as loose edges; vertices left with nothing go.
+ */
+export function deleteEdges(mesh: QuadMesh, edges: [number, number][]): QuadMesh {
+  const gone = new Set(edges.map(([a, b]) => (a < b ? `${a}_${b}` : `${b}_${a}`)));
+  if (gone.size === 0) return cloneQuadMesh(mesh);
+  const isGone = (a: number, b: number) => gone.has(a < b ? `${a}_${b}` : `${b}_${a}`);
+  return deleteKeepingEdges(mesh, (face) => face.some((v, i) => isGone(v, face[(i + 1) % face.length])), isGone);
+}
+
+/**
+ * Drops the faces `removeFace` picks, and every edge `removeEdge` picks;
+ * each dropped face's remaining edges no surviving face uses are kept as
+ * loose edges.
+ */
+function deleteKeepingEdges(
+  mesh: QuadMesh,
+  removeFace: (face: number[]) => boolean,
+  removeEdge: (a: number, b: number) => boolean,
+): QuadMesh {
+  const key = (a: number, b: number) => (a < b ? `${a}_${b}` : `${b}_${a}`);
+  const keptFaces = new Set<number>();
+  const surviving = new Set<string>();
+  mesh.faces.forEach((face, f) => {
+    if (removeFace(face)) return;
+    keptFaces.add(f);
+    face.forEach((v, i) => surviving.add(key(v, face[(i + 1) % face.length])));
+  });
+  const loose = new Map<string, [number, number]>();
+  const offer = (a: number, b: number) => {
+    const k = key(a, b);
+    if (a !== b && !removeEdge(a, b) && !surviving.has(k)) loose.set(k, a < b ? [a, b] : [b, a]);
+  };
+  for (const [a, b] of mesh.edges ?? []) offer(a, b);
+  mesh.faces.forEach((face, f) => {
+    if (keptFaces.has(f)) return;
+    face.forEach((v, i) => offer(v, face[(i + 1) % face.length]));
+  });
+  return subsetFaces({ ...mesh, edges: [...loose.values()] }, (f) => keptFaces.has(f));
+}
+
+/**
  * Extracts the specified faces from a QuadMesh into a new QuadMesh,
  * preserving their geometry, UVs, shading and materials with compact vertex
  * indexing.
  */
 export function extractFaces(mesh: QuadMesh, faceIndices: number[]): QuadMesh {
   const toExtract = new Set(faceIndices.map(Number));
-  return subsetFaces(mesh, (f) => toExtract.has(f));
+  // Loose edges belong to no face, so they stay with the mesh the faces left.
+  return subsetFaces({ ...mesh, edges: undefined }, (f) => toExtract.has(f));
 }

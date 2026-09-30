@@ -156,6 +156,9 @@ function catmullClarkStep(mesh: QuadMesh): QuadMesh {
     sharpEdges: mesh.sharpEdges ? halves(sharpKeys) : undefined,
     seamEdges: mesh.seamEdges ? halves(seamKeys) : undefined,
     edgeCreases: mesh.edgeCreases ? edgeCreases : undefined,
+    // Vertex points keep their vertices' indices, and a vertex no face uses
+    // stays put: loose edges come through as they were.
+    edges: mesh.edges?.map(([a, b]) => [a, b] as [number, number]),
     sourceSignature: mesh.sourceSignature,
   };
 }

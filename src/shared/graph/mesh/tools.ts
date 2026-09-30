@@ -138,6 +138,7 @@ export function compactMesh(mesh: QuadMesh): { mesh: QuadMesh; remapFace: Int32A
       }
     }
   }
+  for (const [a, b] of mesh.edges ?? []) remapVertex[a] = remapVertex[b] = -2; // loose edges use theirs too
   for (let v = 0; v < mesh.positions.length; v++) {
     if (remapVertex[v] === -2) {
       remapVertex[v] = positions.length;
@@ -671,6 +672,78 @@ export function duplicateFaces(mesh: QuadMesh, faces: number[]): { mesh: QuadMes
     newFaces.push(pushFace(next, copied, next.faceUVs![f].map((uv) => [uv[0], uv[1]] as UV), f));
   }
   return { mesh: next, newFaces };
+}
+
+/**
+ * Extrudes vertices, as Blender does: each gets a copy, sitting on it, joined
+ * to it by a loose edge. The copies come back (to be moved with the mouse).
+ */
+export function extrudeVertices(mesh: QuadMesh, vertices: number[]): { mesh: QuadMesh; newVertices: number[] } {
+  const next = cloneQuadMesh(mesh);
+  const edges = next.edges ?? [];
+  const newVertices: number[] = [];
+  for (const v of [...new Set(vertices)].sort((a, b) => a - b)) {
+    const p = mesh.positions[v];
+    if (!p) continue;
+    const c = next.positions.length;
+    next.positions.push([p[0], p[1], p[2]]);
+    edges.push([v, c]);
+    newVertices.push(c);
+  }
+  next.edges = edges;
+  return { mesh: next, newVertices };
+}
+
+/**
+ * Extrudes edges, as Blender does: each vertex on them gets a copy, and each
+ * edge a quad joining it to its copy — so a chain of edges becomes a strip,
+ * and an edges-only outline grows walls. The new quad faces its edge's face
+ * (runs the edge the other way), keeping the normals of an open border
+ * consistent. The copied edges come back, with the new faces.
+ */
+export function extrudeEdges(
+  mesh: QuadMesh,
+  edges: [number, number][],
+): { mesh: QuadMesh; newEdges: [number, number][]; newFaces: number[] } {
+  const next = withFaceUVs(cloneQuadMesh(mesh));
+  const copyOf = new Map<number, number>();
+  const copy = (v: number) => {
+    let c = copyOf.get(v);
+    if (c === undefined) {
+      c = next.positions.length;
+      const p = mesh.positions[v];
+      next.positions.push([p[0], p[1], p[2]]);
+      copyOf.set(v, c);
+    }
+    return c;
+  };
+  // Which way round, and in which face, each edge already runs.
+  const runs = new Map<string, { from: number; face: number }>();
+  mesh.faces.forEach((face, f) =>
+    face.forEach((v, i) => {
+      const w = face[(i + 1) % face.length];
+      runs.set(v < w ? `${v}_${w}` : `${w}_${v}`, { from: v, face: f });
+    }),
+  );
+
+  const seen = new Set<string>();
+  const newEdges: [number, number][] = [];
+  const newFaces: number[] = [];
+  for (const [x, y] of edges) {
+    const key = x < y ? `${x}_${y}` : `${y}_${x}`;
+    if (x === y || seen.has(key) || !mesh.positions[x] || !mesh.positions[y]) continue;
+    seen.add(key);
+    const run = runs.get(key);
+    // Against the neighbouring face's direction, so the two agree.
+    const [a, b] = run ? (run.from === x ? [y, x] : [x, y]) : [x, y];
+    const a2 = copy(a);
+    const b2 = copy(b);
+    newFaces.push(pushFace(next, [a, b, b2, a2], [[0, 0], [1, 0], [1, 1], [0, 1]], run?.face ?? -1));
+    newEdges.push(a2 < b2 ? [a2, b2] : [b2, a2]);
+  }
+  // A loose edge extruded is now a face's: it stops being loose.
+  if (next.edges) next.edges = next.edges.filter(([a, b]) => !seen.has(a < b ? `${a}_${b}` : `${b}_${a}`));
+  return { mesh: next, newEdges, newFaces };
 }
 
 /**

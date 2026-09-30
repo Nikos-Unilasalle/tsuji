@@ -539,3 +539,22 @@ describe("Edit Mesh Face Side", () => {
     expect(evaluate({ geometry: src }, "both", "side-borrow").material).toBe(srcMat);
   });
 });
+
+describe("Edit Mesh on an edges-only mesh", () => {
+  it("takes the loose edges in, and draws them out", async () => {
+    const { polygonWireMesh } = await import("./object");
+    const wire = polygonWireMesh(6, 0.5, 0, 0);
+    const input = new THREE.Mesh(quadMeshToBufferGeometry(wire));
+    const out = EDIT_MESH_NODE.evaluate(
+      { geometry: input },
+      { ...EDIT_MESH_NODE.defaultParams, meshData: null },
+      { nodeId: "edges-only" } as EvalContext,
+    ).geometry as THREE.Mesh;
+
+    const quad = out.geometry.userData.quadMesh as QuadMesh;
+    expect(quad.faces).toEqual([]);
+    expect(quad.edges).toHaveLength(6);
+    const lines = out.children.find((c) => c instanceof THREE.LineSegments) as THREE.LineSegments;
+    expect(lines.geometry.getAttribute("position").count).toBe(12);
+  });
+});

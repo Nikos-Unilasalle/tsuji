@@ -17,7 +17,9 @@ import {
   bufferGeometryToQuadMesh,
   loopCut,
   extrudeFaces,
+  deleteEdges,
   deleteFaces,
+  deleteVertices,
   computeFaceNormal,
   transformSelectionByMatrix,
   transformVertexGroups,
@@ -42,6 +44,9 @@ import {
   dissolveFaces,
   dissolveVertices,
   duplicateFaces,
+  extrudeEdges,
+  extrudeVertices,
+  projectNewFaceUVs,
   extrudeFacesIndividual,
   fillVertices,
   flipFaces,
@@ -141,6 +146,8 @@ export type EditMeshOp =
 export interface EditMeshCommands {
   run(op: EditMeshOp): boolean;
   duplicate(): boolean;
+  /** Extrude the selected vertices or edges, then move them (faces have their own modal). */
+  extrude(): boolean;
   tool(tool: "bevel" | "spin" | "knife" | "bridge"): boolean;
 }
 
@@ -356,6 +363,8 @@ export function createEditMeshController(ctx: EditMeshControllerContext) {
     segments?: number;
     /** Spin: the local axis (X / Y / Z keys switch it). */
     axis3?: "x" | "y" | "z";
+    /** Move after an edge extrude: the faces it made, whose UVs are projected where the move leaves them. */
+    newFaces?: number[];
     /** Knife: the points placed so far, and the one under the cursor. */
     knifePoints?: KnifePoint[];
     knifeCandidate?: KnifePoint | null;
@@ -425,6 +434,8 @@ export function createEditMeshController(ctx: EditMeshControllerContext) {
     const delta = modal.moveDelta ?? new THREE.Vector3();
     const vertices = [...selectionVertices(modal.base, modal.mode, modal.selection)];
     const moved = transformSelectionByMatrix(modal.base, "points", vertices, new THREE.Matrix4().makeTranslation(delta.x, delta.y, delta.z));
+    // Extruded walls were flat until now: map them where they ended up.
+    if (modal.newFaces?.length) projectNewFaceUVs(moved, modal.newFaces);
     return { meshData: moved };
   }
 
@@ -486,6 +497,7 @@ export function createEditMeshController(ctx: EditMeshControllerContext) {
       edges?: EdgeRef[];
       segments?: number;
       axis3?: "x" | "y" | "z";
+      newFaces?: number[];
     } = {},
   ): boolean {
     if (target.node.type !== EDIT_MESH_NODE.type || editModal) return false;
@@ -562,6 +574,7 @@ export function createEditMeshController(ctx: EditMeshControllerContext) {
     if (kind === "move") {
       modal.moveOrigin = worldCenter;
       modal.moveDelta = new THREE.Vector3();
+      modal.newFaces = opts.newFaces;
     }
     if (kind === "bevel" || kind === "spin") {
       modal.edges = opts.edges;
@@ -814,23 +827,19 @@ export function createEditMeshController(ctx: EditMeshControllerContext) {
       return true;
     }
     if (op === "delete") {
-      // Points/edges: every face touching them goes (Blender's Delete Vertices / Edges).
-      const touched = new Set(vertices);
-      const doomed =
-        target.mode === "faces"
-          ? faces
-          : mesh.faces.flatMap((face, f) => {
-              if (target.mode === "points") return face.some((v) => touched.has(v)) ? [f] : [];
-              const keys = new Set(target.selection.edges.map(([a, b]) => `${a}_${b}`));
-              return face.some((v, i) => {
-                const w = face[(i + 1) % face.length];
-                return keys.has(v < w ? `${v}_${w}` : `${w}_${v}`);
-              })
-                ? [f]
-                : [];
-            });
-      if (doomed.length === 0) return false;
-      applyEditOp(target, { meshData: deleteFaces(mesh, doomed), selectedPoints: [], selectedEdges: [], selectedFaces: [] });
+      // Blender's Delete Vertices / Edges / Faces: vertices and edges take
+      // every face using them, and those faces' other edges stay behind as
+      // loose edges — which is also what makes an edges-only mesh editable.
+      const next =
+        target.mode === "points"
+          ? deleteVertices(mesh, target.selection.points)
+          : target.mode === "edges"
+            ? deleteEdges(mesh, target.selection.edges)
+            : faces.length > 0
+              ? deleteFaces(mesh, faces)
+              : null;
+      if (!next) return false;
+      applyEditOp(target, { meshData: next, selectedPoints: [], selectedEdges: [], selectedFaces: [] });
       return true;
     }
     return false;
@@ -854,6 +863,35 @@ export function createEditMeshController(ctx: EditMeshControllerContext) {
     // The duplicate, selected, is the new state the move starts from.
     onTransformChangeRef.current?.(node.id, { meshData: r.mesh, selectMode: "faces", selectedFaces: r.newFaces });
     return startEditModal("move", target, clientX, clientY, { base: r.mesh, selection, mode: "faces", restore });
+  }
+
+  /**
+   * E on vertices or edges, as in Blender: vertices sprout a copy joined by an
+   * edge, edges a quad each; the copies come back selected and follow the
+   * mouse. Cancelling removes them.
+   */
+  function extrudeAndMove(target: EditMeshTarget, clientX: number, clientY: number): boolean {
+    if (target.node.type !== EDIT_MESH_NODE.type || target.mode === "faces") return false;
+    const node = target.node;
+    const restore = {
+      meshData: node.params.meshData ?? null,
+      selectMode: node.params.selectMode ?? target.mode,
+      selectedPoints: node.params.selectedPoints ?? [],
+      selectedEdges: node.params.selectedEdges ?? [],
+      selectedFaces: node.params.selectedFaces ?? [],
+    };
+    if (target.mode === "points") {
+      if (target.selection.points.length === 0) return false;
+      const r = extrudeVertices(target.quadMesh, target.selection.points);
+      const selection = { ...emptySelection(), points: r.newVertices };
+      onTransformChangeRef.current?.(node.id, { meshData: r.mesh, selectMode: "points", selectedPoints: r.newVertices });
+      return startEditModal("move", target, clientX, clientY, { base: r.mesh, selection, mode: "points", restore });
+    }
+    if (target.selection.edges.length === 0) return false;
+    const r = extrudeEdges(target.quadMesh, target.selection.edges);
+    const selection = { ...emptySelection(), edges: r.newEdges };
+    onTransformChangeRef.current?.(node.id, { meshData: r.mesh, selectMode: "edges", selectedEdges: r.newEdges });
+    return startEditModal("move", target, clientX, clientY, { base: r.mesh, selection, mode: "edges", restore, newFaces: r.newFaces });
   }
 
   /** The edges Bevel / Spin / Bridge act on in any mode: the selected ones, or those of the selection. */
@@ -920,6 +958,12 @@ export function createEditMeshController(ctx: EditMeshControllerContext) {
       if (!target) return false;
       const rect = renderer.domElement.getBoundingClientRect();
       return duplicateAndMove(target, rect.left + rect.width / 2, rect.top + rect.height / 2);
+    },
+    extrude() {
+      const target = editMeshTarget();
+      if (!target) return false;
+      const rect = renderer.domElement.getBoundingClientRect();
+      return extrudeAndMove(target, rect.left + rect.width / 2, rect.top + rect.height / 2);
     },
   };
 
@@ -1146,6 +1190,7 @@ export function createEditMeshController(ctx: EditMeshControllerContext) {
     editModalKey,
     runEditOp,
     duplicateAndMove,
+    extrudeAndMove,
     startBevel,
     applyEditMeshDrag,
     beginDrag,

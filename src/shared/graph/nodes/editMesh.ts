@@ -26,6 +26,7 @@ import {
   geometrySignature,
   quadMeshSignature,
   updateQuadMeshGeometry,
+  syncLooseEdgeLines,
 } from "../quadMesh";
 import { convertSelection, MeshSelection, normalizeEdges, SelectMode } from "../mesh/selection";
 
@@ -390,6 +391,8 @@ function applyEditMeshMaterials(
     return fitted(entry.copy, side ?? m.side);
   };
   mesh.material = Array.isArray(materials) ? materials.map(withColors) : withColors(materials);
+  // Last, so the lines take the colour the faces just got.
+  syncLooseEdgeLines(mesh, quadMesh);
 }
 
 /**

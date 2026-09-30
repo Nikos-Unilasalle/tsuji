@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import type { QuadMesh } from "../quadMesh";
 import { describe, expect, it } from "vitest";
 import { EvalContext } from "../types";
 import { OBJECT_BOX_NODE, OBJECT_CYLINDER_NODE, OBJECT_DISC_NODE, OBJECT_PLANE_NODE, OBJECT_POLYGON_NODE, OBJECT_TEXT_NODE } from "./object";
@@ -283,6 +284,47 @@ describe("OBJECT_POLYGON_NODE", () => {
     }
     return angles.size;
   }
+
+  it("without Faces, is vertices and edges only — Blender's Fill: Nothing", () => {
+    const wireOf = (params: Record<string, unknown>) => {
+      const mesh = poly({ faces: 0, sides: 5, ...params }, "poly-wire").geometry as THREE.Mesh;
+      return { mesh, quad: mesh.geometry.userData.quadMesh as QuadMesh };
+    };
+    const flat = wireOf({});
+    expect(flat.mesh).toBeInstanceOf(THREE.Mesh);
+    expect(flat.quad.faces).toEqual([]);
+    expect(flat.quad.positions).toHaveLength(5);
+    expect(flat.quad.edges).toHaveLength(5);
+    // Drawn: a line child, since no face shows an edge.
+    const lines = flat.mesh.children.find((c) => c instanceof THREE.LineSegments) as THREE.LineSegments;
+    expect(lines.geometry.getAttribute("position").count).toBe(5 * 2);
+
+    const ring = wireOf({ innerRadius: 0.2 }).quad;
+    expect(ring.edges).toHaveLength(10);
+    // With a Depth: an outline at each end and the edges joining them.
+    const prism = wireOf({ depth: 0.5 }).quad;
+    expect(prism.positions).toHaveLength(10);
+    expect(prism.edges).toHaveLength(15);
+
+    // Faces back on: filled again, and the lines gone.
+    const filled = poly({ faces: 1, sides: 5 }, "poly-wire").geometry as THREE.Mesh;
+    expect(filled.geometry.getIndex()?.count ?? filled.geometry.getAttribute("position").count).toBeGreaterThan(0);
+    expect(filled.children.some((c) => c instanceof THREE.LineSegments)).toBe(false);
+  });
+
+  it("puts the wire's corners where the filled polygon has them", () => {
+    for (const depth of [0, 0.5]) {
+      const filled = (poly({ sides: 5, depth }, `poly-filled-${depth}`).geometry as THREE.Mesh).geometry.getAttribute("position");
+      const wire = (poly({ sides: 5, depth, faces: 0 }, `poly-corners-${depth}`).geometry as THREE.Mesh).geometry.userData.quadMesh as QuadMesh;
+      for (const [x, y, z] of wire.positions) {
+        let hit = false;
+        for (let i = 0; i < filled.count && !hit; i++) {
+          hit = Math.hypot(filled.getX(i) - x, filled.getY(i) - y, filled.getZ(i) - z) < 1e-5;
+        }
+        expect(hit, `depth ${depth}: (${x}, ${y}, ${z})`).toBe(true);
+      }
+    }
+  });
 
   it("has exactly the number of corners asked for", () => {
     for (const sides of [3, 5, 6, 8]) {

@@ -313,7 +313,9 @@ export function createEditMeshHandles(): EditMeshHandles {
   let occluderKey = "";
   let occluderGeometry: THREE.BufferGeometry | null = null;
   let occluderEpsilon = 1e-4;
-  function occluderFor(mesh: QuadMesh): MeshBVH {
+  let occluderEmpty = false;
+  /** Null for a mesh with no faces (edges only): nothing on it can hide anything. */
+  function occluderFor(mesh: QuadMesh): MeshBVH | null {
     const key = keyOf(mesh);
     if (!occluderGeometry || occluderKey !== key) {
       if (occluderGeometry) {
@@ -327,6 +329,7 @@ export function createEditMeshHandles(): EditMeshHandles {
           if (a && b && c) tris.push(a[0], a[1], a[2], b[0], b[1], b[2], c[0], c[1], c[2]);
         }
       }
+      occluderEmpty = tris.length === 0;
       occluderGeometry = new THREE.BufferGeometry();
       occluderGeometry.setAttribute("position", new THREE.Float32BufferAttribute(tris, 3));
       occluderGeometry.computeBoundingBox();
@@ -336,7 +339,7 @@ export function createEditMeshHandles(): EditMeshHandles {
       occluderEpsilon = Math.max(1e-5, size * 2e-3);
       occluderKey = key;
     }
-    return getBoundsTree(occluderGeometry);
+    return occluderEmpty ? null : getBoundsTree(occluderGeometry);
   }
 
   let xray = false;

@@ -37,7 +37,6 @@ import {
   EDIT_MESH_EXTRUDE_ACTION,
   EDIT_MESH_INSET_ACTION,
   EDIT_MESH_RESEED_ACTION,
-  EDIT_MESH_DELETE_FACES_ACTION,
   EDIT_MESH_SEPARATE_FACES_ACTION,
   resolveEditMeshData,
   readEditMeshSelection,
@@ -1066,6 +1065,7 @@ export function Viewport({
   const editMeshCommandsRef = useRef<{
     run(op: EditMeshOp): boolean;
     duplicate(): boolean;
+    extrude(): boolean;
     tool(tool: "bevel" | "spin" | "knife" | "bridge"): boolean;
   } | null>(null);
   const editMeshPaintDragRef = useRef<boolean>(false);
@@ -1751,6 +1751,7 @@ export function Viewport({
       editModalKey,
       runEditOp,
       duplicateAndMove,
+      extrudeAndMove,
       startBevel,
       applyEditMeshDrag,
     } = editCtl;
@@ -2142,6 +2143,8 @@ export function Viewport({
         let handled = false;
         if (key === "e" && !mod && !e.shiftKey && hasFaces) {
           handled = startEditModal("extrude", target, px, py, { individual: e.altKey });
+        } else if (key === "e" && !mod && !e.shiftKey && !e.altKey && target.mode !== "faces") {
+          handled = extrudeAndMove(target, px, py);
         } else if (key === "i" && !mod && !e.altKey && !e.shiftKey && hasFaces) {
           handled = startEditModal("inset", target, px, py);
         } else if (key === "d" && e.shiftKey && !mod && !e.altKey) {
@@ -8560,9 +8563,17 @@ export function Viewport({
                   <button
                     type="button"
                     className="viewport-hud-button"
-                    disabled={!isFacesActive}
-                    onClick={() => onParamAction?.(editMeshNode.id, EDIT_MESH_EXTRUDE_ACTION)}
-                    title="Extrude by Extrude Distance — or press E over the viewport to drag it (Alt+E: each face on its own)"
+                    disabled={selectedCount === 0}
+                    onClick={() =>
+                      isFacesActive
+                        ? onParamAction?.(editMeshNode.id, EDIT_MESH_EXTRUDE_ACTION)
+                        : editMeshCommandsRef.current?.extrude()
+                    }
+                    title={
+                      isFacesActive
+                        ? "Extrude by Extrude Distance — or press E over the viewport to drag it (Alt+E: each face on its own)"
+                        : "Extrude the selected points or edges, then move them with the mouse (Shortcut: E)"
+                    }
                   >
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M12 19V5M5 12l7-7 7 7" />
@@ -8612,25 +8623,21 @@ export function Viewport({
                     </svg>
                   </button>
 
-                  {/* Tool: Delete Face Selection */}
+                  {/* Tool: Delete the selection — points, edges or faces, Blender's way */}
                   <button
                     type="button"
                     className="viewport-hud-button"
-                    disabled={!isFacesActive}
+                    disabled={selectedCount === 0}
                     style={
-                      !isFacesActive
+                      selectedCount === 0
                         ? { opacity: 0.35, cursor: "not-allowed", pointerEvents: "auto" }
                         : undefined
                     }
-                    onClick={() => {
-                      if (isFacesActive) {
-                        onParamAction?.(editMeshNode.id, EDIT_MESH_DELETE_FACES_ACTION);
-                      }
-                    }}
+                    onClick={() => editMeshCommandsRef.current?.run("delete")}
                     title={
-                      isFacesActive
-                        ? "Delete Face Selection (Shortcut: X / Delete) — Remove selected face(s)"
-                        : "Delete Face Selection (Disabled in Points mode or when no faces selected)"
+                      selectedCount > 0
+                        ? "Delete Selection (Shortcut: Delete) — points and edges take the faces using them; the rest of those faces' edges stay"
+                        : "Delete Selection (nothing selected)"
                     }
                   >
                     <svg

@@ -7,7 +7,7 @@ import { BUILTIN_FONTS, FONT_NAMES } from "../../three/fonts/fonts";
 import { createNodeCache, disposeObject3D } from "../nodeCaches";
 import { asVector3, composeNativeMatrix, preserveModifierUserData } from "./transform";
 import { worldMatrixOf } from "../objectPosition";
-import { createQuadBox, createQuadPlane, quadMeshToBufferGeometry } from "../quadMesh";
+import { createQuadBox, createQuadPlane, QuadMesh, quadMeshToBufferGeometry, syncLooseEdgeLines } from "../quadMesh";
 
 export function numberInput(input: unknown, param: unknown, fallback: number): number {
   const raw = input !== undefined ? input : param;
@@ -1457,11 +1457,55 @@ function polygonMesh(nodeId: string): THREE.Mesh {
   return mesh;
 }
 
+/** The polygon's corners on a circle of radius `r`, as CircleGeometry and the extruded ring place them. */
+function polygonCorners(sides: number, r: number): THREE.Vector2[] {
+  return Array.from({ length: sides }, (_, i) => {
+    const a = (i / sides) * Math.PI * 2;
+    return new THREE.Vector2(Math.cos(a) * r, Math.sin(a) * r);
+  });
+}
+
+/**
+ * The polygon with Faces off: vertices and edges only, Blender's "Fill:
+ * Nothing". Flat, its outline (and its hole's); with a Depth, both outlines
+ * at each end joined by the vertical edges. Corners sit exactly where the
+ * filled version puts them, so toggling Faces changes nothing else.
+ */
+export function polygonWireMesh(sides: number, radius: number, innerRadius: number, depth: number): QuadMesh {
+  const positions: [number, number, number][] = [];
+  const edges: [number, number][] = [];
+  // The filled prism is a CylinderGeometry stood up, whose corners start a
+  // quarter turn round from CircleGeometry's; the other shapes don't.
+  const prism = depth > 0 && innerRadius === 0;
+  const corner = (r: number, i: number): [number, number] => {
+    const a = (i / sides) * Math.PI * 2;
+    return prism ? [Math.sin(a) * r, -Math.cos(a) * r] : [Math.cos(a) * r, Math.sin(a) * r];
+  };
+  const ring = (r: number, z: number): number => {
+    const first = positions.length;
+    for (let i = 0; i < sides; i++) positions.push([...corner(r, i), z]);
+    for (let i = 0; i < sides; i++) edges.push([first + i, first + ((i + 1) % sides)].sort((x, y) => x - y) as [number, number]);
+    return first;
+  };
+  for (const r of innerRadius > 0 ? [radius, innerRadius] : [radius]) {
+    if (depth === 0) {
+      ring(r, 0);
+      continue;
+    }
+    const bottom = ring(r, -depth / 2);
+    const top = ring(r, depth / 2);
+    for (let i = 0; i < sides; i++) edges.push([bottom + i, top + i]);
+  }
+  return { positions, faces: [], edges };
+}
+
 const POLYGON_FIELDS = [
   { id: "sides", label: "Sides", kind: "number" as const, step: 1 },
   { id: "radius", label: "Radius", kind: "number" as const, step: 0.05 },
   { id: "innerRadius", label: "Inner Radius (Hole)", kind: "number" as const, step: 0.05 },
   { id: "depth", label: "Depth / Relief", kind: "number" as const, step: 0.05 },
+  // Off: vertices and edges only, no faces (Blender's Fill: Nothing).
+  { id: "faces", label: "Faces", kind: "boolean" as const },
 ];
 
 /**
@@ -1501,6 +1545,7 @@ export const OBJECT_POLYGON_NODE: NodeDefinition = {
     radius: 0.5,
     innerRadius: 0,
     depth: 0,
+    faces: 1,
     // Spread last, same reason as Disc: whatever comes last wins, and
     // COMMON_DEFAULT_PARAMS would stand the polygon back up.
     ...FLAT_PRIMITIVE_DEFAULT_PARAMS,
@@ -1521,13 +1566,17 @@ export const OBJECT_POLYGON_NODE: NodeDefinition = {
     const radius = Math.max(0.001, numberInput(inputs.radius, params.radius, 0.5));
     const innerRadius = Math.max(0, Math.min(radius - 0.0001, numberInput(inputs.innerRadius, params.innerRadius, 0)));
     const depth = Math.max(0, numberInput(inputs.depth, params.depth, 0));
+    const faces = toBoolean(params.faces ?? 1);
+    const matParams = extractMaterialParams(inputs, params);
 
-    const key = `${sides}_${radius}_${innerRadius}_${depth}`;
+    const key = `${sides}_${radius}_${innerRadius}_${depth}_${faces}`;
     const cache = mesh as THREE.Mesh & { _lastPolygonKey?: string };
     if (cache._lastPolygonKey !== key) {
       cache._lastPolygonKey = key;
       mesh.geometry.dispose();
-      if (depth === 0) {
+      if (!faces) {
+        mesh.geometry = quadMeshToBufferGeometry(polygonWireMesh(sides, radius, innerRadius, depth));
+      } else if (depth === 0) {
         mesh.geometry =
           innerRadius === 0
             ? new THREE.CircleGeometry(radius, sides)
@@ -1542,22 +1591,17 @@ export const OBJECT_POLYGON_NODE: NodeDefinition = {
         // Extruded ring. Built from explicit corner points rather than
         // absarc, so the hole is a polygon too — an arc here would leave a
         // round hole punched through a faceted plate.
-        const corners = (r: number) =>
-          Array.from({ length: sides }, (_, i) => {
-            const a = (i / sides) * Math.PI * 2;
-            return new THREE.Vector2(Math.cos(a) * r, Math.sin(a) * r);
-          });
-        const shape = new THREE.Shape(corners(radius));
-        shape.holes.push(new THREE.Path(corners(innerRadius).reverse()));
+        const shape = new THREE.Shape(polygonCorners(sides, radius));
+        shape.holes.push(new THREE.Path(polygonCorners(sides, innerRadius).reverse()));
         const extruded = new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: false, curveSegments: sides });
         extruded.translate(0, 0, -depth / 2);
         mesh.geometry = extruded;
       }
     }
 
-    const matParams = extractMaterialParams(inputs, params);
     const texParams = extractTextureParams(inputs, params, ctx.nodeId);
     applyMaterialParams(mesh, matParams, depth > 0 ? THREE.FrontSide : THREE.DoubleSide, texParams);
+    syncLooseEdgeLines(mesh, faces ? null : (mesh.geometry.userData.quadMesh as QuadMesh));
 
     return primitiveOutputs(mesh, params);
   },

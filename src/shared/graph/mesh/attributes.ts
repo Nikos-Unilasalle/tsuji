@@ -15,8 +15,11 @@ export const edgeKey = (a: number, b: number) => (a < b ? `${a}_${b}` : `${b}_${
 const pair = (a: number, b: number): [number, number] => (a < b ? [a, b] : [b, a]);
 
 /** Copies of the edge attributes (for cloneQuadMesh). */
-export function cloneEdgeAttributes(mesh: QuadMesh): Pick<QuadMesh, "sharpEdges" | "seamEdges" | "edgeCreases" | "faceColors"> {
+export function cloneEdgeAttributes(
+  mesh: QuadMesh,
+): Pick<QuadMesh, "sharpEdges" | "seamEdges" | "edgeCreases" | "faceColors" | "edges"> {
   return {
+    edges: mesh.edges?.map(([a, b]) => [a, b] as [number, number]),
     sharpEdges: mesh.sharpEdges?.map(([a, b]) => [a, b] as [number, number]),
     seamEdges: mesh.seamEdges?.map(([a, b]) => [a, b] as [number, number]),
     edgeCreases: mesh.edgeCreases?.map(([a, b, w]) => [a, b, w] as [number, number, number]),
@@ -54,6 +57,20 @@ export function remapEdgeAttributes(src: QuadMesh, out: QuadMesh, remap: ArrayLi
   };
   out.sharpEdges = mapPairs(src.sharpEdges);
   out.seamEdges = mapPairs(src.seamEdges);
+  // Loose edges survive wherever both ends do — unless a face now uses them.
+  if (src.edges) {
+    const seen = new Set<string>();
+    out.edges = [];
+    for (const [a, b] of src.edges) {
+      const x = remap[a];
+      const y = remap[b];
+      if (x === undefined || y === undefined || x < 0 || y < 0 || x === y) continue;
+      const key = edgeKey(x, y);
+      if (exists.has(key) || seen.has(key)) continue;
+      seen.add(key);
+      out.edges.push(pair(x, y));
+    }
+  }
   if (src.edgeCreases) {
     const seen = new Set<string>();
     out.edgeCreases = [];
