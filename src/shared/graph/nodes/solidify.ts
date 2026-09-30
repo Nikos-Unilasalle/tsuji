@@ -5,6 +5,7 @@ import { NodeDefinition } from "../types";
 import { clearMeshWarning, findFirstMesh, warnMeshRequired } from "../meshRequired";
 import { createModifierMesh, emitModifiedMesh, numberInput, primitiveOutputs } from "./object";
 import { cloneQuadMesh, computeFaceNormal, QuadMesh, quadMeshToBufferGeometry } from "../quadMesh";
+import { fillNewFaceUVs } from "../mesh/uv";
 
 export interface SolidifyOptions {
   thickness: number;
@@ -67,6 +68,7 @@ export function solidifyQuadMesh(mesh: QuadMesh, options: SolidifyOptions): Quad
 
   const faces: number[][] = [];
   const faceUVs: [number, number][][] = [];
+  const rimFaces: number[] = [];
 
   // Front faces
   for (let f = 0; f < mesh.faces.length; f++) {
@@ -112,22 +114,24 @@ export function solidifyQuadMesh(mesh: QuadMesh, options: SolidifyOptions): Quad
         // back into the solid, i.e. a rim that is entirely backfacing and so
         // invisible under any single-sided material. Reversed, it faces out.
         faces.push([u + V, v + V, v, u]);
-        faceUVs.push([
-          [0, 1],
-          [1, 1],
-          [1, 0],
-          [0, 0],
-        ]);
+        rimFaces.push(faces.length - 1);
+        faceUVs.push([]);
       }
     }
   }
 
-  return {
+  const hasUVs = mesh.faceUVs?.length === mesh.faces.length;
+  const out: QuadMesh = {
     positions,
     faces,
-    faceUVs: faceUVs.length === faces.length ? faceUVs : undefined,
+    faceUVs: hasUVs ? faceUVs : undefined,
     shading: mesh.shading ?? "auto",
   };
+  // The rim continues the front face's UVs across their shared edge, at the
+  // same scale — not the whole 0..1 texture squeezed onto each thin strip.
+  // With no UVs at all, the geometry gets the fixed-density projection.
+  if (hasUVs) fillNewFaceUVs(out, rimFaces);
+  return out;
 }
 
 /**

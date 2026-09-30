@@ -14,6 +14,7 @@ import {
   NATIVE_TRANSFORM_PARAM_FIELDS,
   inheritSourceMaterial,
   isOwnMaterial,
+  TRIPLANAR_PARAM_FIELDS,
 } from "./object";
 import { asVector3, composeNativeMatrix, preserveModifierUserData } from "./transform";
 import {
@@ -534,6 +535,7 @@ function editMeshParamFields(instance?: NodeInstance): ParamFieldDef[] {
     { id: "unwrapButton", label: "Recalculate UVs (box)", kind: "button", action: EDIT_MESH_UNWRAP_UVS_ACTION },
     { id: "uvAngleLimit", label: "Unwrap Angle Limit (°)", kind: "number", step: 1 },
     { id: "smartUnwrapButton", label: "Smart UV Unwrap (seams)", kind: "button", action: EDIT_MESH_SMART_UNWRAP_ACTION },
+    ...TRIPLANAR_PARAM_FIELDS,
     { id: "paintColor", label: "Paint Colour", kind: "color" },
     { id: "creaseWeight", label: "Crease Weight", kind: "number", step: 0.1 },
   );
@@ -621,6 +623,8 @@ export const EDIT_MESH_NODE: NodeDefinition = {
     creaseWeight: 1,
     uvScale: [1, 1] as [number, number],
     uvOffset: [0, 0] as [number, number],
+    triplanar: 0,
+    triplanarBlend: 4,
     // The same native pose every geometry node owns (see
     // NATIVE_TRANSFORM_PARAM_FIELDS / composeNativeMatrix). Defaults are the
     // identity, so an existing Edit Mesh keeps drawing at exactly the source

@@ -51,9 +51,15 @@ describe("QuadMesh", () => {
     expect(geom.index?.count).toBe(36);
     expect(geom.userData.quadMesh).toBeDefined();
 
-    const smoothGeom = quadMeshToBufferGeometry({ ...box, shading: "smooth", faceUVs: undefined });
-    expect(smoothGeom.attributes.position.count).toBe(8);
-    expect(smoothGeom.index?.count).toBe(36);
+    // Smooth with per-vertex UVs (a plane's grid): the shared-vertex path, UVs as they are.
+    const plane = createQuadPlane(1, 1, 2, 2);
+    const smoothGeom = quadMeshToBufferGeometry({ ...plane, shading: "smooth" });
+    expect(smoothGeom.attributes.position.count).toBe(plane.positions.length);
+    expect(Array.from(smoothGeom.attributes.uv.array)).toEqual(plane.uvs!.flat());
+    // Smooth with no UVs at all still gets some, so a texture draws.
+    const bare = quadMeshToBufferGeometry({ ...box, shading: "smooth", faceUVs: undefined });
+    expect(bare.attributes.uv).toBeDefined();
+    expect(bare.index?.count).toBe(36);
 
     const roundtrip = bufferGeometryToQuadMesh(geom);
     expect(roundtrip.faces.length).toBe(6);
@@ -188,19 +194,22 @@ describe("QuadMesh", () => {
     }
   });
 
-  it("calculates coherent box projection UVs for all faces", () => {
-    const box = createQuadBox(2, 2, 2);
-    const unwrapped = boxProjectUVs(box);
-    expect(unwrapped.faceUVs).toBeDefined();
-    expect(unwrapped.faceUVs?.length).toBe(6);
-    for (const fuv of unwrapped.faceUVs!) {
-      expect(fuv.length).toBe(4);
-      for (const [u, v] of fuv) {
-        expect(u).toBeGreaterThanOrEqual(0);
-        expect(u).toBeLessThanOrEqual(1);
-        expect(v).toBeGreaterThanOrEqual(0);
-        expect(v).toBeLessThanOrEqual(1);
-      }
+  it("box-projects at a fixed density: a face's UV extent is its size, whatever the mesh around it", () => {
+    const extent = (uvs: [number, number][]) => [
+      Math.max(...uvs.map((uv) => uv[0])) - Math.min(...uvs.map((uv) => uv[0])),
+      Math.max(...uvs.map((uv) => uv[1])) - Math.min(...uvs.map((uv) => uv[1])),
+    ];
+    const small = boxProjectUVs(createQuadBox(1, 1, 1));
+    const big = boxProjectUVs(createQuadBox(2, 2, 2));
+    expect(big.faceUVs).toHaveLength(6);
+    for (const fuv of small.faceUVs!) expect(extent(fuv as [number, number][])).toEqual([1, 1]);
+    for (const fuv of big.faceUVs!) expect(extent(fuv as [number, number][])).toEqual([2, 2]);
+    // A unit box centred on its origin still fills the 0..1 square.
+    for (const fuv of small.faceUVs!) for (const [u, v] of fuv) {
+      expect(u).toBeGreaterThanOrEqual(0);
+      expect(u).toBeLessThanOrEqual(1);
+      expect(v).toBeGreaterThanOrEqual(0);
+      expect(v).toBeLessThanOrEqual(1);
     }
   });
 

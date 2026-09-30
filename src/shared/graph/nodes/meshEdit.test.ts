@@ -391,7 +391,7 @@ describe("EXTRUDE_MESH_NODE — UVs", () => {
     expect(uvSpan(0.6)).toBeGreaterThan(uvSpan(0.2));
   });
 
-  it("still works on a source with no UVs at all", () => {
+  it("still works on a source with no UVs at all, and gives the result some so a texture draws", () => {
     const bare = new THREE.BufferGeometry();
     bare.setAttribute("position", new THREE.BufferAttribute(new Float32Array([0, 0, 0, 1, 0, 0, 0, 0, 1]), 3));
     const res = EXTRUDE_MESH_NODE.evaluate(
@@ -401,7 +401,9 @@ describe("EXTRUDE_MESH_NODE — UVs", () => {
     );
     const mesh = res.geometry as THREE.Mesh;
     expect(mesh.geometry.getAttribute("position").count).toBeGreaterThan(0);
-    expect(mesh.geometry.getAttribute("uv")).toBeUndefined();
+    const uv = mesh.geometry.getAttribute("uv");
+    expect(uv.count).toBe(mesh.geometry.getAttribute("position").count);
+    for (let i = 0; i < uv.count; i++) expect(Number.isFinite(uv.getX(i)) && Number.isFinite(uv.getY(i))).toBe(true);
   });
 });
 

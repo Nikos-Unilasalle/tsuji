@@ -130,6 +130,10 @@ export interface TextureParams {
   scaleY: number;
   offsetX: number;
   offsetY: number;
+  /** Map the diffuse texture by triplanar projection instead of the UVs (see TRIPLANAR_PARAM_FIELDS). */
+  triplanar?: boolean;
+  /** How sharply the three projections hand over at the surface's bends (higher: crisper, 1: soft). */
+  triplanarBlend?: number;
 }
 
 /**
@@ -257,7 +261,10 @@ export function extractTextureParams(
     offsetY = (inputs[p("uvOffset")] as THREE.Vector3).y;
   }
 
-  return { activeDiffuse, activeNormal, activeRoughness, scaleX, scaleY, offsetX, offsetY };
+  const triplanar = toBoolean(params[p("triplanar")] ?? 0);
+  const triplanarBlend = Math.max(1, numberInput(undefined, params[p("triplanarBlend")], 4));
+
+  return { activeDiffuse, activeNormal, activeRoughness, scaleX, scaleY, offsetX, offsetY, triplanar, triplanarBlend };
 }
 
 export interface MaterialParams {
@@ -623,6 +630,7 @@ export function applyMaterialParams(
     texParams?.scaleY,
     texParams?.offsetX,
     texParams?.offsetY,
+    texParams?.triplanar ? `tri${texParams.triplanarBlend ?? 4}` : "",
     alpha,
   ].join("|");
 
@@ -763,8 +771,78 @@ export function applyMaterialParams(
     (mat as any).__appliedSig = signature;
   }
   const own = mesh.material as THREE.Material;
+  configureTriplanar(own as THREE.MeshStandardMaterial, texParams);
   ownMaterials.set(mesh, own);
   materialOwners.set(own, mesh);
+}
+
+interface TriplanarUniforms {
+  uTriBlend: { value: number };
+  uTriScale: { value: THREE.Vector2 };
+  uTriOffset: { value: THREE.Vector2 };
+}
+
+const TRIPLANAR_VARYINGS = "varying vec3 vTriPos;\nvarying vec3 vTriNormal;";
+
+/*
+ * Triplanar map: three planar samples of the map (across X, Y and Z, in
+ * object space) blended by how much the surface faces each axis. Replaces
+ * three's own map lookup, so everything after it (lighting, alpha test,
+ * fog) is untouched.
+ */
+const TRIPLANAR_MAP_FRAGMENT = `
+#ifdef USE_MAP
+  vec3 triWeights = pow(abs(normalize(vTriNormal)), vec3(uTriBlend));
+  triWeights /= max(triWeights.x + triWeights.y + triWeights.z, 1e-5);
+  vec4 sampledDiffuseColor =
+    texture2D(map, vTriPos.zy * uTriScale + uTriOffset) * triWeights.x +
+    texture2D(map, vTriPos.xz * uTriScale + uTriOffset) * triWeights.y +
+    texture2D(map, vTriPos.xy * uTriScale + uTriOffset) * triWeights.z;
+  diffuseColor *= sampledDiffuseColor;
+#endif
+`;
+
+/**
+ * Turns triplanar mapping on or off on one of applyMaterialParams' own
+ * materials. The shader patch is installed only while it's on (its own
+ * program cache key, so it never shares a program with a plain material);
+ * its settings are uniforms, so changing them never recompiles.
+ */
+function configureTriplanar(material: THREE.MeshStandardMaterial | THREE.MeshBasicMaterial, texParams: TextureParams | undefined): void {
+  const want = Boolean(texParams?.triplanar && material.map);
+  const data = material.userData as { triplanar?: TriplanarUniforms; triplanarOn?: boolean };
+  if (want && texParams) {
+    const uniforms = (data.triplanar ??= {
+      uTriBlend: { value: 4 },
+      uTriScale: { value: new THREE.Vector2(1, 1) },
+      uTriOffset: { value: new THREE.Vector2() },
+    });
+    uniforms.uTriBlend.value = Math.max(1, texParams.triplanarBlend ?? 4);
+    uniforms.uTriScale.value.set(texParams.scaleX, texParams.scaleY);
+    uniforms.uTriOffset.value.set(texParams.offsetX, texParams.offsetY);
+  }
+  if (want === Boolean(data.triplanarOn)) return;
+  data.triplanarOn = want;
+  if (want) {
+    const uniforms = data.triplanar!;
+    material.onBeforeCompile = (shader) => {
+      Object.assign(shader.uniforms, uniforms);
+      shader.vertexShader = shader.vertexShader
+        .replace("#include <common>", `#include <common>\n${TRIPLANAR_VARYINGS}`)
+        .replace("#include <begin_vertex>", "#include <begin_vertex>\nvTriPos = position;\nvTriNormal = normal;");
+      shader.fragmentShader = shader.fragmentShader
+        .replace(
+          "#include <common>",
+          `#include <common>\n${TRIPLANAR_VARYINGS}\nuniform float uTriBlend;\nuniform vec2 uTriScale;\nuniform vec2 uTriOffset;`,
+        )
+        .replace("#include <map_fragment>", TRIPLANAR_MAP_FRAGMENT);
+    };
+    material.customProgramCacheKey = () => "tsuji-triplanar";
+  } else {
+    material.onBeforeCompile = THREE.Material.prototype.onBeforeCompile;
+    material.customProgramCacheKey = THREE.Material.prototype.customProgramCacheKey;
+  }
+  material.needsUpdate = true;
 }
 
 export function clearAppliedMaterialSignature(mesh: THREE.Mesh): void {
@@ -982,9 +1060,22 @@ export function buildPrimitiveDynamicParamFields(extraFields: ParamFieldDef[] = 
     { id: "uvScaleY", label: "UV Scale Y (Tile)", kind: "number", step: 0.1 },
     { id: "uvOffsetX", label: "UV Offset X", kind: "number", step: 0.05 },
     { id: "uvOffsetY", label: "UV Offset Y", kind: "number", step: 0.05 },
+    ...TRIPLANAR_PARAM_FIELDS,
     ...COMMON_MATERIAL_PARAM_FIELDS,
   ];
 }
+
+/**
+ * Triplanar texture mapping: the Texture Map projected along the object's
+ * three axes and blended by the surface normal, instead of read through the
+ * UVs — for geometry with no usable UVs (welds, metaballs, CSG, heavy
+ * modifier stacks). Object space, so the texture sticks to the object when
+ * it moves; UV Scale / Offset still tile and shift it, in scene units.
+ */
+export const TRIPLANAR_PARAM_FIELDS: ParamFieldDef[] = [
+  { id: "triplanar", label: "Triplanar (no UVs)", kind: "boolean" },
+  { id: "triplanarBlend", label: "Triplanar Blend Sharpness", kind: "number", step: 0.5 },
+];
 
 export const COMMON_DEFAULT_PARAMS = {
   visible: 1,
@@ -1004,6 +1095,8 @@ export const COMMON_DEFAULT_PARAMS = {
   uvScaleY: 1,
   uvOffsetX: 0,
   uvOffsetY: 0,
+  triplanar: 0,
+  triplanarBlend: 4,
   color: new THREE.Color(0xffffff),
   emissive: new THREE.Color(0x000000),
   emissiveIntensity: 1.0,

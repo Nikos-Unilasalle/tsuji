@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { projectGeometryUVs } from "../mesh/geometryUV";
 import { bakeMeshesToGeometry } from "../bakeGeometry";
 import { createNodeCache, disposeObject3D } from "../nodeCaches";
 import { NodeDefinition } from "../types";
@@ -67,48 +68,13 @@ function affordableResolution(box: THREE.Box3, requested: number): number {
   return resolution;
 }
 
-/**
- * Box-projected UVs, per vertex, off the dominant axis of its normal.
- *
+/*
  * The welded surface has no UV of its own to inherit — the inputs' parameter
- * spaces do not survive being turned into a distance field. A projection is not
- * a substitute for a real unwrap (it seams wherever the dominant axis flips),
- * but a textured material with no uv attribute at all draws as a flat colour,
- * which reads as the node having broken the material.
+ * spaces do not survive being turned into a distance field — so it gets the
+ * shared per-vertex projection (projectGeometryUVs). Not a substitute for a
+ * real unwrap, but a textured material with no uv attribute at all draws as
+ * a flat colour, which reads as the node having broken the material.
  */
-function applyBoxUvs(geometry: THREE.BufferGeometry, box: THREE.Box3): void {
-  const position = geometry.getAttribute("position");
-  const normal = geometry.getAttribute("normal");
-  if (!position || !normal) return;
-  const size = box.getSize(new THREE.Vector3());
-  const sx = size.x || 1;
-  const sy = size.y || 1;
-  const sz = size.z || 1;
-  const uv = new Float32Array(position.count * 2);
-  for (let i = 0; i < position.count; i++) {
-    const px = position.getX(i);
-    const py = position.getY(i);
-    const pz = position.getZ(i);
-    const ax = Math.abs(normal.getX(i));
-    const ay = Math.abs(normal.getY(i));
-    const az = Math.abs(normal.getZ(i));
-    let u: number;
-    let v: number;
-    if (ax >= ay && ax >= az) {
-      u = (pz - box.min.z) / sz;
-      v = (py - box.min.y) / sy;
-    } else if (ay >= az) {
-      u = (px - box.min.x) / sx;
-      v = (pz - box.min.z) / sz;
-    } else {
-      u = (px - box.min.x) / sx;
-      v = (py - box.min.y) / sy;
-    }
-    uv[i * 2] = u;
-    uv[i * 2 + 1] = v;
-  }
-  geometry.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
-}
 
 function combine(operation: string, a: number, b: number, k: number): number {
   if (operation === "subtract") return smoothMax(a, -b, k);
@@ -150,7 +116,7 @@ export function weldGeometries(
 
   const geometry = surfaceNets(fieldA, grid);
   if (options.relax > 0) relaxGeometry(geometry, Math.round(options.relax), 0.5);
-  applyBoxUvs(geometry, padded);
+  projectGeometryUVs(geometry);
   geometry.computeBoundingBox();
   geometry.computeBoundingSphere();
   return { geometry, grid, box: padded };

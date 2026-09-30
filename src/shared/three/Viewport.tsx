@@ -70,7 +70,9 @@ import {
 import { mirrorMovesX, mirrorXMap } from "../graph/mesh/tools";
 import { layoutKey } from "./layoutKey";
 import { ColorPickerInput } from "../../windows/ColorPickerInput";
-import { QuadMesh, getLoopCutPreviewSegments, loopCut, transformSelectionByMatrix } from "../graph/quadMesh";
+import { QuadMesh, getLoopCutPreviewSegments, loopCut, quadMeshSignature, transformSelectionByMatrix, withFaceUVs } from "../graph/quadMesh";
+import { swapInUVChecker } from "./uvChecker";
+import { UVPreviewPanel, type UVPanelData } from "./UVPreviewPanel";
 import { createPostProcessChain } from "./postProcessChain";
 import { computeGizmoWriteback, TransformGizmoMode, TransformPatch } from "./gizmoWriteback";
 import { enableSmoothShadows } from "./smoothShadows";
@@ -152,6 +154,41 @@ import {
   type StabilizerMode,
 } from "./strokeInput";
 import type { GreaseBrushType } from "../graph/nodes/greasePencil";
+
+/** The image a mesh's material maps, for the UV view's background. */
+function textureImageOf(mesh: THREE.Mesh): CanvasImageSource | null {
+  const material = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material;
+  const image = (material as THREE.MeshStandardMaterial | undefined)?.map?.image as CanvasImageSource | undefined;
+  return image && typeof image === "object" && "width" in image ? image : null;
+}
+
+function imageKeyOf(mesh: THREE.Mesh): string {
+  const material = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material;
+  return (material as THREE.MeshStandardMaterial | undefined)?.map?.uuid ?? "none";
+}
+
+let lastGeometryUV: UVPanelData | null = null;
+/** The UV view's data for a plain mesh: its triangles in UV space (memoised on the geometry's state). */
+function geometryUVData(mesh: THREE.Mesh | null, checker: boolean, label: string): UVPanelData | null {
+  if (!mesh) return null;
+  const geometry = mesh.geometry;
+  const uv = geometry?.getAttribute("uv") as THREE.BufferAttribute | undefined;
+  const index = geometry?.getIndex();
+  const key = `g:${geometry?.uuid}:${uv?.version ?? -1}:${uv?.count ?? 0}:${index?.version ?? -1}:${checker ? "checker" : imageKeyOf(mesh)}:${label}`;
+  if (lastGeometryUV?.key === key) return lastGeometryUV;
+  const polygons: [number, number][][] = [];
+  if (uv) {
+    const corner = (i: number): [number, number] => [uv.getX(i), uv.getY(i)];
+    const count = index ? index.count : uv.count;
+    // A cap on what gets drawn: past it the view is a solid smear anyway.
+    for (let t = 0; t + 2 < count && polygons.length < 60000; t += 3) {
+      const [a, b, c] = index ? [index.getX(t), index.getX(t + 1), index.getX(t + 2)] : [t, t + 1, t + 2];
+      polygons.push([corner(a), corner(b), corner(c)]);
+    }
+  }
+  lastGeometryUV = { key, label: uv ? label : `${label} — no UVs`, polygons, selected: polygons.map(() => false), image: checker ? null : textureImageOf(mesh) };
+  return lastGeometryUV;
+}
 
 /**
  * The world matrix of an object's own native pose. A node that draws its
@@ -869,6 +906,16 @@ export function Viewport({
   const [showUiOverlay, setShowUiOverlay] = useState(true);
   const showUiOverlayRef = useRef(showUiOverlay);
   showUiOverlayRef.current = showUiOverlay;
+  // UV checker: the selected object (everything, with nothing selected) drawn
+  // with the UV grid instead of its material — editor view only.
+  const [uvChecker, setUvChecker] = useState(false);
+  const uvCheckerRef = useRef(uvChecker);
+  uvCheckerRef.current = uvChecker;
+  // UV view: the selected object's UV layout, filled in by the render loop.
+  const [uvPanelOpen, setUvPanelOpen] = useState(false);
+  const uvPanelOpenRef = useRef(uvPanelOpen);
+  uvPanelOpenRef.current = uvPanelOpen;
+  const uvPanelDataRef = useRef<UVPanelData | null>(null);
   const [isHudCollapsed, setIsHudCollapsed] = useState(false);
 
   const currentFrameRef = useRef(currentFrame);
@@ -5830,6 +5877,7 @@ export function Viewport({
       // Edit Mesh handling: sync handles and anchor editMeshCentroidProxy
       let editMeshHasSelection = false;
       let xrayMesh: THREE.Mesh | null = null;
+      let editMeshUV: UVPanelData | null = null;
       const editMeshNode = !outputMode
         ? findEditMeshNode(graphRef.current, selectedNodeIdRef.current, true)
         : undefined;
@@ -5850,6 +5898,19 @@ export function Viewport({
 
         editMeshHandles.setXray(editMeshNode.params.xray === true);
         if (editMeshNode.params.xray === true && srcMesh) xrayMesh = srcMesh;
+        if (uvPanelOpenRef.current && srcMesh) {
+          // The UVs the geometry is actually built from, faces fully selected highlighted.
+          const withUVs = withFaceUVs(quadMesh);
+          const verts = selectionVertices(quadMesh, selectMode, selection);
+          const image = uvCheckerRef.current ? null : textureImageOf(srcMesh);
+          editMeshUV = {
+            key: `em:${editMeshNode.id}:${quadMeshSignature(withUVs)}:${[...verts].join(",")}:${uvCheckerRef.current ? "checker" : imageKeyOf(srcMesh)}`,
+            label: typeof editMeshNode.params.name === "string" && editMeshNode.params.name ? editMeshNode.params.name : "Edit Mesh",
+            polygons: withUVs.faceUVs as [number, number][][],
+            selected: quadMesh.faces.map((face) => face.length > 0 && face.every((v) => verts.has(v))),
+            image,
+          };
+        }
         editMeshHandles.sync({
           mesh: srcMesh,
           quadMesh,
@@ -6597,8 +6658,35 @@ export function Viewport({
       // chemin composer : la passe séparée ne peut pas s'exécuter autrement.
       const volumetric = findVolumetricSettings(scene);
 
+      // UV checker / UV view: the selected object's meshes (every mesh, with
+      // nothing selected — bar custom shaders like volumes and skies).
+      const uvSelectedId = selectedNodeIdRef.current;
+      const uvMeshes: THREE.Mesh[] = [];
+      if (!outputMode && (uvCheckerRef.current || uvPanelOpenRef.current)) {
+        scene.traverse((obj) => {
+          const mesh = obj as THREE.Mesh;
+          if (!mesh.isMesh || !mesh.visible || mesh.userData.looseEdges) return;
+          if (uvSelectedId) {
+            if (selectableNodeIdFor(mesh, graphRef.current) !== uvSelectedId) return;
+          } else if (mesh.material instanceof THREE.ShaderMaterial) {
+            return;
+          }
+          uvMeshes.push(mesh);
+        });
+      }
+      if (uvPanelOpenRef.current && !outputMode) {
+        const selectedNode = uvSelectedId ? graphRef.current.nodes.find((n) => n.id === uvSelectedId) : undefined;
+        const nodeLabel =
+          typeof selectedNode?.params.name === "string" && selectedNode.params.name
+            ? selectedNode.params.name
+            : (selectedNode?.type.split("/").pop() ?? "Mesh");
+        uvPanelDataRef.current = editMeshUV ?? (uvSelectedId ? geometryUVData(uvMeshes[0] ?? null, uvCheckerRef.current, nodeLabel) : null);
+      }
+
       // Restored in the finally below even if a render throws: the material
-      // swap must never outlive this frame's draw.
+      // swap must never outlive this frame's draw. The checker goes on first
+      // and comes off last, so X-ray's own swap nests inside it.
+      const restoreUVChecker = !outputMode && uvCheckerRef.current ? swapInUVChecker(uvMeshes) : () => {};
       const xrayOriginalMaterial = xrayMesh ? xrayMesh.material : null;
       if (xrayMesh) xrayMesh.material = editMeshXrayMaterial;
       try {
@@ -6637,6 +6725,7 @@ export function Viewport({
         }
       } finally {
         if (xrayMesh && xrayOriginalMaterial) xrayMesh.material = xrayOriginalMaterial;
+        restoreUVChecker();
       }
 
       // 1b. Render Editor UI Overlay (Grid, Transform Controls, Light Helpers) - isolated from Postprocess
@@ -7064,7 +7153,7 @@ export function Viewport({
                     {(
                       [
                         { op: "sharp", label: "Sharp", color: "#22d3ee", title: "Sharp: shading stays hard across these edges" },
-                        { op: "seam", label: "Seam", color: "#ef4444", title: "Seam: Smart UV Unwrap cuts the layout here" },
+                        { op: "seam", label: "Seam", color: "#ef4444", title: "Seam: Unwrap and Smart UV Unwrap cut the layout here" },
                         { op: "crease", label: "Crease", color: "#e879f9", title: "Crease (Crease Weight): Subdivide keeps these edges tight" },
                       ] as const
                     ).map((b) => (
@@ -7073,6 +7162,40 @@ export function Viewport({
                         type="button"
                         className="viewport-hud-button"
                         style={{ fontSize: 10, padding: "2px 6px", minWidth: 0, width: "auto", color: b.color }}
+                        onClick={() => editMeshCommandsRef.current?.run(b.op)}
+                        title={b.title}
+                      >
+                        {b.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {node.type === EDIT_MESH_NODE.type && (
+                <div style={row}>
+                  <span
+                    style={label}
+                    title="UV tools, as in Blender's U menu: on the selected faces, or every face with nothing selected. Turn on the UV Checker and the UV view (top-left of the viewport) to see the result."
+                  >
+                    UV
+                  </span>
+                  <div style={{ display: "flex", gap: 2, flexWrap: "wrap", justifyContent: "flex-end", maxWidth: 220 }}>
+                    {(
+                      [
+                        { op: "uv-unwrap", label: "Unwrap", title: "Unwrap (conformal): flattens each island cut by the seams, keeping angles, then packs them into 0..1" },
+                        { op: "uv-cube", label: "Cube", title: "Cube projection: each face onto its closest axis plane, 1 UV unit per scene unit" },
+                        { op: "uv-cylinder", label: "Cylinder", title: "Cylinder projection round the vertical (Y) axis: around by up, at scene scale" },
+                        { op: "uv-sphere", label: "Sphere", title: "Sphere projection about the selection's centre, Y the poles" },
+                        { op: "uv-view", label: "View", title: "Project From View: the selection as the camera sees it, fitted into 0..1" },
+                        { op: "uv-follow", label: "Follow", title: "Follow Active Quads: continues the last selected face's UVs across the others, quad by quad" },
+                        { op: "uv-pack", label: "Pack", title: "Pack Islands: lays the existing UV islands out in 0..1 without reshaping them" },
+                      ] as const
+                    ).map((b) => (
+                      <button
+                        key={b.op}
+                        type="button"
+                        className="viewport-hud-button"
+                        style={{ fontSize: 10, padding: "2px 6px", minWidth: 0, width: "auto" }}
                         onClick={() => editMeshCommandsRef.current?.run(b.op)}
                         title={b.title}
                       >
@@ -9720,6 +9843,7 @@ export function Viewport({
             </div>
           );
         })()}
+      {!outputMode && uvPanelOpen && <UVPreviewPanel source={uvPanelDataRef} onClose={() => setUvPanelOpen(false)} />}
       {/* Top-Left Viewport HUD & Controls — editor-only, never shown in the output window */}
       {/* Top-Left Viewport HUD & Controls — editor-only, never shown in the output window */}
       {!outputMode && (
@@ -9802,6 +9926,31 @@ export function Viewport({
                   </>
                 )}
               </svg>
+            </button>
+            <button
+              type="button"
+              className={`viewport-hud-button ${uvChecker ? "viewport-hud-button-active" : ""}`}
+              onClick={() => setUvChecker((prev) => !prev)}
+              title={
+                uvChecker
+                  ? "UV Checker ON — the selected object (everything, with nothing selected) shows the UV grid"
+                  : "UV Checker — show the selected object with a labelled UV grid, to see stretching, scale and seams"
+              }
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <rect x="3" y="3" width="18" height="18" rx="1" />
+                <path d="M3 12h18M12 3v18" />
+                <path d="M3 3h9v9H3zM12 12h9v9h-9z" fill="currentColor" fillOpacity="0.45" stroke="none" />
+              </svg>
+            </button>
+            <button
+              type="button"
+              className={`viewport-hud-button ${uvPanelOpen ? "viewport-hud-button-active" : ""}`}
+              onClick={() => setUvPanelOpen((prev) => !prev)}
+              title={uvPanelOpen ? "Hide the UV view" : "UV view — the selected object's UV layout over its texture"}
+              style={{ fontSize: "10px", fontWeight: 700 }}
+            >
+              UV
             </button>
             <button
               type="button"

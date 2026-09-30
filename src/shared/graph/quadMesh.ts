@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { triangulateFace } from "./mesh/triangulate";
-import { averageUV, boxProjectFace, lerpUV, UV, uvBounds } from "./mesh/uv";
+import { averageUV, boxProjectFace, fillNewFaceUVs, lerpUV, UV } from "./mesh/uv";
 import { quadRing } from "./mesh/loops";
 import { importBufferGeometry } from "./mesh/importGeometry";
 import { cloneEdgeAttributes, cornerColor, remapEdgeAttributes, splitEdgeAttributes } from "./mesh/attributes";
@@ -184,14 +184,14 @@ export function computeFaceCentroid(positions: [number, number, number][], face:
 }
 
 /**
- * Generates coherent box/cube projection UVs for a QuadMesh.
- * Projects each face onto its dominant normal plane (XY, XZ, or YZ).
+ * Box/cube projection UVs for a QuadMesh: each face onto its dominant normal
+ * plane (XY, XZ, or YZ), in object space at a fixed density (UV_DENSITY) —
+ * so each face's UVs depend on that face alone.
  */
 export function boxProjectUVs(mesh: QuadMesh): QuadMesh {
   const next = cloneQuadMesh(mesh);
-  const bounds = uvBounds(next);
   next.faceUVs = next.faces.map((face) =>
-    face.length === 0 ? [] : boxProjectFace(next, face, computeFaceNormal(next.positions, face), bounds),
+    face.length === 0 ? [] : boxProjectFace(next, face, computeFaceNormal(next.positions, face)),
   );
   return next;
 }
@@ -395,11 +395,20 @@ export function quadMeshToBufferGeometry(
   const globalShading = forcedShading || inputMesh.shading || "auto";
   const hasPerFaceShading = Boolean(inputMesh.faceShading && inputMesh.faceShading.length > 0);
 
-  // Ensure mesh has valid UVs when faceUVs are expected (auto/flat shading or faceUVs present)
-  const needsAutoUVs =
-    (!inputMesh.faceUVs || inputMesh.faceUVs.length !== inputMesh.faces.length) &&
-    !(globalShading === "smooth" && !hasPerFaceShading && !inputMesh.faceUVs);
-  const mesh = needsAutoUVs ? boxProjectUVs(inputMesh) : inputMesh;
+  // UVs are never projected here from the mesh as it currently stands — that
+  // made the texture slide over the whole mesh whenever one vertex moved, and
+  // change with the shading mode. Stored per-corner UVs are used as they are;
+  // per-vertex ones (a plane's grid) likewise, converted to per-corner unless
+  // the pure-smooth path below takes them directly; a mesh with neither gets
+  // the fixed-density projection, which depends on each face alone.
+  const hasFaceUVs = Boolean(
+    inputMesh.faceUVs &&
+      inputMesh.faceUVs.length === inputMesh.faces.length &&
+      inputMesh.faceUVs.every((uvs, f) => uvs.length === inputMesh.faces[f].length),
+  );
+  const hasVertexUVs = Boolean(inputMesh.uvs && inputMesh.uvs.length === inputMesh.positions.length);
+  const smoothTakesVertexUVs = globalShading === "smooth" && !hasPerFaceShading && hasVertexUVs;
+  const mesh = hasFaceUVs || smoothTakesVertexUVs ? inputMesh : withFaceUVs(inputMesh);
 
   const numFaces = mesh.faces.length;
 
@@ -697,9 +706,17 @@ export function bufferGeometryToQuadMesh(geometry: THREE.BufferGeometry): QuadMe
  * projection. Returns the input itself when it already qualifies.
  */
 export function withFaceUVs(mesh: QuadMesh): QuadMesh {
-  if (mesh.faceUVs && mesh.faceUVs.length === mesh.faces.length &&
-      mesh.faceUVs.every((uvs, f) => uvs.length === mesh.faces[f].length)) {
-    return mesh;
+  const valid = (f: number) => mesh.faceUVs?.[f]?.length === mesh.faces[f].length;
+  if (mesh.faceUVs) {
+    const missing = mesh.faces.map((_, f) => f).filter((f) => !valid(f));
+    if (missing.length === 0 && mesh.faceUVs.length === mesh.faces.length) return mesh;
+    if (missing.length < mesh.faces.length) {
+      // Keep every face's UVs that are there; the others continue from them.
+      const next = cloneQuadMesh(mesh);
+      next.faceUVs = mesh.faces.map((_, f) => (valid(f) ? mesh.faceUVs![f].map((uv) => [uv[0], uv[1]] as [number, number]) : []));
+      fillNewFaceUVs(next, missing);
+      return next;
+    }
   }
   if (mesh.uvs && mesh.uvs.length === mesh.positions.length) {
     const next = cloneQuadMesh(mesh);
@@ -711,9 +728,9 @@ export function withFaceUVs(mesh: QuadMesh): QuadMesh {
 
 /**
  * Appends a face created by an operation, with its per-face attributes: UVs
- * (given, or box-projected when omitted — `pending` collects those so they are
- * projected in one pass against the final bounds), material slot and shading
- * inherited from the face it came from.
+ * (given, or — when omitted — continued from its neighbours once the whole
+ * operation is built: `pending` collects those for fillNewFaceUVs), material
+ * slot and shading inherited from the face it came from.
  */
 function appendFace(
   next: QuadMesh,
@@ -732,11 +749,7 @@ function appendFace(
 }
 
 function projectPendingUVs(next: QuadMesh, pending: number[]) {
-  if (pending.length === 0) return;
-  const bounds = uvBounds(next);
-  for (const f of pending) {
-    next.faceUVs![f] = boxProjectFace(next, next.faces[f], computeFaceNormal(next.positions, next.faces[f]), bounds);
-  }
+  fillNewFaceUVs(next, pending);
 }
 
 /** Selected face indices that exist, deduplicated, in ascending order. */

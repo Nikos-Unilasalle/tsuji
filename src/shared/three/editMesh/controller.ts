@@ -62,6 +62,10 @@ import { knifeCut, KnifePoint } from "../../graph/mesh/knife";
 import { creaseMap, edgeKey, paintCorners, setEdgeCrease, setEdgeFlag } from "../../graph/mesh/attributes";
 import { asVector3 } from "../../graph/nodes/transform";
 import { asColor } from "../../graph/nodes/object";
+import { unwrapFaces } from "../../graph/mesh/lscm";
+import { packFaceIslands } from "../../graph/mesh/pack";
+import { cubeProject, cylinderProject, followActiveQuads, sphereProject, viewProject } from "../../graph/mesh/project";
+import { withFaceUVs } from "../../graph/quadMesh";
 import { circleRegion, EditMeshHandles, ScreenRegion } from "../editMeshHandles";
 import type { TransformPatch } from "../gizmoWriteback";
 
@@ -141,7 +145,15 @@ export type EditMeshOp =
   | "seam"
   | "crease"
   | "assign"
-  | "paint";
+  | "paint"
+  // UV tools, on the selected faces (every face with none selected).
+  | "uv-unwrap"
+  | "uv-cube"
+  | "uv-cylinder"
+  | "uv-sphere"
+  | "uv-view"
+  | "uv-follow"
+  | "uv-pack";
 
 export interface EditMeshCommands {
   run(op: EditMeshOp): boolean;
@@ -741,8 +753,45 @@ export function createEditMeshController(ctx: EditMeshControllerContext) {
       : convertSelection(target.quadMesh, target.mode, target.selection, "faces").faces;
   }
 
+  /**
+   * The UV tools: on the selected faces (the faces fully selected, in points
+   * or edges mode), or every face when nothing is selected — as Blender's U
+   * menu does. Only the UVs change; one undo step each.
+   */
+  function runUVOp(target: EditMeshTarget, op: EditMeshOp): boolean {
+    const mesh = withFaceUVs(target.quadMesh);
+    const faces = targetFaces(target);
+    let next: QuadMesh | null = null;
+    if (op === "uv-unwrap") next = unwrapFaces(mesh, faces).mesh;
+    else if (op === "uv-cube") next = cubeProject(mesh, faces);
+    else if (op === "uv-cylinder") next = cylinderProject(mesh, faces, "y");
+    else if (op === "uv-sphere") next = sphereProject(mesh, faces, "y");
+    else if (op === "uv-pack") next = packFaceIslands(mesh, faces.length > 0 ? faces : mesh.faces.map((_, f) => f));
+    else if (op === "uv-view") {
+      // What the camera shows, with the viewport's proportions (NDC x is squeezed by the aspect).
+      const matrix = target.srcMesh.matrixWorld;
+      const aspect = renderer.domElement.clientWidth / Math.max(1, renderer.domElement.clientHeight);
+      const p = new THREE.Vector3();
+      next = viewProject(mesh, faces, (local) => {
+        p.set(local[0], local[1], local[2]).applyMatrix4(matrix).project(camera);
+        return [p.x * aspect, p.y];
+      });
+    } else if (op === "uv-follow") {
+      // The active face: the last one selected.
+      if (faces.length < 2) {
+        flashEditMessage("Follow Active Quads: select the faces, the active one last");
+        return false;
+      }
+      next = followActiveQuads(mesh, faces, faces[faces.length - 1]);
+    }
+    if (!next) return false;
+    applyEditOp(target, { meshData: next });
+    return true;
+  }
+
   function runEditOp(target: EditMeshTarget, op: EditMeshOp): boolean {
     if (target.node.type !== EDIT_MESH_NODE.type) return false;
+    if (op.startsWith("uv-")) return runUVOp(target, op);
     const mesh = target.quadMesh;
     const vertices = [...selectionVertices(mesh, target.mode, target.selection)];
     if (vertices.length === 0) return false;

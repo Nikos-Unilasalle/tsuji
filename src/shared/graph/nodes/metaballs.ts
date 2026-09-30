@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { MarchingCubes } from "three/examples/jsm/objects/MarchingCubes.js";
+import { projectGeometryUVs } from "../mesh/geometryUV";
 import { NodeDefinition, ParamFieldDef } from "../types";
 import { createNodeCache, disposeObject3D } from "../nodeCaches";
 import { worldMatrixOf } from "../objectPosition";
@@ -42,7 +43,7 @@ function getField(nodeId: string, resolution: number): MarchingCubes {
   // the marching-cubes implementation, never the thing that gets drawn.
   // UVs on: the node offers the common texture-map inputs, and without them a
   // wired map would sample a single texel across the whole surface.
-  const field = new MarchingCubes(resolution, new THREE.MeshBasicMaterial(), true, false, 60000);
+  const field = new MarchingCubes(resolution, new THREE.MeshBasicMaterial(), false, false, 60000);
   fieldCache.set(nodeId, { field, resolution });
   return field;
 }
@@ -171,7 +172,10 @@ function writeFieldGeometry(geometry: THREE.BufferGeometry, field: MarchingCubes
     dstNormal.array[i + 1] = field.normalArray[i + 1];
     dstNormal.array[i + 2] = field.normalArray[i + 2];
   }
-  dstUv.array.set(field.uvArray.subarray(0, vertices * 2));
+  // Object space at the shared fixed density, not MarchingCubes' own UVs:
+  // those live in the field's box, which follows the balls — the texture slid
+  // and stretched every time one moved.
+  projectGeometryUVs(geometry, vertices);
   dst.needsUpdate = true;
   dstNormal.needsUpdate = true;
   dstUv.needsUpdate = true;

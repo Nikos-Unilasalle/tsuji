@@ -74,9 +74,12 @@ describe("weldGeometries", () => {
     const { geometry } = weldGeometries(a, b, { blend: 0.3, resolution: 24, operation: "add", relax: 0 });
     const uv = geometry.getAttribute("uv");
     expect(uv.count).toBe(geometry.getAttribute("position").count);
+    // Object space at the fixed density: within the surface's own extent (+0.5), never NaN.
+    const box = bounds(geometry);
+    const reach = Math.max(...box.min.toArray().map(Math.abs), ...box.max.toArray().map(Math.abs));
     for (let i = 0; i < uv.count; i++) {
-      expect(uv.getX(i)).toBeGreaterThanOrEqual(0);
-      expect(uv.getX(i)).toBeLessThanOrEqual(1);
+      expect(Number.isFinite(uv.getX(i))).toBe(true);
+      expect(Math.abs(uv.getX(i) - 0.5)).toBeLessThanOrEqual(reach + 1e-6);
     }
   });
 });

@@ -8,7 +8,7 @@ import {
   withFaceUVs,
 } from "../quadMesh";
 import { buildTopology } from "./topology";
-import { averageUV, boxProjectFace, lerpUV, UV, uvBounds } from "./uv";
+import { averageUV, fillNewFaceUVs, lerpUV, UV } from "./uv";
 import { mapEdgeAttributesInPlace, remapEdgeAttributes, splitEdgeAttributes } from "./attributes";
 
 type V3 = [number, number, number];
@@ -78,13 +78,11 @@ function pushFace(mesh: QuadMesh, face: number[], uvs: UV[], from: number): numb
 }
 
 /**
- * Box-projects UVs for faces an operation created from nothing (bevel strips,
- * bridges, fills), against the whole mesh's bounds like boxProjectUVs.
+ * UVs for faces an operation created from nothing (bevel strips, bridges,
+ * fills, extruded edges): continued from their neighbours — see fillNewFaceUVs.
  */
 export function projectNewFaceUVs(mesh: QuadMesh, faces: number[]) {
-  if (faces.length === 0) return;
-  const bounds = uvBounds(mesh);
-  for (const f of faces) mesh.faceUVs![f] = boxProjectFace(mesh, mesh.faces[f], computeFaceNormal(mesh.positions, mesh.faces[f]), bounds);
+  fillNewFaceUVs(mesh, faces);
 }
 
 /**

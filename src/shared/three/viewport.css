@@ -371,4 +371,54 @@
   bottom: 8px;
 }
 
+/* UV view — see UVPreviewPanel.tsx. */
+.viewport-uv-panel {
+  position: absolute;
+  /* Top-left under the view controls: clear of the parameter panel (right),
+     the orientation gizmo (bottom-left) and the Edit Mesh tool bar (bottom). */
+  left: 12px;
+  top: 76px;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  padding: 6px;
+  gap: 6px;
+  background: rgba(20, 24, 33, 0.95);
+  border: 1px solid var(--chrome-border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  color: var(--chrome-text);
+  font-size: 11px;
+}
+.viewport-uv-panel-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.viewport-uv-panel-title {
+  font-weight: 700;
+  color: var(--accent-color);
+}
+.viewport-uv-panel-label {
+  flex: 1;
+  color: var(--chrome-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.viewport-uv-panel-close {
+  border: none;
+  background: transparent;
+  color: var(--chrome-text-muted);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+.viewport-uv-panel-close:hover {
+  color: var(--chrome-text);
+}
+.viewport-uv-panel canvas {
+  border-radius: 4px;
+  display: block;
+}
 

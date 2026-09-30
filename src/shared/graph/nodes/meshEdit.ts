@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { projectGeometryUVs } from "../mesh/geometryUV";
 import { mergeVertices } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { createNodeCache, disposeObject3D } from "../nodeCaches";
 import { NodeDefinition } from "../types";
@@ -533,6 +534,8 @@ function buildExtrudedGeometry(result: WeldedMesh): THREE.BufferGeometry {
   }
 
   geometry.computeVertexNormals();
+  // A source with no UVs: the shared projection, so a texture still draws.
+  if (!result.cornerUVs) projectGeometryUVs(geometry);
   geometry.computeBoundingBox();
   geometry.computeBoundingSphere();
   return geometry;

@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 import { EvalContext } from "../types";
 import { SOLIDIFY_NODE, solidifyGeometry, solidifyQuadMesh } from "./solidify";
-import { createQuadBox, createQuadPlane, QuadMesh } from "../quadMesh";
+import { boxProjectUVs, createQuadBox, createQuadPlane, QuadMesh } from "../quadMesh";
 
 const CTX: EvalContext = { time: 0, step: 0, nodeId: "solidify-test" };
 
@@ -79,5 +79,30 @@ describe("SOLIDIFY_NODE and Solidify functions", () => {
     expect(outMesh.geometry.userData.quadMesh).toBeDefined();
     const outQuad = outMesh.geometry.userData.quadMesh as QuadMesh;
     expect(outQuad.faces.length).toBe(12);
+  });
+});
+
+describe("Solidify rim UVs", () => {
+  it("the rim continues the front face's UVs at the thickness's scale, not the whole texture per strip", () => {
+    const plane = boxProjectUVs(createQuadPlane(2, 2, 1, 1));
+    const out = solidifyQuadMesh(plane, { thickness: 0.2, rim: true });
+    const rims = out.faces.map((_, f) => f).slice(2);
+    expect(rims).toHaveLength(4);
+    for (const r of rims) {
+      const uvs = out.faceUVs![r] as [number, number][];
+      const spreadU = Math.max(...uvs.map((uv) => uv[0])) - Math.min(...uvs.map((uv) => uv[0]));
+      const spreadV = Math.max(...uvs.map((uv) => uv[1])) - Math.min(...uvs.map((uv) => uv[1]));
+      // A 2 × 0.2 strip at 1 UV per unit.
+      expect(Math.max(spreadU, spreadV)).toBeCloseTo(2);
+      expect(Math.min(spreadU, spreadV)).toBeCloseTo(0.2);
+      // Its edge on the front face carries that face's own UVs there.
+      const front = out.faces[r].filter((v) => v < plane.positions.length);
+      for (const v of front) {
+        const ours = uvs[out.faces[r].indexOf(v)];
+        const theirs = out.faceUVs![0][out.faces[0].indexOf(v)];
+        expect(ours[0]).toBeCloseTo(theirs[0]);
+        expect(ours[1]).toBeCloseTo(theirs[1]);
+      }
+    }
   });
 });
