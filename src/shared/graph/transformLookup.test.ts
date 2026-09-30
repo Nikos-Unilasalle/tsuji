@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { Connection, Graph, NodeInstance } from "./types";
 import { GROUP_OUTPUT_TYPE, GROUP_TYPE } from "./groups";
+import * as THREE from "three";
 import { GIZMO_SELECTABLE_TYPES, resolveGizmoTarget } from "./transformLookup";
+import { DEFAULT_REGISTRY } from "./nodes/index";
 
 function node(id: string, type: string): NodeInstance {
   return { id, type, params: {}, position: { x: 0, y: 0 } };
@@ -128,6 +130,11 @@ describe("resolveGizmoTarget", () => {
     expect(resolveGizmoTarget(graph, "amb1")).toBeNull();
   });
 
+  it("gives a Polygon its own native pose, like the Disc it is built after", () => {
+    const graph: Graph = { nodes: [node("poly1", "object/polygon")], connections: [] };
+    expect(resolveGizmoTarget(graph, "poly1")).toEqual({ kind: "native", objectNodeId: "poly1", deltaSourceNodeId: null });
+  });
+
   it("returns null for a node type not in GIZMO_SELECTABLE_TYPES at all", () => {
     const graph: Graph = { nodes: [node("osc1", "value/oscillator")], connections: [] };
     expect(resolveGizmoTarget(graph, "osc1")).toBeNull();
@@ -175,6 +182,7 @@ describe("GIZMO_SELECTABLE_TYPES", () => {
       "object/plane",
       "object/sphere",
       "object/disc",
+      "object/polygon",
       "object/cylinder",
       "object/cone",
       "object/bar_graph",
@@ -216,6 +224,16 @@ describe("GIZMO_SELECTABLE_TYPES", () => {
       "particles/emitter",
       "object/raccoon",
       "object/laser-beam",
+      "object/terrain",
+      "object/sculpt",
+      "object/tree",
+      "object/ply_point_cloud",
+      "curve/from_point_lists",
+      "curve/text-on-path",
+      "text/animator",
+      "particles/render-instances",
+      "structure/grass-field",
+      "material/volume-3d",
       "curve/grease-pencil",
       "curve/paint-on-geometry",
       "structure/group",
@@ -317,5 +335,21 @@ describe("resolveGizmoTarget — pure geometry modifiers defer to their source",
     };
 
     expect(resolveGizmoTarget(graph, "sub1")).toBeNull();
+  });
+});
+
+describe("GIZMO_SELECTABLE_TYPES coverage", () => {
+  it("lists every node that places its own object from its own Location/Rotation/Scale", () => {
+    // A node with a geometry input defers the gizmo upstream on purpose (see
+    // resolveGizmoTarget), and the Transform nodes are gizmo targets of their
+    // own kind. Anything else owning a pose and missing from the list simply
+    // got no gizmo — Polygon did, for as long as it existed.
+    const exempt = new Set(["transform", "transform/pivot", "transform/matrix-transform"]);
+    const missing = [...DEFAULT_REGISTRY.values()]
+      .filter((def) => def.defaultParams?.location instanceof THREE.Vector3 && def.defaultParams?.rotation !== undefined)
+      .filter((def) => !def.dynamicInputs && !def.inputs.some((socket) => socket.id === "geometry"))
+      .map((def) => def.type)
+      .filter((type) => !exempt.has(type) && !GIZMO_SELECTABLE_TYPES.includes(type));
+    expect(missing).toEqual([]);
   });
 });

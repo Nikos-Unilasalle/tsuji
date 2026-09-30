@@ -154,6 +154,20 @@ import {
 } from "./strokeInput";
 import type { GreaseBrushType } from "../graph/nodes/greasePencil";
 
+/**
+ * The world matrix of an object's own native pose. A node that draws its
+ * object a fixed offset away from that pose (the fire volume, lifted to sit
+ * on its origin) publishes the offset, applied after the pose, as
+ * `userData.poseOffset`: taken back out here so the gizmo and the pivot
+ * cross sit on the pose a drag actually edits.
+ */
+function nativePoseWorldMatrix(object: THREE.Object3D): THREE.Matrix4 {
+  const offset = object.userData?.poseOffset;
+  return offset instanceof THREE.Matrix4
+    ? object.matrixWorld.clone().multiply(offset.clone().invert())
+    : object.matrixWorld;
+}
+
 function isPaintOrGreaseNode(node: { type: string } | null | undefined): boolean {
   if (!node) return false;
   return node.type === GREASE_PENCIL_NODE.type || node.type === PAINT_ON_GEOMETRY_NODE.type;
@@ -2516,6 +2530,8 @@ export function Viewport({
           const scl = patch.scale ?? asVector3(node.params.scale, new THREE.Vector3(1, 1, 1));
           const localMatrix = composeNativeMatrixWithPivot(undefined, loc, rot, scl, piv, node.params);
           gizmoPivotProxyRealObject.matrix.multiplyMatrices(upstream, localMatrix);
+          const poseOffset = gizmoPivotProxyRealObject.userData?.poseOffset;
+          if (poseOffset instanceof THREE.Matrix4) gizmoPivotProxyRealObject.matrix.multiply(poseOffset);
           gizmoPivotProxyRealObject.updateMatrixWorld(true);
 
           if (Object.keys(patch).length > 0) {
@@ -6041,7 +6057,7 @@ export function Viewport({
             const foundObj: THREE.Object3D | undefined = targetObj;
             if (foundObj) {
               foundObj.updateWorldMatrix(true, false);
-              cross.position.copy(pivOffset).applyMatrix4(foundObj.matrixWorld);
+              cross.position.copy(pivOffset).applyMatrix4(nativePoseWorldMatrix(foundObj));
             } else {
               const loc = asVector3(node.params?.location, new THREE.Vector3());
               cross.position.copy(loc).add(pivOffset);
@@ -6173,10 +6189,10 @@ export function Viewport({
                 targetObject.userData && targetObject.userData.pivot
                   ? asVector3(targetObject.userData.pivot, new THREE.Vector3())
                   : asVector3(node?.params?.pivot, new THREE.Vector3());
-              const worldPivot = pivOffset.clone().applyMatrix4(targetObject.matrixWorld);
+              const poseWorld = nativePoseWorldMatrix(targetObject);
+              const worldPivot = pivOffset.clone().applyMatrix4(poseWorld);
+              poseWorld.decompose(new THREE.Vector3(), gizmoPivotProxy.quaternion, gizmoPivotProxy.scale);
               gizmoPivotProxy.position.copy(worldPivot);
-              targetObject.getWorldQuaternion(gizmoPivotProxy.quaternion);
-              targetObject.getWorldScale(gizmoPivotProxy.scale);
               gizmoPivotProxy.updateMatrixWorld(true);
             }
 

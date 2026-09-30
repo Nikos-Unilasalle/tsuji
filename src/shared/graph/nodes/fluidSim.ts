@@ -651,6 +651,11 @@ export const VOLUME_MATERIAL_3D_NODE: NodeDefinition = {
     mat.uniforms.uFrameId.value = ctx.step;
     mat.uniforms.uExposure.value = numberInput(inputs.exposure, params.exposure, 1.4);
     mesh.matrix.copy(composeVolumeMatrix(inputs, params, size));
+    // The ground anchor, published so the viewport gizmo can take it back
+    // out and sit on the pose Location/Rotation/Scale actually edit — the
+    // base of the fire, not the centre of the box the anchor lifts.
+    if (params.groundAnchor === false) delete mesh.userData.poseOffset;
+    else mesh.userData.poseOffset = new THREE.Matrix4().makeTranslation(0, size.y / 2, 0);
     mesh.updateMatrixWorld(true);
     mat.uniforms.uInvModelMatrix.value.copy(mesh.matrixWorld).invert();
 
