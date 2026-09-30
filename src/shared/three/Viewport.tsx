@@ -4065,7 +4065,8 @@ export function Viewport({
           const prev = editMeshHoverEdgeRef.current;
           if (!(edge && prev && edge[0] === prev[0] && edge[1] === prev[1])) editMeshHoverEdgeRef.current = edge;
           editMeshHoverFaceRef.current =
-            hoverTarget.mode === "faces" && !e.altKey ? editMeshHandles.pickFace(raycaster, quadMesh, srcMesh.matrixWorld) : null;
+            hoverTarget.mode === "faces" && !e.altKey ? editMeshHandles.pickFace(raycaster, quadMesh, srcMesh.matrixWorld, { widthPx: rect.width, heightPx: rect.height })
+              : null;
         }
       } else {
         editCtl.pointer = null;
@@ -8503,6 +8504,32 @@ export function Viewport({
                   <rect x="9" y="9" width="11" height="11" rx="1" strokeDasharray="2 2" />
                 </svg>
               </button>
+
+              {/* Face Side: which side of the faces is drawn — a face (the
+                  circle) with its normals pointing out, in, or both ways */}
+              {!isPointsOnly &&
+                ([
+                  ["out", "M16 12h6M19.5 9.5L22 12l-2.5 2.5M8 12H2M4.5 9.5L2 12l2.5 2.5", "Face Side: Out — only the side the normals point to is drawn"],
+                  ["in", "M22 12h-6M18.5 9.5L16 12l2.5 2.5M2 12h6M5.5 9.5L8 12l-2.5 2.5", "Face Side: In — only the side against the normals is drawn"],
+                  [
+                    "both",
+                    "M15.5 12h7M17.5 10L15.5 12l2 2M20.5 10l2 2-2 2M8.5 12h-7M6.5 10l2 2-2 2M3.5 10l-2 2 2 2",
+                    "Face Side: Both — both sides of every face are drawn",
+                  ],
+                ] as const).map(([side, arrows, title]) => (
+                  <button
+                    key={side}
+                    type="button"
+                    className={`viewport-hud-button ${editMeshNode.params.faceSide === side ? "viewport-hud-button-active" : ""}`}
+                    onClick={() => onParamChange?.("faceSide", side, editMeshNode.id)}
+                    title={title}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="12" r="3.5" fill="currentColor" fillOpacity={side === "both" ? 0.6 : 0.25} />
+                      <path d={arrows} />
+                    </svg>
+                  </button>
+                ))}
 
               {selectedCount > 0 && (
                 <>

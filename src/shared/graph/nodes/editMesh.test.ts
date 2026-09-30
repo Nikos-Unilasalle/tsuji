@@ -506,3 +506,36 @@ describe("Edit Mesh material slots", () => {
     expect(mesh.geometry.groups.map((g) => g.materialIndex)).toEqual([0, 2]);
   });
 });
+
+describe("Edit Mesh Face Side", () => {
+  const evaluate = (inputs: Record<string, unknown>, faceSide: string, nodeId: string) =>
+    EDIT_MESH_NODE.evaluate(
+      inputs,
+      { ...EDIT_MESH_NODE.defaultParams, meshData: null, faceSide },
+      { nodeId } as EvalContext,
+    ).geometry as THREE.Mesh;
+
+  it("draws both sides by default, and one side on request", () => {
+    expect((evaluate({}, "both", "side-own").material as THREE.Material).side).toBe(THREE.DoubleSide);
+    expect((evaluate({}, "out", "side-own").material as THREE.Material).side).toBe(THREE.FrontSide);
+    expect((evaluate({}, "in", "side-own").material as THREE.Material).side).toBe(THREE.BackSide);
+  });
+
+  it("gives a borrowed material's side to a copy, and keeps that copy in step with the source", () => {
+    const srcMat = new THREE.MeshStandardMaterial({ color: 0x336699, side: THREE.DoubleSide });
+    const src = new THREE.Mesh(quadMeshToBufferGeometry(createQuadBox(2, 2, 2)), srcMat);
+
+    const out = evaluate({ geometry: src }, "out", "side-borrow").material as THREE.MeshStandardMaterial;
+    expect(out).not.toBe(srcMat);
+    expect(out.side).toBe(THREE.FrontSide);
+    expect(srcMat.side).toBe(THREE.DoubleSide);
+
+    srcMat.color.set(0xff0000);
+    const again = evaluate({ geometry: src }, "out", "side-borrow").material as THREE.MeshStandardMaterial;
+    expect(again).toBe(out);
+    expect(again.color.getHex()).toBe(0xff0000);
+    expect(again.side).toBe(THREE.FrontSide);
+
+    expect(evaluate({ geometry: src }, "both", "side-borrow").material).toBe(srcMat);
+  });
+});

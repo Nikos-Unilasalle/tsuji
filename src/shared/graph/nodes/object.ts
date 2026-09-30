@@ -386,6 +386,11 @@ const lentMaterials = new WeakMap<THREE.Mesh, THREE.Material | THREE.Material[]>
  * a Merge override — so editing it in place (a Texture wired here, say)
  * repaints every other mesh drawing it, and disposing it breaks them.
  */
+/** Whether `material` is the one applyMaterialParams made for `mesh` — its own to edit in place. */
+export function isOwnMaterial(mesh: THREE.Mesh, material: THREE.Material): boolean {
+  return ownMaterials.get(mesh) === material;
+}
+
 function isLentMaterial(mesh: THREE.Mesh, material: THREE.Material | THREE.Material[] | null | undefined): boolean {
   if (!material || material === ownMaterials.get(mesh)) return false;
   if (lentMaterials.get(mesh) === material) return true;

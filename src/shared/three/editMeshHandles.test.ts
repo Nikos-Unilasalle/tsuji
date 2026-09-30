@@ -182,3 +182,82 @@ describe("editMeshHandles edge overlay", () => {
     expect(thick[0].visible).toBe(false);
   });
 });
+
+describe("editMeshHandles Face Side", () => {
+  beforeAll(() => initBvhRaycast());
+
+  const box = createQuadBox(1, 1, 1);
+  const identity = new THREE.Matrix4();
+  const faceAtZ = (z: number) =>
+    box.faces.findIndex((face) => face.every((v) => Math.abs(box.positions[v][2] - z) < 1e-6));
+  const front = faceAtZ(0.5);
+  const back = faceAtZ(-0.5);
+
+  function handlesDrawing(side: THREE.Side) {
+    const handles = createEditMeshHandles();
+    const host = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial({ side }));
+    handles.sync({ mesh: host, quadMesh: box, mode: "faces", points: new Set(), edges: [], faces: new Set() });
+    return handles;
+  }
+  function rayAt(world: THREE.Vector3, camera: THREE.Camera) {
+    const raycaster = new THREE.Raycaster();
+    raycaster.setFromCamera(toNdc(world, camera), camera);
+    return raycaster;
+  }
+
+  it("picks the faces the material draws from this side: the inside of the box when drawing In", () => {
+    const camera = frontCamera(5);
+    const offCentre = new THREE.Vector3(0.3, 0.3, 0.5);
+    expect(handlesDrawing(THREE.DoubleSide).pickFace(rayAt(offCentre, camera), box, identity)).toBe(front);
+    expect(handlesDrawing(THREE.FrontSide).pickFace(rayAt(offCentre, camera), box, identity)).toBe(front);
+    expect(handlesDrawing(THREE.BackSide).pickFace(rayAt(offCentre, camera), box, identity)).toBe(back);
+  });
+
+  it("catches a face drawn only from its other side by its centre dot", () => {
+    const camera = frontCamera(5);
+    const viewport = { widthPx: W, heightPx: H };
+    const centre = new THREE.Vector3(0, 0, 0.5);
+    const handles = handlesDrawing(THREE.BackSide);
+    // The front face isn't drawn from outside, but its dot sits in front of
+    // the back wall the ray would otherwise hit.
+    expect(handles.pickFace(rayAt(centre, camera), box, identity, viewport)).toBe(front);
+    expect(handles.pickFace(rayAt(new THREE.Vector3(0.3, 0.3, 0.5), camera), box, identity, viewport)).toBe(back);
+    // Both sides drawn: no dots, the front face is simply hit.
+    expect(handlesDrawing(THREE.DoubleSide).pickFace(rayAt(centre, camera), box, identity, viewport)).toBe(front);
+  });
+
+  it("shows the dots only when a side is hidden, in faces mode", () => {
+    const dots = (handles: ReturnType<typeof createEditMeshHandles>) =>
+      handles.group.children.find((c) => c instanceof THREE.Points && (c.material as THREE.Material).type === "ShaderMaterial")!;
+    expect(dots(handlesDrawing(THREE.FrontSide)).visible).toBe(true);
+    expect(dots(handlesDrawing(THREE.DoubleSide)).visible).toBe(false);
+  });
+});
+
+describe("editMeshHandles hovered face", () => {
+  it("outlines the hovered face instead of filling it", () => {
+    const handles = createEditMeshHandles();
+    const host = new THREE.Mesh();
+    const mesh = createQuadBox(1, 1, 1);
+    const [, , fill] = handles.group.children as THREE.Mesh[]; // wireframe, marked edges, faces
+    const outline = handles.group.children[handles.group.children.length - 1] as THREE.Mesh;
+    const state = (hoverFace: number | null): EditMeshDisplayState => ({
+      mesh: host, quadMesh: mesh, mode: "faces", points: new Set(), edges: [], faces: new Set([1]), hoverFace,
+    });
+
+    handles.sync(state(null));
+    const fillGeometry = fill.geometry;
+    expect(outline.visible).toBe(false);
+
+    handles.sync(state(0));
+    expect(outline.visible).toBe(true);
+    // The quad's four sides.
+    expect(outline.geometry.getAttribute("instanceStart").count).toBe(4);
+    // The fill still shows the selection alone, not rebuilt for the hover.
+    expect(fill.geometry).toBe(fillGeometry);
+    expect(fill.geometry.getAttribute("position").count).toBe(6);
+
+    handles.sync(state(null));
+    expect(outline.visible).toBe(false);
+  });
+});

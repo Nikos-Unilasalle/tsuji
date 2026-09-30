@@ -13,6 +13,7 @@ import {
   MaterialParams,
   NATIVE_TRANSFORM_PARAM_FIELDS,
   inheritSourceMaterial,
+  isOwnMaterial,
 } from "./object";
 import { asVector3, composeNativeMatrix, preserveModifierUserData } from "./transform";
 import {
@@ -169,8 +170,8 @@ interface EditMeshState {
   baseMaterial?: THREE.Material | THREE.Material[];
   /** Holders whose materials are slots 1..3 (Material 2..4 inputs). */
   slotHolders?: THREE.Mesh[];
-  /** Vertex-colour copies of materials this node doesn't own (shared from its source). */
-  colorClones?: Map<THREE.Material, THREE.Material>;
+  /** Copies of materials this node doesn't own, for vertex colours or a Face Side of its own. */
+  colorClones?: Map<THREE.Material, { copy: THREE.Material; version: number }>;
 }
 
 const editMeshCache = createNodeCache<EditMeshState>((s) => {
@@ -301,13 +302,25 @@ export function materialInputSockets(connections: { toSocket: string }[]): Socke
   }));
 }
 
+/** Which side of its faces Edit Mesh draws: along the normals, against them, or both. */
+export type EditMeshFaceSide = "out" | "in" | "both";
+
+/** The side the Face Side param asks for — null until one is picked, leaving each material's own. */
+export function editMeshFaceSide(params: Record<string, unknown>): THREE.Side | null {
+  if (params.faceSide === "out") return THREE.FrontSide;
+  if (params.faceSide === "in") return THREE.BackSide;
+  if (params.faceSide === "both") return THREE.DoubleSide;
+  return null;
+}
+
 /**
  * Applies the material inputs, then layers on what the mesh data asks for:
- * per-face material slots (Material 2..4 inputs, falling back to slot 0) and
- * vertex colours. The mesh's own slot-0 material is put back first every
- * time — applyMaterialParams would otherwise dispose the array this leaves
- * on the mesh — and a material shared from the source is copied rather than
- * switched to vertex colours in place, which would repaint the source too.
+ * per-face material slots (Material 2..4 inputs, falling back to slot 0),
+ * vertex colours and the Face Side. The mesh's own slot-0 material is put
+ * back first every time — applyMaterialParams would otherwise dispose the
+ * array this leaves on the mesh — and a material this node doesn't own (its
+ * source's, a wired one) is copied rather than changed in place, which would
+ * change it for every other mesh drawing it too.
  */
 function applyEditMeshMaterials(
   state: EditMeshState,
@@ -316,6 +329,7 @@ function applyEditMeshMaterials(
   inputs: Record<string, unknown>,
   texParams: TextureParams | undefined,
   quadMesh: QuadMesh,
+  side: THREE.Side | null,
 ) {
   if (state.baseMaterial) mesh.material = state.baseMaterial;
   applyEditMeshMaterial(mesh, srcMesh, inputs.material, texParams);
@@ -343,24 +357,37 @@ function applyEditMeshMaterials(
   }
 
   const hasColors = Boolean(mesh.geometry.attributes.color);
-  const withColors = (m: THREE.Material): THREE.Material => {
-    const shared = (m as any).__isSharedFromSrc || (srcMesh && (srcMesh.material === m || (Array.isArray(srcMesh.material) && srcMesh.material.includes(m))));
-    if (!shared) {
-      if ((m as any).vertexColors !== hasColors) {
-        (m as any).vertexColors = hasColors;
-        m.needsUpdate = true;
-      }
-      return m;
-    }
-    if (!hasColors) return m;
-    state.colorClones ??= new Map();
-    let copy = state.colorClones.get(m);
-    if (!copy) {
-      copy = m.clone();
-      (copy as any).vertexColors = true;
-      state.colorClones.set(m, copy);
+  const ownsMaterial = (m: THREE.Material) =>
+    isOwnMaterial(mesh, m) || Boolean(state.slotHolders?.some((holder) => isOwnMaterial(holder, m)));
+  const fitted = (copy: THREE.Material, wantSide: THREE.Side) => {
+    if ((copy as any).vertexColors !== hasColors || copy.side !== wantSide) {
+      (copy as any).vertexColors = hasColors;
+      copy.side = wantSide;
+      copy.needsUpdate = true;
     }
     return copy;
+  };
+  const withColors = (m: THREE.Material): THREE.Material => {
+    if (ownsMaterial(m)) return fitted(m, side ?? m.side);
+    if (!hasColors && (side === null || m.side === side)) return m;
+    // Kept in step with the original every frame (its colour, its maps), bar
+    // a shader material's uniforms, which copying would re-clone each time.
+    state.colorClones ??= new Map();
+    let entry = state.colorClones.get(m);
+    if (!entry) {
+      entry = { copy: m.clone(), version: m.version };
+      state.colorClones.set(m, entry);
+    } else if (!(m instanceof THREE.ShaderMaterial)) {
+      const { vertexColors, side: copySide } = entry.copy as any;
+      entry.copy.copy(m);
+      (entry.copy as any).vertexColors = vertexColors;
+      entry.copy.side = copySide;
+      if (entry.version !== m.version) {
+        entry.version = m.version;
+        entry.copy.needsUpdate = true;
+      }
+    }
+    return fitted(entry.copy, side ?? m.side);
   };
   mesh.material = Array.isArray(materials) ? materials.map(withColors) : withColors(materials);
 }
@@ -577,6 +604,9 @@ export const EDIT_MESH_NODE: NodeDefinition = {
     snapIncrement: 0.1,
     // Pick through the surface (Alt+Z); off, hidden points/faces can't be selected.
     xray: false,
+    // Which side of the faces is drawn: "out" (along the normals), "in", or
+    // "both". Unset, each material keeps its own side.
+    faceSide: null as EditMeshFaceSide | null,
     // Select Flat Region grows across edges bending less than this, in degrees.
     flatAngle: 10,
     // Smart UV Unwrap: faces bending more than this from their island start a new one.
@@ -641,7 +671,7 @@ export const EDIT_MESH_NODE: NodeDefinition = {
     // and no need to hash 50k vertices to find that out.
     if (reusable && state.lastQuadMeshObject === quadMesh) {
       applyEditMeshPose(state.mesh!, inputObj, srcMesh, inputs.matrix, params, ctx.nodeId);
-      applyEditMeshMaterials(state, state.mesh!, srcMesh, inputs, texParams, quadMesh);
+      applyEditMeshMaterials(state, state.mesh!, srcMesh, inputs, texParams, quadMesh, editMeshFaceSide(params));
       return primitiveOutputs(state.mesh!, pivotParams(params, state.mesh!));
     }
 
@@ -651,7 +681,7 @@ export const EDIT_MESH_NODE: NodeDefinition = {
     if (reusable && updateQuadMeshGeometry(state.mesh!.geometry, quadMesh, shadeMode)) {
       state.lastQuadMeshObject = quadMesh;
       state.lastQuadMesh = undefined;
-      applyEditMeshMaterials(state, state.mesh!, srcMesh, inputs, texParams, quadMesh);
+      applyEditMeshMaterials(state, state.mesh!, srcMesh, inputs, texParams, quadMesh, editMeshFaceSide(params));
       applyEditMeshPose(state.mesh!, inputObj, srcMesh, inputs.matrix, params, ctx.nodeId);
       return primitiveOutputs(state.mesh!, pivotParams(params, state.mesh!));
     }
@@ -665,7 +695,7 @@ export const EDIT_MESH_NODE: NodeDefinition = {
     ) {
       state.lastQuadMeshObject = quadMesh;
       applyEditMeshPose(state.mesh, inputObj, srcMesh, inputs.matrix, params, ctx.nodeId);
-      applyEditMeshMaterials(state, state.mesh, srcMesh, inputs, texParams, quadMesh);
+      applyEditMeshMaterials(state, state.mesh, srcMesh, inputs, texParams, quadMesh, editMeshFaceSide(params));
       return primitiveOutputs(state.mesh, pivotParams(params, state.mesh));
     }
 
@@ -680,7 +710,7 @@ export const EDIT_MESH_NODE: NodeDefinition = {
       state.mesh.geometry = geometry;
     }
 
-    applyEditMeshMaterials(state, state.mesh, srcMesh, inputs, texParams, quadMesh);
+    applyEditMeshMaterials(state, state.mesh, srcMesh, inputs, texParams, quadMesh, editMeshFaceSide(params));
 
     applyEditMeshPose(state.mesh, inputObj, srcMesh, inputs.matrix, params, ctx.nodeId);
 

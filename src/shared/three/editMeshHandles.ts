@@ -27,6 +27,11 @@ const RENDER_ORDER = 998;
 /** Point handle diameters, in px. */
 const POINT_SIZE = 7;
 const SELECTED_POINT_SIZE = 9;
+/** Face dot diameter, in px — see createFaceDotMaterial. */
+const FACE_DOT_SIZE = 5;
+const FACE_DOT_COLOR = new THREE.Color(0xf8fafc);
+/** Screen-space radius, in CSS px, within which a click lands on a face dot. */
+const FACE_DOT_PICK_RADIUS_PX = 8;
 /** Selected / hovered edge width, in px. */
 const EDGE_WIDTH = 3;
 
@@ -83,6 +88,47 @@ function createPointMaterial(size: number, map: THREE.Texture): THREE.PointsMate
   };
   material.customProgramCacheKey = () => "edit-mesh-point-depth-pull";
   return material;
+}
+
+/**
+ * Face dots: a small dot on the centroid of every face seen from the side its
+ * material doesn't draw (Face Side Out or In), so a face culled from view can
+ * still be found and clicked — Blender's face dots. Which faces those are
+ * depends on where the camera is, so it's decided per vertex, here, rather
+ * than rebuilt on every orbit. `uSide` is the side that *is* drawn.
+ */
+function createFaceDotMaterial(): THREE.ShaderMaterial {
+  return new THREE.ShaderMaterial({
+    uniforms: {
+      uSide: { value: THREE.FrontSide },
+      uSize: { value: FACE_DOT_SIZE },
+    },
+    vertexShader: `
+      uniform int uSide;
+      uniform float uSize;
+      attribute vec3 color;
+      varying vec3 vColor;
+      void main() {
+        vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+        vec3 toCamera = isOrthographic ? vec3(0.0, 0.0, 1.0) : -mvPosition.xyz;
+        bool facing = dot(normalize(normalMatrix * normal), toCamera) > 0.0;
+        bool drawn = uSide == ${THREE.FrontSide} ? facing : !facing;
+        vColor = color;
+        gl_PointSize = drawn ? 0.0 : uSize;
+        mvPosition.xyz *= ${PULL};
+        gl_Position = projectionMatrix * mvPosition;
+      }
+    `,
+    fragmentShader: `
+      varying vec3 vColor;
+      void main() {
+        if (length(gl_PointCoord - 0.5) > 0.5) discard;
+        gl_FragColor = vec4(vColor, 1.0);
+      }
+    `,
+    depthTest: true,
+    depthWrite: false,
+  });
 }
 
 /** A screen-space-width line material with the same depth pull as the points. */
@@ -186,7 +232,17 @@ export interface EditMeshHandles {
    * painted, and hidden handles aren't drawn.
    */
   setXray(xray: boolean): void;
-  pickFace(raycaster: THREE.Raycaster, quadMesh: QuadMesh, meshWorldMatrix: THREE.Matrix4): number | null;
+  /**
+   * The face under the cursor: the nearest one drawn from this side, or a
+   * face dot within reach in front of it. `viewport` (the canvas size, CSS
+   * px) is what the dots need; without it only drawn faces are hit.
+   */
+  pickFace(
+    raycaster: THREE.Raycaster,
+    quadMesh: QuadMesh,
+    meshWorldMatrix: THREE.Matrix4,
+    viewport?: { widthPx: number; heightPx: number },
+  ): number | null;
   /** The visible vertex nearest the cursor, within 16 px; `exclude` ones are skipped (snapping past the selection). */
   pickPoint(
     ndc: THREE.Vector2,
@@ -284,6 +340,12 @@ export function createEditMeshHandles(): EditMeshHandles {
   }
 
   let xray = false;
+  // The side the edited mesh's material draws, read off it at every sync.
+  let drawnSide: THREE.Side = THREE.DoubleSide;
+  /** Whether a face whose normal is (not) turned to the camera is drawn from there. */
+  function isDrawn(facingCamera: boolean): boolean {
+    return drawnSide === THREE.DoubleSide || (facingCamera ? drawnSide === THREE.FrontSide : drawnSide === THREE.BackSide);
+  }
   const visRaycaster = new THREE.Raycaster();
   const visNdc = new THREE.Vector2();
   const visWorld = new THREE.Vector3();
@@ -353,6 +415,7 @@ export function createEditMeshHandles(): EditMeshHandles {
   });
   const selectedEdgeMat = createEdgeMaterial(SELECTED_EDGE_COLOR);
   const hoverEdgeMat = createEdgeMaterial(HOVER_EDGE_COLOR);
+  const hoverFaceMat = createEdgeMaterial(HOVER_EDGE_COLOR);
 
   const wireframeLines = new THREE.LineSegments(new THREE.BufferGeometry(), wireframeMat);
   wireframeLines.renderOrder = RENDER_ORDER;
@@ -367,6 +430,10 @@ export function createEditMeshHandles(): EditMeshHandles {
   selectedEdgeLines.renderOrder = RENDER_ORDER + 3;
   const hoverEdgeLines = new LineSegments2(new LineSegmentsGeometry(), hoverEdgeMat);
   hoverEdgeLines.renderOrder = RENDER_ORDER + 4;
+  // The hovered face's outline (faces mode), rather than a fill that reads
+  // as the selection's.
+  const hoverFaceLines = new LineSegments2(new LineSegmentsGeometry(), hoverFaceMat);
+  hoverFaceLines.renderOrder = RENDER_ORDER + 4;
   // Marked edges, coloured by what marks them: sharp cyan, seam red, crease
   // magenta (drawn over the wireframe, same depth test).
   const markedMat = new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 1, depthWrite: false });
@@ -376,11 +443,17 @@ export function createEditMeshHandles(): EditMeshHandles {
   loopCutLines.renderOrder = RENDER_ORDER + 4;
   const proportionalCircleLines = new THREE.LineSegments(new THREE.BufferGeometry(), proportionalMat);
   proportionalCircleLines.renderOrder = RENDER_ORDER + 2;
+  const faceDotMat = createFaceDotMaterial();
+  const faceDots = new THREE.Points(new THREE.BufferGeometry(), faceDotMat);
+  faceDots.renderOrder = RENDER_ORDER + 2;
+  faceDots.onBeforeRender = (renderer) => {
+    faceDotMat.uniforms.uSize.value = FACE_DOT_SIZE * renderer.getPixelRatio();
+  };
 
   // Screen-width lines need the viewport's size; read it off the renderer
   // at draw time, so each viewport sharing these handles gets its own.
   const sizeScratch = new THREE.Vector2();
-  for (const line of [selectedEdgeLines, hoverEdgeLines]) {
+  for (const line of [selectedEdgeLines, hoverEdgeLines, hoverFaceLines]) {
     line.onBeforeRender = (renderer) => {
       renderer.getSize(sizeScratch);
       (line.material as LineMaterial).resolution.copy(sizeScratch);
@@ -397,6 +470,8 @@ export function createEditMeshHandles(): EditMeshHandles {
     hoverEdgeLines,
     loopCutLines,
     proportionalCircleLines,
+    faceDots,
+    hoverFaceLines,
   ];
   for (const o of overlays) {
     o.matrixAutoUpdate = false;
@@ -445,11 +520,13 @@ export function createEditMeshHandles(): EditMeshHandles {
   let hoverEdgeKey = "";
   let loopKey: unknown = null;
   let proportionalKey = "";
+  let faceDotsKey = "";
+  let hoverFaceKey = "";
 
   function clear() {
     for (const o of overlays) o.visible = false;
     lastMesh = null;
-    meshKey = wireKey = markedKey = facesKey = pointsKey = edgesKey = hoverEdgeKey = proportionalKey = "";
+    meshKey = wireKey = markedKey = facesKey = pointsKey = edgesKey = hoverEdgeKey = proportionalKey = faceDotsKey = hoverFaceKey = "";
     loopKey = null;
   }
 
@@ -472,6 +549,9 @@ export function createEditMeshHandles(): EditMeshHandles {
       group.matrixWorldNeedsUpdate = true;
       group.updateMatrixWorld(true);
 
+      const material = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material;
+      drawnSide = material?.side ?? THREE.DoubleSide;
+
       // Outside X-ray, handles behind the geometry are hidden, matching what
       // can be picked; in X-ray every one of them shows (and is pickable).
       if (mode === "points") {
@@ -481,6 +561,7 @@ export function createEditMeshHandles(): EditMeshHandles {
       }
       selectedEdgeMat.depthTest = !xray;
       hoverEdgeMat.depthTest = !xray;
+      hoverFaceMat.depthTest = !xray;
 
       // Identity first: a frozen mesh hands back the same object every frame
       // until it's edited. A live one is a fresh clone each frame, so it
@@ -537,14 +618,12 @@ export function createEditMeshHandles(): EditMeshHandles {
 
       // 2. Face selection overlay (faces mode)
       const hoverFace = state.hoverFace ?? null;
-      const nextFacesKey = mode === "faces" ? `${meshKey}|${selFacesKey}|${hoverFace ?? ""}` : "off";
+      const nextFacesKey = mode === "faces" ? `${meshKey}|${selFacesKey}` : "off";
       if (facesKey !== nextFacesKey) {
         facesKey = nextFacesKey;
         const faceVerts: number[] = [];
         if (mode === "faces") {
-          const facesToHighlight = new Set<number>(state.faces);
-          if (hoverFace !== null) facesToHighlight.add(hoverFace);
-          for (const fIdx of facesToHighlight) {
+          for (const fIdx of state.faces) {
             const face = quadMesh.faces[fIdx];
             if (!face || face.length < 3) continue;
             for (const tri of triangulateFace(positions, face)) {
@@ -556,6 +635,47 @@ export function createEditMeshHandles(): EditMeshHandles {
           }
         }
         setPositions(faceHighlightMesh, faceVerts);
+      }
+
+      // 2a. Hovered face (faces mode): its outline
+      const hovered = mode === "faces" && hoverFace !== null ? quadMesh.faces[hoverFace] : undefined;
+      const nextHoverFaceKey = hovered ? `${meshKey}|${hoverFace}` : "off";
+      if (hoverFaceKey !== nextHoverFaceKey) {
+        hoverFaceKey = nextHoverFaceKey;
+        const outline: EdgeRef[] = [];
+        if (hovered) hovered.forEach((v, i) => outline.push([v, hovered[(i + 1) % hovered.length]]));
+        setSegments(hoverFaceLines, edgeSegments(quadMesh, outline));
+      }
+
+      // 2b. Face dots (faces mode), on faces seen from their undrawn side
+      const dotsOn = mode === "faces" && drawnSide !== THREE.DoubleSide;
+      faceDotMat.depthTest = !xray;
+      const nextDotsKey = dotsOn ? `${meshKey}|${selFacesKey}|${drawnSide}` : "off";
+      if (faceDotsKey !== nextDotsKey) {
+        faceDotsKey = nextDotsKey;
+        faceDots.geometry.dispose();
+        const geometry = new THREE.BufferGeometry();
+        if (dotsOn) {
+          faceDotMat.uniforms.uSide.value = drawnSide;
+          const pos: number[] = [];
+          const nor: number[] = [];
+          const col: number[] = [];
+          const selectedColor = new THREE.Color(SELECTED_POINT_COLOR);
+          quadMesh.faces.forEach((face, f) => {
+            if (face.length < 3) return;
+            const c = computeFaceCentroid(positions, face);
+            const n = computeFaceNormal(positions, face);
+            const color = state.faces.has(f) ? selectedColor : FACE_DOT_COLOR;
+            pos.push(c.x, c.y, c.z);
+            nor.push(n.x, n.y, n.z);
+            col.push(color.r, color.g, color.b);
+          });
+          geometry.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+          geometry.setAttribute("normal", new THREE.Float32BufferAttribute(nor, 3));
+          geometry.setAttribute("color", new THREE.Float32BufferAttribute(col, 3));
+        }
+        faceDots.geometry = geometry;
+        faceDots.visible = dotsOn;
       }
 
       // 3. Point handles (points mode): circular, zoom-independent, orange when selected
@@ -648,9 +768,9 @@ export function createEditMeshHandles(): EditMeshHandles {
       }
     },
 
-    pickFace(raycaster, quadMesh, meshWorldMatrix) {
-      // Nearest front-facing hit along the ray: occlusion is inherent, which
-      // is also why x-ray doesn't apply to a single click on a face.
+    pickFace(raycaster, quadMesh, meshWorldMatrix, viewport) {
+      // Nearest hit along the ray on a face drawn from this side: occlusion
+      // is inherent. X-ray takes every face, from either side.
       const invMatrix = meshWorldMatrix.clone().invert();
       const localRay = raycaster.ray.clone().applyMatrix4(invMatrix);
       // The normal matrix, not transformDirection: under non-uniform scale a
@@ -671,7 +791,7 @@ export function createEditMeshHandles(): EditMeshHandles {
         if (face.length < 3) continue;
 
         const worldNormal = computeFaceNormal(quadMesh.positions, face).applyMatrix3(normalMatrix).normalize();
-        if (!xray && raycaster.ray.direction.dot(worldNormal) >= -1e-4) continue; // Backface
+        if (!xray && !isDrawn(raycaster.ray.direction.dot(worldNormal) < -1e-4)) continue; // Not drawn from here
 
         for (const [ia, ib, ic] of triangulateFace(quadMesh.positions, face)) {
           const rawA = quadMesh.positions[face[ia]];
@@ -686,6 +806,32 @@ export function createEditMeshHandles(): EditMeshHandles {
           const worldDist = raycaster.ray.origin.distanceTo(worldHit);
           if (worldDist < closestDist) {
             closestDist = worldDist;
+            closestFaceIdx = f;
+          }
+        }
+      }
+
+      // A face dot under the cursor, in front of whatever drawn face the ray
+      // hit, wins: it is what the camera shows there.
+      const camera = raycaster.camera;
+      if (!xray && drawnSide !== THREE.DoubleSide && viewport && camera) {
+        const cursor = raycaster.ray.at(1, new THREE.Vector3()).project(camera);
+        const cursorX = (cursor.x * 0.5 + 0.5) * viewport.widthPx;
+        const cursorY = (-(cursor.y * 0.5) + 0.5) * viewport.heightPx;
+        const screen = new THREE.Vector2();
+        let bestPx = FACE_DOT_PICK_RADIUS_PX;
+        for (let f = 0; f < quadMesh.faces.length; f++) {
+          const face = quadMesh.faces[f];
+          if (face.length < 3) continue;
+          const centroid = computeFaceCentroid(quadMesh.positions, face).applyMatrix4(meshWorldMatrix);
+          const worldNormal = computeFaceNormal(quadMesh.positions, face).applyMatrix3(normalMatrix);
+          if (isDrawn(raycaster.ray.direction.dot(worldNormal) < -1e-4)) continue;
+          if (raycaster.ray.origin.distanceTo(centroid) >= closestDist) continue;
+          const local = computeFaceCentroid(quadMesh.positions, face);
+          if (!toScreen([local.x, local.y, local.z], camera, meshWorldMatrix, viewport.widthPx, viewport.heightPx, screen)) continue;
+          const px = Math.hypot(screen.x - cursorX, screen.y - cursorY);
+          if (px <= bestPx) {
+            bestPx = px;
             closestFaceIdx = f;
           }
         }
@@ -748,13 +894,18 @@ export function createEditMeshHandles(): EditMeshHandles {
         if (face.length < 3) continue;
 
         const localCentroid = computeFaceCentroid(quadMesh.positions, face);
+        let dotOnly = false;
         if (!xray) {
-          // Facing away from the camera: along the view direction for an
+          // Facing the camera: against the view direction for an
           // orthographic camera, towards the eye for a perspective one.
           const worldNormal = computeFaceNormal(quadMesh.positions, face).applyMatrix3(normalMatrix);
           const worldCentroid = localCentroid.clone().applyMatrix4(meshWorldMatrix);
           const toCam = isOrtho ? viewDir.clone().negate() : camPos.clone().sub(worldCentroid);
-          if (worldNormal.dot(toCam) <= 0) continue;
+          // Not drawn from here: only its face dot can be caught, if it has one.
+          if (!isDrawn(worldNormal.dot(toCam) > 0)) {
+            if (drawnSide === THREE.DoubleSide) continue;
+            dotOnly = true;
+          }
           // Hidden behind other parts of the mesh.
           if (!isVisible(localCentroid, camera, meshWorldMatrix, bvh)) continue;
         }
@@ -764,6 +915,7 @@ export function createEditMeshHandles(): EditMeshHandles {
           picked.push(f);
           continue;
         }
+        if (dotOnly) continue;
         for (const vIdx of face) {
           const raw = quadMesh.positions[vIdx];
           if (!raw || !toScreen(raw, camera, meshWorldMatrix, widthPx, heightPx, screen)) continue;

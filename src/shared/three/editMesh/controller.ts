@@ -266,7 +266,7 @@ export function createEditMeshController(ctx: EditMeshControllerContext) {
     }
     if (!raycaster) return null;
     raycaster.setFromCamera(ndc, camera);
-    const f = editMeshHandles.pickFace(raycaster, target.quadMesh, m);
+    const f = editMeshHandles.pickFace(raycaster, target.quadMesh, m, { widthPx: rect.width, heightPx: rect.height });
     return f === null ? null : { ...emptySelection(), faces: [f] };
   }
 
