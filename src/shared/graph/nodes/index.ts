@@ -124,6 +124,7 @@ import { SOLIDIFY_NODE } from "./solidify";
 import { EXTRUDE_MESH_NODE, DELETE_GEOMETRY_NODE, FACE_SELECTION_NODE } from "./meshEdit";
 import { EDIT_MESH_NODE } from "./editMesh";
 import { SHADE_NODE } from "./shade";
+import { UV_UNWRAP_NODE } from "./uvUnwrap";
 import { VISUAL_SLICE_NODE, CLIP_BOX_NODE } from "./visualSlice";
 import { WIGGLE_NODE, WIGGLE_NUMBER_NODE, WIGGLE_VECTOR_NODE } from "./wiggle";
 import { MATERIAL_NODE, MATERIAL_SHADOW_CATCHER_NODE } from "./material";
@@ -412,6 +413,7 @@ export const STARTER_NODES = [
   DELETE_GEOMETRY_NODE,
   FACE_SELECTION_NODE,
   SHADE_NODE,
+  UV_UNWRAP_NODE,
   VISUAL_SLICE_NODE,
   CLIP_BOX_NODE,
   WIGGLE_NODE,
