@@ -102,6 +102,7 @@ export const SCULPT_NODE: NodeDefinition = {
   category: "object",
   inputs: [...COMMON_PRIMITIVE_INPUTS],
   outputs: [...COMMON_PRIMITIVE_OUTPUTS],
+  reset: { params: ["sculptMesh"] },
   defaultParams: {
     primitive: "sphere",
     size: 2,

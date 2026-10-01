@@ -1,10 +1,11 @@
-import React, { useEffect, useState } from "react";
+import React, { createContext, useContext, useEffect, useState } from "react";
 import { Handle, Position, useUpdateNodeInternals } from "@xyflow/react";
 import * as THREE from "three";
 import { CATEGORY_COLOR, NodeCategory, UNKNOWN_CATEGORY_COLOR } from "../shared/graph/categories";
 import { NEW_PORT_SOCKET } from "../shared/graph/groups";
 import { getInspectorValue, subscribeInspector } from "../shared/graph/inspectorStore";
 import { SOCKET_COLOR, SocketDef } from "../shared/graph/sockets";
+import { NODE_FREEZE_ACTION } from "../shared/graph/nodeActions";
 
 export interface GraphNodeData {
   nodeId?: string;
@@ -17,6 +18,64 @@ export interface GraphNodeData {
   /** How many nodes a group holds — absent on every other kind of node. */
   groupSize?: number;
   [key: string]: unknown;
+}
+
+/**
+ * What the icons under a node on hover can do (see GraphEditor, which knows
+ * the registry): the Reset action a node type declares, and where actions go.
+ */
+export interface NodeActions {
+  resetAction: (nodeType: string | undefined) => string | null;
+  run: (nodeId: string, action: string) => void;
+}
+export const NodeActionsContext = createContext<NodeActions | null>(null);
+
+const FreezeIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="12" y1="2" x2="12" y2="22" />
+    <line x1="2" y1="12" x2="22" y2="12" />
+    <line x1="4.9" y1="4.9" x2="19.1" y2="19.1" />
+    <line x1="19.1" y1="4.9" x2="4.9" y2="19.1" />
+  </svg>
+);
+
+const ResetIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M3 12a9 9 0 1 0 3-6.7" />
+    <polyline points="3 3 3 9 9 9" />
+  </svg>
+);
+
+/**
+ * Freeze (anything that outputs geometry) and Reset (a node that declares
+ * one), under the node, shown while the pointer is over it. `nodrag` keeps a
+ * click on them from starting a node drag.
+ */
+function NodeHoverActions({ data }: { data: GraphNodeData }) {
+  const actions = useContext(NodeActionsContext);
+  if (!actions || !data.nodeId) return null;
+  const canFreeze = data.outputs.some((o) => o.id === "geometry" && o.type === "geometry");
+  const reset = actions.resetAction(data.nodeType);
+  if (!canFreeze && !reset) return null;
+  const nodeId = data.nodeId;
+  const run = (action: string) => (e: React.MouseEvent) => {
+    e.stopPropagation();
+    actions.run(nodeId, action);
+  };
+  return (
+    <div className="graph-node-actions nodrag nopan">
+      {reset && (
+        <button type="button" className="graph-node-action" title="Reset: discard what was made in this node (Cmd/Ctrl+Z undoes)" onClick={run(reset)}>
+          <ResetIcon />
+        </button>
+      )}
+      {canFreeze && (
+        <button type="button" className="graph-node-action" title="Freeze: bake the current geometry into a new, static Frozen Geometry node" onClick={run(NODE_FREEZE_ACTION)}>
+          <FreezeIcon />
+        </button>
+      )}
+    </div>
+  );
 }
 
 function useInspectorValue(nodeId?: string) {
@@ -212,6 +271,7 @@ export function GraphNode({ data, selected }: { data: GraphNodeData; selected?: 
       {typeof data.customName === "string" && data.customName.trim() !== "" && (
         <div className="graph-node-custom-name">{data.customName}</div>
       )}
+      <NodeHoverActions data={data} />
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { DEMO_CATALOG, DemoEntry } from "../shared/demos";
 import { deserializeProject } from "../shared/graph/storage";
 import { Project } from "../shared/graph/types";
@@ -32,6 +33,7 @@ export const DemosMenu: React.FC<DemosMenuProps> = ({ onLoadDemo, onError }) => 
   const [openCategory, setOpenCategory] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const rootRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
 
   const toggleOpen = () => {
     if (!isOpen && rootRef.current) {
@@ -47,12 +49,21 @@ export const DemosMenu: React.FC<DemosMenuProps> = ({ onLoadDemo, onError }) => 
   useEffect(() => {
     if (!isOpen) return;
     const onPointerDown = (e: MouseEvent | PointerEvent) => {
-      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setIsOpen(false);
+      const target = e.target as Node;
+      if (rootRef.current?.contains(target) || panelRef.current?.contains(target)) return;
+      setIsOpen(false);
     };
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") setIsOpen(false);
     };
-    const onScrollOrResize = () => setIsOpen(false);
+    // The panel follows the button it hangs from, so the page scrolling away
+    // under it closes it — but not its own list scrolling: that used to close
+    // the menu on the first wheel tick, and the ticks after it then landed on
+    // the viewport behind and zoomed it.
+    const onScrollOrResize = (e?: Event) => {
+      if (e && panelRef.current && e.target instanceof Node && panelRef.current.contains(e.target)) return;
+      setIsOpen(false);
+    };
 
     window.addEventListener("pointerdown", onPointerDown);
     window.addEventListener("keydown", onKeyDown);
@@ -115,10 +126,16 @@ export const DemosMenu: React.FC<DemosMenuProps> = ({ onLoadDemo, onError }) => 
         </svg>
       </button>
 
-      {isOpen && (
+      {/* On <body>, above everything: inside the top bar it shared the bar's
+          stacking layer, and the viewport's Edit Mesh palette drew over it. */}
+      {isOpen && createPortal(
         <div
+          ref={panelRef}
           className="demos-menu-panel"
           style={panelPos ? { top: panelPos.top, left: panelPos.left } : { top: 44, left: 12 }}
+          // The wheel scrolls the list and nothing else: never the canvas or
+          // viewport behind (overscroll-behavior keeps it from chaining at the ends).
+          onWheel={(e) => e.stopPropagation()}
         >
           <input
             className="demos-menu-search"
@@ -166,7 +183,8 @@ export const DemosMenu: React.FC<DemosMenuProps> = ({ onLoadDemo, onError }) => 
           })}
 
           <div className="demos-menu-footer">{total} demos</div>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );

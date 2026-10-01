@@ -88,6 +88,19 @@ describe("QuadMesh", () => {
     }
   });
 
+  it("extrudes along a given direction instead of the normal (an axis-locked extrude)", () => {
+    const box = createQuadBox(1, 1, 1);
+    const before = box.faces[2].map((v) => [...box.positions[v]]);
+    // The top face, pushed sideways along +X: same walls, the cap slid over.
+    const { mesh: extruded } = extrudeFaces(box, [2], 0.75, { x: 1, y: 0, z: 0 });
+    expect(extruded.faces.length).toBe(10);
+    extruded.faces[2].forEach((v, i) => {
+      expect(extruded.positions[v][0]).toBeCloseTo(before[i][0] + 0.75, 6);
+      expect(extruded.positions[v][1]).toBeCloseTo(before[i][1], 6);
+      expect(extruded.positions[v][2]).toBeCloseTo(before[i][2], 6);
+    });
+  });
+
   it("insets selected face into an inner quad and 4 surrounding border quads", () => {
     const box = createQuadBox(1, 1, 1);
     // Inset top face (index 2)

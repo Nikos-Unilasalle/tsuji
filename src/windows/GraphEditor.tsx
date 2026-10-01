@@ -38,7 +38,8 @@ import { isKeyReservedForPlayback } from "../shared/graph/playbackKeys";
 import { randomId } from "../shared/randomId";
 import { SOCKET_COLOR } from "../shared/graph/sockets";
 import { Connection, ExposedParamRef, Graph, KeyframeStore, Marker, NodeInstance, NodeRegistry } from "../shared/graph/types";
-import { GraphNode, GraphNodeData } from "./GraphNode";
+import { GraphNode, GraphNodeData, NodeActions, NodeActionsContext } from "./GraphNode";
+import { resetActionOf } from "../shared/graph/nodeActions";
 import { NodePalette } from "./NodePalette";
 import { QuickAddToolbar } from "./QuickAddToolbar";
 import { NodeSearchModal } from "./NodeSearchModal";
@@ -248,6 +249,8 @@ interface GraphEditorProps {
   /** Per canvas: whether it's still empty, so untouched slots read as available rather than identical to the one in use. */
   emptyCanvases?: boolean[];
   onSelectCanvas?: (index: number) => void;
+  /** The icons under a node on hover — Freeze, Reset (see nodeActions.ts). Omit to hide them. */
+  onNodeAction?: (nodeId: string, action: string) => void;
 }
 
 function GraphEditorContent({
@@ -1827,9 +1830,19 @@ function GraphEditorContent({
 }
 
 export function GraphEditor(props: GraphEditorProps) {
+  const { registry, onNodeAction } = props;
+  const nodeActions = useMemo<NodeActions | null>(
+    () =>
+      onNodeAction
+        ? { resetAction: (nodeType) => (nodeType ? resetActionOf(registry.get(nodeType)) : null), run: onNodeAction }
+        : null,
+    [registry, onNodeAction],
+  );
   return (
     <ReactFlowProvider>
-      <GraphEditorContent {...props} />
+      <NodeActionsContext.Provider value={nodeActions}>
+        <GraphEditorContent {...props} />
+      </NodeActionsContext.Provider>
     </ReactFlowProvider>
   );
 }

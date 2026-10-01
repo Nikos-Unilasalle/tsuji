@@ -584,6 +584,7 @@ export const EDIT_MESH_NODE: NodeDefinition = {
     { id: "uvScale", label: "UV Scale", type: "vector" },
     { id: "uvOffset", label: "UV Offset", type: "vector" },
   ],
+  reset: { action: EDIT_MESH_RESEED_ACTION },
   defaultParams: {
     meshData: null as QuadMesh | null,
     selectMode: "faces" as SelectMode,

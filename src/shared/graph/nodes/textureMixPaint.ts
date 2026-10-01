@@ -74,6 +74,7 @@ export const TEXTURE_MIX_PAINT_NODE: NodeDefinition = {
     { id: "splatMap", label: "Splat Map", type: "texture" },
     { id: "matrix", label: "Matrix", type: "matrix" },
   ],
+  reset: { params: ["splatData"] },
   defaultParams: {
     resolution: 1024,
     activeLayer: 0,

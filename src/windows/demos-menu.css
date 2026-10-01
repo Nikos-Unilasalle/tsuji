@@ -18,12 +18,19 @@
   width: 320px;
   max-height: 70vh;
   overflow-y: auto;
+  overscroll-behavior: contain;
+  /* No system scrollbar in Tsuji: the list scrolls with the wheel or trackpad. */
+  scrollbar-width: none;
   background: var(--chrome-surface-raised);
   border: 1px solid var(--chrome-border);
   border-radius: 8px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
   padding: 8px;
-  z-index: 100;
+  z-index: 1000;
+}
+
+.demos-menu-panel::-webkit-scrollbar {
+  display: none;
 }
 
 /* Collapsed headings sit as one list; the separator would read as clutter

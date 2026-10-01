@@ -725,6 +725,7 @@ export const GREASE_PENCIL_NODE: NodeDefinition = {
     { id: "curves", label: "Curves", type: "curve" },
     { id: "matrix", label: "Matrix", type: "matrix" },
   ],
+  reset: { params: ["frames"] },
   defaultParams: {
     activeColor: "#38bdf8",
     brushSize: 4,

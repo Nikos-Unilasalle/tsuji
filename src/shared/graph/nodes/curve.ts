@@ -695,6 +695,7 @@ export const CURVE_FROM_POINTS_NODE: NodeDefinition = {
     { id: "curve", label: "Curve", type: "curve" },
     { id: "geometry", label: "Curve Preview", type: "geometry" },
   ],
+  reset: { params: ["pointsList"] },
   defaultParams: {
     type: "catmull",
     closed: false,

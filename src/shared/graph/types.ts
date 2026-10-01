@@ -320,6 +320,14 @@ export interface NodeDefinition {
    */
   dynamicParamFields?: (instance: NodeInstance) => ParamFieldDef[];
   /**
+   * The node's Reset icon (shown under it on hover), for a node that carries
+   * data authored in it — an edited mesh, painted pixels, drawn strokes.
+   * Either those params go back to their defaults, or an action runs (App's
+   * onAction), when resetting needs more than defaults (Edit Mesh re-reads
+   * its input). Nodes without one have no Reset icon.
+   */
+  reset?: { params: string[] } | { action: string };
+  /**
    * When present, overrides `inputs` for a specific instance based on its
    * own current connections — for a node like Merge whose socket count
    * grows as wires are added or Logic Bridge whose inputs change socket type.

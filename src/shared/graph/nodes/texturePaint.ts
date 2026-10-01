@@ -53,6 +53,7 @@ export const TEXTURE_PAINT_NODE: NodeDefinition = {
     { id: "geometry", label: "Geometry", type: "geometry" },
     { id: "matrix", label: "Matrix", type: "matrix" },
   ],
+  reset: { params: ["textureData"] },
   defaultParams: {
     resolution: 1024,
     baseColor: "#ffffff",

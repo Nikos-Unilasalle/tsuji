@@ -380,6 +380,16 @@ export function createEditMeshController(ctx: EditMeshControllerContext) {
     /** Knife: the points placed so far, and the one under the cursor. */
     knifePoints?: KnifePoint[];
     knifeCandidate?: KnifePoint | null;
+    /**
+     * Extrude / Move locked to an axis, as in Blender: X, Y or Z locks to
+     * that world axis, the same key again to the object's own, a third time
+     * frees it.
+     */
+    axisLock?: { axis: "x" | "y" | "z"; space: "global" | "local" } | null;
+    /** The selection's centre in mesh space (where the axis line is drawn through). */
+    centerLocal?: THREE.Vector3;
+    /** Extrude's unlocked screen direction (its normal), to go back to. */
+    normalAxis?: THREE.Vector2;
   }
   let editModal: EditModal | null = null;
 
@@ -406,6 +416,52 @@ export function createEditMeshController(ctx: EditMeshControllerContext) {
     knife: "Knife",
   };
 
+  /** The locked axis as a unit vector in mesh space, or null when free. */
+  function lockDirection(modal: EditModal): THREE.Vector3 | null {
+    const lock = modal.axisLock;
+    if (!lock) return null;
+    const unit = new THREE.Vector3(lock.axis === "x" ? 1 : 0, lock.axis === "y" ? 1 : 0, lock.axis === "z" ? 1 : 0);
+    if (lock.space === "local") return unit;
+    // A world direction into mesh space: through the inverse of the linear part.
+    const toLocal = new THREE.Matrix3().setFromMatrix4(modal.matrix).invert();
+    const d = unit.applyMatrix3(toLocal);
+    return d.lengthSq() > 1e-18 ? d.normalize() : null;
+  }
+
+  /** X / Y / Z: world axis, then the object's own, then free again. */
+  function cycleAxisLock(modal: EditModal, axis: "x" | "y" | "z") {
+    const lock = modal.axisLock;
+    modal.axisLock = lock?.axis !== axis ? { axis, space: "global" } : lock.space === "global" ? { axis, space: "local" } : null;
+    const dir = lockDirection(modal);
+    const centre = modal.centerLocal ?? new THREE.Vector3();
+    if (dir) {
+      const screen = localToClient(centre.clone().add(dir), modal.matrix).sub(modal.center);
+      modal.axis = screen.length() < 4 ? new THREE.Vector2(0, -modal.pxPerUnit) : screen;
+    } else if (modal.normalAxis) {
+      modal.axis = modal.normalAxis.clone();
+    }
+    // Move: re-read the pointer against the new constraint.
+    if (modal.kind === "move") moveFromPointer(modal, modal.lastX, modal.lastY);
+  }
+
+  /** Move's offset (mesh space) for a pointer position: free in the view plane, or along the locked axis. */
+  function moveFromPointer(modal: EditModal, clientX: number, clientY: number) {
+    if (!modal.moveOrigin) return;
+    const dir = lockDirection(modal);
+    if (dir) {
+      const along = ((clientX - modal.startX) * modal.axis.x + (clientY - modal.startY) * modal.axis.y) / modal.axis.lengthSq();
+      modal.value = along;
+      modal.moveDelta = dir.multiplyScalar(along);
+      return;
+    }
+    const from = clientToWorldAtDepth(modal.startX, modal.startY, modal.moveOrigin);
+    const to = clientToWorldAtDepth(clientX, clientY, modal.moveOrigin);
+    const worldDelta = to.sub(from);
+    // To local: difference of two transformed points, so translation cancels.
+    const inv = modal.matrix.clone().invert();
+    modal.moveDelta = modal.moveOrigin.clone().add(worldDelta).applyMatrix4(inv).sub(modal.moveOrigin.clone().applyMatrix4(inv));
+  }
+
   function editModalAmount(modal: EditModal): number {
     const typed = parseFloat(modal.typed);
     return modal.typed !== "" && Number.isFinite(typed) ? typed : modal.value;
@@ -416,7 +472,8 @@ export function createEditMeshController(ctx: EditMeshControllerContext) {
     const amount = editModalAmount(modal);
     const faces = modal.selection.faces;
     if (modal.kind === "extrude") {
-      const r = modal.individual ? extrudeFacesIndividual(modal.base, faces, amount) : extrudeFaces(modal.base, faces, amount);
+      const dir = lockDirection(modal) ?? undefined;
+      const r = modal.individual ? extrudeFacesIndividual(modal.base, faces, amount, dir) : extrudeFaces(modal.base, faces, amount, dir);
       return { meshData: r.mesh, selectMode: "faces", selectedFaces: r.newFaces };
     }
     if (modal.kind === "inset") {
@@ -443,7 +500,9 @@ export function createEditMeshController(ctx: EditMeshControllerContext) {
       const r = knifeCut(modal.base, modal.knifePoints ?? []);
       return { meshData: r.mesh, selectMode: "edges", selectedEdges: r.newEdges };
     }
-    const delta = modal.moveDelta ?? new THREE.Vector3();
+    // A typed distance applies along a locked axis; free, the mouse decides.
+    const lockedDir = modal.typed !== "" ? lockDirection(modal) : null;
+    const delta = lockedDir ? lockedDir.multiplyScalar(amount) : (modal.moveDelta ?? new THREE.Vector3());
     const vertices = [...selectionVertices(modal.base, modal.mode, modal.selection)];
     const moved = transformSelectionByMatrix(modal.base, "points", vertices, new THREE.Matrix4().makeTranslation(delta.x, delta.y, delta.z));
     // Extruded walls were flat until now: map them where they ended up.
@@ -472,6 +531,15 @@ export function createEditMeshController(ctx: EditMeshControllerContext) {
       return;
     }
     onTransformChangeRef.current?.(editModal.nodeId, editModalResult(editModal));
+    if (editModal.kind === "extrude" || editModal.kind === "move") {
+      // The locked axis, drawn through the selection as Blender does.
+      const dir = lockDirection(editModal);
+      const c = editModal.centerLocal ?? new THREE.Vector3();
+      const reach = 1000 / Math.max(1e-6, editModal.matrix.getMaxScaleOnAxis());
+      editMeshPreviewLoopRef.current = dir
+        ? [[c.clone().addScaledVector(dir, -reach).toArray(), c.clone().addScaledVector(dir, reach).toArray()]]
+        : null;
+    }
     const amount = editModalAmount(editModal);
     const parts = [`${EDIT_MODAL_LABELS[editModal.kind]}: ${editModal.typed !== "" ? editModal.typed : amount.toFixed(3)}`];
     if (editModal.kind === "inset") parts.push(`depth ${editModal.depth.toFixed(3)} (Cmd/Ctrl)`);
@@ -483,7 +551,13 @@ export function createEditMeshController(ctx: EditMeshControllerContext) {
     }
     if (editModal.kind === "move" && editModal.moveDelta) {
       const d = editModal.moveDelta;
-      parts[0] = `Move: ${d.x.toFixed(3)}, ${d.y.toFixed(3)}, ${d.z.toFixed(3)}`;
+      parts[0] = editModal.axisLock
+        ? `Move: ${editModal.typed !== "" ? editModal.typed : amount.toFixed(3)}`
+        : `Move: ${d.x.toFixed(3)}, ${d.y.toFixed(3)}, ${d.z.toFixed(3)}`;
+    }
+    if (editModal.kind === "extrude" || editModal.kind === "move") {
+      const lock = editModal.axisLock;
+      parts.push(lock ? `along ${lock.axis.toUpperCase()} (${lock.space}) · X/Y/Z` : "X/Y/Z: lock to an axis");
     }
     setEditModalHud(parts.join(" · "));
   }
@@ -577,6 +651,9 @@ export function createEditMeshController(ctx: EditMeshControllerContext) {
       axis,
       center: c,
       pxPerUnit,
+      centerLocal: center.clone(),
+      normalAxis: axis.clone(),
+      axisLock: null,
     };
     if (kind === "loopslide" && opts.edge) {
       modal.edge = opts.edge;
@@ -653,17 +730,14 @@ export function createEditMeshController(ctx: EditMeshControllerContext) {
       const t = ab.lengthSq() > 1e-6 ? new THREE.Vector2(clientX, clientY).sub(modal.edgeA).dot(ab) / ab.lengthSq() : 0.5;
       modal.value = Math.min(0.98, Math.max(0.02, t));
     } else if (modal.kind === "move" && modal.moveOrigin) {
-      const from = clientToWorldAtDepth(modal.startX, modal.startY, modal.moveOrigin);
-      const to = clientToWorldAtDepth(clientX, clientY, modal.moveOrigin);
-      const worldDelta = to.sub(from);
-      // To local: difference of two transformed points, so translation cancels.
-      const inv = modal.matrix.clone().invert();
-      modal.moveDelta = modal.moveOrigin.clone().add(worldDelta).applyMatrix4(inv).sub(modal.moveOrigin.clone().applyMatrix4(inv));
+      moveFromPointer(modal, clientX, clientY);
     }
     previewEditModal();
   }
 
   function endEditModal() {
+    // The axis line goes with the tool (the knife clears its own path).
+    if (editModal && (editModal.kind === "extrude" || editModal.kind === "move")) editMeshPreviewLoopRef.current = null;
     editModal = null;
     setEditModalHud(null);
     setEditMeshTool("select");
@@ -723,6 +797,9 @@ export function createEditMeshController(ctx: EditMeshControllerContext) {
       }
     } else if (modal.kind === "spin" && (key === "x" || key === "y" || key === "z")) {
       modal.axis3 = key;
+      previewEditModal();
+    } else if ((modal.kind === "extrude" || modal.kind === "move") && (key === "x" || key === "y" || key === "z") && !e.ctrlKey && !e.metaKey) {
+      cycleAxisLock(modal, key);
       previewEditModal();
     }
     else if (/^[0-9.]$/.test(e.key) || (e.key === "-" && modal.typed === "")) {

@@ -97,6 +97,7 @@ import { exportVideo, mimeToExtension, saveVideoBlob } from "./shared/export/vid
 import { exportPngSequence, saveZipBlob } from "./shared/export/imageSequenceExport";
 import { TransformPatch, Viewport, ViewportExportHandle } from "./shared/three/Viewport";
 import { exportWornTextures, WORN_BAKE_ACTION } from "./shared/graph/nodes/materialWorn";
+import { NODE_FREEZE_ACTION, NODE_RESET_PARAMS_ACTION, nodeResetPatch } from "./shared/graph/nodeActions";
 import { SplitViewport } from "./shared/three/SplitViewport";
 import "./shared/three/viewport.css";
 import { GIZMO_SELECTABLE_TYPES, resolveGizmoTarget } from "./shared/graph/transformLookup";
@@ -1871,6 +1872,21 @@ function MainEditor() {
     [evaluatedResults, setGraphWithHistory],
   );
 
+  /** The icons under a node on hover (see nodeActions.ts): Freeze, Reset, or a node's own reset action. */
+  const onNodeAction = useCallback(
+    (nodeId: string, action: string) => {
+      if (action === NODE_FREEZE_ACTION) return onFreezeNode(nodeId);
+      if (action === NODE_RESET_PARAMS_ACTION) {
+        const node = findNodeDeep(graph, nodeId);
+        const patch = node ? nodeResetPatch(resolveDefinition(node, DEFAULT_REGISTRY)) : null;
+        if (patch) onParamChange(patch, nodeId);
+        return;
+      }
+      onParamAction(nodeId, action);
+    },
+    [graph, onFreezeNode, onParamAction, onParamChange],
+  );
+
   // Same functional-updater reasoning as onParamChange, but writing all
   // three fields in one setGraph call rather than three separate
   // onParamChange calls — the gizmo fires this every frame of a drag, and
@@ -2823,8 +2839,6 @@ function MainEditor() {
           onChange={onParamChange}
           onToggleKeyframe={onToggleKeyframe}
           onAction={onParamAction}
-          canFreeze={(selectedDef.outputs ?? []).some((o) => o.id === "geometry" && o.type === "geometry")}
-          onFreeze={onFreezeNode}
           connectedSockets={connectedSocketIds(graph, selectedInstance.id)}
           exposedKeys={
             new Set((graph.exposedParams ?? []).filter((e) => e.nodeId === selectedInstance.id).map((e) => e.paramId))
@@ -2918,6 +2932,7 @@ function MainEditor() {
               activeCanvas={activeCanvas}
               emptyCanvases={canvases.map(isCanvasEmpty)}
               onSelectCanvas={switchCanvas}
+              onNodeAction={onNodeAction}
             />
           </div>
         )}

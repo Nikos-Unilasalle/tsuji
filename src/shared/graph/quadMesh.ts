@@ -758,7 +758,9 @@ function validFaces(mesh: QuadMesh, indices: number[]): number[] {
 }
 
 /**
- * Extrudes the selected face(s) outward along their averaged face normal.
+ * Extrudes the selected face(s) outward along their averaged face normal —
+ * or, given a `direction` (a unit vector, mesh space), all of them along it:
+ * an extrude locked to an axis, as with E then X / Y / Z.
  * Duplicates the region's vertices, moves the cap faces onto them and
  * stitches a quad wall along every edge on the region's border.
  *
@@ -770,6 +772,7 @@ export function extrudeFaces(
   mesh: QuadMesh,
   selectedFaceIndices: number[],
   distance = 0.5,
+  direction?: { x: number; y: number; z: number },
 ): { mesh: QuadMesh; newFaces: number[] } {
   const selected = validFaces(mesh, selectedFaceIndices);
   if (selected.length === 0 || distance === 0) {
@@ -791,7 +794,7 @@ export function extrudeFaces(
 
   const oldToNew = new Map<number, number>();
   for (const [v, sum] of vertexNormals) {
-    const n = sum.normalize();
+    const n = direction ? new THREE.Vector3(direction.x, direction.y, direction.z) : sum.normalize();
     const p = base.positions[v];
     oldToNew.set(v, next.positions.length);
     next.positions.push([p[0] + n.x * distance, p[1] + n.y * distance, p[2] + n.z * distance]);
