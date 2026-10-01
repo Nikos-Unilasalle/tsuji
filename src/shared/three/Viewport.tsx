@@ -2,6 +2,7 @@ import { MutableRefObject, useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { TransformControls } from "three/examples/jsm/controls/TransformControls.js";
+import { installScaleGizmoTweaks } from "./gizmoScale";
 import { ClockState, createClock, STEP_SECONDS, tickClock } from "../graph/clock";
 import { EvalResult, disposeEvalSession, evaluateGraph } from "../graph/evaluate";
 import { copyTextureToCanvas, textureSize } from "../graph/gpuTexture";
@@ -1679,6 +1680,18 @@ export function Viewport({
     const raycaster = outputMode ? null : new THREE.Raycaster();
     const transformControls = outputMode ? null : new TransformControls(activeCamera, renderer.domElement);
     transformControls?.setColors(GIZMO_X_COLOR, GIZMO_Y_COLOR, GIZMO_Z_COLOR, GIZMO_ACTIVE_COLOR);
+    // Scale: the centre handle grows with any movement (Shift shrinks), and
+    // Shift on an axis handle scales all three — see gizmoScale.ts.
+    if (transformControls) {
+      installScaleGizmoTweaks(
+        transformControls,
+        () => {
+          const rect = renderer.domElement.getBoundingClientRect();
+          return { width: rect.width, height: rect.height };
+        },
+        () => snapEnabled,
+      );
+    }
     let attachedObjectNodeId: string | null = null;
     let attachedGizmoTarget: GizmoTarget | null = null;
 
@@ -2002,15 +2015,15 @@ export function Viewport({
     // (their render targets and shaders are expensive to rebuild).
     let postChainWasActive = false;
 
-    // Hold Shift to snap the gizmo to fixed increments — 1 unit for
-    // move/scale, 15° for rotate. Three's TransformControls has no built-in
+    // Hold Shift to snap the gizmo to fixed increments — 1 unit for move,
+    // 15° for rotate. (On scale, Shift shrinks with the centre handle and
+    // scales all three axes from an axis handle instead: gizmoScale.ts.) Three's TransformControls has no built-in
     // modifier-key toggle; it just reads translationSnap/rotationSnap/
     // scaleSnap fresh on every pointermove (see its own source), so setting
     // them live on keydown/keyup is enough to make snapping track the key
     // in real time, including toggling mid-drag.
     const TRANSLATION_SNAP = 1;
     const ROTATION_SNAP = THREE.MathUtils.degToRad(15);
-    const SCALE_SNAP = 1;
 
     // translationSnap is deliberately NEVER set on transformControls itself —
     // its world-space snap path calls object.getWorldPosition(), which goes
@@ -2033,7 +2046,6 @@ export function Viewport({
       snapEnabled = enabled;
       if (!transformControls) return;
       transformControls.rotationSnap = enabled ? ROTATION_SNAP : null;
-      transformControls.scaleSnap = enabled ? SCALE_SNAP : null;
     }
 
     function isInputElement(el: Element | null): boolean {
@@ -5962,7 +5974,8 @@ export function Viewport({
               transformControls.setSpace(orientation === "global" ? "world" : "local");
               const incremental = snapEnabled || editSnapRef.current === "increment";
               transformControls.rotationSnap = incremental ? ROTATION_SNAP : null;
-              transformControls.scaleSnap = incremental ? 0.1 : null;
+              // Not from Shift on scale: Shift shrinks / goes uniform there (gizmoScale.ts).
+              transformControls.scaleSnap = editSnapRef.current === "increment" ? 0.1 : null;
               transformControls.enabled = true;
               transformControls.showX = true;
               transformControls.showY = true;
@@ -6381,7 +6394,8 @@ export function Viewport({
       if (transformControls && !transformControls.dragging && transformControls.object !== editMeshCentroidProxy) {
         if (transformControls.space !== "world") transformControls.setSpace("world");
         transformControls.rotationSnap = snapEnabled ? ROTATION_SNAP : null;
-        transformControls.scaleSnap = snapEnabled ? SCALE_SNAP : null;
+        // Shift has its own job on scale (see gizmoScale.ts): no scale snap from it.
+        transformControls.scaleSnap = null;
       }
 
       if (transformControls?.dragging && transformControls.object) {
