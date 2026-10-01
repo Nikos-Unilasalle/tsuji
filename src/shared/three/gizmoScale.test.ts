@@ -47,6 +47,17 @@ describe("scale gizmo", () => {
     expect(object.scale.y).toBeCloseTo(1);
   });
 
+  it("snaps the centre handle's scale to the step when one is set (Ctrl / Cmd)", () => {
+    const { controls, c, object } = setUp({ held: false });
+    controls.scaleSnap = 1;
+    c.axis = "XYZ";
+    c.pointerDown({ x: 0, y: 0, button: 0 });
+    // ×1.4 of 2 is 2.8: snapped to 3.
+    c.pointerMove({ x: (0.4 * CENTRE_SCALE_PX) / 400, y: 0, button: -1 });
+    expect(object.scale.x).toBe(3);
+    expect(object.scale.y).toBe(3);
+  });
+
   it("scales all three axes from an axis handle with Shift, only that one without", () => {
     const shift = { held: false };
     const { c, object } = setUp(shift);

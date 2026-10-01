@@ -2016,14 +2016,18 @@ export function Viewport({
     let postChainWasActive = false;
 
     // Hold Shift to snap the gizmo to fixed increments — 1 unit for move,
-    // 15° for rotate. (On scale, Shift shrinks with the centre handle and
-    // scales all three axes from an axis handle instead: gizmoScale.ts.) Three's TransformControls has no built-in
-    // modifier-key toggle; it just reads translationSnap/rotationSnap/
-    // scaleSnap fresh on every pointermove (see its own source), so setting
-    // them live on keydown/keyup is enough to make snapping track the key
-    // in real time, including toggling mid-drag.
+    // 15° for rotate. On scale Shift has other jobs (it shrinks with the
+    // centre handle and scales all three axes from an axis handle, see
+    // gizmoScale.ts), so scale snaps with Ctrl / Cmd instead: whole steps on
+    // an object, tenths in Edit Mesh. Three's TransformControls has no
+    // built-in modifier-key toggle; it just reads translationSnap/
+    // rotationSnap/scaleSnap fresh on every pointermove (see its own source),
+    // so setting them live on keydown/keyup is enough to make snapping track
+    // the key in real time, including toggling mid-drag.
     const TRANSLATION_SNAP = 1;
     const ROTATION_SNAP = THREE.MathUtils.degToRad(15);
+    const SCALE_SNAP = 1;
+    const EDIT_SCALE_SNAP = 0.1;
 
     // translationSnap is deliberately NEVER set on transformControls itself —
     // its world-space snap path calls object.getWorldPosition(), which goes
@@ -2041,11 +2045,25 @@ export function Viewport({
     // stale-matrixWorld path: we round the position TransformControls *did*
     // just set correctly, not a stale re-derived one.
     let snapEnabled = false;
+    let scaleSnapEnabled = false;
 
     function setSnapEnabled(enabled: boolean) {
       snapEnabled = enabled;
       if (!transformControls) return;
       transformControls.rotationSnap = enabled ? ROTATION_SNAP : null;
+    }
+
+    /** The scale step for whatever the gizmo holds: Ctrl / Cmd, or Edit Mesh's Step snap. */
+    function currentScaleSnap(): number | null {
+      if (transformControls?.object === editMeshCentroidProxy) {
+        return scaleSnapEnabled || editSnapRef.current === "increment" ? EDIT_SCALE_SNAP : null;
+      }
+      return scaleSnapEnabled ? SCALE_SNAP : null;
+    }
+
+    function setScaleSnapEnabled(enabled: boolean) {
+      scaleSnapEnabled = enabled;
+      if (transformControls) transformControls.scaleSnap = currentScaleSnap();
     }
 
     function isInputElement(el: Element | null): boolean {
@@ -2376,14 +2394,17 @@ export function Viewport({
 
     function onSnapKeyDown(e: KeyboardEvent) {
       if (e.key === "Shift") setSnapEnabled(true);
+      if (e.key === "Control" || e.key === "Meta") setScaleSnapEnabled(true);
     }
     function onSnapKeyUp(e: KeyboardEvent) {
       if (e.key === "Shift") setSnapEnabled(false);
+      if (e.key === "Control" || e.key === "Meta") setScaleSnapEnabled(false);
     }
     // Alt-tabbing away mid-drag fires no keyup for whatever was held — without
-    // this, snapping could get stuck on until the next Shift press-and-release.
+    // this, snapping could get stuck on until the next press-and-release.
     function onSnapWindowBlur() {
       setSnapEnabled(false);
+      setScaleSnapEnabled(false);
     }
     if (!outputMode) {
       window.addEventListener("keydown", onSnapKeyDown);
@@ -5974,8 +5995,7 @@ export function Viewport({
               transformControls.setSpace(orientation === "global" ? "world" : "local");
               const incremental = snapEnabled || editSnapRef.current === "increment";
               transformControls.rotationSnap = incremental ? ROTATION_SNAP : null;
-              // Not from Shift on scale: Shift shrinks / goes uniform there (gizmoScale.ts).
-              transformControls.scaleSnap = editSnapRef.current === "increment" ? 0.1 : null;
+              transformControls.scaleSnap = currentScaleSnap();
               transformControls.enabled = true;
               transformControls.showX = true;
               transformControls.showY = true;
@@ -6394,8 +6414,7 @@ export function Viewport({
       if (transformControls && !transformControls.dragging && transformControls.object !== editMeshCentroidProxy) {
         if (transformControls.space !== "world") transformControls.setSpace("world");
         transformControls.rotationSnap = snapEnabled ? ROTATION_SNAP : null;
-        // Shift has its own job on scale (see gizmoScale.ts): no scale snap from it.
-        transformControls.scaleSnap = null;
+        transformControls.scaleSnap = currentScaleSnap();
       }
 
       if (transformControls?.dragging && transformControls.object) {
