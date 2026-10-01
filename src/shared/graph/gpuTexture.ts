@@ -267,7 +267,8 @@ const SLOTS = ["A", "B", "C", "D"] as const;
 export function bindPassInputs(material: THREE.ShaderMaterial, inputs: (THREE.Texture | null)[]): void {
   const white = getWhiteTexture();
   SLOTS.forEach((slot, i) => {
-    const tex = inputs[i] ?? null;
+    // A 3D volume bound to a sampler2D is a GL error, not a picture — treat it as unwired.
+    const tex = inputs[i] instanceof THREE.Data3DTexture ? null : (inputs[i] ?? null);
     material.uniforms[`t${slot}`].value = tex ?? white;
     material.uniforms[`s${slot}`].value = tex && tex.colorSpace === THREE.SRGBColorSpace ? 1 : 0;
     material.uniforms[`h${slot}`].value = tex ? 1 : 0;

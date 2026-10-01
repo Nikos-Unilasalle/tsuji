@@ -65,6 +65,7 @@ export const GIZMO_SELECTABLE_TYPES = [
   "particles/render-instances",
   "structure/grass-field",
   "material/volume-3d",
+  "object/volume-clouds",
   "curve/grease-pencil",
   "curve/paint-on-geometry",
   // A group, but only while it renders its own container — see the guard in
