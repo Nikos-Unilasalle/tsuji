@@ -237,6 +237,12 @@ export type ParamFieldDef =
       /** Display text per option, positionally. Falls back to the value itself. */
       optionLabels?: string[];
       group?: string;
+      /**
+       * Presets: picking an option listed here also writes these params, in
+       * the same change (one undo step) — a look chosen by name rather than
+       * rebuilt a slider at a time. Options not listed just set the value.
+       */
+      presets?: Record<string, Record<string, unknown>>;
     }
   | { id: string; label: string; kind: "color"; group?: string }
   | { id: string; label: string; kind: "vector"; step?: number; degrees?: boolean; group?: string }

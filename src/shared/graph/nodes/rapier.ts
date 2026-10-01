@@ -25,6 +25,7 @@ import {
   worldMatrixOf,
   stepPhysicsWorld,
 } from "../../three/physics/rapierRuntime";
+import { addImpact, drawsWorn, MIN_IMPACT_SPEED, setWornImpacts, type WornImpact } from "./worn/wornImpacts";
 
 /** Same scrub threshold the integrators, Spring and the capsule controller use. */
 const REWIND_THRESHOLD = 0.5;
@@ -185,6 +186,9 @@ interface BodyEntry {
   instanceIndex: number;
   /** Preserved scale from authoring time. */
   scale: THREE.Vector3;
+  /** Knocks it took (mesh space), for a Worn material to chip — see worn/wornImpacts.ts. */
+  impacts: WornImpact[];
+  impactVersion: number;
 }
 
 /** Where a body had got to, so a rebuild can pick the simulation back up rather than restart it. */
@@ -319,6 +323,113 @@ export function describeTargets(targets: readonly BodyTarget[]): string {
   return [...counts].map(([key, count]) => `${key}x${count}`).join("|");
 }
 
+const _hitLocal = new THREE.Vector3();
+const _colliderQuat = new THREE.Quaternion();
+const _bodyQuat = new THREE.Quaternion();
+
+/** A contact this far apart (or overlapping) counts as touching. */
+const TOUCHING = 0.02;
+
+/** Per world: the Worn-drawn bodies of every Rigid Body node, and each body's speed a step ago. */
+interface ImpactTracker {
+  nodes: Map<string, readonly BodyEntry[]>;
+  velocity: Map<number, THREE.Vector3>;
+  /** Change of speed each body took in the last step, beyond what gravity gave it. */
+  kick: Map<number, number>;
+}
+const impactTrackers = new WeakMap<PhysicsWorldHandle, ImpactTracker>();
+
+/**
+ * Registers (or, with null, withdraws) a node's Worn-drawn bodies for knock
+ * recording. One after-step callback per world serves every node.
+ */
+function trackImpacts(handle: PhysicsWorldHandle, nodeId: string, entries: readonly BodyEntry[] | null) {
+  let tracker = impactTrackers.get(handle);
+  if (!entries) {
+    tracker?.nodes.delete(nodeId);
+    if (tracker && tracker.nodes.size === 0) handle.postStep?.delete(IMPACT_STEP);
+    return;
+  }
+  if (!tracker) {
+    const created: ImpactTracker = { nodes: new Map(), velocity: new Map(), kick: new Map() };
+    impactTrackers.set(handle, created);
+    tracker = created;
+  }
+  tracker.nodes.set(nodeId, entries);
+  handle.postStep ??= new Map();
+  const t = tracker;
+  if (!handle.postStep.has(IMPACT_STEP)) handle.postStep.set(IMPACT_STEP, () => recordImpacts(handle.world, t));
+}
+const IMPACT_STEP = "__worn-impacts";
+
+/**
+ * After a step: every moving body's change of speed beyond gravity's (the
+ * knock it just took — Rapier's own contact impulses read back as zero once
+ * the step is over), then, for each Worn-drawn body, the points where it
+ * touches something, marked with the harder of the two bodies' knocks.
+ */
+function recordImpacts(world: RAPIER.World, tracker: ImpactTracker) {
+  const g = world.gravity;
+  const dt = world.timestep;
+  const seen = new Map<number, THREE.Vector3>();
+  tracker.kick.clear();
+  world.forEachActiveRigidBody((body) => {
+    if (!body.isDynamic()) return;
+    const v = body.linvel();
+    const gs = body.gravityScale();
+    // A body that wasn't awake a step ago was at rest.
+    const before = tracker.velocity.get(body.handle);
+    const bx = before?.x ?? 0, by = before?.y ?? 0, bz = before?.z ?? 0;
+    tracker.kick.set(body.handle, Math.hypot(v.x - bx - g.x * gs * dt, v.y - by - g.y * gs * dt, v.z - bz - g.z * gs * dt));
+    seen.set(body.handle, new THREE.Vector3(v.x, v.y, v.z));
+  });
+  tracker.velocity = seen;
+
+  for (const entries of tracker.nodes.values()) {
+    for (const entry of entries) {
+      if (entry.instanceIndex >= 0 || !drawsWorn(entry.mesh)) continue;
+      const collider = entry.body.collider(0);
+      if (!collider) continue;
+      const own = tracker.kick.get(entry.body.handle) ?? 0;
+      const size = (entry.mesh.geometry.userData?.__wornEntry?.size as number | undefined) ?? 1;
+      world.contactPairsWith(collider, (other) => {
+        const otherBody = other.parent();
+        const speed = Math.max(own, otherBody ? (tracker.kick.get(otherBody.handle) ?? 0) : 0);
+        if (speed < MIN_IMPACT_SPEED) return;
+        world.contactPair(collider, other, (manifold, flipped) => {
+          for (let i = 0; i < manifold.numContacts(); i++) {
+            if (manifold.contactDist(i) > TOUCHING) continue;
+            const local = flipped ? manifold.localContactPoint2(i) : manifold.localContactPoint1(i);
+            if (!local) continue;
+            // Collider space → world → body space → mesh space (the body has
+            // no scale; the collider was built with the mesh's baked in).
+            const ct = collider.translation(), cr = collider.rotation();
+            const bt = entry.body.translation(), br = entry.body.rotation();
+            _hitLocal.set(local.x, local.y, local.z).applyQuaternion(_colliderQuat.set(cr.x, cr.y, cr.z, cr.w));
+            _hitLocal.set(_hitLocal.x + ct.x - bt.x, _hitLocal.y + ct.y - bt.y, _hitLocal.z + ct.z - bt.z);
+            _hitLocal.applyQuaternion(_bodyQuat.set(br.x, br.y, br.z, br.w).invert()).divide(entry.scale);
+            if (addImpact(entry.impacts, { x: _hitLocal.x, y: _hitLocal.y, z: _hitLocal.z, speed }, size)) entry.impactVersion++;
+          }
+        });
+      });
+    }
+  }
+}
+
+/** Hands each Worn-drawn mesh its knocks (copies sharing a geometry share them). */
+function showImpacts(state: BodyState, prefix: string) {
+  const byGeometry = new Map<THREE.BufferGeometry, { list: WornImpact[]; key: string }>();
+  state.entries.forEach((entry, i) => {
+    if (entry.instanceIndex >= 0 || !drawsWorn(entry.mesh)) return;
+    const geometry = entry.mesh.geometry;
+    const slot = byGeometry.get(geometry) ?? { list: [], key: prefix };
+    slot.list.push(...entry.impacts);
+    slot.key += `:${i}.${entry.impactVersion}`;
+    byGeometry.set(geometry, slot);
+  });
+  for (const [geometry, slot] of byGeometry) setWornImpacts(geometry, slot.list, slot.key);
+}
+
 const _parentInverse = new THREE.Matrix4();
 const _parentWorld = new THREE.Matrix4();
 const _pose = new THREE.Vector3();
@@ -440,6 +551,9 @@ export const RIGID_BODY_NODE: NodeDefinition = {
         for (const entry of stale.entries) handle.world.removeRigidBody(entry.body);
         handle.bodies.delete(ctx.nodeId);
       }
+      // Back to the authored state: the knocks of the last run go too.
+      if (stale) for (const entry of stale.entries) setWornImpacts(entry.mesh.geometry, [], "");
+      trackImpacts(handle, ctx.nodeId, null);
       bodyCache.delete(ctx.nodeId);
       return idle();
     }
@@ -463,7 +577,9 @@ export const RIGID_BODY_NODE: NodeDefinition = {
       // Carried only within the same world and generation: a Reset rebuilds
       // the world itself, and there the whole point is to start over.
       let carried: MotionSnapshot[] | null = null;
+      let carriedImpacts: WornImpact[][] | null = null;
       if (state && state.worldNodeId === handle.nodeId && state.generation === handle.generation) {
+        carriedImpacts = state.entries.map((entry) => entry.impacts);
         carried = state.entries.map((entry) => ({
           translation: entry.body.translation(),
           rotation: entry.body.rotation(),
@@ -534,6 +650,9 @@ export const RIGID_BODY_NODE: NodeDefinition = {
             mesh: target.mesh,
             instanceIndex: target.instanceIndex,
             scale: _poseScale.clone(),
+            // A rebuild isn't a reset (see above): the dents stay too.
+            impacts: carriedImpacts?.[entries.length] ?? [],
+            impactVersion: 0,
           });
         } catch (err) {
           console.error(`physics/rigid-body: failed to create a body for "${target.mesh.name || target.mesh.uuid}"`, err);
@@ -624,6 +743,12 @@ export const RIGID_BODY_NODE: NodeDefinition = {
         entry.mesh.matrixWorldNeedsUpdate = true;
       }
     }
+
+    // Knocks: recorded after every step (a step's contact impulses are gone
+    // by the next), shown on the meshes each frame.
+    const drawsAnyWorn = state.entries.some((entry) => entry.instanceIndex < 0 && drawsWorn(entry.mesh));
+    trackImpacts(handle, ctx.nodeId, drawsAnyWorn ? state.entries : null);
+    showImpacts(state, `${ctx.nodeId}:${handle.generation}`);
 
     for (const instanced of touchedInstances) {
       instanced.instanceMatrix.needsUpdate = true;

@@ -257,6 +257,13 @@ export interface PhysicsWorldHandle {
    * instead.
    */
   preStep: Map<string, (dt: number) => void>;
+  /**
+   * Callbacks run immediately after each fixed step, keyed by the node that
+   * registered one: what happened *in* a step (a knock, read off the contact
+   * impulses) is gone by the next, so a node evaluating once per frame would
+   * miss every one but the last step's.
+   */
+  postStep?: Map<string, () => void>;
   /** Leftover time not yet consumed by a fixed step. */
   accumulator: number;
   lastTime: number | undefined;
@@ -282,6 +289,7 @@ export function createPhysicsWorld(
     world,
     bodies: new Map(),
     preStep: new Map(),
+    postStep: new Map(),
     accumulator: 0,
     lastTime: undefined,
     generation,
@@ -336,6 +344,7 @@ export function stepPhysicsWorld(
   for (let i = 0; i < steps; i++) {
     for (const before of handle.preStep.values()) before(timestep);
     handle.world.step();
+    if (handle.postStep) for (const after of handle.postStep.values()) after();
   }
   return steps;
 }

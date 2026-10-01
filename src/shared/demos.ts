@@ -491,6 +491,12 @@ export const DEMO_CATALOG: DemoCategory[] = [
         label: "Decal Wall",
         description: "One graffiti painted across 27 separate cubes — the wall opens and the picture tears apart.",
       },
+      {
+        file: "demo_material_worn.tsuji",
+        label: "Worn: Aging & Knocks",
+        description:
+          "Press Play: a painted pedestal, a bronze raccoon and mossy steps weather from new to ancient and back (Age on a loop), while crates tumbling down the stairs chip wherever they are knocked.",
+      },
     ],
   },
   {

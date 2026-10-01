@@ -426,7 +426,8 @@ export function prepareGeometryForMaterial(mesh: THREE.Mesh, material: THREE.Mat
   for (const m of Array.isArray(material) ? material : [material]) {
     const prepare = (m as any)?.__prepareGeometry;
     if (typeof prepare !== "function") continue;
-    const prepared = prepare(mesh.geometry);
+    // The mesh too: a hook may key what it keeps on who draws the geometry.
+    const prepared = prepare(mesh.geometry, mesh);
     // Duck-typed rather than `instanceof THREE.BufferGeometry`: a geometry
     // built by a third-party library that bundles its own copy of three
     // (three-bvh-csg's CSG output, notably) fails `instanceof` against ours

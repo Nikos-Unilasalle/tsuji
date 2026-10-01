@@ -1,0 +1,1548 @@
+{
+  "canvases": [
+    {
+      "nodes": [
+        {
+          "id": "clock",
+          "type": "time",
+          "position": {
+            "x": -1600,
+            "y": -300
+          },
+          "params": {}
+        },
+        {
+          "id": "age_rate",
+          "type": "value/math",
+          "position": {
+            "x": -1380,
+            "y": -300
+          },
+          "params": {
+            "op": "multiply",
+            "a": 0,
+            "b": 0.1
+          }
+        },
+        {
+          "id": "age_wrap",
+          "type": "value/math",
+          "position": {
+            "x": -1160,
+            "y": -300
+          },
+          "params": {
+            "op": "mod",
+            "a": 0,
+            "b": 2
+          }
+        },
+        {
+          "id": "age_centre",
+          "type": "value/math",
+          "position": {
+            "x": -940,
+            "y": -300
+          },
+          "params": {
+            "op": "subtract",
+            "a": 0,
+            "b": 1
+          }
+        },
+        {
+          "id": "age_fold",
+          "type": "value/math",
+          "position": {
+            "x": -720,
+            "y": -300
+          },
+          "params": {
+            "op": "abs",
+            "a": 0,
+            "b": 0
+          }
+        },
+        {
+          "id": "age",
+          "type": "value/math",
+          "position": {
+            "x": -500,
+            "y": -300
+          },
+          "params": {
+            "op": "subtract",
+            "a": 1,
+            "b": 0
+          }
+        },
+        {
+          "id": "worn_pedestal",
+          "type": "material/worn",
+          "position": {
+            "x": -250,
+            "y": -520
+          },
+          "params": {
+            "baseColor": 3101808,
+            "baseRoughness": 0.5,
+            "baseMetalness": 0.1,
+            "wornColor": 14079702,
+            "wornRoughness": 0.3,
+            "wornMetalness": 0.75,
+            "dirtColor": 2760726,
+            "dirtRoughness": 0.95,
+            "dirtMetalness": 0,
+            "wearAmount": 0.5,
+            "dirtAmount": 0.35,
+            "contrast": 2,
+            "noise": 0.4,
+            "noiseScale": 6,
+            "noiseSpace": "object",
+            "noiseDetail": 3,
+            "variation": 0.25,
+            "seed": 1,
+            "wearPatch": 0.3,
+            "dirtPatch": 0.3,
+            "patchScale": 2.5,
+            "curveWear": 0.3,
+            "curveDirt": 0.3,
+            "curveSensitivity": 1,
+            "edgeAngle": 30,
+            "cavityDirt": 0.4,
+            "debugView": "off",
+            "preset": "painted metal",
+            "primerColor": 10240560,
+            "primerWidth": 0.4,
+            "chipHardness": 0.9,
+            "chipRelief": 0.6,
+            "scratchAmount": 0.3,
+            "scratchScale": 18,
+            "dustAmount": 0.3,
+            "dustColor": 12103066,
+            "streakAmount": 0.25,
+            "streakScale": 4,
+            "textureScale": 1,
+            "age": 0.5,
+            "scale": 1,
+            "paintMask": false,
+            "gripAmount": 0.8,
+            "gripRadius": 0.15,
+            "impactAmount": 0.8,
+            "impactSize": 1,
+            "impactThreshold": 1.5,
+            "bakeSize": "2048"
+          }
+        },
+        {
+          "id": "worn_bronze",
+          "type": "material/worn",
+          "position": {
+            "x": -250,
+            "y": -220
+          },
+          "params": {
+            "baseColor": 8016424,
+            "baseRoughness": 0.45,
+            "baseMetalness": 0.8,
+            "wornColor": 14725226,
+            "wornRoughness": 0.2,
+            "wornMetalness": 0.85,
+            "dirtColor": 3045988,
+            "dirtRoughness": 0.8,
+            "dirtMetalness": 0,
+            "wearAmount": 0.3,
+            "dirtAmount": 0.55,
+            "contrast": 2,
+            "noise": 0.4,
+            "noiseScale": 6,
+            "noiseSpace": "object",
+            "noiseDetail": 3,
+            "variation": 0.25,
+            "seed": 1,
+            "wearPatch": 0.3,
+            "dirtPatch": 0.15,
+            "patchScale": 2.5,
+            "curveWear": 0.3,
+            "curveDirt": 0.5,
+            "curveSensitivity": 1,
+            "edgeAngle": 30,
+            "cavityDirt": 0.6,
+            "debugView": "off",
+            "preset": "antique bronze",
+            "primerColor": 9059114,
+            "primerWidth": 0,
+            "chipHardness": 0.2,
+            "chipRelief": 0.2,
+            "scratchAmount": 0.3,
+            "scratchScale": 18,
+            "dustAmount": 0,
+            "dustColor": 12103066,
+            "streakAmount": 0,
+            "streakScale": 4,
+            "textureScale": 1,
+            "age": 0.5,
+            "scale": 1,
+            "paintMask": false,
+            "gripAmount": 0.8,
+            "gripRadius": 0.15,
+            "impactAmount": 0.8,
+            "impactSize": 1,
+            "impactThreshold": 1.5,
+            "bakeSize": "2048"
+          }
+        },
+        {
+          "id": "worn_steps",
+          "type": "material/worn",
+          "position": {
+            "x": -250,
+            "y": 80
+          },
+          "params": {
+            "baseColor": 8026224,
+            "baseRoughness": 0.92,
+            "baseMetalness": 0,
+            "wornColor": 10263186,
+            "wornRoughness": 0.85,
+            "wornMetalness": 0,
+            "dirtColor": 4020770,
+            "dirtRoughness": 1,
+            "dirtMetalness": 0,
+            "wearAmount": 0.15,
+            "dirtAmount": 0.6,
+            "contrast": 2,
+            "noise": 0.6,
+            "noiseScale": 6,
+            "noiseSpace": "object",
+            "noiseDetail": 3,
+            "variation": 0.5,
+            "seed": 1,
+            "wearPatch": 0.3,
+            "dirtPatch": 0.15,
+            "patchScale": 2.5,
+            "curveWear": 0.3,
+            "curveDirt": 0.5,
+            "curveSensitivity": 1,
+            "edgeAngle": 30,
+            "cavityDirt": 0.7,
+            "debugView": "off",
+            "preset": "mossy stone",
+            "primerColor": 9059114,
+            "primerWidth": 0,
+            "chipHardness": 0.1,
+            "chipRelief": 0.3,
+            "scratchAmount": 0,
+            "scratchScale": 18,
+            "dustAmount": 0,
+            "dustColor": 12103066,
+            "streakAmount": 0.3,
+            "streakScale": 4,
+            "textureScale": 1,
+            "age": 0.5,
+            "scale": 1,
+            "paintMask": false,
+            "gripAmount": 0.8,
+            "gripRadius": 0.15,
+            "impactAmount": 0.8,
+            "impactSize": 2,
+            "impactThreshold": 1.5,
+            "bakeSize": "2048"
+          }
+        },
+        {
+          "id": "worn_crates",
+          "type": "material/worn",
+          "position": {
+            "x": -250,
+            "y": 620
+          },
+          "params": {
+            "baseColor": 13658652,
+            "baseRoughness": 0.5,
+            "baseMetalness": 0.1,
+            "wornColor": 14079702,
+            "wornRoughness": 0.3,
+            "wornMetalness": 0.75,
+            "dirtColor": 2760726,
+            "dirtRoughness": 0.95,
+            "dirtMetalness": 0,
+            "wearAmount": 0.5,
+            "dirtAmount": 0.35,
+            "contrast": 2,
+            "noise": 0.4,
+            "noiseScale": 6,
+            "noiseSpace": "object",
+            "noiseDetail": 3,
+            "variation": 0.25,
+            "seed": 1,
+            "wearPatch": 0.3,
+            "dirtPatch": 0.3,
+            "patchScale": 2.5,
+            "curveWear": 0.3,
+            "curveDirt": 0.3,
+            "curveSensitivity": 1,
+            "edgeAngle": 30,
+            "cavityDirt": 0.4,
+            "debugView": "off",
+            "preset": "custom",
+            "primerColor": 3815994,
+            "primerWidth": 0.4,
+            "chipHardness": 0.9,
+            "chipRelief": 0.6,
+            "scratchAmount": 0.3,
+            "scratchScale": 18,
+            "dustAmount": 0.15,
+            "dustColor": 12103066,
+            "streakAmount": 0.12,
+            "streakScale": 4,
+            "textureScale": 1,
+            "age": 0.15,
+            "scale": 1,
+            "paintMask": false,
+            "gripAmount": 0.8,
+            "gripRadius": 0.15,
+            "impactAmount": 1,
+            "impactSize": 1.6,
+            "impactThreshold": 1,
+            "bakeSize": "2048"
+          }
+        },
+        {
+          "id": "pedestal",
+          "type": "object/box",
+          "position": {
+            "x": 80,
+            "y": -520
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": -1.5,
+              "y": 0.9,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1.6,
+              "y": 1.8,
+              "z": 1.6
+            },
+            "showPivot": false,
+            "pivot": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "inheritRotation": "parent",
+            "inheritScale": "parent",
+            "texturePath": "",
+            "normalMapPath": "",
+            "roughnessMapPath": "",
+            "uvScaleX": 1,
+            "uvScaleY": 1,
+            "uvOffsetX": 0,
+            "uvOffsetY": 0,
+            "triplanar": 0,
+            "triplanarBlend": 4,
+            "color": 16777215,
+            "emissive": 0,
+            "emissiveIntensity": 1,
+            "shadeless": 0,
+            "roughness": 0.4,
+            "metalness": 0.1,
+            "wireframe": 0,
+            "opacity": 1,
+            "transmission": 0,
+            "thickness": 0.5
+          }
+        },
+        {
+          "id": "raccoon",
+          "type": "object/raccoon",
+          "position": {
+            "x": 80,
+            "y": -220
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": -1.5,
+              "y": 1.8,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1.2,
+              "y": 1.2,
+              "z": 1.2
+            },
+            "showPivot": false,
+            "pivot": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "inheritRotation": "parent",
+            "inheritScale": "parent",
+            "texturePath": "",
+            "normalMapPath": "",
+            "roughnessMapPath": "",
+            "uvScaleX": 1,
+            "uvScaleY": 1,
+            "uvOffsetX": 0,
+            "uvOffsetY": 0,
+            "triplanar": 0,
+            "triplanarBlend": 4,
+            "color": 16777215,
+            "emissive": 0,
+            "emissiveIntensity": 1,
+            "shadeless": 0,
+            "roughness": 0.4,
+            "metalness": 0.1,
+            "wireframe": 0,
+            "opacity": 1,
+            "transmission": 0,
+            "thickness": 0.5
+          }
+        },
+        {
+          "id": "statics",
+          "type": "structure/merge",
+          "position": {
+            "x": 380,
+            "y": 80
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "overrideMaterials": 0,
+            "color": 16777215,
+            "emissive": 0,
+            "emissiveIntensity": 1,
+            "shadeless": 0,
+            "roughness": 0.4,
+            "metalness": 0.1,
+            "wireframe": 0,
+            "opacity": 1,
+            "uvScaleX": 1,
+            "uvScaleY": 1,
+            "uvOffsetX": 0,
+            "uvOffsetY": 0
+          }
+        },
+        {
+          "id": "ground",
+          "type": "object/box",
+          "position": {
+            "x": 80,
+            "y": 0
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 0,
+              "y": -0.5,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 30,
+              "y": 1,
+              "z": 30
+            },
+            "showPivot": false,
+            "pivot": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "inheritRotation": "parent",
+            "inheritScale": "parent",
+            "texturePath": "",
+            "normalMapPath": "",
+            "roughnessMapPath": "",
+            "uvScaleX": 1,
+            "uvScaleY": 1,
+            "uvOffsetX": 0,
+            "uvOffsetY": 0,
+            "triplanar": 0,
+            "triplanarBlend": 4,
+            "color": 3817287,
+            "emissive": 0,
+            "emissiveIntensity": 1,
+            "shadeless": 0,
+            "roughness": 0.9,
+            "metalness": 0,
+            "wireframe": 0,
+            "opacity": 1,
+            "transmission": 0,
+            "thickness": 0.5
+          }
+        },
+        {
+          "id": "step_0",
+          "type": "object/box",
+          "position": {
+            "x": 80,
+            "y": 160
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 1.5,
+              "y": 1.7999999999999998,
+              "z": -1
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 0.8,
+              "y": 3.5999999999999996,
+              "z": 4
+            },
+            "showPivot": false,
+            "pivot": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "inheritRotation": "parent",
+            "inheritScale": "parent",
+            "texturePath": "",
+            "normalMapPath": "",
+            "roughnessMapPath": "",
+            "uvScaleX": 1,
+            "uvScaleY": 1,
+            "uvOffsetX": 0,
+            "uvOffsetY": 0,
+            "triplanar": 0,
+            "triplanarBlend": 4,
+            "color": 16777215,
+            "emissive": 0,
+            "emissiveIntensity": 1,
+            "shadeless": 0,
+            "roughness": 0.4,
+            "metalness": 0.1,
+            "wireframe": 0,
+            "opacity": 1,
+            "transmission": 0,
+            "thickness": 0.5
+          }
+        },
+        {
+          "id": "step_1",
+          "type": "object/box",
+          "position": {
+            "x": 80,
+            "y": 270
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 2.3,
+              "y": 1.5,
+              "z": -1
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 0.8,
+              "y": 3,
+              "z": 4
+            },
+            "showPivot": false,
+            "pivot": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "inheritRotation": "parent",
+            "inheritScale": "parent",
+            "texturePath": "",
+            "normalMapPath": "",
+            "roughnessMapPath": "",
+            "uvScaleX": 1,
+            "uvScaleY": 1,
+            "uvOffsetX": 0,
+            "uvOffsetY": 0,
+            "triplanar": 0,
+            "triplanarBlend": 4,
+            "color": 16777215,
+            "emissive": 0,
+            "emissiveIntensity": 1,
+            "shadeless": 0,
+            "roughness": 0.4,
+            "metalness": 0.1,
+            "wireframe": 0,
+            "opacity": 1,
+            "transmission": 0,
+            "thickness": 0.5
+          }
+        },
+        {
+          "id": "step_2",
+          "type": "object/box",
+          "position": {
+            "x": 80,
+            "y": 380
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 3.1,
+              "y": 1.2,
+              "z": -1
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 0.8,
+              "y": 2.4,
+              "z": 4
+            },
+            "showPivot": false,
+            "pivot": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "inheritRotation": "parent",
+            "inheritScale": "parent",
+            "texturePath": "",
+            "normalMapPath": "",
+            "roughnessMapPath": "",
+            "uvScaleX": 1,
+            "uvScaleY": 1,
+            "uvOffsetX": 0,
+            "uvOffsetY": 0,
+            "triplanar": 0,
+            "triplanarBlend": 4,
+            "color": 16777215,
+            "emissive": 0,
+            "emissiveIntensity": 1,
+            "shadeless": 0,
+            "roughness": 0.4,
+            "metalness": 0.1,
+            "wireframe": 0,
+            "opacity": 1,
+            "transmission": 0,
+            "thickness": 0.5
+          }
+        },
+        {
+          "id": "step_3",
+          "type": "object/box",
+          "position": {
+            "x": 80,
+            "y": 490
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 3.9000000000000004,
+              "y": 0.8999999999999999,
+              "z": -1
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 0.8,
+              "y": 1.7999999999999998,
+              "z": 4
+            },
+            "showPivot": false,
+            "pivot": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "inheritRotation": "parent",
+            "inheritScale": "parent",
+            "texturePath": "",
+            "normalMapPath": "",
+            "roughnessMapPath": "",
+            "uvScaleX": 1,
+            "uvScaleY": 1,
+            "uvOffsetX": 0,
+            "uvOffsetY": 0,
+            "triplanar": 0,
+            "triplanarBlend": 4,
+            "color": 16777215,
+            "emissive": 0,
+            "emissiveIntensity": 1,
+            "shadeless": 0,
+            "roughness": 0.4,
+            "metalness": 0.1,
+            "wireframe": 0,
+            "opacity": 1,
+            "transmission": 0,
+            "thickness": 0.5
+          }
+        },
+        {
+          "id": "step_4",
+          "type": "object/box",
+          "position": {
+            "x": 80,
+            "y": 600
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 4.7,
+              "y": 0.6,
+              "z": -1
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 0.8,
+              "y": 1.2,
+              "z": 4
+            },
+            "showPivot": false,
+            "pivot": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "inheritRotation": "parent",
+            "inheritScale": "parent",
+            "texturePath": "",
+            "normalMapPath": "",
+            "roughnessMapPath": "",
+            "uvScaleX": 1,
+            "uvScaleY": 1,
+            "uvOffsetX": 0,
+            "uvOffsetY": 0,
+            "triplanar": 0,
+            "triplanarBlend": 4,
+            "color": 16777215,
+            "emissive": 0,
+            "emissiveIntensity": 1,
+            "shadeless": 0,
+            "roughness": 0.4,
+            "metalness": 0.1,
+            "wireframe": 0,
+            "opacity": 1,
+            "transmission": 0,
+            "thickness": 0.5
+          }
+        },
+        {
+          "id": "step_5",
+          "type": "object/box",
+          "position": {
+            "x": 80,
+            "y": 710
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 5.5,
+              "y": 0.3,
+              "z": -1
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 0.8,
+              "y": 0.6,
+              "z": 4
+            },
+            "showPivot": false,
+            "pivot": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "inheritRotation": "parent",
+            "inheritScale": "parent",
+            "texturePath": "",
+            "normalMapPath": "",
+            "roughnessMapPath": "",
+            "uvScaleX": 1,
+            "uvScaleY": 1,
+            "uvOffsetX": 0,
+            "uvOffsetY": 0,
+            "triplanar": 0,
+            "triplanarBlend": 4,
+            "color": 16777215,
+            "emissive": 0,
+            "emissiveIntensity": 1,
+            "shadeless": 0,
+            "roughness": 0.4,
+            "metalness": 0.1,
+            "wireframe": 0,
+            "opacity": 1,
+            "transmission": 0,
+            "thickness": 0.5
+          }
+        },
+        {
+          "id": "crates",
+          "type": "structure/merge",
+          "position": {
+            "x": 380,
+            "y": 620
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "overrideMaterials": 0,
+            "color": 16777215,
+            "emissive": 0,
+            "emissiveIntensity": 1,
+            "shadeless": 0,
+            "roughness": 0.4,
+            "metalness": 0.1,
+            "wireframe": 0,
+            "opacity": 1,
+            "uvScaleX": 1,
+            "uvScaleY": 1,
+            "uvOffsetX": 0,
+            "uvOffsetY": 0
+          }
+        },
+        {
+          "id": "crate_0",
+          "type": "object/box",
+          "position": {
+            "x": 80,
+            "y": 900
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 2,
+              "y": 6,
+              "z": -0.2
+            },
+            "rotation": {
+              "x": 0.5,
+              "y": 0.3,
+              "z": 0.6
+            },
+            "scale": {
+              "x": 0.8,
+              "y": 0.8,
+              "z": 0.8
+            },
+            "showPivot": false,
+            "pivot": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "inheritRotation": "parent",
+            "inheritScale": "parent",
+            "texturePath": "",
+            "normalMapPath": "",
+            "roughnessMapPath": "",
+            "uvScaleX": 1,
+            "uvScaleY": 1,
+            "uvOffsetX": 0,
+            "uvOffsetY": 0,
+            "triplanar": 0,
+            "triplanarBlend": 4,
+            "color": 16777215,
+            "emissive": 0,
+            "emissiveIntensity": 1,
+            "shadeless": 0,
+            "roughness": 0.4,
+            "metalness": 0.1,
+            "wireframe": 0,
+            "opacity": 1,
+            "transmission": 0,
+            "thickness": 0.5
+          }
+        },
+        {
+          "id": "crate_1",
+          "type": "object/box",
+          "position": {
+            "x": 80,
+            "y": 1060
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 2.1,
+              "y": 8.5,
+              "z": -1.6
+            },
+            "rotation": {
+              "x": 0.9,
+              "y": 0.1,
+              "z": 0.9
+            },
+            "scale": {
+              "x": 0.8,
+              "y": 0.8,
+              "z": 0.8
+            },
+            "showPivot": false,
+            "pivot": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "inheritRotation": "parent",
+            "inheritScale": "parent",
+            "texturePath": "",
+            "normalMapPath": "",
+            "roughnessMapPath": "",
+            "uvScaleX": 1,
+            "uvScaleY": 1,
+            "uvOffsetX": 0,
+            "uvOffsetY": 0,
+            "triplanar": 0,
+            "triplanarBlend": 4,
+            "color": 16777215,
+            "emissive": 0,
+            "emissiveIntensity": 1,
+            "shadeless": 0,
+            "roughness": 0.4,
+            "metalness": 0.1,
+            "wireframe": 0,
+            "opacity": 1,
+            "transmission": 0,
+            "thickness": 0.5
+          }
+        },
+        {
+          "id": "crate_2",
+          "type": "object/box",
+          "position": {
+            "x": 80,
+            "y": 1220
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 1.95,
+              "y": 11,
+              "z": -2.3
+            },
+            "rotation": {
+              "x": 0.2,
+              "y": 1,
+              "z": 1.1
+            },
+            "scale": {
+              "x": 0.8,
+              "y": 0.8,
+              "z": 0.8
+            },
+            "showPivot": false,
+            "pivot": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "inheritRotation": "parent",
+            "inheritScale": "parent",
+            "texturePath": "",
+            "normalMapPath": "",
+            "roughnessMapPath": "",
+            "uvScaleX": 1,
+            "uvScaleY": 1,
+            "uvOffsetX": 0,
+            "uvOffsetY": 0,
+            "triplanar": 0,
+            "triplanarBlend": 4,
+            "color": 16777215,
+            "emissive": 0,
+            "emissiveIntensity": 1,
+            "shadeless": 0,
+            "roughness": 0.4,
+            "metalness": 0.1,
+            "wireframe": 0,
+            "opacity": 1,
+            "transmission": 0,
+            "thickness": 0.5
+          }
+        },
+        {
+          "id": "world",
+          "type": "physics/world",
+          "position": {
+            "x": 380,
+            "y": -160
+          },
+          "params": {
+            "gravity": {
+              "x": 0,
+              "y": -9.81,
+              "z": 0
+            },
+            "timestep": 0.016666666666666666,
+            "maxSteps": 4,
+            "paused": 0,
+            "reset": 0
+          }
+        },
+        {
+          "id": "static_body",
+          "type": "physics/rigid-body",
+          "position": {
+            "x": 640,
+            "y": 80
+          },
+          "params": {
+            "bodyType": "fixed",
+            "shape": "trimesh",
+            "split": "per-child",
+            "mass": 1,
+            "friction": 0.5,
+            "restitution": 0.1,
+            "linearDamping": 0.05,
+            "angularDamping": 0.05,
+            "gravityScale": 1,
+            "ccd": false
+          }
+        },
+        {
+          "id": "crate_bodies",
+          "type": "physics/rigid-body",
+          "position": {
+            "x": 640,
+            "y": 620
+          },
+          "params": {
+            "bodyType": "dynamic",
+            "shape": "box",
+            "split": "per-child",
+            "mass": 1,
+            "friction": 0.35,
+            "restitution": 0.3,
+            "linearDamping": 0.05,
+            "angularDamping": 0.05,
+            "gravityScale": 1,
+            "ccd": false
+          }
+        },
+        {
+          "id": "sun",
+          "type": "light/directional",
+          "position": {
+            "x": 640,
+            "y": -300
+          },
+          "params": {
+            "location": {
+              "x": 6,
+              "y": 10,
+              "z": 5
+            },
+            "target": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "color": 16773848,
+            "intensity": 2.2,
+            "castShadow": 1,
+            "shadowSoftness": 1
+          }
+        },
+        {
+          "id": "fill",
+          "type": "light/ambient",
+          "position": {
+            "x": 640,
+            "y": -180
+          },
+          "params": {
+            "color": 10466512,
+            "intensity": 0.5
+          }
+        },
+        {
+          "id": "env",
+          "type": "lighting/environment",
+          "position": {
+            "x": 900,
+            "y": 300
+          },
+          "params": {
+            "color": 5923952,
+            "intensity": 1,
+            "background": 1,
+            "blurriness": 0,
+            "filePath": "",
+            "backgroundImagePath": "",
+            "backgroundFit": "cover",
+            "backgroundScale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "backgroundOffset": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "backgroundRotation": 0,
+            "ambientIntensity": 0.65,
+            "sunIntensity": 1.2
+          }
+        },
+        {
+          "id": "scene",
+          "type": "structure/merge",
+          "position": {
+            "x": 900,
+            "y": 0
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "overrideMaterials": 0,
+            "color": 16777215,
+            "emissive": 0,
+            "emissiveIntensity": 1,
+            "shadeless": 0,
+            "roughness": 0.4,
+            "metalness": 0.1,
+            "wireframe": 0,
+            "opacity": 1,
+            "uvScaleX": 1,
+            "uvScaleY": 1,
+            "uvOffsetX": 0,
+            "uvOffsetY": 0
+          }
+        },
+        {
+          "id": "render",
+          "type": "render",
+          "position": {
+            "x": 1160,
+            "y": 0
+          },
+          "params": {
+            "frameCount": 1200,
+            "fps": 60,
+            "motionBlur": 0,
+            "resolutionPreset": "16:9 (1920x1080)",
+            "width": 1920,
+            "height": 1080,
+            "holdout": false,
+            "timelineEnabled": true
+          }
+        }
+      ],
+      "connections": [
+        {
+          "id": "clock.seconds->age_rate.a",
+          "fromNode": "clock",
+          "fromSocket": "seconds",
+          "toNode": "age_rate",
+          "toSocket": "a"
+        },
+        {
+          "id": "age_rate.out->age_wrap.a",
+          "fromNode": "age_rate",
+          "fromSocket": "out",
+          "toNode": "age_wrap",
+          "toSocket": "a"
+        },
+        {
+          "id": "age_wrap.out->age_centre.a",
+          "fromNode": "age_wrap",
+          "fromSocket": "out",
+          "toNode": "age_centre",
+          "toSocket": "a"
+        },
+        {
+          "id": "age_centre.out->age_fold.a",
+          "fromNode": "age_centre",
+          "fromSocket": "out",
+          "toNode": "age_fold",
+          "toSocket": "a"
+        },
+        {
+          "id": "age_fold.out->age.b",
+          "fromNode": "age_fold",
+          "fromSocket": "out",
+          "toNode": "age",
+          "toSocket": "b"
+        },
+        {
+          "id": "age.out->worn_pedestal.age",
+          "fromNode": "age",
+          "fromSocket": "out",
+          "toNode": "worn_pedestal",
+          "toSocket": "age"
+        },
+        {
+          "id": "age.out->worn_bronze.age",
+          "fromNode": "age",
+          "fromSocket": "out",
+          "toNode": "worn_bronze",
+          "toSocket": "age"
+        },
+        {
+          "id": "age.out->worn_steps.age",
+          "fromNode": "age",
+          "fromSocket": "out",
+          "toNode": "worn_steps",
+          "toSocket": "age"
+        },
+        {
+          "id": "worn_pedestal.material->pedestal.material",
+          "fromNode": "worn_pedestal",
+          "fromSocket": "material",
+          "toNode": "pedestal",
+          "toSocket": "material"
+        },
+        {
+          "id": "worn_bronze.material->raccoon.material",
+          "fromNode": "worn_bronze",
+          "fromSocket": "material",
+          "toNode": "raccoon",
+          "toSocket": "material"
+        },
+        {
+          "id": "ground.geometry->statics.in0",
+          "fromNode": "ground",
+          "fromSocket": "geometry",
+          "toNode": "statics",
+          "toSocket": "in0"
+        },
+        {
+          "id": "worn_steps.material->step_0.material",
+          "fromNode": "worn_steps",
+          "fromSocket": "material",
+          "toNode": "step_0",
+          "toSocket": "material"
+        },
+        {
+          "id": "step_0.geometry->statics.in1",
+          "fromNode": "step_0",
+          "fromSocket": "geometry",
+          "toNode": "statics",
+          "toSocket": "in1"
+        },
+        {
+          "id": "worn_steps.material->step_1.material",
+          "fromNode": "worn_steps",
+          "fromSocket": "material",
+          "toNode": "step_1",
+          "toSocket": "material"
+        },
+        {
+          "id": "step_1.geometry->statics.in2",
+          "fromNode": "step_1",
+          "fromSocket": "geometry",
+          "toNode": "statics",
+          "toSocket": "in2"
+        },
+        {
+          "id": "worn_steps.material->step_2.material",
+          "fromNode": "worn_steps",
+          "fromSocket": "material",
+          "toNode": "step_2",
+          "toSocket": "material"
+        },
+        {
+          "id": "step_2.geometry->statics.in3",
+          "fromNode": "step_2",
+          "fromSocket": "geometry",
+          "toNode": "statics",
+          "toSocket": "in3"
+        },
+        {
+          "id": "worn_steps.material->step_3.material",
+          "fromNode": "worn_steps",
+          "fromSocket": "material",
+          "toNode": "step_3",
+          "toSocket": "material"
+        },
+        {
+          "id": "step_3.geometry->statics.in4",
+          "fromNode": "step_3",
+          "fromSocket": "geometry",
+          "toNode": "statics",
+          "toSocket": "in4"
+        },
+        {
+          "id": "worn_steps.material->step_4.material",
+          "fromNode": "worn_steps",
+          "fromSocket": "material",
+          "toNode": "step_4",
+          "toSocket": "material"
+        },
+        {
+          "id": "step_4.geometry->statics.in5",
+          "fromNode": "step_4",
+          "fromSocket": "geometry",
+          "toNode": "statics",
+          "toSocket": "in5"
+        },
+        {
+          "id": "worn_steps.material->step_5.material",
+          "fromNode": "worn_steps",
+          "fromSocket": "material",
+          "toNode": "step_5",
+          "toSocket": "material"
+        },
+        {
+          "id": "step_5.geometry->statics.in6",
+          "fromNode": "step_5",
+          "fromSocket": "geometry",
+          "toNode": "statics",
+          "toSocket": "in6"
+        },
+        {
+          "id": "worn_crates.material->crate_0.material",
+          "fromNode": "worn_crates",
+          "fromSocket": "material",
+          "toNode": "crate_0",
+          "toSocket": "material"
+        },
+        {
+          "id": "crate_0.geometry->crates.in0",
+          "fromNode": "crate_0",
+          "fromSocket": "geometry",
+          "toNode": "crates",
+          "toSocket": "in0"
+        },
+        {
+          "id": "worn_crates.material->crate_1.material",
+          "fromNode": "worn_crates",
+          "fromSocket": "material",
+          "toNode": "crate_1",
+          "toSocket": "material"
+        },
+        {
+          "id": "crate_1.geometry->crates.in1",
+          "fromNode": "crate_1",
+          "fromSocket": "geometry",
+          "toNode": "crates",
+          "toSocket": "in1"
+        },
+        {
+          "id": "worn_crates.material->crate_2.material",
+          "fromNode": "worn_crates",
+          "fromSocket": "material",
+          "toNode": "crate_2",
+          "toSocket": "material"
+        },
+        {
+          "id": "crate_2.geometry->crates.in2",
+          "fromNode": "crate_2",
+          "fromSocket": "geometry",
+          "toNode": "crates",
+          "toSocket": "in2"
+        },
+        {
+          "id": "world.world->static_body.world",
+          "fromNode": "world",
+          "fromSocket": "world",
+          "toNode": "static_body",
+          "toSocket": "world"
+        },
+        {
+          "id": "statics.geometry->static_body.geometry",
+          "fromNode": "statics",
+          "fromSocket": "geometry",
+          "toNode": "static_body",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "world.world->crate_bodies.world",
+          "fromNode": "world",
+          "fromSocket": "world",
+          "toNode": "crate_bodies",
+          "toSocket": "world"
+        },
+        {
+          "id": "crates.geometry->crate_bodies.geometry",
+          "fromNode": "crates",
+          "fromSocket": "geometry",
+          "toNode": "crate_bodies",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "pedestal.geometry->scene.in0",
+          "fromNode": "pedestal",
+          "fromSocket": "geometry",
+          "toNode": "scene",
+          "toSocket": "in0"
+        },
+        {
+          "id": "raccoon.geometry->scene.in1",
+          "fromNode": "raccoon",
+          "fromSocket": "geometry",
+          "toNode": "scene",
+          "toSocket": "in1"
+        },
+        {
+          "id": "static_body.geometry->scene.in2",
+          "fromNode": "static_body",
+          "fromSocket": "geometry",
+          "toNode": "scene",
+          "toSocket": "in2"
+        },
+        {
+          "id": "crate_bodies.geometry->scene.in3",
+          "fromNode": "crate_bodies",
+          "fromSocket": "geometry",
+          "toNode": "scene",
+          "toSocket": "in3"
+        },
+        {
+          "id": "sun.light->scene.in4",
+          "fromNode": "sun",
+          "fromSocket": "light",
+          "toNode": "scene",
+          "toSocket": "in4"
+        },
+        {
+          "id": "fill.light->scene.in5",
+          "fromNode": "fill",
+          "fromSocket": "light",
+          "toNode": "scene",
+          "toSocket": "in5"
+        },
+        {
+          "id": "scene.geometry->render.geometry",
+          "fromNode": "scene",
+          "fromSocket": "geometry",
+          "toNode": "render",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "env.environment->render.environment",
+          "fromNode": "env",
+          "fromSocket": "environment",
+          "toNode": "render",
+          "toSocket": "environment"
+        }
+      ],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    },
+    {
+      "nodes": [],
+      "connections": [],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    },
+    {
+      "nodes": [],
+      "connections": [],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    },
+    {
+      "nodes": [],
+      "connections": [],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    },
+    {
+      "nodes": [],
+      "connections": [],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    },
+    {
+      "nodes": [],
+      "connections": [],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    }
+  ],
+  "activeCanvas": 0
+}

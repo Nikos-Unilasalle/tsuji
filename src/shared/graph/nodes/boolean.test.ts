@@ -293,7 +293,7 @@ describe("BOOLEAN_NODE — multi-mesh inputs (Array, Merge, imported models)", (
       CTX,
     );
     const mesh = res.geometry as THREE.Mesh;
-    expect(mesh.geometry.getAttribute("aEdgeCurvatures")).toBeTruthy();
-    expect(mesh.geometry.getAttribute("aBarycentric")).toBeTruthy();
+    expect(mesh.geometry.getAttribute("aWornList")).toBeTruthy();
+    expect(mesh.geometry.getAttribute("aWornRest")).toBeTruthy();
   });
 });

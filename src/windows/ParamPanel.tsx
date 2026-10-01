@@ -163,6 +163,16 @@ export function booleanField(value: unknown, onChange: (v: unknown) => void) {
   return <input type="checkbox" checked={!!value} onChange={(e) => onChange(e.target.checked ? 1 : 0)} />;
 }
 
+/**
+ * What picking `value` in a select writes: just its own param, or — for an
+ * option with a preset — its own param and every one the preset sets, as one
+ * patch (one undo step).
+ */
+export function selectChange(field: ParamFieldDef & { kind: "select" }, value: unknown): string | Record<string, unknown> {
+  const preset = field.presets?.[String(value)];
+  return preset ? { ...preset, [field.id]: value } : field.id;
+}
+
 export function selectField(field: ParamFieldDef & { kind: "select" }, value: unknown, onChange: (v: unknown) => void) {
   return (
     <select value={String(value)} onChange={(e) => onChange(e.target.value)}>
@@ -795,7 +805,12 @@ export function ParamPanel({
                           canKeyframe ? (paramKey, x, y) => setNumContextMenu({ x, y, paramKey }) : undefined,
                         )}
                       {field.kind === "boolean" && booleanField(params[field.id], (v) => onChange(field.id, v))}
-                      {field.kind === "select" && selectField(field, params[field.id], (v) => onChange(field.id, v))}
+                      {field.kind === "select" &&
+                        selectField(field, params[field.id], (v) => {
+                          const patch = selectChange(field, v);
+                          if (typeof patch === "string") onChange(patch, v);
+                          else onChange(patch);
+                        })}
                       {field.kind === "color" && (
                         <ColorPickerInput value={params[field.id]} onChange={(v) => onChange(field.id, v)} />
                       )}

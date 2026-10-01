@@ -96,6 +96,7 @@ import { broadcastGraph, maximizeMainWindow, PreviewCameraPose, startBroadcastin
 import { exportVideo, mimeToExtension, saveVideoBlob } from "./shared/export/videoExport";
 import { exportPngSequence, saveZipBlob } from "./shared/export/imageSequenceExport";
 import { TransformPatch, Viewport, ViewportExportHandle } from "./shared/three/Viewport";
+import { exportWornTextures, WORN_BAKE_ACTION } from "./shared/graph/nodes/materialWorn";
 import { SplitViewport } from "./shared/three/SplitViewport";
 import "./shared/three/viewport.css";
 import { GIZMO_SELECTABLE_TYPES, resolveGizmoTarget } from "./shared/graph/transformLookup";
@@ -1556,6 +1557,10 @@ function MainEditor() {
           connections: [...prev.connections, ...carriedConnections],
         }));
         setSelectedNodeId(mixNode.id);
+        return;
+      }
+      if (action === WORN_BAKE_ACTION) {
+        void exportWornTextures(nodeId, evaluatedResults, findNodeDeep(graph, nodeId)?.params);
         return;
       }
       if (action === EDIT_MESH_SMART_UNWRAP_ACTION) {
