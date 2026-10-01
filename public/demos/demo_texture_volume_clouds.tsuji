@@ -1,0 +1,344 @@
+{
+  "canvases": [
+    {
+      "nodes": [
+        {
+          "id": "sky",
+          "type": "lighting/environment",
+          "position": {
+            "x": 60,
+            "y": 40
+          },
+          "params": {
+            "color": 8365782,
+            "intensity": 1,
+            "background": 1,
+            "blurriness": 0,
+            "filePath": "",
+            "backgroundImagePath": "",
+            "backgroundFit": "cover",
+            "backgroundScale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "backgroundOffset": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "backgroundRotation": 0,
+            "ambientIntensity": 0.6,
+            "sunIntensity": 0
+          }
+        },
+        {
+          "id": "sun",
+          "type": "light/directional",
+          "position": {
+            "x": 60,
+            "y": 300
+          },
+          "params": {
+            "color": 16773336,
+            "intensity": 2,
+            "location": {
+              "x": 70,
+              "y": 35,
+              "z": 50
+            },
+            "target": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "castShadow": 1
+          }
+        },
+        {
+          "id": "ground",
+          "type": "object/plane",
+          "position": {
+            "x": 60,
+            "y": 560
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "rotation": {
+              "x": 1.5707963267948966,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 300,
+              "y": 300,
+              "z": 1
+            },
+            "color": 5660746,
+            "roughness": 0.95,
+            "metalness": 0,
+            "opacity": 1
+          }
+        },
+        {
+          "id": "shape",
+          "type": "texture/tileable-volume",
+          "position": {
+            "x": 420,
+            "y": 40
+          },
+          "params": {
+            "pattern": "cloud-shape",
+            "channels": "packed",
+            "frequency": 4,
+            "octaves": 3,
+            "gain": 0.5,
+            "seed": 0,
+            "invert": false,
+            "resolution": "auto"
+          }
+        },
+        {
+          "id": "detail",
+          "type": "texture/tileable-volume",
+          "position": {
+            "x": 420,
+            "y": 260
+          },
+          "params": {
+            "pattern": "cloud-detail",
+            "channels": "packed",
+            "frequency": 2,
+            "octaves": 3,
+            "gain": 0.5,
+            "seed": 0,
+            "invert": false,
+            "resolution": "auto"
+          }
+        },
+        {
+          "id": "clouds",
+          "type": "object/volume-clouds",
+          "position": {
+            "x": 800,
+            "y": 120
+          },
+          "params": {
+            "location": {
+              "x": 0,
+              "y": 18,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "boxSize": {
+              "x": 200,
+              "y": 12,
+              "z": 200
+            },
+            "profile": "cumulus",
+            "coverage": 0.5,
+            "density": 1.2,
+            "erosion": 0.6,
+            "shapeScale": 40,
+            "detailScale": 7,
+            "wind": {
+              "x": 3,
+              "y": 0,
+              "z": 1
+            },
+            "edgeFade": 0.35,
+            "shapeBlack": 0.8,
+            "shapeWhite": 1,
+            "sunDirection": {
+              "x": 0.5,
+              "y": 0.6,
+              "z": 0.3
+            },
+            "sunColor": 16773856,
+            "sunIntensity": 6,
+            "skyColor": 9219558,
+            "groundColor": 5395548,
+            "ambient": 1,
+            "anisotropy": 0.6,
+            "powder": 0.5,
+            "steps": 80,
+            "lightSteps": 6
+          }
+        },
+        {
+          "id": "camera",
+          "type": "calibration/camera",
+          "position": {
+            "x": 800,
+            "y": 620
+          },
+          "params": {
+            "location": {
+              "x": 0,
+              "y": 2,
+              "z": 40
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "useTarget": true,
+            "target": {
+              "x": 0,
+              "y": 24,
+              "z": -30
+            },
+            "up": {
+              "x": 0,
+              "y": 1,
+              "z": 0
+            },
+            "fov": 60,
+            "active": true,
+            "mode": "manual",
+            "projectionType": "perspective"
+          }
+        },
+        {
+          "id": "render",
+          "type": "render",
+          "position": {
+            "x": 1180,
+            "y": 120
+          },
+          "params": {
+            "frameCount": 300,
+            "fps": 30,
+            "motionBlur": 0,
+            "resolutionPreset": "16:9 (1920x1080)",
+            "width": 1920,
+            "height": 1080,
+            "holdout": false
+          }
+        },
+        {
+          "id": "loop",
+          "type": "texture/tileable-noise",
+          "position": {
+            "x": 420,
+            "y": 520
+          },
+          "params": {
+            "pattern": "perlin-worley",
+            "channels": "packed",
+            "frequency": 4,
+            "octaves": 3,
+            "gain": 0.5,
+            "seed": 0,
+            "invert": false,
+            "slice": 0,
+            "speed": 0.1,
+            "size": "1024 × 1024",
+            "width": 1024,
+            "height": 1024
+          }
+        },
+        {
+          "id": "view",
+          "type": "view2d",
+          "position": {
+            "x": 800,
+            "y": 520
+          },
+          "params": {}
+        }
+      ],
+      "connections": [
+        {
+          "id": "c_sky",
+          "fromNode": "sky",
+          "fromSocket": "environment",
+          "toNode": "render",
+          "toSocket": "environment"
+        },
+        {
+          "id": "c_shape",
+          "fromNode": "shape",
+          "fromSocket": "volume",
+          "toNode": "clouds",
+          "toSocket": "shape"
+        },
+        {
+          "id": "c_detail",
+          "fromNode": "detail",
+          "fromSocket": "volume",
+          "toNode": "clouds",
+          "toSocket": "detail"
+        },
+        {
+          "id": "c_sun",
+          "fromNode": "sun",
+          "fromSocket": "light",
+          "toNode": "clouds",
+          "toSocket": "sun"
+        },
+        {
+          "id": "c_loop",
+          "fromNode": "loop",
+          "fromSocket": "texture",
+          "toNode": "view",
+          "toSocket": "texture"
+        }
+      ],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    },
+    {
+      "nodes": [],
+      "connections": [],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    },
+    {
+      "nodes": [],
+      "connections": [],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    },
+    {
+      "nodes": [],
+      "connections": [],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    },
+    {
+      "nodes": [],
+      "connections": [],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    },
+    {
+      "nodes": [],
+      "connections": [],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    }
+  ],
+  "activeCanvas": 0
+}

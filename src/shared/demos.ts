@@ -477,6 +477,12 @@ export const DEMO_CATALOG: DemoCategory[] = [
           "A heavily blurred letter turned into a regular dot screen: Voronoi distance vs. a Map Range radius with noisy max, colored through a B-Spline ramp.",
       },
       {
+        file: "demo_texture_volume_clouds.tsuji",
+        label: "Volume Clouds",
+        description:
+          "Raymarched cumulus built from tileable 3D noise (Perlin-Worley shape, Worley erosion) drifting in the wind, lit by a wired sun. Press Play; the 2D view shows a tileable noise looping every 10 s.",
+      },
+      {
         file: "demo_texture_to_geometry.tsuji",
         label: "Texture to Geometry",
         description: "A texture's pixels spawning objects.",

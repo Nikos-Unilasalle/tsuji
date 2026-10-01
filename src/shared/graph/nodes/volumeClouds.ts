@@ -77,6 +77,7 @@ function createCloudMaterial(): THREE.ShaderMaterial {
       uPowder: { value: 0.5 },
       uSteps: { value: 64 },
       uLightSteps: { value: 6 },
+      uDistanceFade: { value: new THREE.Vector2(0, 0) },
     },
     transparent: true,
     depthWrite: false,
@@ -144,6 +145,7 @@ export const VOLUME_CLOUDS_NODE: NodeDefinition = {
     detailScale: 6,
     wind: new THREE.Vector3(1.5, 0, 0.5),
     edgeFade: 0.15,
+    distanceFade: 0,
     shapeBlack: 0.8,
     shapeWhite: 1,
     sunDirection: new THREE.Vector3(0.5, 0.6, 0.3),
@@ -166,6 +168,7 @@ export const VOLUME_CLOUDS_NODE: NodeDefinition = {
     { id: "detailScale", label: "Detail Size (world)", kind: "number", step: 0.5, group: "Shape" },
     { id: "wind", label: "Wind (units / s)", kind: "vector", group: "Shape" },
     { id: "edgeFade", label: "Box Edge Fade", kind: "number", step: 0.05, group: "Shape" },
+    { id: "distanceFade", label: "Distance Fade (world, 0 = auto)", kind: "number", step: 5, group: "Shape" },
     { id: "shapeBlack", label: "Shape Levels: Black", kind: "number", step: 0.05, group: "Shape" },
     { id: "shapeWhite", label: "Shape Levels: White", kind: "number", step: 0.05, group: "Shape" },
     { id: "sunDirection", label: "Sun Direction (no light wired)", kind: "vector", group: "Lighting" },
@@ -222,6 +225,9 @@ export const VOLUME_CLOUDS_NODE: NodeDefinition = {
     u.uDensity.value = Math.max(0, numberInput(inputs.density, params.density, 1.2));
     u.uErosion.value = Math.max(0, Math.min(1, numberInput(inputs.erosion, params.erosion, 0.6)));
     u.uEdgeFade.value = Math.max(0, Math.min(1, numberInput(undefined, params.edgeFade, 0.15)));
+    // 0 = auto, resolved per pixel from the camera's position (see the shader).
+    const fadeEnd = Math.max(0, numberInput(undefined, params.distanceFade, 0));
+    (u.uDistanceFade.value as THREE.Vector2).set(fadeEnd * 0.4, fadeEnd);
 
     const center = new THREE.Vector3().setFromMatrixPosition(mesh.matrix);
     const worldSun = sunDirection(inputs.sun, asVector3(params.sunDirection, new THREE.Vector3(0.5, 0.6, 0.3)), center);

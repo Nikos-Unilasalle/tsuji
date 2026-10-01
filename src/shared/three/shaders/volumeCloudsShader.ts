@@ -9,7 +9,8 @@
  * Lighting: Beer-Lambert toward the sun through a few cheap samples (base
  * shape only), a three-octave multiple-scattering approximation (Wrenninge
  * 2013) over a dual-lobe Henyey-Greenstein phase, a powder term, and a
- * height-graded sky/ground ambient. Scattering is integrated per step with
+ * height-graded sky/ground ambient. Density fades out with distance from the
+ * camera, so a finite box melts into the sky instead of ending on a line. Scattering is integrated per step with
  * Hillaire's energy-conserving formula, so changing Steps changes noise, not
  * brightness.
  *
@@ -25,6 +26,11 @@ export const VOLUME_CLOUDS_VERTEX = /* glsl */ `
     vLocalPos = position;
     vLocalCam = (uInvModel * vec4(cameraPosition, 1.0)).xyz;
     gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    // The march spans the whole box in the fragment shader; only the back faces
+    // that start it have to survive clipping. A wall past the camera's far
+    // plane (the editor's is 100) would otherwise be cut away, leaving a hole
+    // the exact shape of that wall. Pinned to the far plane, it still draws.
+    if (gl_Position.w > 0.0) gl_Position.z = min(gl_Position.z, gl_Position.w * 0.999999);
   }
 `;
 
@@ -56,6 +62,7 @@ export const VOLUME_CLOUDS_FRAGMENT = /* glsl */ `
   uniform float uPowder;
   uniform int uSteps;
   uniform int uLightSteps;
+  uniform vec2 uDistanceFade;
 
   varying vec3 vLocalPos;
   varying vec3 vLocalCam;
@@ -121,6 +128,15 @@ export const VOLUME_CLOUDS_FRAGMENT = /* glsl */ `
     t.x = max(t.x, 0.0);
     if (t.y <= t.x) discard;
 
+    // Density fades with distance and the march stops at the fade end — long
+    // grazing rays through a wide box are both the expensive case and the one
+    // that would otherwise show the box's far edge as a hard line on the horizon.
+    // Auto (y <= 0): gone by the far wall wherever the camera stands.
+    float radius = max(uHalfSize.x, uHalfSize.z);
+    float fadeEnd = uDistanceFade.y > 0.0 ? uDistanceFade.y : length(ro.xz) + radius;
+    vec2 fade = vec2(uDistanceFade.y > 0.0 ? uDistanceFade.x : max(fadeEnd - 1.2 * radius, 0.0), fadeEnd);
+    t.y = min(t.y, fade.y);
+    if (t.y <= t.x) discard;
     float dt = (t.y - t.x) / float(uSteps);
     float jitter = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
     float cosTheta = dot(rd, uSunDir);
@@ -130,9 +146,10 @@ export const VOLUME_CLOUDS_FRAGMENT = /* glsl */ `
     float T = 1.0;
     for (int i = 0; i < ${MAX_CLOUD_STEPS}; i++) {
       if (i >= uSteps) break;
-      vec3 p = ro + rd * (t.x + dt * (float(i) + jitter));
+      float tc = t.x + dt * (float(i) + jitter);
+      vec3 p = ro + rd * tc;
       float h = heightFraction(p);
-      float base = baseDensity(p, h);
+      float base = baseDensity(p, h) * (1.0 - smoothstep(fade.x, fade.y, tc));
       if (base <= 0.0) continue;
       float d = erode(base, p, h);
       if (d <= 0.0) continue;
