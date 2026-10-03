@@ -3,6 +3,7 @@ import * as THREE from "three";
 import {
   createQuadBox,
   createQuadPlane,
+  createQuadSphere,
   quadMeshToBufferGeometry,
   bufferGeometryToQuadMesh,
   getQuadMeshEdges,
@@ -27,6 +28,70 @@ describe("QuadMesh", () => {
     for (const f of box.faces) {
       expect(f.length).toBe(4);
     }
+  });
+
+  it("creates a closed, outward-facing quad sphere on the radius", () => {
+    const n = 4;
+    const sphere = createQuadSphere(0.5, n);
+    expect(sphere.faces.length).toBe(6 * n * n);
+    expect(sphere.positions.length).toBe(6 * n * n + 2); // Euler: V - E + F = 2
+    for (const f of sphere.faces) expect(f.length).toBe(4);
+    for (const p of sphere.positions) expect(Math.hypot(...p)).toBeCloseTo(0.5, 6);
+
+    // Closed manifold: every edge shared by exactly two faces, once each way.
+    const directed = new Set<string>();
+    for (const f of sphere.faces) {
+      for (let i = 0; i < 4; i++) {
+        const key = `${f[i]}_${f[(i + 1) % 4]}`;
+        expect(directed.has(key)).toBe(false);
+        directed.add(key);
+      }
+    }
+    for (const key of directed) {
+      const [a, b] = key.split("_");
+      expect(directed.has(`${b}_${a}`)).toBe(true);
+    }
+
+    for (const f of sphere.faces) {
+      const centroid = new THREE.Vector3();
+      for (const v of f) centroid.add(new THREE.Vector3(...sphere.positions[v]));
+      const a = new THREE.Vector3(...sphere.positions[f[0]]);
+      const normal = new THREE.Vector3()
+        .subVectors(new THREE.Vector3(...sphere.positions[f[1]]), a)
+        .cross(new THREE.Vector3().subVectors(new THREE.Vector3(...sphere.positions[f[2]]), a));
+      expect(normal.dot(centroid)).toBeGreaterThan(0);
+    }
+  });
+
+  it("builds Blender 5.3's quad sphere: same vertices, faces and UVs", () => {
+    // Reference values from Blender's own Add > Quad Sphere (radius 1, 4
+    // segments, Even Area), exported as OBJ (Y up).
+    const sphere = createQuadSphere(1, 4);
+    expect(sphere.positions.length).toBe(98);
+    const expectClose = (v: number, expected: number[]) =>
+      sphere.positions[v].forEach((c, a) => expect(c).toBeCloseTo(expected[a], 5));
+    expectClose(0, [-0.57735, -0.57735, 0.57735]);
+    expectClose(1, [-0.267367, -0.681364, 0.681364]);
+    expectClose(6, [-0.343109, -0.874387, 0.343109]);
+    expectClose(7, [0, -0.930896, 0.365284]);
+    expect(sphere.faces[0]).toEqual([0, 25, 40, 5]);
+    expect(sphere.faces[2]).toEqual([57, 72, 56, 41]); // a flipped quad: starts one corner later
+    expect(sphere.faceUVs![0]).toEqual([
+      [0.375, 0],
+      [0.4375, 0],
+      [0.4375, 0.0625],
+      [0.375, 0.0625],
+    ]);
+    const geometry = quadMeshToBufferGeometry(sphere);
+    expect(bufferGeometryToQuadMesh(geometry).faces.length).toBe(96);
+  });
+
+  it("spaces an Even Angle quad sphere at equal angles", () => {
+    const sphere = createQuadSphere(1, 4, "even_angle");
+    // Vertex 7 sits a quarter of the way across the -Y face: 22.5° off its centre.
+    const [x, y, z] = sphere.positions[7];
+    expect(x).toBeCloseTo(0, 6);
+    expect(Math.atan2(z, -y)).toBeCloseTo(Math.PI / 8, 6);
   });
 
   it("creates a quad plane with segmented grid", () => {

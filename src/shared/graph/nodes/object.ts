@@ -7,7 +7,7 @@ import { BUILTIN_FONTS, FONT_NAMES } from "../../three/fonts/fonts";
 import { createNodeCache, disposeObject3D } from "../nodeCaches";
 import { asVector3, composeNativeMatrix, preserveModifierUserData } from "./transform";
 import { worldMatrixOf } from "../objectPosition";
-import { createQuadBox, createQuadPlane, QuadMesh, quadMeshToBufferGeometry, syncLooseEdgeLines } from "../quadMesh";
+import { createQuadBox, createQuadPlane, createQuadSphere, QuadMesh, QuadSphereMethod, quadMeshToBufferGeometry, syncLooseEdgeLines } from "../quadMesh";
 
 export function numberInput(input: unknown, param: unknown, fallback: number): number {
   const raw = input !== undefined ? input : param;
@@ -1385,22 +1385,68 @@ function sphereMesh(nodeId: string): THREE.Mesh {
   return mesh;
 }
 
-/** Sphere 3D geometry primitive with UV texture mapping. */
+const SPHERE_TYPE_FIELD: ParamFieldDef = {
+  id: "sphereType",
+  label: "Type",
+  kind: "select",
+  options: ["uv", "quad"],
+  optionLabels: ["UV Sphere", "Quad Sphere"],
+};
+const QUAD_SPHERE_FIELDS: ParamFieldDef[] = [
+  { id: "segments", label: "Segments (per cube side)", kind: "number", step: 1 },
+  {
+    id: "quadSphereMethod",
+    label: "Method",
+    kind: "select",
+    options: ["even_area", "even_angle"],
+    optionLabels: ["Even Area", "Even Angle"],
+  },
+];
+
+/**
+ * Sphere 3D geometry primitive with UV texture mapping.
+ *
+ * `Type` picks the topology. UV Sphere is the original THREE.SphereGeometry
+ * (and stays the default: Edit Mesh Points stores points by vertex index, so
+ * a saved sphere must keep its vertices). Quad Sphere is Blender 5.3's —
+ * same vertices, faces and UVs, with its Segments (default 4) and Method —
+ * all quads, no poles, even face sizes, the better base for Edit Mesh,
+ * Subdivide or sculpting. See createQuadSphere. Its geometry carries the
+ * QuadMesh it was built from, so Edit Mesh gets the quads as they are rather
+ * than re-pairing triangles.
+ */
 export const OBJECT_SPHERE_NODE: NodeDefinition = {
   type: "object/sphere",
   label: "Sphere",
   category: "object",
-  inputs: [...COMMON_PRIMITIVE_INPUTS],
+  inputs: [...COMMON_PRIMITIVE_INPUTS, { id: "segments", label: "Segments", type: "value" }],
   outputs: [...COMMON_PRIMITIVE_OUTPUTS],
-  defaultParams: { ...COMMON_DEFAULT_PARAMS },
-  paramFields: buildPrimitiveDynamicParamFields()(),
-  dynamicParamFields: buildPrimitiveDynamicParamFields(),
+  defaultParams: { ...COMMON_DEFAULT_PARAMS, sphereType: "uv", segments: 4, quadSphereMethod: "even_area" },
+  paramFields: buildPrimitiveDynamicParamFields([SPHERE_TYPE_FIELD, ...QUAD_SPHERE_FIELDS])(),
+  dynamicParamFields: (instance) =>
+    buildPrimitiveDynamicParamFields(
+      instance.params.sphereType === "quad" ? [SPHERE_TYPE_FIELD, ...QUAD_SPHERE_FIELDS] : [SPHERE_TYPE_FIELD],
+    )(),
   evaluate: (inputs, params, ctx) => {
     const mesh = sphereMesh(ctx.nodeId);
 
     if (ctx.nodeId !== ctx.liveEditNodeId) {
       mesh.matrixAutoUpdate = false;
       mesh.matrix.copy(composeNativeMatrix(inputs.matrix, params.location, params.rotation, params.scale, params));
+    }
+
+    const quad = params.sphereType === "quad";
+    const segments = Math.max(1, Math.min(64, Math.round(numberInput(inputs.segments, params.segments, 4))));
+    const method: QuadSphereMethod = params.quadSphereMethod === "even_angle" ? "even_angle" : "even_area";
+    const key = quad ? `quad_${segments}_${method}` : "uv";
+    const cache = mesh as THREE.Mesh & { _lastSphereKey?: string };
+    // A fresh mesh already holds the UV sphere, so "uv" needs no rebuild.
+    if ((cache._lastSphereKey ?? "uv") !== key) {
+      cache._lastSphereKey = key;
+      mesh.geometry.dispose();
+      mesh.geometry = quad
+        ? quadMeshToBufferGeometry(createQuadSphere(0.5, segments, method))
+        : new THREE.SphereGeometry(0.5, 32, 16);
     }
 
     const matParams = extractMaterialParams(inputs, params);

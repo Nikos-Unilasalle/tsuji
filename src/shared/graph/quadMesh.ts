@@ -233,6 +233,131 @@ export function createQuadBox(width = 1, height = 1, depth = 1): QuadMesh {
   });
 }
 
+export type QuadSphereMethod = "even_area" | "even_angle";
+
+/**
+ * Blender's cube corners per face (corner index = x·4 + y·2 + z, Blender's
+ * Z-up axes), wound outward, in the order its cube UV layout expects.
+ */
+const QUAD_SPHERE_CUBE_FACES = [
+  [0, 1, 3, 2],
+  [2, 3, 7, 6],
+  [6, 7, 5, 4],
+  [4, 5, 1, 0],
+  [2, 6, 4, 0],
+  [7, 3, 1, 5],
+];
+/** Lower-left corner of each face above in the UV layout of Blender's default cube. */
+const QUAD_SPHERE_FACE_UV = [
+  [0.375, 0],
+  [0.375, 0.25],
+  [0.375, 0.5],
+  [0.375, 0.75],
+  [0.125, 0.5],
+  [0.625, 0.5],
+];
+
+/**
+ * Quad sphere, a port of Blender 5.3's Add > Mesh > Quad Sphere
+ * (bmo_create_quadsphere_exec): a cube whose six faces are `segments` ×
+ * `segments` grids pushed out onto the sphere. All quads, no poles — the
+ * eight cube corners are the only vertices with three neighbours.
+ *
+ * Each axis of a face is warped on its own, tan(c·angle) / tan(angle), before
+ * normalising. "even_angle" (angle π/4) is the Equi-Angular Cube-map: equal
+ * angles between vertices. "even_area", Blender's default, widens the angle
+ * to ~49.77° — solved for the least area distortion (Zucker & Higashi,
+ * "Cube-to-sphere Projections for Procedural Texturing and Beyond", JCGT
+ * 2018) — so the quads come out closer to the same size.
+ *
+ * Vertex order, face order and UVs match Blender's exactly, with its Z-up
+ * axes turned to Y-up the way its OBJ export does ((x, y, z) → (x, z, −y)),
+ * so the mesh is the one Blender exports. That includes Blender's trick of
+ * starting the quads of two opposite quarters of each face one corner later:
+ * a quad renders as its 0–2 diagonal (triangulateFace), and this way the
+ * diagonals point toward the cube corners symmetrically, which keeps the
+ * triangulated surface rounder.
+ *
+ * UVs: the cube-cross layout of Blender's default cube, a quarter of the UV
+ * width per face.
+ */
+export function createQuadSphere(radius = 0.5, segments = 4, method: QuadSphereMethod = "even_area"): QuadMesh {
+  const seg = Math.max(1, Math.round(segments));
+  const segVert = seg + 1;
+  const layerFull = segVert * segVert;
+  const layerRing = seg * 4;
+
+  // Vertices are stored as Z layers; only the cube surface exists, so the
+  // first and last layers are full grids and those between are rings.
+  const vertexIndex = (x: number, y: number, z: number): number => {
+    if (z === 0) return y * segVert + x;
+    if (z === seg) return layerFull + layerRing * (seg - 1) + y * segVert + x;
+    // Walk around the ring, starting at the (0, 0) corner.
+    let ring: number;
+    if (y === 0) ring = x;
+    else if (x === seg) ring = seg + y;
+    else if (y === seg) ring = seg * 3 - x;
+    else ring = seg * 4 - y;
+    return layerFull + layerRing * (z - 1) + ring;
+  };
+
+  const angle = method === "even_angle" ? Math.PI / 4 : 0.8687;
+  const cubeCo = (i: number) => (i * 2 - seg) / seg;
+  const warp = Array.from({ length: segVert }, (_, i) =>
+    i === 0 || i === seg ? cubeCo(i) : Math.tan(cubeCo(i) * angle) / Math.tan(angle),
+  );
+
+  const positions: [number, number, number][] = [];
+  const addVertex = (g: [number, number, number]) => {
+    // The axis on a cube face stays exactly ±1; the two spanning it are warped.
+    const face = g[0] === 0 || g[0] === seg ? 0 : g[1] === 0 || g[1] === seg ? 1 : 2;
+    const co = g.map((c, axis) => (axis === face ? cubeCo(c) : warp[c]));
+    const scale = radius / Math.hypot(co[0], co[1], co[2]);
+    positions.push([co[0] * scale, co[2] * scale, -co[1] * scale]);
+  };
+  for (let z = 0; z <= seg; z++) {
+    if (z === 0 || z === seg) {
+      for (let y = 0; y <= seg; y++) for (let x = 0; x <= seg; x++) addVertex([x, y, z]);
+    } else {
+      for (let x = 0; x <= seg; x++) addVertex([x, 0, z]);
+      for (let y = 1; y <= seg; y++) addVertex([seg, y, z]);
+      for (let x = seg - 1; x >= 0; x--) addVertex([x, seg, z]);
+      for (let y = seg - 1; y >= 1; y--) addVertex([0, y, z]);
+    }
+  }
+
+  const cornerOf = (c: number): [number, number, number] => [(c >> 2) & 1, (c >> 1) & 1, c & 1];
+  const uvStep = 0.25 / seg;
+  const faces: number[][] = [];
+  const faceUVs: [number, number][][] = [];
+  QUAD_SPHERE_CUBE_FACES.forEach((cubeFace, f) => {
+    const corner = cornerOf(cubeFace[0]);
+    const stepU = cornerOf(cubeFace[1]).map((c, a) => c - corner[a]);
+    const stepV = cornerOf(cubeFace[3]).map((c, a) => c - corner[a]);
+    const at = (u: number, v: number) => {
+      const [x, y, z] = corner.map((c, a) => c * seg + stepU[a] * u + stepV[a] * v);
+      return vertexIndex(x, y, z);
+    };
+    const [u0, v0] = QUAD_SPHERE_FACE_UV[f];
+    for (let v = 0; v < seg; v++) {
+      for (let u = 0; u < seg; u++) {
+        const quad = [at(u, v), at(u + 1, v), at(u + 1, v + 1), at(u, v + 1)];
+        const uvs: [number, number][] = [
+          [u0 + uvStep * u, v0 + uvStep * v],
+          [u0 + uvStep * (u + 1), v0 + uvStep * v],
+          [u0 + uvStep * (u + 1), v0 + uvStep * (v + 1)],
+          [u0 + uvStep * u, v0 + uvStep * (v + 1)],
+        ];
+        const flip = (u * 2 + 1 < seg) !== (v * 2 + 1 < seg);
+        faces.push(flip ? [...quad.slice(1), quad[0]] : quad);
+        faceUVs.push(flip ? [...uvs.slice(1), uvs[0]] : uvs);
+      }
+    }
+  });
+
+  return { positions, faces, faceUVs, shading: "smooth" };
+}
+
 /**
  * Creates a plane represented as a grid of quads.
  */
