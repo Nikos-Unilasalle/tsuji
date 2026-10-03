@@ -155,6 +155,7 @@ import {
   type StabilizerMode,
 } from "./strokeInput";
 import type { GreaseBrushType } from "../graph/nodes/greasePencil";
+import { P5_GREASE_BRUSH_LABELS } from "../graph/nodes/greasePencilP5";
 
 /** The image a mesh's material maps, for the UV view's background. */
 function textureImageOf(mesh: THREE.Mesh): CanvasImageSource | null {
@@ -299,7 +300,8 @@ import {
 } from "./textureMixEngine";
 import { serializeSplatToPng } from "./splatSerialization";
 import { compositeLayersAuto } from "./layeredTexture";
-import { getTexturePaintState } from "../graph/nodes/texturePaint";
+import { getTexturePaintState, texturePaintP5Style } from "../graph/nodes/texturePaint";
+import { endBrushPaint } from "./brushPaintSession";
 import { getTextureMixPaintState } from "../graph/nodes/textureMixPaint";
 
 function isTexturePaintNode(node: { type: string } | null | undefined): boolean {
@@ -3503,6 +3505,7 @@ export function Viewport({
                     pressure,
                     prevPressure: null,
                     pressureAffects: pressureTarget,
+                    p5: texturePaintP5Style(texPaintNode.params),
                   });
                   if (res.sampledColor) {
                     onParamChangeRef.current?.("brushColor", res.sampledColor, texPaintNode.id);
@@ -4021,6 +4024,7 @@ export function Viewport({
                     pressure,
                     prevPressure,
                     pressureAffects: pressureTarget,
+                    p5: texturePaintP5Style(texPaintNode.params),
                   });
                   if (res.sampledColor) {
                     onParamChangeRef.current?.("brushColor", res.sampledColor, texPaintNode.id);
@@ -4469,6 +4473,12 @@ export function Viewport({
         const node = selectedNodeIdRef.current
           ? graphRef.current.nodes.find((n) => n.id === selectedNodeIdRef.current)
           : null;
+        if (node && isTexturePaintNode(node)) {
+          const paintState = getTexturePaintState(node.id);
+          if (paintState.canvas && endBrushPaint(paintState.canvas) && paintState.texture) {
+            paintState.texture.needsUpdate = true;
+          }
+        }
         // Encoding a 1024² map is expensive enough to be felt, and a working
         // pass is dozens of short strokes. Coalesce them: the buffer in memory
         // is the live one, the param only has to catch up before a save.
@@ -7745,6 +7755,11 @@ export function Viewport({
                 <option value="pencil" style={{ background: "#1e293b", color: "#fff" }}>Pencil</option>
                 <option value="charcoal" style={{ background: "#1e293b", color: "#fff" }}>Charcoal</option>
                 <option value="watercolor" style={{ background: "#1e293b", color: "#fff" }}>Watercolour</option>
+                <optgroup label="p5.brush (painted texture)" style={{ background: "#1e293b", color: "#94a3b8" }}>
+                  {P5_GREASE_BRUSH_LABELS.map(([value, label]) => (
+                    <option key={value} value={value} style={{ background: "#1e293b", color: "#fff" }}>{label}</option>
+                  ))}
+                </optgroup>
               </select>
 
               {/* Solid Fill Toggle */}
@@ -9533,6 +9548,33 @@ export function Viewport({
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M19 11 11 3 3 11l8 8z" />
                   <path d="M19 15c0 1.7 1.3 3 2 3s2-1.3 2-3-2-4-2-4-2 2.3-2 4Z" />
+                </svg>
+              </button>
+
+              {/* Tool: p5.brush stroke */}
+              <button
+                type="button"
+                className={`viewport-hud-button ${currentTool === "brush" ? "viewport-hud-button-active" : ""}`}
+                onClick={() => onParamChange?.("brushTool", "brush", tpNode.id)}
+                title="p5 Brush: natural pencil / charcoal / marker stroke (brush picked in the node's p5.brush settings)"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 21c3-1 4-3 5-5" />
+                  <path d="m8 16 9.5-9.5a2.1 2.1 0 0 1 3 3L11 19" />
+                  <path d="M8 16l3 3" />
+                </svg>
+              </button>
+
+              {/* Tool: p5.brush watercolor */}
+              <button
+                type="button"
+                className={`viewport-hud-button ${currentTool === "watercolor" ? "viewport-hud-button-active" : ""}`}
+                onClick={() => onParamChange?.("brushTool", "watercolor", tpNode.id)}
+                title="Watercolor: the gesture outlines a wash that bleeds and darkens at its edges"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 3c-3 4-6 7.5-6 11a6 6 0 0 0 12 0c0-3.5-3-7-6-11Z" />
+                  <path d="M9 15a3 3 0 0 0 3 3" />
                 </svg>
               </button>
 

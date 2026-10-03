@@ -3,10 +3,12 @@ import { NodeDefinition } from "../types";
 import { createNodeCache, disposeObject3D } from "../nodeCaches";
 import { composeNativeMatrix } from "./transform";
 import {
+  TexturePaintStrokeParams,
   TexturePaintTool,
   createPaintCanvas,
   restorePaintCanvas,
 } from "../../three/texturePainter";
+import { BRUSH_NAMES } from "../../three/brushScene";
 import {
   LayeredTextureState,
   applyTextureToGeometry,
@@ -38,6 +40,21 @@ export function getTexturePaintState(nodeId: string): TexturePaintState {
   return state;
 }
 
+/** The p5.brush settings Texture Paint hands to applyPaintStroke for its "brush" / "watercolor" tools. */
+export function texturePaintP5Style(params: Record<string, unknown>): TexturePaintStrokeParams["p5"] {
+  const unit = (v: unknown, fallback: number) => {
+    const n = Number(v);
+    return Number.isFinite(n) ? Math.max(0, Math.min(1, n)) : fallback;
+  };
+  const brush = BRUSH_NAMES.includes(params.p5Brush as (typeof BRUSH_NAMES)[number]) ? String(params.p5Brush) : "2B";
+  return {
+    brush,
+    bleed: unit(params.watercolorBleed, 0.3),
+    texture: unit(params.watercolorTexture, 0.5),
+    border: unit(params.watercolorBorder, 0.4),
+  };
+}
+
 export const TEXTURE_PAINT_NODE: NodeDefinition = {
   type: "texture/paint",
   label: "Texture Paint",
@@ -63,6 +80,10 @@ export const TEXTURE_PAINT_NODE: NodeDefinition = {
     brushOpacity: 1.0,
     brushHardness: 0.5,
     symmetryX: false,
+    p5Brush: "2B",
+    watercolorBleed: 0.3,
+    watercolorTexture: 0.5,
+    watercolorBorder: 0.4,
     usePressure: true,
     pressureTarget: "both",
     textureData: "",
@@ -85,13 +106,18 @@ export const TEXTURE_PAINT_NODE: NodeDefinition = {
       id: "brushTool",
       label: "Active Tool",
       kind: "select",
-      options: ["paint", "erase", "smooth", "eyedropper", "fill"],
+      options: ["paint", "erase", "smooth", "eyedropper", "fill", "brush", "watercolor"],
+      optionLabels: ["Paint", "Erase", "Smooth", "Eyedropper", "Fill", "p5 Brush", "Watercolor"],
     },
     { id: "brushColor", label: "Brush Color", kind: "color" },
     { id: "brushSize", label: "Brush Size", kind: "number", step: 1 },
     { id: "brushOpacity", label: "Brush Opacity", kind: "number", step: 0.05 },
     { id: "brushHardness", label: "Brush Hardness", kind: "number", step: 0.05 },
     { id: "symmetryX", label: "Mirror X", kind: "boolean" },
+    { id: "p5Brush", label: "p5 Brush", kind: "select", options: [...BRUSH_NAMES], group: "p5.brush" },
+    { id: "watercolorBleed", label: "Watercolor Bleed", kind: "number", step: 0.05, group: "p5.brush" },
+    { id: "watercolorTexture", label: "Watercolor Texture", kind: "number", step: 0.05, group: "p5.brush" },
+    { id: "watercolorBorder", label: "Edge Darkening", kind: "number", step: 0.05, group: "p5.brush" },
     { id: "usePressure", label: "Stylus Pressure", kind: "boolean" },
     {
       id: "pressureTarget",

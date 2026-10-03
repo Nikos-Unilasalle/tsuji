@@ -1,4 +1,6 @@
-export type TexturePaintTool = "paint" | "erase" | "smooth" | "eyedropper" | "fill";
+import { BrushPaintStyle, brushPaintSample, isBrushPaintTool } from "./brushPaintSession";
+
+export type TexturePaintTool = "paint" | "erase" | "smooth" | "eyedropper" | "fill" | "brush" | "watercolor";
 
 export interface TexturePaintStrokeParams {
   tool: TexturePaintTool;
@@ -12,6 +14,8 @@ export interface TexturePaintStrokeParams {
   pressure?: number;
   prevPressure?: number | null;
   pressureAffects?: "both" | "size" | "opacity" | "none";
+  /** p5.brush settings for the "brush" / "watercolor" tools. */
+  p5?: Pick<BrushPaintStyle, "brush" | "bleed" | "texture" | "border">;
 }
 
 /**
@@ -374,6 +378,29 @@ export function applyPaintStroke(
     const toHex = (n: number) => n.toString(16).padStart(2, "0");
     const hex = `#${toHex(p[0])}${toHex(p[1])}${toHex(p[2])}`;
     return { sampledColor: hex };
+  }
+
+  if (isBrushPaintTool(params.tool)) {
+    const pressure = params.pressureAffects === "none" ? 1 : (params.pressure ?? 1);
+    brushPaintSample(
+      canvas,
+      params.tool,
+      {
+        brush: params.p5?.brush ?? "2B",
+        color: params.color,
+        size: params.radius,
+        opacity: params.opacity,
+        bleed: params.p5?.bleed ?? 0.25,
+        texture: params.p5?.texture ?? 0.4,
+        border: params.p5?.border ?? 0.4,
+        symmetryX: Boolean(params.symmetryX),
+      },
+      currX,
+      currY,
+      pressure,
+      !params.prevUv,
+    );
+    return {};
   }
 
   // Fill tool

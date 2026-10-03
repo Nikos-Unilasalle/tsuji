@@ -2,6 +2,9 @@ import * as THREE from "three";
 import { NodeDefinition } from "../types";
 import { createNodeCache, disposeObject3D } from "../nodeCaches";
 import { composeNativeMatrix } from "./transform";
+import { curveStrokeMeta } from "../../three/brushScene";
+import { BRUSH_ENGINE_MAX_SIZE } from "../../three/brushEngine";
+import { P5GreaseBrushType, P5_GREASE_BRUSH_TYPES, isP5GreaseBrush, syncGreaseP5Layer } from "./greasePencilP5";
 
 export interface StrokePoint {
   x: number;
@@ -17,7 +20,7 @@ export interface StrokePoint {
   tiltInc?: number;
 }
 
-export type GreaseBrushType =
+export type NativeGreaseBrushType =
   | "ink_pen"
   | "ink_pen_rough"
   | "marker_bold"
@@ -26,8 +29,11 @@ export type GreaseBrushType =
   | "charcoal"
   | "watercolor";
 
+/** Native ribbon brushes, plus p5.brush media painted to a texture (greasePencilP5.ts). */
+export type GreaseBrushType = NativeGreaseBrushType | P5GreaseBrushType;
+
 /** Brush ids handed to the shader for procedural grain (see applyStrokeEdgeAA). */
-export const BRUSH_SHADER_ID: Record<GreaseBrushType, number> = {
+export const BRUSH_SHADER_ID: Record<NativeGreaseBrushType, number> = {
   ink_pen: 0,
   ink_pen_rough: 0,
   marker_bold: 0,
@@ -463,7 +469,7 @@ export function buildStrokesRibbonGeometry(
     const strokeWidth = stroke.width || baseBrushSize;
     const baseRadius = strokeWidth * 0.02;
     const brushType: GreaseBrushType = stroke.brushType || "ink_pen";
-    grainBrush = BRUSH_SHADER_ID[brushType] ?? 0;
+    grainBrush = BRUSH_SHADER_ID[brushType as NativeGreaseBrushType] ?? 0;
     grainAlong = 0;
 
     // 1. Airbrush Preset: Soft Stippled Particle Spray
@@ -687,6 +693,7 @@ export function strokesToCurves(strokes: GreaseStroke[]): THREE.CatmullRomCurve3
     if (!stroke.points || stroke.points.length < 2) continue;
     const vectors = stroke.points.map((p) => new THREE.Vector3(p.x, p.y, p.z));
     const curve = new THREE.CatmullRomCurve3(vectors, Boolean(stroke.closed), "centripetal");
+    curveStrokeMeta.set(curve, { pressures: stroke.points.map((p) => p.pressure), color: stroke.color });
     curves.push(curve);
   }
   return curves;
@@ -746,6 +753,13 @@ export const GREASE_PENCIL_NODE: NodeDefinition = {
     onionSkinBefore: 1,
     onionSkinAfter: 1,
     onionSkinOpacity: 0.35,
+    p5Density: 256,
+    p5Seed: 1,
+    p5Boil: 0,
+    p5Opacity: 150,
+    p5Bleed: 0.3,
+    p5Texture: 0.5,
+    p5Border: 0.4,
     frames: [] as KeyframeDrawing[],
     visible: true,
     location: new THREE.Vector3(0, 0, 0),
@@ -769,6 +783,7 @@ export const GREASE_PENCIL_NODE: NodeDefinition = {
         "pencil",
         "charcoal",
         "watercolor",
+        ...P5_GREASE_BRUSH_TYPES,
       ],
     },
     { id: "solidFill", label: "Solid Fill", kind: "boolean" },
@@ -788,6 +803,13 @@ export const GREASE_PENCIL_NODE: NodeDefinition = {
     { id: "onionSkinBefore", label: "Ghost Before", kind: "number", step: 1 },
     { id: "onionSkinAfter", label: "Ghost After", kind: "number", step: 1 },
     { id: "onionSkinOpacity", label: "Ghost Opacity", kind: "number", step: 0.05 },
+    { id: "p5Density", label: "Texture Density (px/unit)", kind: "number", step: 16, group: "p5.brush" },
+    { id: "p5Seed", label: "Seed", kind: "number", step: 1, group: "p5.brush" },
+    { id: "p5Boil", label: "Boil (frames, 0 = off)", kind: "number", step: 1, group: "p5.brush" },
+    { id: "p5Opacity", label: "Watercolor Opacity (0-255)", kind: "number", step: 5, group: "p5.brush" },
+    { id: "p5Bleed", label: "Watercolor Bleed", kind: "number", step: 0.05, group: "p5.brush" },
+    { id: "p5Texture", label: "Watercolor Texture", kind: "number", step: 0.05, group: "p5.brush" },
+    { id: "p5Border", label: "Edge Darkening", kind: "number", step: 0.05, group: "p5.brush" },
     { id: "visible", label: "Visible", kind: "boolean", group: "Transform" },
     { id: "location", label: "Location", kind: "vector", group: "Transform" },
     { id: "rotation", label: "Rotation (°)", kind: "vector", step: 1, degrees: true, group: "Transform" },
@@ -858,7 +880,8 @@ export const GREASE_PENCIL_NODE: NodeDefinition = {
       state.lastSignature = signature;
 
       // 1. Render Solid Fill Mesh (underneath strokes)
-      const filledStrokes = strokes.map((s) => ({
+      const vectorStrokes = strokes.filter((s) => !isP5GreaseBrush(s.brushType || nodeBrushType));
+      const filledStrokes = vectorStrokes.map((s) => ({
         ...s,
         fill: s.fill ?? nodeSolidFill,
         fillColor:
@@ -911,7 +934,7 @@ export const GREASE_PENCIL_NODE: NodeDefinition = {
       }
 
       // 2. Render Active Drawing as variable-width ribbon mesh
-      const activeStrokes = strokes.map((s) => ({
+      const activeStrokes = vectorStrokes.map((s) => ({
         ...s,
         brushType: s.brushType || nodeBrushType,
       }));
@@ -1040,6 +1063,30 @@ export const GREASE_PENCIL_NODE: NodeDefinition = {
         if (state.onionNextMesh) state.onionNextMesh.visible = false;
       }
     }
+
+    const unit = (v: unknown, fallback: number) => {
+      const n = Number(v);
+      return Number.isFinite(n) ? Math.max(0, Math.min(1, n)) : fallback;
+    };
+    const boil = Math.max(0, Math.round(Number(params.p5Boil) || 0));
+    const baseSeed = Math.round(Number(params.p5Seed) || 1);
+    syncGreaseP5Layer(
+      state.group,
+      ctx.nodeId,
+      strokes.map((s) => (s.brushType ? s : { ...s, brushType: nodeBrushType })),
+      {
+        density: Math.max(16, Number(params.p5Density) || 256),
+        maxTextureSize: BRUSH_ENGINE_MAX_SIZE,
+        seed: boil > 0 ? baseSeed + Math.floor(currentFrame / boil) : baseSeed,
+        opacity: Number.isFinite(Number(params.p5Opacity)) ? Number(params.p5Opacity) : 150,
+        bleed: unit(params.p5Bleed, 0.3),
+        texture: unit(params.p5Texture, 0.5),
+        border: unit(params.p5Border, 0.4),
+        defaultColor: activeColorHex,
+        defaultWidth: brushSize,
+      },
+      ctx.isPlaying ? ctx.currentFrame : undefined,
+    );
 
     // Apply Transformation Matrix
     const matrix = composeNativeMatrix(

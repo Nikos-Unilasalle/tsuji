@@ -546,6 +546,17 @@ export const DEMO_CATALOG: DemoCategory[] = [
     ],
   },
   {
+    title: "Painting (p5.brush)",
+    demos: [
+      {
+        file: "demo_p5_brush_watercolor.tsuji",
+        label: "Watercolor Landscape",
+        description:
+          "p5.brush media in Grease Pencil: a static watercolor landscape with charcoal ridges and 2B reeds, pastel birds flying on keyframes with a boil shimmer, and in the 2D view a Brush Canvas star breathing on an oscillator — wet wash, charcoal outline, hatching, hand wiggle. Press Play.",
+      },
+    ],
+  },
+  {
     title: "Showcases",
     demos: [
       {
