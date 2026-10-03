@@ -68,6 +68,9 @@ export const GIZMO_SELECTABLE_TYPES = [
   "object/volume-clouds",
   "curve/grease-pencil",
   "curve/paint-on-geometry",
+  "rig/human",
+  "rig/polypede",
+  "rig/polypede-motion",
   // A group, but only while it renders its own container — see the guard in
   // resolveGizmoTarget, which is the part a flat type list cannot express.
   GROUP_TYPE,

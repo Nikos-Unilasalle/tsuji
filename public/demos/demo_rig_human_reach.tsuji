@@ -1,0 +1,366 @@
+{
+  "canvases": [
+    {
+      "nodes": [
+        {
+          "id": "setup_0",
+          "type": "object/plane",
+          "position": {
+            "x": 599,
+            "y": 160
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "rotation": {
+              "x": 1.5707963267948966,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 12,
+              "y": 12,
+              "z": 1
+            },
+            "texturePath": "",
+            "normalMapPath": "",
+            "roughnessMapPath": "",
+            "uvScaleX": 1,
+            "uvScaleY": 1,
+            "uvOffsetX": 0,
+            "uvOffsetY": 0,
+            "color": 16777215,
+            "emissive": 0,
+            "emissiveIntensity": 1,
+            "shadeless": 0,
+            "roughness": 0.1,
+            "metalness": 0.1,
+            "wireframe": 0,
+            "opacity": 1,
+            "transmission": 0,
+            "thickness": 0.5
+          }
+        },
+        {
+          "id": "setup_1",
+          "type": "texture/procedural",
+          "position": {
+            "x": 375,
+            "y": 223
+          },
+          "params": {
+            "type": "checker",
+            "colorA": 16777215,
+            "colorB": 2236962,
+            "scale": 8,
+            "seed": 1,
+            "octaves": 3,
+            "resolution": 256,
+            "uvScaleX": 1,
+            "uvScaleY": 1,
+            "uvOffsetX": 0,
+            "uvOffsetY": 0
+          }
+        },
+        {
+          "id": "setup_2",
+          "type": "light/point",
+          "position": {
+            "x": 857,
+            "y": 193
+          },
+          "params": {
+            "location": {
+              "x": 0,
+              "y": 2.185514752224622,
+              "z": -4.5179526088705275
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "color": 16768110,
+            "intensity": 50,
+            "distance": 15,
+            "decay": 2,
+            "castShadow": 1
+          }
+        },
+        {
+          "id": "setup_3",
+          "type": "light/point",
+          "position": {
+            "x": 1043,
+            "y": 187
+          },
+          "params": {
+            "location": {
+              "x": 0,
+              "y": 2.185514752224622,
+              "z": 4.487400919453167
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "color": 440020,
+            "intensity": 50,
+            "distance": 15,
+            "decay": 2,
+            "castShadow": 1
+          }
+        },
+        {
+          "id": "setup_4",
+          "type": "render",
+          "position": {
+            "x": 610,
+            "y": 393
+          },
+          "params": {
+            "frameCount": 120,
+            "fps": 30,
+            "motionBlur": 0,
+            "resolutionPreset": "16:9 (1920x1080)",
+            "width": 1920,
+            "height": 1080,
+            "holdout": false
+          }
+        },
+        {
+          "id": "setup_5",
+          "type": "lighting/environment",
+          "position": {
+            "x": 340,
+            "y": 406
+          },
+          "params": {
+            "color": 4147542,
+            "intensity": 1,
+            "background": 1,
+            "blurriness": 0,
+            "filePath": "",
+            "backgroundImagePath": "",
+            "backgroundFit": "cover",
+            "backgroundScale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "backgroundOffset": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "backgroundRotation": 0,
+            "ambientIntensity": 0,
+            "sunIntensity": 0
+          }
+        },
+        {
+          "id": "setup_6",
+          "type": "light/point",
+          "position": {
+            "x": 860,
+            "y": 389
+          },
+          "params": {
+            "location": {
+              "x": 3.583607412619263,
+              "y": 2.185514752224622,
+              "z": -0.48624947478730096
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "color": 16777215,
+            "intensity": 50,
+            "distance": 15,
+            "decay": 2,
+            "castShadow": 1
+          }
+        },
+        {
+          "id": "leftCenter",
+          "type": "object/empty",
+          "position": {
+            "x": -1600,
+            "y": -200
+          },
+          "params": {
+            "location": {
+              "x": 0.32,
+              "y": 1.25,
+              "z": 0.4
+            }
+          }
+        },
+        {
+          "id": "rightCenter",
+          "type": "object/empty",
+          "position": {
+            "x": -1600,
+            "y": 200
+          },
+          "params": {
+            "location": {
+              "x": -0.32,
+              "y": 1.25,
+              "z": 0.4
+            }
+          }
+        },
+        {
+          "id": "leftOrbit",
+          "type": "transform/orbit",
+          "position": {
+            "x": -1250,
+            "y": -200
+          },
+          "params": {
+            "radius": 0.3,
+            "speed": 140,
+            "axis": "Z"
+          }
+        },
+        {
+          "id": "rightOrbit",
+          "type": "transform/orbit",
+          "position": {
+            "x": -1250,
+            "y": 200
+          },
+          "params": {
+            "radius": 0.3,
+            "speed": -140,
+            "phase": 180,
+            "axis": "Z"
+          }
+        },
+        {
+          "id": "bob",
+          "type": "animation/oscillator",
+          "position": {
+            "x": -1600,
+            "y": 560
+          },
+          "params": {
+            "type": "sine",
+            "frequency": 0.7,
+            "amplitude": 0.07,
+            "offset": 0.97
+          }
+        },
+        {
+          "id": "pelvis",
+          "type": "vector/compose",
+          "position": {
+            "x": -1250,
+            "y": 560
+          },
+          "params": {
+            "x": 0,
+            "y": 0.97,
+            "z": 0.03
+          }
+        },
+        {
+          "id": "human",
+          "type": "rig/human",
+          "position": {
+            "x": -800,
+            "y": 0
+          },
+          "params": {
+            "armPull": 0.4
+          }
+        }
+      ],
+      "connections": [
+        {
+          "id": "setup_c0",
+          "fromNode": "setup_1",
+          "fromSocket": "texture",
+          "toNode": "setup_0",
+          "toSocket": "texture"
+        },
+        {
+          "id": "setup_c1",
+          "fromNode": "setup_5",
+          "fromSocket": "environment",
+          "toNode": "setup_4",
+          "toSocket": "environment"
+        },
+        {
+          "id": "leftCenter.geometry->leftOrbit.target",
+          "fromNode": "leftCenter",
+          "fromSocket": "geometry",
+          "toNode": "leftOrbit",
+          "toSocket": "target"
+        },
+        {
+          "id": "rightCenter.geometry->rightOrbit.target",
+          "fromNode": "rightCenter",
+          "fromSocket": "geometry",
+          "toNode": "rightOrbit",
+          "toSocket": "target"
+        },
+        {
+          "id": "leftOrbit.position->human.leftHand",
+          "fromNode": "leftOrbit",
+          "fromSocket": "position",
+          "toNode": "human",
+          "toSocket": "leftHand"
+        },
+        {
+          "id": "rightOrbit.position->human.rightHand",
+          "fromNode": "rightOrbit",
+          "fromSocket": "position",
+          "toNode": "human",
+          "toSocket": "rightHand"
+        },
+        {
+          "id": "bob.out->pelvis.y",
+          "fromNode": "bob",
+          "fromSocket": "out",
+          "toNode": "pelvis",
+          "toSocket": "y"
+        },
+        {
+          "id": "pelvis.out->human.pelvis",
+          "fromNode": "pelvis",
+          "fromSocket": "out",
+          "toNode": "human",
+          "toSocket": "pelvis"
+        }
+      ],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    }
+  ],
+  "activeCanvas": 0
+}

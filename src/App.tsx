@@ -9,6 +9,7 @@ import { EXPLODE_GLTF_ACTION, ExplodedTexture, explodeGltfToMeshData, gltfSource
 import { isTauri } from "./shared/isTauri";
 import { TOGGLE_POINTS_KEYFRAME_ACTION } from "./shared/graph/nodes/curve";
 import { EDIT_MESH_POINTS_NODE, RESEED_MESH_POINTS_ACTION } from "./shared/graph/nodes/editMeshPoints";
+import { isIkControlNode } from "./shared/graph/curveLookup";
 import {
   EDIT_MESH_NODE,
   EDIT_MESH_RESEED_ACTION,
@@ -1425,6 +1426,11 @@ function MainEditor() {
               onParamChange("pointsList", extracted.points, nodeId);
             }
           }
+        }
+        // A skeleton still at rest stores no controls; keyframe the ones it shows.
+        if (isIkControlNode(node) && (!Array.isArray(points) || points.length === 0)) {
+          const derived = evaluatedResults?.get(nodeId)?.__controlPoints;
+          if (Array.isArray(derived)) points = derived.map((p) => (p as THREE.Vector3).clone());
         }
         onToggleKeyframe(nodeId, "pointsList", currentFrame, points);
         return;

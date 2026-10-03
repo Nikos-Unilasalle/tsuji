@@ -15,6 +15,19 @@ export const CURVE_POINTS_NODE_TYPES = [
 ];
 
 /**
+ * Nodes whose `pointsList` is a fixed set of IK controls (Human Skeleton's
+ * pelvis, head, hands, feet and poles) rather than a path: the viewport
+ * draws no line through them and never inserts or removes one. An empty list
+ * means the rest pose; the handles then come from the node's evaluated
+ * `__controlPoints`, and the first drag stores the whole list.
+ */
+export const IK_CONTROL_NODE_TYPES = ["rig/human"];
+
+export function isIkControlNode(node: { type: string } | null | undefined): boolean {
+  return Boolean(node && IK_CONTROL_NODE_TYPES.includes(node.type));
+}
+
+/**
  * What the viewport's curve-point handles edit, and in whose space:
  *
  * - `pointsNodeId` — the node whose `pointsList` param a handle drag writes

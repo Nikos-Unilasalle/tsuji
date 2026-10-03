@@ -237,6 +237,9 @@ describe("GIZMO_SELECTABLE_TYPES", () => {
       "object/volume-clouds",
       "curve/grease-pencil",
       "curve/paint-on-geometry",
+      "rig/human",
+      "rig/polypede",
+      "rig/polypede-motion",
       "structure/group",
     ]);
   });

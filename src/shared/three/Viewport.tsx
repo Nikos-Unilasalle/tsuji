@@ -12,7 +12,7 @@ import { HubElement } from "../graph/nodes/hub";
 import { asVector3, composeNativeMatrixWithPivot, PIVOT_TRANSFORM_NODE } from "../graph/nodes/transform";
 import { resetAllParticleSimulations } from "../graph/particleRuntime";
 import { getSimulationEpoch, onSimulationReset } from "../graph/simulationEpoch";
-import { resolveCurveEditTarget } from "../graph/curveLookup";
+import { isIkControlNode, resolveCurveEditTarget } from "../graph/curveLookup";
 import { resolveSceneRoots } from "../graph/sceneRoots";
 import { findFirstMesh } from "../graph/meshRequired";
 import { insertCurvePointAfter, removeCurvePoint } from "../graph/curvePoints";
@@ -2085,7 +2085,7 @@ export function Viewport({
       // Fixed topology: every pointsList entry has to keep lining up with the
       // source mesh's own vertex index for writePointsToMesh's write-back to
       // mean anything — unlike a curve, there is no legal insert/remove here.
-      if (node.type === EDIT_MESH_POINTS_NODE.type) return false;
+      if (node.type === EDIT_MESH_POINTS_NODE.type || isIkControlNode(node)) return false;
 
       const index = Array.from(selectedPointIndices)[0];
       const nextPoints =
@@ -2632,7 +2632,7 @@ export function Viewport({
           const node = graphRef.current.nodes.find((n) => n.id === curvePointsNodeId);
           if (!node || !onTransformChangeRef.current) return;
           let rawList = Array.isArray(node.params.pointsList) ? [...node.params.pointsList] : [];
-          if (rawList.length === 0 && node.type === EDIT_MESH_POINTS_NODE.type) {
+          if (rawList.length === 0 && (node.type === EDIT_MESH_POINTS_NODE.type || isIkControlNode(node))) {
             rawList = [];
             for (let i = 0; i < curveHandles.count(); i++) {
               const h = curveHandles.handleAt(i);
@@ -2667,7 +2667,7 @@ export function Viewport({
           const node = graphRef.current.nodes.find((n) => n.id === curvePointsNodeId);
           if (!node || !onTransformChangeRef.current) return;
           let rawList = Array.isArray(node.params.pointsList) ? [...node.params.pointsList] : [];
-          if (rawList.length === 0 && node.type === EDIT_MESH_POINTS_NODE.type) {
+          if (rawList.length === 0 && (node.type === EDIT_MESH_POINTS_NODE.type || isIkControlNode(node))) {
             rawList = [];
             for (let i = 0; i < curveHandles.count(); i++) {
               const h = curveHandles.handleAt(i);
@@ -5731,6 +5731,10 @@ export function Viewport({
         const mesh = spaceObj instanceof THREE.Object3D ? findFirstMesh(spaceObj) : null;
         const extracted = mesh ? extractPointsFromMesh(spaceObj as THREE.Object3D, curveNode!.id, "Edit Mesh Points") : null;
         curvePoints = extracted?.points ?? [];
+      } else if (isIkControlNode(curveNode) && rawStoredPoints.length === 0) {
+        // Rest pose: nothing stored yet, the node reports where its controls are.
+        const derived = results.get(curveNode!.id)?.__controlPoints;
+        curvePoints = Array.isArray(derived) ? derived.map((p) => asVector3(p, new THREE.Vector3())) : [];
       } else {
         curvePoints = rawStoredPoints.map((p) => asVector3(p, new THREE.Vector3()));
       }
@@ -5771,7 +5775,7 @@ export function Viewport({
         // (see curve.ts), so skip the straight control-polygon line here. A
         // mesh's vertex-buffer order isn't a path either — a line through it
         // would zigzag across the mesh rather than trace anything meaningful.
-        const hideStraightLine = isLatticeNode || curveNode?.type === "curve/from_points" || isEditMeshPointsNode;
+        const hideStraightLine = isLatticeNode || curveNode?.type === "curve/from_points" || isEditMeshPointsNode || isIkControlNode(curveNode);
         curveHandles.sync(curvePoints, spaceMatrix, selectedPointIndices, frozenIndices, !hideStraightLine, camera, host.clientHeight);
       } else if (curveHandles.count() > 0) {
         curveHandles.clear();

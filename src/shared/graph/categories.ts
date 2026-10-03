@@ -17,6 +17,7 @@ export type NodeCategory =
   | "physics"
   | "post"
   | "postprocess"
+  | "rig"
   | "sound"
   | "structure"
   | "text"
@@ -45,6 +46,7 @@ export const CATEGORY_ORDER: NodeCategory[] = [
   "physics",
   "postprocess",
   "post",
+  "rig",
   "sound",
   "structure",
   "text",
@@ -73,6 +75,7 @@ export const CATEGORY_LABEL: Record<NodeCategory, string> = {
   physics: "Physics",
   postprocess: "Post-Process & FX",
   post: "Post-render 2D",
+  rig: "Rig / IK",
   sound: "Sound / Audio",
   structure: "Structure",
   text: "Text",
@@ -104,6 +107,7 @@ export const CATEGORY_COLOR: Record<NodeCategory, string> = {
   physics: "#22c55e",
   postprocess: "#c084fc",
   post: "#f43f5e",
+  rig: "#c2773d",
   sound: "#06b6d4",
   structure: "#38bdf8",
   text: "#f97316",

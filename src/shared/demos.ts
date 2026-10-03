@@ -521,6 +521,26 @@ export const DEMO_CATALOG: DemoCategory[] = [
     ],
   },
   {
+    title: "Rig / IK",
+    demos: [
+      {
+        file: "demo_rig_ik.tsuji",
+        label: "FABRIK Skeletons",
+        description: "A posed human, and a polypede walking circles around it (press Play).",
+      },
+      {
+        file: "demo_rig_human_reach.tsuji",
+        label: "Human Reach",
+        description: "Hands chase two orbiting targets while the pelvis bobs; feet stay planted.",
+      },
+      {
+        file: "demo_rig_insect_path.tsuji",
+        label: "Insect on a Path",
+        description: "A hexapod walking a heart-shaped path with Follow Path (press Play).",
+      },
+    ],
+  },
+  {
     title: "Showcases",
     demos: [
       {
