@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import * as THREE from "three";
-import { applyPoles, boneLengths, IkRig, solveFabrik } from "./fabrik";
+import { applyPoles, boneLengths, clampDirection, IkRig, solveFabrik } from "./fabrik";
 
 const v = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
 
@@ -91,5 +91,40 @@ describe("applyPoles", () => {
     expect(positions[1].z).toBeCloseTo(0.6, 6);
     expect(positions[1].length()).toBeCloseTo(1, 6);
     expect(positions[1].distanceTo(positions[2])).toBeCloseTo(1, 6);
+  });
+});
+
+describe("joint limits", () => {
+  const DEG = Math.PI / 180;
+  const angle = (a: THREE.Vector3, b: THREE.Vector3) => a.angleTo(b) / DEG;
+
+  it("clamps a direction into a cone, keeping its heading", () => {
+    const axis = v(0, 1, 0);
+    const out = clampDirection(v(1, 0, 0), axis, 30 * DEG);
+    expect(angle(out, axis)).toBeCloseTo(30, 6);
+    expect(out.z).toBeCloseTo(0, 9); // still heading toward +X
+    expect(clampDirection(v(0.1, 1, 0).normalize(), axis, 30 * DEG).x).toBeCloseTo(v(0.1, 1, 0).normalize().x, 9);
+  });
+
+  it("makes the cone elliptical with a side limit, and pushes out to a minimum", () => {
+    const axis = v(0, -1, 0);
+    const side = { axis: v(1, 0, 0), maxAngle: 20 * DEG };
+    expect(angle(clampDirection(v(1, 0, 0), axis, 80 * DEG, 0, side), axis)).toBeCloseTo(20, 5);
+    expect(angle(clampDirection(v(0, 0, 1), axis, 80 * DEG, 0, side), axis)).toBeCloseTo(80, 5);
+    expect(angle(clampDirection(axis.clone(), axis, 80 * DEG, 10 * DEG, side), axis)).toBeCloseTo(10, 5);
+  });
+
+  it("keeps a hinge from folding past its limit, even when the target asks for it", () => {
+    const base = chain(2);
+    // Hinge: the axis is the upper bone's own rest direction.
+    const rig: IkRig = { ...base, limits: [{ joint: 2, axis: base.rest[1].clone().normalize(), maxAngle: 90 * DEG }] };
+    const { positions } = solveFabrik(rig, [{ joint: 2, target: v(0.1, 0.2, 0) }], {
+      poles: [{ joint: 1, pole: v(2, 0.5, 0) }],
+      maxIterations: 60,
+    });
+    const upper = positions[1].clone().sub(positions[0]);
+    const lower = positions[2].clone().sub(positions[1]);
+    expect(angle(upper, lower)).toBeLessThanOrEqual(90 + 1e-6);
+    expectLengthsKept(rig, positions);
   });
 });

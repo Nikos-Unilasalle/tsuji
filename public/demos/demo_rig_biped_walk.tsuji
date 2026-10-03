@@ -211,8 +211,9 @@
             "y": 120
           },
           "params": {
-            "primitiveType": "heart",
-            "radius": 2.5
+            "primitiveType": "ellipse",
+            "radius": 3.5,
+            "height": 5.5
           }
         },
         {
@@ -246,35 +247,23 @@
           "params": {}
         },
         {
-          "id": "insect",
-          "type": "rig/polypede",
+          "id": "human",
+          "type": "rig/human",
           "position": {
             "x": -1000,
-            "y": -40
+            "y": -120
           },
-          "params": {
-            "legPairs": 3,
-            "legSegments": 2,
-            "legLength": 1.0,
-            "bodyRadius": 0.18,
-            "bodyHeight": 0.3,
-            "reach": 0.72,
-            "sideArc": 110,
-            "kneeHeight": 0.45,
-            "boneThickness": 0.025
-          }
+          "params": {}
         },
         {
           "id": "walk",
-          "type": "rig/polypede-motion",
+          "type": "rig/biped-motion",
           "position": {
             "x": -650,
             "y": 120
           },
           "params": {
-            "stepRadius": 0.2,
-            "stepDuration": 0.16,
-            "stepHeight": 0.12
+            "showCircles": true
           }
         }
       ],
@@ -315,8 +304,8 @@
           "toSocket": "curve"
         },
         {
-          "id": "insect.geometry->walk.skeleton",
-          "fromNode": "insect",
+          "id": "human.geometry->walk.skeleton",
+          "fromNode": "human",
           "fromSocket": "geometry",
           "toNode": "walk",
           "toSocket": "skeleton"

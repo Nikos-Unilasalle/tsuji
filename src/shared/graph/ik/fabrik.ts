@@ -11,7 +11,7 @@ import * as THREE from "three";
  * both arms hanging off it) takes the weighted centroid of where each branch
  * wants it, which is the paper's multi-end-effector extension.
  *
- * Two additions on top:
+ * Three additions on top:
  *
  * - **Rigid joints** keep a fixed offset in their parent's frame instead of a
  *   free bone — a shoulder sits where the chest's frame puts it, it does not
@@ -23,7 +23,12 @@ import * as THREE from "three";
  *   a rotation about that line moves neither neighbour, so bone lengths are
  *   untouched. Applied before solving too, because FABRIK cannot bend a chain
  *   that starts out perfectly straight along its target — every direction it
- *   reads is the same line.
+ *   reads is the same line — and again each round, before the forward pass.
+ * - **Joint limits** keep a bone's direction inside an elliptical cone
+ *   around a reference axis carried by the parent's frame (see IkLimit). The
+ *   forward pass enforces them and is the last thing each round does, so the
+ *   returned pose always respects them — at the price of not reaching a
+ *   target the limits put out of reach.
  */
 
 export interface IkJoint {
@@ -33,10 +38,34 @@ export interface IkJoint {
   rigid?: boolean;
 }
 
+/**
+ * Keeps the bone from `joint`'s parent to `joint` within an angle of `axis`.
+ *
+ * `axis` is given in the rig's rest space and turns with the parent's frame
+ * (the swing of the parent's bone from rest, or the root's identity), so:
+ *
+ * - a **hinge** (knee, elbow) uses the parent bone's own rest direction as
+ *   axis: the angle is then the bend, `minAngle`..`maxAngle`, and the pole
+ *   decides which side it bends to;
+ * - a **ball joint** (hip, shoulder, spine) uses a fixed rest direction, and
+ *   `side` makes the cone elliptical: `side.maxAngle` toward `side.axis`,
+ *   `maxAngle` across it.
+ *
+ * Angles in radians.
+ */
+export interface IkLimit {
+  joint: number;
+  axis: THREE.Vector3;
+  maxAngle: number;
+  minAngle?: number;
+  side?: { axis: THREE.Vector3; maxAngle: number };
+}
+
 export interface IkRig {
   joints: IkJoint[];
   /** Rest positions, one per joint, in the rig's own space. Bone lengths and rigid offsets come from these. */
   rest: THREE.Vector3[];
+  limits?: IkLimit[];
 }
 
 export interface IkEffector {
@@ -121,6 +150,45 @@ function frames(rig: IkRig, prep: Prepared, positions: THREE.Vector3[]): THREE.Q
   return out;
 }
 
+/**
+ * `dir` (unit) clamped into a cone around `axis` (unit), keeping its heading
+ * around the axis: `side.maxAngle` toward `side.axis`, `maxAngle` across it,
+ * an ellipse in between. At least `minAngle` from the axis.
+ */
+export function clampDirection(
+  dir: THREE.Vector3,
+  axis: THREE.Vector3,
+  maxAngle: number,
+  minAngle = 0,
+  side?: { axis: THREE.Vector3; maxAngle: number },
+): THREE.Vector3 {
+  // u: the side direction, flattened onto the plane across the axis.
+  const u = new THREE.Vector3();
+  for (const candidate of [side?.axis, new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 0, 1)]) {
+    if (!candidate) continue;
+    u.copy(candidate).addScaledVector(axis, -candidate.dot(axis));
+    if (u.lengthSq() > 1e-12) break;
+  }
+  u.normalize();
+  const v = axis.clone().cross(u);
+
+  const theta = Math.acos(Math.max(-1, Math.min(1, dir.dot(axis))));
+  const x = dir.dot(u);
+  const y = dir.dot(v);
+  // On the axis the heading is undefined; any one does to push out to minAngle.
+  const phi = Math.hypot(x, y) > 1e-9 ? Math.atan2(y, x) : 0;
+  const aU = Math.max(1e-6, side ? side.maxAngle : maxAngle);
+  const aV = Math.max(1e-6, maxAngle);
+  const bound = 1 / Math.hypot(Math.cos(phi) / aU, Math.sin(phi) / aV);
+  const t = Math.max(Math.min(theta, bound), Math.min(minAngle, bound));
+  if (Math.abs(t - theta) < 1e-9) return dir.clone();
+  return axis
+    .clone()
+    .multiplyScalar(Math.cos(t))
+    .add(u.multiplyScalar(Math.cos(phi) * Math.sin(t)))
+    .add(v.multiplyScalar(Math.sin(phi) * Math.sin(t)));
+}
+
 /** Moves `point` to `length` from `anchor`, along the line it is already on. */
 function placeAt(point: THREE.Vector3, anchor: THREE.Vector3, length: number, fallback: THREE.Vector3): THREE.Vector3 {
   const dir = point.clone().sub(anchor);
@@ -201,6 +269,8 @@ export function solveFabrik(
     return max;
   };
 
+  const limitOf = new Map((rig.limits ?? []).map((l) => [l.joint, l]));
+
   applyPoles(rig, positions, poles);
 
   let iterations = 0;
@@ -238,8 +308,10 @@ export function solveFabrik(
       else if (count > 0) positions[i].copy(plain.divideScalar(count));
     }
 
+    applyPoles(rig, positions, poles);
+
     // Forward: root pinned, every joint put back at its length (or rigid
-    // offset) from its now-final parent.
+    // offset) from its now-final parent, inside its limit.
     positions[0].copy(root);
     const forwardRot: THREE.Quaternion[] = [new THREE.Quaternion()];
     const dir = new THREE.Vector3();
@@ -250,6 +322,15 @@ export function solveFabrik(
         positions[i].copy(positions[p]).add(prep.offsets[i].clone().applyQuaternion(forwardRot[p]));
       } else {
         positions[i].copy(placeAt(positions[i], positions[p], prep.lengths[i], fallbackDir(i)));
+        const limit = limitOf.get(i);
+        if (limit) {
+          const q = forwardRot[p];
+          const axis = limit.axis.clone().applyQuaternion(q).normalize();
+          const side = limit.side ? { axis: limit.side.axis.clone().applyQuaternion(q), maxAngle: limit.side.maxAngle } : undefined;
+          const bone = positions[i].clone().sub(positions[p]).normalize();
+          const clamped = clampDirection(bone, axis, limit.maxAngle, limit.minAngle ?? 0, side);
+          positions[i].copy(positions[p]).addScaledVector(clamped, prep.lengths[i]);
+        }
       }
       const restDir = prep.restDirs[i];
       if (joint.rigid || !restDir) {
@@ -262,7 +343,6 @@ export function solveFabrik(
     err = error();
   }
 
-  applyPoles(rig, positions, poles);
   return { positions, iterations, error: error() };
 }
 

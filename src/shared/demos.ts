@@ -538,6 +538,11 @@ export const DEMO_CATALOG: DemoCategory[] = [
         label: "Insect on a Path",
         description: "A hexapod walking a heart-shaped path with Follow Path (press Play).",
       },
+      {
+        file: "demo_rig_biped_walk.tsuji",
+        label: "Biped Walk",
+        description: "A human walking an elliptical path: stepping feet, swinging arms, bobbing hips (press Play).",
+      },
     ],
   },
   {

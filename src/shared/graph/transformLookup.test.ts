@@ -240,6 +240,7 @@ describe("GIZMO_SELECTABLE_TYPES", () => {
       "rig/human",
       "rig/polypede",
       "rig/polypede-motion",
+      "rig/biped-motion",
       "structure/group",
     ]);
   });

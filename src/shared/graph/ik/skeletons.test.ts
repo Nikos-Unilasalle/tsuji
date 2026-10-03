@@ -40,6 +40,40 @@ describe("human skeleton", () => {
   });
 });
 
+describe("human joint limits", () => {
+  const bend = (positions: THREE.Vector3[], a: number, b: number, c: number) =>
+    (positions[b].clone().sub(positions[a]).angleTo(positions[c].clone().sub(positions[b])) * 180) / Math.PI;
+
+  it("keeps the knees within their bend while squatting deep, and lets them fold further when off", () => {
+    const limited = buildHumanSkeleton({ kneeBend: 90 });
+    const free = buildHumanSkeleton({ jointLimits: 0 });
+    const squat = (sk: ReturnType<typeof buildHumanSkeleton>) => {
+      const c = sk.restControls.map((p) => p.clone());
+      c[0].y = 0.35;
+      c[1].y = 1.05;
+      return solveHuman(sk, c, { maxIterations: 60 });
+    };
+    const l = squat(limited);
+    const f = squat(free);
+    const j = limited.joint;
+    for (const s of [0, 1]) {
+      expect(bend(l, j.hip[s], j.knee[s], j.foot[s])).toBeLessThanOrEqual(90 + 1e-3);
+      expect(bend(f, j.hip[s], j.knee[s], j.foot[s])).toBeGreaterThan(95);
+    }
+  });
+
+  it("limits how far a leg swings back from the hip", () => {
+    const sk = buildHumanSkeleton({ hipBack: 20 });
+    const c = sk.restControls.map((p) => p.clone());
+    c[4].set(c[4].x, 0.5, -0.8); // left foot far behind
+    const solved = solveHuman(sk, c, { maxIterations: 60 });
+    const thigh = solved[sk.joint.knee[0]].clone().sub(solved[sk.joint.hip[0]]);
+    // Backward swing: angle behind straight down, in the sagittal plane.
+    const back = (Math.atan2(-thigh.z, -thigh.y) * 180) / Math.PI;
+    expect(back).toBeLessThanOrEqual(20 + 0.5);
+  });
+});
+
 describe("polypede skeleton", () => {
   it("builds pairs of legs with exact segment lengths, feet resting on the ground", () => {
     const skeleton = buildPolypedeSkeleton({ legPairs: 3, legSegments: 3, legLength: 1.5 });

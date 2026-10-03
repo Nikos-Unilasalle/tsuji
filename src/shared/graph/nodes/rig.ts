@@ -20,7 +20,7 @@ import {
 } from "../ik/skeletons";
 import { createSkeletonView, SkeletonView } from "../ik/skeletonView";
 import { createGait, GAIT_DEFAULTS, GaitParams, GaitState, polypedeNeighbors, stepGait } from "../ik/polypedeGait";
-import { IkRig } from "../ik/fabrik";
+import { boneLengths, IkRig } from "../ik/fabrik";
 
 /**
  * Rig nodes: FABRIK inverse kinematics on two ready-made skeletons — a human
@@ -122,8 +122,29 @@ function humanParams(params: Record<string, unknown>): HumanParams {
     shoulderWidth: Math.max(0, n("shoulderWidth")),
     hipWidth: Math.max(0, n("hipWidth")),
     spineSegments: Math.max(1, Math.min(8, Math.round(n("spineSegments")))),
+    jointLimits: params.jointLimits === undefined ? 1 : toBoolean(params.jointLimits) ? 1 : 0,
+    kneeBend: n("kneeBend"),
+    elbowBend: n("elbowBend"),
+    hipForward: n("hipForward"),
+    hipBack: n("hipBack"),
+    hipSide: n("hipSide"),
+    shoulderRange: n("shoulderRange"),
+    spineBend: n("spineBend"),
+    neckBend: n("neckBend"),
   };
 }
+
+const HUMAN_LIMIT_FIELDS: ParamFieldDef[] = [
+  { id: "jointLimits", label: "Joint Limits", kind: "boolean", group: "Joint Limits" },
+  { id: "kneeBend", label: "Knee Bend (°)", kind: "number", step: 5, group: "Joint Limits" },
+  { id: "elbowBend", label: "Elbow Bend (°)", kind: "number", step: 5, group: "Joint Limits" },
+  { id: "hipForward", label: "Hip Forward (°)", kind: "number", step: 5, group: "Joint Limits" },
+  { id: "hipBack", label: "Hip Back (°)", kind: "number", step: 5, group: "Joint Limits" },
+  { id: "hipSide", label: "Hip Side (°)", kind: "number", step: 5, group: "Joint Limits" },
+  { id: "shoulderRange", label: "Shoulder Range (°)", kind: "number", step: 5, group: "Joint Limits" },
+  { id: "spineBend", label: "Spine Bend (°)", kind: "number", step: 5, group: "Joint Limits" },
+  { id: "neckBend", label: "Neck Bend (°)", kind: "number", step: 5, group: "Joint Limits" },
+];
 
 /**
  * Human skeleton, posed by FABRIK from ten controls: pelvis (the root), head,
@@ -174,6 +195,7 @@ export const RIG_HUMAN_NODE: NodeDefinition = {
     { id: "shoulderWidth", label: "Shoulder Width ×", kind: "number", step: 0.05, group: "Proportions" },
     { id: "hipWidth", label: "Hip Width ×", kind: "number", step: 0.05, group: "Proportions" },
     { id: "spineSegments", label: "Spine Segments", kind: "number", step: 1, group: "Proportions" },
+    ...HUMAN_LIMIT_FIELDS,
     { id: "armPull", label: "Arm Pull on Torso", kind: "number", step: 0.05, group: "Solver" },
     ...SOLVER_FIELDS,
     { id: "showControls", label: "Show Controls", kind: "boolean", group: "Display" },
@@ -228,6 +250,15 @@ export const RIG_HUMAN_NODE: NodeDefinition = {
         : [],
       markerSize: 0.03 * H,
     });
+    const rigData: HumanRigData = {
+      skeleton,
+      key,
+      thickness,
+      color: params.boneColor instanceof THREE.Color ? params.boneColor : new THREE.Color(String(params.boneColor ?? "#9a5b2e")),
+      armPull: numberInput(undefined, params.armPull, 0.3),
+      solver: solverOptions(params),
+    };
+    group.userData.humanRig = rigData;
 
     group.updateMatrixWorld(true);
     const world = positions.map((p) => p.clone().applyMatrix4(group.matrix));
@@ -242,6 +273,16 @@ export const RIG_HUMAN_NODE: NodeDefinition = {
     };
   },
 };
+
+/** What a Human Skeleton hands Biped Motion, on its geometry's userData. */
+export interface HumanRigData {
+  skeleton: HumanSkeleton;
+  key: string;
+  thickness: number;
+  color: THREE.Color;
+  armPull: number;
+  solver: { maxIterations: number; tolerance: number };
+}
 
 // ---------------------------------------------------------------------------
 // Polypede Skeleton
@@ -267,6 +308,9 @@ function polypedeParams(params: Record<string, unknown>): PolypedeParams {
     reach: Math.max(0, n("reach")),
     sideArc: Math.max(0, Math.min(180, n("sideArc"))),
     kneeHeight: n("kneeHeight"),
+    jointLimits: params.jointLimits === undefined ? 1 : toBoolean(params.jointLimits) ? 1 : 0,
+    jointBend: n("jointBend"),
+    hipSwing: n("hipSwing"),
   };
 }
 
@@ -313,6 +357,9 @@ export const RIG_POLYPEDE_NODE: NodeDefinition = {
     { id: "reach", label: "Foot Reach", kind: "number", step: 0.05, group: "Body" },
     { id: "sideArc", label: "Leg Spread (°)", kind: "number", step: 5, group: "Body" },
     { id: "kneeHeight", label: "Knee Height", kind: "number", step: 0.05, group: "Body" },
+    { id: "jointLimits", label: "Joint Limits", kind: "boolean", group: "Joint Limits" },
+    { id: "jointBend", label: "Joint Bend (°)", kind: "number", step: 5, group: "Joint Limits" },
+    { id: "hipSwing", label: "Hip Swing (°)", kind: "number", step: 5, group: "Joint Limits" },
     ...DISPLAY_FIELDS,
   ],
   evaluate: (inputs, params, ctx) => {
@@ -476,4 +523,252 @@ function drawEmpty(view: SkeletonView) {
   view.update({ positions: [], bones: [], thickness: 0, color: 0xffffff, jointRadius: 0 });
 }
 
-export const RIG_NODES: NodeDefinition[] = [RIG_HUMAN_NODE, RIG_POLYPEDE_NODE, RIG_POLYPEDE_MOTION_NODE];
+// ---------------------------------------------------------------------------
+// Biped Motion
+
+interface BipedState {
+  key: string;
+  epoch: number;
+  gait: GaitState;
+  lastTime: number | null;
+  clock: "wall" | "graph";
+  prevBody: THREE.Vector3 | null;
+  /** Clock reading prevBody was taken at. */
+  prevBodyTime: number;
+  /** Smoothed speed along the body's forward axis, world units per second. */
+  speed: number;
+  /** Smoothed pelvis drop. */
+  drop: number;
+}
+
+const bipedStates = createNodeCache<Map<string, BipedState>>();
+
+export const BIPED_DEFAULTS = {
+  stepRadius: 0.26,
+  stepDuration: 0.34,
+  stepHeight: 0.12,
+  overshoot: 0.8,
+  stanceWidth: 1,
+  pelvisBob: 0.03,
+  maxPelvisDrop: 0.08,
+  toeOff: 0.08,
+  hipSway: 0.035,
+  armSwing: 0.6,
+  lean: 0.08,
+};
+
+/**
+ * Walks a Human Skeleton, the biped counterpart of Polypede Motion: the body
+ * goes where this node's pose puts it (its own transform, draggable with the
+ * gizmo, over whatever matrix is wired in) and the feet follow with the
+ * circle technique — each planted until its home leaves its circle, then one
+ * step ahead, never both in the air unless the body outruns them. On top:
+ *
+ * - **Pelvis** drops just enough for both feet to stay within reach of the
+ *   hips — up to Max Pelvis Drop — bobs up while a foot swings through, and
+ *   sways over the foot it is standing on. Past that, a foot left far behind
+ *   lifts its heel (Toe Off) rather than crouching the whole body.
+ * - **Arms** swing against the legs: a hand goes forward with the opposite
+ *   foot, by Arm Swing × that foot's stride.
+ * - **Lean**: the head goes forward with speed, Lean metres per m/s.
+ * - **Poles** ride along — elbows behind, knees ahead of their own foot — so
+ *   the knees keep pointing where the foot is going, including on turns.
+ *
+ * The skeleton's joint limits apply. Real time, like Polypede Motion.
+ */
+export const RIG_BIPED_MOTION_NODE: NodeDefinition = {
+  type: "rig/biped-motion",
+  label: "Biped Motion",
+  category: "rig",
+  inputs: [
+    { id: "skeleton", label: "Skeleton", type: "geometry", owns: true },
+    { id: "matrix", label: "Matrix", type: "matrix" },
+  ],
+  outputs: [
+    { id: "geometry", label: "Geometry", type: "geometry" },
+    { id: "matrix", label: "Body Matrix", type: "matrix" },
+    { id: "feet", label: "Feet", type: "list" },
+    { id: "joints", label: "Joints", type: "list" },
+    { id: "bones", label: "Bone Matrices", type: "list" },
+  ],
+  defaultParams: {
+    ...TRANSFORM_DEFAULTS,
+    ...BIPED_DEFAULTS,
+    showCircles: false,
+    showControls: false,
+  },
+  paramFields: [
+    ...NATIVE_TRANSFORM_PARAM_FIELDS,
+    { id: "stepRadius", label: "Step Radius", kind: "number", step: 0.02, group: "Gait" },
+    { id: "stepDuration", label: "Step Duration (s)", kind: "number", step: 0.02, group: "Gait" },
+    { id: "stepHeight", label: "Step Height", kind: "number", step: 0.01, group: "Gait" },
+    { id: "overshoot", label: "Step Overshoot", kind: "number", step: 0.05, group: "Gait" },
+    { id: "stanceWidth", label: "Stance Width ×", kind: "number", step: 0.05, group: "Gait" },
+    { id: "pelvisBob", label: "Pelvis Bob", kind: "number", step: 0.005, group: "Body" },
+    { id: "maxPelvisDrop", label: "Max Pelvis Drop", kind: "number", step: 0.01, group: "Body" },
+    { id: "toeOff", label: "Toe Off (heel lift)", kind: "number", step: 0.01, group: "Body" },
+    { id: "hipSway", label: "Hip Sway", kind: "number", step: 0.005, group: "Body" },
+    { id: "armSwing", label: "Arm Swing", kind: "number", step: 0.05, group: "Body" },
+    { id: "lean", label: "Lean (m per m/s)", kind: "number", step: 0.01, group: "Body" },
+    { id: "showCircles", label: "Show Step Circles", kind: "boolean", group: "Display" },
+    { id: "showControls", label: "Show Controls", kind: "boolean", group: "Display" },
+  ],
+  evaluate: (inputs, params, ctx) => {
+    const view = viewFor(ctx.nodeId);
+    const group = view.group;
+    placeGroup(group, inputs, params, ctx.nodeId, ctx.liveEditNodeId);
+    const body = group.matrix.clone();
+
+    const source = inputs.skeleton instanceof THREE.Object3D ? inputs.skeleton : null;
+    const data = source?.userData.humanRig as HumanRigData | undefined;
+    if (!data) {
+      drawEmpty(view);
+      return { geometry: group, matrix: body, feet: [], joints: [], bones: [] };
+    }
+    const { skeleton } = data;
+    const rc = skeleton.restControls;
+    const num = (id: keyof typeof BIPED_DEFAULTS) => numberInput(undefined, params[id], BIPED_DEFAULTS[id]);
+
+    const width = Math.max(0, num("stanceWidth"));
+    const restFeet = [rc[4], rc[5]].map((f) => new THREE.Vector3(f.x * width, f.y, f.z));
+    const homes = restFeet.map((f) => f.clone().applyMatrix4(body));
+    const up = new THREE.Vector3(0, 1, 0).transformDirection(body);
+
+    let sessions = bipedStates.get(ctx.nodeId);
+    if (!sessions) {
+      sessions = new Map();
+      bipedStates.set(ctx.nodeId, sessions);
+    }
+    const sessionKey = `${ctx.sessionId ?? ""}|${ctx.evalScope ?? ""}`;
+    const epoch = ctx.simulationEpoch ?? 0;
+    const { now, clock } = motionClock(ctx);
+    const stateKey = `${data.key}|${width}`;
+    let state = sessions.get(sessionKey);
+    if (!state || state.key !== stateKey || state.epoch !== epoch) {
+      state = { key: stateKey, epoch, gait: createGait(homes), lastTime: null, clock, prevBody: null, prevBodyTime: now, speed: 0, drop: -1 };
+      sessions.set(sessionKey, state);
+    }
+    if (state.clock !== clock) {
+      state.clock = clock;
+      state.lastTime = null;
+    }
+    const dt = state.lastTime === null ? 0 : Math.max(0, Math.min(0.1, now - state.lastTime));
+    state.lastTime = now;
+
+    const gaitParams: GaitParams = {
+      stepRadius: Math.max(0.001, num("stepRadius")),
+      stepDuration: Math.max(0.01, num("stepDuration")),
+      stepHeight: num("stepHeight"),
+      overshoot: num("overshoot"),
+      // Wait for the other foot rather than hop, until the stride would tear.
+      urgency: 2.4,
+      // Past this a leg cannot reach its foot anyway: put it back under the body.
+      snap: 3.5,
+    };
+    const feetWorld = stepGait(state.gait, homes, up, [[1], [0]], gaitParams, dt);
+    const toLocal = body.clone().invert();
+    const feet = feetWorld.map((f) => f.clone().applyMatrix4(toLocal));
+
+    // Speed along the body's own forward axis, smoothed, in skeleton units.
+    const bodyPos = new THREE.Vector3().setFromMatrixPosition(body);
+    const forward = new THREE.Vector3(0, 0, 1).transformDirection(body);
+    const scale = new THREE.Vector3().setFromMatrixScale(body);
+    const unit = Math.max(1e-6, (scale.x + scale.y + scale.z) / 3);
+    // Measured over at least a thirtieth of a second: the graph can be
+    // evaluated more than once per displayed frame, and a whole frame's
+    // movement over a near-zero wall-clock gap reads as a huge speed.
+    const elapsed = now - state.prevBodyTime;
+    if (!state.prevBody || elapsed > 0.5 || elapsed < 0) {
+      state.prevBody = bodyPos;
+      state.prevBodyTime = now;
+    } else if (elapsed >= 1 / 30) {
+      const v = bodyPos.clone().sub(state.prevBody).dot(forward) / elapsed;
+      // Faster than anyone walks is a jump (the timeline looping, a teleport): start over.
+      if (Math.abs(v) / unit > 10) state.speed = 0;
+      else state.speed += (v - state.speed) * Math.min(1, elapsed * 5);
+      state.prevBody = bodyPos;
+      state.prevBodyTime = now;
+    }
+    const speed = state.speed / unit;
+
+    // Pelvis drop: just enough for both feet to be within reach of the hips,
+    // up to the maximum; how far each foot is short of reach after that.
+    const lengths = boneLengths(skeleton.rig);
+    const height = rc[1].y;
+    const hips = [0, 1].map((s) => skeleton.rig.rest[skeleton.joint.hip[s]]);
+    const reaches = [0, 1].map((s) => (lengths[skeleton.joint.knee[s]] + lengths[skeleton.joint.foot[s]]) * 0.985);
+    /** How far the hip at `hipY` sits above the highest point foot s could be reached from. */
+    const shortfall = (s: number, hipY: number) => {
+      const flat = Math.hypot(hips[s].x - feet[s].x, hips[s].z - feet[s].z);
+      const vertical = flat >= reaches[s] ? 0 : Math.sqrt(reaches[s] ** 2 - flat ** 2);
+      return Math.max(0, hipY - (feet[s].y + vertical));
+    };
+    const targetDrop = Math.min(Math.max(0, num("maxPelvisDrop")), Math.max(shortfall(0, hips[0].y), shortfall(1, hips[1].y)));
+    state.drop = state.drop < 0 || dt === 0 ? targetDrop : state.drop + (targetDrop - state.drop) * Math.min(1, dt * 12);
+    // A planted foot still out of reach lifts its heel, as a trailing foot does.
+    for (const s of [0, 1]) {
+      if (state.gait.legs[s].stepping) continue;
+      feet[s].y += Math.min(Math.max(0, num("toeOff")), shortfall(s, hips[s].y - state.drop));
+    }
+
+    // Bob and sway while a foot is in the air, over the foot standing.
+    let bob = 0;
+    let sway = 0;
+    state.gait.legs.forEach((leg, s) => {
+      if (!leg.stepping) return;
+      const lift = Math.sin(Math.PI * Math.min(1, leg.t));
+      bob = Math.max(bob, lift * num("pelvisBob"));
+      sway += lift * num("hipSway") * Math.sign(restFeet[1 - s].x || 1);
+    });
+    const delta = new THREE.Vector3(sway, bob - state.drop, 0);
+    const lean = Math.max(-0.3, Math.min(0.3, num("lean") * speed)) * (height / 1.7);
+    // Clamped to a real stride, so a foot left somewhere odd (a jump, a reload)
+    // cannot fling the arms — and, through Arm Pull, the torso — along with it.
+    const maxStride = 2 * gaitParams.stepRadius / unit;
+    const stride = (s: number) => Math.max(-maxStride, Math.min(maxStride, feet[s].z - restFeet[s].z));
+    const armSwing = num("armSwing");
+
+    const controls = [
+      rc[0].clone().add(delta),
+      rc[1].clone().add(delta).add(new THREE.Vector3(0, 0, lean)),
+      rc[2].clone().add(delta).add(new THREE.Vector3(0, 0, armSwing * stride(1) + lean * 0.5)),
+      rc[3].clone().add(delta).add(new THREE.Vector3(0, 0, armSwing * stride(0) + lean * 0.5)),
+      feet[0],
+      feet[1],
+      rc[6].clone().add(delta),
+      rc[7].clone().add(delta),
+      rc[8].clone().add(delta).add(new THREE.Vector3(feet[0].x - restFeet[0].x, 0, stride(0))),
+      rc[9].clone().add(delta).add(new THREE.Vector3(feet[1].x - restFeet[1].x, 0, stride(1))),
+    ];
+    const positions = solveHuman(skeleton, controls, { armPull: data.armPull, ...data.solver });
+
+    const showControls = toBoolean(params.showControls);
+    const { joint } = skeleton;
+    view.update({
+      positions,
+      bones: bonesOf(skeleton.rig),
+      thickness: data.thickness,
+      color: data.color,
+      jointRadius: data.thickness * 1.3,
+      targets: showControls ? controls.slice(0, 6) : [],
+      poles: showControls
+        ? [
+            { at: controls[6], joint: positions[joint.elbow[0]] },
+            { at: controls[7], joint: positions[joint.elbow[1]] },
+            { at: controls[8], joint: positions[joint.knee[0]] },
+            { at: controls[9], joint: positions[joint.knee[1]] },
+          ]
+        : [],
+      markerSize: 0.03 * height,
+      circles: toBoolean(params.showCircles)
+        ? restFeet.map((f) => ({ center: new THREE.Vector3(f.x, 0.001, f.z), radius: gaitParams.stepRadius / unit }))
+        : undefined,
+    });
+
+    group.updateMatrixWorld(true);
+    const world = positions.map((p) => p.clone().applyMatrix4(body));
+    return { geometry: group, matrix: body, feet: feetWorld, joints: world, bones: boneMatrices(skeleton.rig, world) };
+  },
+};
+
+export const RIG_NODES: NodeDefinition[] = [RIG_HUMAN_NODE, RIG_POLYPEDE_NODE, RIG_POLYPEDE_MOTION_NODE, RIG_BIPED_MOTION_NODE];

@@ -134,7 +134,7 @@
             "y": 393
           },
           "params": {
-            "frameCount": 120,
+            "frameCount": 540,
             "fps": 30,
             "motionBlur": 0,
             "resolutionPreset": "16:9 (1920x1080)",

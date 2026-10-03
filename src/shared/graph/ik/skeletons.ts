@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { IkEffector, IkJoint, IkPole, IkRig, solveFabrik } from "./fabrik";
+import { IkEffector, IkJoint, IkLimit, IkPole, IkRig, solveFabrik } from "./fabrik";
 
 /**
  * The two skeletons the Rig nodes build: a human and a polypede (any number
@@ -26,6 +26,21 @@ export interface HumanParams {
   shoulderWidth: number;
   hipWidth: number;
   spineSegments: number;
+  /** Joint limits on (1) or off (0). The angles below are in degrees. */
+  jointLimits: number;
+  /** Knee: furthest the shin folds back from the thigh's line. */
+  kneeBend: number;
+  /** Elbow: furthest the forearm folds from the upper arm's line. */
+  elbowBend: number;
+  /** Hip: thigh swing forward, backward and out to the side, from hanging straight down. */
+  hipForward: number;
+  hipBack: number;
+  hipSide: number;
+  /** Shoulder: cone around pointing out to the side (slightly forward). */
+  shoulderRange: number;
+  /** Whole spine, shared between its segments; neck and head share neckBend. */
+  spineBend: number;
+  neckBend: number;
 }
 
 export const HUMAN_DEFAULTS: HumanParams = {
@@ -36,6 +51,15 @@ export const HUMAN_DEFAULTS: HumanParams = {
   shoulderWidth: 1,
   hipWidth: 1,
   spineSegments: 3,
+  jointLimits: 1,
+  kneeBend: 150,
+  elbowBend: 145,
+  hipForward: 120,
+  hipBack: 30,
+  hipSide: 45,
+  shoulderRange: 110,
+  spineBend: 60,
+  neckBend: 70,
 };
 
 /** The human's control points, in `pointsList` order. */
@@ -62,6 +86,7 @@ export interface HumanSkeleton extends Skeleton {
     elbow: [number, number];
     foot: [number, number];
     knee: [number, number];
+    hip: [number, number];
   };
   /** Control points of the rest pose, in HUMAN_CONTROLS order. */
   restControls: THREE.Vector3[];
@@ -113,26 +138,28 @@ export function buildHumanSkeleton(input: Partial<HumanParams> = {}): HumanSkele
   const elbowBend = 12 * DEG;
   const hand: [number, number] = [0, 0];
   const elbow: [number, number] = [0, 0];
+  const shoulder: [number, number] = [0, 0];
   for (const [s, side] of [[0, 1], [1, -1]] as const) {
     const label = s === 0 ? "Left" : "Right";
     const shoulderAt = new THREE.Vector3(side * 0.11 * H * p.shoulderWidth, chestY, 0);
-    const shoulder = add(`${label} Shoulder`, chest, shoulderAt, true);
+    shoulder[s] = add(`${label} Shoulder`, chest, shoulderAt, true);
     const down = new THREE.Vector3(side * Math.sin(armAngle), -Math.cos(armAngle), 0);
     const elbowAt = shoulderAt.clone().addScaledVector(down, upperArm);
     // Forearm swings forward by the bend, so the elbow points back.
     const foreDir = down.clone().applyAxisAngle(down.clone().cross(new THREE.Vector3(0, 0, 1)).normalize(), elbowBend);
-    elbow[s] = add(`${label} Elbow`, shoulder, elbowAt);
+    elbow[s] = add(`${label} Elbow`, shoulder[s], elbowAt);
     hand[s] = add(`${label} Hand`, elbow[s], elbowAt.clone().addScaledVector(foreDir, forearm));
   }
 
   const foot: [number, number] = [0, 0];
   const knee: [number, number] = [0, 0];
+  const hip: [number, number] = [0, 0];
   for (const [s, side] of [[0, 1], [1, -1]] as const) {
     const label = s === 0 ? "Left" : "Right";
     const hipAt = new THREE.Vector3(side * 0.09 * H * p.hipWidth, hipY, 0);
-    const hip = add(`${label} Hip`, pelvis, hipAt, true);
+    hip[s] = add(`${label} Hip`, pelvis, hipAt, true);
     const kneeAt = hipAt.clone().add(new THREE.Vector3(0, -Math.cos(kneeBend) * thigh, Math.sin(kneeBend) * thigh));
-    knee[s] = add(`${label} Knee`, hip, kneeAt);
+    knee[s] = add(`${label} Knee`, hip[s], kneeAt);
     foot[s] = add(`${label} Foot`, knee[s], kneeAt.clone().add(new THREE.Vector3(0, -Math.cos(kneeBend) * shin, -Math.sin(kneeBend) * shin)));
   }
 
@@ -151,11 +178,60 @@ export function buildHumanSkeleton(input: Partial<HumanParams> = {}): HumanSkele
   ];
 
   return {
-    rig: { joints, rest },
+    rig: { joints, rest, limits: p.jointLimits ? humanLimits(p, rest, { pelvis, chest, neck, head, hand, elbow, shoulder, foot, knee, hip }) : undefined },
     names,
-    joint: { pelvis, chest, head, hand, elbow, foot, knee },
+    joint: { pelvis, chest, head, hand, elbow, foot, knee, hip },
     restControls,
   };
+}
+
+/**
+ * Anatomical limits, all satisfied by the rest pose: knees and elbows are
+ * hinges off their upper bone (the pole picks the side), hips an elliptical
+ * cone tilted forward so a leg swings further forward than back, shoulders a
+ * cone around pointing out, and the spine and neck share their bend between
+ * their joints.
+ */
+function humanLimits(
+  p: HumanParams,
+  rest: THREE.Vector3[],
+  j: {
+    pelvis: number;
+    chest: number;
+    neck: number;
+    head: number;
+    hand: number[];
+    elbow: number[];
+    shoulder: number[];
+    foot: number[];
+    knee: number[];
+    hip: number[];
+  },
+): IkLimit[] {
+  const deg = (d: number) => Math.max(0, d) * DEG;
+  const dir = (from: number, to: number) => rest[to].clone().sub(rest[from]).normalize();
+  const limits: IkLimit[] = [];
+
+  const spine: number[] = [];
+  for (let i = j.chest; i > j.pelvis; i--) spine.push(i);
+  for (const i of spine) limits.push({ joint: i, axis: new THREE.Vector3(0, 1, 0), maxAngle: deg(p.spineBend) / spine.length });
+  limits.push({ joint: j.neck, axis: new THREE.Vector3(0, 1, 0), maxAngle: deg(p.neckBend) / 2 });
+  limits.push({ joint: j.head, axis: dir(j.chest, j.neck), maxAngle: deg(p.neckBend) / 2 });
+
+  const tilt = (deg(p.hipForward) - deg(p.hipBack)) / 2;
+  for (const s of [0, 1]) {
+    const side = s === 0 ? 1 : -1;
+    limits.push({ joint: j.foot[s], axis: dir(j.hip[s], j.knee[s]), maxAngle: deg(p.kneeBend) });
+    limits.push({ joint: j.hand[s], axis: dir(j.shoulder[s], j.elbow[s]), maxAngle: deg(p.elbowBend) });
+    limits.push({
+      joint: j.knee[s],
+      axis: new THREE.Vector3(0, -Math.cos(tilt), Math.sin(tilt)),
+      maxAngle: (deg(p.hipForward) + deg(p.hipBack)) / 2,
+      side: { axis: new THREE.Vector3(1, 0, 0), maxAngle: deg(p.hipSide) },
+    });
+    limits.push({ joint: j.elbow[s], axis: new THREE.Vector3(side, 0, 0.35).normalize(), maxAngle: deg(p.shoulderRange) });
+  }
+  return limits;
 }
 
 export interface SolveOptions {
@@ -212,6 +288,12 @@ export interface PolypedeParams {
   sideArc: number;
   /** Height of the knee poles above the body. */
   kneeHeight: number;
+  /** Joint limits on (1) or off (0). */
+  jointLimits: number;
+  /** Degrees each leg joint may fold from the previous segment's line. */
+  jointBend: number;
+  /** Degrees the first segment may swing away from its rest direction. */
+  hipSwing: number;
 }
 
 export const POLYPEDE_DEFAULTS: PolypedeParams = {
@@ -223,6 +305,9 @@ export const POLYPEDE_DEFAULTS: PolypedeParams = {
   reach: 1.05,
   sideArc: 130,
   kneeHeight: 0.6,
+  jointLimits: 1,
+  jointBend: 150,
+  hipSwing: 75,
 };
 
 export interface PolypedeLeg {
@@ -265,6 +350,7 @@ export function buildPolypedeSkeleton(input: Partial<PolypedeParams> = {}): Poly
   const rest: THREE.Vector3[] = [new THREE.Vector3(0, bodyHeight, 0)];
   const names = ["Body"];
   const legs: PolypedeLeg[] = [];
+  const limits: IkLimit[] = [];
   const body = rest[0];
 
   for (let pair = 0; pair < pairs; pair++) {
@@ -302,12 +388,16 @@ export function buildPolypedeSkeleton(input: Partial<PolypedeParams> = {}): Poly
         rest.push(arched[s]);
         names.push(s === segments ? `${label} Foot` : `${label} Joint ${s}`);
         legJoints.push(joints.length - 1);
+        // The first segment swings in a cone off the body; every later one is
+        // a hinge off the segment before it, the pole choosing the side.
+        const axis = arched[s === 1 ? 1 : s - 1].clone().sub(arched[s === 1 ? 0 : s - 2]).normalize();
+        limits.push({ joint: joints.length - 1, axis, maxAngle: (s === 1 ? p.hipSwing : p.jointBend) * DEG });
       }
       legs.push({ joints: legJoints, restFoot: footAt, pole, side, pair });
     }
   }
 
-  return { rig: { joints, rest }, names, legs, bodyRadius };
+  return { rig: { joints, rest, limits: p.jointLimits ? limits : undefined }, names, legs, bodyRadius };
 }
 
 /**

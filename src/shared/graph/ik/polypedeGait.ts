@@ -28,6 +28,14 @@ export interface GaitParams {
   stepHeight: number;
   /** Where a step lands: 0 on the home, 1 on the far edge of the circle. */
   overshoot: number;
+  /**
+   * A foot this many step radii from home steps even with a neighbour in the
+   * air (default URGENT). Higher waits longer for its turn: a biped wants
+   * that, so a walk never turns into a hop.
+   */
+  urgency?: number;
+  /** A foot this many step radii from home is put straight back home (default SNAP). */
+  snap?: number;
 }
 
 export const GAIT_DEFAULTS: GaitParams = {
@@ -95,7 +103,7 @@ export function stepGait(
   legs.forEach((leg, i) => {
     const home = homes[i];
     if (!home) return;
-    if (flatDistance(leg.stepping ? leg.from : leg.planted, home, up) > radius * SNAP) {
+    if (flatDistance(leg.stepping ? leg.from : leg.planted, home, up) > radius * (params.snap ?? SNAP)) {
       leg.planted.copy(home);
       leg.from.copy(home);
       leg.stepping = false;
@@ -119,7 +127,7 @@ export function stepGait(
     .sort((a, b) => b.d - a.d);
   for (const { i, d } of behind) {
     const neighbourUp = (neighbors[i] ?? []).some((n) => legs[n]?.stepping);
-    if (neighbourUp && d < radius * URGENT) continue;
+    if (neighbourUp && d < radius * (params.urgency ?? URGENT)) continue;
     const leg = legs[i];
     leg.stepping = true;
     leg.t = 0;
