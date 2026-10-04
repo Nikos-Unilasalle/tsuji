@@ -56,6 +56,8 @@ import { PARTICLES_TO_POINTS_NODE } from "./particlesToPoints";
 import { PARTICLE_RENDER_INSTANCES_NODE } from "./particleInstances";
 import { FORCE_FIELD_NODE } from "./forceField";
 import { FLOCK_NODE } from "./flock";
+import { SPINE_CHAIN_NODE } from "./spineChain";
+import { PROFILED_TUBES_NODE } from "./profiledTubes";
 import { GROUND_NODE } from "./ground";
 import { CAPTURE_TRAILS_NODE } from "./particleTrails";
 import {
@@ -386,6 +388,8 @@ export const STARTER_NODES = [
   PARTICLE_RENDER_INSTANCES_NODE,
   FORCE_FIELD_NODE,
   FLOCK_NODE,
+  SPINE_CHAIN_NODE,
+  PROFILED_TUBES_NODE,
   GROUND_NODE,
   PARTICLE_SIMULATE_NODE,
   PARTICLE_RENDER_NODE,
@@ -608,6 +612,8 @@ export * from "./pointsInfluence";
 export * from "./connectivity";
 export * from "./forceField";
 export * from "./flock";
+export * from "./spineChain";
+export * from "./profiledTubes";
 export * from "./ground";
 export * from "./particleTrails";
 export * from "./distance";

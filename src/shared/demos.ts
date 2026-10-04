@@ -220,6 +220,11 @@ export const DEMO_CATALOG: DemoCategory[] = [
     title: "Curves",
     demos: [
       {
+        file: "demo_curve_spine_koi.tsuji",
+        label: "Spine Chain (Koi Pond)",
+        description: "Flock steers, Spine Chain swims, Profiled Tubes gives them bodies: each koi trails its head and beats its tail harder as it speeds up, skinned with the Koi shape and Koi patches. Click to call them, s to scatter.",
+      },
+      {
         file: "demo_curve_follow_path.tsuji",
         label: "Follow Path",
         description: "A cone riding along a helix.",

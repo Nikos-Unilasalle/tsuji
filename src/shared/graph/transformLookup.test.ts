@@ -229,6 +229,7 @@ describe("GIZMO_SELECTABLE_TYPES", () => {
       "object/tree",
       "object/ply_point_cloud",
       "curve/from_point_lists",
+      "curve/profiled-tubes",
       "curve/text-on-path",
       "text/animator",
       "particles/render-instances",

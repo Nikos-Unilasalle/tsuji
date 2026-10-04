@@ -37,6 +37,7 @@ interface FlockNodeState {
   headings: THREE.Vector3[];
   speeds: number[];
   phases: number[];
+  sizes: number[];
 }
 
 /** Disposes only the geometry: the material is the Shape's (or the shared default), borrowed by reference. */
@@ -103,7 +104,7 @@ function readParams(inputs: Record<string, unknown>, params: Record<string, unkn
 
 function freshState(epoch: number, step: number, seed: number): FlockNodeState {
   // lastStep one behind so the very first evaluation advances a step instead of freezing.
-  return { sim: createFlockState(), epoch, lastStep: step - 1, seed, prevCall: false, prevScatter: false, points: [], rotations: [], headings: [], speeds: [], phases: [] };
+  return { sim: createFlockState(), epoch, lastStep: step - 1, seed, prevCall: false, prevScatter: false, points: [], rotations: [], headings: [], speeds: [], phases: [], sizes: [] };
 }
 
 function axisAlignment(axis: string): THREE.Quaternion {
@@ -164,8 +165,9 @@ function syncList<T>(list: T[], n: number, make: () => T): void {
  *
  * Draws its own instanced copies of Shape (a teardrop body until one is wired), and
  * hands out per-agent lists — Points, Rotations (Euler °, the convention
- * Instance on Points reads), Headings, Speeds and Swim Phase (radians,
- * quicker when swimming harder, for a tail wiggle) — for anything else.
+ * Instance on Points reads), Headings, Speeds, Swim Phase (radians,
+ * quicker when swimming harder, for a tail wiggle) and Sizes (each agent's
+ * drawn scale) — for anything else, Spine Chain first among them.
  */
 export const FLOCK_NODE: NodeDefinition = {
   type: "particles/flock",
@@ -189,6 +191,7 @@ export const FLOCK_NODE: NodeDefinition = {
     { id: "headings", label: "Headings", type: "list" },
     { id: "speeds", label: "Speeds", type: "list" },
     { id: "phases", label: "Swim Phase", type: "list" },
+    { id: "sizes", label: "Sizes", type: "list" },
     { id: "count", label: "Count", type: "value" },
   ],
   defaultParams: {
@@ -320,6 +323,7 @@ export const FLOCK_NODE: NodeDefinition = {
     syncList(state.headings, n, () => new THREE.Vector3());
     state.speeds.length = n;
     state.phases.length = n;
+    state.sizes.length = n;
     const q = new THREE.Quaternion();
     for (let i = 0; i < n; i++) {
       const b = i * 3;
@@ -330,7 +334,8 @@ export const FLOCK_NODE: NodeDefinition = {
       state.rotations[i].set(euler.x / DEG, euler.y / DEG, euler.z / DEG);
       state.speeds[i] = sim.speed[i];
       state.phases[i] = sim.phase[i];
-      scaleV.setScalar(scale * sizeFactor(i, p.seed, p.variation));
+      state.sizes[i] = scale * sizeFactor(i, p.seed, p.variation);
+      scaleV.setScalar(state.sizes[i]);
       mesh.setMatrixAt(i, matrix.compose(pt, q, scaleV));
     }
     mesh.count = n;
@@ -343,6 +348,7 @@ export const FLOCK_NODE: NodeDefinition = {
       headings: state.headings,
       speeds: state.speeds,
       phases: state.phases,
+      sizes: state.sizes,
       count: n,
     };
   },
