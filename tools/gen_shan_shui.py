@@ -45,43 +45,77 @@ def ink(nid, px, py, source, socket="curves", **params):
 
 
 # ------------------------------------------------------------------ anchors
-# A row of `count` positions, `step` apart, jittered — each family of
-# landforms is placed this way and only its depth rule differs.
 
-def row(prefix, px, py, count, start, step, jitter, seed):
-    node(f"{prefix}_x", "list/generate", px, py, count=count, start=start, step=step)
-    node(f"{prefix}_jit", "list/random-list", px, py + 150, count=count, algorithm="uniform", seed=seed, min=-jitter, max=jitter)
-    node(f"{prefix}_xs", "list/math", px + 240, py + 60, op="add")
-    wire(f"{prefix}_x", "list", f"{prefix}_xs", "a")
-    wire(f"{prefix}_jit", "list", f"{prefix}_xs", "b")
-    return f"{prefix}_xs"
-
-
-# Mountains: depth d in [0, 1] sets how low, how near and how large.
+# Mountains: massifs, as Shan Shui plans them. A noise along the strip peaks
+# in a few places (periodic, so the loop has no seam); around each peak a
+# cluster of mountains is stacked row behind row in depth, more rows where the
+# peak is stronger. Between the peaks there are no mountains at all.
 X0, Y0 = -2600, -900
-mx = row("m", X0, Y0, 10, 0, PERIOD / 10, 1.6, 11)
-node("m_depth", "list/random-list", X0, Y0 + 320, count=10, algorithm="uniform", seed=23, min=0, max=1)
-node("m_y", "list/map-range", X0 + 240, Y0 + 260, inMin=0, inMax=1, outMin=1.3, outMax=-2.2, clamp=1, power=1)
-node("m_z", "list/map-range", X0 + 240, Y0 + 420, inMin=0, inMax=1, outMin=-9, outMax=0, clamp=1, power=1)
-node("m_s", "list/map-range", X0 + 240, Y0 + 580, inMin=0, inMax=1, outMin=1.25, outMax=1.15, clamp=1, power=1)
-for t in ("m_y", "m_z", "m_s"):
-    wire("m_depth", "list", t, "list")
-node("m_anchors", "list/combine-vectors", X0 + 480, Y0 + 200)
-wire(mx, "list", "m_anchors", "xList")
+node("m_peaks", "list/noise-peaks", X0, Y0, domain="line", plane="xz", min=0, max=PERIOD, depthMin=-5, depthMax=5,
+     origin=v3(0, 0, -4.5), frequency=0.2, octaves=2, threshold=0.25, minDistance=6, invert=False, periodic=True,
+     resolution=480, seed=11)
+node("m_rows", "list/map-range", X0, Y0 + 260, inMin=0, inMax=1, outMin=6, outMax=12, clamp=1, power=1)
+wire("m_peaks", "strengths", "m_rows", "list")
+node("m_cluster", "list/scatter-around", X0 + 240, Y0 + 60, count=8, spread=v3(6, 0, 4.5), distribution="uniform",
+     layeredAlong="z", seed=11)
+wire("m_peaks", "points", "m_cluster", "points")
+wire("m_rows", "list", "m_cluster", "counts")
+# Layer 0 is the back row: higher on the page, further away; 1 the front row.
+node("m_y", "list/map-range", X0 + 480, Y0 + 260, inMin=0, inMax=1, outMin=1.3, outMax=-2.2, clamp=1, power=1)
+node("m_s", "list/map-range", X0 + 480, Y0 + 420, inMin=0, inMax=1, outMin=1.25, outMax=1.0, clamp=1, power=1)
+for t in ("m_y", "m_s"):
+    wire("m_cluster", "layers", t, "list")
+node("m_split", "list/split-vectors", X0 + 480, Y0 + 60)
+wire("m_cluster", "points", "m_split", "vectorList")
+node("m_anchors", "list/combine-vectors", X0 + 720, Y0 + 200)
+wire("m_split", "xList", "m_anchors", "xList")
 wire("m_y", "list", "m_anchors", "yList")
-wire("m_z", "list", "m_anchors", "zList")
+wire("m_split", "zList", "m_anchors", "zList")
+
+# A back row all along the strip, so the massifs never leave the sky bare
+# behind them: one mountain every few units at the far end of the depth,
+# joined to the clusters' anchors (and their scales) with List Group.
+node("b_x", "list/generate", X0 - 760, Y0 + 640, count=12, start=0, step=PERIOD / 12)
+node("b_jit", "list/random-list", X0 - 760, Y0 + 790, count=12, algorithm="uniform", seed=53, min=-1.2, max=1.2)
+node("b_xs", "list/math", X0 - 520, Y0 + 700, op="add")
+wire("b_x", "list", "b_xs", "a")
+wire("b_jit", "list", "b_xs", "b")
+node("b_y", "list/random-list", X0 - 760, Y0 + 940, count=12, algorithm="uniform", seed=59, min=1.4, max=2.0)
+node("b_anchors", "list/combine-vectors", X0 - 280, Y0 + 760, zDefault=-9.8)
+wire("b_xs", "list", "b_anchors", "xList")
+wire("b_y", "list", "b_anchors", "yList")
+node("b_s", "list/random-list", X0 - 520, Y0 + 940, count=12, algorithm="uniform", seed=61, min=0.9, max=1.3)
+node("m_all", "list/group", X0 + 960, Y0 + 300)
+wire("m_anchors", "vectorList", "m_all", "in0")
+wire("b_anchors", "vectorList", "m_all", "in1")
+node("m_all_s", "list/group", X0 + 960, Y0 + 500)
+wire("m_s", "list", "m_all_s", "in0")
+wire("b_s", "list", "m_all_s", "in1")
 
 # Distant ranges: a pale chain far behind everything.
 D0 = Y0 - 700
 node("d_x", "list/generate", X0, D0, count=3, start=4, step=PERIOD / 3)
-node("d_anchors", "list/combine-vectors", X0 + 480, D0, yDefault=1.0, zDefault=-16)
+node("d_anchors", "list/combine-vectors", X0 + 480, D0, yDefault=2.6, zDefault=-16)
 wire("d_x", "list", "d_anchors", "xList")
 
-# Plateaus: flat-topped banks in the foreground.
+# Plateaus: flat-topped banks in the gaps between the massifs — the troughs
+# of the same noise — several to a gap, row behind row like the mountains:
+# the back rows higher on the page and further away.
 P0 = Y0 + 820
-px_ = row("p", X0, P0, 6, 4, PERIOD / 6, 1.2, 31)
-node("p_anchors", "list/combine-vectors", X0 + 480, P0 + 60, yDefault=-3.1, zDefault=2.5)
-wire(px_, "list", "p_anchors", "xList")
+node("p_gaps", "list/noise-peaks", X0, P0, domain="line", plane="xz", min=0, max=PERIOD, depthMin=-5, depthMax=5,
+     origin=v3(0, 0, 2.0), frequency=0.2, octaves=2, threshold=0.5, minDistance=7, invert=True, periodic=True,
+     resolution=480, seed=11)
+node("p_cluster", "list/scatter-around", X0 + 240, P0 + 60, count=6, spread=v3(6, 0, 1.6), distribution="uniform",
+     layeredAlong="z", seed=31)
+wire("p_gaps", "points", "p_cluster", "points")
+node("p_y", "list/map-range", X0 + 480, P0 + 260, inMin=0, inMax=1, outMin=-2.5, outMax=-3.4, clamp=1, power=1)
+wire("p_cluster", "layers", "p_y", "list")
+node("p_split", "list/split-vectors", X0 + 480, P0 + 60)
+wire("p_cluster", "points", "p_split", "vectorList")
+node("p_anchors", "list/combine-vectors", X0 + 720, P0 + 200)
+wire("p_split", "xList", "p_anchors", "xList")
+wire("p_y", "list", "p_anchors", "yList")
+wire("p_split", "zList", "p_anchors", "zList")
 
 # Water: bands of ripples in the mist between the mountains.
 W0 = P0 + 420
@@ -142,19 +176,19 @@ STROKE_Z = 0.01
 # Mountains — fill, outline, fold hatching, and three kinds of vegetation.
 node("mount", "curve/ridge-layers", C1, Y0, profile="peak", width=6, height=4.8, sizeJitter=0.35,
      layers=10, resolution=50, frequency=1, shrink=1, drop=0.03, chop=0.55, seed=4)
-wire("m_anchors", "vectorList", "mount", "anchors")
-wire("m_s", "list", "mount", "scales")
+wire("m_all", "list", "mount", "anchors")
+wire("m_all_s", "list", "mount", "scales")
 node("mount_fill", "curve/fill", C1 + 300, Y0 - 160, color=0xFFFFFF, opacity=1, baseDrop=0.3, gradient=False, zOffset=0)
 wire("mount", "outlines", "mount_fill", "curves")
 ink("mount_outline", C1 + 300, Y0 + 40, ("mount", "outlines"),
     width=0.03, minWidth=0.004, profile="sine", widthNoise=1, opacity=0.45, zOffset=STROKE_Z, seed=1)
-node("mount_hatch", "curve/strata-hatch", C1 + 300, Y0 + 240, count=200, length=0.2, jitter=0.3, distribution="edges", resolution=50, seed=2)
+node("mount_hatch", "curve/strata-hatch", C1 + 300, Y0 + 240, count=140, length=0.2, jitter=0.3, distribution="edges", resolution=50, seed=2)
 wire("mount", "stacks", "mount_hatch", "stacks")
 ink("mount_tex", C1 + 560, Y0 + 240, ("mount_hatch", "curves"),
     width=0.015, minWidth=0.003, profile="sine", widthNoise=0.5, opacity=0.45, alphaJitter=1, zOffset=STROKE_Z, seed=3)
 
 node("rim_spots", "curve/scatter", C1 + 300, Y0 + 480, resolution=50, layerMin=0, layerMax=0, maskScaleAlong=0.1, maskScaleAcross=0,
-     maskPower=3, threshold=0.1, heightMin=0.2, heightMax=1, offset=v3(0, 0.04, -0.03), scaleMin=0.4, scaleMax=0.7, seed=1)
+     maskPower=3, threshold=0.05, heightMin=0.2, heightMax=1, offset=v3(0, 0.04, -0.03), scaleMin=0.4, scaleMax=0.7, seed=1)
 wire("mount", "stacks", "rim_spots", "curves")
 node("rim_trees", "structure/instance-on-points", C1 + 560, Y0 + 480, randomFlip=True, seed=21)
 wire("bush", "geometry", "rim_trees", "geometry")
@@ -162,7 +196,7 @@ wire("rim_spots", "points", "rim_trees", "points")
 wire("rim_spots", "scales", "rim_trees", "scales")
 
 node("top_spots", "curve/scatter", C1 + 300, Y0 + 720, resolution=50, layerMin=0, layerMax=99, maskScaleAlong=0.1, maskScaleAcross=0.1,
-     maskPower=3, threshold=0.06, heightMin=0.5, heightMax=1, offset=v3(0, 0, 0.02), scaleMin=0.35, scaleMax=0.6, seed=3)
+     maskPower=3, threshold=0.025, heightMin=0.5, heightMax=1, offset=v3(0, 0, 0.02), scaleMin=0.35, scaleMax=0.6, seed=3)
 wire("mount", "stacks", "top_spots", "curves")
 node("top_trees", "structure/instance-on-points", C1 + 560, Y0 + 720, randomFlip=True, seed=22)
 wire("bush", "geometry", "top_trees", "geometry")
@@ -170,7 +204,7 @@ wire("top_spots", "points", "top_trees", "points")
 wire("top_spots", "scales", "top_trees", "scales")
 
 node("mid_spots", "curve/scatter", C1 + 300, Y0 + 960, resolution=50, layerMin=0, layerMax=99, everyOther=True, maskScaleAlong=0.05,
-     maskScaleAcross=0.2, maskPower=4, threshold=0.012, heightMin=0, heightMax=0.3, minNeighbors=2, neighborRadius=0.3,
+     maskScaleAcross=0.2, maskPower=4, threshold=0.005, heightMin=0, heightMax=0.3, minNeighbors=2, neighborRadius=0.3,
      offset=v3(0, 0, 0.02), scaleMin=0.5, scaleMax=1.1, seed=5)
 wire("mount", "stacks", "mid_spots", "curves")
 node("mid_trees", "structure/instance-on-points", C1 + 560, Y0 + 960, randomFlip=True, seed=23)
@@ -179,10 +213,10 @@ wire("mid_spots", "points", "mid_trees", "points")
 wire("mid_spots", "scales", "mid_trees", "scales")
 
 # Distant ranges — a pale wash, no line work.
-node("dist", "curve/ridge-layers", C1, D0, profile="range", width=20, height=3.4, sizeJitter=0.2,
-     layers=1, resolution=120, frequency=1, shrink=0, drop=0, seed=8)
+node("dist", "curve/ridge-layers", C1, D0, profile="range", width=20, height=4.3, sizeJitter=0.23063,
+     layers=1, resolution=120, frequency=1.825, shrink=0, drop=0, seed=8, location=v3(0, 1.275, 0))
 wire("d_anchors", "vectorList", "dist", "anchors")
-node("dist_fill", "curve/fill", C1 + 300, D0, color=0xD8D8D8, opacity=1, baseDrop=0.6, gradient=True, bottomColor=0xFFFFFF, zOffset=0)
+node("dist_fill", "curve/fill", C1 + 300, D0, color=0xD8D8D8, opacity=0.51662, baseDrop=0, gradient=True, bottomColor=0xFFFFFF, zOffset=0)
 wire("dist", "outlines", "dist_fill", "curves")
 
 # Plateaus — banks with a flat top, a grove on it, and calmer hatching.
@@ -198,7 +232,7 @@ wire("plat", "stacks", "plat_hatch", "stacks")
 ink("plat_tex", C1 + 560, P0 + 240, ("plat_hatch", "curves"),
     width=0.02, minWidth=0.003, profile="sine", widthNoise=0.5, opacity=0.3, alphaJitter=1, zOffset=STROKE_Z, seed=5)
 node("grove_spots", "curve/scatter", C1 + 300, P0 + 480, resolution=60, layerMin=0, layerMax=0, everyOther=True, maskScaleAlong=0.15,
-     maskScaleAcross=0, maskPower=1, threshold=0.45, heightMin=0.92, heightMax=1, offset=v3(0, -0.02, 0.02), scaleMin=0.9, scaleMax=1.6, seed=7)
+     maskScaleAcross=0, maskPower=1, threshold=0.3, heightMin=0.92, heightMax=1, offset=v3(0, -0.02, 0.02), scaleMin=0.7, scaleMax=1.1, seed=7)
 wire("plat", "stacks", "grove_spots", "curves")
 node("grove", "structure/instance-on-points", C1 + 560, P0 + 480, randomFlip=True, seed=24)
 wire("tree", "geometry", "grove", "geometry")
@@ -206,8 +240,8 @@ wire("grove_spots", "points", "grove", "points")
 wire("grove_spots", "scales", "grove", "scales")
 
 # Water — short ripples hatched across flat strata.
-node("water", "curve/ridge-layers", C1, W0, profile="flat", width=7, height=0.05, sizeJitter=0.3,
-     layers=10, resolution=160, frequency=2, shrink=0, drop=0.09, seed=15)
+node("water", "curve/ridge-layers", C1, W0, profile="flat", width=13.375, height=1.725, sizeJitter=0.05137,
+     layers=10, resolution=160, frequency=0.275, shrink=0, drop=0.09, chop=4.75, seed=30, location=v3(0, 0, 6.0300035189909895))
 wire("w_anchors", "vectorList", "water", "anchors")
 node("ripples", "curve/strata-hatch", C1 + 300, W0, count=70, length=0.15, jitter=0.01, distribution="center", resolution=160, seed=16)
 wire("water", "stacks", "ripples", "stacks")

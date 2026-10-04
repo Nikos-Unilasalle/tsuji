@@ -3,64 +3,74 @@
     {
       "nodes": [
         {
-          "id": "m_x",
-          "type": "list/generate",
+          "id": "m_peaks",
+          "type": "list/noise-peaks",
           "position": {
             "x": -3900,
             "y": -1530
           },
           "params": {
-            "count": 10,
-            "start": 0,
-            "step": 4.8
+            "domain": "line",
+            "plane": "xz",
+            "min": 0,
+            "max": 48,
+            "depthMin": -5,
+            "depthMax": 5,
+            "origin": {
+              "x": 0,
+              "y": 0,
+              "z": -4.5
+            },
+            "frequency": 0.2,
+            "octaves": 2,
+            "threshold": 0.25,
+            "minDistance": 6,
+            "invert": false,
+            "periodic": true,
+            "resolution": 480,
+            "seed": 11
           }
         },
         {
-          "id": "m_jit",
-          "type": "list/random-list",
+          "id": "m_rows",
+          "type": "list/map-range",
           "position": {
             "x": -3900,
-            "y": -1275
+            "y": -1088
           },
           "params": {
-            "count": 10,
-            "algorithm": "uniform",
-            "seed": 11,
-            "min": -1.6,
-            "max": 1.6
+            "inMin": 0,
+            "inMax": 1,
+            "outMin": 6,
+            "outMax": 12,
+            "clamp": 1,
+            "power": 1
           }
         },
         {
-          "id": "m_xs",
-          "type": "list/math",
+          "id": "m_cluster",
+          "type": "list/scatter-around",
           "position": {
             "x": -3540,
             "y": -1428
           },
           "params": {
-            "op": "add"
-          }
-        },
-        {
-          "id": "m_depth",
-          "type": "list/random-list",
-          "position": {
-            "x": -3900,
-            "y": -986
-          },
-          "params": {
-            "count": 10,
-            "algorithm": "uniform",
-            "seed": 23,
-            "min": 0,
-            "max": 1
+            "count": 8,
+            "spread": {
+              "x": 6,
+              "y": 0,
+              "z": 4.5
+            },
+            "distribution": "uniform",
+            "layeredAlong": "z",
+            "seed": 11
           }
         },
         {
           "id": "m_y",
           "type": "list/map-range",
           "position": {
-            "x": -3540,
+            "x": -3180,
             "y": -1088
           },
           "params": {
@@ -73,43 +83,134 @@
           }
         },
         {
-          "id": "m_z",
+          "id": "m_s",
           "type": "list/map-range",
           "position": {
-            "x": -3540,
+            "x": -3180,
             "y": -816
           },
           "params": {
             "inMin": 0,
             "inMax": 1,
-            "outMin": -9,
-            "outMax": 0,
+            "outMin": 1.25,
+            "outMax": 1,
             "clamp": 1,
             "power": 1
           }
         },
         {
-          "id": "m_s",
-          "type": "list/map-range",
+          "id": "m_split",
+          "type": "list/split-vectors",
           "position": {
-            "x": -3540,
-            "y": -544
+            "x": -3180,
+            "y": -1428
           },
-          "params": {
-            "inMin": 0,
-            "inMax": 1,
-            "outMin": 1.25,
-            "outMax": 1.15,
-            "clamp": 1,
-            "power": 1
-          }
+          "params": {}
         },
         {
           "id": "m_anchors",
           "type": "list/combine-vectors",
           "position": {
-            "x": -3180,
+            "x": -2820,
             "y": -1190
+          },
+          "params": {}
+        },
+        {
+          "id": "b_x",
+          "type": "list/generate",
+          "position": {
+            "x": -5040,
+            "y": -442
+          },
+          "params": {
+            "count": 12,
+            "start": 0,
+            "step": 4
+          }
+        },
+        {
+          "id": "b_jit",
+          "type": "list/random-list",
+          "position": {
+            "x": -5040,
+            "y": -187
+          },
+          "params": {
+            "count": 12,
+            "algorithm": "uniform",
+            "seed": 53,
+            "min": -1.2,
+            "max": 1.2
+          }
+        },
+        {
+          "id": "b_xs",
+          "type": "list/math",
+          "position": {
+            "x": -4680,
+            "y": -340
+          },
+          "params": {
+            "op": "add"
+          }
+        },
+        {
+          "id": "b_y",
+          "type": "list/random-list",
+          "position": {
+            "x": -5040,
+            "y": 68
+          },
+          "params": {
+            "count": 12,
+            "algorithm": "uniform",
+            "seed": 59,
+            "min": 1.4,
+            "max": 2
+          }
+        },
+        {
+          "id": "b_anchors",
+          "type": "list/combine-vectors",
+          "position": {
+            "x": -4320,
+            "y": -238
+          },
+          "params": {
+            "zDefault": -9.8
+          }
+        },
+        {
+          "id": "b_s",
+          "type": "list/random-list",
+          "position": {
+            "x": -4680,
+            "y": 68
+          },
+          "params": {
+            "count": 12,
+            "algorithm": "uniform",
+            "seed": 61,
+            "min": 0.9,
+            "max": 1.3
+          }
+        },
+        {
+          "id": "m_all",
+          "type": "list/group",
+          "position": {
+            "x": -2460,
+            "y": -1020
+          },
+          "params": {}
+        },
+        {
+          "id": "m_all_s",
+          "type": "list/group",
+          "position": {
+            "x": -2460,
+            "y": -680
           },
           "params": {}
         },
@@ -123,7 +224,7 @@
           "params": {
             "count": 3,
             "start": 4,
-            "step": 16.0
+            "step": 16
           }
         },
         {
@@ -134,60 +235,91 @@
             "y": -2720
           },
           "params": {
-            "yDefault": 1.0,
+            "yDefault": 2.6,
             "zDefault": -16
           }
         },
         {
-          "id": "p_x",
-          "type": "list/generate",
+          "id": "p_gaps",
+          "type": "list/noise-peaks",
           "position": {
             "x": -3900,
             "y": -136
           },
           "params": {
-            "count": 6,
-            "start": 4,
-            "step": 8.0
+            "domain": "line",
+            "plane": "xz",
+            "min": 0,
+            "max": 48,
+            "depthMin": -5,
+            "depthMax": 5,
+            "origin": {
+              "x": 0,
+              "y": 0,
+              "z": 2
+            },
+            "frequency": 0.2,
+            "octaves": 2,
+            "threshold": 0.5,
+            "minDistance": 7,
+            "invert": true,
+            "periodic": true,
+            "resolution": 480,
+            "seed": 11
           }
         },
         {
-          "id": "p_jit",
-          "type": "list/random-list",
-          "position": {
-            "x": -3900,
-            "y": 119
-          },
-          "params": {
-            "count": 6,
-            "algorithm": "uniform",
-            "seed": 31,
-            "min": -1.2,
-            "max": 1.2
-          }
-        },
-        {
-          "id": "p_xs",
-          "type": "list/math",
+          "id": "p_cluster",
+          "type": "list/scatter-around",
           "position": {
             "x": -3540,
             "y": -34
           },
           "params": {
-            "op": "add"
+            "count": 6,
+            "spread": {
+              "x": 6,
+              "y": 0,
+              "z": 1.6
+            },
+            "distribution": "uniform",
+            "layeredAlong": "z",
+            "seed": 31
           }
+        },
+        {
+          "id": "p_y",
+          "type": "list/map-range",
+          "position": {
+            "x": -3180,
+            "y": 306
+          },
+          "params": {
+            "inMin": 0,
+            "inMax": 1,
+            "outMin": -2.5,
+            "outMax": -3.4,
+            "clamp": 1,
+            "power": 1
+          }
+        },
+        {
+          "id": "p_split",
+          "type": "list/split-vectors",
+          "position": {
+            "x": -3180,
+            "y": -34
+          },
+          "params": {}
         },
         {
           "id": "p_anchors",
           "type": "list/combine-vectors",
           "position": {
-            "x": -3180,
-            "y": -34
+            "x": -2820,
+            "y": 204
           },
-          "params": {
-            "yDefault": -3.1,
-            "zDefault": 2.5
-          }
+          "params": {}
         },
         {
           "id": "w_x",
@@ -199,7 +331,7 @@
           "params": {
             "count": 6,
             "start": 0,
-            "step": 8.0
+            "step": 8
           }
         },
         {
@@ -214,7 +346,7 @@
             "algorithm": "uniform",
             "seed": 41,
             "min": -5.4,
-            "max": -3.0
+            "max": -3
           }
         },
         {
@@ -556,7 +688,7 @@
             "y": -1122
           },
           "params": {
-            "count": 200,
+            "count": 140,
             "length": 0.2,
             "jitter": 0.3,
             "distribution": "edges",
@@ -597,7 +729,7 @@
             "maskScaleAlong": 0.1,
             "maskScaleAcross": 0,
             "maskPower": 3,
-            "threshold": 0.1,
+            "threshold": 0.05,
             "heightMin": 0.2,
             "heightMax": 1,
             "offset": {
@@ -636,7 +768,7 @@
             "maskScaleAlong": 0.1,
             "maskScaleAcross": 0.1,
             "maskPower": 3,
-            "threshold": 0.06,
+            "threshold": 0.025,
             "heightMin": 0.5,
             "heightMax": 1,
             "offset": {
@@ -676,7 +808,7 @@
             "maskScaleAlong": 0.05,
             "maskScaleAcross": 0.2,
             "maskPower": 4,
-            "threshold": 0.012,
+            "threshold": 0.005,
             "heightMin": 0,
             "heightMax": 0.3,
             "minNeighbors": 2,
@@ -713,14 +845,19 @@
           "params": {
             "profile": "range",
             "width": 20,
-            "height": 3.4,
-            "sizeJitter": 0.2,
+            "height": 4.3,
+            "sizeJitter": 0.23063,
             "layers": 1,
             "resolution": 120,
-            "frequency": 1,
+            "frequency": 1.825,
             "shrink": 0,
             "drop": 0,
-            "seed": 8
+            "seed": 8,
+            "location": {
+              "x": 0,
+              "y": 1.275,
+              "z": 0
+            }
           }
         },
         {
@@ -732,8 +869,8 @@
           },
           "params": {
             "color": 14211288,
-            "opacity": 1,
-            "baseDrop": 0.6,
+            "opacity": 0.51662,
+            "baseDrop": 0,
             "gradient": true,
             "bottomColor": 16777215,
             "zOffset": 0
@@ -749,7 +886,7 @@
           "params": {
             "profile": "plateau",
             "width": 9,
-            "height": 1.0,
+            "height": 1,
             "sizeJitter": 0.25,
             "layers": 5,
             "resolution": 50,
@@ -770,7 +907,7 @@
           "params": {
             "color": 16777215,
             "opacity": 1,
-            "baseDrop": 2.0,
+            "baseDrop": 2,
             "zOffset": 0
           }
         },
@@ -842,7 +979,7 @@
             "maskScaleAlong": 0.15,
             "maskScaleAcross": 0,
             "maskPower": 1,
-            "threshold": 0.45,
+            "threshold": 0.3,
             "heightMin": 0.92,
             "heightMax": 1,
             "offset": {
@@ -850,8 +987,8 @@
               "y": -0.02,
               "z": 0.02
             },
-            "scaleMin": 0.9,
-            "scaleMax": 1.6,
+            "scaleMin": 0.7,
+            "scaleMax": 1.1,
             "seed": 7
           }
         },
@@ -871,28 +1008,34 @@
           "id": "water",
           "type": "curve/ridge-layers",
           "position": {
-            "x": -2550,
-            "y": 578
+            "x": -2838,
+            "y": 587
           },
           "params": {
             "profile": "flat",
-            "width": 7,
-            "height": 0.05,
-            "sizeJitter": 0.3,
+            "width": 13.375,
+            "height": 1.725,
+            "sizeJitter": 0.05137,
             "layers": 10,
             "resolution": 160,
-            "frequency": 2,
+            "frequency": 0.275,
             "shrink": 0,
             "drop": 0.09,
-            "seed": 15
+            "seed": 30,
+            "chop": 4.75,
+            "location": {
+              "x": 0,
+              "y": 0,
+              "z": 6.0300035189909895
+            }
           }
         },
         {
           "id": "ripples",
           "type": "curve/strata-hatch",
           "position": {
-            "x": -2100,
-            "y": 578
+            "x": -2406,
+            "y": 548
           },
           "params": {
             "count": 70,
@@ -942,7 +1085,7 @@
             "mode": "grid",
             "gridRows": 1,
             "gridCols": 3,
-            "spacingX": 48.0,
+            "spacingX": 48,
             "spacingY": 0,
             "plane": "XY",
             "centerGrid": true,
@@ -969,7 +1112,7 @@
           "params": {
             "op": "multiply",
             "a": 0,
-            "b": 1.0
+            "b": 1
           }
         },
         {
@@ -982,7 +1125,7 @@
           "params": {
             "op": "mod",
             "a": 0,
-            "b": 48.0
+            "b": 48
           }
         },
         {
@@ -1114,44 +1257,51 @@
       ],
       "connections": [
         {
-          "id": "m_x.list->m_xs.a",
-          "fromNode": "m_x",
-          "fromSocket": "list",
-          "toNode": "m_xs",
-          "toSocket": "a"
+          "id": "m_peaks.strengths->m_rows.list",
+          "fromNode": "m_peaks",
+          "fromSocket": "strengths",
+          "toNode": "m_rows",
+          "toSocket": "list"
         },
         {
-          "id": "m_jit.list->m_xs.b",
-          "fromNode": "m_jit",
-          "fromSocket": "list",
-          "toNode": "m_xs",
-          "toSocket": "b"
+          "id": "m_peaks.points->m_cluster.points",
+          "fromNode": "m_peaks",
+          "fromSocket": "points",
+          "toNode": "m_cluster",
+          "toSocket": "points"
         },
         {
-          "id": "m_depth.list->m_y.list",
-          "fromNode": "m_depth",
+          "id": "m_rows.list->m_cluster.counts",
+          "fromNode": "m_rows",
           "fromSocket": "list",
+          "toNode": "m_cluster",
+          "toSocket": "counts"
+        },
+        {
+          "id": "m_cluster.layers->m_y.list",
+          "fromNode": "m_cluster",
+          "fromSocket": "layers",
           "toNode": "m_y",
           "toSocket": "list"
         },
         {
-          "id": "m_depth.list->m_z.list",
-          "fromNode": "m_depth",
-          "fromSocket": "list",
-          "toNode": "m_z",
-          "toSocket": "list"
-        },
-        {
-          "id": "m_depth.list->m_s.list",
-          "fromNode": "m_depth",
-          "fromSocket": "list",
+          "id": "m_cluster.layers->m_s.list",
+          "fromNode": "m_cluster",
+          "fromSocket": "layers",
           "toNode": "m_s",
           "toSocket": "list"
         },
         {
-          "id": "m_xs.list->m_anchors.xList",
-          "fromNode": "m_xs",
-          "fromSocket": "list",
+          "id": "m_cluster.points->m_split.vectorList",
+          "fromNode": "m_cluster",
+          "fromSocket": "points",
+          "toNode": "m_split",
+          "toSocket": "vectorList"
+        },
+        {
+          "id": "m_split.xList->m_anchors.xList",
+          "fromNode": "m_split",
+          "fromSocket": "xList",
           "toNode": "m_anchors",
           "toSocket": "xList"
         },
@@ -1163,11 +1313,67 @@
           "toSocket": "yList"
         },
         {
-          "id": "m_z.list->m_anchors.zList",
-          "fromNode": "m_z",
-          "fromSocket": "list",
+          "id": "m_split.zList->m_anchors.zList",
+          "fromNode": "m_split",
+          "fromSocket": "zList",
           "toNode": "m_anchors",
           "toSocket": "zList"
+        },
+        {
+          "id": "b_x.list->b_xs.a",
+          "fromNode": "b_x",
+          "fromSocket": "list",
+          "toNode": "b_xs",
+          "toSocket": "a"
+        },
+        {
+          "id": "b_jit.list->b_xs.b",
+          "fromNode": "b_jit",
+          "fromSocket": "list",
+          "toNode": "b_xs",
+          "toSocket": "b"
+        },
+        {
+          "id": "b_xs.list->b_anchors.xList",
+          "fromNode": "b_xs",
+          "fromSocket": "list",
+          "toNode": "b_anchors",
+          "toSocket": "xList"
+        },
+        {
+          "id": "b_y.list->b_anchors.yList",
+          "fromNode": "b_y",
+          "fromSocket": "list",
+          "toNode": "b_anchors",
+          "toSocket": "yList"
+        },
+        {
+          "id": "m_anchors.vectorList->m_all.in0",
+          "fromNode": "m_anchors",
+          "fromSocket": "vectorList",
+          "toNode": "m_all",
+          "toSocket": "in0"
+        },
+        {
+          "id": "b_anchors.vectorList->m_all.in1",
+          "fromNode": "b_anchors",
+          "fromSocket": "vectorList",
+          "toNode": "m_all",
+          "toSocket": "in1"
+        },
+        {
+          "id": "m_s.list->m_all_s.in0",
+          "fromNode": "m_s",
+          "fromSocket": "list",
+          "toNode": "m_all_s",
+          "toSocket": "in0"
+        },
+        {
+          "id": "b_s.list->m_all_s.in1",
+          "fromNode": "b_s",
+          "fromSocket": "list",
+          "toNode": "m_all_s",
+          "toSocket": "in1"
         },
         {
           "id": "d_x.list->d_anchors.xList",
@@ -1177,25 +1383,46 @@
           "toSocket": "xList"
         },
         {
-          "id": "p_x.list->p_xs.a",
-          "fromNode": "p_x",
-          "fromSocket": "list",
-          "toNode": "p_xs",
-          "toSocket": "a"
+          "id": "p_gaps.points->p_cluster.points",
+          "fromNode": "p_gaps",
+          "fromSocket": "points",
+          "toNode": "p_cluster",
+          "toSocket": "points"
         },
         {
-          "id": "p_jit.list->p_xs.b",
-          "fromNode": "p_jit",
-          "fromSocket": "list",
-          "toNode": "p_xs",
-          "toSocket": "b"
+          "id": "p_cluster.layers->p_y.list",
+          "fromNode": "p_cluster",
+          "fromSocket": "layers",
+          "toNode": "p_y",
+          "toSocket": "list"
         },
         {
-          "id": "p_xs.list->p_anchors.xList",
-          "fromNode": "p_xs",
-          "fromSocket": "list",
+          "id": "p_cluster.points->p_split.vectorList",
+          "fromNode": "p_cluster",
+          "fromSocket": "points",
+          "toNode": "p_split",
+          "toSocket": "vectorList"
+        },
+        {
+          "id": "p_split.xList->p_anchors.xList",
+          "fromNode": "p_split",
+          "fromSocket": "xList",
           "toNode": "p_anchors",
           "toSocket": "xList"
+        },
+        {
+          "id": "p_y.list->p_anchors.yList",
+          "fromNode": "p_y",
+          "fromSocket": "list",
+          "toNode": "p_anchors",
+          "toSocket": "yList"
+        },
+        {
+          "id": "p_split.zList->p_anchors.zList",
+          "fromNode": "p_split",
+          "fromSocket": "zList",
+          "toNode": "p_anchors",
+          "toSocket": "zList"
         },
         {
           "id": "w_x.list->w_anchors.xList",
@@ -1338,15 +1565,15 @@
           "toSocket": "in1"
         },
         {
-          "id": "m_anchors.vectorList->mount.anchors",
-          "fromNode": "m_anchors",
-          "fromSocket": "vectorList",
+          "id": "m_all.list->mount.anchors",
+          "fromNode": "m_all",
+          "fromSocket": "list",
           "toNode": "mount",
           "toSocket": "anchors"
         },
         {
-          "id": "m_s.list->mount.scales",
-          "fromNode": "m_s",
+          "id": "m_all_s.list->mount.scales",
+          "fromNode": "m_all_s",
           "fromSocket": "list",
           "toNode": "mount",
           "toSocket": "scales"
@@ -1541,13 +1768,6 @@
           "toSocket": "scales"
         },
         {
-          "id": "w_anchors.vectorList->water.anchors",
-          "fromNode": "w_anchors",
-          "fromSocket": "vectorList",
-          "toNode": "water",
-          "toSocket": "anchors"
-        },
-        {
           "id": "water.stacks->ripples.stacks",
           "fromNode": "water",
           "fromSocket": "stacks",
@@ -1700,6 +1920,13 @@
           "fromSocket": "effect",
           "toNode": "render",
           "toSocket": "postprocess"
+        },
+        {
+          "id": "w_anchors.vectorList->water.anchors",
+          "fromNode": "w_anchors",
+          "fromSocket": "vectorList",
+          "toNode": "water",
+          "toSocket": "anchors"
         }
       ],
       "keyframes": {},
