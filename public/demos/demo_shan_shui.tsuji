@@ -1,0 +1,1746 @@
+{
+  "canvases": [
+    {
+      "nodes": [
+        {
+          "id": "m_x",
+          "type": "list/generate",
+          "position": {
+            "x": -3900,
+            "y": -1530
+          },
+          "params": {
+            "count": 10,
+            "start": 0,
+            "step": 4.8
+          }
+        },
+        {
+          "id": "m_jit",
+          "type": "list/random-list",
+          "position": {
+            "x": -3900,
+            "y": -1275
+          },
+          "params": {
+            "count": 10,
+            "algorithm": "uniform",
+            "seed": 11,
+            "min": -1.6,
+            "max": 1.6
+          }
+        },
+        {
+          "id": "m_xs",
+          "type": "list/math",
+          "position": {
+            "x": -3540,
+            "y": -1428
+          },
+          "params": {
+            "op": "add"
+          }
+        },
+        {
+          "id": "m_depth",
+          "type": "list/random-list",
+          "position": {
+            "x": -3900,
+            "y": -986
+          },
+          "params": {
+            "count": 10,
+            "algorithm": "uniform",
+            "seed": 23,
+            "min": 0,
+            "max": 1
+          }
+        },
+        {
+          "id": "m_y",
+          "type": "list/map-range",
+          "position": {
+            "x": -3540,
+            "y": -1088
+          },
+          "params": {
+            "inMin": 0,
+            "inMax": 1,
+            "outMin": 1.3,
+            "outMax": -2.2,
+            "clamp": 1,
+            "power": 1
+          }
+        },
+        {
+          "id": "m_z",
+          "type": "list/map-range",
+          "position": {
+            "x": -3540,
+            "y": -816
+          },
+          "params": {
+            "inMin": 0,
+            "inMax": 1,
+            "outMin": -9,
+            "outMax": 0,
+            "clamp": 1,
+            "power": 1
+          }
+        },
+        {
+          "id": "m_s",
+          "type": "list/map-range",
+          "position": {
+            "x": -3540,
+            "y": -544
+          },
+          "params": {
+            "inMin": 0,
+            "inMax": 1,
+            "outMin": 1.25,
+            "outMax": 1.15,
+            "clamp": 1,
+            "power": 1
+          }
+        },
+        {
+          "id": "m_anchors",
+          "type": "list/combine-vectors",
+          "position": {
+            "x": -3180,
+            "y": -1190
+          },
+          "params": {}
+        },
+        {
+          "id": "d_x",
+          "type": "list/generate",
+          "position": {
+            "x": -3900,
+            "y": -2720
+          },
+          "params": {
+            "count": 3,
+            "start": 4,
+            "step": 16.0
+          }
+        },
+        {
+          "id": "d_anchors",
+          "type": "list/combine-vectors",
+          "position": {
+            "x": -3180,
+            "y": -2720
+          },
+          "params": {
+            "yDefault": 1.0,
+            "zDefault": -16
+          }
+        },
+        {
+          "id": "p_x",
+          "type": "list/generate",
+          "position": {
+            "x": -3900,
+            "y": -136
+          },
+          "params": {
+            "count": 6,
+            "start": 4,
+            "step": 8.0
+          }
+        },
+        {
+          "id": "p_jit",
+          "type": "list/random-list",
+          "position": {
+            "x": -3900,
+            "y": 119
+          },
+          "params": {
+            "count": 6,
+            "algorithm": "uniform",
+            "seed": 31,
+            "min": -1.2,
+            "max": 1.2
+          }
+        },
+        {
+          "id": "p_xs",
+          "type": "list/math",
+          "position": {
+            "x": -3540,
+            "y": -34
+          },
+          "params": {
+            "op": "add"
+          }
+        },
+        {
+          "id": "p_anchors",
+          "type": "list/combine-vectors",
+          "position": {
+            "x": -3180,
+            "y": -34
+          },
+          "params": {
+            "yDefault": -3.1,
+            "zDefault": 2.5
+          }
+        },
+        {
+          "id": "w_x",
+          "type": "list/generate",
+          "position": {
+            "x": -3900,
+            "y": 578
+          },
+          "params": {
+            "count": 6,
+            "start": 0,
+            "step": 8.0
+          }
+        },
+        {
+          "id": "w_y",
+          "type": "list/random-list",
+          "position": {
+            "x": -3900,
+            "y": 833
+          },
+          "params": {
+            "count": 6,
+            "algorithm": "uniform",
+            "seed": 41,
+            "min": -5.4,
+            "max": -3.0
+          }
+        },
+        {
+          "id": "w_anchors",
+          "type": "list/combine-vectors",
+          "position": {
+            "x": -3180,
+            "y": 680
+          },
+          "params": {
+            "zDefault": -9.5
+          }
+        },
+        {
+          "id": "blob_line",
+          "type": "curve/primitive",
+          "position": {
+            "x": -3900,
+            "y": 1360
+          },
+          "params": {
+            "primitiveType": "line",
+            "height": 0.14,
+            "visible": 1
+          }
+        },
+        {
+          "id": "blob",
+          "type": "curve/ink-stroke",
+          "position": {
+            "x": -3510,
+            "y": 1360
+          },
+          "params": {
+            "color": 6579300,
+            "width": 0.04,
+            "minWidth": 0.003,
+            "profile": "blob",
+            "widthNoise": 0.5,
+            "opacity": 0.55,
+            "zOffset": 0,
+            "seed": 3
+          }
+        },
+        {
+          "id": "bush_x",
+          "type": "list/random-list",
+          "position": {
+            "x": -3900,
+            "y": 1700
+          },
+          "params": {
+            "count": 5,
+            "algorithm": "gaussian",
+            "seed": 5,
+            "min": -0.14,
+            "max": 0.14
+          }
+        },
+        {
+          "id": "bush_y",
+          "type": "list/random-list",
+          "position": {
+            "x": -3900,
+            "y": 1955
+          },
+          "params": {
+            "count": 5,
+            "algorithm": "gaussian",
+            "seed": 6,
+            "min": -0.1,
+            "max": 0.1
+          }
+        },
+        {
+          "id": "bush_pts",
+          "type": "list/combine-vectors",
+          "position": {
+            "x": -3510,
+            "y": 1802
+          },
+          "params": {}
+        },
+        {
+          "id": "bush",
+          "type": "structure/instance-on-points",
+          "position": {
+            "x": -3120,
+            "y": 1530
+          },
+          "params": {
+            "scaleMin": 0.6,
+            "scaleMax": 1.2,
+            "rotationJitter": 12,
+            "axis": "Z",
+            "randomFlip": false,
+            "seed": 7
+          }
+        },
+        {
+          "id": "trunk_line",
+          "type": "curve/primitive",
+          "position": {
+            "x": -3900,
+            "y": 2312
+          },
+          "params": {
+            "primitiveType": "line",
+            "height": 0.62,
+            "location": {
+              "x": 0,
+              "y": 0.31,
+              "z": 0
+            },
+            "visible": 1
+          }
+        },
+        {
+          "id": "trunk",
+          "type": "curve/ink-stroke",
+          "position": {
+            "x": -3510,
+            "y": 2312
+          },
+          "params": {
+            "color": 6579300,
+            "width": 0.007,
+            "minWidth": 0.004,
+            "profile": "taper",
+            "widthNoise": 0.3,
+            "wobble": 0.012,
+            "wobbleScale": 0.4,
+            "opacity": 0.45,
+            "zOffset": 0,
+            "seed": 9
+          }
+        },
+        {
+          "id": "leaf_line",
+          "type": "curve/primitive",
+          "position": {
+            "x": -3900,
+            "y": 2652
+          },
+          "params": {
+            "primitiveType": "line",
+            "height": 0.22,
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 1.5708
+            },
+            "visible": 1
+          }
+        },
+        {
+          "id": "leaf",
+          "type": "curve/ink-stroke",
+          "position": {
+            "x": -3510,
+            "y": 2652
+          },
+          "params": {
+            "color": 6579300,
+            "width": 0.03,
+            "minWidth": 0.003,
+            "profile": "blob",
+            "widthNoise": 0.5,
+            "opacity": 0.3,
+            "zOffset": 0,
+            "seed": 10
+          }
+        },
+        {
+          "id": "leaf_h",
+          "type": "list/random-list",
+          "position": {
+            "x": -3900,
+            "y": 2992
+          },
+          "params": {
+            "count": 16,
+            "algorithm": "uniform",
+            "seed": 12,
+            "min": 0.16,
+            "max": 0.62
+          }
+        },
+        {
+          "id": "leaf_room",
+          "type": "list/map-range",
+          "position": {
+            "x": -3540,
+            "y": 2992
+          },
+          "params": {
+            "inMin": 0.16,
+            "inMax": 0.62,
+            "outMin": 0.32,
+            "outMax": 0.04,
+            "clamp": 1,
+            "power": 1
+          }
+        },
+        {
+          "id": "leaf_side",
+          "type": "list/random-list",
+          "position": {
+            "x": -3900,
+            "y": 3264
+          },
+          "params": {
+            "count": 16,
+            "algorithm": "uniform",
+            "seed": 13,
+            "min": -1,
+            "max": 1
+          }
+        },
+        {
+          "id": "leaf_x",
+          "type": "list/math",
+          "position": {
+            "x": -3180,
+            "y": 3128
+          },
+          "params": {
+            "op": "multiply"
+          }
+        },
+        {
+          "id": "leaf_pts",
+          "type": "list/combine-vectors",
+          "position": {
+            "x": -2820,
+            "y": 3026
+          },
+          "params": {}
+        },
+        {
+          "id": "leaf_size",
+          "type": "list/map-range",
+          "position": {
+            "x": -3180,
+            "y": 3400
+          },
+          "params": {
+            "inMin": 0.16,
+            "inMax": 0.62,
+            "outMin": 1.4,
+            "outMax": 0.45,
+            "clamp": 1,
+            "power": 1
+          }
+        },
+        {
+          "id": "foliage",
+          "type": "structure/instance-on-points",
+          "position": {
+            "x": -2460,
+            "y": 2754
+          },
+          "params": {
+            "scaleMin": 0.8,
+            "scaleMax": 1.2,
+            "rotationJitter": 15,
+            "axis": "Z",
+            "seed": 14
+          }
+        },
+        {
+          "id": "tree",
+          "type": "structure/merge",
+          "position": {
+            "x": -2100,
+            "y": 2482
+          },
+          "params": {}
+        },
+        {
+          "id": "mount",
+          "type": "curve/ridge-layers",
+          "position": {
+            "x": -2550,
+            "y": -1530
+          },
+          "params": {
+            "profile": "peak",
+            "width": 6,
+            "height": 4.8,
+            "sizeJitter": 0.35,
+            "layers": 10,
+            "resolution": 50,
+            "frequency": 1,
+            "shrink": 1,
+            "drop": 0.03,
+            "chop": 0.55,
+            "seed": 4
+          }
+        },
+        {
+          "id": "mount_fill",
+          "type": "curve/fill",
+          "position": {
+            "x": -2100,
+            "y": -1802
+          },
+          "params": {
+            "color": 16777215,
+            "opacity": 1,
+            "baseDrop": 0.3,
+            "gradient": false,
+            "zOffset": 0
+          }
+        },
+        {
+          "id": "mount_outline",
+          "type": "curve/ink-stroke",
+          "position": {
+            "x": -2100,
+            "y": -1462
+          },
+          "params": {
+            "color": 6579300,
+            "width": 0.03,
+            "minWidth": 0.004,
+            "profile": "sine",
+            "widthNoise": 1,
+            "opacity": 0.45,
+            "zOffset": 0.01,
+            "seed": 1
+          }
+        },
+        {
+          "id": "mount_hatch",
+          "type": "curve/strata-hatch",
+          "position": {
+            "x": -2100,
+            "y": -1122
+          },
+          "params": {
+            "count": 200,
+            "length": 0.2,
+            "jitter": 0.3,
+            "distribution": "edges",
+            "resolution": 50,
+            "seed": 2
+          }
+        },
+        {
+          "id": "mount_tex",
+          "type": "curve/ink-stroke",
+          "position": {
+            "x": -1710,
+            "y": -1122
+          },
+          "params": {
+            "color": 6579300,
+            "width": 0.015,
+            "minWidth": 0.003,
+            "profile": "sine",
+            "widthNoise": 0.5,
+            "opacity": 0.45,
+            "alphaJitter": 1,
+            "zOffset": 0.01,
+            "seed": 3
+          }
+        },
+        {
+          "id": "rim_spots",
+          "type": "curve/scatter",
+          "position": {
+            "x": -2100,
+            "y": -714
+          },
+          "params": {
+            "resolution": 50,
+            "layerMin": 0,
+            "layerMax": 0,
+            "maskScaleAlong": 0.1,
+            "maskScaleAcross": 0,
+            "maskPower": 3,
+            "threshold": 0.1,
+            "heightMin": 0.2,
+            "heightMax": 1,
+            "offset": {
+              "x": 0,
+              "y": 0.04,
+              "z": -0.03
+            },
+            "scaleMin": 0.4,
+            "scaleMax": 0.7,
+            "seed": 1
+          }
+        },
+        {
+          "id": "rim_trees",
+          "type": "structure/instance-on-points",
+          "position": {
+            "x": -1710,
+            "y": -714
+          },
+          "params": {
+            "randomFlip": true,
+            "seed": 21
+          }
+        },
+        {
+          "id": "top_spots",
+          "type": "curve/scatter",
+          "position": {
+            "x": -2100,
+            "y": -306
+          },
+          "params": {
+            "resolution": 50,
+            "layerMin": 0,
+            "layerMax": 99,
+            "maskScaleAlong": 0.1,
+            "maskScaleAcross": 0.1,
+            "maskPower": 3,
+            "threshold": 0.06,
+            "heightMin": 0.5,
+            "heightMax": 1,
+            "offset": {
+              "x": 0,
+              "y": 0,
+              "z": 0.02
+            },
+            "scaleMin": 0.35,
+            "scaleMax": 0.6,
+            "seed": 3
+          }
+        },
+        {
+          "id": "top_trees",
+          "type": "structure/instance-on-points",
+          "position": {
+            "x": -1710,
+            "y": -306
+          },
+          "params": {
+            "randomFlip": true,
+            "seed": 22
+          }
+        },
+        {
+          "id": "mid_spots",
+          "type": "curve/scatter",
+          "position": {
+            "x": -2100,
+            "y": 102
+          },
+          "params": {
+            "resolution": 50,
+            "layerMin": 0,
+            "layerMax": 99,
+            "everyOther": true,
+            "maskScaleAlong": 0.05,
+            "maskScaleAcross": 0.2,
+            "maskPower": 4,
+            "threshold": 0.012,
+            "heightMin": 0,
+            "heightMax": 0.3,
+            "minNeighbors": 2,
+            "neighborRadius": 0.3,
+            "offset": {
+              "x": 0,
+              "y": 0,
+              "z": 0.02
+            },
+            "scaleMin": 0.5,
+            "scaleMax": 1.1,
+            "seed": 5
+          }
+        },
+        {
+          "id": "mid_trees",
+          "type": "structure/instance-on-points",
+          "position": {
+            "x": -1710,
+            "y": 102
+          },
+          "params": {
+            "randomFlip": true,
+            "seed": 23
+          }
+        },
+        {
+          "id": "dist",
+          "type": "curve/ridge-layers",
+          "position": {
+            "x": -2550,
+            "y": -2720
+          },
+          "params": {
+            "profile": "range",
+            "width": 20,
+            "height": 3.4,
+            "sizeJitter": 0.2,
+            "layers": 1,
+            "resolution": 120,
+            "frequency": 1,
+            "shrink": 0,
+            "drop": 0,
+            "seed": 8
+          }
+        },
+        {
+          "id": "dist_fill",
+          "type": "curve/fill",
+          "position": {
+            "x": -2100,
+            "y": -2720
+          },
+          "params": {
+            "color": 14211288,
+            "opacity": 1,
+            "baseDrop": 0.6,
+            "gradient": true,
+            "bottomColor": 16777215,
+            "zOffset": 0
+          }
+        },
+        {
+          "id": "plat",
+          "type": "curve/ridge-layers",
+          "position": {
+            "x": -2550,
+            "y": -136
+          },
+          "params": {
+            "profile": "plateau",
+            "width": 9,
+            "height": 1.0,
+            "sizeJitter": 0.25,
+            "layers": 5,
+            "resolution": 50,
+            "frequency": 1,
+            "shrink": 0.6,
+            "drop": 0.04,
+            "chop": 0.6,
+            "seed": 12
+          }
+        },
+        {
+          "id": "plat_fill",
+          "type": "curve/fill",
+          "position": {
+            "x": -2100,
+            "y": -408
+          },
+          "params": {
+            "color": 16777215,
+            "opacity": 1,
+            "baseDrop": 2.0,
+            "zOffset": 0
+          }
+        },
+        {
+          "id": "plat_outline",
+          "type": "curve/ink-stroke",
+          "position": {
+            "x": -2100,
+            "y": -68
+          },
+          "params": {
+            "color": 6579300,
+            "width": 0.03,
+            "minWidth": 0.004,
+            "profile": "sine",
+            "widthNoise": 1,
+            "opacity": 0.3,
+            "zOffset": 0.01,
+            "seed": 4
+          }
+        },
+        {
+          "id": "plat_hatch",
+          "type": "curve/strata-hatch",
+          "position": {
+            "x": -2100,
+            "y": 272
+          },
+          "params": {
+            "count": 80,
+            "length": 0.2,
+            "jitter": 0.3,
+            "distribution": "inner",
+            "resolution": 50,
+            "seed": 6
+          }
+        },
+        {
+          "id": "plat_tex",
+          "type": "curve/ink-stroke",
+          "position": {
+            "x": -1710,
+            "y": 272
+          },
+          "params": {
+            "color": 6579300,
+            "width": 0.02,
+            "minWidth": 0.003,
+            "profile": "sine",
+            "widthNoise": 0.5,
+            "opacity": 0.3,
+            "alphaJitter": 1,
+            "zOffset": 0.01,
+            "seed": 5
+          }
+        },
+        {
+          "id": "grove_spots",
+          "type": "curve/scatter",
+          "position": {
+            "x": -2100,
+            "y": 680
+          },
+          "params": {
+            "resolution": 60,
+            "layerMin": 0,
+            "layerMax": 0,
+            "everyOther": true,
+            "maskScaleAlong": 0.15,
+            "maskScaleAcross": 0,
+            "maskPower": 1,
+            "threshold": 0.45,
+            "heightMin": 0.92,
+            "heightMax": 1,
+            "offset": {
+              "x": 0,
+              "y": -0.02,
+              "z": 0.02
+            },
+            "scaleMin": 0.9,
+            "scaleMax": 1.6,
+            "seed": 7
+          }
+        },
+        {
+          "id": "grove",
+          "type": "structure/instance-on-points",
+          "position": {
+            "x": -1710,
+            "y": 680
+          },
+          "params": {
+            "randomFlip": true,
+            "seed": 24
+          }
+        },
+        {
+          "id": "water",
+          "type": "curve/ridge-layers",
+          "position": {
+            "x": -2550,
+            "y": 578
+          },
+          "params": {
+            "profile": "flat",
+            "width": 7,
+            "height": 0.05,
+            "sizeJitter": 0.3,
+            "layers": 10,
+            "resolution": 160,
+            "frequency": 2,
+            "shrink": 0,
+            "drop": 0.09,
+            "seed": 15
+          }
+        },
+        {
+          "id": "ripples",
+          "type": "curve/strata-hatch",
+          "position": {
+            "x": -2100,
+            "y": 578
+          },
+          "params": {
+            "count": 70,
+            "length": 0.15,
+            "jitter": 0.01,
+            "distribution": "center",
+            "resolution": 160,
+            "seed": 16
+          }
+        },
+        {
+          "id": "ripple_ink",
+          "type": "curve/ink-stroke",
+          "position": {
+            "x": -1710,
+            "y": 578
+          },
+          "params": {
+            "color": 6579300,
+            "width": 0.01,
+            "minWidth": 0.004,
+            "profile": "sine",
+            "widthNoise": 0.5,
+            "opacity": 0.6,
+            "alphaJitter": 0.6,
+            "zOffset": 0,
+            "seed": 17
+          }
+        },
+        {
+          "id": "scroll",
+          "type": "structure/merge",
+          "position": {
+            "x": -1200,
+            "y": -1190
+          },
+          "params": {}
+        },
+        {
+          "id": "strip",
+          "type": "structure/array",
+          "position": {
+            "x": -810,
+            "y": -1190
+          },
+          "params": {
+            "mode": "grid",
+            "gridRows": 1,
+            "gridCols": 3,
+            "spacingX": 48.0,
+            "spacingY": 0,
+            "plane": "XY",
+            "centerGrid": true,
+            "count": 3,
+            "visible": 1
+          }
+        },
+        {
+          "id": "time",
+          "type": "time",
+          "position": {
+            "x": -1200,
+            "y": -442
+          },
+          "params": {}
+        },
+        {
+          "id": "travel",
+          "type": "value/math",
+          "position": {
+            "x": -870,
+            "y": -442
+          },
+          "params": {
+            "op": "multiply",
+            "a": 0,
+            "b": 1.0
+          }
+        },
+        {
+          "id": "wrap",
+          "type": "value/math",
+          "position": {
+            "x": -540,
+            "y": -442
+          },
+          "params": {
+            "op": "mod",
+            "a": 0,
+            "b": 48.0
+          }
+        },
+        {
+          "id": "cam_pos",
+          "type": "vector/compose",
+          "position": {
+            "x": -210,
+            "y": -442
+          },
+          "params": {
+            "x": 0,
+            "y": 0.6,
+            "z": 20
+          }
+        },
+        {
+          "id": "camera",
+          "type": "calibration/camera",
+          "position": {
+            "x": 150,
+            "y": -442
+          },
+          "params": {
+            "active": true,
+            "mode": "manual",
+            "projectionType": "perspective",
+            "location": {
+              "x": 0,
+              "y": 0.6,
+              "z": 20
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "useTarget": false,
+            "target": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "up": {
+              "x": 0,
+              "y": 1,
+              "z": 0
+            },
+            "fov": 27
+          }
+        },
+        {
+          "id": "env",
+          "type": "lighting/environment",
+          "position": {
+            "x": -810,
+            "y": -1870
+          },
+          "params": {
+            "color": 16777215,
+            "intensity": 1,
+            "background": 1,
+            "blurriness": 0,
+            "filePath": "",
+            "backgroundImagePath": "",
+            "backgroundFit": "cover",
+            "backgroundScale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "backgroundOffset": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "backgroundRotation": 0,
+            "ambientIntensity": 0,
+            "sunIntensity": 0
+          }
+        },
+        {
+          "id": "ink_tone",
+          "type": "postprocess/duotone",
+          "position": {
+            "x": -810,
+            "y": -2244
+          },
+          "params": {
+            "shadowColor": 2827552,
+            "highlightColor": 15590090,
+            "balance": 0.68,
+            "softness": 0.75,
+            "amount": 1
+          }
+        },
+        {
+          "id": "paper",
+          "type": "postprocess/film-texture",
+          "position": {
+            "x": -450,
+            "y": -2244
+          },
+          "params": {
+            "grain": 0.06,
+            "dust": 0.04,
+            "scratches": 0,
+            "blotches": 0.3,
+            "rate": 0,
+            "seed": 3
+          }
+        },
+        {
+          "id": "render",
+          "type": "render",
+          "position": {
+            "x": -60,
+            "y": -1870
+          },
+          "params": {
+            "frameCount": 1440,
+            "fps": 30,
+            "motionBlur": 0,
+            "resolutionPreset": "16:9 (1920x1080)",
+            "width": 1920,
+            "height": 1080,
+            "holdout": false
+          }
+        }
+      ],
+      "connections": [
+        {
+          "id": "m_x.list->m_xs.a",
+          "fromNode": "m_x",
+          "fromSocket": "list",
+          "toNode": "m_xs",
+          "toSocket": "a"
+        },
+        {
+          "id": "m_jit.list->m_xs.b",
+          "fromNode": "m_jit",
+          "fromSocket": "list",
+          "toNode": "m_xs",
+          "toSocket": "b"
+        },
+        {
+          "id": "m_depth.list->m_y.list",
+          "fromNode": "m_depth",
+          "fromSocket": "list",
+          "toNode": "m_y",
+          "toSocket": "list"
+        },
+        {
+          "id": "m_depth.list->m_z.list",
+          "fromNode": "m_depth",
+          "fromSocket": "list",
+          "toNode": "m_z",
+          "toSocket": "list"
+        },
+        {
+          "id": "m_depth.list->m_s.list",
+          "fromNode": "m_depth",
+          "fromSocket": "list",
+          "toNode": "m_s",
+          "toSocket": "list"
+        },
+        {
+          "id": "m_xs.list->m_anchors.xList",
+          "fromNode": "m_xs",
+          "fromSocket": "list",
+          "toNode": "m_anchors",
+          "toSocket": "xList"
+        },
+        {
+          "id": "m_y.list->m_anchors.yList",
+          "fromNode": "m_y",
+          "fromSocket": "list",
+          "toNode": "m_anchors",
+          "toSocket": "yList"
+        },
+        {
+          "id": "m_z.list->m_anchors.zList",
+          "fromNode": "m_z",
+          "fromSocket": "list",
+          "toNode": "m_anchors",
+          "toSocket": "zList"
+        },
+        {
+          "id": "d_x.list->d_anchors.xList",
+          "fromNode": "d_x",
+          "fromSocket": "list",
+          "toNode": "d_anchors",
+          "toSocket": "xList"
+        },
+        {
+          "id": "p_x.list->p_xs.a",
+          "fromNode": "p_x",
+          "fromSocket": "list",
+          "toNode": "p_xs",
+          "toSocket": "a"
+        },
+        {
+          "id": "p_jit.list->p_xs.b",
+          "fromNode": "p_jit",
+          "fromSocket": "list",
+          "toNode": "p_xs",
+          "toSocket": "b"
+        },
+        {
+          "id": "p_xs.list->p_anchors.xList",
+          "fromNode": "p_xs",
+          "fromSocket": "list",
+          "toNode": "p_anchors",
+          "toSocket": "xList"
+        },
+        {
+          "id": "w_x.list->w_anchors.xList",
+          "fromNode": "w_x",
+          "fromSocket": "list",
+          "toNode": "w_anchors",
+          "toSocket": "xList"
+        },
+        {
+          "id": "w_y.list->w_anchors.yList",
+          "fromNode": "w_y",
+          "fromSocket": "list",
+          "toNode": "w_anchors",
+          "toSocket": "yList"
+        },
+        {
+          "id": "blob_line.curve->blob.curve",
+          "fromNode": "blob_line",
+          "fromSocket": "curve",
+          "toNode": "blob",
+          "toSocket": "curve"
+        },
+        {
+          "id": "bush_x.list->bush_pts.xList",
+          "fromNode": "bush_x",
+          "fromSocket": "list",
+          "toNode": "bush_pts",
+          "toSocket": "xList"
+        },
+        {
+          "id": "bush_y.list->bush_pts.yList",
+          "fromNode": "bush_y",
+          "fromSocket": "list",
+          "toNode": "bush_pts",
+          "toSocket": "yList"
+        },
+        {
+          "id": "blob.geometry->bush.geometry",
+          "fromNode": "blob",
+          "fromSocket": "geometry",
+          "toNode": "bush",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "bush_pts.vectorList->bush.points",
+          "fromNode": "bush_pts",
+          "fromSocket": "vectorList",
+          "toNode": "bush",
+          "toSocket": "points"
+        },
+        {
+          "id": "trunk_line.curve->trunk.curve",
+          "fromNode": "trunk_line",
+          "fromSocket": "curve",
+          "toNode": "trunk",
+          "toSocket": "curve"
+        },
+        {
+          "id": "leaf_line.curve->leaf.curve",
+          "fromNode": "leaf_line",
+          "fromSocket": "curve",
+          "toNode": "leaf",
+          "toSocket": "curve"
+        },
+        {
+          "id": "leaf_h.list->leaf_room.list",
+          "fromNode": "leaf_h",
+          "fromSocket": "list",
+          "toNode": "leaf_room",
+          "toSocket": "list"
+        },
+        {
+          "id": "leaf_room.list->leaf_x.a",
+          "fromNode": "leaf_room",
+          "fromSocket": "list",
+          "toNode": "leaf_x",
+          "toSocket": "a"
+        },
+        {
+          "id": "leaf_side.list->leaf_x.b",
+          "fromNode": "leaf_side",
+          "fromSocket": "list",
+          "toNode": "leaf_x",
+          "toSocket": "b"
+        },
+        {
+          "id": "leaf_x.list->leaf_pts.xList",
+          "fromNode": "leaf_x",
+          "fromSocket": "list",
+          "toNode": "leaf_pts",
+          "toSocket": "xList"
+        },
+        {
+          "id": "leaf_h.list->leaf_pts.yList",
+          "fromNode": "leaf_h",
+          "fromSocket": "list",
+          "toNode": "leaf_pts",
+          "toSocket": "yList"
+        },
+        {
+          "id": "leaf_h.list->leaf_size.list",
+          "fromNode": "leaf_h",
+          "fromSocket": "list",
+          "toNode": "leaf_size",
+          "toSocket": "list"
+        },
+        {
+          "id": "leaf.geometry->foliage.geometry",
+          "fromNode": "leaf",
+          "fromSocket": "geometry",
+          "toNode": "foliage",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "leaf_pts.vectorList->foliage.points",
+          "fromNode": "leaf_pts",
+          "fromSocket": "vectorList",
+          "toNode": "foliage",
+          "toSocket": "points"
+        },
+        {
+          "id": "leaf_size.list->foliage.scales",
+          "fromNode": "leaf_size",
+          "fromSocket": "list",
+          "toNode": "foliage",
+          "toSocket": "scales"
+        },
+        {
+          "id": "trunk.geometry->tree.in0",
+          "fromNode": "trunk",
+          "fromSocket": "geometry",
+          "toNode": "tree",
+          "toSocket": "in0"
+        },
+        {
+          "id": "foliage.geometry->tree.in1",
+          "fromNode": "foliage",
+          "fromSocket": "geometry",
+          "toNode": "tree",
+          "toSocket": "in1"
+        },
+        {
+          "id": "m_anchors.vectorList->mount.anchors",
+          "fromNode": "m_anchors",
+          "fromSocket": "vectorList",
+          "toNode": "mount",
+          "toSocket": "anchors"
+        },
+        {
+          "id": "m_s.list->mount.scales",
+          "fromNode": "m_s",
+          "fromSocket": "list",
+          "toNode": "mount",
+          "toSocket": "scales"
+        },
+        {
+          "id": "mount.outlines->mount_fill.curves",
+          "fromNode": "mount",
+          "fromSocket": "outlines",
+          "toNode": "mount_fill",
+          "toSocket": "curves"
+        },
+        {
+          "id": "mount.outlines->mount_outline.curves",
+          "fromNode": "mount",
+          "fromSocket": "outlines",
+          "toNode": "mount_outline",
+          "toSocket": "curves"
+        },
+        {
+          "id": "mount.stacks->mount_hatch.stacks",
+          "fromNode": "mount",
+          "fromSocket": "stacks",
+          "toNode": "mount_hatch",
+          "toSocket": "stacks"
+        },
+        {
+          "id": "mount_hatch.curves->mount_tex.curves",
+          "fromNode": "mount_hatch",
+          "fromSocket": "curves",
+          "toNode": "mount_tex",
+          "toSocket": "curves"
+        },
+        {
+          "id": "mount.stacks->rim_spots.curves",
+          "fromNode": "mount",
+          "fromSocket": "stacks",
+          "toNode": "rim_spots",
+          "toSocket": "curves"
+        },
+        {
+          "id": "bush.geometry->rim_trees.geometry",
+          "fromNode": "bush",
+          "fromSocket": "geometry",
+          "toNode": "rim_trees",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "rim_spots.points->rim_trees.points",
+          "fromNode": "rim_spots",
+          "fromSocket": "points",
+          "toNode": "rim_trees",
+          "toSocket": "points"
+        },
+        {
+          "id": "rim_spots.scales->rim_trees.scales",
+          "fromNode": "rim_spots",
+          "fromSocket": "scales",
+          "toNode": "rim_trees",
+          "toSocket": "scales"
+        },
+        {
+          "id": "mount.stacks->top_spots.curves",
+          "fromNode": "mount",
+          "fromSocket": "stacks",
+          "toNode": "top_spots",
+          "toSocket": "curves"
+        },
+        {
+          "id": "bush.geometry->top_trees.geometry",
+          "fromNode": "bush",
+          "fromSocket": "geometry",
+          "toNode": "top_trees",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "top_spots.points->top_trees.points",
+          "fromNode": "top_spots",
+          "fromSocket": "points",
+          "toNode": "top_trees",
+          "toSocket": "points"
+        },
+        {
+          "id": "top_spots.scales->top_trees.scales",
+          "fromNode": "top_spots",
+          "fromSocket": "scales",
+          "toNode": "top_trees",
+          "toSocket": "scales"
+        },
+        {
+          "id": "mount.stacks->mid_spots.curves",
+          "fromNode": "mount",
+          "fromSocket": "stacks",
+          "toNode": "mid_spots",
+          "toSocket": "curves"
+        },
+        {
+          "id": "tree.geometry->mid_trees.geometry",
+          "fromNode": "tree",
+          "fromSocket": "geometry",
+          "toNode": "mid_trees",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "mid_spots.points->mid_trees.points",
+          "fromNode": "mid_spots",
+          "fromSocket": "points",
+          "toNode": "mid_trees",
+          "toSocket": "points"
+        },
+        {
+          "id": "mid_spots.scales->mid_trees.scales",
+          "fromNode": "mid_spots",
+          "fromSocket": "scales",
+          "toNode": "mid_trees",
+          "toSocket": "scales"
+        },
+        {
+          "id": "d_anchors.vectorList->dist.anchors",
+          "fromNode": "d_anchors",
+          "fromSocket": "vectorList",
+          "toNode": "dist",
+          "toSocket": "anchors"
+        },
+        {
+          "id": "dist.outlines->dist_fill.curves",
+          "fromNode": "dist",
+          "fromSocket": "outlines",
+          "toNode": "dist_fill",
+          "toSocket": "curves"
+        },
+        {
+          "id": "p_anchors.vectorList->plat.anchors",
+          "fromNode": "p_anchors",
+          "fromSocket": "vectorList",
+          "toNode": "plat",
+          "toSocket": "anchors"
+        },
+        {
+          "id": "plat.outlines->plat_fill.curves",
+          "fromNode": "plat",
+          "fromSocket": "outlines",
+          "toNode": "plat_fill",
+          "toSocket": "curves"
+        },
+        {
+          "id": "plat.outlines->plat_outline.curves",
+          "fromNode": "plat",
+          "fromSocket": "outlines",
+          "toNode": "plat_outline",
+          "toSocket": "curves"
+        },
+        {
+          "id": "plat.stacks->plat_hatch.stacks",
+          "fromNode": "plat",
+          "fromSocket": "stacks",
+          "toNode": "plat_hatch",
+          "toSocket": "stacks"
+        },
+        {
+          "id": "plat_hatch.curves->plat_tex.curves",
+          "fromNode": "plat_hatch",
+          "fromSocket": "curves",
+          "toNode": "plat_tex",
+          "toSocket": "curves"
+        },
+        {
+          "id": "plat.stacks->grove_spots.curves",
+          "fromNode": "plat",
+          "fromSocket": "stacks",
+          "toNode": "grove_spots",
+          "toSocket": "curves"
+        },
+        {
+          "id": "tree.geometry->grove.geometry",
+          "fromNode": "tree",
+          "fromSocket": "geometry",
+          "toNode": "grove",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "grove_spots.points->grove.points",
+          "fromNode": "grove_spots",
+          "fromSocket": "points",
+          "toNode": "grove",
+          "toSocket": "points"
+        },
+        {
+          "id": "grove_spots.scales->grove.scales",
+          "fromNode": "grove_spots",
+          "fromSocket": "scales",
+          "toNode": "grove",
+          "toSocket": "scales"
+        },
+        {
+          "id": "w_anchors.vectorList->water.anchors",
+          "fromNode": "w_anchors",
+          "fromSocket": "vectorList",
+          "toNode": "water",
+          "toSocket": "anchors"
+        },
+        {
+          "id": "water.stacks->ripples.stacks",
+          "fromNode": "water",
+          "fromSocket": "stacks",
+          "toNode": "ripples",
+          "toSocket": "stacks"
+        },
+        {
+          "id": "ripples.curves->ripple_ink.curves",
+          "fromNode": "ripples",
+          "fromSocket": "curves",
+          "toNode": "ripple_ink",
+          "toSocket": "curves"
+        },
+        {
+          "id": "dist_fill.geometry->scroll.in0",
+          "fromNode": "dist_fill",
+          "fromSocket": "geometry",
+          "toNode": "scroll",
+          "toSocket": "in0"
+        },
+        {
+          "id": "ripple_ink.geometry->scroll.in1",
+          "fromNode": "ripple_ink",
+          "fromSocket": "geometry",
+          "toNode": "scroll",
+          "toSocket": "in1"
+        },
+        {
+          "id": "mount_fill.geometry->scroll.in2",
+          "fromNode": "mount_fill",
+          "fromSocket": "geometry",
+          "toNode": "scroll",
+          "toSocket": "in2"
+        },
+        {
+          "id": "mount_outline.geometry->scroll.in3",
+          "fromNode": "mount_outline",
+          "fromSocket": "geometry",
+          "toNode": "scroll",
+          "toSocket": "in3"
+        },
+        {
+          "id": "mount_tex.geometry->scroll.in4",
+          "fromNode": "mount_tex",
+          "fromSocket": "geometry",
+          "toNode": "scroll",
+          "toSocket": "in4"
+        },
+        {
+          "id": "rim_trees.geometry->scroll.in5",
+          "fromNode": "rim_trees",
+          "fromSocket": "geometry",
+          "toNode": "scroll",
+          "toSocket": "in5"
+        },
+        {
+          "id": "top_trees.geometry->scroll.in6",
+          "fromNode": "top_trees",
+          "fromSocket": "geometry",
+          "toNode": "scroll",
+          "toSocket": "in6"
+        },
+        {
+          "id": "mid_trees.geometry->scroll.in7",
+          "fromNode": "mid_trees",
+          "fromSocket": "geometry",
+          "toNode": "scroll",
+          "toSocket": "in7"
+        },
+        {
+          "id": "plat_fill.geometry->scroll.in8",
+          "fromNode": "plat_fill",
+          "fromSocket": "geometry",
+          "toNode": "scroll",
+          "toSocket": "in8"
+        },
+        {
+          "id": "plat_outline.geometry->scroll.in9",
+          "fromNode": "plat_outline",
+          "fromSocket": "geometry",
+          "toNode": "scroll",
+          "toSocket": "in9"
+        },
+        {
+          "id": "plat_tex.geometry->scroll.in10",
+          "fromNode": "plat_tex",
+          "fromSocket": "geometry",
+          "toNode": "scroll",
+          "toSocket": "in10"
+        },
+        {
+          "id": "grove.geometry->scroll.in11",
+          "fromNode": "grove",
+          "fromSocket": "geometry",
+          "toNode": "scroll",
+          "toSocket": "in11"
+        },
+        {
+          "id": "scroll.geometry->strip.geometry",
+          "fromNode": "scroll",
+          "fromSocket": "geometry",
+          "toNode": "strip",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "time.seconds->travel.a",
+          "fromNode": "time",
+          "fromSocket": "seconds",
+          "toNode": "travel",
+          "toSocket": "a"
+        },
+        {
+          "id": "travel.out->wrap.a",
+          "fromNode": "travel",
+          "fromSocket": "out",
+          "toNode": "wrap",
+          "toSocket": "a"
+        },
+        {
+          "id": "wrap.out->cam_pos.x",
+          "fromNode": "wrap",
+          "fromSocket": "out",
+          "toNode": "cam_pos",
+          "toSocket": "x"
+        },
+        {
+          "id": "cam_pos.out->camera.location",
+          "fromNode": "cam_pos",
+          "fromSocket": "out",
+          "toNode": "camera",
+          "toSocket": "location"
+        },
+        {
+          "id": "ink_tone.effect->paper.effect",
+          "fromNode": "ink_tone",
+          "fromSocket": "effect",
+          "toNode": "paper",
+          "toSocket": "effect"
+        },
+        {
+          "id": "env.environment->render.environment",
+          "fromNode": "env",
+          "fromSocket": "environment",
+          "toNode": "render",
+          "toSocket": "environment"
+        },
+        {
+          "id": "paper.effect->render.postprocess",
+          "fromNode": "paper",
+          "fromSocket": "effect",
+          "toNode": "render",
+          "toSocket": "postprocess"
+        }
+      ],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    },
+    {
+      "nodes": [],
+      "connections": [],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    },
+    {
+      "nodes": [],
+      "connections": [],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    },
+    {
+      "nodes": [],
+      "connections": [],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    },
+    {
+      "nodes": [],
+      "connections": [],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    },
+    {
+      "nodes": [],
+      "connections": [],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    }
+  ],
+  "activeCanvas": 0
+}

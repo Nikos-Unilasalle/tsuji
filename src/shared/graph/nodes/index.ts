@@ -114,6 +114,9 @@ import { PAINT_ON_GEOMETRY_NODE } from "./paintOnGeometry";
 import { CURVES_FROM_POINT_LISTS_NODE } from "./curveFromPointLists";
 import { CURVE_SUBDIVIDE_NODE } from "./curveSubdivide";
 import { CURVE_TO_POINTS_NODE } from "./curveToPoints";
+import { RIDGE_LAYERS_NODE, SCATTER_ON_CURVES_NODE, STRATA_HATCH_NODE } from "./strata";
+import { CURVE_FILL_NODE, INK_STROKE_NODE } from "./ink";
+import { INSTANCE_ON_POINTS_NODE } from "./instanceOnPoints";
 import { CURVE_SHAPE_KEY_NODE, MESH_SHAPE_KEY_NODE } from "./shapeKey";
 import { LATTICE_DEFORM_NODE } from "./lattice";
 import { METABALLS_NODE } from "./metaballs";
@@ -408,6 +411,12 @@ export const STARTER_NODES = [
   CURVES_FROM_POINT_LISTS_NODE,
   CURVE_SUBDIVIDE_NODE,
   CURVE_TO_POINTS_NODE,
+  RIDGE_LAYERS_NODE,
+  STRATA_HATCH_NODE,
+  SCATTER_ON_CURVES_NODE,
+  INK_STROKE_NODE,
+  CURVE_FILL_NODE,
+  INSTANCE_ON_POINTS_NODE,
   LATTICE_DEFORM_NODE,
   METABALLS_NODE,
   BOOLEAN_NODE,
@@ -606,4 +615,7 @@ export * from "./rapier";
 export * from "./terrain";
 export * from "./kineticText";
 export * from "./modifiersFilm";
+export * from "./strata";
+export * from "./ink";
+export * from "./instanceOnPoints";
 

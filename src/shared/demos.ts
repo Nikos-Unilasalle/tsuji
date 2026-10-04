@@ -560,6 +560,12 @@ export const DEMO_CATALOG: DemoCategory[] = [
     title: "Showcases",
     demos: [
       {
+        file: "demo_shan_shui.tsuji",
+        label: "Shan Shui (endless scroll)",
+        description:
+          "A Chinese landscape handscroll after LingDong-'s shan-shui-inf: Ridge Layers mountains filled, outlined and hatched with Ink Stroke, trees scattered on ridges and slopes with Scatter on Curves and Instance on Points, rippled water and pale distant ranges — on a loop that pans one seamless period (press Play).",
+      },
+      {
         file: "spawn.tsuji",
         label: "Spawn on Surface",
         description: "Scatter objects across a surface.",
