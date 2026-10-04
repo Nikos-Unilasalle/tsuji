@@ -430,6 +430,11 @@ export const DEMO_CATALOG: DemoCategory[] = [
         description: "Particles off a mesh, pulled by a vortex, hitting a ground.",
       },
       {
+        file: "demo_particles_flock.tsuji",
+        label: "Flock (Koi Pond)",
+        description: "A school of self-steering koi after Nagomi: they wander, keep together and drift in depth. Click the pond to call them, press s to scatter.",
+      },
+      {
         file: "demo_particles_trails.tsuji",
         label: "Trails & Web",
         description: "Particle history as trails, plus nearby-point links.",

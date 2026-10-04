@@ -68,6 +68,11 @@ if (typeof window !== "undefined") {
   // palette and the param panel all sit in the same window and must not
   // fire graph logic just because a user pressed Save.
   window.addEventListener("pointerdown", (e) => {
+    // A touch tap arrives as a bare pointerdown with no pointermove first, so
+    // without this the Mouse node would report where the previous tap landed.
+    clientX = e.clientX;
+    clientY = e.clientY;
+    seen = true;
     if (isOverAnyViewport(e.target)) {
       pressedButtons.add(e.button);
       bump(downCounts, e.button);
