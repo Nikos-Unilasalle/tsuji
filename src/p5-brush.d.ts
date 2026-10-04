@@ -12,6 +12,30 @@ declare module "p5.brush/standalone" {
   export function noiseSeed(value: number): void;
 
   export function box(): string[];
+
+  /** The tip surface a custom brush draws its shape on: a 2D canvas, origin centred, ±50 units across. */
+  export interface TipSurface {
+    drawingContext: CanvasRenderingContext2D;
+    fill(value: number | string): void;
+    noFill(): void;
+    noStroke(): void;
+    ellipse(x: number, y: number, w: number, h: number): void;
+  }
+  export interface BrushParams {
+    type?: "default" | "spray" | "marker" | "custom" | "image";
+    weight: number;
+    scatter?: number;
+    sharpness?: number;
+    grain?: number;
+    opacity: number;
+    spacing: number;
+    pressure?: number[] | ((t: number) => number) | { mode: "gaussian"; curve: [number, number]; min_max: [number, number] };
+    tip?: (surface: TipSurface) => void;
+    rotate?: "none" | "natural" | "random";
+    markerTip?: boolean;
+    noise?: number;
+  }
+  export function add(name: string, params: BrushParams): void | Promise<void>;
   export function scaleBrushes(factor: number): void;
   export function set(brushName: string, color: string, weight?: number): void;
   export function noStroke(): void;

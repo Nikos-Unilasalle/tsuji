@@ -7,7 +7,10 @@ import {
   BRUSH_FIELDS,
   BRUSH_NAMES,
   BrushFillMode,
+  BrushFillStyle,
+  BrushPath,
   BrushScene,
+  BrushStrokeStyle,
   asCurveList,
   buildBrushPaths,
 } from "../../three/brushScene";
@@ -79,7 +82,7 @@ export function buildBrushCanvasScene(
   const fillMode = pick<BrushFillMode>(params.fillMode, ["none", "watercolor", "wash"], "watercolor");
   const randomBleedDir = params.bleedRandomDirection !== false;
 
-  return {
+  const scene: BrushScene = {
     width,
     height,
     background: params.transparent ? null : parseColorHex(params.background, "#f6f1e8"),
@@ -119,6 +122,25 @@ export function buildBrushCanvasScene(
     },
     paths,
   };
+  scene.paths = paths.map((path) => resolvePaint(path, scene));
+  return scene;
+}
+
+/**
+ * A curve's own paint (Stroke Style), turned into the per-path overrides the
+ * painter merges over the scene's style: pigment and weight scale what this
+ * node is set to, bleed and colour replace it.
+ */
+function resolvePaint(path: BrushPath, scene: BrushScene): BrushPath {
+  const paint = path.paint;
+  if (!paint) return path;
+  const fill: Partial<BrushFillStyle> = { ...path.fill };
+  const stroke: Partial<BrushStrokeStyle> = { ...path.stroke };
+  if (paint.opacity !== undefined) fill.opacity = Math.max(1, Math.min(255, scene.fill.opacity * clamp01(paint.opacity)));
+  if (paint.bleed !== undefined) fill.bleed = clamp01(paint.bleed);
+  if (paint.fillColor !== undefined) fill.color = paint.fillColor;
+  if (paint.weight !== undefined) stroke.weight = Math.max(0.01, scene.stroke.weight * Math.max(0, paint.weight));
+  return { ...path, fill, stroke };
 }
 
 const WATERCOLOR_LOOKS: Record<string, Record<string, unknown>> = {

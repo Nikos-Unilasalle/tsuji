@@ -117,6 +117,8 @@ import { CURVE_TO_POINTS_NODE } from "./curveToPoints";
 import { RIDGE_LAYERS_NODE, SCATTER_ON_CURVES_NODE, STRATA_HATCH_NODE } from "./strata";
 import { CURVE_FILL_NODE, INK_STROKE_NODE } from "./ink";
 import { INSTANCE_ON_POINTS_NODE } from "./instanceOnPoints";
+import { WRITE_ON_NODE } from "./writeOn";
+import { STROKE_OUTLINE_NODE, STROKE_STYLE_NODE } from "./strokePaint";
 import { CURVE_SHAPE_KEY_NODE, MESH_SHAPE_KEY_NODE } from "./shapeKey";
 import { LATTICE_DEFORM_NODE } from "./lattice";
 import { METABALLS_NODE } from "./metaballs";
@@ -417,6 +419,9 @@ export const STARTER_NODES = [
   INK_STROKE_NODE,
   CURVE_FILL_NODE,
   INSTANCE_ON_POINTS_NODE,
+  WRITE_ON_NODE,
+  STROKE_OUTLINE_NODE,
+  STROKE_STYLE_NODE,
   LATTICE_DEFORM_NODE,
   METABALLS_NODE,
   BOOLEAN_NODE,
@@ -618,4 +623,6 @@ export * from "./modifiersFilm";
 export * from "./strata";
 export * from "./ink";
 export * from "./instanceOnPoints";
+export * from "./writeOn";
+export * from "./strokePaint";
 

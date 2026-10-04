@@ -40,6 +40,8 @@ export const P5_GREASE_BRUSH_LABELS: Array<[P5GreaseBrushType, string]> = [
   ["p5:rotring", "p5 Rotring"],
   ["p5:marker", "p5 Marker"],
   ["p5:spray", "p5 Spray"],
+  ["p5:sumi", "p5 Ink Brush 毛笔"],
+  ["p5:sumi-dry", "p5 Dry Ink Brush 飞白"],
   ["p5:watercolor", "p5 Watercolour Wash"],
 ];
 

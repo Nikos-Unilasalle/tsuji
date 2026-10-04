@@ -19,6 +19,9 @@ export const BRUSH_NAMES = [
   "charcoal",
   "marker",
   "spray",
+  // Chinese ink brushes, registered by inkBrushes.ts.
+  "sumi",
+  "sumi-dry",
 ] as const;
 
 export const BRUSH_FIELDS = ["none", "hand", "curved", "zigzag", "waves", "seabed", "spiral", "columns"] as const;
@@ -31,6 +34,8 @@ export interface BrushPath {
   closed: boolean;
   /** Per-path stroke colour override (Grease Pencil strokes carry their own). */
   color?: string;
+  /** Per-curve paint carried in from the curve (see CurveStrokeMeta) — resolved against the scene's style by the painter. */
+  paint?: CurvePaint;
   /** Per-path style overrides, merged over the scene's — for drawings that mix media. */
   stroke?: Partial<BrushStrokeStyle>;
   fill?: Partial<BrushFillStyle>;
@@ -88,8 +93,24 @@ export interface BrushScene {
   paths: BrushPath[];
 }
 
+/**
+ * Paint a single curve carries for itself, set by Stroke Style: the curve
+ * counterpart of a per-instance colour. Each field is relative to, or
+ * replaces, what the painting node is set to for every curve.
+ */
+export interface CurvePaint {
+  /** 0-1, multiplies the fill's pigment. 0 leaves the curve unpainted. */
+  opacity?: number;
+  /** 0-1, replaces the fill's bleed. */
+  bleed?: number;
+  /** Multiplies the stroke weight. */
+  weight?: number;
+  /** Replaces the fill colour. */
+  fillColor?: string;
+}
+
 /** Optional per-curve data a producer can attach (Grease Pencil does). */
-export interface CurveStrokeMeta {
+export interface CurveStrokeMeta extends CurvePaint {
   pressures?: number[];
   color?: string;
 }
@@ -136,6 +157,7 @@ interface WorldPath {
   pressures: number[];
   closed: boolean;
   color?: string;
+  paint?: CurvePaint;
 }
 
 export type DrawingPlane = "xy" | "xz" | "yz";
@@ -183,7 +205,12 @@ function sampleCurves(curves: THREE.Curve<THREE.Vector3>[], pose?: THREE.Matrix4
     const points = curve.getSpacedPoints(count);
     if (pose) for (const p of points) p.applyMatrix4(pose);
     const pressures = points.map((_, i) => pressureAt(meta?.pressures, i / count));
-    out.push({ points, pressures, closed: curveIsClosed(curve), color: meta?.color });
+    const paint = meta && (meta.opacity !== undefined || meta.bleed !== undefined || meta.weight !== undefined || meta.fillColor !== undefined)
+      ? { opacity: meta.opacity, bleed: meta.bleed, weight: meta.weight, fillColor: meta.fillColor }
+      : undefined;
+    // An unpainted curve costs nothing: it never reaches the painter.
+    if (paint?.opacity !== undefined && paint.opacity <= 0) continue;
+    out.push({ points, pressures, closed: curveIsClosed(curve), color: meta?.color, paint });
   }
   return out;
 }
@@ -275,7 +302,7 @@ export function buildBrushPaths(
       const [bx, by] = px[px.length - 1];
       if (Math.hypot(ax - bx, ay - by) < 0.5) px.pop();
     }
-    if (px.length >= 2) paths.push({ points: px, closed: path.closed, color: path.color });
+    if (px.length >= 2) paths.push({ points: px, closed: path.closed, color: path.color, paint: path.paint });
   }
   return paths;
 }

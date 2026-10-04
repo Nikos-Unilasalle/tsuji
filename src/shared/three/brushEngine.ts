@@ -1,5 +1,6 @@
 import * as brush from "p5.brush/standalone";
 import { BrushPath, BrushScene } from "./brushScene";
+import { registerInkBrushes } from "./inkBrushes";
 
 /**
  * The one place p5.brush touches the app. p5.brush keeps a single active
@@ -39,6 +40,9 @@ function engine(): EngineState {
     canvas.height = BRUSH_ENGINE_MAX_SIZE;
     brush.load(canvas);
     brush.angleMode(brush.DEGREES);
+    // Before any scaleBrushes(): it rescales every registered brush in place,
+    // so a brush added later would miss the scale already applied.
+    registerInkBrushes();
     state = { canvas, appliedScale: 1 };
     slot[ENGINE_KEY] = state;
   }

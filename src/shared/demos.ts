@@ -554,6 +554,12 @@ export const DEMO_CATALOG: DemoCategory[] = [
         description:
           "p5.brush media in Grease Pencil: a static watercolor landscape with charcoal ridges and 2B reeds, pastel birds flying on keyframes with a boil shimmer, and in the 2D view a Brush Canvas star breathing on an oscillator — wet wash, charcoal outline, hatching, hand wiggle. Press Play.",
       },
+      {
+        file: "demo_calligraphy_tsuji.tsuji",
+        label: "Calligraphy — 辻",
+        description:
+          "辻 (tsuji) written stroke by stroke in Japanese stroke order: a Grease Pencil drawing revealed by Write On and painted in Brush Canvas with the sumi ink brush (毛笔), a dilute ink wash rising under each finished stroke (Stroke Outline, Stroke Style). Hide the Paper plane to redraw the strokes with a tablet. Press Play. Stroke data: KanjiVG © Ulrich Apel, CC BY-SA 3.0.",
+      },
     ],
   },
   {
