@@ -1,0 +1,116 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-30 -56 1200 542" width="1200" height="542" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Roboto, sans-serif">
+<rect x="-30" y="-56" width="1200" height="542" fill="#ffffff"/>
+<text x="0" y="-32" font-size="14" font-weight="600" fill="#7a1330">Scène à trois objets</text>
+<rect x="0" y="0" width="180" height="326" rx="10" fill="#fdf3f5" stroke="#7a1330" stroke-width="1.5"/>
+<path d="M0,30 L0,10 Q0,0 10,0 L170,0 Q180,0 180,10 L180,30 Z" fill="#f3d3da" stroke="#7a1330" stroke-width="1.5"/>
+<text x="90" y="20" font-size="12.5" font-weight="600" text-anchor="middle" fill="#7a1330">Plane</text>
+<circle cx="0.0" cy="48.0" r="5.5" fill="#b51d44"/>
+<text x="12" y="52" font-size="11" fill="#9a5566">Visible</text>
+<circle cx="0.0" cy="74.0" r="5.5" fill="#ffffff" stroke="#b51d44" stroke-width="2"/>
+<text x="12" y="78" font-size="11" fill="#9a5566">Texture Map</text>
+<circle cx="0.0" cy="100.0" r="5.5" fill="#ffffff" stroke="#b51d44" stroke-width="2"/>
+<text x="12" y="104" font-size="11" fill="#9a5566">Normal Map</text>
+<circle cx="0.0" cy="126.0" r="5.5" fill="#ffffff" stroke="#b51d44" stroke-width="2"/>
+<text x="12" y="130" font-size="11" fill="#9a5566">Roughness Map</text>
+<rect x="-5.5" y="146.5" width="11" height="11" rx="1" fill="#b51d44"/>
+<text x="12" y="156" font-size="11" fill="#9a5566">Matrix</text>
+<rect x="-5.5" y="172.5" width="11" height="11" rx="1" fill="#ffffff" stroke="#b51d44" stroke-width="2"/>
+<text x="12" y="182" font-size="11" fill="#9a5566">Material</text>
+<path d="M-5.5,198.5 L6.5,204.0 L-5.5,209.5 Z" fill="#b51d44"/>
+<text x="12" y="208" font-size="11" fill="#9a5566">UV Scale</text>
+<path d="M-5.5,224.5 L6.5,230.0 L-5.5,235.5 Z" fill="#b51d44"/>
+<text x="12" y="234" font-size="11" fill="#9a5566">UV Offset</text>
+<circle cx="0.0" cy="256.0" r="5.5" fill="#b51d44"/>
+<text x="12" y="260" font-size="11" fill="#9a5566">Inner (Hole)</text>
+<circle cx="0.0" cy="282.0" r="5.5" fill="#b51d44"/>
+<text x="12" y="286" font-size="11" fill="#9a5566">Segments</text>
+<circle cx="0.0" cy="308.0" r="5.5" fill="#b51d44"/>
+<text x="12" y="312" font-size="11" fill="#9a5566">Depth</text>
+<polygon points="185.5,48.0 182.8,52.8 177.3,52.8 174.5,48.0 177.3,43.2 182.8,43.2" fill="#b51d44"/>
+<text x="168" y="52" font-size="11" text-anchor="end" fill="#9a5566">Geometry</text>
+<rect x="174.5" y="68.5" width="11" height="11" rx="1" fill="#b51d44"/>
+<text x="168" y="78" font-size="11" text-anchor="end" fill="#9a5566">Matrix</text>
+<rect x="320" y="0" width="180" height="248" rx="10" fill="#fdf3f5" stroke="#7a1330" stroke-width="1.5"/>
+<path d="M320,30 L320,10 Q320,0 330,0 L490,0 Q500,0 500,10 L500,30 Z" fill="#f3d3da" stroke="#7a1330" stroke-width="1.5"/>
+<text x="410" y="20" font-size="12.5" font-weight="600" text-anchor="middle" fill="#7a1330">Box</text>
+<circle cx="320.0" cy="48.0" r="5.5" fill="#b51d44"/>
+<text x="332" y="52" font-size="11" fill="#9a5566">Visible</text>
+<circle cx="320.0" cy="74.0" r="5.5" fill="#ffffff" stroke="#b51d44" stroke-width="2"/>
+<text x="332" y="78" font-size="11" fill="#9a5566">Texture Map</text>
+<circle cx="320.0" cy="100.0" r="5.5" fill="#ffffff" stroke="#b51d44" stroke-width="2"/>
+<text x="332" y="104" font-size="11" fill="#9a5566">Normal Map</text>
+<circle cx="320.0" cy="126.0" r="5.5" fill="#ffffff" stroke="#b51d44" stroke-width="2"/>
+<text x="332" y="130" font-size="11" fill="#9a5566">Roughness Map</text>
+<rect x="314.5" y="146.5" width="11" height="11" rx="1" fill="#b51d44"/>
+<text x="332" y="156" font-size="11" fill="#9a5566">Matrix</text>
+<rect x="314.5" y="172.5" width="11" height="11" rx="1" fill="#ffffff" stroke="#b51d44" stroke-width="2"/>
+<text x="332" y="182" font-size="11" fill="#9a5566">Material</text>
+<path d="M314.5,198.5 L326.5,204.0 L314.5,209.5 Z" fill="#b51d44"/>
+<text x="332" y="208" font-size="11" fill="#9a5566">UV Scale</text>
+<path d="M314.5,224.5 L326.5,230.0 L314.5,235.5 Z" fill="#b51d44"/>
+<text x="332" y="234" font-size="11" fill="#9a5566">UV Offset</text>
+<polygon points="505.5,48.0 502.8,52.8 497.3,52.8 494.5,48.0 497.3,43.2 502.8,43.2" fill="#b51d44"/>
+<text x="488" y="52" font-size="11" text-anchor="end" fill="#9a5566">Geometry</text>
+<rect x="494.5" y="68.5" width="11" height="11" rx="1" fill="#b51d44"/>
+<text x="488" y="78" font-size="11" text-anchor="end" fill="#9a5566">Matrix</text>
+<rect x="640" y="0" width="180" height="248" rx="10" fill="#fdf3f5" stroke="#7a1330" stroke-width="1.5"/>
+<path d="M640,30 L640,10 Q640,0 650,0 L810,0 Q820,0 820,10 L820,30 Z" fill="#f3d3da" stroke="#7a1330" stroke-width="1.5"/>
+<text x="730" y="20" font-size="12.5" font-weight="600" text-anchor="middle" fill="#7a1330">Sphere</text>
+<circle cx="640.0" cy="48.0" r="5.5" fill="#b51d44"/>
+<text x="652" y="52" font-size="11" fill="#9a5566">Visible</text>
+<circle cx="640.0" cy="74.0" r="5.5" fill="#ffffff" stroke="#b51d44" stroke-width="2"/>
+<text x="652" y="78" font-size="11" fill="#9a5566">Texture Map</text>
+<circle cx="640.0" cy="100.0" r="5.5" fill="#ffffff" stroke="#b51d44" stroke-width="2"/>
+<text x="652" y="104" font-size="11" fill="#9a5566">Normal Map</text>
+<circle cx="640.0" cy="126.0" r="5.5" fill="#ffffff" stroke="#b51d44" stroke-width="2"/>
+<text x="652" y="130" font-size="11" fill="#9a5566">Roughness Map</text>
+<rect x="634.5" y="146.5" width="11" height="11" rx="1" fill="#b51d44"/>
+<text x="652" y="156" font-size="11" fill="#9a5566">Matrix</text>
+<rect x="634.5" y="172.5" width="11" height="11" rx="1" fill="#ffffff" stroke="#b51d44" stroke-width="2"/>
+<text x="652" y="182" font-size="11" fill="#9a5566">Material</text>
+<path d="M634.5,198.5 L646.5,204.0 L634.5,209.5 Z" fill="#b51d44"/>
+<text x="652" y="208" font-size="11" fill="#9a5566">UV Scale</text>
+<path d="M634.5,224.5 L646.5,230.0 L634.5,235.5 Z" fill="#b51d44"/>
+<text x="652" y="234" font-size="11" fill="#9a5566">UV Offset</text>
+<polygon points="825.5,48.0 822.8,52.8 817.3,52.8 814.5,48.0 817.3,43.2 822.8,43.2" fill="#b51d44"/>
+<text x="808" y="52" font-size="11" text-anchor="end" fill="#9a5566">Geometry</text>
+<rect x="814.5" y="68.5" width="11" height="11" rx="1" fill="#b51d44"/>
+<text x="808" y="78" font-size="11" text-anchor="end" fill="#9a5566">Matrix</text>
+<rect x="960" y="0" width="180" height="118" rx="10" fill="#fdf3f5" stroke="#7a1330" stroke-width="1.5"/>
+<path d="M960,30 L960,10 Q960,0 970,0 L1130,0 Q1140,0 1140,10 L1140,30 Z" fill="#f3d3da" stroke="#7a1330" stroke-width="1.5"/>
+<text x="1050" y="20" font-size="12.5" font-weight="600" text-anchor="middle" fill="#7a1330">Empty</text>
+<rect x="954.5" y="42.5" width="11" height="11" rx="1" fill="#b51d44"/>
+<text x="972" y="52" font-size="11" fill="#9a5566">Matrix</text>
+<polygon points="1145.5,48.0 1142.8,52.8 1137.3,52.8 1134.5,48.0 1137.3,43.2 1142.8,43.2" fill="#b51d44"/>
+<text x="1128" y="52" font-size="11" text-anchor="end" fill="#9a5566">Geometry</text>
+<rect x="1134.5" y="68.5" width="11" height="11" rx="1" fill="#b51d44"/>
+<text x="1128" y="78" font-size="11" text-anchor="end" fill="#9a5566">Matrix</text>
+<path d="M1134.5,94.5 L1146.5,100.0 L1134.5,105.5 Z" fill="#b51d44"/>
+<text x="1128" y="104" font-size="11" text-anchor="end" fill="#9a5566">Location</text>
+<rect x="0" y="260" width="180" height="196" rx="10" fill="#fdf3f5" stroke="#7a1330" stroke-width="1.5"/>
+<path d="M0,290 L0,270 Q0,260 10,260 L170,260 Q180,260 180,270 L180,290 Z" fill="#f3d3da" stroke="#7a1330" stroke-width="1.5"/>
+<text x="90" y="280" font-size="12.5" font-weight="600" text-anchor="middle" fill="#7a1330">Directional Light</text>
+<path d="M0.0,301.5 L6.5,308.0 L0.0,314.5 L-6.5,308.0 Z" fill="#b51d44"/>
+<text x="12" y="312" font-size="11" fill="#9a5566">Color</text>
+<circle cx="0.0" cy="334.0" r="5.5" fill="#b51d44"/>
+<text x="12" y="338" font-size="11" fill="#9a5566">Intensity</text>
+<polygon points="5.5,360.0 2.8,364.8 -2.7,364.8 -5.5,360.0 -2.8,355.2 2.8,355.2" fill="#b51d44"/>
+<text x="12" y="364" font-size="11" fill="#9a5566">Target</text>
+<rect x="-5.5" y="380.5" width="11" height="11" rx="1" fill="#b51d44"/>
+<text x="12" y="390" font-size="11" fill="#9a5566">Matrix</text>
+<circle cx="0.0" cy="412.0" r="5.5" fill="#b51d44"/>
+<text x="12" y="416" font-size="11" fill="#9a5566">Shadows</text>
+<circle cx="0.0" cy="438.0" r="5.5" fill="#b51d44"/>
+<text x="12" y="442" font-size="11" fill="#9a5566">Shadow Softness</text>
+<polygon points="185.5,308.0 182.8,312.8 177.3,312.8 174.5,308.0 177.3,303.2 182.8,303.2" fill="#b51d44"/>
+<text x="168" y="312" font-size="11" text-anchor="end" fill="#9a5566">Light</text>
+<rect x="320" y="260" width="180" height="92" rx="10" fill="#fdf3f5" stroke="#7a1330" stroke-width="1.5"/>
+<path d="M320,290 L320,270 Q320,260 330,260 L490,260 Q500,260 500,270 L500,290 Z" fill="#f3d3da" stroke="#7a1330" stroke-width="1.5"/>
+<text x="410" y="280" font-size="12.5" font-weight="600" text-anchor="middle" fill="#7a1330">Ambient Light</text>
+<path d="M320.0,301.5 L326.5,308.0 L320.0,314.5 L313.5,308.0 Z" fill="#b51d44"/>
+<text x="332" y="312" font-size="11" fill="#9a5566">Color</text>
+<circle cx="320.0" cy="334.0" r="5.5" fill="#b51d44"/>
+<text x="332" y="338" font-size="11" fill="#9a5566">Intensity</text>
+<polygon points="505.5,308.0 502.8,312.8 497.3,312.8 494.5,308.0 497.3,303.2 502.8,303.2" fill="#b51d44"/>
+<text x="488" y="312" font-size="11" text-anchor="end" fill="#9a5566">Light</text>
+</svg>

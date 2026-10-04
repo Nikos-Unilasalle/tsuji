@@ -3,145 +3,511 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Wiki & Documentation Officielle — Tsuji</title>
-  <meta name="description" content="Documentation complète, catalogue interactif des nodes et guide de calibration DLT vidéo-mapping 3D pour Tsuji.">
-  <link rel="stylesheet" href="css/main.css">
-  <link rel="stylesheet" href="css/components.css">
+  <title>TSUJI — 3D NODE STUDIO // VIDEO-MAPPING & MOTION DESIGN</title>
+  <meta name="description" content="Tsuji is a real-time 3D node environment for video-mapping, motion design, and digital scenography.">
+  <link rel="icon" type="image/png" href="img/logo_icon.png">
+  <link rel="stylesheet" href="css/tsuji-theme.css">
 </head>
 <body>
 
-  <!-- En-tête Sticky Navigation (Mode Light) -->
-  <header class="wiki-header">
-    <div class="header-container">
-      <a href="#tab-home" class="brand-logo">
-        <img src="img/logo.png" alt="Tsuji Logo" class="logo-img-header">
-        <span class="brand-text">Tsuji <span class="brand-badge">Wiki</span></span>
-      </a>
+  <!-- THREE.JS INTERACTIVE BACKGROUND CANVAS -->
+  <canvas id="three-bg-canvas"></canvas>
 
-      <nav>
-        <ul class="nav-menu">
-          <li><a href="#tab-home" class="nav-link active">Accueil</a></li>
-          <li><a href="#tab-nodes" class="nav-link">Catalogue des Nodes</a></li>
-          <li><a href="#tab-dlt" class="nav-link">Calibration DLT</a></li>
-          <li><a href="#tab-guides" class="nav-link">Guides & Tutoriels</a></li>
-          <li><a href="#tab-shortcuts" class="nav-link">Raccourcis</a></li>
-          <li><a href="#tab-troubleshoot" class="nav-link">Dépannage</a></li>
-        </ul>
-      </nav>
+  <div class="site-wrapper">
 
-      <a href="https://github.com/Nikos-Unilasalle/tsuji" target="_blank" rel="noopener" class="btn-github">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"></path>
-        </svg>
-        GitHub
-      </a>
-    </div>
-  </header>
+    <!-- HEADER MINIMALISTE -->
+    <header class="hud-header">
+      <div class="hud-container">
+        <a href="#hero" class="brand-badge interactive-area">
+          <img src="img/logo_icon.png" alt="Tsuji" class="brand-logo-img">
+          <span class="brand-title">TSUJI</span>
+          <span class="brand-version">v0.6.3</span>
+        </a>
 
-  <main class="wiki-main-container">
+        <nav>
+          <ul class="hud-nav interactive-area">
+            <li><a href="#manifesto" data-i18n="navManifesto">ARCHITECTURE</a></li>
+            <li><a href="#capabilities" data-i18n="navCapabilities">CAPACITÉS</a></li>
+            <li><a href="#lineage" data-i18n="navLineage">INSPIRATIONS</a></li>
+            <li><a href="#catalog" data-i18n="navCatalog">NODES</a></li>
+            <li><a href="#dlt-sim" data-i18n="navDltSim">CALIBRATION DLT</a></li>
+            <li><a href="#shortcuts" data-i18n="navShortcuts">RACCOURCIS</a></li>
+            <li><a href="#get-started" data-i18n="navAccess">ACCÈS</a></li>
+          </ul>
+        </nav>
 
-    <!-- ONGLET 1 : ACCUEIL -->
-    <section id="tab-home" class="wiki-tab-content active">
-      <div class="hero-section">
-        <div class="hero-content">
-          <h1>Studio 3D & Node Graph <span class="gradient-text">Temps Réel</span></h1>
-          <p class="hero-subtitle">
-            Le moteur de vidéo-mapping 3D, de scénographie numérique et de dataviz réactive propulsé par Tauri 2, React 18 et Three.js r170.
+        <div class="hud-actions interactive-area">
+          <!-- SÉLECTEUR 4 LANGUES : FR / EN / JA / ZH -->
+          <div class="lang-switcher">
+            <button class="lang-btn active" data-lang="fr">FR</button>
+            <button class="lang-btn" data-lang="en">EN</button>
+            <button class="lang-btn" data-lang="ja">JA</button>
+            <button class="lang-btn" data-lang="zh">ZH</button>
+          </div>
+
+          <a href="https://tsuji.xyz" target="_blank" rel="noopener" class="btn-terminal btn-cyan">
+            <span data-i18n="launchApp">APP ➔</span>
+          </a>
+          <a href="https://github.com/Nikos-Unilasalle/tsuji" target="_blank" rel="noopener" class="btn-terminal btn-ghost">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"></path>
+            </svg>
+            <span data-i18n="githubBtn">GITHUB</span>
+          </a>
+        </div>
+      </div>
+    </header>
+
+    <!-- SECTION HERO -->
+    <section id="hero" class="container hero-section">
+      <div class="hero-content">
+        <div class="section-tag" data-i18n="heroTag">// STUDIO 3D NODAL TEMPS RÉEL</div>
+
+        <h1 class="hero-main-title" data-i18n="heroTitle">
+          VIDÉO-MAPPING ARCHITECTURAL, MOTION DESIGN ET SCÉNOGRAPHIE NUMÉRIQUE.
+        </h1>
+
+        <p class="hero-manifesto" data-i18n="heroManifesto">
+          TSUJI EST UN ENVIRONNEMENT DE CRÉATION NODAL 3D TEMPS RÉEL EXÉCUTÉ SUR THREE.JS R185 ET RAPIER 3D (WASM). CONÇU POUR LE VIDÉO-MAPPING, LE MOTION DESIGN PARAMÉTRIQUE ET LES INSTALLATIONS RÉACTIVES. DISPONIBLE SUR NAVIGATEUR (TSUJI.XYZ) ET APPLICATION DESKTOP TAURI.
+        </p>
+
+        <div class="hero-buttons interactive-area">
+          <a href="https://tsuji.xyz" target="_blank" rel="noopener" class="btn-terminal btn-cyan">
+            <span data-i18n="btnOpenStudio">OUVRIR L'APP</span>
+            <span>➔</span>
+          </a>
+          <a href="#capabilities" class="btn-terminal btn-pink">
+            <span data-i18n="btnExploreCaps">SPÉCIFICATIONS TECHNIQUES</span>
+            <span>↓</span>
+          </a>
+          <a href="#catalog" class="btn-terminal btn-ghost">
+            <span data-i18n="btnExploreCatalog">305 NODES</span>
+          </a>
+        </div>
+
+        <!-- SÉLECTEUR DE MODE THREE.JS -->
+        <div class="three-mode-switcher interactive-area">
+          <div class="mode-switcher-label" data-i18n="modeSwitcherLabel">// MODE D'AFFICHAGE THREE.JS :</div>
+          <div class="mode-buttons-group">
+            <button class="mode-btn active" data-mode="01_NODAL_BUS">[01_NODAL_BUS]</button>
+            <button class="mode-btn" data-mode="02_DLT_WARP">[02_DLT_WARP]</button>
+            <button class="mode-btn" data-mode="03_ORGANIC_GROWTH">[03_ORGANIC_GROWTH]</button>
+            <button class="mode-btn" data-mode="04_RAPIER_PHYSICS">[04_RAPIER_PHYSICS]</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION ARCHITECTURE -->
+    <section id="manifesto" class="container">
+      <span class="section-tag" data-i18n="manifestoTag">01 // FONDEMENTS DU MOTEUR</span>
+      <h2 class="section-title" data-i18n="manifestoTitle">ARCHITECTURE SYSTÉMIQUE ET FLUX DE DONNÉES</h2>
+      <p class="section-desc" data-i18n="manifestoDesc">
+        ÉVALUATION TOPOLOGIQUE STRICTE À 60 FPS SANS BOUCLE DE MODULATION IMPÉRATIVE. CHAQUE COMPORTEMENT EST DÉFINI PAR LE GRAPHE.
+      </p>
+
+      <div class="innovations-grid">
+        <div class="feature-box">
+          <div class="feature-tag-id">[PIPELINE_3D_2D]</div>
+          <h3 class="feature-heading" data-i18n="cardUnified3DTitle">ESPACE 3D UNIFIÉ ET PLAN 2D</h3>
+          <p class="feature-text" data-i18n="cardUnified3DText">
+            LA 2D NE CONSTITUE PAS UN PIPELINE DISTINCT : ELLE REPOSE SUR LE PLAN Z=0 DE L'ESPACE 3D. CETTE STRUCTURE SIMPLIFIE LES CALCULS DE WARPING ET L'INTÉGRATION DES SURFACES DE PROJECTION DANS LA SCÈNE.
           </p>
-          <div class="hero-actions">
-            <a href="#tab-nodes" class="btn-primary nav-link">Exploration du Catalogue Nodes</a>
-            <a href="#tab-dlt" class="btn-secondary nav-link">Guide Calibration DLT</a>
+          <div class="feature-specs">
+            <div class="spec-line"><span class="spec-dot" data-i18n="cardUnified3DSub1">■ PLAN Z=0 POUR CALQUES 2D ET FLUX VIDÉO</span></div>
+            <div class="spec-line"><span class="spec-dot" data-i18n="cardUnified3DSub2">■ PROJECTION PERSPECTIVE ET GÉOMÉTRIE 3D DIRECTE</span></div>
           </div>
         </div>
 
-        <div class="hero-media">
-          <img src="img/videomap.jpg" alt="Tsuji Interface Real Screenshot" class="hero-img">
+        <div class="feature-box">
+          <div class="feature-tag-id">[EVALUATION_DAG]</div>
+          <h3 class="feature-heading" data-i18n="cardGraphTruthTitle">SOURCE UNIQUE DE VÉRITÉ : LE GRAPHE (DAG)</h3>
+          <p class="feature-text" data-i18n="cardGraphTruthText">
+            LE GRAPHE ACYCLIQUE DIRIGÉ CONDUIT L'INTÉGRALITÉ DES TRANSFORMATIONS, CALCULS GÉOMÉTRIQUES, SIGNAUX AUDIO ET COLLISIFS. LES CONNEXIONS NODALES PRÉVALENT SUR L'INTERPOLATION DE LA TIMELINE.
+          </p>
+          <div class="feature-specs">
+            <div class="spec-line"><span class="spec-dot" data-i18n="cardGraphTruthSub1">■ RÉSOLUTION TOPOLOGIQUE DES DÉPENDANCES</span></div>
+            <div class="spec-line"><span class="spec-dot" data-i18n="cardGraphTruthSub2">■ TRAITEMENT ZÉRO-CYCLE AVEC REGISTRES DIFFÉRÉS</span></div>
+          </div>
+        </div>
+
+        <div class="feature-box">
+          <div class="feature-tag-id">[MEMOIRE_VRAM]</div>
+          <h3 class="feature-heading" data-i18n="cardZeroAllocTitle">GESTION VRAM ET ZÉRO-ALLOCATION</h3>
+          <p class="feature-text" data-i18n="cardZeroAllocText">
+            OPTIMISATION POUR FONCTIONNEMENT CONTINU SUR INSTALLATIONS PERMANENTES. LES GÉOMÉTRIES, MATÉRIAUX SHADER ET TEXTURES GPU SONT MIS EN CACHE ET RECYCLÉS PAR IDENTIFIANT DE NODE.
+          </p>
+          <div class="feature-specs">
+            <div class="spec-line"><span class="spec-dot" data-i18n="cardZeroAllocSub1">■ CACHES STRUCTURAUX PAR NODEID</span></div>
+            <div class="spec-line"><span class="spec-dot" data-i18n="cardZeroAllocSub2">■ RÉINITIALISATION ATOMIQUE DE L'ÉPOQUE DE SIMULATION</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION CAPACITÉS // MOTION DESIGN & VIDÉO-MAPPING -->
+    <section id="capabilities" class="container">
+      <span class="section-tag green" data-i18n="motionTag">02 // CAPACITÉS SYSTÉMIQUES DU STUDIO</span>
+      <h2 class="section-title" data-i18n="motionTitle">VIDÉO-MAPPING, MOTION DESIGN ET GÉOMÉTRIE DYNAMIQUE</h2>
+      <p class="section-desc" data-i18n="motionDesc">
+        CATALOGUE TECHNIQUE DES SOUS-SYSTÈMES MAJEURS DU LOGICIEL POUR LA CRÉATION TEMPS RÉEL.
+      </p>
+
+      <div class="innovations-grid">
+        <!-- 2D Camera -->
+        <div class="feature-box">
+          <div class="feature-tag-id">[VIEW2D_ORTHO]</div>
+          <h3 class="feature-heading" data-i18n="cap2DCameraTitle">CAMÉRA 2D (VIEW2D) ET COMPOSITION ORTHOGRAPHIQUE</h3>
+          <p class="feature-text" data-i18n="cap2DCameraText">
+            LE NODE VIEW2D ACTIVE UNE PROJECTION ORTHOGRAPHIQUE DÉDIÉE AU MOTION DESIGN VECTORIEL, AUX INTERFACES HUD ET AUX LAYOUTS D'ÉCRANS PLATS, TOUT EN CONSERVANT L'ACCÈS AUX SOLVEURS PHYSIQUES ET SHADERS GPU.
+          </p>
+          <div class="feature-specs">
+            <div class="spec-line"><span class="spec-dot" data-i18n="cap2DCameraSub1">■ RENDU SANS DÉFORMATION DE PERSPECTIVE</span></div>
+            <div class="spec-line"><span class="spec-dot" data-i18n="cap2DCameraSub2">■ ALIGNEMENT ET COMPOSITING SUR LE PLAN SCÉNIQUE</span></div>
+          </div>
+        </div>
+
+        <!-- Kinetic Typography -->
+        <div class="feature-box">
+          <div class="feature-tag-id">[TYPOGRAPHIE_KINETIC]</div>
+          <h3 class="feature-heading" data-i18n="capKineticTextTitle">TYPOGRAPHIE CINÉTIQUE ET TEXT ANIMATORS</h3>
+          <p class="feature-text" data-i18n="capKineticTextText">
+            LES NODES KINETIC/ANIMATOR ET KINETIC/RANGE-SELECTOR PILOTENT L'ANIMATION DE TEXTE CARACTÈRE PAR CARACTÈRE (CASCADE, ÉCHELLE, TRACKING). CURVE/TEXT-ON-PATH ENROULE ET DÉPLACE LE TEXTE LE LONG DE SPLINES 3D (OPENTYPE).
+          </p>
+          <div class="feature-specs">
+            <div class="spec-line"><span class="spec-dot" data-i18n="capKineticTextSub1">■ SÉLECTEURS D'INTERVALLES ET DÉCALAGES PAR LETTRE</span></div>
+            <div class="spec-line"><span class="spec-dot" data-i18n="capKineticTextSub2">■ PROJECTION SUR COURBES PARAMÉTRIQUES 3D</span></div>
+          </div>
+        </div>
+
+        <!-- Wiggle & Rhythm -->
+        <div class="feature-box">
+          <div class="feature-tag-id">[FBM_ET_CINÉTIQUE]</div>
+          <h3 class="feature-heading" data-i18n="capRhythmTitle">DYNAMIQUE DU MOUVEMENT : WIGGLE, STAGGER ET RESSORTS</h3>
+          <p class="feature-text" data-i18n="capRhythmText">
+            LE NODE ANIMATION/WIGGLE GÉNÈRE UN BRUIT FRACTAL FBM CONTINU MULTI-OCTAVES SUR LA MATRICE DE TRANSFORMATION. MOTION/STAGGER INTRODUIT UN DÉCALAGE SUR LES INSTANCES, ET MOTION/SPRING CALCULE LES OSCILLATEURS AMORTIS.
+          </p>
+          <div class="feature-specs">
+            <div class="spec-line"><span class="spec-dot" data-i18n="capRhythmSub1">■ BRUIT FBM SUR TRANSLATION, ROTATION ET ÉCHELLE</span></div>
+            <div class="spec-line"><span class="spec-dot" data-i18n="capRhythmSub2">■ RESSORTS PHYSIQUES HARMONIQUES ET DÉLAIS EN CASCADE</span></div>
+          </div>
+        </div>
+
+        <!-- Curves & Sweep -->
+        <div class="feature-box">
+          <div class="feature-tag-id">[SPLINES_ET_CSG]</div>
+          <h3 class="feature-heading" data-i18n="capCurvesTitle">COURBES 3D, BALAYAGES ET MODIFICATEURS CSG</h3>
+          <p class="feature-text" data-i18n="capCurvesText">
+            GÉNÉRATION DE SPLINES (CATMULL-ROM, BÉZIER, HÉLICES). CURVE/TO_MESH PRODUIT DES TUBES EXTRUDÉS À PROFIL D'ÉPAISSEUR VARIABLE. LE NODE WELD ASSURE DES SOUDURES DOUCES PAR SURFACE NETS (SDF) ET CONTOUR SCAN TRANCHE LES SURFACES.
+          </p>
+          <div class="feature-specs">
+            <div class="spec-line"><span class="spec-dot" data-i18n="capCurvesSub1">■ TUBES PARAMÉTRIQUES ET PROFILES DE CONICITÉ</span></div>
+            <div class="spec-line"><span class="spec-dot" data-i18n="capCurvesSub2">■ OPÉRATIONS BOOLÉENNES BVH-CSG ET SOUDURE SURFACE NETS</span></div>
+          </div>
+        </div>
+
+        <!-- Textures GPU & Shaders -->
+        <div class="feature-box">
+          <div class="feature-tag-id">[SHADERS_GPU]</div>
+          <h3 class="feature-heading" data-i18n="capTexturesTitle">TEXTURES PROCÉDURALES ET TRAITEMENT GPU</h3>
+          <p class="feature-text" data-i18n="capTexturesText">
+            21 NODES DE GÉNÉRATION ET TRAITEMENT DE TEXTURES EN SHADERS : HALFTONE, VORONOI, ONDES, COLOR RAMPS, CONVERSION NORMAL/ROUGHNESS ET PIXEL SPAWNER GÉNÉRANT UN OBJET 3D PAR PIXEL DE TEXTURE.
+          </p>
+          <div class="feature-specs">
+            <div class="spec-line"><span class="spec-dot" data-i18n="capTexturesSub1">■ CALCUL EN TEMPS RÉEL SUR GPU À 60 FPS</span></div>
+            <div class="spec-line"><span class="spec-dot" data-i18n="capTexturesSub2">■ PIXEL SPAWNER VOLUMÉTRIQUE MATRICIEL</span></div>
+          </div>
+        </div>
+
+        <!-- Physics as Motion -->
+        <div class="feature-box">
+          <div class="feature-tag-id">[SOLVEUR_RAPIER_WASM]</div>
+          <h3 class="feature-heading" data-i18n="capPhysicsMotionTitle">PHYSIQUE RAPIER 3D, CORPS RIGIDES ET VÉHICULES</h3>
+          <p class="feature-text" data-i18n="capPhysicsMotionText">
+            MOTEUR RAPIER 3D (WASM) AVEC PAS DE TEMPS DÉTERMINISTE FIXE. LE MODE SPLIT: PER-CHILD SIMULE LES INSTANCES INDÉPENDAMMENT. CONTRÔLEUR DE VOITURE 4 ROUES RAYCAST AVEC SUSPENSIONS ET CONTRÔLEUR DE PERSONNAGE CINÉMATIQUE.
+          </p>
+          <div class="feature-specs">
+            <div class="spec-line"><span class="spec-dot" data-i18n="capPhysicsMotionSub1">■ VÉHICULE SUR SUSPENSIONS RAYCAST INDÉPENDANTES</span></div>
+            <div class="spec-line"><span class="spec-dot" data-i18n="capPhysicsMotionSub2">■ PERSONNAGE CINÉMATIQUE MARCHANT SUR ESCALIERS ET POUSSANT DES CORPS</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION INSPIRATIONS -->
+    <section id="lineage" class="container">
+      <span class="section-tag pink" data-i18n="lineageTag">03 // INSPIRATIONS TECHNIQUES</span>
+      <h2 class="section-title" data-i18n="lineageTitle">RÉFÉRENCES ARCHITECTURALES ET PARADIGMES</h2>
+      <p class="section-desc" data-i18n="lineageDesc">
+        INTÉGRATION DE PARADIGMES PROUVÉS ISSUS DES MOTEURS DE RÉFÉRENCE DE L'INDUSTRIE.
+      </p>
+
+      <div class="lineage-grid">
+        <div class="lineage-card blender">
+          <div class="card-header-badge">
+            <span class="card-source" style="color: #f5821f;">BLENDER</span>
+            <span class="card-role">LOGIQUE NODALE & MODIFICATEURS</span>
+          </div>
+          <h3 class="card-title">RIGUEUR DAG & GÉOMÉTRIE</h3>
+          <p class="card-body" data-i18n="blenderDesc">
+            LOGIQUE DE GRAPHE DÉCLARATIF (ANIMATION/GEOMETRY NODES), MODIFICATEURS VOLUMÉTRIQUES LATTICE (FFD), SHAPE KEYS ET INSERTION RAPIDE D'IMAGES-CLÉS VIA LA TOUCHE K.
+          </p>
+          <div class="card-tags">
+            <span class="tag-pill">ANIMATION NODES</span>
+            <span class="tag-pill">LATTICE FFD</span>
+            <span class="tag-pill">TOUCHE K</span>
+          </div>
+        </div>
+
+        <div class="lineage-card ae">
+          <div class="card-header-badge">
+            <span class="card-source" style="color: var(--pink);">AFTER EFFECTS</span>
+            <span class="card-role">RYTHME & DYNAMIQUE VISUELLE</span>
+          </div>
+          <h3 class="card-title">SENSIBILITÉ GRAPHIQUE</h3>
+          <p class="card-body" data-i18n="aeDesc">
+            CONTRÔLE DU TIMING GRAPHIQUE, FONCTIONS DE BRUIT CONTINU (WIGGLE), EFFETS EN CASCADE (STAGGER) ET DÉCOMPOSITION TYPOGRAPHIQUE.
+          </p>
+          <div class="card-tags">
+            <span class="tag-pill">WIGGLE FBM</span>
+            <span class="tag-pill">STAGGER CASCADE</span>
+            <span class="tag-pill">KINETIC TEXT</span>
+          </div>
+        </div>
+
+        <div class="lineage-card cables">
+          <div class="card-header-badge">
+            <span class="card-source" style="color: var(--cyan);">CABLES.GL</span>
+            <span class="card-role">STRUCTURE MODULAIRE DU GRAPHE</span>
+          </div>
+          <h3 class="card-title">CLARTÉ WEB & SEQUENCE</h3>
+          <p class="card-body" data-i18n="cablesDesc">
+            ORGANISATION MODULAIRE EN SEQUENCE, EXÉCUTION WEB-NATIVE LÉGÈRE À 60 FPS ET DIAGNOSTIC IMMÉDIAT VIA SONDES D'INSPECTION SUR CÂBLES.
+          </p>
+          <div class="card-tags">
+            <span class="tag-pill">SEQUENCE NODES</span>
+            <span class="tag-pill">INSPECTOR WIRE</span>
+            <span class="tag-pill">WEB-NATIVE 60FPS</span>
+          </div>
+        </div>
+
+        <div class="lineage-card unreal">
+          <div class="card-header-badge">
+            <span class="card-source" style="color: var(--green);">UNREAL ENGINE</span>
+            <span class="card-role">PHYSIQUE & CONTRÔLEURS</span>
+          </div>
+          <h3 class="card-title">PHYSIQUE & VÉHICULES RAYCAST</h3>
+          <p class="card-body" data-i18n="unrealDesc">
+            SIMULATION PHYSIQUE DES VÉHICULES PAR RANGÉES DE RAYONS, CONTRÔLEURS DE PERSONNAGES CINÉMATIQUES ET CHAMPS DE FORCES VECTORIELS.
+          </p>
+          <div class="card-tags">
+            <span class="tag-pill">RAYCAST VEHICLE</span>
+            <span class="tag-pill">KINEMATIC CHARACTER</span>
+            <span class="tag-pill">FORCE FIELDS</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION CATALOGUE // LES 305 NODES -->
+    <section id="catalog" class="container interactive-area">
+      <span class="section-tag" data-i18n="catalogTag">04 // REGISTRE EXHAUSTIF</span>
+      <h2 class="section-title" data-i18n="catalogTitle">CATALOGUE COMPLET DES 305 NODES OPÉRATIONNELS</h2>
+      <p class="section-desc" data-i18n="catalogDesc">
+        INVENTAIRE DE L'ENSEMBLE DES MODULES NODAUX ENREGISTRÉS DANS LE DEFAULT_REGISTRY DE TSUJI V0.6.3.
+      </p>
+
+      <div class="catalog-controls">
+        <div class="search-input-wrapper">
+          <svg class="search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="11" cy="11" r="8"></circle>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          </svg>
+          <input type="text" id="nodes-search-input" class="search-input" data-i18n-placeholder="searchPlaceholder" placeholder="FILTRER PARMI LES 305 NODES (EX: VIEW2D, KINETIC, WIGGLE, RAPIER, CURVE)...">
+        </div>
+
+        <div id="category-chips-container" class="category-chips"></div>
+
+        <div class="nodes-counter-bar">
+          <span id="nodes-count-display">CHARGEMENT DU CATALOGUE...</span>
+          <span style="color: var(--cyan);">REGISTRY V0.6.3 // 305 NODES</span>
         </div>
       </div>
 
-      <div class="features-grid">
-        <div class="feature-card">
-          <div class="feature-icon">🌐</div>
-          <h3>Moteur DAG 100% Réactif</h3>
-          <p>Un flux de données unifié où la moindre modification de node réévalue l'intégralité du rendu 3D à 60 FPS sans boucle infinie.</p>
+      <div id="nodes-cards-container" class="nodes-grid"></div>
+    </section>
+
+    <!-- SECTION SIMULATEUR DLT -->
+    <section id="dlt-sim" class="container interactive-area">
+      <span class="section-tag pink" data-i18n="dltTag">05 // CALIBRATION VIDÉO-MAPPING</span>
+      <h2 class="section-title" data-i18n="dltTitle">SOLVEUR DIRECT LINEAR TRANSFORMATION (DLT)</h2>
+      <p class="section-desc" data-i18n="dltDesc">
+        CALCUL EN TEMPS RÉEL DE LA MATRICE DE POSE, DE LA LONGUEUR FOCALE ET DU LENS-SHIFT DU PROJECTEUR À PARTIR DE POINTS DE CORRESPONDANCE MONDE 3D / ÉCRAN 2D.
+      </p>
+
+      <div class="dlt-container-box">
+        <div class="dlt-viewport">
+          <canvas id="dlt-canvas"></canvas>
         </div>
 
-        <div class="feature-card">
-          <div class="feature-icon">📐</div>
-          <h3>Calibration DLT Directe</h3>
-          <p>Alignez votre vidéo-projection sur les coins physiques d'une pièce grâce au solveur DLT temps réel calculant la pose et le lens shift.</p>
+        <div class="dlt-controls-sidebar">
+          <div>
+            <div class="dlt-sidebar-title" data-i18n="dltSidebarTitle">// TÉLÉMÉTRIE DLT</div>
+            <div class="dlt-stats-list">
+              <div class="stat-row">
+                <span>POINTS D'ALIGNEMENT:</span>
+                <span class="stat-val" data-i18n="dltPointsCalibrated">4 / 4 CALIBRÉS</span>
+              </div>
+              <div class="stat-row">
+                <span data-i18n="dltRmsError">ERREUR RMS :</span>
+                <span id="dlt-rms-error" class="stat-val">0.28 px</span>
+              </div>
+              <div class="stat-row">
+                <span data-i18n="dltFocalEst">FOCALE CALCULÉE :</span>
+                <span id="dlt-focal-len" class="stat-val">35.2 mm</span>
+              </div>
+              <div class="stat-row">
+                <span data-i18n="dltLensShift">LENS SHIFT VERTICAL :</span>
+                <span id="dlt-lens-shift" class="stat-val">+12.4%</span>
+              </div>
+              <div class="stat-row">
+                <span data-i18n="dltMatrixSpace">ESPACE MATRICE :</span>
+                <span style="color: var(--cyan);" data-i18n="dltMatrixVal">4x4 HOMOGÈNE</span>
+              </div>
+            </div>
+            <p style="font-size: 0.75rem; color: var(--text-dim); line-height: 1.5;" data-i18n="dltInstructions">
+              FAIRE PIVOTER LA VUE 3D PAR GLISSER-DÉPOSER. CLIQUER CI-DESSOUS POUR RECALCULER LA MATRICE DE PROJECTION.
+            </p>
+          </div>
+
+          <button id="btn-recompute-dlt" class="btn-terminal btn-cyan" style="width: 100%; justify-content: center; margin-top: 1rem;">
+            <span data-i18n="dltBtnRecalc">RÉÉVALUER LA POSE DLT</span>
+            <span>⚡</span>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION RACCOURCIS CLAVIER -->
+    <section id="shortcuts" class="container interactive-area">
+      <span class="section-tag green" data-i18n="shortcutsTag">06 // COMMANDES CLAVIER</span>
+      <h2 class="section-title" data-i18n="shortcutsTitle">TABLE DES RACCOURCIS DU STUDIO</h2>
+      <p class="section-desc" data-i18n="shortcutsDesc">
+        RÉFÉRENCE DES COMMANDES OPÉRATIONNELLES DE L'ÉDITEUR.
+      </p>
+
+      <table class="shortcuts-table">
+        <thead>
+          <tr>
+            <th data-i18n="thShortcut">TOUCHE</th>
+            <th data-i18n="thFunction">FONCTION DU MOTEUR</th>
+            <th data-i18n="thBehavior">PRIORITÉ ET COMPORTEMENT</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td data-i18n="shSpaceKey"><kbd>Espace</kbd></td>
+            <td data-i18n="shSpaceFunc">LECTURE / PAUSE DE LA TIMELINE</td>
+            <td data-i18n="shSpaceBeh">SANCTUARISÉ EN LECTURE SI ÉCOUTÉ PAR UN NODE KEYBOARD</td>
+          </tr>
+          <tr>
+            <td data-i18n="shSearchKey"><kbd>Cmd</kbd> + <kbd>Espace</kbd> / <kbd>Ctrl</kbd> + <kbd>Espace</kbd></td>
+            <td data-i18n="shSearchFunc">PALETTE RAPIDE DE RECHERCHE DE NODES</td>
+            <td data-i18n="shSearchBeh">INSERTION DIRECTE SUR LE CÂBLE SURVOLÉ</td>
+          </tr>
+          <tr>
+            <td data-i18n="shGizmoKey"><kbd>T</kbd> / <kbd>R</kbd> / <kbd>S</kbd></td>
+            <td data-i18n="shGizmoFunc">GIZMOS TRANSLATION / ROTATION / ÉCHELLE</td>
+            <td data-i18n="shGizmoBeh">MANIPULATION DIRECTE DANS LE VIEWPORT 3D</td>
+          </tr>
+          <tr>
+            <td data-i18n="shAxisKey"><kbd>X</kbd> / <kbd>Y</kbd> / <kbd>Z</kbd></td>
+            <td data-i18n="shAxisFunc">VERROUILLAGE D'AXE DU GIZMO ACTIF</td>
+            <td data-i18n="shAxisBeh">CONTRAINT LE DÉPLACEMENT SUR L'AXE SÉLECTIONNÉ</td>
+          </tr>
+          <tr>
+            <td data-i18n="shKeyframeKey"><kbd>K</kbd></td>
+            <td data-i18n="shKeyframeFunc">ENREGISTRER / SUPPRIMER UNE IMAGE-CLÉ</td>
+            <td data-i18n="shKeyframeBeh">CRÉATION IMMÉDIATE SUR LE PARAMÈTRE SURVOLÉ</td>
+          </tr>
+          <tr>
+            <td data-i18n="shMarqueeKey"><kbd>Cmd</kbd> + CLIC & GLISSER</td>
+            <td data-i18n="shMarqueeFunc">SÉLECTION RECTANGULAIRE 2D DE SOMMETS</td>
+            <td data-i18n="shMarqueeBeh">SÉLECTION DE POINTS DE COURBES OU CAGE LATTICE FFD</td>
+          </tr>
+          <tr>
+            <td data-i18n="shTabKey"><kbd>Tab</kbd></td>
+            <td data-i18n="shTabFunc">MASQUER / AFFICHER LES GUIDES VISUELS</td>
+            <td data-i18n="shTabBeh">BASCULEMENT EN MODE PRÉSENTATION SANS INTERFACE</td>
+          </tr>
+          <tr>
+            <td data-i18n="shFullscreenKey"><kbd>Shift</kbd> + <kbd>Tab</kbd></td>
+            <td data-i18n="shFullscreenFunc">BASCULER EN PLEIN ÉCRAN</td>
+            <td data-i18n="shFullscreenBeh">AFFICHAGE PLEIN ÉCRAN SANS BORDURE POUR PROJECTION</td>
+          </tr>
+          <tr>
+            <td data-i18n="shEscKey"><kbd>Échap</kbd></td>
+            <td data-i18n="shEscFunc">ARRÊT D'URGENCE DE LA LECTURE</td>
+            <td data-i18n="shEscBeh">RESTITUE IMMÉDIATEMENT LES TOUCHES À L'ÉDITEUR</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- SECTION EXÉCUTION & ACCÈS -->
+    <section id="get-started" class="container interactive-area">
+      <span class="section-tag" data-i18n="accessTag">07 // EXÉCUTION DU MOTEUR</span>
+      <h2 class="section-title" data-i18n="accessTitle">DÉPLOIEMENT ET COMPILATION</h2>
+      <p class="section-desc" data-i18n="accessDesc">
+        EXÉCUTION IMMÉDIATE SUR LE WEB OU COMPILATION LOCALE NATIVE.
+      </p>
+
+      <div class="innovations-grid">
+        <div class="feature-box" style="border-color: var(--cyan);">
+          <div class="feature-tag-id">[WEB_APP]</div>
+          <h3 class="feature-heading" data-i18n="webAppTitle">APPLICATION WEB (TSUJI.XYZ)</h3>
+          <p class="feature-text" data-i18n="webAppText">
+            EXÉCUTION COMPLÈTE DU GRAPHE ET DU RENDU THREE.JS SANS INSTALLATION PRÉALABLE.
+          </p>
+          <div style="margin-top: 1.5rem;">
+            <a href="https://tsuji.xyz" target="_blank" rel="noopener" class="btn-terminal btn-cyan">
+              <span data-i18n="webAppBtn">LANCER L'APPLICATION ➔</span>
+            </a>
+          </div>
         </div>
 
-        <div class="feature-card">
-          <div class="feature-icon">🎬</div>
-          <h3>Timeline & Keyframing Granulaire</h3>
-          <p>Enregistrez des clés d'animation paramètre par paramètre ou axe par axe (<kbd>k</kbd>), avec priorité absolue des câbles sur l'interpolation.</p>
+        <div class="feature-box">
+          <div class="feature-tag-id">[TAURI_V2]</div>
+          <h3 class="feature-heading" data-i18n="desktopTitle">COMPILATION NATIVE (TAURI 2)</h3>
+          <p class="feature-text" data-i18n="desktopText">
+            SUPPORT MULTI-ÉCRANS ET ACCÈS MATÉRIEL POUR INSTALLATIONS PERMANENTES.
+          </p>
+          <div style="background: var(--bg-black); border: 1px solid var(--border-subtle); padding: 0.85rem; border-radius: 2px; font-size: 0.8rem; color: var(--text-dim); margin-top: 1rem;">
+            <code>git clone https://github.com/Nikos-Unilasalle/tsuji.git<br>cd tsuji && npm install<br>npm run tauri dev</code>
+          </div>
         </div>
       </div>
     </section>
 
-    <!-- ONGLET 2 : CATALOGUE DES NODES -->
-    <section id="tab-nodes" class="wiki-tab-content">
-      <div class="section-title-box">
-        <h2>Catalogue Complet des Nodes Tsuji</h2>
-        <p>Explorez les 60+ nodes spécialisées avec leurs types de prises, paramètres par défaut et exemples d'utilisation.</p>
+    <!-- FOOTER MINIMALISTE -->
+    <footer class="hud-footer">
+      <div class="footer-content">
+        <div style="display: flex; align-items: center; gap: 0.85rem;">
+          <img src="img/logo_icon.png" alt="Tsuji Logo" style="width: 28px; height: 28px; border-radius: 2px;">
+          <div>
+            <div style="color: var(--white); letter-spacing: 0.1em; font-size: 0.82rem;" data-i18n="footerEngine">TSUJI ENGINE // MOTEUR 3D TEMPS RÉEL & VIDÉO-MAPPING</div>
+            <div style="font-size: 0.72rem; color: var(--text-muted);" data-i18n="footerDesc">LOGICIEL LIBRE SOUS LICENCE MIT • TYPESCRIPT, THREE.JS, RAPIER</div>
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 1.25rem; font-size: 0.75rem;">
+          <a href="https://github.com/Nikos-Unilasalle/tsuji" target="_blank" rel="noopener" style="color: var(--cyan); text-decoration: none;" data-i18n="footerSource">DÉPÔT GITHUB</a>
+          <a href="https://tsuji.xyz" target="_blank" rel="noopener" style="color: var(--pink); text-decoration: none;" data-i18n="footerWebApp">TSUJI.XYZ</a>
+        </div>
       </div>
+    </footer>
 
-      <div id="nodeCatalogContainer"></div>
-    </section>
-
-    <!-- ONGLET 3 : CALIBRATION DLT -->
-    <section id="tab-dlt" class="wiki-tab-content">
-      <div class="section-title-box">
-        <h2>Calibration Vidéo-Mapping 3D (Direct Linear Transformation)</h2>
-        <p>Ajustez virtuellement le projecteur physique à l'écran et visualisez la résolution DLT en direct.</p>
-      </div>
-
-      <!-- Widget du Simulateur DLT -->
-      <div id="dltSimulatorContainer"></div>
-
-      <div class="hero-media" style="margin-top: 2rem;">
-        <img src="img/tsuji.jpg" alt="DLT Calibration UI Real Screenshot" class="hero-img">
-      </div>
-    </section>
-
-    <!-- ONGLET 4 : GUIDES & TUTORIELS -->
-    <section id="tab-guides" class="wiki-tab-content">
-      <div class="section-title-box">
-        <h2>Guides & Tutoriels Pédagogiques</h2>
-        <p>Des instructions pas-à-pas claires, structurées et accompagnées de visuels réels de l'application.</p>
-      </div>
-
-      <div id="guidesListContainer"></div>
-    </section>
-
-    <!-- ONGLET 5 : RACCOURCIS CLAVIER -->
-    <section id="tab-shortcuts" class="wiki-tab-content">
-      <div class="section-title-box">
-        <h2>Raccourcis Clavier & Commandes Rapides</h2>
-        <p>Augmentez votre productivité en maîtrisant les raccourcis clés de Tsuji.</p>
-      </div>
-
-      <div id="keyboardVizContainer"></div>
-    </section>
-
-    <!-- ONGLET 6 : DEPANNAGE -->
-    <section id="tab-troubleshoot" class="wiki-tab-content">
-      <div class="section-title-box">
-        <h2>Centre de Diagnostic & Résolution de Problèmes</h2>
-        <p>Un assistant interactif pour résoudre rapidement les erreurs fréquentes d'animation, de calibration et d'audio.</p>
-      </div>
-
-      <div id="troubleshooterContainer"></div>
-    </section>
-
-  </main>
-
-  <footer class="wiki-footer">
-    <div class="header-container">
-      <p>© 2026 Tsuji — Moteur de Studio 3D & Node Graph pour le Vidéo-Mapping. Publié sous Licence MIT.</p>
-    </div>
-  </footer>
+  </div>
 
   <script type="module" src="js/app.js"></script>
 </body>

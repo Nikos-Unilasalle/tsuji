@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-30 -56 240 334" width="240" height="334" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Roboto, sans-serif">
+<rect x="-30" y="-56" width="240" height="334" fill="#ffffff"/>
+<text x="0" y="-32" font-size="14" font-weight="600" fill="#7a1330">Un premier nœud</text>
+<rect x="0" y="0" width="180" height="248" rx="10" fill="#fdf3f5" stroke="#7a1330" stroke-width="1.5"/>
+<path d="M0,30 L0,10 Q0,0 10,0 L170,0 Q180,0 180,10 L180,30 Z" fill="#f3d3da" stroke="#7a1330" stroke-width="1.5"/>
+<text x="90" y="20" font-size="12.5" font-weight="600" text-anchor="middle" fill="#7a1330">Sphere</text>
+<circle cx="0.0" cy="48.0" r="5.5" fill="#b51d44"/>
+<text x="12" y="52" font-size="11" fill="#9a5566">Visible</text>
+<circle cx="0.0" cy="74.0" r="5.5" fill="#ffffff" stroke="#b51d44" stroke-width="2"/>
+<text x="12" y="78" font-size="11" fill="#9a5566">Texture Map</text>
+<circle cx="0.0" cy="100.0" r="5.5" fill="#ffffff" stroke="#b51d44" stroke-width="2"/>
+<text x="12" y="104" font-size="11" fill="#9a5566">Normal Map</text>
+<circle cx="0.0" cy="126.0" r="5.5" fill="#ffffff" stroke="#b51d44" stroke-width="2"/>
+<text x="12" y="130" font-size="11" fill="#9a5566">Roughness Map</text>
+<rect x="-5.5" y="146.5" width="11" height="11" rx="1" fill="#b51d44"/>
+<text x="12" y="156" font-size="11" fill="#9a5566">Matrix</text>
+<rect x="-5.5" y="172.5" width="11" height="11" rx="1" fill="#ffffff" stroke="#b51d44" stroke-width="2"/>
+<text x="12" y="182" font-size="11" fill="#9a5566">Material</text>
+<path d="M-5.5,198.5 L6.5,204.0 L-5.5,209.5 Z" fill="#b51d44"/>
+<text x="12" y="208" font-size="11" fill="#9a5566">UV Scale</text>
+<path d="M-5.5,224.5 L6.5,230.0 L-5.5,235.5 Z" fill="#b51d44"/>
+<text x="12" y="234" font-size="11" fill="#9a5566">UV Offset</text>
+<polygon points="185.5,48.0 182.8,52.8 177.3,52.8 174.5,48.0 177.3,43.2 182.8,43.2" fill="#b51d44"/>
+<text x="168" y="52" font-size="11" text-anchor="end" fill="#9a5566">Geometry</text>
+<rect x="174.5" y="68.5" width="11" height="11" rx="1" fill="#b51d44"/>
+<text x="168" y="78" font-size="11" text-anchor="end" fill="#9a5566">Matrix</text>
+</svg>

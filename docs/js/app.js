@@ -1,162 +1,266 @@
-import { initNodeCatalog } from "./components/nodeCatalog.js";
-import { initDLTSimulator } from "./components/dltSimulator.js";
-import { initTroubleshooter } from "./components/troubleshooter.js";
-import { initKeyboardViz } from "./components/keyboardViz.js";
-import { GUIDES_DATABASE } from "./data/guides.js";
-
 /**
- * Application principale du Wiki Tsuji
+ * TSUJI (辻) — Application Web & Orchestration Bilingue
+ * Low-key Japanese Geek // Node Graph Studio & Motion Design Engine
  */
-document.addEventListener("DOMContentLoaded", () => {
-  initNavigation();
-  initNodeCatalog("nodeCatalogContainer");
-  initDLTSimulator("dltSimulatorContainer");
-  initTroubleshooter("troubleshooterContainer");
-  initKeyboardViz("keyboardVizContainer");
-  renderPedagogicalGuides();
-});
 
-function initNavigation() {
-  const navLinks = document.querySelectorAll(".nav-link");
-  const tabContents = document.querySelectorAll(".wiki-tab-content");
+import { TsujiBackgroundScene } from './scene/backgroundScene.js';
+import { TsujiDltSimulator } from './scene/dltSimScene.js';
+import { CATEGORY_DEFINITIONS, FULL_NODES_CATALOG } from './data/nodesCatalog.js';
+import { I18N } from './i18n.js';
 
-  navLinks.forEach(link => {
-    link.addEventListener("click", (e) => {
-      e.preventDefault();
-      const targetTab = link.getAttribute("href").substring(1);
+class TsujiApp {
+  constructor() {
+    this.currentLang = localStorage.getItem('tsuji_lang') || 'fr';
+    this.selectedCategory = 'all';
+    this.searchQuery = '';
 
-      navLinks.forEach(l => l.classList.remove("active"));
-      tabContents.forEach(tc => tc.classList.remove("active"));
-
-      link.classList.add("active");
-      const activeEl = document.getElementById(targetTab);
-      if (activeEl) {
-        activeEl.classList.add("active");
-      }
-
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    });
-  });
-}
-
-function renderPedagogicalGuides() {
-  const container = document.getElementById("guidesListContainer");
-  if (!container) return;
-
-  container.innerHTML = `
-    <div class="guides-layout">
-      <!-- Sommaire des Guides -->
-      <aside class="guides-sidebar">
-        <div class="sidebar-title">Sommaire des Tutoriels</div>
-        <nav class="guides-toc-nav">
-          ${GUIDES_DATABASE.map((g, idx) => `
-            <a href="#guide-art-${g.id}" class="toc-link ${idx === 0 ? "active" : ""}" data-guide="${g.id}">
-              <span>${g.title.split(" ")[0]}</span>
-              <span>${g.title.split(" ").slice(1).join(" ")}</span>
-            </a>
-          `).join("")}
-        </nav>
-      </aside>
-
-      <!-- Flux des Articles Pédagogiques -->
-      <div class="guides-content-stream">
-        ${GUIDES_DATABASE.map(guide => renderSingleGuideArticle(guide)).join("")}
-      </div>
-    </div>
-  `;
-
-  // Gestion des liens du sommaire
-  const tocLinks = container.querySelectorAll(".toc-link");
-  tocLinks.forEach(link => {
-    link.addEventListener("click", (e) => {
-      e.preventDefault();
-      tocLinks.forEach(l => l.classList.remove("active"));
-      link.classList.add("active");
-
-      const targetId = link.getAttribute("href").substring(1);
-      const targetEl = document.getElementById(targetId);
-      if (targetEl) {
-        targetEl.scrollIntoView({ behavior: "smooth", block: "start" });
-      }
-    });
-  });
-}
-
-function renderSingleGuideArticle(guide) {
-  return `
-    <article class="guide-article-card" id="guide-art-${guide.id}">
-      <div class="guide-meta-bar">
-        <span class="guide-badge-time">⏱️ ${guide.time}</span>
-        <span class="guide-badge-level">${guide.level}</span>
-      </div>
-
-      <h2 class="guide-main-title">${guide.title}</h2>
-      <p class="guide-intro-lead">${guide.content.lead}</p>
-
-      <div class="guide-markdown-body">
-        ${guide.content.sections.map(section => renderGuideSection(section)).join("")}
-      </div>
-    </article>
-  `;
-}
-
-function renderGuideSection(section) {
-  if (section.type === "text") {
-    return `
-      <h2>${section.title}</h2>
-      <p>${section.body}</p>
-    `;
+    this.initThreeScenes();
+    this.setupLanguageSwitcher();
+    this.applyLanguage();
+    this.renderCategoryChips();
+    this.renderNodesGrid();
+    this.setupSearch();
+    this.setupNavigation();
   }
 
-  if (section.type === "steps") {
-    return `
-      <h2>${section.title}</h2>
-      <div class="step-cards-container">
-        ${section.items.map(step => `
-          <div class="step-card-item">
-            <div class="step-number-circle">${step.number}</div>
-            <div class="step-content-text">
-              <h4>${step.title}</h4>
-              <p>${step.desc}</p>
+  initThreeScenes() {
+    // 1. Scène Three.js Fullscreen en background
+    try {
+      this.bgScene = new TsujiBackgroundScene('three-bg-canvas');
+    } catch (e) {
+      console.warn('Three.js background initialization error:', e);
+    }
+
+    // 2. Simulateur DLT interactif
+    try {
+      this.dltSim = new TsujiDltSimulator('dlt-canvas');
+    } catch (e) {
+      console.warn('Three.js DLT simulator initialization error:', e);
+    }
+  }
+
+  setupLanguageSwitcher() {
+    const langBtns = document.querySelectorAll('.lang-btn');
+    langBtns.forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        const lang = e.currentTarget.dataset.lang;
+        if (lang && lang !== this.currentLang) {
+          this.setLanguage(lang);
+        }
+      });
+    });
+  }
+
+  setLanguage(lang) {
+    this.currentLang = lang;
+    localStorage.setItem('tsuji_lang', lang);
+    this.applyLanguage();
+    this.renderCategoryChips();
+    this.renderNodesGrid();
+  }
+
+  applyLanguage() {
+    const t = I18N[this.currentLang] || I18N.fr;
+
+    // Mise à jour de l'état actif des boutons FR/EN
+    document.querySelectorAll('.lang-btn').forEach((btn) => {
+      if (btn.dataset.lang === this.currentLang) {
+        btn.classList.add('active');
+      } else {
+        btn.classList.remove('active');
+      }
+    });
+
+    // Remplacement des éléments portant data-i18n
+    document.querySelectorAll('[data-i18n]').forEach((el) => {
+      const key = el.getAttribute('data-i18n');
+      if (t[key]) {
+        el.innerHTML = t[key];
+      }
+    });
+
+    // Remplacement des placeholders
+    document.querySelectorAll('[data-i18n-placeholder]').forEach((el) => {
+      const key = el.getAttribute('data-i18n-placeholder');
+      if (t[key]) {
+        el.setAttribute('placeholder', t[key]);
+      }
+    });
+  }
+
+  renderCategoryChips() {
+    const container = document.getElementById('category-chips-container');
+    if (!container) return;
+
+    const t = I18N[this.currentLang] || I18N.fr;
+    const allLabel = t.allChip || 'ALL';
+
+    let html = `<button class="cat-chip ${this.selectedCategory === 'all' ? 'active' : ''}" data-cat="all">${allLabel} [${FULL_NODES_CATALOG.length}]</button>`;
+
+    Object.entries(CATEGORY_DEFINITIONS).forEach(([catId, catDef]) => {
+      const count = FULL_NODES_CATALOG.filter((n) => n.category === catId).length;
+      if (count > 0) {
+        const label = catDef[this.currentLang] || catDef.en || catId;
+        const isActive = this.selectedCategory === catId ? 'active' : '';
+        html += `<button class="cat-chip ${isActive}" data-cat="${catId}">${label.toUpperCase()} [${count}]</button>`;
+      }
+    });
+
+    container.innerHTML = html;
+
+    container.querySelectorAll('.cat-chip').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        container.querySelectorAll('.cat-chip').forEach((b) => b.classList.remove('active'));
+        e.currentTarget.classList.add('active');
+        this.selectedCategory = e.currentTarget.dataset.cat;
+        this.renderNodesGrid();
+      });
+    });
+  }
+
+  setupSearch() {
+    const input = document.getElementById('nodes-search-input');
+    if (!input) return;
+
+    input.addEventListener('input', (e) => {
+      this.searchQuery = e.target.value.toLowerCase().trim();
+      this.renderNodesGrid();
+    });
+  }
+
+  renderNodesGrid() {
+    const container = document.getElementById('nodes-cards-container');
+    const counter = document.getElementById('nodes-count-display');
+    if (!container) return;
+
+    const t = I18N[this.currentLang] || I18N.fr;
+
+    const filtered = FULL_NODES_CATALOG.filter((node) => {
+      const matchCat = (this.selectedCategory === 'all' || node.category === this.selectedCategory);
+      const summaryText = typeof node.summary === 'object'
+        ? (node.summary[this.currentLang] || node.summary.fr || '')
+        : (node.summary || '');
+
+      const matchQuery = !this.searchQuery ||
+        node.name.toLowerCase().includes(this.searchQuery) ||
+        node.id.toLowerCase().includes(this.searchQuery) ||
+        summaryText.toLowerCase().includes(this.searchQuery);
+
+      return matchCat && matchQuery;
+    });
+
+    if (counter) {
+      counter.textContent = `${filtered.length} / ${FULL_NODES_CATALOG.length} ${t.loadedNodes || 'NODES LOADED'}`;
+    }
+
+    if (filtered.length === 0) {
+      container.innerHTML = `
+        <div style="grid-column: 1 / -1; padding: 3rem; text-align: center; color: var(--text-muted); border: 1px dashed var(--border-subtle);">
+          ${t.noSignalFound || '[NO NODAL SIGNAL FOUND FOR THIS CRITERIA]'}
+        </div>
+      `;
+      return;
+    }
+
+    // Mapping des couleurs des types de sockets
+    const socketColors = {
+      value: '#00f0ff',
+      vector: '#38bdf8',
+      matrix: '#a855f7',
+      color: '#ff007f',
+      geometry: '#00ff66',
+      texture: '#2dd4bf',
+      curve: '#facc15',
+      list: '#f97316',
+      text: '#e2e8f0',
+      any: '#94a3b8'
+    };
+
+    container.innerHTML = filtered.map((node) => {
+      const catDef = CATEGORY_DEFINITIONS[node.category] || { color: '#00f0ff' };
+      const catLabel = catDef[this.currentLang] || catDef.en || node.category;
+      const summary = typeof node.summary === 'object'
+        ? (node.summary[this.currentLang] || node.summary.en || '')
+        : (node.summary || '');
+
+      const inputsHtml = (node.inputs && node.inputs.length > 0)
+        ? node.inputs.slice(0, 3).map((inp) => {
+            const color = socketColors[inp.type] || '#ffffff';
+            return `
+              <div class="socket-row">
+                <span style="color: var(--text-dim);">${inp.name || inp.id}</span>
+                <span class="socket-pill" style="color: ${color};">
+                  <span class="socket-dot" style="background: ${color};"></span>
+                  ${inp.type}
+                </span>
+              </div>
+            `;
+          }).join('')
+        : '<div class="socket-row"><span style="color: var(--text-muted); font-size: 0.7rem;">None / Local</span></div>';
+
+      const outputsHtml = (node.outputs && node.outputs.length > 0)
+        ? node.outputs.slice(0, 2).map((out) => {
+            const color = socketColors[out.type] || '#ffffff';
+            return `
+              <div class="socket-row">
+                <span style="color: var(--text-dim); font-weight: 400;">${out.name || out.id}</span>
+                <span class="socket-pill" style="color: ${color};">
+                  <span class="socket-dot" style="background: ${color};"></span>
+                  ${out.type}
+                </span>
+              </div>
+            `;
+          }).join('')
+        : '<div class="socket-row"><span style="color: var(--text-muted); font-size: 0.7rem;">Terminal Output</span></div>';
+
+      return `
+        <div class="node-card">
+          <div>
+            <div class="node-top">
+              <span class="node-type-id">${node.id}</span>
+              <span class="node-cat-badge" style="border-color: ${catDef.color}33; color: ${catDef.color};">${catLabel}</span>
             </div>
+            <h3 class="node-name">${node.name}</h3>
+            <p class="node-summary">${summary}</p>
           </div>
-        `).join("")}
-      </div>
-    `;
-  }
 
-  if (section.type === "tip") {
-    return `
-      <div class="callout-box callout-tip">
-        <div class="callout-icon">💡</div>
-        <div class="callout-text">
-          <h5>${section.titleTip}</h5>
-          <p>${section.bodyTip}</p>
+          <div class="node-sockets">
+            <div style="font-size: 0.68rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.2rem;">SIGNALS [IN / OUT]</div>
+            ${inputsHtml}
+            ${outputsHtml}
+          </div>
         </div>
-      </div>
-    `;
+      `;
+    }).join('');
   }
 
-  if (section.type === "warning") {
-    return `
-      <div class="callout-box callout-warning">
-        <div class="callout-icon">⚠️</div>
-        <div class="callout-text">
-          <h5>${section.titleWarning}</h5>
-          <p>${section.bodyWarning}</p>
-        </div>
-      </div>
-    `;
-  }
+  setupNavigation() {
+    const navLinks = document.querySelectorAll('.hud-nav a');
+    const sections = document.querySelectorAll('section[id]');
 
-  if (section.type === "image") {
-    return `
-      <div class="guide-image-frame">
-        <img src="${section.src}" alt="${section.caption}" />
-        <div class="image-caption">${section.caption}</div>
-      </div>
-    `;
-  }
+    window.addEventListener('scroll', () => {
+      let currentSection = '';
+      const scrollPos = window.scrollY + 120;
 
-  return "";
+      sections.forEach((sec) => {
+        const top = sec.offsetTop;
+        const height = sec.offsetHeight;
+        if (scrollPos >= top && scrollPos < top + height) {
+          currentSection = sec.getAttribute('id');
+        }
+      });
+
+      navLinks.forEach((link) => {
+        link.classList.remove('active');
+        if (link.getAttribute('href') === `#${currentSection}`) {
+          link.classList.add('active');
+        }
+      });
+    });
+  }
 }
+
+// Initialisation dès que le document est prêt
+document.addEventListener('DOMContentLoaded', () => {
+  window.tsujiApp = new TsujiApp();
+});

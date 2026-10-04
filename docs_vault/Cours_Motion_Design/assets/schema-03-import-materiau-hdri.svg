@@ -1,0 +1,91 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-30 -56 540 634" width="540" height="634" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Roboto, sans-serif">
+<rect x="-30" y="-56" width="540" height="634" fill="#ffffff"/>
+<text x="0" y="-32" font-size="14" font-weight="600" fill="#7a1330">Import, matériau, éclairage</text>
+<path d="M180.0,48.0 C240.0,48.0 240.0,152.0 300.0,152.0" fill="none" stroke="#c8607a" stroke-width="2" stroke-linecap="round"/>
+<rect x="0" y="0" width="180" height="300" rx="10" fill="#fdf3f5" stroke="#7a1330" stroke-width="1.5"/>
+<path d="M0,30 L0,10 Q0,0 10,0 L170,0 Q180,0 180,10 L180,30 Z" fill="#f3d3da" stroke="#7a1330" stroke-width="1.5"/>
+<text x="90" y="20" font-size="12.5" font-weight="600" text-anchor="middle" fill="#7a1330">Material</text>
+<path d="M0.0,41.5 L6.5,48.0 L0.0,54.5 L-6.5,48.0 Z" fill="#b51d44"/>
+<text x="12" y="52" font-size="11" fill="#9a5566">Color</text>
+<path d="M0.0,67.5 L6.5,74.0 L0.0,80.5 L-6.5,74.0 Z" fill="#b51d44"/>
+<text x="12" y="78" font-size="11" fill="#9a5566">Emissive Color</text>
+<circle cx="0.0" cy="100.0" r="5.5" fill="#b51d44"/>
+<text x="12" y="104" font-size="11" fill="#9a5566">Emissive Intensity</text>
+<circle cx="0.0" cy="126.0" r="5.5" fill="#b51d44"/>
+<text x="12" y="130" font-size="11" fill="#9a5566">Shadeless</text>
+<circle cx="0.0" cy="152.0" r="5.5" fill="#b51d44"/>
+<text x="12" y="156" font-size="11" fill="#9a5566">Roughness</text>
+<circle cx="0.0" cy="178.0" r="5.5" fill="#b51d44"/>
+<text x="12" y="182" font-size="11" fill="#9a5566">Metalness</text>
+<circle cx="0.0" cy="204.0" r="5.5" fill="#b51d44"/>
+<text x="12" y="208" font-size="11" fill="#9a5566">Wireframe</text>
+<circle cx="0.0" cy="230.0" r="5.5" fill="#b51d44"/>
+<text x="12" y="234" font-size="11" fill="#9a5566">Opacity</text>
+<circle cx="0.0" cy="256.0" r="5.5" fill="#b51d44"/>
+<text x="12" y="260" font-size="11" fill="#9a5566">Transmission (Glass)</text>
+<circle cx="0.0" cy="282.0" r="5.5" fill="#b51d44"/>
+<text x="12" y="286" font-size="11" fill="#9a5566">Glass Thickness</text>
+<rect x="174.5" y="42.5" width="11" height="11" rx="1" fill="#ffffff" stroke="#b51d44" stroke-width="2"/>
+<text x="168" y="52" font-size="11" text-anchor="end" fill="#9a5566">Material</text>
+<rect x="300" y="0" width="180" height="248" rx="10" fill="#fdf3f5" stroke="#7a1330" stroke-width="1.5"/>
+<path d="M300,30 L300,10 Q300,0 310,0 L470,0 Q480,0 480,10 L480,30 Z" fill="#f3d3da" stroke="#7a1330" stroke-width="1.5"/>
+<text x="390" y="20" font-size="12.5" font-weight="600" text-anchor="middle" fill="#7a1330">OBJ Model</text>
+<circle cx="300.0" cy="48.0" r="5.5" fill="#b51d44"/>
+<text x="312" y="52" font-size="11" fill="#9a5566">Visible</text>
+<circle cx="300.0" cy="74.0" r="5.5" fill="#ffffff" stroke="#b51d44" stroke-width="2"/>
+<text x="312" y="78" font-size="11" fill="#9a5566">Diffuse Map</text>
+<circle cx="300.0" cy="100.0" r="5.5" fill="#ffffff" stroke="#b51d44" stroke-width="2"/>
+<text x="312" y="104" font-size="11" fill="#9a5566">Normal Map</text>
+<rect x="294.5" y="120.5" width="11" height="11" rx="1" fill="#b51d44"/>
+<text x="312" y="130" font-size="11" fill="#9a5566">Matrix</text>
+<rect x="294.5" y="146.5" width="11" height="11" rx="1" fill="#ffffff" stroke="#b51d44" stroke-width="2"/>
+<text x="312" y="156" font-size="11" fill="#9a5566">Material</text>
+<path d="M294.5,172.5 L306.5,178.0 L294.5,183.5 Z" fill="#b51d44"/>
+<text x="312" y="182" font-size="11" fill="#9a5566">UV Scale</text>
+<path d="M294.5,198.5 L306.5,204.0 L294.5,209.5 Z" fill="#b51d44"/>
+<text x="312" y="208" font-size="11" fill="#9a5566">UV Offset</text>
+<path d="M294.5,224.5 L306.5,230.0 L294.5,235.5 Z" fill="#b51d44"/>
+<text x="312" y="234" font-size="11" fill="#9a5566">Pivot</text>
+<polygon points="485.5,48.0 482.8,52.8 477.3,52.8 474.5,48.0 477.3,43.2 482.8,43.2" fill="#b51d44"/>
+<text x="468" y="52" font-size="11" text-anchor="end" fill="#9a5566">Geometry</text>
+<rect x="474.5" y="68.5" width="11" height="11" rx="1" fill="#b51d44"/>
+<text x="468" y="78" font-size="11" text-anchor="end" fill="#9a5566">Matrix</text>
+<rect x="0" y="300" width="180" height="248" rx="10" fill="#fdf3f5" stroke="#7a1330" stroke-width="1.5"/>
+<path d="M0,330 L0,310 Q0,300 10,300 L170,300 Q180,300 180,310 L180,330 Z" fill="#f3d3da" stroke="#7a1330" stroke-width="1.5"/>
+<text x="90" y="320" font-size="12.5" font-weight="600" text-anchor="middle" fill="#7a1330">Environment &amp; HDRI</text>
+<path d="M0.0,341.5 L6.5,348.0 L0.0,354.5 L-6.5,348.0 Z" fill="#b51d44"/>
+<text x="12" y="352" font-size="11" fill="#9a5566">Background Color</text>
+<circle cx="0.0" cy="374.0" r="5.5" fill="#ffffff" stroke="#b51d44" stroke-width="2"/>
+<text x="12" y="378" font-size="11" fill="#9a5566">HDRI / Env Map</text>
+<circle cx="0.0" cy="400.0" r="5.5" fill="#b51d44"/>
+<text x="12" y="404" font-size="11" fill="#9a5566">Env Intensity</text>
+<circle cx="0.0" cy="426.0" r="5.5" fill="#b51d44"/>
+<text x="12" y="430" font-size="11" fill="#9a5566">Show Background</text>
+<circle cx="0.0" cy="452.0" r="5.5" fill="#b51d44"/>
+<text x="12" y="456" font-size="11" fill="#9a5566">Bg Blur</text>
+<path d="M-5.5,472.5 L6.5,478.0 L-5.5,483.5 Z" fill="#b51d44"/>
+<text x="12" y="482" font-size="11" fill="#9a5566">Bg Image Scale</text>
+<path d="M-5.5,498.5 L6.5,504.0 L-5.5,509.5 Z" fill="#b51d44"/>
+<text x="12" y="508" font-size="11" fill="#9a5566">Bg Image Offset</text>
+<circle cx="0.0" cy="530.0" r="5.5" fill="#b51d44"/>
+<text x="12" y="534" font-size="11" fill="#9a5566">Bg Image Rotation</text>
+<circle cx="180.0" cy="348.0" r="6.5" fill="#ffffff" stroke="#b51d44" stroke-width="1.5"/><circle cx="180.0" cy="348.0" r="2" fill="#b51d44"/>
+<text x="168" y="352" font-size="11" text-anchor="end" fill="#9a5566">Environment</text>
+<rect x="300" y="300" width="180" height="196" rx="10" fill="#fdf3f5" stroke="#7a1330" stroke-width="1.5"/>
+<path d="M300,330 L300,310 Q300,300 310,300 L470,300 Q480,300 480,310 L480,330 Z" fill="#f3d3da" stroke="#7a1330" stroke-width="1.5"/>
+<text x="390" y="320" font-size="12.5" font-weight="600" text-anchor="middle" fill="#7a1330">Directional Light</text>
+<path d="M300.0,341.5 L306.5,348.0 L300.0,354.5 L293.5,348.0 Z" fill="#b51d44"/>
+<text x="312" y="352" font-size="11" fill="#9a5566">Color</text>
+<circle cx="300.0" cy="374.0" r="5.5" fill="#b51d44"/>
+<text x="312" y="378" font-size="11" fill="#9a5566">Intensity</text>
+<polygon points="305.5,400.0 302.8,404.8 297.3,404.8 294.5,400.0 297.3,395.2 302.8,395.2" fill="#b51d44"/>
+<text x="312" y="404" font-size="11" fill="#9a5566">Target</text>
+<rect x="294.5" y="420.5" width="11" height="11" rx="1" fill="#b51d44"/>
+<text x="312" y="430" font-size="11" fill="#9a5566">Matrix</text>
+<circle cx="300.0" cy="452.0" r="5.5" fill="#b51d44"/>
+<text x="312" y="456" font-size="11" fill="#9a5566">Shadows</text>
+<circle cx="300.0" cy="478.0" r="5.5" fill="#b51d44"/>
+<text x="312" y="482" font-size="11" fill="#9a5566">Shadow Softness</text>
+<polygon points="485.5,348.0 482.8,352.8 477.3,352.8 474.5,348.0 477.3,343.2 482.8,343.2" fill="#b51d44"/>
+<text x="468" y="352" font-size="11" text-anchor="end" fill="#9a5566">Light</text>
+</svg>
