@@ -96,6 +96,7 @@ import { serializeSplatToPng } from "./shared/three/splatSerialization";
 import { broadcastGraph, maximizeMainWindow, PreviewCameraPose, startBroadcasting } from "./shared/ipc";
 import { exportVideo, mimeToExtension, saveVideoBlob } from "./shared/export/videoExport";
 import { exportPngSequence, saveZipBlob } from "./shared/export/imageSequenceExport";
+import { renderGraphToSvg, saveGraphSvg } from "./shared/export/graphSvg";
 import { TransformPatch, Viewport, ViewportExportHandle } from "./shared/three/Viewport";
 import { exportWornTextures, WORN_BAKE_ACTION } from "./shared/graph/nodes/materialWorn";
 import { NODE_FREEZE_ACTION, NODE_RESET_PARAMS_ACTION, nodeResetPatch } from "./shared/graph/nodeActions";
@@ -498,6 +499,29 @@ function MainEditor() {
       setExportMode(null);
     }
   }, [beginExport, totalFrames, exportFps, currentFilename, waitForExportHandle]);
+
+  const handleExportGraphSvg = useCallback(async () => {
+    if (graph.nodes.length === 0) {
+      alert("Nothing to export — this canvas is empty.");
+      return;
+    }
+    try {
+      // A multi-node selection exports just that subset (a focused schema for
+      // docs); no selection (or a single node, which isn't a "subset" worth
+      // isolating) exports the whole canvas.
+      const onlyIds = selectedNodeIds.length > 1 ? new Set(selectedNodeIds) : undefined;
+      const svg = renderGraphToSvg(graph, DEFAULT_REGISTRY, {
+        title: currentFilename.replace(/\.[^.]+$/, ""),
+        onlyIds,
+      });
+      const base = (currentFilename.replace(/\.[^.]+$/, "") || "graph") + (onlyIds ? "_selection" : "");
+      await saveGraphSvg(svg, `${base}.svg`);
+    } catch (err) {
+      console.error("Graph SVG export failed:", err);
+      const message = err instanceof Error ? err.message : String(err);
+      alert("Graph SVG export failed: " + message);
+    }
+  }, [graph, selectedNodeIds, currentFilename]);
 
   const [isPlaying, setIsPlaying] = useState(false);
   // Per canvas: each has its own Render node and so its own frame count, and
@@ -1082,12 +1106,17 @@ function MainEditor() {
       } else if (isCmdOrCtrl && key === "y") {
         e.preventDefault();
         redo();
+      } else if (isCmdOrCtrl && isShift && key === "e") {
+        // Free — doesn't collide with Cmd/Ctrl+E (unused) or the plain Export
+        // menu, which lives under Share instead of a shortcut.
+        e.preventDefault();
+        handleExportGraphSvg();
       }
     }
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [undo, redo]);
+  }, [undo, redo, handleExportGraphSvg]);
 
   const handleLoadProject = (newProject: Project, filename?: string) => {
     historyRef.current = {};
@@ -2661,6 +2690,7 @@ function MainEditor() {
         onRedo={redo}
         onExportVideo={keyframesEnabled ? handleExportVideo : undefined}
         onExportSequence={keyframesEnabled ? handleExportSequence : undefined}
+        onExportGraphSvg={handleExportGraphSvg}
         isExporting={isExporting}
         exportMode={exportMode}
         exportProgress={exportProgress}

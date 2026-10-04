@@ -18,6 +18,8 @@ export interface ShareMenuProps {
   exportMode?: "video" | "sequence" | null;
   /** 0-1. */
   exportProgress?: number;
+  /** Absent hides the row entirely — e.g. an empty graph, nothing to schematize. */
+  onExportGraphSvg?: () => void;
 }
 
 /**
@@ -41,6 +43,7 @@ export const ShareMenu: React.FC<ShareMenuProps> = ({
   isExporting = false,
   exportMode = null,
   exportProgress = 0,
+  onExportGraphSvg,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [source, setSource] = useState<ExportSource>("3d");
@@ -190,6 +193,22 @@ export const ShareMenu: React.FC<ShareMenuProps> = ({
                 {activeSource === "2d"
                   ? "Lossless PNGs at the 2D texture's native size, with alpha, packaged as a ZIP."
                   : "Lossless frame-by-frame PNG sequence packaged as a ZIP."}
+              </span>
+            </button>
+          )}
+
+          {onExportGraphSvg && (
+            <button
+              type="button"
+              className="share-menu-item"
+              onClick={() => {
+                onExportGraphSvg();
+                setIsOpen(false);
+              }}
+            >
+              <span className="share-menu-item-label">Export Graph (SVG)</span>
+              <span className="share-menu-item-desc">
+                Vector schematic of the node graph as it's laid out — for docs, not a screenshot.
               </span>
             </button>
           )}

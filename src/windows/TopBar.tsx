@@ -43,6 +43,8 @@ export interface TopBarProps {
   exportMode?: "video" | "sequence" | null;
   /** 0-1. */
   exportProgress?: number;
+  /** Absent hides the row entirely — e.g. an empty graph, nothing to schematize. */
+  onExportGraphSvg?: () => void;
   isTimelineOpen?: boolean;
   onToggleTimeline?: () => void;
   is2DMode?: boolean;
@@ -72,6 +74,7 @@ export const TopBar: React.FC<TopBarProps> = ({
   isExporting = false,
   exportMode = null,
   exportProgress = 0,
+  onExportGraphSvg,
   isTimelineOpen: _isTimelineOpen = false,
   onToggleTimeline: _onToggleTimeline,
   is2DMode = false,
@@ -576,6 +579,7 @@ export const TopBar: React.FC<TopBarProps> = ({
           isExporting={isExporting}
           exportMode={exportMode}
           exportProgress={exportProgress}
+          onExportGraphSvg={onExportGraphSvg}
         />
 
         {/* FULL SCREEN — whole-window fullscreen toggle (browser API or native window flag) */}
