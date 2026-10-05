@@ -2779,7 +2779,6 @@ function MainEditor() {
             onUnpinParam={onToggleExposed}
             onRenameExposedParam={onRenameExposed}
             mode2D={is2DMode}
-            onToggle2DMode={toggle2DMode}
             snapElevation={snapElevation}
             onToggleSnapElevation={toggleSnapElevation}
           />

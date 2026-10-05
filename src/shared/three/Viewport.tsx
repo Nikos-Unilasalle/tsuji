@@ -73,7 +73,8 @@ import { layoutKey } from "./layoutKey";
 import { ColorPickerInput } from "../../windows/ColorPickerInput";
 import { QuadMesh, getLoopCutPreviewSegments, loopCut, quadMeshSignature, transformSelectionByMatrix, withFaceUVs } from "../graph/quadMesh";
 import { swapInUVChecker } from "./uvChecker";
-import { UVPreviewPanel, type UVPanelData } from "./UVPreviewPanel";
+import { UV_PANEL_WIDTH, UVPreviewPanel, type UVPanelData } from "./UVPreviewPanel";
+import { HudBar, HudSeparator, HudToolColumn, useHudToolMaxRows } from "./HudToolbars";
 import { createPostProcessChain } from "./postProcessChain";
 import { computeGizmoWriteback, TransformGizmoMode, TransformPatch } from "./gizmoWriteback";
 import { enableSmoothShadows } from "./smoothShadows";
@@ -847,7 +848,6 @@ interface ViewportProps {
   onUnpinParam?: (nodeId: string, paramId: string) => void;
   onRenameExposedParam?: (nodeId: string, paramId: string, label: string) => void;
   mode2D?: boolean;
-  onToggle2DMode?: () => void;
   elevationView?: boolean;
   snapElevation?: boolean;
   onToggleSnapElevation?: () => void;
@@ -896,7 +896,6 @@ export function Viewport({
   onUnpinParam,
   onRenameExposedParam,
   mode2D = false,
-  onToggle2DMode,
   elevationView = false,
   snapElevation = false,
   onToggleSnapElevation,
@@ -1248,6 +1247,9 @@ export function Viewport({
   }, []);
 
   const hostRef = useRef<HTMLDivElement>(null);
+  const hudToolMaxRows = useHudToolMaxRows(hostRef);
+  // The tool columns sit right of the UV panel while it is open (both top-left).
+  const hudToolColumnLeft = uvPanelOpen ? 12 + UV_PANEL_WIDTH + 8 : 12;
   /** The small grab-circle that appears near the viewport's left/right edge — drag it vertically to zoom around the orbit target, same as a mouse-wheel dolly. */
   const [edgeZoomHandle, setEdgeZoomHandle] = useState<{ side: "left" | "right"; y: number } | null>(null);
   const edgeZoomDraggingRef = useRef(false);
@@ -7094,8 +7096,10 @@ export function Viewport({
         />
       )}
       {/* Edit Mesh panel: gizmo orientation, pivot, snapping, edge marks,
-          face material slot / colour, and the selection's median position. */}
+          face material slot / colour, and the selection's median position.
+          Not on the 2D mode's elevation view — it belongs to the edit pane. */}
       {!outputMode &&
+        !elevationView &&
         selectedNodeId &&
         !editModalHud &&
         (() => {
@@ -7575,142 +7579,15 @@ export function Viewport({
           const fillColor = parseColorHex(gpNode.params.fillColor, "");
           const brushSize = Number(gpNode.params.brushSize) || 4;
           const onionSkin = Boolean(gpNode.params.onionSkin ?? true);
-
           return (
-            <div
-              className="viewport-gp-hud"
-              style={{
-                position: "absolute",
-                bottom: 16,
-                left: "50%",
-                transform: "translateX(-50%)",
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                padding: "5px 12px",
-                background: "rgba(24, 28, 38, 0.95)",
-                backdropFilter: "blur(12px)",
-                border: "1px solid rgba(56, 189, 248, 0.4)",
-                borderRadius: "8px",
-                boxShadow:
-                  "0 8px 24px rgba(0, 0, 0, 0.5), 0 0 16px rgba(56, 189, 248, 0.2)",
-                color: "#ffffff",
-                fontSize: "12px",
-                zIndex: 45,
-                pointerEvents: "auto",
-              }}
-            >
-              {/* Frame Indicator */}
-              <div
-                style={{
-                  fontSize: "11px",
-                  fontWeight: 700,
-                  color: "#38bdf8",
-                  padding: "2px 8px",
-                  background: "rgba(56, 189, 248, 0.15)",
-                  borderRadius: "4px",
-                  letterSpacing: "0.02em",
-                  userSelect: "none",
-                }}
-                title="Current frame"
-              >
-                {currentFrame >= 0 ? currentFrame : 0}
-              </div>
-
-              {onToggle2DMode && (
+            <>
+              <HudToolColumn maxRows={hudToolMaxRows} left={hudToolColumnLeft}>
+                {/* Tool: Pen */}
                 <button
                   type="button"
-                  className={`viewport-hud-button ${mode2D ? "viewport-hud-button-active" : ""}`}
-                  onClick={onToggle2DMode}
-                  title={mode2D ? "2D Drawing Mode active (click to switch to 3D Orbit Mode)" : "3D Drawing Mode active (click to switch to 2D Plane Mode)"}
-                  style={{
-                    fontWeight: 700,
-                    fontSize: "11px",
-                    padding: "0 6px",
-                    minWidth: "28px",
-                  }}
-                >
-                  {mode2D ? "2D" : "3D"}
-                </button>
-              )}
-
-              <div
-                style={{
-                  width: 1,
-                  height: 16,
-                  background: "rgba(255, 255, 255, 0.15)",
-                }}
-              />
-
-              {/* Tool: Pen */}
-              <button
-                type="button"
-                className={`viewport-hud-button ${gpTool === "pen" ? "viewport-hud-button-active" : ""}`}
-                onClick={() => setGpTool("pen")}
-                title="Pen (freehand drawing — hold Shift at start/end to taper)"
-              >
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
-                  <path d="m15 5 4 4" />
-                </svg>
-              </button>
-
-              {/* Shape tools. Shift constrains (square / circle / 15° line),
-                  Ctrl draws from the centre, Alt flips an arc's bulge. */}
-              {(
-                [
-                  {
-                    tool: "line" as GpToolMode,
-                    title: "Line (Shift: snap angle · Ctrl: from centre)",
-                    path: <line x1="4" y1="20" x2="20" y2="4" />,
-                  },
-                  {
-                    tool: "rect" as GpToolMode,
-                    title: "Rectangle (Shift: square · Ctrl: from centre)",
-                    path: <rect x="4" y="5" width="16" height="14" rx="1" />,
-                  },
-                  {
-                    tool: "ellipse" as GpToolMode,
-                    title: "Ellipse (Shift: circle · Ctrl: from centre)",
-                    path: <ellipse cx="12" cy="12" rx="9" ry="6.5" />,
-                  },
-                  {
-                    tool: "arc" as GpToolMode,
-                    title: "Arc (Alt: flip the bulge)",
-                    path: <path d="M4 20 A 16 16 0 0 1 20 4" />,
-                  },
-                  {
-                    tool: "polyline" as GpToolMode,
-                    title: "Polyline (click each vertex · double-click or Enter to close · Esc to end open)",
-                    path: <polyline points="3 18 9 8 14 15 21 5" />,
-                  },
-                  {
-                    tool: "fill" as GpToolMode,
-                    title: "Fill (click inside a closed region — Brush Size sets how big a gap is bridged)",
-                    path: (
-                      <>
-                        <path d="M19 11 11 3 3 11l8 8z" />
-                        <path d="M19 15c0 1.7 1.3 3 2 3s2-1.3 2-3-2-4-2-4-2 2.3-2 4Z" />
-                      </>
-                    ),
-                  },
-                ] as const
-              ).map(({ tool, title, path }) => (
-                <button
-                  key={tool}
-                  type="button"
-                  className={`viewport-hud-button ${gpTool === tool ? "viewport-hud-button-active" : ""}`}
-                  onClick={() => setGpTool(tool)}
-                  title={title}
+                  className={`viewport-hud-button ${gpTool === "pen" ? "viewport-hud-button-active" : ""}`}
+                  onClick={() => setGpTool("pen")}
+                  title="Pen (freehand drawing — hold Shift at start/end to taper)"
                 >
                   <svg
                     width="14"
@@ -7722,563 +7599,616 @@ export function Viewport({
                     strokeLinecap="round"
                     strokeLinejoin="round"
                   >
-                    {path}
+                    <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+                    <path d="m15 5 4 4" />
                   </svg>
                 </button>
-              ))}
 
-              {/* Brush Preset Selector */}
-              <select
-                value={gpBrushType}
-                onChange={(e) => {
-                  const b = e.target.value as GreaseBrushType;
-                  setGpBrushType(b);
-                  onParamChange?.("brushType", b, gpNode.id);
-                }}
-                style={{
-                  background: "rgba(255, 255, 255, 0.08)",
-                  color: "#f1f5f9",
-                  border: "1px solid rgba(255, 255, 255, 0.15)",
-                  borderRadius: 4,
-                  fontSize: "11px",
-                  height: 24,
-                  padding: "0 6px",
-                  outline: "none",
-                  cursor: "pointer",
-                }}
-                title="Brush preset — Marker Bold follows stylus tilt; Pencil, Charcoal and Watercolour are textured media"
-              >
-                <option value="ink_pen" style={{ background: "#1e293b", color: "#fff" }}>Ink Pen</option>
-                <option value="ink_pen_rough" style={{ background: "#1e293b", color: "#fff" }}>Ink Pen Rough</option>
-                <option value="marker_bold" style={{ background: "#1e293b", color: "#fff" }}>Marker Bold</option>
-                <option value="airbrush" style={{ background: "#1e293b", color: "#fff" }}>Airbrush</option>
-                <option value="pencil" style={{ background: "#1e293b", color: "#fff" }}>Pencil</option>
-                <option value="charcoal" style={{ background: "#1e293b", color: "#fff" }}>Charcoal</option>
-                <option value="watercolor" style={{ background: "#1e293b", color: "#fff" }}>Watercolour</option>
-                <optgroup label="p5.brush (painted texture)" style={{ background: "#1e293b", color: "#94a3b8" }}>
-                  {P5_GREASE_BRUSH_LABELS.map(([value, label]) => (
-                    <option key={value} value={value} style={{ background: "#1e293b", color: "#fff" }}>{label}</option>
-                  ))}
-                </optgroup>
-              </select>
+                {/* Shape tools. Shift constrains (square / circle / 15° line),
+                    Ctrl draws from the centre, Alt flips an arc's bulge. */}
+                {(
+                  [
+                    {
+                      tool: "line" as GpToolMode,
+                      title: "Line (Shift: snap angle · Ctrl: from centre)",
+                      path: <line x1="4" y1="20" x2="20" y2="4" />,
+                    },
+                    {
+                      tool: "rect" as GpToolMode,
+                      title: "Rectangle (Shift: square · Ctrl: from centre)",
+                      path: <rect x="4" y="5" width="16" height="14" rx="1" />,
+                    },
+                    {
+                      tool: "ellipse" as GpToolMode,
+                      title: "Ellipse (Shift: circle · Ctrl: from centre)",
+                      path: <ellipse cx="12" cy="12" rx="9" ry="6.5" />,
+                    },
+                    {
+                      tool: "arc" as GpToolMode,
+                      title: "Arc (Alt: flip the bulge)",
+                      path: <path d="M4 20 A 16 16 0 0 1 20 4" />,
+                    },
+                    {
+                      tool: "polyline" as GpToolMode,
+                      title: "Polyline (click each vertex · double-click or Enter to close · Esc to end open)",
+                      path: <polyline points="3 18 9 8 14 15 21 5" />,
+                    },
+                    {
+                      tool: "fill" as GpToolMode,
+                      title: "Fill (click inside a closed region — Brush Size sets how big a gap is bridged)",
+                      path: (
+                        <>
+                          <path d="M19 11 11 3 3 11l8 8z" />
+                          <path d="M19 15c0 1.7 1.3 3 2 3s2-1.3 2-3-2-4-2-4-2 2.3-2 4Z" />
+                        </>
+                      ),
+                    },
+                  ] as const
+                ).map(({ tool, title, path }) => (
+                  <button
+                    key={tool}
+                    type="button"
+                    className={`viewport-hud-button ${gpTool === tool ? "viewport-hud-button-active" : ""}`}
+                    onClick={() => setGpTool(tool)}
+                    title={title}
+                  >
+                    <svg
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      {path}
+                    </svg>
+                  </button>
+                ))}
 
-              {/* Solid Fill Toggle */}
-              <button
-                type="button"
-                className={`viewport-hud-button ${gpSolidFill ? "viewport-hud-button-active" : ""}`}
-                onClick={() => {
-                  const next = !gpSolidFill;
-                  setGpSolidFill(next);
-                  onParamChange?.("solidFill", next, gpNode.id);
-                }}
-                title="Solid Fill (toggle shape interior fill)"
-              >
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill={gpSolidFill ? "currentColor" : "none"}
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
+                {/* Tool: Hard Eraser */}
+                <button
+                  type="button"
+                  className={`viewport-hud-button ${gpTool === "eraser_hard" ? "viewport-hud-button-active" : ""}`}
+                  onClick={() => setGpTool("eraser_hard")}
+                  title="Hard Eraser (erase entire stroke on contact)"
                 >
-                  <polygon points="12 2 2 22 22 22" />
-                </svg>
-              </button>
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21" />
+                    <path d="M22 21H7" />
+                    <path d="m5 11 9 9" />
+                  </svg>
+                </button>
 
-              {/* Tool: Hard Eraser */}
-              <button
-                type="button"
-                className={`viewport-hud-button ${gpTool === "eraser_hard" ? "viewport-hud-button-active" : ""}`}
-                onClick={() => setGpTool("eraser_hard")}
-                title="Hard Eraser (erase entire stroke on contact)"
-              >
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
+                {/* Tool: Soft Eraser */}
+                <button
+                  type="button"
+                  className={`viewport-hud-button ${gpTool === "eraser_soft" ? "viewport-hud-button-active" : ""}`}
+                  onClick={() => setGpTool("eraser_soft")}
+                  title="Soft Eraser (gradually thin and fade strokes)"
                 >
-                  <path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21" />
-                  <path d="M22 21H7" />
-                  <path d="m5 11 9 9" />
-                </svg>
-              </button>
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeDasharray="2 2"
+                  >
+                    <path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21" />
+                    <path d="M22 21H7" strokeDasharray="none" />
+                    <path d="m5 11 9 9" />
+                  </svg>
+                </button>
 
-              {/* Tool: Soft Eraser */}
-              <button
-                type="button"
-                className={`viewport-hud-button ${gpTool === "eraser_soft" ? "viewport-hud-button-active" : ""}`}
-                onClick={() => setGpTool("eraser_soft")}
-                title="Soft Eraser (gradually thin and fade strokes)"
-              >
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeDasharray="2 2"
+                {/* Tool: Stroke Eraser — removes a whole line on contact */}
+                <button
+                  type="button"
+                  className={`viewport-hud-button ${gpTool === "eraser_stroke" ? "viewport-hud-button-active" : ""}`}
+                  onClick={() => setGpTool("eraser_stroke")}
+                  title="Stroke Eraser (touch a line to delete all of it)"
                 >
-                  <path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21" />
-                  <path d="M22 21H7" strokeDasharray="none" />
-                  <path d="m5 11 9 9" />
-                </svg>
-              </button>
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M3 17c4-9 10-11 18-12" />
+                    <path d="m14 8 7 7M21 8l-7 7" />
+                  </svg>
+                </button>
 
-              {/* Tool: Stroke Eraser — removes a whole line on contact */}
-              <button
-                type="button"
-                className={`viewport-hud-button ${gpTool === "eraser_stroke" ? "viewport-hud-button-active" : ""}`}
-                onClick={() => setGpTool("eraser_stroke")}
-                title="Stroke Eraser (touch a line to delete all of it)"
-              >
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
+                {/* Tool: Lasso select (drag to pick, drag again to move, ⌫ to delete) */}
+                <button
+                  type="button"
+                  className={`viewport-hud-button ${gpTool === "lasso" ? "viewport-hud-button-active" : ""}`}
+                  onClick={() => setGpTool("lasso")}
+                  title="Lasso Select (Shift: only fully enclosed · drag selection to move · ⌫ delete · Esc clear)"
                 >
-                  <path d="M3 17c4-9 10-11 18-12" />
-                  <path d="m14 8 7 7M21 8l-7 7" />
-                </svg>
-              </button>
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <ellipse cx="12" cy="9" rx="9" ry="6" strokeDasharray="3 2" />
+                    <path d="M8 14.5c0 2 1 3.5 1 5" />
+                  </svg>
+                </button>
 
-              {/* Tool: Lasso select (drag to pick, drag again to move, ⌫ to delete) */}
-              <button
-                type="button"
-                className={`viewport-hud-button ${gpTool === "lasso" ? "viewport-hud-button-active" : ""}`}
-                onClick={() => setGpTool("lasso")}
-                title="Lasso Select (Shift: only fully enclosed · drag selection to move · ⌫ delete · Esc clear)"
-              >
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
+                {/* Tool: Carver — boolean subtraction along a lasso */}
+                <button
+                  type="button"
+                  className={`viewport-hud-button ${gpTool === "carve" ? "viewport-hud-button-active" : ""}`}
+                  onClick={() => setGpTool("carve")}
+                  title="Carver (lasso a region to subtract it — cuts strokes, punches holes in fills)"
                 >
-                  <ellipse cx="12" cy="9" rx="9" ry="6" strokeDasharray="3 2" />
-                  <path d="M8 14.5c0 2 1 3.5 1 5" />
-                </svg>
-              </button>
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <circle cx="10" cy="12" r="7" strokeDasharray="3 2" />
+                    <path d="M14 5h7v7" />
+                    <path d="M21 5 13 13" />
+                  </svg>
+                </button>
 
-              {/* Tool: Carver — boolean subtraction along a lasso */}
-              <button
-                type="button"
-                className={`viewport-hud-button ${gpTool === "carve" ? "viewport-hud-button-active" : ""}`}
-                onClick={() => setGpTool("carve")}
-                title="Carver (lasso a region to subtract it — cuts strokes, punches holes in fills)"
-              >
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
+                {/* Tool: Tint */}
+                <button
+                  type="button"
+                  className={`viewport-hud-button ${gpTool === "tint" ? "viewport-hud-button-active" : ""}`}
+                  onClick={() => setGpTool("tint")}
+                  title="Tint (paint over strokes to blend their color with active color)"
                 >
-                  <circle cx="10" cy="12" r="7" strokeDasharray="3 2" />
-                  <path d="M14 5h7v7" />
-                  <path d="M21 5 13 13" />
-                </svg>
-              </button>
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="m19 11-8-8-8.6 8.6a2 2 0 0 0 0 2.8l5.2 5.2c.8.8 2 .8 2.8 0L19 11Z" />
+                    <path d="m5 2 5 5" />
+                    <circle cx="19" cy="19" r="3" />
+                  </svg>
+                </button>
 
-              {/* Tool: Tint */}
-              <button
-                type="button"
-                className={`viewport-hud-button ${gpTool === "tint" ? "viewport-hud-button-active" : ""}`}
-                onClick={() => setGpTool("tint")}
-                title="Tint (paint over strokes to blend their color with active color)"
-              >
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="m19 11-8-8-8.6 8.6a2 2 0 0 0 0 2.8l5.2 5.2c.8.8 2 .8 2.8 0L19 11Z" />
-                  <path d="m5 2 5 5" />
-                  <circle cx="19" cy="19" r="3" />
-                </svg>
-              </button>
-
-              <div
-                style={{
-                  width: 1,
-                  height: 16,
-                  background: "rgba(255, 255, 255, 0.15)",
-                }}
-              />
-
-              {/* Stroke Color picker */}
-              <label
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 4,
-                  cursor: "pointer",
-                }}
-                title="Stroke color (outline)"
-              >
-                <input
-                  type="color"
-                  value={activeColor}
-                  onChange={(e) =>
-                    onParamChange?.("activeColor", e.target.value, gpNode.id)
+                {/* Tool: Gizmo / Transform */}
+                <button
+                  type="button"
+                  className={`viewport-hud-button ${gpTool === "select" ? "viewport-hud-button-active" : ""}`}
+                  onClick={() =>
+                    setGpTool((prev) => (prev === "select" ? "pen" : "select"))
                   }
+                  title={
+                    gpTool === "select"
+                      ? "Gizmo active (modify object transform, drawing disabled — click to return to Pen)"
+                      : "Gizmo (transform object in 3D without drawing)"
+                  }
+                >
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <polyline points="5 9 2 12 5 15" />
+                    <polyline points="9 5 12 2 15 5" />
+                    <polyline points="15 19 12 22 9 19" />
+                    <polyline points="19 9 22 12 19 15" />
+                    <line x1="2" y1="12" x2="22" y2="12" />
+                    <line x1="12" y1="2" x2="12" y2="22" />
+                  </svg>
+                </button>
+              </HudToolColumn>
+
+              <HudBar>
+                {/* Frame Indicator */}
+                <div
                   style={{
-                    width: 18,
-                    height: 18,
-                    padding: 0,
-                    border: "1px solid rgba(255,255,255,0.4)",
-                    borderRadius: "50%",
-                    cursor: "pointer",
-                    backgroundColor: "transparent",
+                    fontSize: "11px",
+                    fontWeight: 700,
+                    color: "#38bdf8",
+                    padding: "2px 8px",
+                    background: "rgba(56, 189, 248, 0.15)",
+                    borderRadius: "4px",
+                    letterSpacing: "0.02em",
+                    userSelect: "none",
                   }}
-                />
-              </label>
+                  title="Current frame"
+                >
+                  {currentFrame >= 0 ? currentFrame : 0}
+                </div>
 
-              {/* Fill Color picker */}
-              <label
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 4,
-                  cursor: "pointer",
-                  opacity: gpSolidFill ? 1 : 0.4,
-                }}
-                title={gpSolidFill ? "Fill color (interior shape color)" : "Fill color (enable Solid Fill to activate)"}
-              >
-                <input
-                  type="color"
-                  value={fillColor || activeColor}
-                  onChange={(e) =>
-                    onParamChange?.("fillColor", e.target.value, gpNode.id)
-                  }
+                <HudSeparator />
+
+                {/* Brush Preset Selector */}
+                <select
+                  value={gpBrushType}
+                  onChange={(e) => {
+                    const b = e.target.value as GreaseBrushType;
+                    setGpBrushType(b);
+                    onParamChange?.("brushType", b, gpNode.id);
+                  }}
                   style={{
-                    width: 18,
-                    height: 18,
-                    padding: 0,
-                    border: "1px solid rgba(255,255,255,0.4)",
+                    background: "rgba(255, 255, 255, 0.08)",
+                    color: "#f1f5f9",
+                    border: "1px solid rgba(255, 255, 255, 0.15)",
                     borderRadius: 4,
-                    cursor: "pointer",
-                    backgroundColor: "transparent",
-                  }}
-                />
-              </label>
-
-              {/* Brush Size Slider */}
-              <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                <span
-                  style={{
                     fontSize: "11px",
-                    color: "#94a3b8",
-                    minWidth: 24,
-                    textAlign: "right",
-                  }}
-                >
-                  {brushSize}px
-                </span>
-                <input
-                  type="range"
-                  min={1}
-                  max={32}
-                  value={brushSize}
-                  onChange={(e) =>
-                    onParamChange?.(
-                      "brushSize",
-                      Number(e.target.value),
-                      gpNode.id,
-                    )
-                  }
-                  style={{
-                    width: 56,
-                    accentColor: "#38bdf8",
+                    height: 24,
+                    padding: "0 6px",
+                    outline: "none",
                     cursor: "pointer",
                   }}
-                  title="Brush thickness"
-                />
-              </div>
-
-              <div
-                style={{
-                  width: 1,
-                  height: 16,
-                  background: "rgba(255, 255, 255, 0.15)",
-                }}
-              />
-
-              {/* Stroke Smoothing Slider */}
-              <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                <span
-                  style={{
-                    fontSize: "11px",
-                    color: "#94a3b8",
-                    minWidth: 42,
-                    textAlign: "right",
-                  }}
-                  title="Stroke smoothing to remove involuntary hand tremors"
+                  title="Brush preset — Marker Bold follows stylus tilt; Pencil, Charcoal and Watercolour are textured media"
                 >
-                  Smooth {Math.round(Math.max(0, Math.min(1, Number(gpNode.params.smoothing ?? 0.2))) * 100)}%
-                </span>
-                <input
-                  type="range"
-                  min={0}
-                  max={1}
-                  step={0.05}
-                  value={Math.max(0, Math.min(1, Number(gpNode.params.smoothing ?? 0.2)))}
-                  onChange={(e) =>
-                    onParamChange?.(
-                      "smoothing",
-                      Number(e.target.value),
-                      gpNode.id,
-                    )
-                  }
+                  <option value="ink_pen" style={{ background: "#1e293b", color: "#fff" }}>Ink Pen</option>
+                  <option value="ink_pen_rough" style={{ background: "#1e293b", color: "#fff" }}>Ink Pen Rough</option>
+                  <option value="marker_bold" style={{ background: "#1e293b", color: "#fff" }}>Marker Bold</option>
+                  <option value="airbrush" style={{ background: "#1e293b", color: "#fff" }}>Airbrush</option>
+                  <option value="pencil" style={{ background: "#1e293b", color: "#fff" }}>Pencil</option>
+                  <option value="charcoal" style={{ background: "#1e293b", color: "#fff" }}>Charcoal</option>
+                  <option value="watercolor" style={{ background: "#1e293b", color: "#fff" }}>Watercolour</option>
+                  <optgroup label="p5.brush (painted texture)" style={{ background: "#1e293b", color: "#94a3b8" }}>
+                    {P5_GREASE_BRUSH_LABELS.map(([value, label]) => (
+                      <option key={value} value={value} style={{ background: "#1e293b", color: "#fff" }}>{label}</option>
+                    ))}
+                  </optgroup>
+                </select>
+
+                {/* Solid Fill Toggle */}
+                <button
+                  type="button"
+                  className={`viewport-hud-button ${gpSolidFill ? "viewport-hud-button-active" : ""}`}
+                  onClick={() => {
+                    const next = !gpSolidFill;
+                    setGpSolidFill(next);
+                    onParamChange?.("solidFill", next, gpNode.id);
+                  }}
+                  title="Solid Fill (toggle shape interior fill)"
+                >
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill={gpSolidFill ? "currentColor" : "none"}
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <polygon points="12 2 2 22 22 22" />
+                  </svg>
+                </button>
+
+                <HudSeparator />
+
+                {/* Stroke Color picker */}
+                <label
                   style={{
-                    width: 50,
-                    accentColor: "#38bdf8",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 4,
                     cursor: "pointer",
                   }}
-                  title="Stroke smoothing (eliminates involuntary hand tremors during drawing)"
-                />
-              </div>
-
-              <div
-                style={{
-                  width: 1,
-                  height: 16,
-                  background: "rgba(255, 255, 255, 0.15)",
-                }}
-              />
-
-              {/* Lock / Keyframe Button */}
-              <button
-                type="button"
-                className="viewport-hud-button"
-                onClick={() => {
-                  const currentFrames =
-                    (gpNode.params.frames as KeyframeDrawing[]) || [];
-                  const targetFrame =
-                    currentFrame >= 0 ? currentFrame : 0;
-                  const updated = duplicateDrawing(
-                    currentFrames,
-                    targetFrame,
-                    targetFrame,
-                  );
-                  onParamChange?.("frames", updated, gpNode.id);
-                }}
-                title="Insert keyframe at current frame"
-              >
-                <svg
-                  width="13"
-                  height="13"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
+                  title="Stroke color (outline)"
                 >
-                  <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
-                  <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                </svg>
-              </button>
+                  <input
+                    type="color"
+                    value={activeColor}
+                    onChange={(e) =>
+                      onParamChange?.("activeColor", e.target.value, gpNode.id)
+                    }
+                    style={{
+                      width: 18,
+                      height: 18,
+                      padding: 0,
+                      border: "1px solid rgba(255,255,255,0.4)",
+                      borderRadius: "50%",
+                      cursor: "pointer",
+                      backgroundColor: "transparent",
+                    }}
+                  />
+                </label>
 
-              {/* Blank Next Button */}
-              <button
-                type="button"
-                className="viewport-hud-button"
-                onClick={() => {
-                  const targetFrame =
-                    (currentFrame >= 0 ? currentFrame : 0) + 1;
-                  const currentFrames =
-                    (gpNode.params.frames as KeyframeDrawing[]) || [];
-                  const updated = createBlankDrawing(
-                    currentFrames,
-                    targetFrame,
-                  );
-                  onParamChange?.("frames", updated, gpNode.id);
-                  onFrameChange?.(targetFrame);
-                }}
-                title="Blank keyframe at next frame"
-              >
-                <svg
-                  width="13"
-                  height="13"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
+                {/* Fill Color picker */}
+                <label
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 4,
+                    cursor: "pointer",
+                    opacity: gpSolidFill ? 1 : 0.4,
+                  }}
+                  title={gpSolidFill ? "Fill color (interior shape color)" : "Fill color (enable Solid Fill to activate)"}
                 >
-                  <path d="M5 12h14" />
-                  <path d="m12 5 7 7-7 7" />
-                </svg>
-              </button>
+                  <input
+                    type="color"
+                    value={fillColor || activeColor}
+                    onChange={(e) =>
+                      onParamChange?.("fillColor", e.target.value, gpNode.id)
+                    }
+                    style={{
+                      width: 18,
+                      height: 18,
+                      padding: 0,
+                      border: "1px solid rgba(255,255,255,0.4)",
+                      borderRadius: 4,
+                      cursor: "pointer",
+                      backgroundColor: "transparent",
+                    }}
+                  />
+                </label>
 
-              {/* Duplicate Next Button */}
-              <button
-                type="button"
-                className="viewport-hud-button"
-                onClick={() => {
-                  const curF = currentFrame >= 0 ? currentFrame : 0;
-                  const targetFrame = curF + 1;
-                  const currentFrames =
-                    (gpNode.params.frames as KeyframeDrawing[]) || [];
-                  const updated = duplicateDrawing(
-                    currentFrames,
-                    curF,
-                    targetFrame,
-                  );
-                  onParamChange?.("frames", updated, gpNode.id);
-                  onFrameChange?.(targetFrame);
-                }}
-                title="Duplicate drawing to next frame"
-              >
-                <svg
-                  width="13"
-                  height="13"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
+                {/* Brush Size Slider */}
+                <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                  <span
+                    style={{
+                      fontSize: "11px",
+                      color: "#94a3b8",
+                      minWidth: 24,
+                      textAlign: "right",
+                    }}
+                  >
+                    {brushSize}px
+                  </span>
+                  <input
+                    type="range"
+                    min={1}
+                    max={32}
+                    value={brushSize}
+                    onChange={(e) =>
+                      onParamChange?.(
+                        "brushSize",
+                        Number(e.target.value),
+                        gpNode.id,
+                      )
+                    }
+                    style={{
+                      width: 56,
+                      accentColor: "#38bdf8",
+                      cursor: "pointer",
+                    }}
+                    title="Brush thickness"
+                  />
+                </div>
+
+                <HudSeparator />
+
+                {/* Stroke Smoothing Slider */}
+                <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                  <span
+                    style={{
+                      fontSize: "11px",
+                      color: "#94a3b8",
+                      minWidth: 42,
+                      textAlign: "right",
+                    }}
+                    title="Stroke smoothing to remove involuntary hand tremors"
+                  >
+                    Smooth {Math.round(Math.max(0, Math.min(1, Number(gpNode.params.smoothing ?? 0.2))) * 100)}%
+                  </span>
+                  <input
+                    type="range"
+                    min={0}
+                    max={1}
+                    step={0.05}
+                    value={Math.max(0, Math.min(1, Number(gpNode.params.smoothing ?? 0.2)))}
+                    onChange={(e) =>
+                      onParamChange?.(
+                        "smoothing",
+                        Number(e.target.value),
+                        gpNode.id,
+                      )
+                    }
+                    style={{
+                      width: 50,
+                      accentColor: "#38bdf8",
+                      cursor: "pointer",
+                    }}
+                    title="Stroke smoothing (eliminates involuntary hand tremors during drawing)"
+                  />
+                </div>
+
+                <HudSeparator />
+
+                {/* Lock / Keyframe Button */}
+                <button
+                  type="button"
+                  className="viewport-hud-button"
+                  onClick={() => {
+                    const currentFrames =
+                      (gpNode.params.frames as KeyframeDrawing[]) || [];
+                    const targetFrame =
+                      currentFrame >= 0 ? currentFrame : 0;
+                    const updated = duplicateDrawing(
+                      currentFrames,
+                      targetFrame,
+                      targetFrame,
+                    );
+                    onParamChange?.("frames", updated, gpNode.id);
+                  }}
+                  title="Insert keyframe at current frame"
                 >
-                  <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
-                  <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
-                </svg>
-              </button>
+                  <svg
+                    width="13"
+                    height="13"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                  </svg>
+                </button>
 
-              {/* Clear Button */}
-              <button
-                type="button"
-                className="viewport-hud-button"
-                onClick={() => {
-                  const curF = currentFrame >= 0 ? currentFrame : 0;
-                  const currentFrames =
-                    (gpNode.params.frames as KeyframeDrawing[]) || [];
-                  const updated = clearDrawingAtFrame(currentFrames, curF);
-                  onParamChange?.("frames", updated, gpNode.id);
-                }}
-                title="Clear drawing at current frame"
-              >
-                <svg
-                  width="13"
-                  height="13"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
+                {/* Blank Next Button */}
+                <button
+                  type="button"
+                  className="viewport-hud-button"
+                  onClick={() => {
+                    const targetFrame =
+                      (currentFrame >= 0 ? currentFrame : 0) + 1;
+                    const currentFrames =
+                      (gpNode.params.frames as KeyframeDrawing[]) || [];
+                    const updated = createBlankDrawing(
+                      currentFrames,
+                      targetFrame,
+                    );
+                    onParamChange?.("frames", updated, gpNode.id);
+                    onFrameChange?.(targetFrame);
+                  }}
+                  title="Blank keyframe at next frame"
                 >
-                  <path d="M3 6h18" />
-                  <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
-                  <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
-                </svg>
-              </button>
+                  <svg
+                    width="13"
+                    height="13"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M5 12h14" />
+                    <path d="m12 5 7 7-7 7" />
+                  </svg>
+                </button>
 
-              <div
-                style={{
-                  width: 1,
-                  height: 16,
-                  background: "rgba(255, 255, 255, 0.15)",
-                }}
-              />
-
-              {/* Onion Skin toggle */}
-              <button
-                type="button"
-                className={`viewport-hud-button ${onionSkin ? "viewport-hud-button-active" : ""}`}
-                onClick={() => {
-                  onParamChange?.("onionSkin", !onionSkin, gpNode.id);
-                }}
-                title={
-                  onionSkin
-                    ? "Disable onion skinning"
-                    : "Enable onion skinning (ghosting)"
-                }
-              >
-                <svg
-                  width="13"
-                  height="13"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
+                {/* Duplicate Next Button */}
+                <button
+                  type="button"
+                  className="viewport-hud-button"
+                  onClick={() => {
+                    const curF = currentFrame >= 0 ? currentFrame : 0;
+                    const targetFrame = curF + 1;
+                    const currentFrames =
+                      (gpNode.params.frames as KeyframeDrawing[]) || [];
+                    const updated = duplicateDrawing(
+                      currentFrames,
+                      curF,
+                      targetFrame,
+                    );
+                    onParamChange?.("frames", updated, gpNode.id);
+                    onFrameChange?.(targetFrame);
+                  }}
+                  title="Duplicate drawing to next frame"
                 >
-                  <circle cx="12" cy="12" r="10" />
-                  <circle cx="12" cy="6" r="6" />
-                  <circle cx="12" cy="2" r="2" />
-                </svg>
-              </button>
+                  <svg
+                    width="13"
+                    height="13"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
+                    <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+                  </svg>
+                </button>
 
-              <div
-                style={{
-                  width: 1,
-                  height: 16,
-                  background: "rgba(255, 255, 255, 0.15)",
-                }}
-              />
-
-              {/* Tool: Gizmo / Transform */}
-              <button
-                type="button"
-                className={`viewport-hud-button ${gpTool === "select" ? "viewport-hud-button-active" : ""}`}
-                onClick={() =>
-                  setGpTool((prev) => (prev === "select" ? "pen" : "select"))
-                }
-                title={
-                  gpTool === "select"
-                    ? "Gizmo active (modify object transform, drawing disabled — click to return to Pen)"
-                    : "Gizmo (transform object in 3D without drawing)"
-                }
-              >
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
+                {/* Clear Button */}
+                <button
+                  type="button"
+                  className="viewport-hud-button"
+                  onClick={() => {
+                    const curF = currentFrame >= 0 ? currentFrame : 0;
+                    const currentFrames =
+                      (gpNode.params.frames as KeyframeDrawing[]) || [];
+                    const updated = clearDrawingAtFrame(currentFrames, curF);
+                    onParamChange?.("frames", updated, gpNode.id);
+                  }}
+                  title="Clear drawing at current frame"
                 >
-                  <polyline points="5 9 2 12 5 15" />
-                  <polyline points="9 5 12 2 15 5" />
-                  <polyline points="15 19 12 22 9 19" />
-                  <polyline points="19 9 22 12 19 15" />
-                  <line x1="2" y1="12" x2="22" y2="12" />
-                  <line x1="12" y1="2" x2="12" y2="22" />
-                </svg>
-              </button>
-            </div>
+                  <svg
+                    width="13"
+                    height="13"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M3 6h18" />
+                    <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+                    <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+                  </svg>
+                </button>
+
+                <HudSeparator />
+
+                {/* Onion Skin toggle */}
+                <button
+                  type="button"
+                  className={`viewport-hud-button ${onionSkin ? "viewport-hud-button-active" : ""}`}
+                  onClick={() => {
+                    onParamChange?.("onionSkin", !onionSkin, gpNode.id);
+                  }}
+                  title={
+                    onionSkin
+                      ? "Disable onion skinning"
+                      : "Enable onion skinning (ghosting)"
+                  }
+                >
+                  <svg
+                    width="13"
+                    height="13"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <circle cx="12" cy="12" r="10" />
+                    <circle cx="12" cy="6" r="6" />
+                    <circle cx="12" cy="2" r="2" />
+                  </svg>
+                </button>
+              </HudBar>
+            </>
           );
         })()}
       {/* Edit Mesh Floating Toolbar */}
@@ -8309,409 +8239,398 @@ export function Viewport({
           };
 
           return (
-            <div
-              className="viewport-gp-hud"
-              style={{
-                position: "absolute",
-                bottom: 16,
-                left: "50%",
-                transform: "translateX(-50%)",
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                padding: "6px 14px",
-                background: "rgba(24, 28, 38, 0.95)",
-                backdropFilter: "blur(12px)",
-                border: "1px solid rgba(56, 189, 248, 0.4)",
-                borderRadius: "8px",
-                boxShadow: "0 8px 24px rgba(0, 0, 0, 0.5), 0 0 16px rgba(56, 189, 248, 0.2)",
-                color: "#ffffff",
-                fontSize: "12px",
-                zIndex: 45,
-                pointerEvents: "auto",
-              }}
-            >
-              {/* Select modes — switching converts the selection (Blender's 1 / 2 / 3) */}
-              <button
-                type="button"
-                className={`viewport-hud-button ${selectMode === "points" ? "viewport-hud-button-active" : ""}`}
-                onClick={() => {
-                  if (!isPointsOnly) switchMode("points");
-                }}
-                title={isPointsOnly ? "Points Mode (Vertices)" : "Points Mode — Select and transform vertices"}
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                  <circle cx="5" cy="5" r="2.5" />
-                  <circle cx="19" cy="5" r="2.5" />
-                  <circle cx="5" cy="19" r="2.5" />
-                  <circle cx="19" cy="19" r="2.5" />
-                  <path d="M5 5h14v14H5z" fill="none" stroke="currentColor" strokeWidth="1.5" strokeDasharray="2 2" />
-                </svg>
-              </button>
-
-              {!isPointsOnly && (
+            <>
+              {/* Tool column: what a click or drag in the viewport does —
+                  select mode, selection shape, gizmo, and the interactive
+                  tools that act on the selection. */}
+              <HudToolColumn maxRows={hudToolMaxRows} left={hudToolColumnLeft}>
+                {/* Select modes — switching converts the selection (Blender's 1 / 2 / 3) */}
                 <button
                   type="button"
-                  className={`viewport-hud-button ${selectMode === "edges" ? "viewport-hud-button-active" : ""}`}
-                  onClick={() => switchMode("edges")}
-                  title="Edges Mode — Select and transform edges (Alt+click: edge loop, Cmd/Ctrl+Alt+click: edge ring)"
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                    <path d="M4 4h16v16H4z" strokeDasharray="2 2" />
-                    <line x1="4" y1="20" x2="20" y2="4" strokeWidth="3" strokeLinecap="round" />
-                  </svg>
-                </button>
-              )}
-
-              {!isPointsOnly && (
-                <button
-                  type="button"
-                  className={`viewport-hud-button ${selectMode === "faces" ? "viewport-hud-button-active" : ""}`}
-                  onClick={() => switchMode("faces")}
-                  title="Faces Mode — Select and transform faces (Alt+click: face loop)"
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-                    <rect x="4" y="4" width="16" height="16" rx="2" fill="currentColor" fillOpacity="0.3" />
-                  </svg>
-                </button>
-              )}
-
-              <div style={{ width: 1, height: 16, background: "rgba(255, 255, 255, 0.15)" }} />
-
-              {/* Transform Mode: Loc */}
-              <button
-                type="button"
-                className={`viewport-hud-button ${transformMode === "translate" ? "viewport-hud-button-active" : ""}`}
-                onClick={() => setTransformMode("translate")}
-                title="Translate / Move (Shortcut: G / W)"
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="5 9 2 12 5 15" />
-                  <polyline points="9 5 12 2 15 5" />
-                  <polyline points="15 19 12 22 9 19" />
-                  <polyline points="19 9 22 12 19 15" />
-                  <line x1="2" y1="12" x2="22" y2="12" />
-                  <line x1="12" y1="2" x2="12" y2="22" />
-                </svg>
-              </button>
-
-              {/* Transform Mode: Rot */}
-              <button
-                type="button"
-                className={`viewport-hud-button ${transformMode === "rotate" ? "viewport-hud-button-active" : ""}`}
-                onClick={() => setTransformMode("rotate")}
-                title="Rotate (Shortcut: R / E)"
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M21 12a9 9 0 1 1-2.64-6.36L21 8" />
-                  <polyline points="21 3 21 8 16 8" />
-                </svg>
-              </button>
-
-              {/* Transform Mode: Scale */}
-              <button
-                type="button"
-                className={`viewport-hud-button ${transformMode === "scale" ? "viewport-hud-button-active" : ""}`}
-                onClick={() => setTransformMode("scale")}
-                title="Scale (Shortcut: S / R)"
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="15 3 21 3 21 9" />
-                  <polyline points="9 21 3 21 3 15" />
-                  <line x1="21" y1="3" x2="14" y2="10" />
-                  <line x1="3" y1="21" x2="10" y2="14" />
-                </svg>
-              </button>
-
-              {/* Proportional Editing Toggle */}
-              {!isPointsOnly && (
-                <button
-                  type="button"
-                  className={`viewport-hud-button ${editMeshNode.params.proportionalEditing ? "viewport-hud-button-active" : ""}`}
+                  className={`viewport-hud-button ${selectMode === "points" ? "viewport-hud-button-active" : ""}`}
                   onClick={() => {
-                    onParamChange?.("proportionalEditing", !editMeshNode.params.proportionalEditing, editMeshNode.id);
+                    if (!isPointsOnly) switchMode("points");
                   }}
+                  title={isPointsOnly ? "Points Mode (Vertices)" : "Points Mode — Select and transform vertices"}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <circle cx="5" cy="5" r="2.5" />
+                    <circle cx="19" cy="5" r="2.5" />
+                    <circle cx="5" cy="19" r="2.5" />
+                    <circle cx="19" cy="19" r="2.5" />
+                    <path d="M5 5h14v14H5z" fill="none" stroke="currentColor" strokeWidth="1.5" strokeDasharray="2 2" />
+                  </svg>
+                </button>
+
+                {!isPointsOnly && (
+                  <button
+                    type="button"
+                    className={`viewport-hud-button ${selectMode === "edges" ? "viewport-hud-button-active" : ""}`}
+                    onClick={() => switchMode("edges")}
+                    title="Edges Mode — Select and transform edges (Alt+click: edge loop, Cmd/Ctrl+Alt+click: edge ring)"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                      <path d="M4 4h16v16H4z" strokeDasharray="2 2" />
+                      <line x1="4" y1="20" x2="20" y2="4" strokeWidth="3" strokeLinecap="round" />
+                    </svg>
+                  </button>
+                )}
+
+                {!isPointsOnly && (
+                  <button
+                    type="button"
+                    className={`viewport-hud-button ${selectMode === "faces" ? "viewport-hud-button-active" : ""}`}
+                    onClick={() => switchMode("faces")}
+                    title="Faces Mode — Select and transform faces (Alt+click: face loop)"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                      <rect x="4" y="4" width="16" height="16" rx="2" fill="currentColor" fillOpacity="0.3" />
+                    </svg>
+                  </button>
+                )}
+
+                {/* Selection shape: what Shift+drag draws */}
+                <button
+                  type="button"
+                  className={`viewport-hud-button ${editMeshMarqueeShape === "lasso" ? "viewport-hud-button-active" : ""}`}
+                  onClick={() => setEditMeshMarqueeShape((shape) => (shape === "box" ? "lasso" : "box"))}
                   title={
-                    editMeshNode.params.proportionalEditing
-                      ? `Proportional Editing ON (Influence Diameter: ${editMeshNode.params.proportionalDiameter ?? 1.0}; mouse wheel while dragging resizes it) — Click to turn OFF (Shortcut: O)`
-                      : "Proportional Editing OFF — Click to turn ON (Shortcut: O)"
+                    editMeshMarqueeShape === "lasso"
+                      ? "Shift+drag draws a Lasso — click for Box"
+                      : "Shift+drag draws a Box — click for Lasso"
                   }
                 >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <circle cx="12" cy="12" r="3" fill="currentColor" />
-                    <circle cx="12" cy="12" r="8" stroke="currentColor" strokeDasharray="3 3" />
+                  {editMeshMarqueeShape === "lasso" ? (
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+                      <path d="M7 16c-3-1-4-4-3-7 2-5 12-6 15-2 2 3-1 7-6 7-2 0-4 0-6 2" />
+                      <path d="M7 16l-1 4" />
+                    </svg>
+                  ) : (
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                      <rect x="4" y="5" width="16" height="14" strokeDasharray="3 2" />
+                    </svg>
+                  )}
+                </button>
+
+                {/* Transform Mode: Loc */}
+                <button
+                  type="button"
+                  className={`viewport-hud-button ${transformMode === "translate" ? "viewport-hud-button-active" : ""}`}
+                  onClick={() => setTransformMode("translate")}
+                  title="Translate / Move (Shortcut: G / W)"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="5 9 2 12 5 15" />
+                    <polyline points="9 5 12 2 15 5" />
+                    <polyline points="15 19 12 22 9 19" />
+                    <polyline points="19 9 22 12 19 15" />
+                    <line x1="2" y1="12" x2="22" y2="12" />
+                    <line x1="12" y1="2" x2="12" y2="22" />
                   </svg>
                 </button>
-              )}
 
-              <div style={{ width: 1, height: 16, background: "rgba(255, 255, 255, 0.15)" }} />
+                {/* Transform Mode: Rot */}
+                <button
+                  type="button"
+                  className={`viewport-hud-button ${transformMode === "rotate" ? "viewport-hud-button-active" : ""}`}
+                  onClick={() => setTransformMode("rotate")}
+                  title="Rotate (Shortcut: R / E)"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 12a9 9 0 1 1-2.64-6.36L21 8" />
+                    <polyline points="21 3 21 8 16 8" />
+                  </svg>
+                </button>
 
-              {/* Selection tools */}
-              <button
-                type="button"
-                className="viewport-hud-button"
-                disabled={selectedCount === 0}
-                onClick={() => commitHudSelection((m) => growSelection(m, selectMode, selection))}
-                title="Grow Selection (Shortcut: Cmd/Ctrl + =)"
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                  <rect x="9" y="9" width="6" height="6" rx="1" fill="currentColor" fillOpacity="0.4" />
-                  <path d="M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4" />
-                </svg>
-              </button>
-              <button
-                type="button"
-                className="viewport-hud-button"
-                disabled={selectedCount === 0}
-                onClick={() => commitHudSelection((m) => shrinkSelection(m, selectMode, selection))}
-                title="Shrink Selection (Shortcut: Cmd/Ctrl + -)"
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                  <rect x="4" y="4" width="16" height="16" rx="1" strokeDasharray="2 2" />
-                  <path d="M9 5v4H5M15 5v4h4M19 15h-4v4M5 15h4v4" />
-                </svg>
-              </button>
-              <button
-                type="button"
-                className="viewport-hud-button"
-                disabled={selectedCount === 0}
-                onClick={() => commitHudSelection((m) => linkedSelection(m, selectMode, selection))}
-                title="Select Linked — the whole piece the selection is on (Shortcut: Cmd/Ctrl+L; L over the mesh picks the piece under the cursor, Shift+L deselects it)"
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                  <path d="M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1" />
-                  <path d="M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1" />
-                </svg>
-              </button>
-              {selectMode === "faces" && !isPointsOnly && (
+                {/* Transform Mode: Scale */}
+                <button
+                  type="button"
+                  className={`viewport-hud-button ${transformMode === "scale" ? "viewport-hud-button-active" : ""}`}
+                  onClick={() => setTransformMode("scale")}
+                  title="Scale (Shortcut: S / R)"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="15 3 21 3 21 9" />
+                    <polyline points="9 21 3 21 3 15" />
+                    <line x1="21" y1="3" x2="14" y2="10" />
+                    <line x1="3" y1="21" x2="10" y2="14" />
+                  </svg>
+                </button>
+
+                {/* Interactive tools — always listed so the column keeps its
+                    shape; disabled until there is something to act on. */}
+                {!isPointsOnly && (
+                  <>
+                    {/* Tool: Extrude */}
+                    <button
+                      type="button"
+                      className="viewport-hud-button"
+                      disabled={selectedCount === 0}
+                      onClick={() =>
+                        isFacesActive
+                          ? onParamAction?.(editMeshNode.id, EDIT_MESH_EXTRUDE_ACTION)
+                          : editMeshCommandsRef.current?.extrude()
+                      }
+                      title={
+                        isFacesActive
+                          ? "Extrude by Extrude Distance — or press E over the viewport to drag it (Alt+E: each face on its own)"
+                          : "Extrude the selected points or edges, then move them with the mouse (Shortcut: E)"
+                      }
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M12 19V5M5 12l7-7 7 7" />
+                      </svg>
+                    </button>
+
+                    {/* Tool: Inset */}
+                    <button
+                      type="button"
+                      className="viewport-hud-button"
+                      disabled={!isFacesActive}
+                      onClick={() => onParamAction?.(editMeshNode.id, EDIT_MESH_INSET_ACTION)}
+                      title="Inset by Inset Thickness / Depth — or press I over the viewport to drag it (I again: each face on its own, Cmd/Ctrl: depth)"
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <rect x="3" y="3" width="18" height="18" rx="2" />
+                        <rect x="8" y="8" width="8" height="8" rx="1" />
+                      </svg>
+                    </button>
+
+                    {/* Tool: Bevel */}
+                    <button
+                      type="button"
+                      className="viewport-hud-button"
+                      disabled={selectedCount === 0}
+                      onClick={() => editMeshCommandsRef.current?.tool("bevel")}
+                      title="Bevel the selected edges — drag for width, wheel for segments (Shortcut: Cmd/Ctrl+B)"
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round">
+                        <path d="M4 20V9l5-5h11" />
+                        <path d="M4 9h5V4" strokeDasharray="2 2" opacity="0.6" />
+                      </svg>
+                    </button>
+
+                    {/* Tool: Loop Cut */}
+                    <button
+                      type="button"
+                      className={`viewport-hud-button ${editMeshTool === "loopcut" ? "viewport-hud-button-active" : ""}`}
+                      onClick={() => setEditMeshTool((t) => (t === "loopcut" ? "select" : "loopcut"))}
+                      title={`Loop Cut (Shortcut: Ctrl+R) — Scroll wheel over mesh to set cuts count (${editMeshLoopCuts})`}
+                      style={{ position: "relative" }}
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <rect x="3" y="3" width="18" height="18" rx="2" />
+                        <line x1="3" y1="12" x2="21" y2="12" strokeDasharray="3 3" />
+                      </svg>
+                      {editMeshTool === "loopcut" && (
+                        <span
+                          style={{
+                            position: "absolute",
+                            top: -4,
+                            right: -6,
+                            fontSize: "10px",
+                            fontWeight: 700,
+                            color: "#facc15",
+                            background: "rgba(40, 36, 20, 0.95)",
+                            padding: "1px 4px",
+                            borderRadius: "3px",
+                            lineHeight: "1",
+                          }}
+                        >
+                          {editMeshLoopCuts}
+                        </span>
+                      )}
+                    </button>
+
+                    {/* Tool: Knife */}
+                    <button
+                      type="button"
+                      className="viewport-hud-button"
+                      onClick={() => editMeshCommandsRef.current?.tool("knife")}
+                      title="Knife — click along vertices and edges, Enter to cut (Shortcut: K)"
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round">
+                        <path d="M4 20L16 8l3 3L7 20z" fill="currentColor" fillOpacity="0.3" />
+                        <path d="M16 8l3-3" />
+                      </svg>
+                    </button>
+
+                    {/* Tool: Bridge */}
+                    <button
+                      type="button"
+                      className="viewport-hud-button"
+                      disabled={selectedCount === 0}
+                      onClick={() => editMeshCommandsRef.current?.tool("bridge")}
+                      title="Bridge two edge loops — or two groups of faces, removed and joined into a tunnel"
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                        <ellipse cx="6" cy="12" rx="2.5" ry="6" />
+                        <ellipse cx="18" cy="12" rx="2.5" ry="6" />
+                        <path d="M6 6h12M6 18h12" />
+                      </svg>
+                    </button>
+
+                    {/* Tool: Spin */}
+                    <button
+                      type="button"
+                      className="viewport-hud-button"
+                      disabled={selectedCount === 0}
+                      onClick={() => editMeshCommandsRef.current?.tool("spin")}
+                      title="Spin the selected edges around the object's axis (a lathe) — drag for angle, wheel for steps, X/Y/Z for the axis"
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+                        <line x1="12" y1="3" x2="12" y2="21" strokeDasharray="2 2" />
+                        <path d="M5 8a7 3 0 0 0 14 0M5 16a7 3 0 0 0 14 0" />
+                      </svg>
+                    </button>
+                  </>
+                )}
+              </HudToolColumn>
+
+              {/* Bottom bar: editing options, then commands on the selection. */}
+              <HudBar>
+                {/* Proportional Editing Toggle */}
+                {!isPointsOnly && (
+                  <button
+                    type="button"
+                    className={`viewport-hud-button ${editMeshNode.params.proportionalEditing ? "viewport-hud-button-active" : ""}`}
+                    onClick={() => {
+                      onParamChange?.("proportionalEditing", !editMeshNode.params.proportionalEditing, editMeshNode.id);
+                    }}
+                    title={
+                      editMeshNode.params.proportionalEditing
+                        ? `Proportional Editing ON (Influence Diameter: ${editMeshNode.params.proportionalDiameter ?? 1.0}; mouse wheel while dragging resizes it) — Click to turn OFF (Shortcut: O)`
+                        : "Proportional Editing OFF — Click to turn ON (Shortcut: O)"
+                    }
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <circle cx="12" cy="12" r="3" fill="currentColor" />
+                      <circle cx="12" cy="12" r="8" stroke="currentColor" strokeDasharray="3 3" />
+                    </svg>
+                  </button>
+                )}
+
+                {/* X-mirror: edits mirror across the object's local X axis */}
+                {!isPointsOnly && (
+                  <button
+                    type="button"
+                    className={`viewport-hud-button ${editMeshNode.params.mirrorX === true ? "viewport-hud-button-active" : ""}`}
+                    onClick={() => onParamChange?.("mirrorX", editMeshNode.params.mirrorX !== true, editMeshNode.id)}
+                    title={
+                      editMeshNode.params.mirrorX === true
+                        ? "X-Mirror ON — moving a vertex moves its mirror image across local X too"
+                        : "X-Mirror OFF — click to mirror edits across the object's local X axis"
+                    }
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round">
+                      <line x1="12" y1="3" x2="12" y2="21" strokeDasharray="2 2" />
+                      <path d="M9 7L4 12l5 5zM15 7l5 5-5 5z" fill="currentColor" fillOpacity="0.3" />
+                    </svg>
+                  </button>
+                )}
+
+                {/* X-ray: pick through the surface */}
+                <button
+                  type="button"
+                  className={`viewport-hud-button ${editMeshNode.params.xray === true ? "viewport-hud-button-active" : ""}`}
+                  onClick={() => onParamChange?.("xray", editMeshNode.params.xray !== true, editMeshNode.id)}
+                  title={
+                    editMeshNode.params.xray === true
+                      ? "X-Ray ON — hidden points and faces can be selected (Shortcut: Alt+Z)"
+                      : "X-Ray OFF — only what the camera sees can be selected (Shortcut: Alt+Z)"
+                  }
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                    <rect x="4" y="4" width="11" height="11" rx="1" />
+                    <rect x="9" y="9" width="11" height="11" rx="1" strokeDasharray="2 2" />
+                  </svg>
+                </button>
+
+                {/* Face Side: which side of the faces is drawn — a face (the
+                    circle) with its normals pointing out, in, or both ways */}
+                {!isPointsOnly &&
+                  ([
+                    ["out", "M16 12h6M19.5 9.5L22 12l-2.5 2.5M8 12H2M4.5 9.5L2 12l2.5 2.5", "Face Side: Out — only the side the normals point to is drawn"],
+                    ["in", "M22 12h-6M18.5 9.5L16 12l2.5 2.5M2 12h6M5.5 9.5L8 12l-2.5 2.5", "Face Side: In — only the side against the normals is drawn"],
+                    [
+                      "both",
+                      "M15.5 12h7M17.5 10L15.5 12l2 2M20.5 10l2 2-2 2M8.5 12h-7M6.5 10l2 2-2 2M3.5 10l-2 2 2 2",
+                      "Face Side: Both — both sides of every face are drawn",
+                    ],
+                  ] as const).map(([side, arrows, title]) => (
+                    <button
+                      key={side}
+                      type="button"
+                      className={`viewport-hud-button ${editMeshNode.params.faceSide === side ? "viewport-hud-button-active" : ""}`}
+                      onClick={() => onParamChange?.("faceSide", side, editMeshNode.id)}
+                      title={title}
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="12" cy="12" r="3.5" fill="currentColor" fillOpacity={side === "both" ? 0.6 : 0.25} />
+                        <path d={arrows} />
+                      </svg>
+                    </button>
+                  ))}
+
+                <HudSeparator />
+
+                {/* Selection tools */}
                 <button
                   type="button"
                   className="viewport-hud-button"
                   disabled={selectedCount === 0}
-                  onClick={() =>
-                    commitHudSelection((m) => ({
-                      ...selection,
-                      faces: flatFaces(m, selection.faces, Number(editMeshNode.params.flatAngle) || 10),
-                    }))
-                  }
-                  title={`Select Flat Region — grow across edges bending less than ${Number(editMeshNode.params.flatAngle) || 10}° (Flat Angle)`}
+                  onClick={() => commitHudSelection((m) => growSelection(m, selectMode, selection))}
+                  title="Grow Selection (Shortcut: Cmd/Ctrl + =)"
                 >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round">
-                    <path d="M3 15l9-5 9 5-9 5z" fill="currentColor" fillOpacity="0.3" />
-                    <path d="M3 10l9-5 9 5" strokeDasharray="2 2" />
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                    <rect x="9" y="9" width="6" height="6" rx="1" fill="currentColor" fillOpacity="0.4" />
+                    <path d="M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4" />
                   </svg>
                 </button>
-              )}
-              <button
-                type="button"
-                className={`viewport-hud-button ${editMeshMarqueeShape === "lasso" ? "viewport-hud-button-active" : ""}`}
-                onClick={() => setEditMeshMarqueeShape((shape) => (shape === "box" ? "lasso" : "box"))}
-                title={
-                  editMeshMarqueeShape === "lasso"
-                    ? "Shift+drag draws a Lasso — click for Box"
-                    : "Shift+drag draws a Box — click for Lasso"
-                }
-              >
-                {editMeshMarqueeShape === "lasso" ? (
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
-                    <path d="M7 16c-3-1-4-4-3-7 2-5 12-6 15-2 2 3-1 7-6 7-2 0-4 0-6 2" />
-                    <path d="M7 16l-1 4" />
-                  </svg>
-                ) : (
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-                    <rect x="4" y="5" width="16" height="14" strokeDasharray="3 2" />
-                  </svg>
-                )}
-              </button>
-
-              {!isPointsOnly && selectedCount > 0 && (
-                <>
-                  <div style={{ width: 1, height: 16, background: "rgba(255, 255, 255, 0.15)" }} />
-                  {/* One-shot operations */}
-                  <button
-                    type="button"
-                    className="viewport-hud-button"
-                    onClick={() => editMeshCommandsRef.current?.run("merge")}
-                    title="Merge at Center (Shortcut: M)"
-                  >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                      <circle cx="12" cy="12" r="2.5" fill="currentColor" />
-                      <path d="M4 4l5 5M20 4l-5 5M4 20l5-5M20 20l-5-5" />
-                    </svg>
-                  </button>
-                  <button
-                    type="button"
-                    className="viewport-hud-button"
-                    onClick={() => editMeshCommandsRef.current?.run("dissolve")}
-                    title="Dissolve — points, edges or faces merge into the faces around them (Shortcut: Cmd/Ctrl+X)"
-                  >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-                      <rect x="3" y="5" width="18" height="14" rx="1" />
-                      <line x1="12" y1="5" x2="12" y2="19" strokeDasharray="2 2" opacity="0.5" />
-                    </svg>
-                  </button>
-                  {selectMode !== "faces" && (
-                    <button
-                      type="button"
-                      className="viewport-hud-button"
-                      onClick={() => editMeshCommandsRef.current?.run("fill")}
-                      title="Fill — make a face from the selected points / edges (Shortcut: F)"
-                    >
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="1.5">
-                        <path d="M5 18L8 6h9l2 12z" fillOpacity="0.35" />
-                      </svg>
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    className="viewport-hud-button"
-                    onClick={() => editMeshCommandsRef.current?.run("subdivide")}
-                    title="Subdivide the selected faces"
-                  >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
-                      <rect x="4" y="4" width="16" height="16" />
-                      <line x1="12" y1="4" x2="12" y2="20" />
-                      <line x1="4" y1="12" x2="20" y2="12" />
-                    </svg>
-                  </button>
-                  <button
-                    type="button"
-                    className="viewport-hud-button"
-                    onClick={() => editMeshCommandsRef.current?.run("flip")}
-                    title="Flip Normals of the selected faces"
-                  >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                      <path d="M4 12h16" />
-                      <path d="M8 8l-4 4 4 4M16 8l4 4-4 4" />
-                    </svg>
-                  </button>
-                  <button
-                    type="button"
-                    className="viewport-hud-button"
-                    onClick={() => editMeshCommandsRef.current?.duplicate()}
-                    title="Duplicate, then move with the mouse (Shortcut: Shift+D)"
-                  >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-                      <rect x="3" y="3" width="12" height="12" rx="1" />
-                      <rect x="9" y="9" width="12" height="12" rx="1" fill="currentColor" fillOpacity="0.3" />
-                    </svg>
-                  </button>
-                  <button
-                    type="button"
-                    className="viewport-hud-button"
-                    onClick={() => editMeshCommandsRef.current?.tool("bevel")}
-                    title="Bevel the selected edges — drag for width, wheel for segments (Shortcut: Cmd/Ctrl+B)"
-                  >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round">
-                      <path d="M4 20V9l5-5h11" />
-                      <path d="M4 9h5V4" strokeDasharray="2 2" opacity="0.6" />
-                    </svg>
-                  </button>
-                  <button
-                    type="button"
-                    className="viewport-hud-button"
-                    onClick={() => editMeshCommandsRef.current?.tool("bridge")}
-                    title="Bridge two edge loops — or two groups of faces, removed and joined into a tunnel"
-                  >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-                      <ellipse cx="6" cy="12" rx="2.5" ry="6" />
-                      <ellipse cx="18" cy="12" rx="2.5" ry="6" />
-                      <path d="M6 6h12M6 18h12" />
-                    </svg>
-                  </button>
-                  <button
-                    type="button"
-                    className="viewport-hud-button"
-                    onClick={() => editMeshCommandsRef.current?.tool("spin")}
-                    title="Spin the selected edges around the object's axis (a lathe) — drag for angle, wheel for steps, X/Y/Z for the axis"
-                  >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
-                      <line x1="12" y1="3" x2="12" y2="21" strokeDasharray="2 2" />
-                      <path d="M5 8a7 3 0 0 0 14 0M5 16a7 3 0 0 0 14 0" />
-                    </svg>
-                  </button>
-                </>
-              )}
-
-              {!isPointsOnly && (
                 <button
                   type="button"
                   className="viewport-hud-button"
-                  onClick={() => editMeshCommandsRef.current?.tool("knife")}
-                  title="Knife — click along vertices and edges, Enter to cut (Shortcut: K)"
+                  disabled={selectedCount === 0}
+                  onClick={() => commitHudSelection((m) => shrinkSelection(m, selectMode, selection))}
+                  title="Shrink Selection (Shortcut: Cmd/Ctrl + -)"
                 >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round">
-                    <path d="M4 20L16 8l3 3L7 20z" fill="currentColor" fillOpacity="0.3" />
-                    <path d="M16 8l3-3" />
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                    <rect x="4" y="4" width="16" height="16" rx="1" strokeDasharray="2 2" />
+                    <path d="M9 5v4H5M15 5v4h4M19 15h-4v4M5 15h4v4" />
                   </svg>
                 </button>
-              )}
-
-              {/* X-mirror: edits mirror across the object's local X axis */}
-              {!isPointsOnly && (
                 <button
                   type="button"
-                  className={`viewport-hud-button ${editMeshNode.params.mirrorX === true ? "viewport-hud-button-active" : ""}`}
-                  onClick={() => onParamChange?.("mirrorX", editMeshNode.params.mirrorX !== true, editMeshNode.id)}
-                  title={
-                    editMeshNode.params.mirrorX === true
-                      ? "X-Mirror ON — moving a vertex moves its mirror image across local X too"
-                      : "X-Mirror OFF — click to mirror edits across the object's local X axis"
-                  }
+                  className="viewport-hud-button"
+                  disabled={selectedCount === 0}
+                  onClick={() => commitHudSelection((m) => linkedSelection(m, selectMode, selection))}
+                  title="Select Linked — the whole piece the selection is on (Shortcut: Cmd/Ctrl+L; L over the mesh picks the piece under the cursor, Shift+L deselects it)"
                 >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round">
-                    <line x1="12" y1="3" x2="12" y2="21" strokeDasharray="2 2" />
-                    <path d="M9 7L4 12l5 5zM15 7l5 5-5 5z" fill="currentColor" fillOpacity="0.3" />
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                    <path d="M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1" />
+                    <path d="M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1" />
                   </svg>
                 </button>
-              )}
-
-              {/* X-ray: pick through the surface */}
-              <button
-                type="button"
-                className={`viewport-hud-button ${editMeshNode.params.xray === true ? "viewport-hud-button-active" : ""}`}
-                onClick={() => onParamChange?.("xray", editMeshNode.params.xray !== true, editMeshNode.id)}
-                title={
-                  editMeshNode.params.xray === true
-                    ? "X-Ray ON — hidden points and faces can be selected (Shortcut: Alt+Z)"
-                    : "X-Ray OFF — only what the camera sees can be selected (Shortcut: Alt+Z)"
-                }
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-                  <rect x="4" y="4" width="11" height="11" rx="1" />
-                  <rect x="9" y="9" width="11" height="11" rx="1" strokeDasharray="2 2" />
-                </svg>
-              </button>
-
-              {/* Face Side: which side of the faces is drawn — a face (the
-                  circle) with its normals pointing out, in, or both ways */}
-              {!isPointsOnly &&
-                ([
-                  ["out", "M16 12h6M19.5 9.5L22 12l-2.5 2.5M8 12H2M4.5 9.5L2 12l2.5 2.5", "Face Side: Out — only the side the normals point to is drawn"],
-                  ["in", "M22 12h-6M18.5 9.5L16 12l2.5 2.5M2 12h6M5.5 9.5L8 12l-2.5 2.5", "Face Side: In — only the side against the normals is drawn"],
-                  [
-                    "both",
-                    "M15.5 12h7M17.5 10L15.5 12l2 2M20.5 10l2 2-2 2M8.5 12h-7M6.5 10l2 2-2 2M3.5 10l-2 2 2 2",
-                    "Face Side: Both — both sides of every face are drawn",
-                  ],
-                ] as const).map(([side, arrows, title]) => (
+                {selectMode === "faces" && !isPointsOnly && (
                   <button
-                    key={side}
                     type="button"
-                    className={`viewport-hud-button ${editMeshNode.params.faceSide === side ? "viewport-hud-button-active" : ""}`}
-                    onClick={() => onParamChange?.("faceSide", side, editMeshNode.id)}
-                    title={title}
+                    className="viewport-hud-button"
+                    disabled={selectedCount === 0}
+                    onClick={() =>
+                      commitHudSelection((m) => ({
+                        ...selection,
+                        faces: flatFaces(m, selection.faces, Number(editMeshNode.params.flatAngle) || 10),
+                      }))
+                    }
+                    title={`Select Flat Region — grow across edges bending less than ${Number(editMeshNode.params.flatAngle) || 10}° (Flat Angle)`}
                   >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                      <circle cx="12" cy="12" r="3.5" fill="currentColor" fillOpacity={side === "both" ? 0.6 : 0.25} />
-                      <path d={arrows} />
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round">
+                      <path d="M3 15l9-5 9 5-9 5z" fill="currentColor" fillOpacity="0.3" />
+                      <path d="M3 10l9-5 9 5" strokeDasharray="2 2" />
                     </svg>
                   </button>
-                ))}
-
-              {selectedCount > 0 && (
-                <>
-                  <div style={{ width: 1, height: 16, background: "rgba(255, 255, 255, 0.15)" }} />
+                )}
+                {selectedCount > 0 && (
                   <button
                     type="button"
                     className="viewport-hud-button"
@@ -8727,166 +8646,167 @@ export function Viewport({
                       <line x1="9" y1="9" x2="15" y2="15" />
                     </svg>
                   </button>
-                </>
-              )}
+                )}
 
-              {!isPointsOnly && (
-                <>
-                  <div style={{ width: 1, height: 16, background: "rgba(255, 255, 255, 0.15)" }} />
-
-                  {/* Tool: Extrude */}
-                  <button
-                    type="button"
-                    className="viewport-hud-button"
-                    disabled={selectedCount === 0}
-                    onClick={() =>
-                      isFacesActive
-                        ? onParamAction?.(editMeshNode.id, EDIT_MESH_EXTRUDE_ACTION)
-                        : editMeshCommandsRef.current?.extrude()
-                    }
-                    title={
-                      isFacesActive
-                        ? "Extrude by Extrude Distance — or press E over the viewport to drag it (Alt+E: each face on its own)"
-                        : "Extrude the selected points or edges, then move them with the mouse (Shortcut: E)"
-                    }
-                  >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M12 19V5M5 12l7-7 7 7" />
-                    </svg>
-                  </button>
-
-                  {/* Tool: Loop Cut */}
-                  <button
-                    type="button"
-                    className={`viewport-hud-button ${editMeshTool === "loopcut" ? "viewport-hud-button-active" : ""}`}
-                    onClick={() => setEditMeshTool((t) => (t === "loopcut" ? "select" : "loopcut"))}
-                    title={`Loop Cut (Shortcut: Ctrl+R) — Scroll wheel over mesh to set cuts count (${editMeshLoopCuts})`}
-                  >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <rect x="3" y="3" width="18" height="18" rx="2" />
-                      <line x1="3" y1="12" x2="21" y2="12" strokeDasharray="3 3" />
-                    </svg>
-                    {editMeshTool === "loopcut" && (
-                      <span
-                        style={{
-                          marginLeft: 4,
-                          fontSize: "10px",
-                          fontWeight: 700,
-                          color: "#facc15",
-                          background: "rgba(250, 204, 21, 0.2)",
-                          padding: "1px 4px",
-                          borderRadius: "3px",
-                          lineHeight: "1",
-                        }}
+                {!isPointsOnly && selectedCount > 0 && (
+                  <>
+                    <HudSeparator />
+                    {/* One-shot operations */}
+                    <button
+                      type="button"
+                      className="viewport-hud-button"
+                      onClick={() => editMeshCommandsRef.current?.run("merge")}
+                      title="Merge at Center (Shortcut: M)"
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                        <circle cx="12" cy="12" r="2.5" fill="currentColor" />
+                        <path d="M4 4l5 5M20 4l-5 5M4 20l5-5M20 20l-5-5" />
+                      </svg>
+                    </button>
+                    <button
+                      type="button"
+                      className="viewport-hud-button"
+                      onClick={() => editMeshCommandsRef.current?.run("dissolve")}
+                      title="Dissolve — points, edges or faces merge into the faces around them (Shortcut: Cmd/Ctrl+X)"
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                        <rect x="3" y="5" width="18" height="14" rx="1" />
+                        <line x1="12" y1="5" x2="12" y2="19" strokeDasharray="2 2" opacity="0.5" />
+                      </svg>
+                    </button>
+                    {selectMode !== "faces" && (
+                      <button
+                        type="button"
+                        className="viewport-hud-button"
+                        onClick={() => editMeshCommandsRef.current?.run("fill")}
+                        title="Fill — make a face from the selected points / edges (Shortcut: F)"
                       >
-                        {editMeshLoopCuts}
-                      </span>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="1.5">
+                          <path d="M5 18L8 6h9l2 12z" fillOpacity="0.35" />
+                        </svg>
+                      </button>
                     )}
-                  </button>
-
-                  {/* Tool: Inset */}
-                  <button
-                    type="button"
-                    className="viewport-hud-button"
-                    disabled={!isFacesActive}
-                    onClick={() => onParamAction?.(editMeshNode.id, EDIT_MESH_INSET_ACTION)}
-                    title="Inset by Inset Thickness / Depth — or press I over the viewport to drag it (I again: each face on its own, Cmd/Ctrl: depth)"
-                  >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <rect x="3" y="3" width="18" height="18" rx="2" />
-                      <rect x="8" y="8" width="8" height="8" rx="1" />
-                    </svg>
-                  </button>
-
-                  {/* Tool: Delete the selection — points, edges or faces, Blender's way */}
-                  <button
-                    type="button"
-                    className="viewport-hud-button"
-                    disabled={selectedCount === 0}
-                    style={
-                      selectedCount === 0
-                        ? { opacity: 0.35, cursor: "not-allowed", pointerEvents: "auto" }
-                        : undefined
-                    }
-                    onClick={() => editMeshCommandsRef.current?.run("delete")}
-                    title={
-                      selectedCount > 0
-                        ? "Delete Selection (Shortcut: Delete) — points and edges take the faces using them; the rest of those faces' edges stay"
-                        : "Delete Selection (nothing selected)"
-                    }
-                  >
-                    <svg
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
+                    <button
+                      type="button"
+                      className="viewport-hud-button"
+                      onClick={() => editMeshCommandsRef.current?.run("subdivide")}
+                      title="Subdivide the selected faces"
                     >
-                      <path d="M3 6h18" />
-                      <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
-                      <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
-                      <line x1="10" y1="11" x2="10" y2="17" />
-                      <line x1="14" y1="11" x2="14" y2="17" />
-                    </svg>
-                  </button>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
+                        <rect x="4" y="4" width="16" height="16" />
+                        <line x1="12" y1="4" x2="12" y2="20" />
+                        <line x1="4" y1="12" x2="20" y2="12" />
+                      </svg>
+                    </button>
+                    <button
+                      type="button"
+                      className="viewport-hud-button"
+                      onClick={() => editMeshCommandsRef.current?.run("flip")}
+                      title="Flip Normals of the selected faces"
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                        <path d="M4 12h16" />
+                        <path d="M8 8l-4 4 4 4M16 8l4 4-4 4" />
+                      </svg>
+                    </button>
+                    <button
+                      type="button"
+                      className="viewport-hud-button"
+                      onClick={() => editMeshCommandsRef.current?.duplicate()}
+                      title="Duplicate, then move with the mouse (Shortcut: Shift+D)"
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                        <rect x="3" y="3" width="12" height="12" rx="1" />
+                        <rect x="9" y="9" width="12" height="12" rx="1" fill="currentColor" fillOpacity="0.3" />
+                      </svg>
+                    </button>
+                  </>
+                )}
 
-                  {/* Tool: Separate Face Selection */}
-                  <button
-                    type="button"
-                    className="viewport-hud-button"
-                    disabled={!isFacesActive}
-                    style={
-                      !isFacesActive
-                        ? { opacity: 0.35, cursor: "not-allowed", pointerEvents: "auto" }
-                        : undefined
-                    }
-                    onClick={() => {
-                      if (isFacesActive) {
-                        onParamAction?.(editMeshNode.id, EDIT_MESH_SEPARATE_FACES_ACTION);
+                {!isPointsOnly && (
+                  <>
+                    <HudSeparator />
+
+                    {/* Tool: Separate Face Selection */}
+                    <button
+                      type="button"
+                      className="viewport-hud-button"
+                      disabled={!isFacesActive}
+                      onClick={() => {
+                        if (isFacesActive) {
+                          onParamAction?.(editMeshNode.id, EDIT_MESH_SEPARATE_FACES_ACTION);
+                        }
+                      }}
+                      title={
+                        isFacesActive
+                          ? "Separate Face Selection (Shortcut: P) — Create a new object node from selected face(s)"
+                          : "Separate Face Selection (Disabled in Points mode or when no faces selected)"
                       }
-                    }}
-                    title={
-                      isFacesActive
-                        ? "Separate Face Selection (Shortcut: P) — Create a new object node from selected face(s)"
-                        : "Separate Face Selection (Disabled in Points mode or when no faces selected)"
-                    }
-                  >
-                    <svg
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
                     >
-                      <rect x="3" y="9" width="11" height="11" rx="2" />
-                      <path d="M9 3h10a2 2 0 0 1 2 2v10" strokeDasharray="2.5 2.5" />
-                      <path d="M14 10l6-6m0 0h-4m4 0v4" />
-                    </svg>
-                  </button>
-                </>
-              )}
+                      <svg
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <rect x="3" y="9" width="11" height="11" rx="2" />
+                        <path d="M9 3h10a2 2 0 0 1 2 2v10" strokeDasharray="2.5 2.5" />
+                        <path d="M14 10l6-6m0 0h-4m4 0v4" />
+                      </svg>
+                    </button>
 
-              <div style={{ width: 1, height: 16, background: "rgba(255, 255, 255, 0.15)" }} />
+                    {/* Tool: Delete the selection — points, edges or faces, Blender's way */}
+                    <button
+                      type="button"
+                      className="viewport-hud-button"
+                      disabled={selectedCount === 0}
+                      onClick={() => editMeshCommandsRef.current?.run("delete")}
+                      title={
+                        selectedCount > 0
+                          ? "Delete Selection (Shortcut: Delete) — points and edges take the faces using them; the rest of those faces' edges stay"
+                          : "Delete Selection (nothing selected)"
+                      }
+                    >
+                      <svg
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <path d="M3 6h18" />
+                        <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+                        <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+                        <line x1="10" y1="11" x2="10" y2="17" />
+                        <line x1="14" y1="11" x2="14" y2="17" />
+                      </svg>
+                    </button>
+                  </>
+                )}
 
-              {/* Reset from Input Button */}
-              <button
-                type="button"
-                className="viewport-hud-button"
-                onClick={() => onParamAction?.(editMeshNode.id, isPointsOnly ? RESEED_MESH_POINTS_ACTION : EDIT_MESH_RESEED_ACTION)}
-                title={isPointsOnly ? "Reset Points from Basis" : "Reset Mesh from Input or default Cube"}
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-                  <path d="M3 3v5h5" />
-                </svg>
-              </button>
-            </div>
+                <HudSeparator />
+
+                {/* Reset from Input Button */}
+                <button
+                  type="button"
+                  className="viewport-hud-button"
+                  onClick={() => onParamAction?.(editMeshNode.id, isPointsOnly ? RESEED_MESH_POINTS_ACTION : EDIT_MESH_RESEED_ACTION)}
+                  title={isPointsOnly ? "Reset Points from Basis" : "Reset Mesh from Input or default Cube"}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                    <path d="M3 3v5h5" />
+                  </svg>
+                </button>
+              </HudBar>
+            </>
           );
         })()}
       {/* Terrain Sculpt Floating Toolbar */}

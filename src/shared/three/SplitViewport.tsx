@@ -63,7 +63,6 @@ interface SplitViewportProps {
   onUnpinParam?: (nodeId: string, paramId: string) => void;
   onRenameExposedParam?: (nodeId: string, paramId: string, label: string) => void;
   mode2D?: boolean;
-  onToggle2DMode?: () => void;
   snapElevation?: boolean;
   onToggleSnapElevation?: () => void;
   gpTool?: GpToolMode;
@@ -104,7 +103,6 @@ export function SplitViewport({
   onUnpinParam,
   onRenameExposedParam,
   mode2D = false,
-  onToggle2DMode,
   snapElevation = false,
   onToggleSnapElevation,
   gpTool: gpToolProp,
@@ -368,7 +366,6 @@ export function SplitViewport({
           outputMode={false}
           cameraView={isCamera}
           mode2D={is2D}
-          onToggle2DMode={onToggle2DMode}
           elevationView={false}
           selectedNodeId={selectedNodeId}
           onSelectNode={onSelectNode}

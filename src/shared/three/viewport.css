@@ -110,6 +110,14 @@
   color: var(--canvas-text, #f1f5f9);
 }
 
+.viewport-hud-button:disabled,
+.viewport-hud-button:disabled:hover {
+  opacity: 0.35;
+  cursor: not-allowed;
+  background: transparent;
+  color: var(--canvas-text-muted, #94a3b8);
+}
+
 /* Pressed and Active states: No contour / border / outline, only icon blue */
 .viewport-hud-button:active,
 .viewport-hud-button-active {

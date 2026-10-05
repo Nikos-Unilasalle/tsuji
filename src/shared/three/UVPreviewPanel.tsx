@@ -17,6 +17,8 @@ export interface UVPanelData {
 }
 
 const SIZE = 240;
+/** Rendered panel width: canvas + 6px padding each side + 1px border each side. */
+export const UV_PANEL_WIDTH = SIZE + 2 * 6 + 2;
 const MAX_TILES = 8;
 
 /**
