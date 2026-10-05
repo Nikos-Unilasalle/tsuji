@@ -149,6 +149,16 @@ export function deserializeGraph(jsonString: string, registry: NodeRegistry = DE
   return adoptGraph(data, registry);
 }
 
+/** Brings every node's params, groups' interiors included, up to its type's current shape — see NodeDefinition.upgradeParams. */
+function upgradeNodes(nodes: Graph["nodes"], registry: NodeRegistry): Graph["nodes"] {
+  return nodes.map((node) => {
+    const upgrade = registry.get(node.type)?.upgradeParams;
+    const params = upgrade ? upgrade({ ...(node.params ?? {}) }) : node.params;
+    const subgraph = node.subgraph ? { ...node.subgraph, nodes: upgradeNodes(node.subgraph.nodes, registry) } : node.subgraph;
+    return params === node.params && subgraph === node.subgraph ? node : { ...node, params, subgraph };
+  });
+}
+
 function adoptGraph(
   data: { nodes: unknown[]; connections: unknown[]; keyframes?: unknown; markers?: unknown; exposedParams?: unknown },
   registry: NodeRegistry,
@@ -162,7 +172,7 @@ function adoptGraph(
   // anywhere.
   return pruneDanglingConnections(
     {
-      nodes: data.nodes as Graph["nodes"],
+      nodes: upgradeNodes(data.nodes as Graph["nodes"], registry),
       connections: data.connections as Graph["connections"],
       keyframes: data.keyframes && typeof data.keyframes === "object" ? (data.keyframes as Graph["keyframes"]) : {},
       markers: normalizeMarkers(data.markers),

@@ -7,6 +7,7 @@ import { valueNoise3 } from "../../math/valueNoise";
 import { Curve3, curvePlane, curvesSignature, flattenCurves, fromPlane, strokeSamples, toPlane } from "../curveLists";
 import { asColor, COMMON_DEFAULT_PARAMS, extractMaterialParams, NATIVE_TRANSFORM_PARAM_FIELDS, primitiveOutputs } from "./object";
 import { composeNativeMatrix } from "./transform";
+import { DEFAULT_PROFILE_POINTS, evalProfileCurve, ProfilePoint } from "../profileCurve";
 
 function num(input: unknown, param: unknown, fallback: number): number {
   const n = Number(input !== undefined ? input : param);
@@ -118,9 +119,10 @@ function applyInk(material: THREE.MeshBasicMaterial, inputs: Record<string, unkn
 /* Ink Stroke                                                                 */
 /* -------------------------------------------------------------------------- */
 
-const PROFILES = ["sine", "blob", "taper", "uniform"] as const;
+const PROFILES = ["sine", "blob", "taper", "uniform", "curve"] as const;
 
-function profileAt(kind: string, t: number): number {
+function profileAt(kind: string, t: number, curve: ProfilePoint[]): number {
+  if (kind === "curve") return evalProfileCurve(curve, t);
   if (kind === "uniform") return 1;
   if (kind === "taper") return Math.cos((t * Math.PI) / 2);
   const s = Math.max(0, Math.sin(t * Math.PI));
@@ -131,6 +133,7 @@ interface StrokeOptions {
   width: number;
   minWidth: number;
   profile: string;
+  profileCurve: ProfilePoint[];
   widthNoise: number;
   wobble: number;
   wobbleScale: number;
@@ -169,7 +172,7 @@ export function buildStrokeGeometry(curves: Curve3[], o: StrokeOptions): THREE.B
       tu /= len;
       tv /= len;
       const t = i / (n - 1);
-      let w = o.width * profileAt(o.profile, t);
+      let w = o.width * profileAt(o.profile, t, o.profileCurve);
       w = w * (1 - o.widthNoise) + w * o.widthNoise * valueNoise3(i * 0.5, n0);
       w += o.minWidth;
       const shift = o.wobble * 2 * (valueNoise3(i * o.wobbleScale, n0 + 7) - 0.47);
@@ -205,9 +208,10 @@ const STROKE_FIELDS: ParamFieldDef[] = [
     label: "Width Profile",
     kind: "select",
     options: [...PROFILES],
-    optionLabels: ["Sine (pointed ends)", "Blob (full belly)", "Taper (thick to thin)", "Uniform"],
+    optionLabels: ["Sine (pointed ends)", "Blob (full belly)", "Taper (thick to thin)", "Uniform", "Drawn Curve"],
     group: "Stroke",
   },
+  { id: "profileCurve", label: "Width Curve (Drawn)", kind: "curve_profile", group: "Stroke" },
   { id: "widthNoise", label: "Width Noise", kind: "number", step: 0.05, percent: true, group: "Stroke" },
   { id: "wobble", label: "Wobble", kind: "number", step: 0.005, group: "Stroke" },
   { id: "wobbleScale", label: "Wobble Frequency", kind: "number", step: 0.05, group: "Stroke" },
@@ -234,6 +238,7 @@ export const INK_STROKE_NODE: NodeDefinition = {
     width: 0.03,
     minWidth: 0.004,
     profile: "sine",
+    profileCurve: DEFAULT_PROFILE_POINTS,
     widthNoise: 0.5,
     wobble: 0,
     wobbleScale: 0.3,
@@ -252,6 +257,7 @@ export const INK_STROKE_NODE: NodeDefinition = {
       width: Math.max(0, num(inputs.width, params.width, 0.03)),
       minWidth: Math.max(0, num(undefined, params.minWidth, 0.004)),
       profile: String(params.profile ?? "sine"),
+      profileCurve: Array.isArray(params.profileCurve) ? (params.profileCurve as ProfilePoint[]) : DEFAULT_PROFILE_POINTS,
       widthNoise: Math.max(0, Math.min(1, num(undefined, params.widthNoise, 0.5))),
       wobble: num(undefined, params.wobble, 0),
       wobbleScale: num(undefined, params.wobbleScale, 0.3),

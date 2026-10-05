@@ -174,7 +174,9 @@ C1 = X0 + 900
 STROKE_Z = 0.01
 
 # Mountains — fill, outline, fold hatching, and three kinds of vegetation.
-node("mount", "curve/ridge-layers", C1, Y0, profile="peak", width=6, height=4.8, sizeJitter=0.35,
+# Silhouette Layers presets, spelled out: Peak, Long Range, Mesa and Water Line.
+node("mount", "curve/ridge-layers", C1, Y0, profile="peak", envelope="arch", noiseSpace="relative", noiseOffset=10,
+     layerDrift=0.15, clipTop=False, width=6, height=4.8, sizeJitter=0.35,
      layers=10, resolution=50, frequency=1, shrink=1, drop=0.03, chop=0.55, seed=4)
 wire("m_all", "list", "mount", "anchors")
 wire("m_all_s", "list", "mount", "scales")
@@ -213,15 +215,17 @@ wire("mid_spots", "points", "mid_trees", "points")
 wire("mid_spots", "scales", "mid_trees", "scales")
 
 # Distant ranges — a pale wash, no line work.
-node("dist", "curve/ridge-layers", C1, D0, profile="range", width=20, height=4.3, sizeJitter=0.23063,
-     layers=1, resolution=120, frequency=1.825, shrink=0, drop=0, seed=8, location=v3(0, 1.275, 0))
+node("dist", "curve/ridge-layers", C1, D0, profile="range", envelope="dome", noiseSpace="world", noiseOffset=0,
+     layerDrift=0.3, clipTop=False, width=20, height=4.3, sizeJitter=0.23063,
+     layers=1, resolution=120, frequency=0.9125, shrink=0, drop=0, seed=8, location=v3(0, 1.275, 0))
 wire("d_anchors", "vectorList", "dist", "anchors")
 node("dist_fill", "curve/fill", C1 + 300, D0, color=0xD8D8D8, opacity=0.51662, baseDrop=0, gradient=True, bottomColor=0xFFFFFF, zOffset=0)
 wire("dist", "outlines", "dist_fill", "curves")
 
 # Plateaus — banks with a flat top, a grove on it, and calmer hatching.
-node("plat", "curve/ridge-layers", C1, P0, profile="plateau", width=9, height=1.0, sizeJitter=0.25,
-     layers=5, resolution=50, frequency=1, shrink=0.6, drop=0.04, chop=0.6, seed=12)
+node("plat", "curve/ridge-layers", C1, P0, profile="plateau", envelope="bell", noiseSpace="relative", noiseOffset=10,
+     layerDrift=0.1, clipTop=True, width=9, height=2.0, sizeJitter=0.25,
+     layers=5, resolution=50, frequency=1, shrink=0.6, drop=0.04, chop=0.3, seed=12)
 wire("p_anchors", "vectorList", "plat", "anchors")
 node("plat_fill", "curve/fill", C1 + 300, P0 - 160, color=0xFFFFFF, opacity=1, baseDrop=2.0, zOffset=0)
 wire("plat", "outlines", "plat_fill", "curves")
@@ -240,7 +244,8 @@ wire("grove_spots", "points", "grove", "points")
 wire("grove_spots", "scales", "grove", "scales")
 
 # Water — short ripples hatched across flat strata.
-node("water", "curve/ridge-layers", C1, W0, profile="flat", width=13.375, height=1.725, sizeJitter=0.05137,
+node("water", "curve/ridge-layers", C1, W0, profile="flat", envelope="none", noiseSpace="world", noiseOffset=0,
+     layerDrift=0.5, clipTop=False, width=13.375, height=1.725, sizeJitter=0.05137,
      layers=10, resolution=160, frequency=0.275, shrink=0, drop=0.09, chop=4.75, seed=30, location=v3(0, 0, 6.0300035189909895))
 wire("w_anchors", "vectorList", "water", "anchors")
 node("ripples", "curve/strata-hatch", C1 + 300, W0, count=70, length=0.15, jitter=0.01, distribution="center", resolution=160, seed=16)

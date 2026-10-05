@@ -1,10 +1,13 @@
 import * as THREE from "three";
 import { describe, expect, test } from "vitest";
 import { EvalContext } from "../types";
-import { RIDGE_LAYERS_NODE, SCATTER_ON_CURVES_NODE, STRATA_HATCH_NODE } from "./strata";
+import { SCATTER_ON_CURVES_NODE, STRATA_HATCH_NODE } from "./strata";
+import { RIDGE_LAYERS_NODE } from "./silhouetteLayers";
 import { CURVE_FILL_NODE, INK_STROKE_NODE } from "./ink";
 import { INSTANCE_ON_POINTS_NODE } from "./instanceOnPoints";
 import { valueNoise3 } from "../../math/valueNoise";
+import { createPRNG } from "../../math/random";
+import { deserializeProject } from "../storage";
 
 const ctx = (nodeId: string): EvalContext => ({ time: 0, step: 0, nodeId });
 
@@ -58,10 +61,112 @@ describe("RIDGE_LAYERS_NODE", () => {
     expect(b.stacks).toBe(a.stacks);
   });
 
-  test("plateau tops are clipped flat", () => {
-    const out = RIDGE_LAYERS_NODE.evaluate({}, { ...params, profile: "plateau", height: 2, chop: 0.5 }, ctx("ridge-d"));
-    const ys = (out.outlines as THREE.Curve<THREE.Vector3>[])[0].getPoints(100).map((p) => p.y);
-    expect(Math.max(...ys)).toBeLessThanOrEqual(1.0001 + 0.01);
+  test("Clip the Top caps every shape at the clip height", () => {
+    const out = RIDGE_LAYERS_NODE.evaluate({}, { ...params, envelope: "bell", clipTop: true, height: 2, chop: 0.5 }, ctx("ridge-d"));
+    for (const layer of out.layers as THREE.CatmullRomCurve3[]) {
+      expect(Math.max(...layer.points.map((p) => p.y))).toBeLessThanOrEqual(1 + 1e-9);
+    }
+  });
+
+  test("a drawn envelope shapes the silhouette", () => {
+    const flatTop = [{ x: 0, y: 1 }, { x: 1, y: 1 }];
+    const out = RIDGE_LAYERS_NODE.evaluate({}, { ...params, envelope: "curve", envelopeCurve: flatTop, layers: 1, frequency: 0 }, ctx("ridge-e"));
+    // Frequency 0 reads one noise value everywhere, so a flat envelope gives a level line.
+    const ys = (out.outlines as THREE.CatmullRomCurve3[])[0].points.map((p) => p.y);
+    expect(Math.max(...ys) - Math.min(...ys)).toBeLessThan(1e-9);
+  });
+});
+
+/**
+ * The four formulas Ridge Layers hard-coded before it became generic, copied
+ * verbatim. Files saved then carry only `profile`; upgradeParams has to spell
+ * each one out so exactly that the drawing does not move by a hair.
+ */
+function legacyStack(profile: string, anchor: THREE.Vector3, width: number, height: number, layers: number, resolution: number, frequency: number, shrink: number, drop: number, chop: number, noiseSeed: number, rng: () => number): THREE.Vector3[][] {
+  const stack: THREE.Vector3[][] = [];
+  let sink = 0;
+  for (let j = 0; j < layers; j++) {
+    sink += rng() * drop;
+    const p = 1 - (j / layers) * shrink;
+    const points: THREE.Vector3[] = [];
+    for (let i = 0; i < resolution; i++) {
+      const t = i / (resolution - 1);
+      let x = (t - 0.5) * width;
+      let y = 0;
+      if (profile === "peak") {
+        const a = (t - 0.5) * Math.PI;
+        y = Math.cos(a) * valueNoise3(a * frequency + 10, j * 0.15, noiseSeed) * height * p;
+        x *= p;
+      } else if (profile === "plateau") {
+        const a = (t - 0.5) * Math.PI;
+        y = (Math.cos(a * 2) + 1) * valueNoise3(a * frequency + 10, j * 0.1, noiseSeed) * height * p;
+        y = Math.min(y, height * chop);
+        x *= p;
+      } else if (profile === "range") {
+        y = valueNoise3(x * 0.5 * frequency, j * 0.3, noiseSeed) * Math.sqrt(Math.sin(Math.PI * t)) * height * p;
+        x *= p;
+      } else {
+        y = (valueNoise3(x * frequency, j * 0.5, noiseSeed) - 0.47) * height;
+      }
+      points.push(new THREE.Vector3(anchor.x + x, anchor.y + y - sink, anchor.z));
+    }
+    stack.push(points);
+  }
+  return stack;
+}
+
+describe("Silhouette Layers reads files saved as Ridge Layers", () => {
+  // The Shan Shui demo's four landforms, as they were saved.
+  const saved: Record<string, unknown>[] = [
+    { profile: "peak", width: 6, height: 4.8, frequency: 1, shrink: 1, drop: 0.03, chop: 0.55, layers: 10, resolution: 50, sizeJitter: 0.35, seed: 4 },
+    { profile: "range", width: 20, height: 4.3, frequency: 1.825, shrink: 0, drop: 0, layers: 1, resolution: 120, sizeJitter: 0.23063, seed: 8 },
+    { profile: "plateau", width: 9, height: 1, frequency: 1, shrink: 0.6, drop: 0.04, chop: 0.6, layers: 5, resolution: 50, sizeJitter: 0.25, seed: 12 },
+    { profile: "flat", width: 13.375, height: 1.725, frequency: 0.275, shrink: 0, drop: 0.09, chop: 4.75, layers: 10, resolution: 160, sizeJitter: 0.05137, seed: 30 },
+    { profile: "flat", width: 4, height: 1, shrink: 0.8, layers: 4, resolution: 30, seed: 2 },
+  ];
+  const anchors = [new THREE.Vector3(0, 0, 0), new THREE.Vector3(7, -1, -3)];
+  const scales = [1, 0.6];
+
+  for (const old of saved) {
+    test(`${old.profile} (seed ${old.seed}) draws exactly what it did`, () => {
+      const params = { ...RIDGE_LAYERS_NODE.defaultParams, ...RIDGE_LAYERS_NODE.upgradeParams!({ ...old }) };
+      const out = RIDGE_LAYERS_NODE.evaluate({ anchors, scales }, params, ctx(`legacy-${old.profile}-${old.seed}`));
+      const p = { ...RIDGE_LAYERS_NODE.defaultParams, ...old } as Record<string, number>;
+      const seed = p.seed;
+      anchors.forEach((anchor, m) => {
+        const rng = createPRNG(seed * 7919 + m * 104729 + 1);
+        const w = p.width * scales[m] * (1 + p.sizeJitter * (rng() * 2 - 1));
+        const h = p.height * scales[m] * (1 + p.sizeJitter * (rng() * 2 - 1));
+        const expected = legacyStack(String(old.profile), anchor, w, h, p.layers, p.resolution, p.frequency, p.shrink, p.drop, p.chop, seed * 13.7 + m * 3.17, rng);
+        const actual = (out.stacks as THREE.CatmullRomCurve3[][])[m].map((c) => c.points);
+        expect(actual.length).toBe(expected.length);
+        actual.forEach((layer, j) => layer.forEach((pt, i) => expect(pt.distanceTo(expected[j][i])).toBeLessThan(1e-9)));
+      });
+    });
+  }
+
+  test("upgrading leaves params already in the new shape alone", () => {
+    const current = { ...RIDGE_LAYERS_NODE.defaultParams, envelope: "dome", height: 7 };
+    expect(RIDGE_LAYERS_NODE.upgradeParams!(current)).toBe(current);
+  });
+
+  test("a loaded file is upgraded, inside groups too", () => {
+    const file = JSON.stringify({
+      canvases: [{
+        nodes: [
+          { id: "r", type: "curve/ridge-layers", position: { x: 0, y: 0 }, params: { profile: "plateau", height: 1, chop: 0.6 } },
+          {
+            id: "g", type: "structure/group", position: { x: 0, y: 0 }, params: {},
+            subgraph: { nodes: [{ id: "r2", type: "curve/ridge-layers", position: { x: 0, y: 0 }, params: { profile: "range" } }], connections: [] },
+          },
+        ],
+        connections: [],
+      }],
+      activeCanvas: 0,
+    });
+    const nodes = deserializeProject(file).canvases[0].nodes;
+    expect(nodes[0].params).toMatchObject({ envelope: "bell", height: 2, chop: 0.3, clipTop: true });
+    expect(nodes[1].subgraph!.nodes[0].params).toMatchObject({ envelope: "dome", noiseSpace: "world", frequency: 0.5 });
   });
 });
 
@@ -129,6 +234,12 @@ describe("INK_STROKE_NODE", () => {
     const b = INK_STROKE_NODE.evaluate({ curves: [line.clone()] }, INK_STROKE_NODE.defaultParams, ctx("ink-b")).geometry as THREE.Mesh;
     expect(b).toBe(a);
     expect(b.geometry).toBe(geometry);
+  });
+
+  test("a drawn width curve sets the width along the stroke", () => {
+    const params = { ...INK_STROKE_NODE.defaultParams, profile: "curve", profileCurve: [{ x: 0, y: 1 }, { x: 1, y: 1 }], widthNoise: 0, minWidth: 0, width: 0.05 };
+    const pos = (INK_STROKE_NODE.evaluate({ curve: line }, params, ctx("ink-d")).geometry as THREE.Mesh).geometry.getAttribute("position");
+    for (let i = 0; i < pos.count; i += 2) expect(Math.abs(pos.getY(i) - pos.getY(i + 1))).toBeCloseTo(0.1, 6);
   });
 
   test("nothing wired: an empty mesh, no throw", () => {

@@ -644,7 +644,12 @@
             "shrink": 1,
             "drop": 0.03,
             "chop": 0.55,
-            "seed": 4
+            "seed": 4,
+            "envelope": "arch",
+            "noiseSpace": "relative",
+            "noiseOffset": 10,
+            "layerDrift": 0.15,
+            "clipTop": false
           }
         },
         {
@@ -849,7 +854,7 @@
             "sizeJitter": 0.23063,
             "layers": 1,
             "resolution": 120,
-            "frequency": 1.825,
+            "frequency": 0.9125,
             "shrink": 0,
             "drop": 0,
             "seed": 8,
@@ -857,7 +862,12 @@
               "x": 0,
               "y": 1.275,
               "z": 0
-            }
+            },
+            "envelope": "dome",
+            "noiseSpace": "world",
+            "noiseOffset": 0,
+            "layerDrift": 0.3,
+            "clipTop": false
           }
         },
         {
@@ -886,15 +896,20 @@
           "params": {
             "profile": "plateau",
             "width": 9,
-            "height": 1,
+            "height": 2,
             "sizeJitter": 0.25,
             "layers": 5,
             "resolution": 50,
             "frequency": 1,
             "shrink": 0.6,
             "drop": 0.04,
-            "chop": 0.6,
-            "seed": 12
+            "chop": 0.3,
+            "seed": 12,
+            "envelope": "bell",
+            "noiseSpace": "relative",
+            "noiseOffset": 10,
+            "layerDrift": 0.1,
+            "clipTop": true
           }
         },
         {
@@ -1027,7 +1042,12 @@
               "x": 0,
               "y": 0,
               "z": 6.0300035189909895
-            }
+            },
+            "envelope": "none",
+            "noiseSpace": "world",
+            "noiseOffset": 0,
+            "layerDrift": 0.5,
+            "clipTop": false
           }
         },
         {

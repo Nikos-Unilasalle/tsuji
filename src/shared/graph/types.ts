@@ -320,6 +320,14 @@ export interface NodeDefinition {
    */
   dynamicParamFields?: (instance: NodeInstance) => ParamFieldDef[];
   /**
+   * Rewrites a saved instance's params from an older shape of this node into
+   * the current one, when a file is loaded. This is what lets a node be made
+   * more general — a fixed choice split into the settings it stood for —
+   * without breaking the files that used the old form. Must leave params
+   * already in the current shape untouched, since every load runs it.
+   */
+  upgradeParams?: (params: Record<string, unknown>) => Record<string, unknown>;
+  /**
    * The node's Reset icon (shown under it on hover), for a node that carries
    * data authored in it — an edited mesh, painted pixels, drawn strokes.
    * Either those params go back to their defaults, or an action runs (App's
