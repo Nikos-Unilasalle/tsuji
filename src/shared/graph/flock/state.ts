@@ -1,4 +1,5 @@
 import { createPRNG } from "../../math/random";
+import type { Avoider } from "../obstacles";
 
 /**
  * Flock — the agent simulation behind the Flock node, kept free of
@@ -70,6 +71,10 @@ export interface FlockParams {
   maxPitch: number;
   /** Roll into turns, 0 = none. */
   bank: number;
+  /** How hard agents steer away from obstacles; 0 ignores them. */
+  obstacle: number;
+  /** Nearest obstacle surface around a point, if any is in reach — see obstacles.ts. */
+  avoid?: Avoider;
 }
 
 export interface Vec3 {

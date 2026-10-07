@@ -1,10 +1,12 @@
 import { fromBoolean } from "../sockets";
 import { NodeDefinition } from "../types";
 import { createNodeCache } from "../nodeCaches";
+import { perSession, sessionKey } from "../sessionState";
 
 // Global set tracking currently pressed keys
 const pressedKeys = new Set<string>();
-const prevKeyStateCache = createNodeCache<boolean>();
+/** Per render loop, so each viewport sees every key press once — see sessionState.ts. */
+const prevKeyStateCache = createNodeCache<Map<string, boolean>>();
 
 if (typeof window !== "undefined") {
   window.addEventListener("keydown", (e) => {
@@ -72,8 +74,12 @@ export const KEYBOARD_NODE: NodeDefinition = {
     const keyInput = inputs.key !== undefined ? String(inputs.key) : String(params.key ?? "a");
     const isDown = isKeyPressed(keyInput);
 
-    const prev = prevKeyStateCache.get(ctx.nodeId) ?? false;
-    prevKeyStateCache.set(ctx.nodeId, isDown);
+    let sessions = prevKeyStateCache.get(ctx.nodeId);
+    if (!sessions) prevKeyStateCache.set(ctx.nodeId, (sessions = new Map()));
+    const key = sessionKey(ctx);
+    const prev = sessions.get(key) ?? false;
+    perSession(sessions, key, () => isDown);
+    sessions.set(key, isDown);
 
     const pressed = isDown && !prev;
 

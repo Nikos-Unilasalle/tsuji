@@ -4,6 +4,7 @@ import { createNodeCache } from "../nodeCaches";
 import { STEP_SECONDS, stepsSince } from "../clock";
 import { toBoolean } from "../sockets";
 import { findFirstMesh } from "../meshRequired";
+import { perSession, sessionKey } from "../sessionState";
 import { numberInput } from "./object";
 import { asVector3 } from "./transform";
 import {
@@ -17,19 +18,25 @@ import {
   scatterFlock,
 } from "../flock/state";
 import { stepFlock } from "../flock/steering";
+import { collectObstacles, makeAvoider } from "../obstacles";
 
 const DEG = Math.PI / 180;
 /** Same catch-up ceiling as the other step-driven simulations: a stall advances visibly instead of hanging. */
 const MAX_CATCHUP_STEPS = 10;
 const FORWARD_AXES = ["+Z", "-Z", "+X", "-X"];
 
-interface FlockNodeState {
+/** One render loop's simulation — see sessionState.ts for why each viewport keeps its own. */
+interface FlockSim {
   sim: FlockState;
   epoch: number;
   lastStep: number;
   seed: number;
   prevCall: boolean;
   prevScatter: boolean;
+}
+
+interface FlockNodeState {
+  sessions: Map<string, FlockSim>;
   mesh?: THREE.InstancedMesh;
   meshKey?: string;
   points: THREE.Vector3[];
@@ -99,12 +106,13 @@ function readParams(inputs: Record<string, unknown>, params: Record<string, unkn
     callSpread: nonNeg(numberInput(undefined, params.callSpread, 0.6)),
     maxPitch: nonNeg(numberInput(undefined, params.maxPitch, 35)) * DEG,
     bank: numberInput(undefined, params.bank, 0.5),
+    obstacle: nonNeg(numberInput(undefined, params.obstacleWeight, 3)),
   };
 }
 
-function freshState(epoch: number, step: number, seed: number): FlockNodeState {
+function freshSim(epoch: number, step: number, seed: number): FlockSim {
   // lastStep one behind so the very first evaluation advances a step instead of freezing.
-  return { sim: createFlockState(), epoch, lastStep: step - 1, seed, prevCall: false, prevScatter: false, points: [], rotations: [], headings: [], speeds: [], phases: [], sizes: [] };
+  return { sim: createFlockState(), epoch, lastStep: step - 1, seed, prevCall: false, prevScatter: false };
 }
 
 function axisAlignment(axis: string): THREE.Quaternion {
@@ -157,6 +165,10 @@ function syncList<T>(list: T[], n: number, make: () => T): void {
  * pivot — on each agent's own clock, and every agent carries a small
  * personality, so the group never moves in lockstep.
  *
+ * Obstacles (any geometry — rocks, pillars, a character) are steered
+ * around within Avoidance Distance, and an agent that slips inside a closed
+ * one is put back out.
+ *
  * Call (a rising edge, e.g. Click's Pressed) summons the flock to the Target
  * as it is at that moment: each agent answers after its own delay, bursts,
  * rises to the top of the bounds in Plane mode, and circles the point rather
@@ -175,6 +187,7 @@ export const FLOCK_NODE: NodeDefinition = {
   category: "particles",
   inputs: [
     { id: "shape", label: "Shape (Mesh)", type: "geometry" },
+    { id: "obstacles", label: "Obstacles (Geometry)", type: "geometry" },
     { id: "count", label: "Count", type: "value" },
     { id: "target", label: "Target", type: "vector" },
     { id: "targetWeight", label: "Target Pull", type: "value" },
@@ -220,6 +233,8 @@ export const FLOCK_NODE: NodeDefinition = {
     callSpread: 0.6,
     maxPitch: 35,
     bank: 0.5,
+    obstacleWeight: 3,
+    obstacleRadius: 1,
     scale: 0.4,
     forwardAxis: "+Z",
     visible: true,
@@ -257,42 +272,44 @@ export const FLOCK_NODE: NodeDefinition = {
     { id: "circle", label: "Circling", kind: "number", step: 0.05, group: "Target" },
     { id: "callDuration", label: "Call Duration (s)", kind: "number", step: 0.1, group: "Target" },
     { id: "callSpread", label: "Call Reaction Spread (s)", kind: "number", step: 0.05, group: "Target" },
+    { id: "obstacleWeight", label: "Avoidance (0 = ignore obstacles)", kind: "number", step: 0.1, group: "Obstacles" },
+    { id: "obstacleRadius", label: "Avoidance Distance", kind: "number", step: 0.1, group: "Obstacles" },
     { id: "scale", label: "Agent Scale", kind: "number", step: 0.05, group: "Shape" },
     { id: "forwardAxis", label: "Shape Forward Axis", kind: "select", options: FORWARD_AXES, group: "Shape" },
     { id: "visible", label: "Visible", kind: "boolean", group: "Shape" },
   ],
   evaluate: (inputs, params, ctx) => {
     const p = readParams(inputs, params);
+    p.avoid = makeAvoider(collectObstacles(inputs.obstacles), Math.max(0, numberInput(undefined, params.obstacleRadius, 1)));
     const epoch = ctx.simulationEpoch ?? 0;
     let state = flockCache.get(ctx.nodeId);
+    if (!state) {
+      state = { sessions: new Map(), points: [], rotations: [], headings: [], speeds: [], phases: [], sizes: [] };
+      flockCache.set(ctx.nodeId, state);
+    }
+    const key = sessionKey(ctx);
+    let run = perSession(state.sessions, key, () => freshSim(epoch, ctx.step, p.seed));
     // A scrub backwards, a reset or a new seed: the flock's history no longer
     // belongs to this timeline, so start the school over rather than replay it.
-    if (state && (state.epoch !== epoch || ctx.step < state.lastStep || state.seed !== p.seed)) {
-      const keep = state;
-      state = freshState(epoch, ctx.step, p.seed);
-      state.mesh = keep.mesh;
-      state.meshKey = keep.meshKey;
-      flockCache.set(ctx.nodeId, state);
+    if (run.epoch !== epoch || ctx.step < run.lastStep || run.seed !== p.seed) {
+      run = freshSim(epoch, ctx.step, p.seed);
+      state.sessions.set(key, run);
     }
-    if (!state) {
-      state = freshState(epoch, ctx.step, p.seed);
-      flockCache.set(ctx.nodeId, state);
-    }
-    const sim = state.sim;
+    const sim = run.sim;
 
     const count = Math.max(0, Math.min(MAX_AGENTS, Math.floor(numberInput(inputs.count, params.count, 40))));
     if (count !== sim.count) resizeFlock(sim, count, p);
 
     const call = toBoolean(inputs.call);
-    if (call && !state.prevCall) callFlock(sim, p.target, p);
-    state.prevCall = call;
+    if (call && !run.prevCall) callFlock(sim, p.target, p);
+    run.prevCall = call;
     const scatter = toBoolean(inputs.scatter);
-    if (scatter && !state.prevScatter) scatterFlock(sim, flockCentroid(sim, p));
-    state.prevScatter = scatter;
+    if (scatter && !run.prevScatter) scatterFlock(sim, flockCentroid(sim, p));
+    run.prevScatter = scatter;
 
-    const steps = stepsSince(state.lastStep, ctx.step, MAX_CATCHUP_STEPS);
+    const steps = stepsSince(run.lastStep, ctx.step, MAX_CATCHUP_STEPS);
     for (let s = 0; s < steps; s++) stepFlock(sim, p, STEP_SECONDS);
-    state.lastStep = Math.max(state.lastStep, ctx.step);
+    run.lastStep = Math.max(run.lastStep, ctx.step);
 
     const shapeMesh = inputs.shape instanceof THREE.Object3D ? findFirstMesh(inputs.shape) : null;
     const sourceGeometry = shapeMesh?.geometry ?? bodyGeometry();

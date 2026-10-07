@@ -222,7 +222,7 @@ export const DEMO_CATALOG: DemoCategory[] = [
       {
         file: "demo_curve_spine_koi.tsuji",
         label: "Spine Chain (Koi Pond)",
-        description: "Flock steers, Spine Chain swims, Profiled Tubes gives them bodies: each koi trails its head and beats its tail harder as it speeds up, skinned with the Koi shape and Koi patches. Click to call them, s to scatter.",
+        description: "Flock steers, Spine Chain swims, Profiled Tubes gives them bodies: each koi trails its head and beats its tail harder as it speeds up, skinned with the Koi shape and Koi patches, leaving wakes in a Ripple Field and swimming around rocks the ripples bounce off. Click to call them (and drop a ripple), s to scatter.",
       },
       {
         file: "demo_curve_follow_path.tsuji",
@@ -254,6 +254,11 @@ export const DEMO_CATALOG: DemoCategory[] = [
   {
     title: "Physics",
     demos: [
+      {
+        file: "demo_physics_ripples.tsuji",
+        label: "Ripple Field",
+        description: "A pool that ripples: click to drop a stone, rain falls on its own. Rings spread, cross and bounce off the edges.",
+      },
       {
         file: "demo_physics_rolling.tsuji",
         label: "Rolling Cube",

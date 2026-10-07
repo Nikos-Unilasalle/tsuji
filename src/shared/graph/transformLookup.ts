@@ -61,6 +61,7 @@ export const GIZMO_SELECTABLE_TYPES = [
   "object/ply_point_cloud",
   "curve/from_point_lists",
   "curve/profiled-tubes",
+  "physics/ripple-field",
   "curve/text-on-path",
   "text/animator",
   "particles/render-instances",

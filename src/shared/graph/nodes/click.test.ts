@@ -81,4 +81,15 @@ describe("CLICK_NODE", () => {
     res = CLICK_NODE.evaluate({}, CLICK_NODE.defaultParams, ctx);
     expect(res).toEqual({ isDown: 0, pressed: 0, released: 0 });
   });
+
+  it("every viewport sees the press once, not only the first to evaluate", () => {
+    const editor: EvalContext = { ...CTX, nodeId: "click-views", sessionId: "viewport-0" };
+    const output: EvalContext = { ...editor, sessionId: "viewport-1" };
+    CLICK_NODE.evaluate({}, CLICK_NODE.defaultParams, editor);
+    CLICK_NODE.evaluate({}, CLICK_NODE.defaultParams, output);
+    simulatePointerButton(0, true);
+    expect(CLICK_NODE.evaluate({}, CLICK_NODE.defaultParams, editor).pressed).toBe(1);
+    expect(CLICK_NODE.evaluate({}, CLICK_NODE.defaultParams, output).pressed).toBe(1);
+    expect(CLICK_NODE.evaluate({}, CLICK_NODE.defaultParams, editor).pressed).toBe(0);
+  });
 });

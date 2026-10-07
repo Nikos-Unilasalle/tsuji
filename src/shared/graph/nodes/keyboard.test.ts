@@ -37,4 +37,15 @@ describe("KEYBOARD_NODE", () => {
     expect(res.isDown).toBe(1);
     simulateKeyUp("space");
   });
+
+  it("every viewport sees the key press once", () => {
+    const editor: EvalContext = { ...CTX, nodeId: "key-views", sessionId: "viewport-0" };
+    const output: EvalContext = { ...editor, sessionId: "viewport-1" };
+    KEYBOARD_NODE.evaluate({ key: "q" }, {}, editor);
+    KEYBOARD_NODE.evaluate({ key: "q" }, {}, output);
+    simulateKeyDown("q");
+    expect(KEYBOARD_NODE.evaluate({ key: "q" }, {}, editor).pressed).toBe(1);
+    expect(KEYBOARD_NODE.evaluate({ key: "q" }, {}, output).pressed).toBe(1);
+    simulateKeyUp("q");
+  });
 });

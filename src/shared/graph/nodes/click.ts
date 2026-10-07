@@ -1,6 +1,7 @@
 import { fromBoolean } from "../sockets";
 import { NodeDefinition } from "../types";
 import { createNodeCache } from "../nodeCaches";
+import { perSession, sessionKey } from "../sessionState";
 import { isPointerButtonDown, pointerButtonEdgeCounts } from "../pointerStore";
 
 interface ClickState {
@@ -8,7 +9,8 @@ interface ClickState {
   seenUp: number;
 }
 
-const stateCache = createNodeCache<ClickState>();
+/** Per render loop, so each viewport sees every click once — see sessionState.ts. */
+const stateCache = createNodeCache<Map<string, ClickState>>();
 
 /** PointerEvent.button values, by name — matches the param select below. */
 const BUTTONS: Record<string, number> = { left: 0, middle: 1, right: 2 };
@@ -47,14 +49,18 @@ export const CLICK_NODE: NodeDefinition = {
     const isDown = isPointerButtonDown(button);
     const { down, up } = pointerButtonEdgeCounts(button);
 
-    const prev = stateCache.get(ctx.nodeId);
+    let sessions = stateCache.get(ctx.nodeId);
+    if (!sessions) stateCache.set(ctx.nodeId, (sessions = new Map()));
+    const key = sessionKey(ctx);
+    const prev = sessions.get(key);
     // No prior read (the node's first frame): if the button is already down,
     // back-date the seen count by one so this first read still reports the
     // rising edge — same as Keyboard's own first-frame behavior, "already
     // held when the node appeared" counts as just pressed. A first read
     // while up never reports `released`; there is nothing to have released.
     const baseline = prev ?? { seenDown: isDown ? down - 1 : down, seenUp: up };
-    stateCache.set(ctx.nodeId, { seenDown: down, seenUp: up });
+    perSession(sessions, key, () => baseline);
+    sessions.set(key, { seenDown: down, seenUp: up });
 
     const pressed = down !== baseline.seenDown;
     const released = prev !== undefined && up !== baseline.seenUp;

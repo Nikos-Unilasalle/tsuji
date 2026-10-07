@@ -5,6 +5,7 @@ import { toBoolean } from "../sockets";
 import { evalProfileCurve, ProfilePoint } from "../profileCurve";
 import { clockInput, numberInput } from "./object";
 import { asVector3 } from "./transform";
+import { perSession, sessionKey } from "../sessionState";
 import {
   advancePhase,
   ChainSet,
@@ -27,10 +28,15 @@ const MAX_CHAINS = 2000;
 /** Little at the start, all of it at the end — a swimming fish, a flag, a tail. */
 const DEFAULT_ENVELOPE: ProfilePoint[] = [{ x: 0, y: 0.08 }, { x: 0.5, y: 0.3 }, { x: 1, y: 1 }];
 
-interface SpineState {
+/** One render loop's chains — see sessionState.ts for why each viewport keeps its own. */
+interface SpineRun {
   chains: ChainSet;
   lastTime?: number;
   epoch?: number;
+}
+
+interface SpineState {
+  sessions: Map<string, SpineRun>;
   spine: Float64Array;
   envelope: Float64Array;
   envelopeKey?: string;
@@ -164,19 +170,20 @@ export const SPINE_CHAIN_NODE: NodeDefinition = {
 
     let state = spineCache.get(ctx.nodeId);
     if (!state) {
-      state = { chains: createChainSet(), spine: new Float64Array(0), envelope: new Float64Array(0), pointLists: [] };
+      state = { sessions: new Map(), spine: new Float64Array(0), envelope: new Float64Array(0), pointLists: [] };
       spineCache.set(ctx.nodeId, state);
     }
-    const chains = state.chains;
+    const run = perSession<SpineRun>(state.sessions, sessionKey(ctx), () => ({ chains: createChainSet() }));
+    const chains = run.chains;
     const seedOne = (i: number) => seedChain(chains, i, heads[i], listVector(inputs.headings, i), lengthOf(i));
 
     const time = clockInput(inputs, params, ctx);
     const epoch = ctx.simulationEpoch ?? 0;
-    const rewound = state.lastTime !== undefined && time < state.lastTime - REWIND_THRESHOLD;
-    const reseed = state.lastTime === undefined || rewound || state.epoch !== epoch;
-    const dt = reseed ? 0 : Math.max(0, time - (state.lastTime ?? time));
-    state.lastTime = time;
-    state.epoch = epoch;
+    const rewound = run.lastTime !== undefined && time < run.lastTime - REWIND_THRESHOLD;
+    const reseed = run.lastTime === undefined || rewound || run.epoch !== epoch;
+    const dt = reseed ? 0 : Math.max(0, time - (run.lastTime ?? time));
+    run.lastTime = time;
+    run.epoch = epoch;
 
     // Forgetting the segment count makes the resize below re-seed every chain.
     if (reseed) chains.segments = 0;

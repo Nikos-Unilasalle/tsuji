@@ -10,6 +10,7 @@ import {
   pickState,
   stateDuration,
 } from "./state";
+import type { Avoidance } from "../obstacles";
 
 /**
  * One fixed step of the flock: neighbour search on a uniform grid, the
@@ -62,6 +63,8 @@ function buildGrid(state: FlockState, params: FlockParams): Grid {
 }
 
 const desired = { x: 0, y: 0, z: 0 };
+const push = { x: 0, y: 0, z: 0 };
+const avoidance: Avoidance = { x: 0, y: 0, z: 0, weight: 0, inside: false, distance: 0 };
 
 /**
  * Turns unit vector `dir` (at index b) toward `to` by at most `maxAngle`
@@ -216,6 +219,26 @@ export function stepFlock(state: FlockState, params: FlockParams, dt: number): v
     desired.y += ey * params.edge * 2;
     desired.z += ez * params.edge * 2;
 
+    if (params.avoid && params.obstacle > 0) {
+      // Felt here and a little ahead, so an agent turns before it reaches
+      // the rock rather than as it touches it.
+      const ahead = Math.max(0.2, state.speed[i] * 0.6);
+      let w = 0;
+      if (params.avoid(px, py, pz, avoidance)) {
+        w = avoidance.weight;
+        push.x = avoidance.x; push.y = avoidance.y; push.z = avoidance.z;
+      }
+      if (params.avoid(px + hx * ahead, py + hy * ahead, pz + hz * ahead, avoidance) && avoidance.weight * 0.8 > w) {
+        w = avoidance.weight * 0.8;
+        push.x = avoidance.x; push.y = avoidance.y; push.z = avoidance.z;
+      }
+      if (w > 0) {
+        desired.x += push.x * w * params.obstacle * 2;
+        if (!plane) desired.y += push.y * w * params.obstacle * 2;
+        desired.z += push.z * w * params.obstacle * 2;
+      }
+    }
+
     const called = state.callLeft[i] > 0;
     const pullWeight = called ? Math.max(params.targetWeight, 2.5) : params.targetWeight;
     let callSpeed = 0;
@@ -298,6 +321,27 @@ export function stepFlock(state: FlockState, params: FlockParams, dt: number): v
       pos[b + 1] += (state.depthTarget[i] - pos[b + 1]) * Math.min(1, dt * (called ? 1.5 : 0.35));
     } else {
       pos[b + 1] += dir[b + 1] * v * dt;
+    }
+
+    // Steering should keep agents out of obstacles; one that got in anyway
+    // (a fast burst, an obstacle that moved onto it) is put back outside.
+    if (params.avoid && params.obstacle > 0 && params.avoid(pos[b], pos[b + 1], pos[b + 2], avoidance) && avoidance.inside) {
+      const out = avoidance.distance + 0.02;
+      if (plane) {
+        // Depth is not the agent's to change here, so it leaves sideways: far
+        // enough along the level that its move along the surface normal
+        // covers the whole way out, even under a sloping flank.
+        const flat = Math.hypot(avoidance.x, avoidance.z);
+        if (flat > 1e-3) {
+          const reach = out / Math.max(0.2, flat);
+          pos[b] += (avoidance.x / flat) * reach;
+          pos[b + 2] += (avoidance.z / flat) * reach;
+        }
+      } else {
+        pos[b] += avoidance.x * out;
+        pos[b + 1] += avoidance.y * out;
+        pos[b + 2] += avoidance.z * out;
+      }
     }
 
     // Steering keeps agents inside; this only catches what a weak Edge weight lets slip out.

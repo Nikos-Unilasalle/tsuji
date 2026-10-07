@@ -5,6 +5,7 @@ import { EvalContext } from "../types";
 import { STEP_SECONDS } from "../clock";
 import { callFlock, createFlockState, FlockParams, resizeFlock, scatterFlock } from "../flock/state";
 import { stepFlock } from "../flock/steering";
+import { collectObstacles, makeAvoider, Avoidance } from "../obstacles";
 
 const ctx = (nodeId: string, step: number, extra: Partial<EvalContext> = {}): EvalContext => ({ nodeId, step, time: step * STEP_SECONDS, ...extra });
 
@@ -34,6 +35,7 @@ function params(overrides: Partial<FlockParams> = {}): FlockParams {
     callSpread: 0.6,
     maxPitch: (35 * Math.PI) / 180,
     bank: 0.5,
+    obstacle: 0,
     ...overrides,
   };
 }
@@ -184,5 +186,76 @@ describe("FLOCK_NODE", () => {
   test("bad count input falls back and stays within limits", () => {
     expect(FLOCK_NODE.evaluate({ count: Number.NaN }, FLOCK_NODE.defaultParams, ctx("flock-nan", 0)).count).toBe(40);
     expect(FLOCK_NODE.evaluate({ count: -5 }, FLOCK_NODE.defaultParams, ctx("flock-neg", 0)).count).toBe(0);
+  });
+
+  test("viewports on different clocks keep their own flock instead of resetting each other", () => {
+    const live = (step: number) => ctx("flock-views", step, { sessionId: "viewport-0" });
+    const exporting = (step: number) => ctx("flock-views", step, { sessionId: "export" });
+    const first = (FLOCK_NODE.evaluate({}, FLOCK_NODE.defaultParams, live(0)).points as THREE.Vector3[])[0].clone();
+    let liveAt = first;
+    for (let s = 1; s <= 60; s++) {
+      liveAt = (FLOCK_NODE.evaluate({}, FLOCK_NODE.defaultParams, live(s)).points as THREE.Vector3[])[0].clone();
+      // The export replays from frame 0 between live frames.
+      FLOCK_NODE.evaluate({}, FLOCK_NODE.defaultParams, exporting(Math.floor(s / 4)));
+    }
+    expect(liveAt.distanceTo(first)).toBeGreaterThan(0.3);
+    const replay = (FLOCK_NODE.evaluate({}, FLOCK_NODE.defaultParams, exporting(0)).points as THREE.Vector3[])[0];
+    expect(replay.distanceTo(first)).toBeLessThan(1e-9);
+  });
+});
+
+describe("flock obstacles", () => {
+  const rock = () => new THREE.Mesh(new THREE.SphereGeometry(1, 24, 16), new THREE.MeshBasicMaterial());
+  const blank = (): Avoidance => ({ x: 0, y: 0, z: 0, weight: 0, inside: false, distance: 0 });
+
+  test("the avoider points away from the nearest surface, outward even from inside", () => {
+    const avoid = makeAvoider(collectObstacles(rock()), 1)!;
+    const near = blank();
+    expect(avoid(1.5, 0, 0, near)).toBe(true);
+    expect(near.inside).toBe(false);
+    expect(near.x).toBeGreaterThan(0.95);
+    expect(near.weight).toBeCloseTo(0.25, 1);
+    const within = blank();
+    expect(avoid(0.4, 0, 0, within)).toBe(true);
+    expect(within.inside).toBe(true);
+    expect(within.x).toBeGreaterThan(0.95);
+    expect(avoid(5, 0, 0, blank())).toBe(false);
+  });
+
+  test("follows the obstacle's own placement", () => {
+    const moved = rock();
+    moved.position.set(4, 0, 0);
+    const group = new THREE.Group();
+    group.add(moved);
+    const out = blank();
+    expect(makeAvoider(collectObstacles(group), 1)!(5.5, 0, 0, out)).toBe(true);
+    expect(out.x).toBeGreaterThan(0.95);
+  });
+
+  test("agents keep out of a rock in the middle of the pond", () => {
+    const count = (withRock: boolean) => {
+      const p = params({ boundsSize: { x: 8, y: 1, z: 8 }, obstacle: withRock ? 3 : 0, avoid: withRock ? makeAvoider(collectObstacles(rock()), 1) : undefined });
+      const state = createFlockState();
+      resizeFlock(state, 40, p);
+      let inside = 0;
+      for (let s = 0; s < 1200; s++) {
+        stepFlock(state, p, STEP_SECONDS);
+        if (s % 10) continue;
+        // In 3D: the sphere narrows away from its middle, so a fish deep enough is clear of it closer to its axis.
+        for (let i = 0; i < state.count; i++) if (Math.hypot(state.pos[i * 3], state.pos[i * 3 + 1], state.pos[i * 3 + 2]) < 0.95) inside++;
+      }
+      return inside;
+    };
+    const free = count(false);
+    expect(free).toBeGreaterThan(20);
+    expect(count(true)).toBe(0);
+  });
+
+  test("the node takes any geometry as obstacles", () => {
+    const id = "flock-rock";
+    let points: THREE.Vector3[] = [];
+    const p = { ...FLOCK_NODE.defaultParams, boundsSize: new THREE.Vector3(8, 1, 8) };
+    for (let s = 0; s < 600; s++) points = FLOCK_NODE.evaluate({ obstacles: rock() }, p, ctx(id, s)).points as THREE.Vector3[];
+    for (const pt of points) expect(pt.length()).toBeGreaterThan(0.95);
   });
 });
