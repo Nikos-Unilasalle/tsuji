@@ -1863,7 +1863,7 @@ export const OBJECT_TEXT_NODE: NodeDefinition = {
     } },
     { id: "fontSize", label: "Font Size (px)", kind: "number" },
     { id: "depth", label: "Depth / Relief", kind: "number", step: 0.05 },
-    { id: "faceCamera", label: "Face Camera (always readable)", kind: "boolean" },
+    { id: "faceCamera", label: "Face Camera", kind: "boolean" },
   ])(),
   dynamicParamFields: buildPrimitiveDynamicParamFields([
     { id: "text", label: "Text (fallback)", kind: "text" },
@@ -1879,7 +1879,7 @@ export const OBJECT_TEXT_NODE: NodeDefinition = {
     } },
     { id: "fontSize", label: "Font Size (px)", kind: "number" },
     { id: "depth", label: "Depth / Relief", kind: "number", step: 0.05 },
-    { id: "faceCamera", label: "Face Camera (always readable)", kind: "boolean" },
+    { id: "faceCamera", label: "Face Camera", kind: "boolean" },
   ]),
   evaluate: (inputs, params, ctx) => {
     const textState = textMesh(ctx.nodeId);

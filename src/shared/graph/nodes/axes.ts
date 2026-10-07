@@ -68,27 +68,27 @@ function axisSpec(params: Record<string, unknown>, axis: "x" | "y" | "z"): AxisS
 }
 
 const EXTRA_FIELDS: ParamFieldDef[] = [
-  { id: "dimension", label: "Dimension", kind: "select", options: ["2D", "3D"], optionLabels: ["2D (x right, y up)", "3D (z up)"], group: "Axes" },
+  { id: "dimension", label: "Dimension", kind: "select", options: ["2D", "3D"], group: "Axes" },
   { id: "xMin", label: "x min", kind: "number", step: 0.5, group: "Axes" },
   { id: "xMax", label: "x max", kind: "number", step: 0.5, group: "Axes" },
-  { id: "xStep", label: "x step (0 = auto)", kind: "number", step: 0.5, group: "Axes" },
+  { id: "xStep", label: "x step", kind: "number", step: 0.5, group: "Axes" },
   { id: "yMin", label: "y min", kind: "number", step: 0.5, group: "Axes" },
   { id: "yMax", label: "y max", kind: "number", step: 0.5, group: "Axes" },
-  { id: "yStep", label: "y step (0 = auto)", kind: "number", step: 0.5, group: "Axes" },
-  { id: "zMin", label: "z min (3D)", kind: "number", step: 0.5, group: "Axes" },
-  { id: "zMax", label: "z max (3D)", kind: "number", step: 0.5, group: "Axes" },
-  { id: "zStep", label: "z step (0 = auto)", kind: "number", step: 0.5, group: "Axes" },
-  { id: "unit", label: "Unit Length (world, per axis)", kind: "vector", group: "Axes" },
-  { id: "grid", label: "Grid", kind: "select", options: [...GRID_PLANES], optionLabels: ["None", "xy", "xz", "yz", "All three"], group: "Grid" },
+  { id: "yStep", label: "y step", kind: "number", step: 0.5, group: "Axes" },
+  { id: "zMin", label: "z min", kind: "number", step: 0.5, group: "Axes" },
+  { id: "zMax", label: "z max", kind: "number", step: 0.5, group: "Axes" },
+  { id: "zStep", label: "z step", kind: "number", step: 0.5, group: "Axes" },
+  { id: "unit", label: "Unit Length", kind: "vector", group: "Axes" },
+  { id: "grid", label: "Grid", kind: "select", options: [...GRID_PLANES], optionLabels: ["None", "xy", "xz", "yz", "All"], group: "Grid" },
   { id: "labels", label: "Numbers", kind: "boolean", group: "Labels" },
-  { id: "piTicks", label: "x in multiples of π", kind: "boolean", group: "Labels" },
-  { id: "names", label: "Axis Names (comma list)", kind: "text", group: "Labels" },
+  { id: "piTicks", label: "x in π", kind: "boolean", group: "Labels" },
+  { id: "names", label: "Axis Names", kind: "text", group: "Labels" },
   { id: "labelSize", label: "Text Size", kind: "number", step: 0.05, group: "Labels" },
   { id: "arrows", label: "Arrow Tips", kind: "boolean", group: "Style" },
   { id: "axisColor", label: "Axis Color", kind: "color", group: "Style" },
   { id: "gridColor", label: "Grid Color", kind: "color", group: "Style" },
-  { id: "axisWidth", label: "Axis Width (px)", kind: "number", step: 0.5, group: "Style" },
-  { id: "gridWidth", label: "Grid Width (px)", kind: "number", step: 0.5, group: "Style" },
+  { id: "axisWidth", label: "Axis Width", kind: "number", step: 0.5, group: "Style" },
+  { id: "gridWidth", label: "Grid Width", kind: "number", step: 0.5, group: "Style" },
 ];
 
 /**
@@ -112,7 +112,7 @@ export const AXES_NODE: NodeDefinition = {
   ],
   outputs: [
     { id: "geometry", label: "Geometry", type: "geometry" },
-    { id: "space", label: "Space (math → world)", type: "matrix" },
+    { id: "space", label: "Space", type: "matrix" },
     { id: "matrix", label: "Matrix", type: "matrix" },
   ],
   defaultParams: {

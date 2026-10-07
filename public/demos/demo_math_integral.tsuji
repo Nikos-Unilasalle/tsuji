@@ -1,0 +1,731 @@
+{
+  "canvases": [
+    {
+      "nodes": [
+        {
+          "id": "env",
+          "type": "lighting/environment",
+          "position": {
+            "x": 340,
+            "y": 406
+          },
+          "params": {
+            "color": 16777215,
+            "intensity": 1,
+            "background": 1,
+            "blurriness": 0,
+            "filePath": "",
+            "backgroundImagePath": "",
+            "backgroundFit": "cover",
+            "backgroundScale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "backgroundOffset": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "backgroundRotation": 0,
+            "ambientIntensity": 0.6,
+            "sunIntensity": 0
+          }
+        },
+        {
+          "id": "render",
+          "type": "render",
+          "position": {
+            "x": 610,
+            "y": 393
+          },
+          "params": {
+            "frameCount": 450,
+            "fps": 30,
+            "motionBlur": 0,
+            "resolutionPreset": "16:9 (1920x1080)",
+            "width": 1920,
+            "height": 1080,
+            "holdout": false
+          }
+        },
+        {
+          "id": "cam",
+          "type": "calibration/camera",
+          "position": {
+            "x": -900,
+            "y": -200
+          },
+          "params": {
+            "location": {
+              "x": 0.5,
+              "y": 2,
+              "z": 30
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "useTarget": true,
+            "target": {
+              "x": 0.5,
+              "y": 2,
+              "z": 0
+            },
+            "up": {
+              "x": 0,
+              "y": 1,
+              "z": 0
+            },
+            "fov": 21,
+            "active": true,
+            "mode": "manual",
+            "projectionType": "orthographic"
+          }
+        },
+        {
+          "id": "seq",
+          "type": "time/sequence",
+          "position": {
+            "x": -900,
+            "y": 120
+          },
+          "params": {
+            "steps": 6,
+            "mode": "timeline",
+            "offset": 0,
+            "step0Name": "axes",
+            "step0Duration": 1,
+            "step0Ease": "smooth",
+            "step0Start": "",
+            "step0From": 0,
+            "step0To": 1,
+            "step1Name": "curve",
+            "step1Duration": 1.5,
+            "step1Ease": "smooth",
+            "step1Start": "",
+            "step1From": 0,
+            "step1To": 1,
+            "step2Name": "area",
+            "step2Duration": 3,
+            "step2Ease": "linear",
+            "step2Start": "",
+            "step2From": -2,
+            "step2To": 3,
+            "step3Name": "rectangles",
+            "step3Duration": 1,
+            "step3Ease": "smooth",
+            "step3Start": "",
+            "step3From": 0,
+            "step3To": 1,
+            "step4Name": "refine",
+            "step4Duration": 6,
+            "step4Ease": "linear",
+            "step4Start": "",
+            "step4From": 0,
+            "step4To": 6,
+            "step5Name": "pause",
+            "step5Duration": 2.5,
+            "step5Ease": "smooth",
+            "step5Start": "",
+            "step5From": 0,
+            "step5To": 1
+          }
+        },
+        {
+          "id": "axes",
+          "type": "math/axes",
+          "position": {
+            "x": -560,
+            "y": -200
+          },
+          "params": {
+            "dimension": "2D",
+            "xMin": -3,
+            "xMax": 4,
+            "xStep": 0,
+            "yMin": -1,
+            "yMax": 5,
+            "yStep": 0,
+            "unit": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "grid": "xy",
+            "labels": true,
+            "piTicks": false,
+            "names": "x, y",
+            "labelSize": 0.28,
+            "arrows": true,
+            "axisColor": 2236962,
+            "gridColor": 14015457,
+            "axisWidth": 2,
+            "gridWidth": 1
+          }
+        },
+        {
+          "id": "curve",
+          "type": "math/function-curve",
+          "position": {
+            "x": -200,
+            "y": -260
+          },
+          "params": {
+            "mode": "function",
+            "formula": "x\u00b3/8 \u2212 x/2 + 1.5",
+            "from": -3,
+            "to": 4,
+            "samples": 400,
+            "yMin": -1,
+            "yMax": 5,
+            "progress": 1,
+            "color": 2060267,
+            "width": 3.5,
+            "dashed": false,
+            "visible": true,
+            "fill": true,
+            "fillFrom": -2,
+            "fillTo": 3,
+            "fillColor": 2060267,
+            "fillNegativeColor": 15026253,
+            "fillOpacity": 0.22
+          }
+        },
+        {
+          "id": "n",
+          "type": "math/expression",
+          "position": {
+            "x": -560,
+            "y": 360
+          },
+          "params": {
+            "formula": "2^floor(a)",
+            "a": 0
+          }
+        },
+        {
+          "id": "indices",
+          "type": "list/generate",
+          "position": {
+            "x": -300,
+            "y": 360
+          },
+          "params": {
+            "count": 1,
+            "start": 0,
+            "step": 1
+          }
+        },
+        {
+          "id": "mids",
+          "type": "math/expression",
+          "position": {
+            "x": -40,
+            "y": 360
+          },
+          "params": {
+            "formula": "a + (x + 0.5)(b \u2212 a)/c",
+            "a": -2,
+            "b": 3,
+            "c": 1
+          }
+        },
+        {
+          "id": "heights",
+          "type": "math/expression",
+          "position": {
+            "x": 220,
+            "y": 360
+          },
+          "params": {
+            "formula": "x\u00b3/8 \u2212 x/2 + 1.5"
+          }
+        },
+        {
+          "id": "centers",
+          "type": "math/expression",
+          "position": {
+            "x": 480,
+            "y": 300
+          },
+          "params": {
+            "formula": "(x, y/2, 0.02)"
+          }
+        },
+        {
+          "id": "sizes",
+          "type": "math/expression",
+          "position": {
+            "x": 480,
+            "y": 460
+          },
+          "params": {
+            "formula": "((b \u2212 a)/c \u00b7 0.94, y, 1)",
+            "a": -2,
+            "b": 3,
+            "c": 1
+          }
+        },
+        {
+          "id": "areas",
+          "type": "math/expression",
+          "position": {
+            "x": 480,
+            "y": 620
+          },
+          "params": {
+            "formula": "(b \u2212 a)/c \u00b7 y",
+            "a": -2,
+            "b": 3,
+            "c": 1
+          }
+        },
+        {
+          "id": "sum",
+          "type": "list/statistics",
+          "position": {
+            "x": 740,
+            "y": 620
+          },
+          "params": {}
+        },
+        {
+          "id": "rect",
+          "type": "object/box",
+          "position": {
+            "x": 480,
+            "y": 140
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 0.02
+            },
+            "color": 15898954,
+            "opacity": 0.55,
+            "roughness": 0.8,
+            "metalness": 0,
+            "shadeless": 1
+          }
+        },
+        {
+          "id": "rects",
+          "type": "structure/instance-on-points",
+          "position": {
+            "x": 740,
+            "y": 300
+          },
+          "params": {
+            "visible": 1,
+            "scaleMin": 1,
+            "scaleMax": 1,
+            "rotationJitter": 0,
+            "axis": "Y",
+            "randomFlip": false,
+            "seed": 0
+          }
+        },
+        {
+          "id": "areaText",
+          "type": "converter/value-to-text",
+          "position": {
+            "x": 220,
+            "y": -420
+          },
+          "params": {
+            "decimals": 3,
+            "prefix": "aire = ",
+            "suffix": ""
+          }
+        },
+        {
+          "id": "nText",
+          "type": "converter/value-to-text",
+          "position": {
+            "x": 220,
+            "y": 780
+          },
+          "params": {
+            "decimals": 0,
+            "prefix": "n = ",
+            "suffix": ""
+          }
+        },
+        {
+          "id": "sumText",
+          "type": "converter/value-to-text",
+          "position": {
+            "x": 980,
+            "y": 620
+          },
+          "params": {
+            "decimals": 3,
+            "prefix": "somme = ",
+            "suffix": ""
+          }
+        },
+        {
+          "id": "areaLabel",
+          "type": "object/text",
+          "position": {
+            "x": 480,
+            "y": -420
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": -2.9,
+              "y": 4.6,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "text": "aire",
+            "fontSize": 0.5,
+            "depth": 0,
+            "color": 2060267,
+            "shadeless": 1
+          }
+        },
+        {
+          "id": "nLabel",
+          "type": "object/text",
+          "position": {
+            "x": 480,
+            "y": 780
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": -2.9,
+              "y": 4.0,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "text": "n",
+            "fontSize": 0.5,
+            "depth": 0,
+            "color": 2236962,
+            "shadeless": 1
+          }
+        },
+        {
+          "id": "sumLabel",
+          "type": "object/text",
+          "position": {
+            "x": 1240,
+            "y": 620
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": -2.9,
+              "y": 3.4,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "text": "somme",
+            "fontSize": 0.5,
+            "depth": 0,
+            "color": 14250783,
+            "shadeless": 1
+          }
+        },
+        {
+          "id": "title",
+          "type": "object/text",
+          "position": {
+            "x": -200,
+            "y": -480
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 2.2,
+              "y": -0.6,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "text": "f(x) = x\u00b3/8 \u2212 x/2 + 1.5",
+            "fontSize": 0.4,
+            "depth": 0,
+            "color": 2060267,
+            "shadeless": 1
+          }
+        }
+      ],
+      "connections": [
+        {
+          "id": "env.environment->render.environment",
+          "fromNode": "env",
+          "fromSocket": "environment",
+          "toNode": "render",
+          "toSocket": "environment"
+        },
+        {
+          "id": "seq.step0->axes.visible",
+          "fromNode": "seq",
+          "fromSocket": "step0",
+          "toNode": "axes",
+          "toSocket": "visible"
+        },
+        {
+          "id": "axes.space->curve.space",
+          "fromNode": "axes",
+          "fromSocket": "space",
+          "toNode": "curve",
+          "toSocket": "space"
+        },
+        {
+          "id": "seq.step1->curve.progress",
+          "fromNode": "seq",
+          "fromSocket": "step1",
+          "toNode": "curve",
+          "toSocket": "progress"
+        },
+        {
+          "id": "seq.step1->title.visible",
+          "fromNode": "seq",
+          "fromSocket": "step1",
+          "toNode": "title",
+          "toSocket": "visible"
+        },
+        {
+          "id": "seq.step2->curve.fillTo",
+          "fromNode": "seq",
+          "fromSocket": "step2",
+          "toNode": "curve",
+          "toSocket": "fillTo"
+        },
+        {
+          "id": "curve.area->areaText.value",
+          "fromNode": "curve",
+          "fromSocket": "area",
+          "toNode": "areaText",
+          "toSocket": "value"
+        },
+        {
+          "id": "areaText.text->areaLabel.text",
+          "fromNode": "areaText",
+          "fromSocket": "text",
+          "toNode": "areaLabel",
+          "toSocket": "text"
+        },
+        {
+          "id": "seq.step2->areaLabel.visible",
+          "fromNode": "seq",
+          "fromSocket": "step2",
+          "toNode": "areaLabel",
+          "toSocket": "visible"
+        },
+        {
+          "id": "seq.step4->n.a",
+          "fromNode": "seq",
+          "fromSocket": "step4",
+          "toNode": "n",
+          "toSocket": "a"
+        },
+        {
+          "id": "n.value->indices.count",
+          "fromNode": "n",
+          "fromSocket": "value",
+          "toNode": "indices",
+          "toSocket": "count"
+        },
+        {
+          "id": "indices.list->mids.x",
+          "fromNode": "indices",
+          "fromSocket": "list",
+          "toNode": "mids",
+          "toSocket": "x"
+        },
+        {
+          "id": "n.value->mids.c",
+          "fromNode": "n",
+          "fromSocket": "value",
+          "toNode": "mids",
+          "toSocket": "c"
+        },
+        {
+          "id": "mids.list->heights.x",
+          "fromNode": "mids",
+          "fromSocket": "list",
+          "toNode": "heights",
+          "toSocket": "x"
+        },
+        {
+          "id": "mids.list->centers.x",
+          "fromNode": "mids",
+          "fromSocket": "list",
+          "toNode": "centers",
+          "toSocket": "x"
+        },
+        {
+          "id": "heights.list->centers.y",
+          "fromNode": "heights",
+          "fromSocket": "list",
+          "toNode": "centers",
+          "toSocket": "y"
+        },
+        {
+          "id": "heights.list->sizes.y",
+          "fromNode": "heights",
+          "fromSocket": "list",
+          "toNode": "sizes",
+          "toSocket": "y"
+        },
+        {
+          "id": "n.value->sizes.c",
+          "fromNode": "n",
+          "fromSocket": "value",
+          "toNode": "sizes",
+          "toSocket": "c"
+        },
+        {
+          "id": "heights.list->areas.y",
+          "fromNode": "heights",
+          "fromSocket": "list",
+          "toNode": "areas",
+          "toSocket": "y"
+        },
+        {
+          "id": "n.value->areas.c",
+          "fromNode": "n",
+          "fromSocket": "value",
+          "toNode": "areas",
+          "toSocket": "c"
+        },
+        {
+          "id": "areas.list->sum.list",
+          "fromNode": "areas",
+          "fromSocket": "list",
+          "toNode": "sum",
+          "toSocket": "list"
+        },
+        {
+          "id": "rect.geometry->rects.geometry",
+          "fromNode": "rect",
+          "fromSocket": "geometry",
+          "toNode": "rects",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "centers.list->rects.points",
+          "fromNode": "centers",
+          "fromSocket": "list",
+          "toNode": "rects",
+          "toSocket": "points"
+        },
+        {
+          "id": "sizes.list->rects.scales",
+          "fromNode": "sizes",
+          "fromSocket": "list",
+          "toNode": "rects",
+          "toSocket": "scales"
+        },
+        {
+          "id": "seq.step3->rects.visible",
+          "fromNode": "seq",
+          "fromSocket": "step3",
+          "toNode": "rects",
+          "toSocket": "visible"
+        },
+        {
+          "id": "n.value->nText.value",
+          "fromNode": "n",
+          "fromSocket": "value",
+          "toNode": "nText",
+          "toSocket": "value"
+        },
+        {
+          "id": "nText.text->nLabel.text",
+          "fromNode": "nText",
+          "fromSocket": "text",
+          "toNode": "nLabel",
+          "toSocket": "text"
+        },
+        {
+          "id": "seq.step3->nLabel.visible",
+          "fromNode": "seq",
+          "fromSocket": "step3",
+          "toNode": "nLabel",
+          "toSocket": "visible"
+        },
+        {
+          "id": "sum.sum->sumText.value",
+          "fromNode": "sum",
+          "fromSocket": "sum",
+          "toNode": "sumText",
+          "toSocket": "value"
+        },
+        {
+          "id": "sumText.text->sumLabel.text",
+          "fromNode": "sumText",
+          "fromSocket": "text",
+          "toNode": "sumLabel",
+          "toSocket": "text"
+        },
+        {
+          "id": "seq.step3->sumLabel.visible",
+          "fromNode": "seq",
+          "fromSocket": "step3",
+          "toNode": "sumLabel",
+          "toSocket": "visible"
+        }
+      ],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    }
+  ],
+  "activeCanvas": 0
+}

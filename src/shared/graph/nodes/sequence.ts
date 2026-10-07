@@ -14,6 +14,9 @@ export interface Step {
   ease: Ease;
   /** Starts at this marker's time (by label), or at these seconds, instead of after the step before. */
   at?: string | number;
+  /** What the step's output reads before it starts and after it ends — 0 and 1 unless set. */
+  from: number;
+  to: number;
 }
 
 /** Shapes a linear 0–1 into the step's feel. `smooth` eases in and out, Manim's default. */
@@ -61,7 +64,7 @@ export function stepCount(params: Record<string, unknown> | undefined, wired: It
   let count = Math.max(1, Math.floor(numberInput(undefined, params?.steps, DEFAULT_STEPS)));
   for (const id of wired) count = Math.max(count, outputIndex(id) + 1);
   for (const key of Object.keys(params ?? {})) {
-    const m = /^step(\d+)(Name|Duration|Ease|Start)$/.exec(key);
+    const m = /^step(\d+)(Name|Duration|Ease|Start|From|To)$/.exec(key);
     if (m) count = Math.max(count, Number(m[1]) + 1);
   }
   return Math.min(count, 64);
@@ -79,34 +82,36 @@ export function readStep(params: Record<string, unknown> | undefined, i: number)
   const kind = ((EASES as readonly string[]).includes(rawEase) ? rawEase : "smooth") as Ease;
   const rawStart = String(params?.[`${PREFIX}${i}Start`] ?? "").trim().replace(/^@/, "");
   const at = rawStart === "" ? undefined : Number.isFinite(Number(rawStart)) ? Number(rawStart) : rawStart;
-  return { name, duration, ease: kind, at };
+  const from = numberInput(undefined, params?.[`${PREFIX}${i}From`], 0);
+  const to = numberInput(undefined, params?.[`${PREFIX}${i}To`], 1);
+  return { name, duration, ease: kind, at, from, to };
 }
 
 function outputSockets(params: Record<string, unknown> | undefined, wired: Iterable<string>): SocketDef[] {
   const count = stepCount(params, wired);
   const steps = Array.from({ length: count }, (_, i) => readStep(params, i));
   return [
-    ...steps.map((s, i) => ({ id: `${PREFIX}${i}`, label: `${s.name} (0–1)`, type: "value" as const })),
+    ...steps.map((s, i) => ({ id: `${PREFIX}${i}`, label: s.name, type: "value" as const })),
     // Always one spare: wiring it is how a step is added.
-    { id: `${PREFIX}${count}`, label: "+ wire to add a step", type: "value" as const },
-    { id: "index", label: "Current Step (0-based, −1 before)", type: "value" as const },
+    { id: `${PREFIX}${count}`, label: "+", type: "value" as const },
+    { id: "index", label: "Current Step", type: "value" as const },
     { id: "current", label: "Current Step Name", type: "text" as const },
     { id: "local", label: "Current Step Progress", type: "value" as const },
-    { id: "progresses", label: "All Progresses (List)", type: "list" as const },
-    { id: "total", label: "Total Duration (s)", type: "value" as const },
+    { id: "progresses", label: "All Progresses", type: "list" as const },
+    { id: "total", label: "Total Duration", type: "value" as const },
   ];
 }
 
 const BASE_FIELDS: ParamFieldDef[] = [
-  { id: "steps", label: "Steps (wiring the + output adds one too)", kind: "number", step: 1 },
+  { id: "steps", label: "Steps", kind: "number", step: 1 },
   {
     id: "mode",
     label: "Play",
     kind: "select",
     options: ["timeline", "trigger"],
-    optionLabels: ["On the timeline (exact, exportable)", "On Next / Back (live, in class)"],
+    optionLabels: ["Timeline", "Trigger"],
   },
-  { id: "offset", label: "Start at (s, Timeline mode)", kind: "number", step: 0.5 },
+  { id: "offset", label: "Start At", kind: "number", step: 0.5 },
 ];
 
 function stepFields(count: number): ParamFieldDef[] {
@@ -115,9 +120,11 @@ function stepFields(count: number): ParamFieldDef[] {
     const group = `Step ${i + 1}`;
     fields.push(
       { id: `${PREFIX}${i}Name`, label: "Name", kind: "text", group },
-      { id: `${PREFIX}${i}Duration`, label: "Duration (s)", kind: "number", step: 0.25, group },
-      { id: `${PREFIX}${i}Ease`, label: "Ease", kind: "select", options: [...EASES], optionLabels: ["Smooth (in and out)", "Linear", "In (speeds up)", "Out (slows down)", "Back (overshoots)"], group },
-      { id: `${PREFIX}${i}Start`, label: "Start (blank: after the previous; a marker's label; or seconds)", kind: "text", group },
+      { id: `${PREFIX}${i}Duration`, label: "Duration", kind: "number", step: 0.25, group },
+      { id: `${PREFIX}${i}Ease`, label: "Ease", kind: "select", options: [...EASES], optionLabels: ["Smooth", "Linear", "In", "Out", "Back"], group },
+      { id: `${PREFIX}${i}Start`, label: "Start", kind: "text", group },
+      { id: `${PREFIX}${i}From`, label: "From", kind: "number", step: 0.1, group },
+      { id: `${PREFIX}${i}To`, label: "To", kind: "number", step: 0.1, group },
     );
   }
   return fields;
@@ -166,9 +173,10 @@ const triggerCache = createNodeCache<Map<string, TriggerRun>>();
  * without the script — and as useful for a title sequence or a cue list.
  *
  * Every step has an output, named after it; the spare output at the end
- * adds a step when wired. Each step's name, duration, ease and start (after
- * the step before, at a timeline marker, or at a given second) are set in
- * the panel.
+ * adds a step when wired. Each step's name, duration, ease, start (after
+ * the step before, at a timeline marker, or at a given second) and the
+ * values its output travels between — From and To, 0 and 1 unless set —
+ * are set in the panel.
  *
  * Timeline mode is exact and exportable: scrubbing shows any moment.
  * Trigger mode is for the classroom: each rising edge on Next starts the
@@ -179,9 +187,9 @@ export const SEQUENCE_NODE: NodeDefinition = {
   label: "Sequence",
   category: "time",
   inputs: [
-    { id: "time", label: "Time (s)", type: "value" },
-    { id: "next", label: "Next (rising edge, Trigger mode)", type: "value" },
-    { id: "back", label: "Back (rising edge, Trigger mode)", type: "value" },
+    { id: "time", label: "Time", type: "value" },
+    { id: "next", label: "Next", type: "value" },
+    { id: "back", label: "Back", type: "value" },
   ],
   outputs: outputSockets(undefined, []),
   dynamicOutputs: (connections, _types, params) => outputSockets(params, wiredOutputs(connections)),
@@ -233,7 +241,8 @@ export const SEQUENCE_NODE: NodeDefinition = {
       const elapsed = time - starts[i];
       const raw = step.duration > 0 ? elapsed / step.duration : elapsed >= 0 ? 1 : 0;
       const p = Number.isFinite(raw) ? ease(step.ease, raw) : 0;
-      out[`${PREFIX}${i}`] = p;
+      // The output travels From → To; the progress lists stay 0–1.
+      out[`${PREFIX}${i}`] = step.from + (step.to - step.from) * p;
       progresses.push(p);
       if (elapsed >= 0) index = i;
     });

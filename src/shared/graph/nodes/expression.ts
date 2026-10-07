@@ -31,27 +31,18 @@ export function cachedExpression(source: string, variables: readonly string[]): 
 export function formulaErrorField(id: string, source: unknown, variables: readonly string[]): ParamFieldDef[] {
   const result = cachedExpression(String(source ?? ""), variables);
   if (!(result instanceof ExpressionError)) return [];
-  return [{ id: `${id}Error`, label: `⚠ ${result.message} (at character ${result.position + 1})`, kind: "note", tone: "warn" }];
+  return [{ id: `${id}Error`, label: `⚠ ${result.message}, at ${result.position + 1}`, kind: "note", tone: "warn" }];
 }
 
 const BASE_FIELDS: ParamFieldDef[] = [
   { id: "formula", label: "Formula", kind: "text", group: "Formula" },
-  { id: "a", label: "a (when unwired)", kind: "number", step: 0.1, group: "Parameters" },
-  { id: "b", label: "b (when unwired)", kind: "number", step: 0.1, group: "Parameters" },
-  { id: "c", label: "c (when unwired)", kind: "number", step: 0.1, group: "Parameters" },
-  { id: "d", label: "d (when unwired)", kind: "number", step: 0.1, group: "Parameters" },
-  { id: "x", label: "x (when unwired)", kind: "number", step: 0.1, group: "Parameters" },
-  { id: "y", label: "y (when unwired)", kind: "number", step: 0.1, group: "Parameters" },
-  { id: "z", label: "z (when unwired)", kind: "number", step: 0.1, group: "Parameters" },
-  {
-    id: "help",
-    label:
-      "Write it as on paper: 2x² − 3x + 1, 3sin x, (x+1)(x−1), √(1 − x²), |x|, e^(−x²). ln is the natural log, log the decimal one. " +
-      "x < 0 ? −x : x (or if(x < 0, −x, x)) for pieces. A comma list — (cos t, sin t, t/4) — gives a vector. " +
-      "t follows the timeline unless wired; wire a list into any letter to get one result per item.",
-    kind: "note",
-    group: "Formula",
-  },
+  { id: "a", label: "a", kind: "number", step: 0.1, group: "Parameters" },
+  { id: "b", label: "b", kind: "number", step: 0.1, group: "Parameters" },
+  { id: "c", label: "c", kind: "number", step: 0.1, group: "Parameters" },
+  { id: "d", label: "d", kind: "number", step: 0.1, group: "Parameters" },
+  { id: "x", label: "x", kind: "number", step: 0.1, group: "Parameters" },
+  { id: "y", label: "y", kind: "number", step: 0.1, group: "Parameters" },
+  { id: "z", label: "z", kind: "number", step: 0.1, group: "Parameters" },
 ];
 
 /**
@@ -71,8 +62,8 @@ export const EXPRESSION_NODE: NodeDefinition = {
   inputs: EXPRESSION_VARIABLES.map((v) => ({ id: v, label: v, type: "any" as const })),
   outputs: [
     { id: "value", label: "Value", type: "value" },
-    { id: "vector", label: "Vector (comma list)", type: "vector" },
-    { id: "list", label: "List (per item)", type: "list" },
+    { id: "vector", label: "Vector", type: "vector" },
+    { id: "list", label: "List", type: "list" },
   ],
   defaultParams: { formula: "sin(x)", a: 1, b: 0, c: 0, d: 0, x: 0, y: 0, z: 0 },
   paramFields: BASE_FIELDS,

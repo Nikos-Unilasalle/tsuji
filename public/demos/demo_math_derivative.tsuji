@@ -114,7 +114,9 @@
             "step4Name": "pause",
             "step4Duration": 1.0,
             "step4Ease": "smooth",
-            "step4Start": ""
+            "step4Start": "",
+            "step3From": -3,
+            "step3To": 3
           }
         },
         {
@@ -169,18 +171,6 @@
             "width": 3.5,
             "dashed": false,
             "visible": true
-          }
-        },
-        {
-          "id": "x0",
-          "type": "math/expression",
-          "position": {
-            "x": -560,
-            "y": 240
-          },
-          "params": {
-            "formula": "lerp(\u22123, 3, a)",
-            "a": 0
           }
         },
         {
@@ -383,13 +373,6 @@
           "toSocket": "progress"
         },
         {
-          "id": "seq.step3->x0.a",
-          "fromNode": "seq",
-          "fromSocket": "step3",
-          "toNode": "x0",
-          "toSocket": "a"
-        },
-        {
           "id": "axes.space->tangent.space",
           "fromNode": "axes",
           "fromSocket": "space",
@@ -397,9 +380,9 @@
           "toSocket": "space"
         },
         {
-          "id": "x0.value->tangent.a",
-          "fromNode": "x0",
-          "fromSocket": "value",
+          "id": "seq.step3->tangent.a",
+          "fromNode": "seq",
+          "fromSocket": "step3",
           "toNode": "tangent",
           "toSocket": "a"
         },
@@ -411,9 +394,9 @@
           "toSocket": "progress"
         },
         {
-          "id": "x0.value->point.a",
-          "fromNode": "x0",
-          "fromSocket": "value",
+          "id": "seq.step3->point.a",
+          "fromNode": "seq",
+          "fromSocket": "step3",
           "toNode": "point",
           "toSocket": "a"
         },
@@ -453,9 +436,9 @@
           "toSocket": "visible"
         },
         {
-          "id": "x0.value->slope.a",
-          "fromNode": "x0",
-          "fromSocket": "value",
+          "id": "seq.step3->slope.a",
+          "fromNode": "seq",
+          "fromSocket": "step3",
           "toNode": "slope",
           "toSocket": "a"
         },

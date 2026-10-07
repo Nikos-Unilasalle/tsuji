@@ -18,8 +18,8 @@ const wire = (fromSocket: string): Connection => ({ id: fromSocket, fromNode: "s
 
 describe("steps", () => {
   test("each step reads its own fields, with defaults for the rest", () => {
-    expect(readStep(steps(["curve", 2, "out", "zoom"]), 0)).toEqual({ name: "curve", duration: 2, ease: "out", at: "zoom" });
-    expect(readStep({}, 4)).toEqual({ name: "step 5", duration: 1, ease: "smooth", at: undefined });
+    expect(readStep(steps(["curve", 2, "out", "zoom"]), 0)).toEqual({ name: "curve", duration: 2, ease: "out", at: "zoom", from: 0, to: 1 });
+    expect(readStep({}, 4)).toEqual({ name: "step 5", duration: 1, ease: "smooth", at: undefined, from: 0, to: 1 });
     expect(readStep({ step0Start: "@7.5" }, 0).at).toBe(7.5);
   });
 
@@ -51,14 +51,14 @@ describe("SEQUENCE_NODE", () => {
   test("one output per step, named after it, then a spare that adds one when wired", () => {
     const outputs = SEQUENCE_NODE.dynamicOutputs!([], [], steps(["curve", 2], ["tangent", 1]));
     expect(outputs.slice(0, 3).map((o) => [o.id, o.label])).toEqual([
-      ["step0", "curve (0–1)"],
-      ["step1", "tangent (0–1)"],
-      ["step2", "+ wire to add a step"],
+      ["step0", "curve"],
+      ["step1", "tangent"],
+      ["step2", "+"],
     ]);
     const grown = SEQUENCE_NODE.dynamicOutputs!([wire("step2")], [], steps(["curve", 2], ["tangent", 1]));
     expect(grown.slice(0, 4).map((o) => o.id)).toEqual(["step0", "step1", "step2", "step3"]);
-    expect(grown[2].label).toBe("step 3 (0–1)");
-    expect(grown[3].label).toBe("+ wire to add a step");
+    expect(grown[2].label).toBe("step 3");
+    expect(grown[3].label).toBe("+");
   });
 
   test("the panel shows a group of fields for every step, wired ones included", () => {
@@ -111,5 +111,14 @@ describe("SEQUENCE_NODE", () => {
     });
     const current = { steps: 2 };
     expect(SEQUENCE_NODE.upgradeParams!(current)).toBe(current);
+  });
+
+  test("a step's output travels From → To, holding From before and To after", () => {
+    const p = { ...steps(["slide", 2, "linear"]), step0From: -3, step0To: 3 };
+    const at = (t: number) => SEQUENCE_NODE.evaluate({}, p, ctx(t));
+    expect(at(-1).step0).toBe(-3);
+    expect(at(1).step0).toBe(0);
+    expect(at(5).step0).toBe(3);
+    expect(at(1).local).toBe(0.5);
   });
 });

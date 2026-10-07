@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { describe, expect, test } from "vitest";
+import { LineSegments2 } from "three/examples/jsm/lines/LineSegments2.js";
 import { FUNCTION_CURVE_NODE } from "./functionCurve";
 import { EvalContext } from "../types";
 
@@ -46,7 +47,8 @@ describe("FUNCTION_CURVE_NODE", () => {
     const half = pts(FUNCTION_CURVE_NODE.evaluate({}, params({ formula: "0", from: 0, to: 10, samples: 10, progress: 0.5 }), ctx("fc-g")));
     expect(Math.max(...half.map((p) => p.x))).toBeCloseTo(5, 9);
     const none = FUNCTION_CURVE_NODE.evaluate({}, params({ formula: "0", progress: 0 }), ctx("fc-h"));
-    expect((none.geometry as THREE.Object3D).visible).toBe(false);
+    const line = (none.geometry as THREE.Group).children.find((c) => c instanceof LineSegments2)!;
+    expect(line.visible).toBe(false);
   });
 
   test("a Space places the curve on its axes", () => {
@@ -72,5 +74,33 @@ describe("FUNCTION_CURVE_NODE", () => {
     expect(ys).toHaveLength(2);
     expect(Math.min(...ys)).toBeCloseTo(-3, 9);
     expect(Math.max(...ys)).toBeCloseTo(6, 9);
+  });
+
+  test("Area is the signed integral between Fill From and Fill To", () => {
+    const area = (o: Record<string, unknown>, id: string) => FUNCTION_CURVE_NODE.evaluate({}, params({ fill: true, samples: 800, ...o }), ctx(id)).area as number;
+    expect(area({ formula: "x²", fillFrom: 0, fillTo: 3 }, "fc-area-a")).toBeCloseTo(9, 3);
+    expect(area({ formula: "x", fillFrom: -1, fillTo: 1 }, "fc-area-b")).toBeCloseTo(0, 6);
+    expect(area({ formula: "x²", fillFrom: 3, fillTo: 0 }, "fc-area-c")).toBeCloseTo(-9, 3);
+    expect(area({ mode: "polar", formula: "1", from: 0, to: 2 * Math.PI, fillFrom: 0, fillTo: 2 * Math.PI }, "fc-area-d")).toBeCloseTo(Math.PI, 3);
+  });
+
+  test("the fill is coloured by sign and split exactly at the axis", () => {
+    const out = FUNCTION_CURVE_NODE.evaluate({}, params({ formula: "x", fill: true, fillFrom: -1, fillTo: 1, samples: 3 }), ctx("fc-fill"));
+    const fill = (out.geometry as THREE.Group).children.find((c) => c instanceof THREE.Mesh) as THREE.Mesh;
+    expect(fill.visible).toBe(true);
+    const pos = fill.geometry.getAttribute("position");
+    const col = fill.geometry.getAttribute("color");
+    for (let i = 0; i < pos.count; i++) {
+      // Blue (above) vertices never sit below the axis, red (below) never above it.
+      if (col.getZ(i) > col.getX(i)) expect(pos.getY(i)).toBeGreaterThanOrEqual(-1e-9);
+      else expect(pos.getY(i)).toBeLessThanOrEqual(1e-9);
+    }
+  });
+
+  test("no fill drawn unless asked; Area still reported", () => {
+    const out = FUNCTION_CURVE_NODE.evaluate({}, params({ formula: "1", fillFrom: 0, fillTo: 2 }), ctx("fc-nofill"));
+    const fill = (out.geometry as THREE.Group).children.find((c) => c instanceof THREE.Mesh)!;
+    expect(fill.visible).toBe(false);
+    expect(out.area).toBeCloseTo(2, 6);
   });
 });

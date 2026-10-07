@@ -10,6 +10,7 @@ import { polylineCurve } from "../curveLists";
 import { readSpace } from "../mathSpace";
 import { ExpressionError } from "../../math/expression";
 import { cachedExpression, formulaErrorField } from "./expression";
+import { fillToAxis, fillToOrigin } from "../areaFill";
 
 const MODES = ["function", "parametric", "polar"] as const;
 type Mode = (typeof MODES)[number];
@@ -22,6 +23,9 @@ const VARIABLES: Record<Mode, string[]> = {
 };
 
 interface CurveState {
+  root: THREE.Group;
+  fill: THREE.Mesh;
+  area: number;
   line: LineSegments2;
   material: LineMaterial;
   signature?: string;
@@ -32,7 +36,7 @@ interface CurveState {
   hasPoints: boolean;
 }
 
-const curveCache = createNodeCache<CurveState>((s) => disposeObject3D(s.line));
+const curveCache = createNodeCache<CurveState>((s) => disposeObject3D(s.root));
 
 function curveState(nodeId: string): CurveState {
   let state = curveCache.get(nodeId);
@@ -41,7 +45,18 @@ function curveState(nodeId: string): CurveState {
   const line = new LineSegments2(new LineSegmentsGeometry(), material);
   line.userData.nodeId = nodeId;
   line.frustumCulled = false;
-  state = { line, material, segments: [], curves: [], points: [], hasPoints: false };
+  const fill = new THREE.Mesh(
+    new THREE.BufferGeometry(),
+    new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.3, side: THREE.DoubleSide, depthWrite: false }),
+  );
+  fill.userData.nodeId = nodeId;
+  fill.frustumCulled = false;
+  // The area sits under its own outline.
+  fill.renderOrder = -1;
+  const root = new THREE.Group();
+  root.userData.nodeId = nodeId;
+  root.add(fill, line);
+  state = { root, fill, area: 0, line, material, segments: [], curves: [], points: [], hasPoints: false };
   curveCache.set(nodeId, state);
   return state;
 }
@@ -139,23 +154,70 @@ function trimToProgress(runs: THREE.Vector3[][], progress: number): THREE.Vector
   return out;
 }
 
+/**
+ * The area between the graph and the x-axis (or, for a polar curve, the
+ * origin) from Fill From to Fill To — an integral's region, coloured by sign —
+ * and its signed value. Sampled on its own over just that interval, so a
+ * moving bound sweeps smoothly; swapped bounds give the opposite sign, as
+ * ∫ from b to a does.
+ */
+function buildFill(
+  state: CurveState,
+  mode: Mode,
+  evaluate: ((scope: Record<string, number>, out: number[]) => number[]) | null,
+  scope: Record<string, number>,
+  from: number, to: number, samples: number, yMin: number, yMax: number,
+  fillFrom: number, fillTo: number,
+  space: THREE.Matrix4, above: THREE.Color, below: THREE.Color,
+): void {
+  const geometry = new THREE.BufferGeometry();
+  state.area = 0;
+  const lo = Math.max(Math.min(fillFrom, fillTo), Math.min(from, to));
+  const hi = Math.min(Math.max(fillFrom, fillTo), Math.max(from, to));
+  if (evaluate && mode !== "parametric" && hi > lo) {
+    const n = Math.max(2, Math.round((samples * (hi - lo)) / Math.max(1e-9, Math.abs(to - from))));
+    const runs = sampleFunction(mode, evaluate, { ...scope }, lo, hi, n, Math.min(yMin, yMax), Math.max(yMin, yMax));
+    const filled = mode === "polar" ? fillToOrigin(runs) : fillToAxis(runs);
+    state.area = filled.area * (fillTo < fillFrom ? -1 : 1);
+    const positions = new Float32Array(filled.positions.length);
+    const colors = new Float32Array(filled.positions.length);
+    const p = new THREE.Vector3();
+    for (let i = 0; i < filled.positions.length; i += 3) {
+      p.set(filled.positions[i], filled.positions[i + 1], filled.positions[i + 2]).applyMatrix4(space);
+      positions[i] = p.x; positions[i + 1] = p.y; positions[i + 2] = p.z;
+      const c = filled.above[i / 3] ? above : below;
+      colors[i] = c.r; colors[i + 1] = c.g; colors[i + 2] = c.b;
+    }
+    geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+    geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+  }
+  state.fill.geometry.dispose();
+  state.fill.geometry = geometry;
+}
+
 const FIELDS: ParamFieldDef[] = [
-  { id: "mode", label: "Kind", kind: "select", options: [...MODES], optionLabels: ["y = f(x)", "Parametric (x(t), y(t), z(t))", "Polar r(θ)"], group: "Formula" },
+  { id: "mode", label: "Kind", kind: "select", options: [...MODES], optionLabels: ["y = f(x)", "Parametric", "Polar"], group: "Formula" },
   { id: "formula", label: "Formula", kind: "text", group: "Formula" },
-  { id: "from", label: "From (x, t or θ)", kind: "number", step: 0.5, group: "Formula" },
+  { id: "from", label: "From", kind: "number", step: 0.5, group: "Formula" },
   { id: "to", label: "To", kind: "number", step: 0.5, group: "Formula" },
   { id: "samples", label: "Samples", kind: "number", step: 50, group: "Formula" },
   { id: "yMin", label: "Cut below y", kind: "number", step: 1, group: "Formula" },
   { id: "yMax", label: "Cut above y", kind: "number", step: 1, group: "Formula" },
-  { id: "a", label: "a (when unwired)", kind: "number", step: 0.1, group: "Parameters" },
-  { id: "b", label: "b (when unwired)", kind: "number", step: 0.1, group: "Parameters" },
-  { id: "c", label: "c (when unwired)", kind: "number", step: 0.1, group: "Parameters" },
-  { id: "d", label: "d (when unwired)", kind: "number", step: 0.1, group: "Parameters" },
-  { id: "progress", label: "Drawn (0–1)", kind: "number", step: 0.05, group: "Style" },
+  { id: "a", label: "a", kind: "number", step: 0.1, group: "Parameters" },
+  { id: "b", label: "b", kind: "number", step: 0.1, group: "Parameters" },
+  { id: "c", label: "c", kind: "number", step: 0.1, group: "Parameters" },
+  { id: "d", label: "d", kind: "number", step: 0.1, group: "Parameters" },
+  { id: "progress", label: "Drawn", kind: "number", step: 0.05, group: "Style" },
   { id: "color", label: "Color", kind: "color", group: "Style" },
-  { id: "width", label: "Width (px)", kind: "number", step: 0.5, group: "Style" },
+  { id: "width", label: "Width", kind: "number", step: 0.5, group: "Style" },
   { id: "dashed", label: "Dashed", kind: "boolean", group: "Style" },
   { id: "visible", label: "Visible", kind: "boolean", group: "Style" },
+  { id: "fill", label: "Fill Area", kind: "boolean", group: "Area" },
+  { id: "fillFrom", label: "Fill From", kind: "number", step: 0.5, group: "Area" },
+  { id: "fillTo", label: "Fill To", kind: "number", step: 0.5, group: "Area" },
+  { id: "fillColor", label: "Color Above", kind: "color", group: "Area" },
+  { id: "fillNegativeColor", label: "Color Below", kind: "color", group: "Area" },
+  { id: "fillOpacity", label: "Opacity", kind: "number", step: 0.05, group: "Area" },
 ];
 
 /**
@@ -176,20 +238,23 @@ export const FUNCTION_CURVE_NODE: NodeDefinition = {
   label: "Function Curve",
   category: "math",
   inputs: [
-    { id: "space", label: "Space (from Axes)", type: "matrix" },
+    { id: "space", label: "Space", type: "matrix" },
     { id: "a", label: "a", type: "value" },
     { id: "b", label: "b", type: "value" },
     { id: "c", label: "c", type: "value" },
     { id: "d", label: "d", type: "value" },
-    { id: "progress", label: "Drawn (0–1)", type: "value" },
-    { id: "t", label: "t (time)", type: "value" },
+    { id: "progress", label: "Drawn", type: "value" },
+    { id: "t", label: "t", type: "value" },
+    { id: "fillFrom", label: "Fill From", type: "value" },
+    { id: "fillTo", label: "Fill To", type: "value" },
     { id: "visible", label: "Visible", type: "value" },
   ],
   outputs: [
     { id: "geometry", label: "Geometry", type: "geometry" },
     { id: "curve", label: "Curve", type: "curve" },
-    { id: "curves", label: "Curves (List)", type: "list" },
+    { id: "curves", label: "Curves", type: "list" },
     { id: "points", label: "Points", type: "list" },
+    { id: "area", label: "Area", type: "value" },
   ],
   defaultParams: {
     mode: "function",
@@ -205,6 +270,12 @@ export const FUNCTION_CURVE_NODE: NodeDefinition = {
     width: 3,
     dashed: false,
     visible: true,
+    fill: false,
+    fillFrom: -1,
+    fillTo: 1,
+    fillColor: new THREE.Color(0x1f6feb),
+    fillNegativeColor: new THREE.Color(0xe5484d),
+    fillOpacity: 0.3,
   },
   paramFields: FIELDS,
   dynamicParamFields: (instance: NodeInstance) => {
@@ -234,7 +305,12 @@ export const FUNCTION_CURVE_NODE: NodeDefinition = {
     // Only what the formula reads can change it: a static curve on a playing timeline is not resampled every frame.
     const reads = compiled instanceof ExpressionError ? [] : compiled.variables;
     const live = Object.fromEntries(Object.entries(scope).filter(([k]) => reads.includes(k)));
-    const signature = JSON.stringify([params.formula, mode, live, from, to, samples, yMin, yMax, progress, space.elements]);
+    const fillOn = toBoolean(params.fill);
+    const fillFrom = numberInput(inputs.fillFrom, params.fillFrom, -1);
+    const fillTo = numberInput(inputs.fillTo, params.fillTo, 1);
+    const above = asColor(params.fillColor, new THREE.Color(0x1f6feb));
+    const below = asColor(params.fillNegativeColor, new THREE.Color(0xe5484d));
+    const signature = JSON.stringify([params.formula, mode, live, from, to, samples, yMin, yMax, progress, space.elements, fillOn, fillFrom, fillTo, above.getHex(), below.getHex()]);
     if (state.signature !== signature) {
       state.signature = signature;
       const math = compiled instanceof ExpressionError ? [] : sampleFunction(mode, (s, out) => compiled.evaluate(s, out), scope, from, to, samples, Math.min(yMin, yMax), Math.max(yMin, yMax));
@@ -250,7 +326,10 @@ export const FUNCTION_CURVE_NODE: NodeDefinition = {
       state.line.geometry = new LineSegmentsGeometry().setPositions(positions.length ? positions : [0, 0, 0, 0, 0, 0]);
       state.line.computeLineDistances();
       state.hasPoints = positions.length > 0;
+      buildFill(state, mode, compiled instanceof ExpressionError ? null : (sc, out) => compiled.evaluate(sc, out), scope, from, to, samples, yMin, yMax, fillFrom, fillTo, space, above, below);
     }
+    state.fill.visible = fillOn && (state.fill.geometry.getAttribute("position")?.count ?? 0) > 0;
+    (state.fill.material as THREE.MeshBasicMaterial).opacity = Math.max(0, Math.min(1, numberInput(undefined, params.fillOpacity, 0.3)));
 
     const { material, line } = state;
     material.color.copy(asColor(params.color, new THREE.Color(0x1f6feb)));
@@ -268,8 +347,9 @@ export const FUNCTION_CURVE_NODE: NodeDefinition = {
       if (size.x <= 0 || size.y <= 0) size.set(1920, 1080);
     }
     material.resolution.copy(size);
-    line.visible = state.hasPoints && toBoolean(inputs.visible ?? params.visible ?? true);
+    line.visible = state.hasPoints;
+    state.root.visible = toBoolean(inputs.visible ?? params.visible ?? true);
 
-    return { geometry: line, curve: state.curves[0] ?? null, curves: state.curves, points: state.points };
+    return { geometry: state.root, curve: state.curves[0] ?? null, curves: state.curves, points: state.points, area: state.area };
   },
 };

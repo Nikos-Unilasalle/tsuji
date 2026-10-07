@@ -211,7 +211,7 @@ const STROKE_FIELDS: ParamFieldDef[] = [
     optionLabels: ["Sine (pointed ends)", "Blob (full belly)", "Taper (thick to thin)", "Uniform", "Drawn Curve"],
     group: "Stroke",
   },
-  { id: "profileCurve", label: "Width Curve (Drawn)", kind: "curve_profile", group: "Stroke" },
+  { id: "profileCurve", label: "Width Curve", kind: "curve_profile", group: "Stroke" },
   { id: "widthNoise", label: "Width Noise", kind: "number", step: 0.05, percent: true, group: "Stroke" },
   { id: "wobble", label: "Wobble", kind: "number", step: 0.005, group: "Stroke" },
   { id: "wobbleScale", label: "Wobble Frequency", kind: "number", step: 0.05, group: "Stroke" },

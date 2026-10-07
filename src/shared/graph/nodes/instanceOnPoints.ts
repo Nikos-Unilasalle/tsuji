@@ -201,7 +201,7 @@ export const INSTANCE_ON_POINTS_NODE: NodeDefinition = {
     { id: "rotations", label: "Rotations (List, °: angles or Euler vectors)", type: "list" },
     // A surface normal per point (Ripple Field's Probe Normals, Mesh to
     // Points' normals): each copy's own up leans to match it.
-    { id: "ups", label: "Ups (Direction List)", type: "list" },
+    { id: "ups", label: "Ups", type: "list" },
     { id: "seed", label: "Seed", type: "value" },
     { id: "visible", label: "Visible", type: "value" },
   ],
