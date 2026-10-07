@@ -60,6 +60,11 @@ import { SPINE_CHAIN_NODE } from "./spineChain";
 import { PROFILED_TUBES_NODE } from "./profiledTubes";
 import { RIPPLE_FIELD_NODE } from "./rippleField";
 import { DRIFT_NODE } from "./drift";
+import { EXPRESSION_NODE } from "./expression";
+import { AXES_NODE } from "./axes";
+import { FUNCTION_CURVE_NODE } from "./functionCurve";
+import { FUNCTION_SURFACE_NODE } from "./functionSurface";
+import { SEQUENCE_NODE } from "./sequence";
 import { GROUND_NODE } from "./ground";
 import { CAPTURE_TRAILS_NODE } from "./particleTrails";
 import {
@@ -395,6 +400,11 @@ export const STARTER_NODES = [
   PROFILED_TUBES_NODE,
   RIPPLE_FIELD_NODE,
   DRIFT_NODE,
+  EXPRESSION_NODE,
+  AXES_NODE,
+  FUNCTION_CURVE_NODE,
+  FUNCTION_SURFACE_NODE,
+  SEQUENCE_NODE,
   GROUND_NODE,
   PARTICLE_SIMULATE_NODE,
   PARTICLE_RENDER_NODE,
@@ -621,6 +631,11 @@ export * from "./spineChain";
 export * from "./profiledTubes";
 export * from "./rippleField";
 export * from "./drift";
+export * from "./expression";
+export * from "./axes";
+export * from "./functionCurve";
+export * from "./functionSurface";
+export * from "./sequence";
 export * from "./ground";
 export * from "./particleTrails";
 export * from "./distance";

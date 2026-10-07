@@ -25,9 +25,12 @@ function socketIds(
   def: NodeDefinition,
   side: "inputs" | "outputs",
   connections: Connection[],
+  params?: Record<string, unknown>,
 ): Set<string> {
   const dynamic = side === "inputs" ? def.dynamicInputs : def.dynamicOutputs;
-  const sockets = dynamic ? dynamic(connections) ?? def[side] : def[side];
+  // With the instance's params, as loading (pruneConnections) and the editor
+  // pass them: a Sequence's step outputs are named by its own steps.
+  const sockets = dynamic ? dynamic(connections, undefined, params) ?? def[side] : def[side];
   return new Set(sockets.map((s) => s.id));
 }
 
@@ -64,11 +67,11 @@ function assertSocketsExist(raw: string, file: string): void {
       const incoming = connections.filter((c) => c.toNode === connection.toNode);
 
       expect(
-        [...socketIds(fromDef, "outputs", outgoing)],
+        [...socketIds(fromDef, "outputs", outgoing, from!.params)],
         `${file}: ${from!.type} has no output socket "${connection.fromSocket}"`,
       ).toContain(connection.fromSocket);
       expect(
-        [...socketIds(toDef, "inputs", incoming)],
+        [...socketIds(toDef, "inputs", incoming, to!.params)],
         `${file}: ${to!.type} has no input socket "${connection.toSocket}"`,
       ).toContain(connection.toSocket);
     }

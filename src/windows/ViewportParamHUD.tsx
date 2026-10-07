@@ -84,7 +84,9 @@ export function ViewportParamHUD({
             const { instance, graph: owningGraph } = found;
             const def = resolveDefinition(instance, registry);
             if (!def) return null;
-            const fields = def.dynamicParamFields ? def.dynamicParamFields(instance) : (def.paramFields ?? []);
+            const fields = def.dynamicParamFields
+              ? def.dynamicParamFields(instance, owningGraph.connections.filter((c) => c.toNode === nodeId || c.fromNode === nodeId))
+              : (def.paramFields ?? []);
             const values = paramPanelValues(owningGraph, instance, def, evaluatedResults, frame);
             const showNodeHeader = nodeRefs.length > 1;
 

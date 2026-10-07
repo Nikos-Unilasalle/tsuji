@@ -578,6 +578,21 @@ export const DEMO_CATALOG: DemoCategory[] = [
     ],
   },
   {
+    title: "Math",
+    demos: [
+      {
+        file: "demo_math_derivative.tsuji",
+        label: "Derivative as Slope (2D)",
+        description: "Axes, a function drawn with Function Curve, its tangent sliding along it and the slope read live — all paced by one Sequence. Scrub the timeline or press Play.",
+      },
+      {
+        file: "demo_math_surface.tsuji",
+        label: "Surface z = f(x, y) (3D)",
+        description: "3D axes, z up; a Function Surface unrolls row by row, then a paraboloid bends into a saddle as one parameter runs from 0 to 1, the camera circling slowly.",
+      },
+    ],
+  },
+  {
     title: "Showcases",
     demos: [
       {

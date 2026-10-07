@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { faceCamera } from "../billboard";
 import { Font, FontLoader } from "three/examples/jsm/loaders/FontLoader.js";
 import { NodeDefinition, ParamFieldDef } from "../types";
 import { toBoolean } from "../sockets";
@@ -1845,6 +1846,7 @@ export const OBJECT_TEXT_NODE: NodeDefinition = {
     fontSize: 64,
     depth: 0.1,
     fontPath: "",
+    faceCamera: false,
     ...COMMON_DEFAULT_PARAMS,
   },
   paramFields: buildPrimitiveDynamicParamFields([
@@ -1861,6 +1863,7 @@ export const OBJECT_TEXT_NODE: NodeDefinition = {
     } },
     { id: "fontSize", label: "Font Size (px)", kind: "number" },
     { id: "depth", label: "Depth / Relief", kind: "number", step: 0.05 },
+    { id: "faceCamera", label: "Face Camera (always readable)", kind: "boolean" },
   ])(),
   dynamicParamFields: buildPrimitiveDynamicParamFields([
     { id: "text", label: "Text (fallback)", kind: "text" },
@@ -1876,16 +1879,18 @@ export const OBJECT_TEXT_NODE: NodeDefinition = {
     } },
     { id: "fontSize", label: "Font Size (px)", kind: "number" },
     { id: "depth", label: "Depth / Relief", kind: "number", step: 0.05 },
+    { id: "faceCamera", label: "Face Camera (always readable)", kind: "boolean" },
   ]),
   evaluate: (inputs, params, ctx) => {
     const textState = textMesh(ctx.nodeId);
     const mesh = textState.mesh;
 
-    const textStr = inputs.text !== undefined ? String(inputs.text) : String(params.text ?? "tsuji");
+    const rawText = inputs.text !== undefined ? String(inputs.text) : String(params.text ?? "tsuji");
     const fontSize = Math.max(8, inputs.fontSize !== undefined ? Number(inputs.fontSize) || 64 : Number(params.fontSize) || 64);
     const depth = Math.max(0.001, inputs.depth !== undefined ? Number(inputs.depth) : Number(params.depth) ?? 0.1);
     // A custom font loaded via the file field wins; otherwise the Font menu.
     const font = textState.font ?? BUILTIN_FONTS[String(params.fontPreset ?? "Helvetiker")] ?? defaultFont;
+    const textStr = withFontFallbacks(rawText, font);
 
     const baseMatrix = composeNativeMatrix(inputs.matrix, params.location, params.rotation, params.scale, params);
 
@@ -1929,10 +1934,24 @@ export const OBJECT_TEXT_NODE: NodeDefinition = {
     const matParams = extractMaterialParams(inputs, params);
     const texParams = extractTextureParams(inputs, params, ctx.nodeId);
     applyMaterialParams(mesh, matParams, THREE.FrontSide, texParams);
+    faceCamera(mesh, toBoolean(params.faceCamera));
 
     return primitiveOutputs(mesh, params);
   },
 };
+
+/**
+ * Characters a font has no glyph for would print as "?". The ones that come
+ * up in formulas and labels — a typographic minus, a times sign — fall back
+ * to their nearest plain-keyboard twin instead.
+ */
+const GLYPH_FALLBACKS: Record<string, string> = { "−": "-", "–": "-", "×": "x", "·": ".", "÷": "/", "≤": "<=", "≥": ">=", "≠": "!=", "’": "'" };
+
+function withFontFallbacks(text: string, font: Font): string {
+  const glyphs = (font as unknown as { data?: { glyphs?: Record<string, unknown> } }).data?.glyphs;
+  if (!glyphs) return text;
+  return Array.from(text, (c) => (glyphs[c] || !GLYPH_FALLBACKS[c] ? c : GLYPH_FALLBACKS[c])).join("");
+}
 
 const textMeshCache = createNodeCache<TextMeshState>((s) => disposeObject3D(s.mesh));
 

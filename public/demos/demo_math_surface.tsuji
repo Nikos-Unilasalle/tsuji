@@ -1,0 +1,304 @@
+{
+  "canvases": [
+    {
+      "nodes": [
+        {
+          "id": "env",
+          "type": "lighting/environment",
+          "position": {
+            "x": 340,
+            "y": 406
+          },
+          "params": {
+            "color": 16777215,
+            "intensity": 1,
+            "background": 1,
+            "blurriness": 0,
+            "filePath": "",
+            "backgroundImagePath": "",
+            "backgroundFit": "cover",
+            "backgroundScale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "backgroundOffset": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "backgroundRotation": 0,
+            "ambientIntensity": 1.6,
+            "sunIntensity": 0
+          }
+        },
+        {
+          "id": "render",
+          "type": "render",
+          "position": {
+            "x": 610,
+            "y": 393
+          },
+          "params": {
+            "frameCount": 300,
+            "fps": 30,
+            "motionBlur": 0,
+            "resolutionPreset": "16:9 (1920x1080)",
+            "width": 1920,
+            "height": 1080,
+            "holdout": false
+          }
+        },
+        {
+          "id": "orbit",
+          "type": "math/expression",
+          "position": {
+            "x": -1200,
+            "y": -300
+          },
+          "params": {
+            "formula": "(13 cos(0.25t + 0.6), 8, 13 sin(0.25t + 0.6))"
+          }
+        },
+        {
+          "id": "cam",
+          "type": "calibration/camera",
+          "position": {
+            "x": -900,
+            "y": -300
+          },
+          "params": {
+            "location": {
+              "x": 10,
+              "y": 8,
+              "z": 10
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "useTarget": true,
+            "target": {
+              "x": 0,
+              "y": 0.5,
+              "z": 0
+            },
+            "up": {
+              "x": 0,
+              "y": 1,
+              "z": 0
+            },
+            "fov": 35,
+            "active": true,
+            "mode": "manual",
+            "projectionType": "perspective"
+          }
+        },
+        {
+          "id": "seq",
+          "type": "time/sequence",
+          "position": {
+            "x": -900,
+            "y": 100
+          },
+          "params": {
+            "steps": 4,
+            "mode": "timeline",
+            "offset": 0,
+            "step0Name": "axes",
+            "step0Duration": 1.0,
+            "step0Ease": "smooth",
+            "step0Start": "",
+            "step1Name": "surface",
+            "step1Duration": 3.0,
+            "step1Ease": "smooth",
+            "step1Start": "",
+            "step2Name": "bend",
+            "step2Duration": 3.0,
+            "step2Ease": "smooth",
+            "step2Start": "",
+            "step3Name": "pause",
+            "step3Duration": 3.0,
+            "step3Ease": "smooth",
+            "step3Start": ""
+          }
+        },
+        {
+          "id": "axes",
+          "type": "math/axes",
+          "position": {
+            "x": -560,
+            "y": -200
+          },
+          "params": {
+            "dimension": "3D",
+            "xMin": -3,
+            "xMax": 3,
+            "xStep": 1,
+            "yMin": -3,
+            "yMax": 3,
+            "yStep": 1,
+            "zMin": -2,
+            "zMax": 3,
+            "zStep": 1,
+            "unit": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "grid": "xy",
+            "labels": true,
+            "piTicks": false,
+            "names": "x, y, z",
+            "labelSize": 0.3,
+            "arrows": true,
+            "axisColor": 2236962,
+            "gridColor": 14015457,
+            "axisWidth": 2,
+            "gridWidth": 1
+          }
+        },
+        {
+          "id": "surface",
+          "type": "math/function-surface",
+          "position": {
+            "x": -200,
+            "y": -200
+          },
+          "params": {
+            "mode": "height",
+            "formula": "a (x\u00b2 \u2212 y\u00b2)/4 + (1 \u2212 a)(x\u00b2 + y\u00b2)/6",
+            "uMin": -2.5,
+            "uMax": 2.5,
+            "vMin": -2.5,
+            "vMax": 2.5,
+            "resolution": 48,
+            "zMin": -3,
+            "zMax": 3,
+            "a": 0,
+            "b": 0,
+            "c": 0,
+            "d": 0,
+            "progress": 1,
+            "colorLow": 5214166,
+            "colorHigh": 15906891,
+            "opacity": 1,
+            "gridLines": 4,
+            "gridColor": 2831424,
+            "gridWidth": 1,
+            "visible": true
+          }
+        },
+        {
+          "id": "formula",
+          "type": "object/text",
+          "position": {
+            "x": -200,
+            "y": 200
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 0,
+              "y": 4.0,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "text": "z = a(x\u00b2 \u2212 y\u00b2)/4 + (1 \u2212 a)(x\u00b2 + y\u00b2)/6",
+            "fontSize": 18,
+            "depth": 0,
+            "color": 2236962,
+            "shadeless": 1,
+            "faceCamera": true
+          }
+        },
+        {
+          "id": "sun",
+          "type": "light/directional",
+          "position": {
+            "x": 857,
+            "y": 193
+          },
+          "params": {
+            "location": {
+              "x": 4,
+              "y": 10,
+              "z": 6
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "color": 16773852,
+            "intensity": 1.4,
+            "castShadow": 0
+          }
+        }
+      ],
+      "connections": [
+        {
+          "id": "env->render",
+          "fromNode": "env",
+          "fromSocket": "environment",
+          "toNode": "render",
+          "toSocket": "environment"
+        },
+        {
+          "id": "orbit.vector->cam.location",
+          "fromNode": "orbit",
+          "fromSocket": "vector",
+          "toNode": "cam",
+          "toSocket": "location"
+        },
+        {
+          "id": "seq.step0->axes.visible",
+          "fromNode": "seq",
+          "fromSocket": "step0",
+          "toNode": "axes",
+          "toSocket": "visible"
+        },
+        {
+          "id": "axes.space->surface.space",
+          "fromNode": "axes",
+          "fromSocket": "space",
+          "toNode": "surface",
+          "toSocket": "space"
+        },
+        {
+          "id": "seq.step1->surface.progress",
+          "fromNode": "seq",
+          "fromSocket": "step1",
+          "toNode": "surface",
+          "toSocket": "progress"
+        },
+        {
+          "id": "seq.step2->surface.a",
+          "fromNode": "seq",
+          "fromSocket": "step2",
+          "toNode": "surface",
+          "toSocket": "a"
+        }
+      ],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    }
+  ],
+  "activeCanvas": 0
+}

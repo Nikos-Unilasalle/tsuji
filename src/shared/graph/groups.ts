@@ -1,5 +1,5 @@
 import { SocketDef, SocketType } from "./sockets";
-import { Graph, NodeDefinition, NodeInstance, NodeRegistry } from "./types";
+import { Connection, Graph, NodeDefinition, NodeInstance, NodeRegistry } from "./types";
 
 /**
  * Node groups — a selection collapsed into one node holding a subgraph.
@@ -288,6 +288,13 @@ export function findNodeWithGraph(
     }
   }
   return undefined;
+}
+
+/** A node's own wires, in and out, at whatever depth it sits — what a param panel needs to size per-socket fields. */
+export function nodeConnections(graph: Graph, nodeId: string): Connection[] {
+  const found = findNodeWithGraph(graph, nodeId);
+  if (!found) return [];
+  return found.graph.connections.filter((c) => c.toNode === nodeId || c.fromNode === nodeId);
 }
 
 /**

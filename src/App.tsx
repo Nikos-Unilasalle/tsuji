@@ -60,7 +60,7 @@ import {
   setGraphKeyBindings,
   setPlaybackActive,
 } from "./shared/graph/playbackKeys";
-import { collectAllNodeIds, findNodeDeep, resolveDefinition, updateGraphHolding, updateNodeDeep } from "./shared/graph/groups";
+import { collectAllNodeIds, findNodeDeep, nodeConnections, resolveDefinition, updateGraphHolding, updateNodeDeep } from "./shared/graph/groups";
 import { disposeNodeCaches } from "./shared/graph/nodeCaches";
 import { AutosaveRecord, projectHasContent, readAutosave, writeAutosave } from "./shared/graph/autosave";
 import { rehydrateGraphParams } from "./shared/graph/rehydrateParams";
@@ -2864,7 +2864,7 @@ function MainEditor() {
           category={selectedDef.category}
           fields={
             selectedDef.dynamicParamFields
-              ? selectedDef.dynamicParamFields(selectedInstance)
+              ? selectedDef.dynamicParamFields(selectedInstance, nodeConnections(graph, selectedInstance.id))
               : (selectedDef.paramFields ?? [])
           }
           params={selectedParamValues}

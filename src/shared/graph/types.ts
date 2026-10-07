@@ -318,7 +318,12 @@ export interface NodeDefinition {
    * node's own file keeps its loaded state in, the same "cache outside the
    * pure calculation, keyed by a stable id" pattern as `EvalContext.nodeId`).
    */
-  dynamicParamFields?: (instance: NodeInstance) => ParamFieldDef[];
+  /**
+   * `connections` are the node's own wires, in and out, when the caller has
+   * the graph at hand (the param panel, the viewport HUD) — for fields sized
+   * to sockets that grow as they are wired, like a Sequence's steps.
+   */
+  dynamicParamFields?: (instance: NodeInstance, connections?: Connection[]) => ParamFieldDef[];
   /**
    * Rewrites a saved instance's params from an older shape of this node into
    * the current one, when a file is loaded. This is what lets a node be made

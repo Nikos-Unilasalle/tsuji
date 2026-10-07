@@ -1,0 +1,497 @@
+{
+  "canvases": [
+    {
+      "nodes": [
+        {
+          "id": "env",
+          "type": "lighting/environment",
+          "position": {
+            "x": 340,
+            "y": 406
+          },
+          "params": {
+            "color": 16777215,
+            "intensity": 1,
+            "background": 1,
+            "blurriness": 0,
+            "filePath": "",
+            "backgroundImagePath": "",
+            "backgroundFit": "cover",
+            "backgroundScale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "backgroundOffset": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "backgroundRotation": 0,
+            "ambientIntensity": 0.6,
+            "sunIntensity": 0
+          }
+        },
+        {
+          "id": "render",
+          "type": "render",
+          "position": {
+            "x": 610,
+            "y": 393
+          },
+          "params": {
+            "frameCount": 300,
+            "fps": 30,
+            "motionBlur": 0,
+            "resolutionPreset": "16:9 (1920x1080)",
+            "width": 1920,
+            "height": 1080,
+            "holdout": false
+          }
+        },
+        {
+          "id": "cam",
+          "type": "calibration/camera",
+          "position": {
+            "x": -900,
+            "y": -200
+          },
+          "params": {
+            "location": {
+              "x": 0,
+              "y": 1.5,
+              "z": 30
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "useTarget": true,
+            "target": {
+              "x": 0,
+              "y": 1.5,
+              "z": 0
+            },
+            "up": {
+              "x": 0,
+              "y": 1,
+              "z": 0
+            },
+            "fov": 21,
+            "active": true,
+            "mode": "manual",
+            "projectionType": "orthographic"
+          }
+        },
+        {
+          "id": "seq",
+          "type": "time/sequence",
+          "position": {
+            "x": -900,
+            "y": 100
+          },
+          "params": {
+            "steps": 5,
+            "mode": "timeline",
+            "offset": 0,
+            "step0Name": "axes",
+            "step0Duration": 1.0,
+            "step0Ease": "smooth",
+            "step0Start": "",
+            "step1Name": "curve",
+            "step1Duration": 2.0,
+            "step1Ease": "smooth",
+            "step1Start": "",
+            "step2Name": "tangent",
+            "step2Duration": 1.0,
+            "step2Ease": "smooth",
+            "step2Start": "",
+            "step3Name": "slide",
+            "step3Duration": 5.0,
+            "step3Ease": "linear",
+            "step3Start": "",
+            "step4Name": "pause",
+            "step4Duration": 1.0,
+            "step4Ease": "smooth",
+            "step4Start": ""
+          }
+        },
+        {
+          "id": "axes",
+          "type": "math/axes",
+          "position": {
+            "x": -560,
+            "y": -200
+          },
+          "params": {
+            "dimension": "2D",
+            "xMin": -5,
+            "xMax": 5,
+            "xStep": 0,
+            "yMin": -3,
+            "yMax": 6,
+            "yStep": 0,
+            "unit": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "grid": "xy",
+            "labels": true,
+            "piTicks": false,
+            "names": "x, y",
+            "labelSize": 0.28,
+            "arrows": true,
+            "axisColor": 2236962,
+            "gridColor": 14015457,
+            "axisWidth": 2,
+            "gridWidth": 1
+          }
+        },
+        {
+          "id": "curve",
+          "type": "math/function-curve",
+          "position": {
+            "x": -200,
+            "y": -260
+          },
+          "params": {
+            "mode": "function",
+            "formula": "0.25x\u00b3 \u2212 x",
+            "from": -4.3,
+            "to": 4.3,
+            "samples": 400,
+            "yMin": -3,
+            "yMax": 6,
+            "progress": 1,
+            "color": 2060267,
+            "width": 3.5,
+            "dashed": false,
+            "visible": true
+          }
+        },
+        {
+          "id": "x0",
+          "type": "math/expression",
+          "position": {
+            "x": -560,
+            "y": 240
+          },
+          "params": {
+            "formula": "lerp(\u22123, 3, a)",
+            "a": 0
+          }
+        },
+        {
+          "id": "tangent",
+          "type": "math/function-curve",
+          "position": {
+            "x": -200,
+            "y": 40
+          },
+          "params": {
+            "mode": "function",
+            "formula": "(0.75a\u00b2 \u2212 1)(x \u2212 a) + 0.25a\u00b3 \u2212 a",
+            "from": -5,
+            "to": 5,
+            "samples": 40,
+            "yMin": -3,
+            "yMax": 6,
+            "progress": 1,
+            "color": 15234107,
+            "width": 2.5,
+            "dashed": false,
+            "visible": true
+          }
+        },
+        {
+          "id": "point",
+          "type": "math/expression",
+          "position": {
+            "x": -200,
+            "y": 300
+          },
+          "params": {
+            "formula": "(a, 0.25a\u00b3 \u2212 a, 0)"
+          }
+        },
+        {
+          "id": "pointWorld",
+          "type": "transform/transform-vector",
+          "position": {
+            "x": 80,
+            "y": 300
+          },
+          "params": {}
+        },
+        {
+          "id": "dotPlace",
+          "type": "transform",
+          "position": {
+            "x": 320,
+            "y": 300
+          },
+          "params": {}
+        },
+        {
+          "id": "dot",
+          "type": "object/sphere",
+          "position": {
+            "x": 560,
+            "y": 300
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 0.22,
+              "y": 0.22,
+              "z": 0.22
+            },
+            "sphereType": "uv",
+            "segments": 4,
+            "color": 15234107,
+            "roughness": 0.6,
+            "metalness": 0,
+            "shadeless": 1
+          }
+        },
+        {
+          "id": "slope",
+          "type": "math/expression",
+          "position": {
+            "x": -200,
+            "y": 520
+          },
+          "params": {
+            "formula": "0.75a\u00b2 \u2212 1"
+          }
+        },
+        {
+          "id": "slopeText",
+          "type": "converter/value-to-text",
+          "position": {
+            "x": 80,
+            "y": 520
+          },
+          "params": {
+            "decimals": 2,
+            "prefix": "pente = ",
+            "suffix": ""
+          }
+        },
+        {
+          "id": "label",
+          "type": "object/text",
+          "position": {
+            "x": 320,
+            "y": 520
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": -4.8,
+              "y": 5.0,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "text": "pente",
+            "fontSize": 0.7,
+            "depth": 0,
+            "color": 15234107,
+            "shadeless": 1
+          }
+        },
+        {
+          "id": "title",
+          "type": "object/text",
+          "position": {
+            "x": 320,
+            "y": -420
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": -4.8,
+              "y": -2.6,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "text": "f(x) = 0.25x\u00b3 \u2212 x",
+            "fontSize": 0.55,
+            "depth": 0,
+            "color": 2060267,
+            "shadeless": 1
+          }
+        }
+      ],
+      "connections": [
+        {
+          "id": "env->render",
+          "fromNode": "env",
+          "fromSocket": "environment",
+          "toNode": "render",
+          "toSocket": "environment"
+        },
+        {
+          "id": "seq.step0->axes.visible",
+          "fromNode": "seq",
+          "fromSocket": "step0",
+          "toNode": "axes",
+          "toSocket": "visible"
+        },
+        {
+          "id": "axes.space->curve.space",
+          "fromNode": "axes",
+          "fromSocket": "space",
+          "toNode": "curve",
+          "toSocket": "space"
+        },
+        {
+          "id": "seq.step1->curve.progress",
+          "fromNode": "seq",
+          "fromSocket": "step1",
+          "toNode": "curve",
+          "toSocket": "progress"
+        },
+        {
+          "id": "seq.step3->x0.a",
+          "fromNode": "seq",
+          "fromSocket": "step3",
+          "toNode": "x0",
+          "toSocket": "a"
+        },
+        {
+          "id": "axes.space->tangent.space",
+          "fromNode": "axes",
+          "fromSocket": "space",
+          "toNode": "tangent",
+          "toSocket": "space"
+        },
+        {
+          "id": "x0.value->tangent.a",
+          "fromNode": "x0",
+          "fromSocket": "value",
+          "toNode": "tangent",
+          "toSocket": "a"
+        },
+        {
+          "id": "seq.step2->tangent.progress",
+          "fromNode": "seq",
+          "fromSocket": "step2",
+          "toNode": "tangent",
+          "toSocket": "progress"
+        },
+        {
+          "id": "x0.value->point.a",
+          "fromNode": "x0",
+          "fromSocket": "value",
+          "toNode": "point",
+          "toSocket": "a"
+        },
+        {
+          "id": "point.vector->pointWorld.vector",
+          "fromNode": "point",
+          "fromSocket": "vector",
+          "toNode": "pointWorld",
+          "toSocket": "vector"
+        },
+        {
+          "id": "axes.space->pointWorld.matrix",
+          "fromNode": "axes",
+          "fromSocket": "space",
+          "toNode": "pointWorld",
+          "toSocket": "matrix"
+        },
+        {
+          "id": "pointWorld.vector->dotPlace.location",
+          "fromNode": "pointWorld",
+          "fromSocket": "vector",
+          "toNode": "dotPlace",
+          "toSocket": "location"
+        },
+        {
+          "id": "dotPlace.matrix->dot.matrix",
+          "fromNode": "dotPlace",
+          "fromSocket": "matrix",
+          "toNode": "dot",
+          "toSocket": "matrix"
+        },
+        {
+          "id": "seq.step2->dot.visible",
+          "fromNode": "seq",
+          "fromSocket": "step2",
+          "toNode": "dot",
+          "toSocket": "visible"
+        },
+        {
+          "id": "x0.value->slope.a",
+          "fromNode": "x0",
+          "fromSocket": "value",
+          "toNode": "slope",
+          "toSocket": "a"
+        },
+        {
+          "id": "slope.value->slopeText.value",
+          "fromNode": "slope",
+          "fromSocket": "value",
+          "toNode": "slopeText",
+          "toSocket": "value"
+        },
+        {
+          "id": "slopeText.text->label.text",
+          "fromNode": "slopeText",
+          "fromSocket": "text",
+          "toNode": "label",
+          "toSocket": "text"
+        },
+        {
+          "id": "seq.step2->label.visible",
+          "fromNode": "seq",
+          "fromSocket": "step2",
+          "toNode": "label",
+          "toSocket": "visible"
+        },
+        {
+          "id": "seq.step1->title.visible",
+          "fromNode": "seq",
+          "fromSocket": "step1",
+          "toNode": "title",
+          "toSocket": "visible"
+        }
+      ],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    }
+  ],
+  "activeCanvas": 0
+}
