@@ -281,6 +281,34 @@ describe("INSTANCE_ON_POINTS_NODE", () => {
     const out = INSTANCE_ON_POINTS_NODE.evaluate({ geometry: source }, INSTANCE_ON_POINTS_NODE.defaultParams, ctx("iop-b"));
     expect(((out.geometry as THREE.Group).children[0] as THREE.Mesh).geometry.getAttribute("position").count).toBe(4);
   });
+
+  test("Ups lean each copy so its own up follows the direction given", () => {
+    // A thin post standing on +Y: its tip shows where the copy's up points.
+    const post = new THREE.Mesh(new THREE.BoxGeometry(0.01, 2, 0.01).translate(0, 1, 0), new THREE.MeshBasicMaterial());
+    const points = [new THREE.Vector3(0, 0, 0), new THREE.Vector3(10, 0, 0)];
+    const ups = [new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 1, 0)];
+    const out = INSTANCE_ON_POINTS_NODE.evaluate({ geometry: post, points, ups }, INSTANCE_ON_POINTS_NODE.defaultParams, ctx("iop-ups"));
+    const pos = ((out.geometry as THREE.Group).children[0] as THREE.Mesh).geometry.getAttribute("position");
+    const per = pos.count / 2;
+    let leaned = 0, upright = 0;
+    for (let v = 0; v < per; v++) leaned = Math.max(leaned, pos.getX(v));
+    for (let v = per; v < pos.count; v++) upright = Math.max(upright, pos.getY(v));
+    expect(leaned).toBeCloseTo(2, 2);
+    expect(upright).toBeCloseTo(2, 2);
+  });
+
+  test("copies that only move are rewritten in place, not re-merged", () => {
+    const source = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial());
+    const a = INSTANCE_ON_POINTS_NODE.evaluate({ geometry: source, points: [new THREE.Vector3(0, 0, 0)] }, INSTANCE_ON_POINTS_NODE.defaultParams, ctx("iop-move"));
+    const geometry = ((a.geometry as THREE.Group).children[0] as THREE.Mesh).geometry;
+    const b = INSTANCE_ON_POINTS_NODE.evaluate({ geometry: source, points: [new THREE.Vector3(3, 0, 0)] }, INSTANCE_ON_POINTS_NODE.defaultParams, ctx("iop-move"));
+    const moved = ((b.geometry as THREE.Group).children[0] as THREE.Mesh).geometry;
+    expect(moved).toBe(geometry);
+    moved.computeBoundingBox();
+    expect(moved.boundingBox!.min.x).toBeCloseTo(2.5, 6);
+    const c = INSTANCE_ON_POINTS_NODE.evaluate({ geometry: source, points: [new THREE.Vector3(), new THREE.Vector3(1, 0, 0)] }, INSTANCE_ON_POINTS_NODE.defaultParams, ctx("iop-move"));
+    expect(((c.geometry as THREE.Group).children[0] as THREE.Mesh).geometry.getAttribute("position").count).toBe(8);
+  });
 });
 
 describe("integration with the rest of Tsuji", () => {

@@ -88,10 +88,45 @@ export function mergeInstances(source: THREE.BufferGeometry, matrices: THREE.Mat
   return out;
 }
 
+/**
+ * Rewrites the positions and normals of a geometry built by mergeInstances
+ * for new matrices, in place. For copies that only move — floating,
+ * drifting, swaying — this replaces allocating a whole new merged geometry
+ * every frame with one pass over the same buffers.
+ */
+function rewriteInstances(target: THREE.BufferGeometry, source: THREE.BufferGeometry, matrices: THREE.Matrix4[]): void {
+  const vertexCount = source.getAttribute("position")?.count ?? 0;
+  const normalMatrix = new THREE.Matrix3();
+  const v = new THREE.Vector3();
+  for (const name of ["position", "normal"] as const) {
+    const src = source.getAttribute(name) as THREE.BufferAttribute | undefined;
+    const dst = target.getAttribute(name) as THREE.BufferAttribute | undefined;
+    if (!src || !dst || src.itemSize !== 3) continue;
+    const data = dst.array as Float32Array;
+    for (let k = 0; k < matrices.length; k++) {
+      if (name === "normal") normalMatrix.getNormalMatrix(matrices[k]);
+      const offset = k * vertexCount * 3;
+      for (let i = 0; i < vertexCount; i++) {
+        v.set(src.getX(i), src.getY(i), src.getZ(i));
+        if (name === "position") v.applyMatrix4(matrices[k]);
+        else v.applyMatrix3(normalMatrix).normalize();
+        data[offset + i * 3] = v.x;
+        data[offset + i * 3 + 1] = v.y;
+        data[offset + i * 3 + 2] = v.z;
+      }
+    }
+    dst.needsUpdate = true;
+  }
+  target.computeBoundingSphere();
+  target.computeBoundingBox();
+}
+
 interface InstanceState {
   group: THREE.Group;
   meshes: THREE.Mesh[];
   signature?: string;
+  /** What the merged buffers' sizes depend on: the source parts and the copy count. Matrices alone can be rewritten in place. */
+  layout?: string;
 }
 
 const instanceCache = createNodeCache<InstanceState>((s) => {
@@ -108,10 +143,13 @@ function warnNoMesh(nodeId: string): void {
   console.warn("Instance on Points: the geometry wired in has no mesh to copy (a line, points or an empty) — nothing is drawn.");
 }
 
+const WORLD_UP = new THREE.Vector3(0, 1, 0);
+
 function instanceMatrices(
   points: THREE.Vector3[],
   scales: unknown[],
   rotations: unknown[],
+  ups: unknown[],
   params: Record<string, unknown>,
   seed: number,
 ): THREE.Matrix4[] {
@@ -135,6 +173,12 @@ function instanceMatrices(
       ? new THREE.Quaternion().setFromEuler(new THREE.Euler(r.x * DEG, r.y * DEG, r.z * DEG))
       : new THREE.Quaternion().setFromAxisAngle(axis, Number.isFinite(Number(r)) && r !== undefined ? Number(r) * DEG : 0);
     q.multiply(jitter);
+    // Tilt last, so the copy turns about its own up first and then leans with
+    // the surface it rests on — a leaf spun at random, then riding a wave.
+    const up = ups[i];
+    if (up instanceof THREE.Vector3 && up.lengthSq() > 1e-12) {
+      q.premultiply(new THREE.Quaternion().setFromUnitVectors(WORLD_UP, up.clone().normalize()));
+    }
     return new THREE.Matrix4().compose(p, q, scale);
   });
 }
@@ -155,6 +199,9 @@ export const INSTANCE_ON_POINTS_NODE: NodeDefinition = {
     { id: "points", label: "Points (Vector List)", type: "list" },
     { id: "scales", label: "Scales (List)", type: "list" },
     { id: "rotations", label: "Rotations (List, °: angles or Euler vectors)", type: "list" },
+    // A surface normal per point (Ripple Field's Probe Normals, Mesh to
+    // Points' normals): each copy's own up leans to match it.
+    { id: "ups", label: "Ups (Direction List)", type: "list" },
     { id: "seed", label: "Seed", type: "value" },
     { id: "visible", label: "Visible", type: "value" },
   ],
@@ -186,22 +233,31 @@ export const INSTANCE_ON_POINTS_NODE: NodeDefinition = {
       : [new THREE.Vector3()];
     const scales = Array.isArray(inputs.scales) ? inputs.scales : [];
     const rotations = Array.isArray(inputs.rotations) ? inputs.rotations : [];
+    const ups = Array.isArray(inputs.ups) ? inputs.ups : [];
     const seed = Math.round(num(inputs.seed, params.seed, 0));
     const parts = source ? collectParts(source) : [];
     if (source && parts.length === 0) warnNoMesh(ctx.nodeId);
     else noMeshWarned.delete(ctx.nodeId);
 
+    const partsSignature = parts.map((p) => `${p.mesh.geometry.uuid}:${(p.mesh.geometry.getAttribute("position") as THREE.BufferAttribute | undefined)?.version ?? 0}:${p.local.elements.map((e) => e.toFixed(5)).join(",")}`);
     const signature = JSON.stringify([
-      parts.map((p) => `${p.mesh.geometry.uuid}:${(p.mesh.geometry.getAttribute("position") as THREE.BufferAttribute | undefined)?.version ?? 0}:${p.local.elements.map((e) => e.toFixed(5)).join(",")}`),
+      partsSignature,
       vectorsSignature(points),
       vectorsSignature(scales),
       vectorsSignature(rotations),
+      vectorsSignature(ups),
       params.scaleMin, params.scaleMax, params.rotationJitter, params.axis, params.randomFlip, seed,
     ]);
+    const layout = JSON.stringify([partsSignature, points.length]);
 
-    if (signature !== state.signature) {
+    if (signature !== state.signature && layout === state.layout && state.meshes.length === parts.length) {
       state.signature = signature;
-      const matrices = instanceMatrices(points, scales, rotations, params, seed);
+      const matrices = instanceMatrices(points, scales, rotations, ups, params, seed);
+      parts.forEach((part, i) => rewriteInstances(state!.meshes[i].geometry, part.mesh.geometry, matrices.map((m) => m.clone().multiply(part.local))));
+    } else if (signature !== state.signature) {
+      state.signature = signature;
+      state.layout = layout;
+      const matrices = instanceMatrices(points, scales, rotations, ups, params, seed);
       while (state.meshes.length > parts.length) {
         const gone = state.meshes.pop()!;
         gone.geometry.dispose();

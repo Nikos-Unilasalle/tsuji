@@ -497,6 +497,292 @@
             "y": 620
           },
           "params": {}
+        },
+        {
+          "id": "pad_peaks",
+          "type": "list/noise-peaks",
+          "position": {
+            "x": 800,
+            "y": 0
+          },
+          "params": {
+            "domain": "area",
+            "plane": "xz",
+            "min": -5,
+            "max": 5,
+            "depthMin": -3,
+            "depthMax": 3,
+            "origin": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "frequency": 0.35,
+            "octaves": 2,
+            "threshold": 0.5,
+            "minDistance": 2.5,
+            "invert": false,
+            "periodic": false,
+            "resolution": 200,
+            "seed": 7
+          }
+        },
+        {
+          "id": "pad_cluster",
+          "type": "list/scatter-around",
+          "position": {
+            "x": 1060,
+            "y": 0
+          },
+          "params": {
+            "count": 5,
+            "spread": {
+              "x": 0.9,
+              "y": 0,
+              "z": 0.9
+            },
+            "distribution": "gaussian",
+            "layeredAlong": "none",
+            "seed": 3
+          }
+        },
+        {
+          "id": "pad_drift",
+          "type": "physics/drift",
+          "position": {
+            "x": 1320,
+            "y": 0
+          },
+          "params": {
+            "force": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "forceScale": 2,
+            "drag": 1.2,
+            "maxSpeed": 1,
+            "tether": 1.5,
+            "slack": 0.35,
+            "radius": 0.3,
+            "spacing": 6,
+            "keepHeight": true,
+            "obstacleWeight": 6,
+            "boundsMode": "clamp",
+            "boundsCenter": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "boundsSize": {
+              "x": 11.5,
+              "y": 1,
+              "z": 7
+            }
+          }
+        },
+        {
+          "id": "pad_split",
+          "type": "list/split-vectors",
+          "position": {
+            "x": 1580,
+            "y": 0
+          },
+          "params": {}
+        },
+        {
+          "id": "pad_on_water",
+          "type": "list/combine-vectors",
+          "position": {
+            "x": 1800,
+            "y": 0
+          },
+          "params": {
+            "xDefault": 0,
+            "yDefault": 0,
+            "zDefault": 0
+          }
+        },
+        {
+          "id": "pad_shape",
+          "type": "object/disc",
+          "position": {
+            "x": 1800,
+            "y": 220
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 0,
+              "y": 0.025,
+              "z": 0
+            },
+            "rotation": {
+              "x": -1.5707963267948966,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "radius": 0.3,
+            "innerRadius": 0,
+            "startAngle": 0,
+            "arcAngle": 5.759586531581287,
+            "depth": 0,
+            "color": 5209402,
+            "roughness": 0.55,
+            "metalness": 0.0
+          }
+        },
+        {
+          "id": "pads",
+          "type": "structure/instance-on-points",
+          "position": {
+            "x": 2060,
+            "y": 0
+          },
+          "params": {
+            "visible": 1,
+            "scaleMin": 0.7,
+            "scaleMax": 1.25,
+            "rotationJitter": 180,
+            "axis": "Y",
+            "randomFlip": false,
+            "seed": 11
+          }
+        },
+        {
+          "id": "petal",
+          "type": "object/sphere",
+          "position": {
+            "x": 1800,
+            "y": 440
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 0,
+              "y": 0.06,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0.5,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 0.07,
+              "y": 0.04,
+              "z": 0.16
+            },
+            "sphereType": "uv",
+            "segments": 4,
+            "color": 15972552,
+            "roughness": 0.5,
+            "metalness": 0.0
+          }
+        },
+        {
+          "id": "petals",
+          "type": "structure/array",
+          "position": {
+            "x": 2060,
+            "y": 440
+          },
+          "params": {
+            "visible": 1,
+            "mode": "circular",
+            "count": 8,
+            "radius": 0.07,
+            "plane": "XZ",
+            "totalAngle": 360,
+            "orient": true,
+            "seed": 0
+          }
+        },
+        {
+          "id": "heart",
+          "type": "object/sphere",
+          "position": {
+            "x": 1800,
+            "y": 640
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 0,
+              "y": 0.08,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 0.06,
+              "y": 0.05,
+              "z": 0.06
+            },
+            "sphereType": "uv",
+            "segments": 4,
+            "color": 15911244,
+            "roughness": 0.5,
+            "metalness": 0.0
+          }
+        },
+        {
+          "id": "flower",
+          "type": "structure/merge",
+          "position": {
+            "x": 2300,
+            "y": 520
+          },
+          "params": {}
+        },
+        {
+          "id": "flower_spots",
+          "type": "list/slice",
+          "position": {
+            "x": 2060,
+            "y": 240
+          },
+          "params": {
+            "start": 0,
+            "count": 4
+          }
+        },
+        {
+          "id": "flower_ups",
+          "type": "list/slice",
+          "position": {
+            "x": 2060,
+            "y": 320
+          },
+          "params": {
+            "start": 0,
+            "count": 4
+          }
+        },
+        {
+          "id": "flowers",
+          "type": "structure/instance-on-points",
+          "position": {
+            "x": 2560,
+            "y": 300
+          },
+          "params": {
+            "visible": 1,
+            "scaleMin": 0.9,
+            "scaleMax": 1.2,
+            "rotationJitter": 180,
+            "axis": "Y",
+            "randomFlip": false,
+            "seed": 5
+          }
         }
       ],
       "connections": [
@@ -618,6 +904,146 @@
           "fromSocket": "geometry",
           "toNode": "ripples",
           "toSocket": "obstacles"
+        },
+        {
+          "id": "pad_peaks.points->pad_cluster.points",
+          "fromNode": "pad_peaks",
+          "fromSocket": "points",
+          "toNode": "pad_cluster",
+          "toSocket": "points"
+        },
+        {
+          "id": "pad_cluster.points->pad_drift.points",
+          "fromNode": "pad_cluster",
+          "fromSocket": "points",
+          "toNode": "pad_drift",
+          "toSocket": "points"
+        },
+        {
+          "id": "ripples.probeNormals->pad_drift.forces",
+          "fromNode": "ripples",
+          "fromSocket": "probeNormals",
+          "toNode": "pad_drift",
+          "toSocket": "forces"
+        },
+        {
+          "id": "rocks.geometry->pad_drift.obstacles",
+          "fromNode": "rocks",
+          "fromSocket": "geometry",
+          "toNode": "pad_drift",
+          "toSocket": "obstacles"
+        },
+        {
+          "id": "pad_drift.points->ripples.probes",
+          "fromNode": "pad_drift",
+          "fromSocket": "points",
+          "toNode": "ripples",
+          "toSocket": "probes"
+        },
+        {
+          "id": "pad_drift.points->pad_split.vectorList",
+          "fromNode": "pad_drift",
+          "fromSocket": "points",
+          "toNode": "pad_split",
+          "toSocket": "vectorList"
+        },
+        {
+          "id": "pad_split.xList->pad_on_water.xList",
+          "fromNode": "pad_split",
+          "fromSocket": "xList",
+          "toNode": "pad_on_water",
+          "toSocket": "xList"
+        },
+        {
+          "id": "ripples.probeHeights->pad_on_water.yList",
+          "fromNode": "ripples",
+          "fromSocket": "probeHeights",
+          "toNode": "pad_on_water",
+          "toSocket": "yList"
+        },
+        {
+          "id": "pad_split.zList->pad_on_water.zList",
+          "fromNode": "pad_split",
+          "fromSocket": "zList",
+          "toNode": "pad_on_water",
+          "toSocket": "zList"
+        },
+        {
+          "id": "pad_shape.geometry->pads.geometry",
+          "fromNode": "pad_shape",
+          "fromSocket": "geometry",
+          "toNode": "pads",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "pad_on_water.vectorList->pads.points",
+          "fromNode": "pad_on_water",
+          "fromSocket": "vectorList",
+          "toNode": "pads",
+          "toSocket": "points"
+        },
+        {
+          "id": "ripples.probeNormals->pads.ups",
+          "fromNode": "ripples",
+          "fromSocket": "probeNormals",
+          "toNode": "pads",
+          "toSocket": "ups"
+        },
+        {
+          "id": "petal.geometry->petals.geometry",
+          "fromNode": "petal",
+          "fromSocket": "geometry",
+          "toNode": "petals",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "petals.geometry->flower.in0",
+          "fromNode": "petals",
+          "fromSocket": "geometry",
+          "toNode": "flower",
+          "toSocket": "in0"
+        },
+        {
+          "id": "heart.geometry->flower.in1",
+          "fromNode": "heart",
+          "fromSocket": "geometry",
+          "toNode": "flower",
+          "toSocket": "in1"
+        },
+        {
+          "id": "pad_on_water.vectorList->flower_spots.list",
+          "fromNode": "pad_on_water",
+          "fromSocket": "vectorList",
+          "toNode": "flower_spots",
+          "toSocket": "list"
+        },
+        {
+          "id": "ripples.probeNormals->flower_ups.list",
+          "fromNode": "ripples",
+          "fromSocket": "probeNormals",
+          "toNode": "flower_ups",
+          "toSocket": "list"
+        },
+        {
+          "id": "flower.geometry->flowers.geometry",
+          "fromNode": "flower",
+          "fromSocket": "geometry",
+          "toNode": "flowers",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "flower_spots.list->flowers.points",
+          "fromNode": "flower_spots",
+          "fromSocket": "list",
+          "toNode": "flowers",
+          "toSocket": "points"
+        },
+        {
+          "id": "flower_ups.list->flowers.ups",
+          "fromNode": "flower_ups",
+          "fromSocket": "list",
+          "toNode": "flowers",
+          "toSocket": "ups"
         }
       ],
       "keyframes": {},

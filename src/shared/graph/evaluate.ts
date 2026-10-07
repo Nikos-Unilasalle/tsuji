@@ -5,7 +5,7 @@ import { Connection, EasingType, EvalContext, Graph, Keyframe, KeyframeStore, No
 export interface TopoResult {
   /** Node ids in dependency order — safe to evaluate front to back. */
   order: string[];
-  /** Node ids that could not be ordered because they sit in a connection cycle. */
+  /** Node ids in a connection cycle or downstream of one, ordered as well as the cycles allow (see topoSort). */
   cyclic: string[];
 }
 
@@ -340,8 +340,62 @@ export function topoSort(graph: Graph): TopoResult {
     }
   }
 
+  // What is left sits in a cycle or downstream of one. Evaluating it in file
+  // order let a node read its upstream neighbour's previous frame just
+  // because it was created first. Instead, break one connection at a time —
+  // at the node waiting on the fewest others — and carry on sorting: only the
+  // connection closing each loop reads a frame late, everything else in
+  // order. That one-frame loop is what lets two nodes feed each other (things
+  // drifting on a surface they also disturb).
   const ordered = new Set(order);
-  const cyclic = graph.nodes.map((n) => n.id).filter((id) => !ordered.has(id));
+  const cyclic: string[] = [];
+  const remaining = graph.nodes.map((n) => n.id).filter((id) => !ordered.has(id));
+  const placed = new Set<string>();
+  const upstream = new Map<string, string[]>();
+  for (const [from, tos] of downstream) for (const to of tos) (upstream.get(to) ?? upstream.set(to, []).get(to)!).push(from);
+  /** Whether `id` can reach itself through nodes not yet placed — it sits in a loop, not just after one. */
+  const inLoop = (id: string): boolean => {
+    const seen = new Set<string>();
+    const stack = [...(downstream.get(id) ?? [])];
+    while (stack.length > 0) {
+      const next = stack.pop()!;
+      if (next === id) return true;
+      if (seen.has(next) || placed.has(next) || ordered.has(next)) continue;
+      seen.add(next);
+      stack.push(...(downstream.get(next) ?? []));
+    }
+    return false;
+  };
+  while (placed.size < remaining.length) {
+    // The loop's way in: fewest inputs still waiting, then most inputs
+    // already settled, then file order.
+    let pick = "";
+    let best = [Infinity, -Infinity];
+    for (const id of remaining) {
+      if (placed.has(id) || !inLoop(id)) continue;
+      const waiting = inDegree.get(id) ?? 0;
+      const settled = (upstream.get(id) ?? []).filter((u) => ordered.has(u) || placed.has(u)).length;
+      if (waiting < best[0] || (waiting === best[0] && settled > best[1])) {
+        best = [waiting, settled];
+        pick = id;
+      }
+    }
+    if (!pick) pick = remaining.find((id) => !placed.has(id))!;
+    const pending = [pick];
+    inDegree.set(pick, 0);
+    while (pending.length > 0) {
+      const id = pending.shift()!;
+      if (placed.has(id)) continue;
+      placed.add(id);
+      cyclic.push(id);
+      for (const next of downstream.get(id) ?? []) {
+        if (placed.has(next) || ordered.has(next)) continue;
+        const left = (inDegree.get(next) ?? 0) - 1;
+        inDegree.set(next, left);
+        if (left <= 0) pending.push(next);
+      }
+    }
+  }
   return { order, cyclic };
 }
 

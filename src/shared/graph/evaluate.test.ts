@@ -89,6 +89,19 @@ describe("topoSort", () => {
     expect(cyclic.sort()).toEqual(["a", "b"]);
   });
 
+  test("what follows a cycle still runs in order, whatever order the file lists it in", () => {
+    // a <-> b is a loop; c reads b, d reads c. Listed backwards on purpose.
+    const graph: Graph = {
+      nodes: [node("d", "test/add"), node("c", "test/add"), node("b", "test/add"), node("a", "test/add"), node("src", "test/const")],
+      connections: [edge("src", "out", "a", "b"), edge("a", "out", "b", "a"), edge("b", "out", "a", "a"), edge("b", "out", "c", "a"), edge("c", "out", "d", "a")],
+    };
+    const { order, cyclic } = topoSort(graph);
+    expect(order).toEqual(["src"]);
+    expect(cyclic).toHaveLength(4);
+    expect(cyclic.indexOf("b")).toBeLessThan(cyclic.indexOf("c"));
+    expect(cyclic.indexOf("c")).toBeLessThan(cyclic.indexOf("d"));
+  });
+
   test("ignores a connection left dangling by a deleted node", () => {
     const graph: Graph = {
       nodes: [node("a", "test/const")],

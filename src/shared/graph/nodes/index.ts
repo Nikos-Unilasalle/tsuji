@@ -59,6 +59,7 @@ import { FLOCK_NODE } from "./flock";
 import { SPINE_CHAIN_NODE } from "./spineChain";
 import { PROFILED_TUBES_NODE } from "./profiledTubes";
 import { RIPPLE_FIELD_NODE } from "./rippleField";
+import { DRIFT_NODE } from "./drift";
 import { GROUND_NODE } from "./ground";
 import { CAPTURE_TRAILS_NODE } from "./particleTrails";
 import {
@@ -393,6 +394,7 @@ export const STARTER_NODES = [
   SPINE_CHAIN_NODE,
   PROFILED_TUBES_NODE,
   RIPPLE_FIELD_NODE,
+  DRIFT_NODE,
   GROUND_NODE,
   PARTICLE_SIMULATE_NODE,
   PARTICLE_RENDER_NODE,
@@ -618,6 +620,7 @@ export * from "./flock";
 export * from "./spineChain";
 export * from "./profiledTubes";
 export * from "./rippleField";
+export * from "./drift";
 export * from "./ground";
 export * from "./particleTrails";
 export * from "./distance";
