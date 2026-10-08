@@ -285,6 +285,7 @@ export const TEXTURE_PLANE_NODE: NodeDefinition = {
   inputs: [
     { id: "visible", label: "Visible", type: "value" },
     { id: "texture", label: "Texture", type: "texture" },
+    { id: "mask", label: "Mask", type: "texture" },
     { id: "matrix", label: "Matrix", type: "matrix" },
     { id: "uvScale", label: "UV Scale", type: "vector" },
     { id: "uvOffset", label: "UV Offset", type: "vector" },
@@ -374,6 +375,9 @@ export const TEXTURE_PLANE_NODE: NodeDefinition = {
     // Determine active texture (from input socket or param file fallback)
     const inputTexture = inputs.texture instanceof THREE.Texture ? inputs.texture : null;
     const activeTexture = inputTexture || state.texture;
+    // A wired mask hides what is black in it: three's alphaMap multiplies the
+    // surface's alpha by the map's green channel, and a mask is grey.
+    const maskTexture = inputs.mask instanceof THREE.Texture ? inputs.mask : null;
 
     // Calculate aspect ratio scaling
     const keepAspect = Boolean(params.keepAspect ?? true);
@@ -421,6 +425,7 @@ export const TEXTURE_PLANE_NODE: NodeDefinition = {
       Boolean(params.transparent ?? true),
       Number(params.alphaCutoff) ?? 0.001,
       activeTexture?.uuid ?? "",
+      maskTexture?.uuid ?? "",
       scaleX,
       scaleY,
       offsetX,
@@ -446,6 +451,12 @@ export const TEXTURE_PLANE_NODE: NodeDefinition = {
         mat.map.needsUpdate = true;
       } else {
         mat.map = null;
+      }
+      mat.alphaMap = maskTexture;
+      if (maskTexture) {
+        // The mask must be able to blend, whatever the cutoff does for the image's own alpha.
+        mat.transparent = true;
+        mat.depthWrite = mat.alphaTest > 0;
       }
       mat.needsUpdate = true;
     }

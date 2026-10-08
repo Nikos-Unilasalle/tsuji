@@ -335,10 +335,61 @@ const MASK_OPS = ["and", "or", "subtract", "xor"];
 const MASK_CHANNELS = ["luminance", "r", "g", "b", "a"];
 const maskCache = createNodeCache<GpuPassState>(disposeGpuPassState);
 
+const applyMaskCache = createNodeCache<GpuPassState>(disposeGpuPassState);
+
+/**
+ * Apply Mask — multiplies a texture's alpha by a mask (white keeps, black
+ * hides). The way to cut an image with a Roto Mask for anything that takes a
+ * texture and not a mask socket: a material's map, a decal, a post-process.
+ */
+export const TEXTURE_APPLY_MASK_NODE: NodeDefinition = {
+  type: "texture/apply-mask",
+  label: "Apply Mask",
+  category: "textureTools",
+  inputs: [
+    { id: "texture", label: "Texture", type: "texture" },
+    { id: "mask", label: "Mask", type: "texture" },
+    { id: "invert", label: "Invert", type: "value" },
+  ],
+  outputs: [{ id: "texture", label: "Texture", type: "texture" }],
+  defaultParams: { invert: false, ...SIZE_DEFAULTS },
+  dynamicParamFields: (instance) => [
+    { id: "invert", label: "Invert Mask", kind: "boolean" },
+    ...outputSizeFields(instance.params),
+  ],
+  evaluate: (inputs, rawParams, ctx) => {
+    const params = withInputs(rawParams, inputs);
+    const invert = params.invert ? 1 : 0;
+    const texture = runFilter({
+      ctx,
+      cache: applyMaskCache,
+      params,
+      inputs: [asTexture(inputs.texture), asTexture(inputs.mask)],
+      colorSpace: SRGB,
+      signature: [invert],
+      extraUniforms: () => ({ invert: { value: 0 } }),
+      setUniforms: (m) => {
+        m.uniforms.invert.value = invert;
+      },
+      body: /* glsl */ `
+        uniform float invert;
+        vec4 process(vec2 uv) {
+          vec4 a = hA > 0.5 ? readA(uv) : vec4(1.0);
+          float m = hB > 0.5 ? readB(uv).r : 1.0;
+          if (invert > 0.5) m = 1.0 - m;
+          return vec4(a.rgb, a.a * m);
+        }`,
+    });
+    return { texture };
+  },
+};
+
 /** "Extract" pulls one channel of A out as a grayscale mask; "Combine" boolean-combines it with B's luminance. */
 export const TEXTURE_MASK_NODE: NodeDefinition = {
   type: "texture/mask",
-  label: "Mask",
+  // Renamed from "Mask" once Roto Mask (mask/roto) arrived: this one extracts a
+  // channel or combines two textures. The type id stays, so saved graphs load.
+  label: "Channel Mask",
   category: "textureTools",
   inputs: [
     { id: "textureA", label: "Texture A", type: "texture" },
