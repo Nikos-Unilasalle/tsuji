@@ -153,6 +153,11 @@ guessing) via nape-js's InteractionListener BEGIN/END events.
 `Cloth` (a mesh whose edges become distance constraints — gravity, wind,
 pinned Empties and sphere colliders; the red vertex-color channel masks which
 parts are free cloth, see nodes/cloth.ts) ·
+`Constraint` (hinge / fixed / ball / slider / spring / rope between two bodies
+or a body and the world, latched to the poses it is made at; limits, motor,
+break force; fed by the `Body` output of a Rigid Body or Chain) ·
+`Chain` (a rope, chain or plank bridge: rigid links joined by ball or hinge
+joints, ends pinned to the world or to bodies, links handed out as matrices) ·
 `Collision Event` (outputs a Boolean while two bodies touch — this alone
 generalizes OpenVMap's hardcoded two-state Normal/Collision appearance system
 into "wire a collision into literally any parameter," strictly more capable

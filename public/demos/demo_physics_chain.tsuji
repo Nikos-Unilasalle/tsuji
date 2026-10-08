@@ -1,0 +1,872 @@
+{
+  "canvases": [
+    {
+      "nodes": [
+        {
+          "id": "world_1",
+          "type": "physics/world",
+          "position": {
+            "x": 60,
+            "y": 60
+          },
+          "params": {
+            "gravity": {
+              "x": 0,
+              "y": -9.81,
+              "z": 0
+            },
+            "timestep": 0.016666666666666666,
+            "maxSteps": 4,
+            "paused": 0,
+            "reset": 0
+          }
+        },
+        {
+          "id": "ground_geo",
+          "type": "object/box",
+          "position": {
+            "x": 60,
+            "y": 200
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 0,
+              "y": -0.5,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 24,
+              "y": 1,
+              "z": 24
+            },
+            "color": 4877136,
+            "roughness": 0.9,
+            "metalness": 0,
+            "opacity": 1
+          }
+        },
+        {
+          "id": "pillar_l",
+          "type": "object/box",
+          "position": {
+            "x": 60,
+            "y": 320
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": -3.5,
+              "y": 1.5,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 3,
+              "z": 2.2
+            },
+            "color": 8158342,
+            "roughness": 0.8,
+            "metalness": 0,
+            "opacity": 1
+          }
+        },
+        {
+          "id": "pillar_r",
+          "type": "object/box",
+          "position": {
+            "x": 60,
+            "y": 440
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 3.5,
+              "y": 1.5,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 3,
+              "z": 2.2
+            },
+            "color": 8158342,
+            "roughness": 0.8,
+            "metalness": 0,
+            "opacity": 1
+          }
+        },
+        {
+          "id": "beam_geo",
+          "type": "object/box",
+          "position": {
+            "x": 60,
+            "y": 560
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 0,
+              "y": 7.1,
+              "z": -4
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 4,
+              "y": 0.2,
+              "z": 0.2
+            },
+            "color": 8158342,
+            "roughness": 0.8,
+            "metalness": 0,
+            "opacity": 1
+          }
+        },
+        {
+          "id": "post_geo",
+          "type": "object/box",
+          "position": {
+            "x": 60,
+            "y": 680
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": -2,
+              "y": 3.5,
+              "z": -4
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 0.2,
+              "y": 7,
+              "z": 0.2
+            },
+            "color": 8158342,
+            "roughness": 0.8,
+            "metalness": 0,
+            "opacity": 1
+          }
+        },
+        {
+          "id": "static_group",
+          "type": "structure/merge",
+          "position": {
+            "x": 340,
+            "y": 440
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 0.0,
+              "y": 0.0,
+              "z": 0.0
+            },
+            "rotation": {
+              "x": 0.0,
+              "y": 0.0,
+              "z": 0.0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            }
+          }
+        },
+        {
+          "id": "static_body",
+          "type": "physics/rigid-body",
+          "position": {
+            "x": 600,
+            "y": 440
+          },
+          "params": {
+            "bodyType": "fixed",
+            "shape": "trimesh",
+            "split": "per-child",
+            "mass": 1,
+            "friction": 0.8,
+            "restitution": 0.05,
+            "linearDamping": 0.05,
+            "angularDamping": 0.1,
+            "gravityScale": 1,
+            "ccd": false
+          }
+        },
+        {
+          "id": "bridge",
+          "type": "physics/chain",
+          "position": {
+            "x": 340,
+            "y": 700
+          },
+          "params": {
+            "links": 12,
+            "start": {
+              "x": -3,
+              "y": 3,
+              "z": 0
+            },
+            "end": {
+              "x": 3,
+              "y": 3,
+              "z": 0
+            },
+            "linkShape": "box",
+            "jointType": "hinge",
+            "axis": {
+              "x": 0,
+              "y": 0,
+              "z": 1
+            },
+            "radius": 0.05,
+            "width": 1.8,
+            "mass": 0.5,
+            "linearDamping": 0.1,
+            "angularDamping": 0.6,
+            "friction": 0.8,
+            "restitution": 0,
+            "selfCollide": false,
+            "pinStart": true,
+            "pinEnd": true,
+            "stretch": false,
+            "breakForce": 0
+          }
+        },
+        {
+          "id": "plank_geo",
+          "type": "object/box",
+          "position": {
+            "x": 60,
+            "y": 800
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1.8,
+              "y": 0.46,
+              "z": 0.1
+            },
+            "color": 14267276,
+            "roughness": 0.8,
+            "metalness": 0,
+            "opacity": 1
+          }
+        },
+        {
+          "id": "plank_array",
+          "type": "structure/array",
+          "position": {
+            "x": 340,
+            "y": 860
+          },
+          "params": {
+            "visible": 1,
+            "count": 12,
+            "spacing": 0.5,
+            "mode": "line",
+            "gpuInstancing": false
+          }
+        },
+        {
+          "id": "planks",
+          "type": "structure/instance-transform",
+          "position": {
+            "x": 600,
+            "y": 860
+          },
+          "params": {
+            "mode": "absolute",
+            "pivot": "shared",
+            "rotationMode": "euler",
+            "alignAxis": "Z"
+          }
+        },
+        {
+          "id": "rope",
+          "type": "physics/chain",
+          "position": {
+            "x": 340,
+            "y": 1060
+          },
+          "params": {
+            "links": 8,
+            "start": {
+              "x": 0.0,
+              "y": 7.0,
+              "z": -4.0
+            },
+            "end": {
+              "x": 2.0,
+              "y": 4.0,
+              "z": -4.0
+            },
+            "linkShape": "capsule",
+            "jointType": "ball",
+            "radius": 0.05,
+            "mass": 0.15,
+            "linearDamping": 0.05,
+            "angularDamping": 0.3,
+            "friction": 0.5,
+            "restitution": 0,
+            "selfCollide": false,
+            "pinStart": true,
+            "pinEnd": false,
+            "stretch": true,
+            "breakForce": 0
+          }
+        },
+        {
+          "id": "link_geo",
+          "type": "object/cylinder",
+          "position": {
+            "x": 60,
+            "y": 1020
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0.0,
+              "y": 0.0,
+              "z": 0.0
+            },
+            "scale": {
+              "x": 0.1,
+              "y": 1,
+              "z": 0.1
+            },
+            "color": 11570519,
+            "roughness": 0.5,
+            "metalness": 0.2,
+            "opacity": 1
+          }
+        },
+        {
+          "id": "link_array",
+          "type": "structure/array",
+          "position": {
+            "x": 340,
+            "y": 1160
+          },
+          "params": {
+            "visible": 1,
+            "count": 8,
+            "spacing": 0.5,
+            "mode": "line",
+            "gpuInstancing": false
+          }
+        },
+        {
+          "id": "links",
+          "type": "structure/instance-transform",
+          "position": {
+            "x": 600,
+            "y": 1160
+          },
+          "params": {
+            "mode": "absolute",
+            "pivot": "shared",
+            "rotationMode": "euler",
+            "alignAxis": "Z"
+          }
+        },
+        {
+          "id": "ball_geo",
+          "type": "object/sphere",
+          "position": {
+            "x": 60,
+            "y": 1300
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0.0,
+              "y": 0.0,
+              "z": 0.0
+            },
+            "scale": {
+              "x": 0.9,
+              "y": 0.9,
+              "z": 0.9
+            },
+            "color": 15485081,
+            "roughness": 0.4,
+            "metalness": 0.1,
+            "opacity": 1
+          }
+        },
+        {
+          "id": "ball_array",
+          "type": "structure/array",
+          "position": {
+            "x": 340,
+            "y": 1300
+          },
+          "params": {
+            "visible": 1,
+            "count": 4,
+            "spacing": 2.4,
+            "mode": "line",
+            "axis": "Y",
+            "gpuInstancing": false
+          }
+        },
+        {
+          "id": "lantern_geo",
+          "type": "object/sphere",
+          "position": {
+            "x": 60,
+            "y": 1420
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 2.0,
+              "y": 3.65,
+              "z": -4.0
+            },
+            "rotation": {
+              "x": 0.0,
+              "y": 0.0,
+              "z": 0.0
+            },
+            "scale": {
+              "x": 0.7,
+              "y": 0.7,
+              "z": 0.7
+            },
+            "color": 16768110,
+            "roughness": 0.4,
+            "metalness": 0.1,
+            "opacity": 1
+          }
+        },
+        {
+          "id": "movers_group",
+          "type": "structure/merge",
+          "position": {
+            "x": 600,
+            "y": 1340
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 0.0,
+              "y": 0.0,
+              "z": 0.0
+            },
+            "rotation": {
+              "x": 0.0,
+              "y": 0.0,
+              "z": 0.0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            }
+          }
+        },
+        {
+          "id": "movers_body",
+          "type": "physics/rigid-body",
+          "position": {
+            "x": 860,
+            "y": 1340
+          },
+          "params": {
+            "bodyType": "dynamic",
+            "shape": "auto",
+            "split": "per-child",
+            "mass": 3,
+            "friction": 0.9,
+            "restitution": 0.05,
+            "linearDamping": 0.05,
+            "angularDamping": 0.1,
+            "gravityScale": 1,
+            "ccd": false
+          }
+        },
+        {
+          "id": "lantern_hook",
+          "type": "physics/constraint",
+          "position": {
+            "x": 1120,
+            "y": 1100
+          },
+          "params": {
+            "jointType": "ball",
+            "pairing": "single",
+            "indexA": -1,
+            "indexB": 4,
+            "anchor": {
+              "x": 2.0,
+              "y": 4.0,
+              "z": -4.0
+            },
+            "collideConnected": false
+          }
+        },
+        {
+          "id": "amb_1",
+          "type": "light/ambient",
+          "position": {
+            "x": 600,
+            "y": 1500
+          },
+          "params": {
+            "color": 10465488,
+            "intensity": 0.55
+          }
+        },
+        {
+          "id": "sun_1",
+          "type": "light/directional",
+          "position": {
+            "x": 600,
+            "y": 1600
+          },
+          "params": {
+            "color": 16774608,
+            "intensity": 1.7,
+            "location": {
+              "x": 6,
+              "y": 10,
+              "z": 5
+            },
+            "castShadow": 1
+          }
+        },
+        {
+          "id": "scene_merge",
+          "type": "structure/merge",
+          "position": {
+            "x": 1200,
+            "y": 700
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 0.0,
+              "y": 0.0,
+              "z": 0.0
+            },
+            "rotation": {
+              "x": 0.0,
+              "y": 0.0,
+              "z": 0.0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            }
+          }
+        },
+        {
+          "id": "render_1",
+          "type": "render",
+          "position": {
+            "x": 1460,
+            "y": 700
+          },
+          "params": {
+            "frameCount": 900,
+            "fps": 60,
+            "resolutionPreset": "16:9 (1920x1080)",
+            "width": 1920,
+            "height": 1080
+          }
+        }
+      ],
+      "connections": [
+        {
+          "id": "ground_geo.geometry->static_group.in0",
+          "fromNode": "ground_geo",
+          "fromSocket": "geometry",
+          "toNode": "static_group",
+          "toSocket": "in0"
+        },
+        {
+          "id": "pillar_l.geometry->static_group.in1",
+          "fromNode": "pillar_l",
+          "fromSocket": "geometry",
+          "toNode": "static_group",
+          "toSocket": "in1"
+        },
+        {
+          "id": "pillar_r.geometry->static_group.in2",
+          "fromNode": "pillar_r",
+          "fromSocket": "geometry",
+          "toNode": "static_group",
+          "toSocket": "in2"
+        },
+        {
+          "id": "beam_geo.geometry->static_group.in3",
+          "fromNode": "beam_geo",
+          "fromSocket": "geometry",
+          "toNode": "static_group",
+          "toSocket": "in3"
+        },
+        {
+          "id": "post_geo.geometry->static_group.in4",
+          "fromNode": "post_geo",
+          "fromSocket": "geometry",
+          "toNode": "static_group",
+          "toSocket": "in4"
+        },
+        {
+          "id": "world_1.world->static_body.world",
+          "fromNode": "world_1",
+          "fromSocket": "world",
+          "toNode": "static_body",
+          "toSocket": "world"
+        },
+        {
+          "id": "static_group.geometry->static_body.geometry",
+          "fromNode": "static_group",
+          "fromSocket": "geometry",
+          "toNode": "static_body",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "world_1.world->bridge.world",
+          "fromNode": "world_1",
+          "fromSocket": "world",
+          "toNode": "bridge",
+          "toSocket": "world"
+        },
+        {
+          "id": "plank_geo.geometry->plank_array.geometry",
+          "fromNode": "plank_geo",
+          "fromSocket": "geometry",
+          "toNode": "plank_array",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "plank_array.geometry->planks.geometry",
+          "fromNode": "plank_array",
+          "fromSocket": "geometry",
+          "toNode": "planks",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "bridge.matrices->planks.matrices",
+          "fromNode": "bridge",
+          "fromSocket": "matrices",
+          "toNode": "planks",
+          "toSocket": "matrices"
+        },
+        {
+          "id": "world_1.world->rope.world",
+          "fromNode": "world_1",
+          "fromSocket": "world",
+          "toNode": "rope",
+          "toSocket": "world"
+        },
+        {
+          "id": "link_geo.geometry->link_array.geometry",
+          "fromNode": "link_geo",
+          "fromSocket": "geometry",
+          "toNode": "link_array",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "link_array.geometry->links.geometry",
+          "fromNode": "link_array",
+          "fromSocket": "geometry",
+          "toNode": "links",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "rope.matrices->links.matrices",
+          "fromNode": "rope",
+          "fromSocket": "matrices",
+          "toNode": "links",
+          "toSocket": "matrices"
+        },
+        {
+          "id": "ball_geo.geometry->ball_array.geometry",
+          "fromNode": "ball_geo",
+          "fromSocket": "geometry",
+          "toNode": "ball_array",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "ball_array.geometry->movers_group.in0",
+          "fromNode": "ball_array",
+          "fromSocket": "geometry",
+          "toNode": "movers_group",
+          "toSocket": "in0"
+        },
+        {
+          "id": "lantern_geo.geometry->movers_group.in1",
+          "fromNode": "lantern_geo",
+          "fromSocket": "geometry",
+          "toNode": "movers_group",
+          "toSocket": "in1"
+        },
+        {
+          "id": "world_1.world->movers_body.world",
+          "fromNode": "world_1",
+          "fromSocket": "world",
+          "toNode": "movers_body",
+          "toSocket": "world"
+        },
+        {
+          "id": "movers_group.geometry->movers_body.geometry",
+          "fromNode": "movers_group",
+          "fromSocket": "geometry",
+          "toNode": "movers_body",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "world_1.world->lantern_hook.world",
+          "fromNode": "world_1",
+          "fromSocket": "world",
+          "toNode": "lantern_hook",
+          "toSocket": "world"
+        },
+        {
+          "id": "rope.body->lantern_hook.bodyA",
+          "fromNode": "rope",
+          "fromSocket": "body",
+          "toNode": "lantern_hook",
+          "toSocket": "bodyA"
+        },
+        {
+          "id": "movers_body.body->lantern_hook.bodyB",
+          "fromNode": "movers_body",
+          "fromSocket": "body",
+          "toNode": "lantern_hook",
+          "toSocket": "bodyB"
+        },
+        {
+          "id": "static_body.geometry->scene_merge.in0",
+          "fromNode": "static_body",
+          "fromSocket": "geometry",
+          "toNode": "scene_merge",
+          "toSocket": "in0"
+        },
+        {
+          "id": "movers_body.geometry->scene_merge.in1",
+          "fromNode": "movers_body",
+          "fromSocket": "geometry",
+          "toNode": "scene_merge",
+          "toSocket": "in1"
+        },
+        {
+          "id": "planks.geometry->scene_merge.in2",
+          "fromNode": "planks",
+          "fromSocket": "geometry",
+          "toNode": "scene_merge",
+          "toSocket": "in2"
+        },
+        {
+          "id": "links.geometry->scene_merge.in3",
+          "fromNode": "links",
+          "fromSocket": "geometry",
+          "toNode": "scene_merge",
+          "toSocket": "in3"
+        },
+        {
+          "id": "amb_1.light->scene_merge.in4",
+          "fromNode": "amb_1",
+          "fromSocket": "light",
+          "toNode": "scene_merge",
+          "toSocket": "in4"
+        },
+        {
+          "id": "sun_1.light->scene_merge.in5",
+          "fromNode": "sun_1",
+          "fromSocket": "light",
+          "toNode": "scene_merge",
+          "toSocket": "in5"
+        }
+      ],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    },
+    {
+      "nodes": [],
+      "connections": [],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    },
+    {
+      "nodes": [],
+      "connections": [],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    },
+    {
+      "nodes": [],
+      "connections": [],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    },
+    {
+      "nodes": [],
+      "connections": [],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    },
+    {
+      "nodes": [],
+      "connections": [],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    }
+  ],
+  "activeCanvas": 0
+}

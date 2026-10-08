@@ -290,6 +290,16 @@ export const DEMO_CATALOG: DemoCategory[] = [
         description: "A stack of crates and a ball on a ramp — six bodies from one Array and one Rigid Body node.",
       },
       {
+        file: "demo_physics_constraints.tsuji",
+        label: "Joints (Rapier)",
+        description: "A motorised door, a piston on a rail, a crate on a spring and a hinged pendulum — four Constraint nodes on two Rigid Bodies.",
+      },
+      {
+        file: "demo_physics_chain.tsuji",
+        label: "Chain & Bridge",
+        description: "A plank bridge that sags under falling balls, and a rope with a lantern swinging from a beam.",
+      },
+      {
         file: "demo_physics_character_rapier.tsuji",
         label: "Character on Rapier",
         description: "ZQSD and Space drive a capsule through a Rapier level: auto-step onto a kerb, a ramp, and crates it can shove.",

@@ -1,0 +1,780 @@
+{
+  "canvases": [
+    {
+      "nodes": [
+        {
+          "id": "world_1",
+          "type": "physics/world",
+          "position": {
+            "x": 60,
+            "y": 60
+          },
+          "params": {
+            "gravity": {
+              "x": 0,
+              "y": -9.81,
+              "z": 0
+            },
+            "timestep": 0.016666666666666666,
+            "maxSteps": 4,
+            "paused": 0,
+            "reset": 0
+          }
+        },
+        {
+          "id": "ground_geo",
+          "type": "object/box",
+          "position": {
+            "x": 60,
+            "y": 200
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 0,
+              "y": -0.5,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 24,
+              "y": 1,
+              "z": 24
+            },
+            "color": 4877136,
+            "roughness": 0.9,
+            "metalness": 0,
+            "opacity": 1
+          }
+        },
+        {
+          "id": "post_geo",
+          "type": "object/box",
+          "position": {
+            "x": 60,
+            "y": 320
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": -4,
+              "y": 1.1,
+              "z": 2
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 0.2,
+              "y": 2.2,
+              "z": 0.2
+            },
+            "color": 8158342,
+            "roughness": 0.8,
+            "metalness": 0,
+            "opacity": 1
+          }
+        },
+        {
+          "id": "rail_geo",
+          "type": "object/box",
+          "position": {
+            "x": 60,
+            "y": 440
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 3,
+              "y": 0.35,
+              "z": -3
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 5,
+              "y": 0.1,
+              "z": 0.1
+            },
+            "color": 8158342,
+            "roughness": 0.8,
+            "metalness": 0,
+            "opacity": 1
+          }
+        },
+        {
+          "id": "static_group",
+          "type": "structure/merge",
+          "position": {
+            "x": 340,
+            "y": 320
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 0.0,
+              "y": 0.0,
+              "z": 0.0
+            },
+            "rotation": {
+              "x": 0.0,
+              "y": 0.0,
+              "z": 0.0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            }
+          }
+        },
+        {
+          "id": "static_body",
+          "type": "physics/rigid-body",
+          "position": {
+            "x": 600,
+            "y": 320
+          },
+          "params": {
+            "bodyType": "fixed",
+            "shape": "trimesh",
+            "split": "per-child",
+            "mass": 1,
+            "friction": 0.8,
+            "restitution": 0.05,
+            "linearDamping": 0.05,
+            "angularDamping": 0.1,
+            "gravityScale": 1,
+            "ccd": false
+          }
+        },
+        {
+          "id": "door_geo",
+          "type": "object/box",
+          "position": {
+            "x": 60,
+            "y": 600
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": -3.05,
+              "y": 1.1,
+              "z": 2
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1.6,
+              "y": 2,
+              "z": 0.1
+            },
+            "color": 15485081,
+            "roughness": 0.8,
+            "metalness": 0,
+            "opacity": 1
+          }
+        },
+        {
+          "id": "piston_geo",
+          "type": "object/box",
+          "position": {
+            "x": 60,
+            "y": 720
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 3,
+              "y": 0.35,
+              "z": -3
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1.2,
+              "y": 0.6,
+              "z": 0.6
+            },
+            "color": 3718648,
+            "roughness": 0.8,
+            "metalness": 0,
+            "opacity": 1
+          }
+        },
+        {
+          "id": "crate_geo",
+          "type": "object/box",
+          "position": {
+            "x": 60,
+            "y": 840
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 0,
+              "y": 0.4,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 0.8,
+              "y": 0.8,
+              "z": 0.8
+            },
+            "color": 16768110,
+            "roughness": 0.8,
+            "metalness": 0,
+            "opacity": 1
+          }
+        },
+        {
+          "id": "arm_geo",
+          "type": "object/box",
+          "position": {
+            "x": 60,
+            "y": 960
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": -1.8250096355587748,
+              "y": 5.067585047594004,
+              "z": -3.0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0.9
+            },
+            "scale": {
+              "x": 0.12,
+              "y": 3.0,
+              "z": 0.12
+            },
+            "color": 14267276,
+            "roughness": 0.8,
+            "metalness": 0,
+            "opacity": 1
+          }
+        },
+        {
+          "id": "movers_group",
+          "type": "structure/merge",
+          "position": {
+            "x": 340,
+            "y": 780
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 0.0,
+              "y": 0.0,
+              "z": 0.0
+            },
+            "rotation": {
+              "x": 0.0,
+              "y": 0.0,
+              "z": 0.0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            }
+          }
+        },
+        {
+          "id": "movers_body",
+          "type": "physics/rigid-body",
+          "position": {
+            "x": 600,
+            "y": 780
+          },
+          "params": {
+            "bodyType": "dynamic",
+            "shape": "box",
+            "split": "per-child",
+            "mass": 2,
+            "friction": 0.8,
+            "restitution": 0.05,
+            "linearDamping": 0.05,
+            "angularDamping": 0.1,
+            "gravityScale": 1,
+            "ccd": false
+          }
+        },
+        {
+          "id": "osc_door",
+          "type": "animation/oscillator",
+          "position": {
+            "x": 600,
+            "y": 520
+          },
+          "params": {
+            "type": "sine",
+            "frequency": 0.2,
+            "phase": 0,
+            "amplitude": 1.2,
+            "offset": 0,
+            "curve": "linear",
+            "curveStrength": 1
+          }
+        },
+        {
+          "id": "osc_piston",
+          "type": "animation/oscillator",
+          "position": {
+            "x": 600,
+            "y": 640
+          },
+          "params": {
+            "type": "sine",
+            "frequency": 0.25,
+            "phase": 0,
+            "amplitude": 1.5,
+            "offset": 0,
+            "curve": "linear",
+            "curveStrength": 1
+          }
+        },
+        {
+          "id": "door_hinge",
+          "type": "physics/constraint",
+          "position": {
+            "x": 900,
+            "y": 400
+          },
+          "params": {
+            "jointType": "hinge",
+            "pairing": "single",
+            "indexA": 1,
+            "indexB": 0,
+            "anchor": {
+              "x": -3.9,
+              "y": 1.1,
+              "z": 2
+            },
+            "axis": {
+              "x": 0,
+              "y": 1,
+              "z": 0
+            },
+            "limits": true,
+            "angleMin": -1.75,
+            "angleMax": 1.75,
+            "motor": "position",
+            "target": 0,
+            "motorStiffness": 200,
+            "motorDamping": 30,
+            "motorMaxForce": 0
+          }
+        },
+        {
+          "id": "piston_slider",
+          "type": "physics/constraint",
+          "position": {
+            "x": 900,
+            "y": 600
+          },
+          "params": {
+            "jointType": "slider",
+            "pairing": "single",
+            "indexA": 2,
+            "indexB": 1,
+            "anchor": {
+              "x": 3,
+              "y": 0.35,
+              "z": -3
+            },
+            "axis": {
+              "x": 1,
+              "y": 0,
+              "z": 0
+            },
+            "limits": true,
+            "distanceMin": -1.8,
+            "distanceMax": 1.8,
+            "motor": "position",
+            "target": 0,
+            "motorStiffness": 300,
+            "motorDamping": 40,
+            "motorMaxForce": 0
+          }
+        },
+        {
+          "id": "crate_spring",
+          "type": "physics/constraint",
+          "position": {
+            "x": 900,
+            "y": 800
+          },
+          "params": {
+            "jointType": "spring",
+            "pairing": "single",
+            "indexB": 2,
+            "offsetA": {
+              "x": 0,
+              "y": 5,
+              "z": 0
+            },
+            "offsetB": {
+              "x": 0,
+              "y": 0.4,
+              "z": 0
+            },
+            "restLength": 2.2,
+            "stiffness": 80,
+            "damping": 3
+          }
+        },
+        {
+          "id": "arm_hinge",
+          "type": "physics/constraint",
+          "position": {
+            "x": 900,
+            "y": 1000
+          },
+          "params": {
+            "jointType": "hinge",
+            "pairing": "single",
+            "indexB": 3,
+            "anchor": {
+              "x": -3.0,
+              "y": 6.0,
+              "z": -3.0
+            },
+            "axis": {
+              "x": 0,
+              "y": 0,
+              "z": 1
+            },
+            "limits": false,
+            "motor": "off",
+            "collideConnected": false
+          }
+        },
+        {
+          "id": "amb_1",
+          "type": "light/ambient",
+          "position": {
+            "x": 600,
+            "y": 1160
+          },
+          "params": {
+            "color": 10465488,
+            "intensity": 0.55
+          }
+        },
+        {
+          "id": "sun_1",
+          "type": "light/directional",
+          "position": {
+            "x": 600,
+            "y": 1260
+          },
+          "params": {
+            "color": 16774608,
+            "intensity": 1.7,
+            "location": {
+              "x": 6,
+              "y": 10,
+              "z": 5
+            },
+            "castShadow": 1
+          }
+        },
+        {
+          "id": "scene_merge",
+          "type": "structure/merge",
+          "position": {
+            "x": 1260,
+            "y": 520
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 0.0,
+              "y": 0.0,
+              "z": 0.0
+            },
+            "rotation": {
+              "x": 0.0,
+              "y": 0.0,
+              "z": 0.0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            }
+          }
+        },
+        {
+          "id": "render_1",
+          "type": "render",
+          "position": {
+            "x": 1520,
+            "y": 520
+          },
+          "params": {
+            "frameCount": 900,
+            "fps": 60,
+            "resolutionPreset": "16:9 (1920x1080)",
+            "width": 1920,
+            "height": 1080
+          }
+        }
+      ],
+      "connections": [
+        {
+          "id": "ground_geo.geometry->static_group.in0",
+          "fromNode": "ground_geo",
+          "fromSocket": "geometry",
+          "toNode": "static_group",
+          "toSocket": "in0"
+        },
+        {
+          "id": "post_geo.geometry->static_group.in1",
+          "fromNode": "post_geo",
+          "fromSocket": "geometry",
+          "toNode": "static_group",
+          "toSocket": "in1"
+        },
+        {
+          "id": "rail_geo.geometry->static_group.in2",
+          "fromNode": "rail_geo",
+          "fromSocket": "geometry",
+          "toNode": "static_group",
+          "toSocket": "in2"
+        },
+        {
+          "id": "world_1.world->static_body.world",
+          "fromNode": "world_1",
+          "fromSocket": "world",
+          "toNode": "static_body",
+          "toSocket": "world"
+        },
+        {
+          "id": "static_group.geometry->static_body.geometry",
+          "fromNode": "static_group",
+          "fromSocket": "geometry",
+          "toNode": "static_body",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "door_geo.geometry->movers_group.in0",
+          "fromNode": "door_geo",
+          "fromSocket": "geometry",
+          "toNode": "movers_group",
+          "toSocket": "in0"
+        },
+        {
+          "id": "piston_geo.geometry->movers_group.in1",
+          "fromNode": "piston_geo",
+          "fromSocket": "geometry",
+          "toNode": "movers_group",
+          "toSocket": "in1"
+        },
+        {
+          "id": "crate_geo.geometry->movers_group.in2",
+          "fromNode": "crate_geo",
+          "fromSocket": "geometry",
+          "toNode": "movers_group",
+          "toSocket": "in2"
+        },
+        {
+          "id": "arm_geo.geometry->movers_group.in3",
+          "fromNode": "arm_geo",
+          "fromSocket": "geometry",
+          "toNode": "movers_group",
+          "toSocket": "in3"
+        },
+        {
+          "id": "world_1.world->movers_body.world",
+          "fromNode": "world_1",
+          "fromSocket": "world",
+          "toNode": "movers_body",
+          "toSocket": "world"
+        },
+        {
+          "id": "movers_group.geometry->movers_body.geometry",
+          "fromNode": "movers_group",
+          "fromSocket": "geometry",
+          "toNode": "movers_body",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "world_1.world->door_hinge.world",
+          "fromNode": "world_1",
+          "fromSocket": "world",
+          "toNode": "door_hinge",
+          "toSocket": "world"
+        },
+        {
+          "id": "static_body.body->door_hinge.bodyA",
+          "fromNode": "static_body",
+          "fromSocket": "body",
+          "toNode": "door_hinge",
+          "toSocket": "bodyA"
+        },
+        {
+          "id": "movers_body.body->door_hinge.bodyB",
+          "fromNode": "movers_body",
+          "fromSocket": "body",
+          "toNode": "door_hinge",
+          "toSocket": "bodyB"
+        },
+        {
+          "id": "osc_door.out->door_hinge.target",
+          "fromNode": "osc_door",
+          "fromSocket": "out",
+          "toNode": "door_hinge",
+          "toSocket": "target"
+        },
+        {
+          "id": "world_1.world->piston_slider.world",
+          "fromNode": "world_1",
+          "fromSocket": "world",
+          "toNode": "piston_slider",
+          "toSocket": "world"
+        },
+        {
+          "id": "static_body.body->piston_slider.bodyA",
+          "fromNode": "static_body",
+          "fromSocket": "body",
+          "toNode": "piston_slider",
+          "toSocket": "bodyA"
+        },
+        {
+          "id": "movers_body.body->piston_slider.bodyB",
+          "fromNode": "movers_body",
+          "fromSocket": "body",
+          "toNode": "piston_slider",
+          "toSocket": "bodyB"
+        },
+        {
+          "id": "osc_piston.out->piston_slider.target",
+          "fromNode": "osc_piston",
+          "fromSocket": "out",
+          "toNode": "piston_slider",
+          "toSocket": "target"
+        },
+        {
+          "id": "world_1.world->crate_spring.world",
+          "fromNode": "world_1",
+          "fromSocket": "world",
+          "toNode": "crate_spring",
+          "toSocket": "world"
+        },
+        {
+          "id": "movers_body.body->crate_spring.bodyB",
+          "fromNode": "movers_body",
+          "fromSocket": "body",
+          "toNode": "crate_spring",
+          "toSocket": "bodyB"
+        },
+        {
+          "id": "world_1.world->arm_hinge.world",
+          "fromNode": "world_1",
+          "fromSocket": "world",
+          "toNode": "arm_hinge",
+          "toSocket": "world"
+        },
+        {
+          "id": "movers_body.body->arm_hinge.bodyB",
+          "fromNode": "movers_body",
+          "fromSocket": "body",
+          "toNode": "arm_hinge",
+          "toSocket": "bodyB"
+        },
+        {
+          "id": "static_body.geometry->scene_merge.in0",
+          "fromNode": "static_body",
+          "fromSocket": "geometry",
+          "toNode": "scene_merge",
+          "toSocket": "in0"
+        },
+        {
+          "id": "movers_body.geometry->scene_merge.in1",
+          "fromNode": "movers_body",
+          "fromSocket": "geometry",
+          "toNode": "scene_merge",
+          "toSocket": "in1"
+        },
+        {
+          "id": "amb_1.light->scene_merge.in2",
+          "fromNode": "amb_1",
+          "fromSocket": "light",
+          "toNode": "scene_merge",
+          "toSocket": "in2"
+        },
+        {
+          "id": "sun_1.light->scene_merge.in3",
+          "fromNode": "sun_1",
+          "fromSocket": "light",
+          "toNode": "scene_merge",
+          "toSocket": "in3"
+        }
+      ],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    },
+    {
+      "nodes": [],
+      "connections": [],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    },
+    {
+      "nodes": [],
+      "connections": [],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    },
+    {
+      "nodes": [],
+      "connections": [],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    },
+    {
+      "nodes": [],
+      "connections": [],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    },
+    {
+      "nodes": [],
+      "connections": [],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    }
+  ],
+  "activeCanvas": 0
+}
