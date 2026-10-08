@@ -93,6 +93,39 @@ function computeShapesBounds(shapes: THREE.Shape[]): {
   };
 }
 
+type GlyphOutline = { shapes: THREE.Shape[]; bounds: GlyphLayoutInfo["bounds"] };
+
+/**
+ * Glyph outlines already built, per font, keyed by size and character.
+ *
+ * A Text Animator lays its text out again on every frame — the glyphs move,
+ * so their placement has to be recomputed — and that used to rebuild every
+ * glyph's outline from the font each time too. For a dot-matrix face like
+ * Doto, where one letter is dozens of separate dots, that alone cost tens of
+ * milliseconds a frame for a ring of text. The outline of a character at a
+ * size never changes, so it is built once. Shapes are only ever read (by
+ * ExtrudeGeometry and bounds), never mutated, which is what makes sharing
+ * them safe.
+ */
+const glyphOutlines = new WeakMap<Font, Map<string, GlyphOutline>>();
+const MAX_GLYPHS_PER_FONT = 4000;
+
+function glyphOutline(font: Font, char: string, scale: number): GlyphOutline {
+  let byKey = glyphOutlines.get(font);
+  if (!byKey) glyphOutlines.set(font, (byKey = new Map()));
+  const key = `${scale}|${char}`;
+  let outline = byKey.get(key);
+  if (!outline) {
+    // A size swept continuously (a keyframed Font Size) would otherwise grow
+    // this without bound.
+    if (byKey.size >= MAX_GLYPHS_PER_FONT) byKey.clear();
+    const shapes = font.generateShapes(char, scale);
+    outline = { shapes, bounds: computeShapesBounds(shapes) };
+    byKey.set(key, outline);
+  }
+  return outline;
+}
+
 /**
  * Parses text and computes per-glyph layout, bounds, and placement coordinates.
  */
@@ -161,8 +194,7 @@ export function computeTextLayout(
         const baseAdvance = (glyphData.ha ?? 500) * glyphScale;
         const advance = baseAdvance + tracking * 0.02;
 
-        const shapes = font.generateShapes(char, scale);
-        const bounds = computeShapesBounds(shapes);
+        const { shapes, bounds } = glyphOutline(font, char, scale);
 
         lineChars.push({
           char,
@@ -245,8 +277,13 @@ export function computeTextLayout(
           if (Math.abs(tangent.dot(up)) > 0.99) {
             up.set(0, 0, 1);
           }
-          const normal = new THREE.Vector3().crossVectors(up, tangent).normalize();
-          const binormal = new THREE.Vector3().crossVectors(tangent, normal).normalize();
+          // A right-handed frame: x along the path, y up, z out of the
+          // glyph's face — tangent × up, not up × tangent. The other order
+          // gives a basis with determinant −1, a mirror, which no Euler
+          // rotation can express: text on a path came out flipped (along a
+          // straight +X path, upside down and facing away).
+          const normal = new THREE.Vector3().crossVectors(tangent, up).normalize();
+          const binormal = new THREE.Vector3().crossVectors(normal, tangent).normalize();
 
           const rotMatrix = new THREE.Matrix4().makeBasis(tangent, binormal, normal);
           baseRotation.setFromRotationMatrix(rotMatrix);

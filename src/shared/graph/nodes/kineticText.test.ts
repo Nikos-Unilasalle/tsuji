@@ -128,6 +128,46 @@ describe("Text Layout Engine", () => {
       expect(g.baseMatrix).toBeInstanceOf(THREE.Matrix4);
     }
   });
+
+  it("builds a glyph's outline once and reuses it on every later layout", () => {
+    const first = computeTextLayout("ECHO", font, { fontSize: 40 });
+    const again = computeTextLayout("ECHO", font, { fontSize: 40, tracking: 3 });
+    const bigger = computeTextLayout("ECHO", font, { fontSize: 80 });
+
+    expect(again.glyphs[0].shapes).toBe(first.glyphs[0].shapes);
+    // The same letter twice in one text is one outline, too.
+    expect(computeTextLayout("EE", font, { fontSize: 40 }).glyphs[1].shapes).toBe(first.glyphs[0].shapes);
+    expect(bigger.glyphs[0].shapes).not.toBe(first.glyphs[0].shapes);
+    expect(bigger.glyphs[0].bounds.height).toBeCloseTo(first.glyphs[0].bounds.height * 2, 6);
+  });
+
+  it("reads upright and face-on along a straight path, like text with no path at all", () => {
+    const line = new THREE.LineCurve3(new THREE.Vector3(-5, 0, 0), new THREE.Vector3(5, 0, 0));
+    const layout = computeTextLayout("ROAD", font, { curve: line, alignToPath: true });
+
+    for (const g of layout.glyphs) {
+      const q = new THREE.Quaternion().setFromEuler(g.baseRotation);
+      expect(q.angleTo(new THREE.Quaternion())).toBeCloseTo(0, 6);
+    }
+  });
+
+  it("turns glyphs along a path by a rotation, never a mirror", () => {
+    const pts = Array.from({ length: 32 }, (_, i) => {
+      const a = (i / 32) * Math.PI * 2;
+      return new THREE.Vector3(Math.cos(a) * 3, Math.sin(a) * 0.5, Math.sin(a) * 3);
+    });
+    const ring = new THREE.CatmullRomCurve3(pts, true);
+    const layout = computeTextLayout("AROUND THE RING", font, { curve: ring, alignToPath: true, fitToCurve: true });
+
+    for (const g of layout.glyphs) {
+      const m = new THREE.Matrix4().makeRotationFromEuler(g.baseRotation);
+      const x = new THREE.Vector3().setFromMatrixColumn(m, 0);
+      const tangent = ring.getTangentAt(Math.max(0, Math.min(1, (g.charIndex / (layout.glyphs.length - 1)) % 1)));
+      // The glyph's own x axis is the path's direction of travel.
+      expect(x.dot(tangent.normalize())).toBeGreaterThan(0.99);
+      expect(m.determinant()).toBeCloseTo(1, 6);
+    }
+  });
 });
 
 describe("TEXT_ANIMATOR_NODE", () => {
