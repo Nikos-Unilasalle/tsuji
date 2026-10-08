@@ -213,6 +213,8 @@ import { INTEGRATE_NODE, INTEGRATE_VECTOR_NODE } from "./integrate";
 import { CAPSULE_CONTROLLER_NODE } from "./character";
 import { CLOTH_NODE } from "./cloth";
 import { PHYSICS_WORLD_NODE, RIGID_BODY_NODE, PHYSICS_CHARACTER_NODE, VEHICLE_NODE } from "./rapier";
+import { CONSTRAINT_NODE } from "./constraint";
+import { CHAIN_NODE } from "./chain";
 
 /** The starter catalogue — grows node by node; BIBLE.md has the full target list. */
 export const STARTER_NODES = [
@@ -546,6 +548,8 @@ export const STARTER_NODES = [
   RIGID_BODY_NODE,
   PHYSICS_CHARACTER_NODE,
   VEHICLE_NODE,
+  CONSTRAINT_NODE,
+  CHAIN_NODE,
   MODIFIER_DUOTONE_NODE,
   MODIFIER_HALFTONE_NODE,
   MODIFIER_FILM_TEXTURE_NODE,
@@ -654,6 +658,8 @@ export * from "./integrate";
 export * from "./character";
 export * from "./cloth";
 export * from "./rapier";
+export * from "./constraint";
+export * from "./chain";
 export * from "./terrain";
 export * from "./kineticText";
 export * from "./modifiersFilm";

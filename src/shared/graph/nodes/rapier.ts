@@ -20,6 +20,7 @@ import {
   initRapier,
   isPhysicsWorld,
   isRapierReady,
+  type PhysicsBodiesHandle,
   resolveShape,
   scaleColliderGeometry,
   worldMatrixOf,
@@ -39,7 +40,7 @@ const REWIND_THRESHOLD = 0.5;
  * caller actually opts in by setting one of them, which today only the live
  * viewport does.
  */
-function isSimulating(ctx: EvalContext): boolean {
+export function isSimulating(ctx: EvalContext): boolean {
   if (ctx.isPlaying === undefined && ctx.capturing === undefined) return true;
   return Boolean(ctx.isPlaying) || Boolean(ctx.capturing);
 }
@@ -201,6 +202,8 @@ interface MotionSnapshot {
 
 interface BodyState {
   entries: BodyEntry[];
+  /** What a Constraint attaches to — one object for the life of this set of bodies. */
+  handle: PhysicsBodiesHandle;
   worldNodeId: string;
   generation: number;
   signature: string;
@@ -475,6 +478,7 @@ export const RIGID_BODY_NODE: NodeDefinition = {
     { id: "velocity", label: "Velocity", type: "vector" },
     { id: "speed", label: "Speed", type: "value" },
     { id: "count", label: "Body Count", type: "value" },
+    { id: "body", label: "Body", type: "any" },
   ],
   defaultParams: {
     bodyType: "dynamic",
@@ -530,6 +534,7 @@ export const RIGID_BODY_NODE: NodeDefinition = {
       velocity: new THREE.Vector3(),
       speed: 0,
       count: 0,
+      body: null,
     });
 
     // No world, no engine, or nothing to simulate: hand the geometry straight
@@ -662,7 +667,13 @@ export const RIGID_BODY_NODE: NodeDefinition = {
       if (entries.length === 0) return idle();
 
       handle.bodies.set(ctx.nodeId, entries[0].body);
-      state = { entries, worldNodeId: handle.nodeId, generation: handle.generation, signature };
+      state = {
+        entries,
+        handle: { kind: "physics-bodies", world: handle, bodies: entries.map((entry) => entry.body) },
+        worldNodeId: handle.nodeId,
+        generation: handle.generation,
+        signature,
+      };
       bodyCache.set(ctx.nodeId, state);
     } else {
       // Re-bind to the objects that exist *now*. An Array rebuilds its clones
@@ -767,6 +778,7 @@ export const RIGID_BODY_NODE: NodeDefinition = {
       velocity,
       speed: velocity.length(),
       count: state.entries.length,
+      body: state.handle,
     };
   },
 };

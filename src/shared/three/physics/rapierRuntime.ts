@@ -269,7 +269,28 @@ export interface PhysicsWorldHandle {
   lastTime: number | undefined;
   /** Bumped whenever the world is rebuilt, so bodies know to re-register. */
   generation: number;
+  /** Set once the underlying WASM world is freed — anything still holding the handle must not touch it. */
+  disposed?: boolean;
   dispose: () => void;
+}
+
+/**
+ * A node's bodies, as something another node can attach to — what a Rigid Body
+ * or a Chain hands to a Constraint.
+ *
+ * It carries the world handle it belongs to so a consumer can tell a live
+ * reference from one left over from a world that has since been rebuilt, and
+ * the bodies in the order the producer made them (a Rigid Body's order is its
+ * Merge/Array order), which is what the Constraint's index parameters refer to.
+ */
+export interface PhysicsBodiesHandle {
+  kind: "physics-bodies";
+  world: PhysicsWorldHandle;
+  bodies: RAPIER.RigidBody[];
+}
+
+export function isPhysicsBodies(value: unknown): value is PhysicsBodiesHandle {
+  return Boolean(value) && (value as PhysicsBodiesHandle).kind === "physics-bodies";
 }
 
 export function isPhysicsWorld(value: unknown): value is PhysicsWorldHandle {
@@ -283,7 +304,7 @@ export function createPhysicsWorld(
   generation: number,
 ): PhysicsWorldHandle {
   const world = new api.World({ x: gravity.x, y: gravity.y, z: gravity.z });
-  return {
+  const handle: PhysicsWorldHandle = {
     kind: "physics-world",
     nodeId,
     world,
@@ -294,9 +315,11 @@ export function createPhysicsWorld(
     lastTime: undefined,
     generation,
     dispose: () => {
+      handle.disposed = true;
       world.free();
     },
   };
+  return handle;
 }
 
 /**
