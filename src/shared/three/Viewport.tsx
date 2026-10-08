@@ -5237,6 +5237,8 @@ export function Viewport({
     }
 
     let isDisposed = false;
+    // Set by the first captured frame of an export — see tickInner().
+    let exportStarted = false;
 
     function tick() {
       if (isDisposed) return;
@@ -5278,6 +5280,17 @@ export function Viewport({
       // frameIndex directly rather than racing the currentFrame prop's own
       // React commit.
       const capture = pendingCaptureRef.current;
+
+      // Once an export has started, its viewport renders the frames it is
+      // asked for and nothing in between. Ticking between two captures like
+      // an idle pane evaluated the graph as "not playing" with no timeline
+      // frame, and simulations read that as stopped: a Rigid Body hands back
+      // its authored pose when idle, so every captured frame restarted the
+      // physics and an exported physics scene never moved. Holding still keeps
+      // the run continuous, as Play does. (Ticks before the first capture still
+      // run: they settle the sizes and previous-frame results frame 0 reads.)
+      if (capture) exportStarted = true;
+      else if (exportHandleRef && exportStarted) return;
       const exportFrameIndex = capture?.frameIndex ?? currentFrameRef.current;
       if (capture) {
         const stepSeconds = 1 / capture.fps;
