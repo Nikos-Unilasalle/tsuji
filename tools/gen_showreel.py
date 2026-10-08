@@ -347,10 +347,10 @@ def chapter_ignition():
     s.key("title_p", "x", [(BAR, 0.0), (BAR + 36, 1.45, "expo", 5), (out, 1.45), (out + 26, 0.0, EASE_IN)])
 
     # The machine voice, typed on.
-    s.add("tag", "text/animator", 6, text="NODE-BASED  MOTION  DESIGN", fontPreset="Doto", fontSize=16, depth=0.02,
+    s.add("tag", "text/animator", 6, text="NODE-BASED  MOTION  DESIGN", fontPreset="Doto", fontSize=15, depth=0.02,
           bevelEnabled=False, tracking=1.5, align="center", anchor="glyph_center", basedOn="characters",
           selectorShape="square", start=0, end=0, offset=-0.04, positionDelta=[0, 0, 0], rotationDelta=[0, 0, 0],
-          scaleDelta=[0, 0, 0], location=v3(0, -2.05, 0.6), color=BONE, emissive=BONE, emissiveIntensity=0.35, shadeless=1)
+          scaleDelta=[0, 0, 0], location=v3(0, -1.78, 0.6), color=BONE, emissive=BONE, emissiveIntensity=0.35, shadeless=1)
     s.add("tag_p", "math/expression", 4, formula="x", x=0)
     s.wire("tag_p", "value", "tag", "progress")
     s.key("tag_p", "x", [(2 * BAR, 0.0), (2 * BAR + 26, 1.08, "linear"), (3 * BAR + 6, 1.08), (3 * BAR + 18, 0.0, "linear")])

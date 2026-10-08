@@ -322,7 +322,7 @@
      "params": {
       "text": "NODE-BASED  MOTION  DESIGN",
       "fontPreset": "Doto",
-      "fontSize": 16,
+      "fontSize": 15,
       "depth": 0.02,
       "bevelEnabled": false,
       "tracking": 1.5,
@@ -350,7 +350,7 @@
       ],
       "location": {
        "x": 0,
-       "y": -2.05,
+       "y": -1.78,
        "z": 0.6
       },
       "color": 15592162,
