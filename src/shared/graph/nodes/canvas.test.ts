@@ -61,6 +61,15 @@ describe("CANVAS_GOTO_NODE", () => {
     expect(consumeCanvasSwitchRequest()).toBeNull();
   });
 
+  test("an export frame never switches the document", () => {
+    // A chained film hands over on its last frame — exporting one canvas of
+    // it must not leave the editor on the next one afterwards.
+    const exporting = { ...ctx("goto-export"), capturing: true };
+
+    expect(CANVAS_GOTO_NODE.evaluate({ trigger: 1 }, { canvas: 2 }, exporting).switched).toBe(0);
+    expect(consumeCanvasSwitchRequest()).toBeNull();
+  });
+
   test("two nodes keep their own edge state", () => {
     CANVAS_GOTO_NODE.evaluate({ trigger: 1 }, { canvas: 2 }, ctx("goto-a"));
     expect(consumeCanvasSwitchRequest()).toBe(1);

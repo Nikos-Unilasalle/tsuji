@@ -41,6 +41,12 @@ export const CANVAS_GOTO_NODE: NodeDefinition = {
 
     if (!current || previous) return { switched: fromBoolean(false) };
 
+    // An export renders this canvas's frames; it never moves the document.
+    // A film chained across canvases hands over on its last frame, and an
+    // export reaching that frame would otherwise leave the editor sitting on
+    // the next canvas once it finished.
+    if (ctx.capturing) return { switched: fromBoolean(false) };
+
     // 1-based in the UI (it reads as "Canvas 3", matching the selector's own
     // numbering), 0-based everywhere in the code.
     const raw = Number(inputs.canvas !== undefined ? inputs.canvas : params.canvas);
