@@ -121,7 +121,9 @@
             "step3Name": "pause",
             "step3Duration": 3.0,
             "step3Ease": "smooth",
-            "step3Start": ""
+            "step3Start": "",
+            "step2From": 1,
+            "step2To": -1
           }
         },
         {
@@ -168,7 +170,7 @@
           },
           "params": {
             "mode": "height",
-            "formula": "a (x\u00b2 \u2212 y\u00b2)/4 + (1 \u2212 a)(x\u00b2 + y\u00b2)/6",
+            "formula": "(x\u00b2 + a y\u00b2)/4",
             "uMin": -2.5,
             "uMax": 2.5,
             "vMin": -2.5,
@@ -176,7 +178,7 @@
             "resolution": 48,
             "zMin": -3,
             "zMax": 3,
-            "a": 0,
+            "a": 1,
             "b": 0,
             "c": 0,
             "d": 0,
@@ -188,38 +190,6 @@
             "gridColor": 2831424,
             "gridWidth": 1,
             "visible": true
-          }
-        },
-        {
-          "id": "formula",
-          "type": "object/text",
-          "position": {
-            "x": -200,
-            "y": 200
-          },
-          "params": {
-            "visible": 1,
-            "location": {
-              "x": 0,
-              "y": 4.0,
-              "z": 0
-            },
-            "rotation": {
-              "x": 0,
-              "y": 0,
-              "z": 0
-            },
-            "scale": {
-              "x": 1,
-              "y": 1,
-              "z": 1
-            },
-            "text": "z = a(x\u00b2 \u2212 y\u00b2)/4 + (1 \u2212 a)(x\u00b2 + y\u00b2)/6",
-            "fontSize": 18,
-            "depth": 0,
-            "color": 2236962,
-            "shadeless": 1,
-            "faceCamera": true
           }
         },
         {
@@ -248,6 +218,101 @@
             "color": 16773852,
             "intensity": 1.4,
             "castShadow": 0
+          }
+        },
+        {
+          "id": "formula",
+          "type": "math/latex",
+          "position": {
+            "x": -200,
+            "y": 200
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "tex": "z = \\frac{x^2 + a\\,y^2}{4}",
+            "inline": false,
+            "size": 0.42,
+            "align": "center",
+            "valign": "middle",
+            "at": {
+              "x": 0,
+              "y": 4.4,
+              "z": 0
+            },
+            "progress": 1,
+            "color": 2236962,
+            "opacity": 1,
+            "faceCamera": true,
+            "onTop": true
+          }
+        },
+        {
+          "id": "aText",
+          "type": "converter/value-to-text",
+          "position": {
+            "x": -200,
+            "y": 380
+          },
+          "params": {
+            "decimals": 2,
+            "prefix": "a = ",
+            "suffix": ""
+          }
+        },
+        {
+          "id": "aLabel",
+          "type": "math/latex",
+          "position": {
+            "x": 80,
+            "y": 380
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "tex": "a = 1",
+            "inline": false,
+            "size": 0.38,
+            "align": "center",
+            "valign": "middle",
+            "at": {
+              "x": 0,
+              "y": 3.8,
+              "z": 0
+            },
+            "progress": 1,
+            "color": 14250783,
+            "opacity": 1,
+            "faceCamera": true,
+            "onTop": true
           }
         }
       ],
@@ -293,6 +358,27 @@
           "fromSocket": "step2",
           "toNode": "surface",
           "toSocket": "a"
+        },
+        {
+          "id": "seq.step2->aText.value",
+          "fromNode": "seq",
+          "fromSocket": "step2",
+          "toNode": "aText",
+          "toSocket": "value"
+        },
+        {
+          "id": "aText.text->aLabel.tex",
+          "fromNode": "aText",
+          "fromSocket": "text",
+          "toNode": "aLabel",
+          "toSocket": "tex"
+        },
+        {
+          "id": "seq.step1->aLabel.visible",
+          "fromNode": "seq",
+          "fromSocket": "step1",
+          "toNode": "aLabel",
+          "toSocket": "visible"
         }
       ],
       "keyframes": {},

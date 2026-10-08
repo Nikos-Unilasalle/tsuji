@@ -593,7 +593,7 @@ export const DEMO_CATALOG: DemoCategory[] = [
       {
         file: "demo_math_surface.tsuji",
         label: "Surface z = f(x, y) (3D)",
-        description: "3D axes, z up; a Function Surface unrolls row by row, then a paraboloid bends into a saddle as one parameter runs from 0 to 1, the camera circling slowly.",
+        description: "3D axes, z up; z = (x² + a·y²)/4 unrolls row by row, then a bowl bends into a saddle as a Sequence step takes a from 1 to −1, its value shown live in LaTeX, the camera circling slowly.",
       },
     ],
   },

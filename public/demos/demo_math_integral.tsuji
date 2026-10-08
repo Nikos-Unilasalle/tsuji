@@ -473,7 +473,7 @@
         },
         {
           "id": "title",
-          "type": "object/text",
+          "type": "math/latex",
           "position": {
             "x": -200,
             "y": -480
@@ -481,8 +481,8 @@
           "params": {
             "visible": 1,
             "location": {
-              "x": 2.2,
-              "y": -0.6,
+              "x": 0,
+              "y": 0,
               "z": 0
             },
             "rotation": {
@@ -495,11 +495,20 @@
               "y": 1,
               "z": 1
             },
-            "text": "f(x) = x\u00b3/8 \u2212 x/2 + 1.5",
-            "fontSize": 0.4,
-            "depth": 0,
+            "tex": "\\int_{-2}^{3} \\left(\\frac{x^3}{8} - \\frac{x}{2} + \\frac{3}{2}\\right) dx",
+            "inline": false,
+            "size": 0.42,
+            "align": "center",
+            "valign": "middle",
+            "at": {
+              "x": 1.2,
+              "y": -2.1,
+              "z": 0
+            },
+            "progress": 1,
             "color": 2060267,
-            "shadeless": 1
+            "opacity": 1,
+            "faceCamera": false
           }
         }
       ],
@@ -531,13 +540,6 @@
           "fromSocket": "step1",
           "toNode": "curve",
           "toSocket": "progress"
-        },
-        {
-          "id": "seq.step1->title.visible",
-          "fromNode": "seq",
-          "fromSocket": "step1",
-          "toNode": "title",
-          "toSocket": "visible"
         },
         {
           "id": "seq.step2->curve.fillTo",
@@ -720,6 +722,13 @@
           "fromSocket": "step3",
           "toNode": "sumLabel",
           "toSocket": "visible"
+        },
+        {
+          "id": "seq.step1->title.progress",
+          "fromNode": "seq",
+          "fromSocket": "step1",
+          "toNode": "title",
+          "toSocket": "progress"
         }
       ],
       "keyframes": {},

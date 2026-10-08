@@ -65,6 +65,7 @@ import { AXES_NODE } from "./axes";
 import { FUNCTION_CURVE_NODE } from "./functionCurve";
 import { FUNCTION_SURFACE_NODE } from "./functionSurface";
 import { SEQUENCE_NODE } from "./sequence";
+import { LATEX_NODE } from "./latex";
 import { GROUND_NODE } from "./ground";
 import { CAPTURE_TRAILS_NODE } from "./particleTrails";
 import {
@@ -405,6 +406,7 @@ export const STARTER_NODES = [
   FUNCTION_CURVE_NODE,
   FUNCTION_SURFACE_NODE,
   SEQUENCE_NODE,
+  LATEX_NODE,
   GROUND_NODE,
   PARTICLE_SIMULATE_NODE,
   PARTICLE_RENDER_NODE,
@@ -636,6 +638,7 @@ export * from "./axes";
 export * from "./functionCurve";
 export * from "./functionSurface";
 export * from "./sequence";
+export * from "./latex";
 export * from "./ground";
 export * from "./particleTrails";
 export * from "./distance";
