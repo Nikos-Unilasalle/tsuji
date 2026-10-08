@@ -81,6 +81,25 @@ describe("advancePlayhead", () => {
     expect(frames).toEqual([98, 99, 0]);
   });
 
+  it("never steps over the last frame, however slow the renders", () => {
+    // Renders 5 frames apart: 95 → 100 would wrap straight to 0 and anything
+    // cued on frame 99 (a Go To Canvas chaining a film) would never fire.
+    const { frames } = play([0, 5 / 30, 10 / 30, 15 / 30], { incomingFrame: 90, totalFrames: 100 });
+    expect(frames).toEqual([90, 95, 99, 5]);
+  });
+
+  it("holds the last frame for a single render, then wraps on time", () => {
+    // The hold costs one render, not the clock: the wrap lands where the
+    // anchor says, so the timeline stays in step with the audio.
+    const { frames } = play([0, 12 / 30, 13 / 30, 14 / 30], { incomingFrame: 90, totalFrames: 100 });
+    expect(frames).toEqual([90, 99, 3, 4]);
+  });
+
+  it("shows the last frame once per loop, even when a render skips a whole loop", () => {
+    const { frames } = play([0, 30 / 30, 31 / 30], { incomingFrame: 0, totalFrames: 10 });
+    expect(frames).toEqual([0, 9, 1]);
+  });
+
   it("never runs backwards when the clock does", () => {
     // tickClock re-anchors its epoch on pause/resume, so the reading it hands
     // out can step back. Modulo on a negative would land near the timeline's

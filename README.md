@@ -319,7 +319,7 @@ Les prises de connexion (sockets) sont identifiées par des codes couleur normal
 | Node | Type | Description |
 | :--- | :--- | :--- |
 | **Reroute** | `utility/reroute` | Point de dérivation compact pour organiser le câblage du graphe. |
-| **Canvas Go To** | `canvas/goto` | Bascule vers l'un des canevas du projet lors d'un trigger. |
+| **Canvas Go To** | `canvas/goto` | Bascule vers l'un des canevas du projet lors d'un trigger, qui repart de sa première image (un cue). Un export ne change jamais de canevas. |
 
 ---
 

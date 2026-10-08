@@ -581,15 +581,30 @@ function MainEditor() {
     });
   }, [setGraph]);
 
+  /**
+   * A Go To Canvas from the graph is a cue: the canvas it names plays from
+   * its first frame. Picking a canvas in the selector still finds it where it
+   * was left — that is browsing; this is the show moving on. Resuming here
+   * instead showed a canvas's stale last frame for a frame before it wrapped
+   * round, every time a film chained across canvases came back to it.
+   */
+  const cueCanvas = useCallback(
+    (index: number) => {
+      setCurrentFrames((prev) => prev.map((frame, i) => (i === index ? 0 : frame)));
+      switchCanvas(index);
+    },
+    [switchCanvas],
+  );
+
   const onEvaluatedResults = useCallback(
     (results: Map<string, Record<string, unknown>>) => {
       setEvaluatedResults(results);
       const requestedCanvas = consumeCanvasSwitchRequest();
-      if (requestedCanvas !== null) switchCanvas(requestedCanvas);
+      if (requestedCanvas !== null) cueCanvas(requestedCanvas);
       const handoff = consumeCameraHandoffRequest();
       if (handoff !== null) activateCameraNode(handoff);
     },
-    [switchCanvas, activateCameraNode],
+    [cueCanvas, activateCameraNode],
   );
 
   useEffect(() => {

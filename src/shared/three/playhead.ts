@@ -28,6 +28,11 @@ export interface PlayheadState {
    * jump to a marker — which has to re-anchor rather than be overridden.
    */
   lastReported: number | null;
+  /**
+   * The last frame handed out, not wrapped round the timeline — which loop
+   * it was in as well as where. See the last-frame rule in advancePlayhead.
+   */
+  lastRaw?: number;
 }
 
 export interface PlayheadInput {
@@ -65,7 +70,7 @@ export function advancePlayhead(state: PlayheadState, input: PlayheadInput): Pla
   if (state.anchor === null || external) {
     return {
       frame: incomingFrame,
-      state: { anchor: { clockTime, frame: incomingFrame }, lastReported: incomingFrame },
+      state: { anchor: { clockTime, frame: incomingFrame }, lastReported: incomingFrame, lastRaw: incomingFrame },
     };
   }
 
@@ -83,6 +88,21 @@ export function advancePlayhead(state: PlayheadState, input: PlayheadInput): Pla
   // frames — so a bare floor drops that frame and serves the previous one
   // again. A repeated frame is exactly the duplicate render this whole
   // mechanism exists to remove, and it would have reappeared at random.
-  const frame = (state.anchor.frame + Math.floor(elapsed * fps + 1e-6)) % totalFrames;
-  return { frame, state: { anchor: state.anchor, lastReported: frame } };
+  const raw = state.anchor.frame + Math.floor(elapsed * fps + 1e-6);
+
+  // A loop never steps over its last frame. A render slower than the
+  // timeline skips frames, and skipping that one silently drops whatever is
+  // cued on it — a Go To Canvas handing a chained film on to its next
+  // canvas would miss, and the chapter would loop instead. So the render
+  // that crosses the end shows the last frame; the next one wraps, still on
+  // the anchor's clock, so nothing drifts.
+  const last = totalFrames - 1;
+  const prevRaw = state.lastRaw ?? state.anchor.frame;
+  const prevLoop = Math.floor(prevRaw / totalFrames);
+  if (Math.floor(raw / totalFrames) > prevLoop && prevRaw % totalFrames !== last) {
+    return { frame: last, state: { anchor: state.anchor, lastReported: last, lastRaw: prevLoop * totalFrames + last } };
+  }
+
+  const frame = raw % totalFrames;
+  return { frame, state: { anchor: state.anchor, lastReported: frame, lastRaw: raw } };
 }

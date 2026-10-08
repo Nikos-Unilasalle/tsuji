@@ -16,6 +16,10 @@ const triggerStateCache = createNodeCache<boolean>();
  * node sitting in canvas 3 isn't running and could not pull anything towards
  * it. The node that switches is always in the canvas you're leaving.
  *
+ * It is a cue, so the canvas it names starts from its first frame (App.tsx's
+ * cueCanvas) — a scene triggered from the graph plays from the top, and a
+ * film chained across canvases loops cleanly.
+ *
  * Rising edge rather than level, deliberately — a held-down key or a
  * permanently-true condition would otherwise re-request the same switch every
  * frame, and pin the document there by making every other switch impossible.
