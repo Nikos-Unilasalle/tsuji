@@ -611,6 +611,12 @@ export const DEMO_CATALOG: DemoCategory[] = [
     title: "Showcases",
     demos: [
       {
+        file: "demo_showreel.tsuji",
+        label: "Showreel — Motion Design",
+        description:
+          "Fifty seconds on one 120 BPM beat grid, one chapter per canvas, chained by Go To Canvas: press Play on canvas 1 and it runs all six and loops. A sun and a title landing letter by letter; words on the beat inside a gyroscope of type on paths; 400 columns rippling from one Expression; the title dropped into Rapier under a rain of balls; one object through eight post-process looks; 辻 written with a sumi brush and stamped with its seal. Every move runs off the canvas's own timeline, so it scrubs and exports frame for frame. Stroke data: KanjiVG © Ulrich Apel, CC BY-SA 3.0.",
+      },
+      {
         file: "demo_shan_shui.tsuji",
         label: "Shan Shui (endless scroll)",
         description:

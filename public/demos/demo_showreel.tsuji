@@ -1,0 +1,9119 @@
+{
+ "canvases": [
+  {
+   "nodes": [
+    {
+     "id": "c1_render",
+     "type": "render",
+     "position": {
+      "x": 1420,
+      "y": 0
+     },
+     "params": {
+      "frameCount": 240,
+      "fps": 30,
+      "resolutionPreset": "16:9 (1920x1080)",
+      "width": 1920,
+      "height": 1080,
+      "timelineEnabled": true,
+      "motionBlur": 0
+     }
+    },
+    {
+     "id": "c1_env",
+     "type": "lighting/environment",
+     "position": {
+      "x": 1080,
+      "y": 0
+     },
+     "params": {
+      "color": 723726,
+      "intensity": 1,
+      "background": 1,
+      "ambientIntensity": 0.0,
+      "sunIntensity": 0.0
+     }
+    },
+    {
+     "id": "c1_frame",
+     "type": "time/frame",
+     "position": {
+      "x": -3000,
+      "y": 0
+     },
+     "params": {}
+    },
+    {
+     "id": "c1_t",
+     "type": "math/expression",
+     "position": {
+      "x": -2660,
+      "y": 0
+     },
+     "params": {
+      "formula": "x / 30"
+     }
+    },
+    {
+     "id": "c1_cam",
+     "type": "calibration/camera",
+     "position": {
+      "x": 1080,
+      "y": 300
+     },
+     "params": {
+      "active": true,
+      "mode": "manual",
+      "location": {
+       "x": 0,
+       "y": 0.3,
+       "z": 16
+      },
+      "useTarget": true,
+      "target": {
+       "x": 0,
+       "y": 0.3,
+       "z": 0
+      },
+      "up": {
+       "x": 0,
+       "y": 1,
+       "z": 0
+      },
+      "fov": 30,
+      "projectionType": "perspective"
+     }
+    },
+    {
+     "id": "c1_post_in",
+     "type": "postprocess/antialias",
+     "position": {
+      "x": 400,
+      "y": 0
+     },
+     "params": {
+      "enabled": 1
+     }
+    },
+    {
+     "id": "c1_bloom",
+     "type": "postprocess/bloom",
+     "position": {
+      "x": 740,
+      "y": 0
+     },
+     "params": {
+      "strength": 0.55,
+      "radius": 0.45,
+      "threshold": 0.9
+     }
+    },
+    {
+     "id": "c1_grade",
+     "type": "postprocess/color-correction",
+     "position": {
+      "x": 740,
+      "y": 300
+     },
+     "params": {
+      "brightness": 0.0,
+      "contrast": 1.0,
+      "saturation": 1.0
+     }
+    },
+    {
+     "id": "c1_chroma",
+     "type": "postprocess/rgb-shift",
+     "position": {
+      "x": 740,
+      "y": 600
+     },
+     "params": {
+      "amount": 0.0,
+      "angle": 0
+     }
+    },
+    {
+     "id": "c1_grain",
+     "type": "postprocess/film-grain",
+     "position": {
+      "x": 740,
+      "y": 900
+     },
+     "params": {
+      "noiseIntensity": 0.16,
+      "scanlinesIntensity": 0.0,
+      "scanlinesCount": 2048,
+      "grayscale": 0
+     }
+    },
+    {
+     "id": "c1_vig",
+     "type": "postprocess/vignette",
+     "position": {
+      "x": 740,
+      "y": 1200
+     },
+     "params": {
+      "offset": 1.0,
+      "darkness": 1.1
+     }
+    },
+    {
+     "id": "c1_end",
+     "type": "logic/compare",
+     "position": {
+      "x": -2660,
+      "y": 300
+     },
+     "params": {
+      "op": ">=",
+      "a": 0,
+      "b": 239
+     }
+    },
+    {
+     "id": "c1_goto",
+     "type": "canvas/goto",
+     "position": {
+      "x": -2320,
+      "y": 0
+     },
+     "params": {
+      "canvas": 2,
+      "trigger": 0
+     }
+    },
+    {
+     "id": "c1_sun",
+     "type": "object/disc",
+     "position": {
+      "x": -1300,
+      "y": 0
+     },
+     "params": {
+      "radius": 2.4,
+      "innerRadius": 0,
+      "depth": 0,
+      "location": {
+       "x": 0,
+       "y": 0.55,
+       "z": -4
+      },
+      "rotation": {
+       "x": 0,
+       "y": 0,
+       "z": 0
+      },
+      "scale": {
+       "x": 0,
+       "y": 0,
+       "z": 0
+      },
+      "color": 16726815,
+      "emissive": 16726815,
+      "emissiveIntensity": 0.25,
+      "shadeless": 1
+     }
+    },
+    {
+     "id": "c1_ring",
+     "type": "object/disc",
+     "position": {
+      "x": -1300,
+      "y": 300
+     },
+     "params": {
+      "radius": 2.6,
+      "innerRadius": 2.55,
+      "depth": 0,
+      "location": {
+       "x": 0,
+       "y": 0.55,
+       "z": -4.05
+      },
+      "rotation": {
+       "x": 0,
+       "y": 0,
+       "z": 0
+      },
+      "color": 15592162,
+      "emissive": 15592162,
+      "emissiveIntensity": 0.3,
+      "shadeless": 1,
+      "opacity": 0.0,
+      "scale": {
+       "x": 1,
+       "y": 1,
+       "z": 1
+      }
+     }
+    },
+    {
+     "id": "c1_title",
+     "type": "text/animator",
+     "position": {
+      "x": -960,
+      "y": 0
+     },
+     "params": {
+      "text": "TSUJI",
+      "fontPreset": "Anton",
+      "fontSize": 150,
+      "depth": 0.5,
+      "bevelEnabled": true,
+      "tracking": 6,
+      "lineHeight": 1.0,
+      "align": "center",
+      "anchor": "glyph_center",
+      "basedOn": "characters",
+      "selectorShape": "smooth",
+      "start": 0,
+      "end": 0.45,
+      "offset": -0.45,
+      "invert": true,
+      "randomize": false,
+      "positionDelta": [
+       0,
+       -2.4,
+       2.2
+      ],
+      "rotationDelta": [
+       -1.3962634015954636,
+       0,
+       0.17453292519943295
+      ],
+      "scaleDelta": [
+       0,
+       0,
+       0
+      ],
+      "location": {
+       "x": 0,
+       "y": 0.3,
+       "z": 0
+      },
+      "color": 15592162,
+      "roughness": 0.45,
+      "metalness": 0.0,
+      "emissive": 1841687,
+      "emissiveIntensity": 1
+     }
+    },
+    {
+     "id": "c1_title_p",
+     "type": "math/expression",
+     "position": {
+      "x": -1640,
+      "y": 0
+     },
+     "params": {
+      "formula": "x",
+      "x": 0
+     }
+    },
+    {
+     "id": "c1_tag",
+     "type": "text/animator",
+     "position": {
+      "x": -960,
+      "y": 300
+     },
+     "params": {
+      "text": "NODE-BASED  MOTION  DESIGN",
+      "fontPreset": "Doto",
+      "fontSize": 16,
+      "depth": 0.02,
+      "bevelEnabled": false,
+      "tracking": 1.5,
+      "align": "center",
+      "anchor": "glyph_center",
+      "basedOn": "characters",
+      "selectorShape": "square",
+      "start": 0,
+      "end": 0,
+      "offset": -0.04,
+      "positionDelta": [
+       0,
+       0,
+       0
+      ],
+      "rotationDelta": [
+       0,
+       0,
+       0
+      ],
+      "scaleDelta": [
+       0,
+       0,
+       0
+      ],
+      "location": {
+       "x": 0,
+       "y": -2.05,
+       "z": 0.6
+      },
+      "color": 15592162,
+      "emissive": 15592162,
+      "emissiveIntensity": 0.35,
+      "shadeless": 1
+     }
+    },
+    {
+     "id": "c1_tag_p",
+     "type": "math/expression",
+     "position": {
+      "x": -1640,
+      "y": 300
+     },
+     "params": {
+      "formula": "x",
+      "x": 0
+     }
+    },
+    {
+     "id": "c1_key",
+     "type": "light/directional",
+     "position": {
+      "x": -620,
+      "y": 0
+     },
+     "params": {
+      "location": {
+       "x": -4,
+       "y": 5,
+       "z": 9
+      },
+      "target": {
+       "x": 0,
+       "y": 0,
+       "z": 0
+      },
+      "color": 16774378,
+      "intensity": 2.4,
+      "castShadow": 0
+     }
+    },
+    {
+     "id": "c1_rim",
+     "type": "light/directional",
+     "position": {
+      "x": -620,
+      "y": 300
+     },
+     "params": {
+      "location": {
+       "x": 4,
+       "y": -2,
+       "z": -6
+      },
+      "target": {
+       "x": 0,
+       "y": 0,
+       "z": 0
+      },
+      "color": 16726815,
+      "intensity": 3.5,
+      "castShadow": 0
+     }
+    },
+    {
+     "id": "c1_h_chap",
+     "type": "hub/text",
+     "position": {
+      "x": 60,
+      "y": 0
+     },
+     "params": {
+      "text": "01 / IGNITION",
+      "trigger": 1,
+      "x": 174.0,
+      "y": 84,
+      "rotation": 0,
+      "scale": 1,
+      "visible": 1,
+      "fontFamily": "monospace",
+      "fontSize": 20,
+      "color": 15592162,
+      "opacity": 1,
+      "enterAnimation": "none",
+      "exitAnimation": "none",
+      "durationIn": 0.05,
+      "durationOut": 0.05
+     }
+    },
+    {
+     "id": "c1_h_nodes",
+     "type": "hub/text",
+     "position": {
+      "x": 60,
+      "y": 300
+     },
+     "params": {
+      "text": "text/animator  ·  range selector  ·  keyframes",
+      "trigger": 1,
+      "x": 1575.6,
+      "y": 1000,
+      "rotation": 0,
+      "scale": 1,
+      "visible": 1,
+      "fontFamily": "monospace",
+      "fontSize": 18,
+      "color": 9081766,
+      "opacity": 1,
+      "enterAnimation": "none",
+      "exitAnimation": "none",
+      "durationIn": 0.05,
+      "durationOut": 0.05
+     }
+    },
+    {
+     "id": "c1_scene",
+     "type": "structure/merge",
+     "position": {
+      "x": 1080,
+      "y": 600
+     },
+     "params": {}
+    }
+   ],
+   "connections": [
+    {
+     "id": "c1_env.environment->c1_render.environment",
+     "fromNode": "c1_env",
+     "fromSocket": "environment",
+     "toNode": "c1_render",
+     "toSocket": "environment"
+    },
+    {
+     "id": "c1_frame.frame->c1_t.x",
+     "fromNode": "c1_frame",
+     "fromSocket": "frame",
+     "toNode": "c1_t",
+     "toSocket": "x"
+    },
+    {
+     "id": "c1_vig.effect->c1_render.postprocess",
+     "fromNode": "c1_vig",
+     "fromSocket": "effect",
+     "toNode": "c1_render",
+     "toSocket": "postprocess"
+    },
+    {
+     "id": "c1_frame.frame->c1_end.a",
+     "fromNode": "c1_frame",
+     "fromSocket": "frame",
+     "toNode": "c1_end",
+     "toSocket": "a"
+    },
+    {
+     "id": "c1_end.out->c1_goto.trigger",
+     "fromNode": "c1_end",
+     "fromSocket": "out",
+     "toNode": "c1_goto",
+     "toSocket": "trigger"
+    },
+    {
+     "id": "c1_title_p.value->c1_title.progress",
+     "fromNode": "c1_title_p",
+     "fromSocket": "value",
+     "toNode": "c1_title",
+     "toSocket": "progress"
+    },
+    {
+     "id": "c1_tag_p.value->c1_tag.progress",
+     "fromNode": "c1_tag_p",
+     "fromSocket": "value",
+     "toNode": "c1_tag",
+     "toSocket": "progress"
+    },
+    {
+     "id": "c1_post_in.effect->c1_bloom.effect",
+     "fromNode": "c1_post_in",
+     "fromSocket": "effect",
+     "toNode": "c1_bloom",
+     "toSocket": "effect"
+    },
+    {
+     "id": "c1_bloom.effect->c1_grade.effect",
+     "fromNode": "c1_bloom",
+     "fromSocket": "effect",
+     "toNode": "c1_grade",
+     "toSocket": "effect"
+    },
+    {
+     "id": "c1_grade.effect->c1_chroma.effect",
+     "fromNode": "c1_grade",
+     "fromSocket": "effect",
+     "toNode": "c1_chroma",
+     "toSocket": "effect"
+    },
+    {
+     "id": "c1_chroma.effect->c1_grain.effect",
+     "fromNode": "c1_chroma",
+     "fromSocket": "effect",
+     "toNode": "c1_grain",
+     "toSocket": "effect"
+    },
+    {
+     "id": "c1_grain.effect->c1_vig.effect",
+     "fromNode": "c1_grain",
+     "fromSocket": "effect",
+     "toNode": "c1_vig",
+     "toSocket": "effect"
+    },
+    {
+     "id": "c1_sun.geometry->c1_scene.in0",
+     "fromNode": "c1_sun",
+     "fromSocket": "geometry",
+     "toNode": "c1_scene",
+     "toSocket": "in0"
+    },
+    {
+     "id": "c1_ring.geometry->c1_scene.in1",
+     "fromNode": "c1_ring",
+     "fromSocket": "geometry",
+     "toNode": "c1_scene",
+     "toSocket": "in1"
+    },
+    {
+     "id": "c1_title.geometry->c1_scene.in2",
+     "fromNode": "c1_title",
+     "fromSocket": "geometry",
+     "toNode": "c1_scene",
+     "toSocket": "in2"
+    },
+    {
+     "id": "c1_tag.geometry->c1_scene.in3",
+     "fromNode": "c1_tag",
+     "fromSocket": "geometry",
+     "toNode": "c1_scene",
+     "toSocket": "in3"
+    },
+    {
+     "id": "c1_scene.geometry->c1_render.geometry",
+     "fromNode": "c1_scene",
+     "fromSocket": "geometry",
+     "toNode": "c1_render",
+     "toSocket": "geometry"
+    }
+   ],
+   "keyframes": {
+    "c1_chroma": {
+     "amount": [
+      {
+       "frame": 0,
+       "value": 0.0
+      }
+     ]
+    },
+    "c1_grade": {
+     "saturation": [
+      {
+       "frame": 0,
+       "value": 0.0
+      },
+      {
+       "frame": 10,
+       "value": 1.0,
+       "easeIn": "expo",
+       "easeStrength": 5
+      }
+     ]
+    },
+    "c1_cam": {
+     "location": [
+      {
+       "frame": 0,
+       "value": {
+        "x": 0,
+        "y": 0.3,
+        "z": 16
+       }
+      },
+      {
+       "frame": 60,
+       "value": {
+        "x": 0,
+        "y": 0.3,
+        "z": 14.5
+       },
+       "easeIn": "smooth"
+      },
+      {
+       "frame": 100,
+       "value": {
+        "x": 0,
+        "y": 0.25,
+        "z": 11.2
+       },
+       "easeIn": "expo",
+       "easeStrength": 5
+      },
+      {
+       "frame": 210,
+       "value": {
+        "x": 0,
+        "y": 0.2,
+        "z": 10.2
+       },
+       "easeIn": "smooth"
+      },
+      {
+       "frame": 240,
+       "value": {
+        "x": 0,
+        "y": 0.2,
+        "z": 8.0
+       },
+       "easeIn": "bezier",
+       "easeBezier": [
+        0.6,
+        0.0,
+        0.9,
+        0.35
+       ]
+      }
+     ]
+    },
+    "c1_sun": {
+     "scale": [
+      {
+       "frame": 0,
+       "value": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+       }
+      },
+      {
+       "frame": 19,
+       "value": {
+        "x": 1,
+        "y": 1,
+        "z": 1
+       },
+       "easeIn": "back",
+       "easeStrength": 1.4
+      },
+      {
+       "frame": 119,
+       "value": {
+        "x": 1,
+        "y": 1,
+        "z": 1
+       }
+      },
+      {
+       "frame": 120,
+       "value": {
+        "x": 1.07,
+        "y": 1.07,
+        "z": 1.07
+       },
+       "easeIn": "hold"
+      },
+      {
+       "frame": 132,
+       "value": {
+        "x": 1.0,
+        "y": 1.0,
+        "z": 1.0
+       },
+       "easeIn": "expo",
+       "easeStrength": 5
+      },
+      {
+       "frame": 135,
+       "value": {
+        "x": 1.1,
+        "y": 1.1,
+        "z": 1.1
+       },
+       "easeIn": "hold"
+      },
+      {
+       "frame": 147,
+       "value": {
+        "x": 1.03,
+        "y": 1.03,
+        "z": 1.03
+       },
+       "easeIn": "expo",
+       "easeStrength": 5
+      },
+      {
+       "frame": 150,
+       "value": {
+        "x": 1.1300000000000001,
+        "y": 1.1300000000000001,
+        "z": 1.1300000000000001
+       },
+       "easeIn": "hold"
+      },
+      {
+       "frame": 162,
+       "value": {
+        "x": 1.06,
+        "y": 1.06,
+        "z": 1.06
+       },
+       "easeIn": "expo",
+       "easeStrength": 5
+      },
+      {
+       "frame": 165,
+       "value": {
+        "x": 1.1600000000000001,
+        "y": 1.1600000000000001,
+        "z": 1.1600000000000001
+       },
+       "easeIn": "hold"
+      },
+      {
+       "frame": 177,
+       "value": {
+        "x": 1.09,
+        "y": 1.09,
+        "z": 1.09
+       },
+       "easeIn": "expo",
+       "easeStrength": 5
+      },
+      {
+       "frame": 204,
+       "value": {
+        "x": 1.12,
+        "y": 1.12,
+        "z": 1.12
+       },
+       "easeIn": "smooth"
+      },
+      {
+       "frame": 234,
+       "value": {
+        "x": 9,
+        "y": 9,
+        "z": 9
+       },
+       "easeIn": "bezier",
+       "easeBezier": [
+        0.6,
+        0.0,
+        0.9,
+        0.35
+       ]
+      }
+     ],
+     "location": [
+      {
+       "frame": 0,
+       "value": {
+        "x": 0,
+        "y": -1.6,
+        "z": -4
+       }
+      },
+      {
+       "frame": 19,
+       "value": {
+        "x": 0,
+        "y": 0.55,
+        "z": -4
+       },
+       "easeIn": "expo",
+       "easeStrength": 6
+      }
+     ]
+    },
+    "c1_ring": {
+     "scale": [
+      {
+       "frame": 15,
+       "value": {
+        "x": 0.9,
+        "y": 0.9,
+        "z": 0.9
+       }
+      },
+      {
+       "frame": 29,
+       "value": {
+        "x": 2.1,
+        "y": 2.1,
+        "z": 2.1
+       },
+       "easeIn": "expo",
+       "easeStrength": 5
+      },
+      {
+       "frame": 30,
+       "value": {
+        "x": 0.9,
+        "y": 0.9,
+        "z": 0.9
+       },
+       "easeIn": "hold"
+      },
+      {
+       "frame": 44,
+       "value": {
+        "x": 2.1,
+        "y": 2.1,
+        "z": 2.1
+       },
+       "easeIn": "expo",
+       "easeStrength": 5
+      },
+      {
+       "frame": 45,
+       "value": {
+        "x": 0.9,
+        "y": 0.9,
+        "z": 0.9
+       },
+       "easeIn": "hold"
+      },
+      {
+       "frame": 59,
+       "value": {
+        "x": 2.1,
+        "y": 2.1,
+        "z": 2.1
+       },
+       "easeIn": "expo",
+       "easeStrength": 5
+      },
+      {
+       "frame": 120,
+       "value": {
+        "x": 0.9,
+        "y": 0.9,
+        "z": 0.9
+       },
+       "easeIn": "hold"
+      },
+      {
+       "frame": 134,
+       "value": {
+        "x": 2.1,
+        "y": 2.1,
+        "z": 2.1
+       },
+       "easeIn": "expo",
+       "easeStrength": 5
+      },
+      {
+       "frame": 135,
+       "value": {
+        "x": 0.9,
+        "y": 0.9,
+        "z": 0.9
+       },
+       "easeIn": "hold"
+      },
+      {
+       "frame": 149,
+       "value": {
+        "x": 2.1,
+        "y": 2.1,
+        "z": 2.1
+       },
+       "easeIn": "expo",
+       "easeStrength": 5
+      },
+      {
+       "frame": 150,
+       "value": {
+        "x": 0.9,
+        "y": 0.9,
+        "z": 0.9
+       },
+       "easeIn": "hold"
+      },
+      {
+       "frame": 164,
+       "value": {
+        "x": 2.1,
+        "y": 2.1,
+        "z": 2.1
+       },
+       "easeIn": "expo",
+       "easeStrength": 5
+      },
+      {
+       "frame": 165,
+       "value": {
+        "x": 0.9,
+        "y": 0.9,
+        "z": 0.9
+       },
+       "easeIn": "hold"
+      },
+      {
+       "frame": 179,
+       "value": {
+        "x": 2.1,
+        "y": 2.1,
+        "z": 2.1
+       },
+       "easeIn": "expo",
+       "easeStrength": 5
+      }
+     ],
+     "opacity": [
+      {
+       "frame": 14,
+       "value": 0.0
+      },
+      {
+       "frame": 15,
+       "value": 0.85,
+       "easeIn": "hold"
+      },
+      {
+       "frame": 29,
+       "value": 0.0,
+       "easeIn": "expo",
+       "easeStrength": 3
+      },
+      {
+       "frame": 29,
+       "value": 0.0
+      },
+      {
+       "frame": 30,
+       "value": 0.85,
+       "easeIn": "hold"
+      },
+      {
+       "frame": 44,
+       "value": 0.0,
+       "easeIn": "expo",
+       "easeStrength": 3
+      },
+      {
+       "frame": 44,
+       "value": 0.0
+      },
+      {
+       "frame": 45,
+       "value": 0.85,
+       "easeIn": "hold"
+      },
+      {
+       "frame": 59,
+       "value": 0.0,
+       "easeIn": "expo",
+       "easeStrength": 3
+      },
+      {
+       "frame": 119,
+       "value": 0.0
+      },
+      {
+       "frame": 120,
+       "value": 0.85,
+       "easeIn": "hold"
+      },
+      {
+       "frame": 134,
+       "value": 0.0,
+       "easeIn": "expo",
+       "easeStrength": 3
+      },
+      {
+       "frame": 134,
+       "value": 0.0
+      },
+      {
+       "frame": 135,
+       "value": 0.85,
+       "easeIn": "hold"
+      },
+      {
+       "frame": 149,
+       "value": 0.0,
+       "easeIn": "expo",
+       "easeStrength": 3
+      },
+      {
+       "frame": 149,
+       "value": 0.0
+      },
+      {
+       "frame": 150,
+       "value": 0.85,
+       "easeIn": "hold"
+      },
+      {
+       "frame": 164,
+       "value": 0.0,
+       "easeIn": "expo",
+       "easeStrength": 3
+      },
+      {
+       "frame": 164,
+       "value": 0.0
+      },
+      {
+       "frame": 165,
+       "value": 0.85,
+       "easeIn": "hold"
+      },
+      {
+       "frame": 179,
+       "value": 0.0,
+       "easeIn": "expo",
+       "easeStrength": 3
+      }
+     ]
+    },
+    "c1_title_p": {
+     "x": [
+      {
+       "frame": 60,
+       "value": 0.0
+      },
+      {
+       "frame": 96,
+       "value": 1.45,
+       "easeIn": "expo",
+       "easeStrength": 5
+      },
+      {
+       "frame": 195,
+       "value": 1.45
+      },
+      {
+       "frame": 221,
+       "value": 0.0,
+       "easeIn": "bezier",
+       "easeBezier": [
+        0.6,
+        0.0,
+        0.9,
+        0.35
+       ]
+      }
+     ]
+    },
+    "c1_title": {
+     "positionDelta": [
+      {
+       "frame": 194,
+       "value": [
+        0,
+        -2.4,
+        2.2
+       ]
+      },
+      {
+       "frame": 195,
+       "value": [
+        0,
+        3.2,
+        -1.5
+       ],
+       "easeIn": "hold"
+      }
+     ]
+    },
+    "c1_tag_p": {
+     "x": [
+      {
+       "frame": 120,
+       "value": 0.0
+      },
+      {
+       "frame": 146,
+       "value": 1.08,
+       "easeIn": "linear"
+      },
+      {
+       "frame": 186,
+       "value": 1.08
+      },
+      {
+       "frame": 198,
+       "value": 0.0,
+       "easeIn": "linear"
+      }
+     ]
+    },
+    "c1_h_nodes": {
+     "visible": [
+      {
+       "frame": 0,
+       "value": 0
+      },
+      {
+       "frame": 60,
+       "value": 1,
+       "easeIn": "hold"
+      }
+     ]
+    }
+   },
+   "markers": [
+    {
+     "frame": 0,
+     "label": "sun"
+    },
+    {
+     "frame": 60,
+     "label": "title"
+    },
+    {
+     "frame": 120,
+     "label": "tagline"
+    },
+    {
+     "frame": 195,
+     "label": "exit"
+    }
+   ],
+   "exposedParams": []
+  },
+  {
+   "nodes": [
+    {
+     "id": "c2_render",
+     "type": "render",
+     "position": {
+      "x": 1420,
+      "y": 0
+     },
+     "params": {
+      "frameCount": 240,
+      "fps": 30,
+      "resolutionPreset": "16:9 (1920x1080)",
+      "width": 1920,
+      "height": 1080,
+      "timelineEnabled": true,
+      "motionBlur": 0
+     }
+    },
+    {
+     "id": "c2_env",
+     "type": "lighting/environment",
+     "position": {
+      "x": 1080,
+      "y": 0
+     },
+     "params": {
+      "color": 16726815,
+      "intensity": 1,
+      "background": 1,
+      "ambientIntensity": 0.0,
+      "sunIntensity": 0.0
+     }
+    },
+    {
+     "id": "c2_frame",
+     "type": "time/frame",
+     "position": {
+      "x": -3000,
+      "y": 0
+     },
+     "params": {}
+    },
+    {
+     "id": "c2_t",
+     "type": "math/expression",
+     "position": {
+      "x": -2660,
+      "y": 0
+     },
+     "params": {
+      "formula": "x / 30"
+     }
+    },
+    {
+     "id": "c2_cam",
+     "type": "calibration/camera",
+     "position": {
+      "x": 1080,
+      "y": 300
+     },
+     "params": {
+      "active": true,
+      "mode": "manual",
+      "location": {
+       "x": 0,
+       "y": 1.2,
+       "z": 12
+      },
+      "useTarget": true,
+      "target": {
+       "x": 0,
+       "y": 0.1,
+       "z": 0
+      },
+      "up": {
+       "x": 0,
+       "y": 1,
+       "z": 0
+      },
+      "fov": 36,
+      "projectionType": "perspective"
+     }
+    },
+    {
+     "id": "c2_post_in",
+     "type": "postprocess/antialias",
+     "position": {
+      "x": 400,
+      "y": 0
+     },
+     "params": {
+      "enabled": 1
+     }
+    },
+    {
+     "id": "c2_bloom",
+     "type": "postprocess/bloom",
+     "position": {
+      "x": 740,
+      "y": 0
+     },
+     "params": {
+      "strength": 0.2,
+      "radius": 0.4,
+      "threshold": 0.96
+     }
+    },
+    {
+     "id": "c2_grade",
+     "type": "postprocess/color-correction",
+     "position": {
+      "x": 740,
+      "y": 300
+     },
+     "params": {
+      "brightness": 0.0,
+      "contrast": 1.0,
+      "saturation": 1.0
+     }
+    },
+    {
+     "id": "c2_chroma",
+     "type": "postprocess/rgb-shift",
+     "position": {
+      "x": 740,
+      "y": 600
+     },
+     "params": {
+      "amount": 0.0,
+      "angle": 0
+     }
+    },
+    {
+     "id": "c2_grain",
+     "type": "postprocess/film-grain",
+     "position": {
+      "x": 740,
+      "y": 900
+     },
+     "params": {
+      "noiseIntensity": 0.14,
+      "scanlinesIntensity": 0.0,
+      "scanlinesCount": 2048,
+      "grayscale": 0
+     }
+    },
+    {
+     "id": "c2_vig",
+     "type": "postprocess/vignette",
+     "position": {
+      "x": 740,
+      "y": 1200
+     },
+     "params": {
+      "offset": 0.7,
+      "darkness": 1.0
+     }
+    },
+    {
+     "id": "c2_end",
+     "type": "logic/compare",
+     "position": {
+      "x": -2660,
+      "y": 300
+     },
+     "params": {
+      "op": ">=",
+      "a": 0,
+      "b": 239
+     }
+    },
+    {
+     "id": "c2_goto",
+     "type": "canvas/goto",
+     "position": {
+      "x": -2320,
+      "y": 0
+     },
+     "params": {
+      "canvas": 3,
+      "trigger": 0
+     }
+    },
+    {
+     "id": "c2_word",
+     "type": "text/animator",
+     "position": {
+      "x": -960,
+      "y": 0
+     },
+     "params": {
+      "text": "TYPE",
+      "fontPreset": "Anton",
+      "fontSize": 100,
+      "depth": 0.35,
+      "bevelEnabled": true,
+      "tracking": 4,
+      "align": "center",
+      "anchor": "glyph_center",
+      "basedOn": "characters",
+      "selectorShape": "smooth",
+      "start": 0,
+      "end": 0.5,
+      "offset": -0.5,
+      "invert": true,
+      "positionDelta": [
+       0,
+       -1.0,
+       0.8
+      ],
+      "rotationDelta": [
+       -1.5707963267948966,
+       0,
+       0
+      ],
+      "scaleDelta": [
+       0,
+       0,
+       0
+      ],
+      "location": {
+       "x": 0,
+       "y": 0.0,
+       "z": 0
+      },
+      "color": 723726,
+      "roughness": 0.55,
+      "metalness": 0.0
+     }
+    },
+    {
+     "id": "c2_word_p",
+     "type": "math/expression",
+     "position": {
+      "x": -1640,
+      "y": 0
+     },
+     "params": {
+      "formula": "x",
+      "x": 0
+     }
+    },
+    {
+     "id": "c2_ring_i",
+     "type": "list/generate",
+     "position": {
+      "x": -1980,
+      "y": 0
+     },
+     "params": {
+      "count": 64,
+      "start": 0,
+      "step": 1
+     }
+    },
+    {
+     "id": "c2_ringA_pts",
+     "type": "math/expression",
+     "position": {
+      "x": -1640,
+      "y": 300
+     },
+     "params": {
+      "formula": "(a*cos(-tau*x/64), 0, a*sin(-tau*x/64))",
+      "a": 3.0
+     }
+    },
+    {
+     "id": "c2_ringA_path",
+     "type": "curve/from_points",
+     "position": {
+      "x": -1300,
+      "y": 0
+     },
+     "params": {
+      "type": "catmull",
+      "closed": 1,
+      "tension": 0.5,
+      "sag": 0,
+      "visible": 0
+     }
+    },
+    {
+     "id": "c2_ringA",
+     "type": "text/animator",
+     "position": {
+      "x": -960,
+      "y": 300
+     },
+     "params": {
+      "text": "KINETIC TYPE  /  ON ANY PATH  /  KINETIC TYPE  /  ON ANY PATH  /  ",
+      "fontPreset": "Anton",
+      "fontSize": 40,
+      "depth": 0.006,
+      "bevelEnabled": false,
+      "tracking": 0,
+      "align": "center",
+      "anchor": "glyph_center",
+      "alignToPath": true,
+      "fitToCurve": true,
+      "pathOffset": 0,
+      "positionDelta": [
+       0,
+       0,
+       0
+      ],
+      "rotationDelta": [
+       0,
+       0,
+       0
+      ],
+      "scaleDelta": [
+       1,
+       1,
+       1
+      ],
+      "rotation": {
+       "x": 0.42,
+       "y": 0,
+       "z": 0.1
+      },
+      "color": 15592162,
+      "shadeless": 1,
+      "scale": {
+       "x": 0,
+       "y": 0,
+       "z": 0
+      }
+     }
+    },
+    {
+     "id": "c2_ringB_pts",
+     "type": "math/expression",
+     "position": {
+      "x": -1640,
+      "y": 600
+     },
+     "params": {
+      "formula": "(a*cos(-tau*x/64), 0, a*sin(-tau*x/64))",
+      "a": 3.6
+     }
+    },
+    {
+     "id": "c2_ringB_path",
+     "type": "curve/from_points",
+     "position": {
+      "x": -1300,
+      "y": 300
+     },
+     "params": {
+      "type": "catmull",
+      "closed": 1,
+      "tension": 0.5,
+      "sag": 0,
+      "visible": 0
+     }
+    },
+    {
+     "id": "c2_ringB",
+     "type": "text/animator",
+     "position": {
+      "x": -960,
+      "y": 600
+     },
+     "params": {
+      "text": "RANGE SELECTOR · PER-GLYPH TRANSFORMS · TEXT ON PATH · RANGE SELECTOR · PER-GLYPH TRANSFORMS · TEXT ON PATH · ",
+      "fontPreset": "Nova Mono",
+      "fontSize": 34,
+      "depth": 0.006,
+      "bevelEnabled": false,
+      "tracking": 0,
+      "align": "center",
+      "anchor": "glyph_center",
+      "alignToPath": true,
+      "fitToCurve": true,
+      "pathOffset": 0,
+      "positionDelta": [
+       0,
+       0,
+       0
+      ],
+      "rotationDelta": [
+       0,
+       0,
+       0
+      ],
+      "scaleDelta": [
+       1,
+       1,
+       1
+      ],
+      "rotation": {
+       "x": -0.3,
+       "y": 0,
+       "z": -0.42
+      },
+      "color": 723726,
+      "shadeless": 1,
+      "scale": {
+       "x": 0,
+       "y": 0,
+       "z": 0
+      }
+     }
+    },
+    {
+     "id": "c2_ringC_pts",
+     "type": "math/expression",
+     "position": {
+      "x": -1640,
+      "y": 900
+     },
+     "params": {
+      "formula": "(a*cos(-tau*x/64), 0, a*sin(-tau*x/64))",
+      "a": 4.1
+     }
+    },
+    {
+     "id": "c2_ringC_path",
+     "type": "curve/from_points",
+     "position": {
+      "x": -1300,
+      "y": 600
+     },
+     "params": {
+      "type": "catmull",
+      "closed": 1,
+      "tension": 0.5,
+      "sag": 0,
+      "visible": 0
+     }
+    },
+    {
+     "id": "c2_ringC",
+     "type": "text/animator",
+     "position": {
+      "x": -960,
+      "y": 900
+     },
+     "params": {
+      "text": "TSUJI  /  TYPE IN MOTION  /  TSUJI  /  TYPE IN MOTION  /  TSUJI  /  TYPE IN MOTION  /  ",
+      "fontPreset": "Anton",
+      "fontSize": 40,
+      "depth": 0.006,
+      "bevelEnabled": false,
+      "tracking": 0,
+      "align": "center",
+      "anchor": "glyph_center",
+      "alignToPath": true,
+      "fitToCurve": true,
+      "pathOffset": 0,
+      "positionDelta": [
+       0,
+       0,
+       0
+      ],
+      "rotationDelta": [
+       0,
+       0,
+       0
+      ],
+      "scaleDelta": [
+       1,
+       1,
+       1
+      ],
+      "rotation": {
+       "x": 0.12,
+       "y": 0,
+       "z": 0.55
+      },
+      "color": 15592162,
+      "shadeless": 1,
+      "scale": {
+       "x": 0,
+       "y": 0,
+       "z": 0
+      }
+     }
+    },
+    {
+     "id": "c2_iris",
+     "type": "object/disc",
+     "position": {
+      "x": -1300,
+      "y": 900
+     },
+     "params": {
+      "radius": 1.0,
+      "innerRadius": 0,
+      "depth": 0,
+      "location": {
+       "x": 0,
+       "y": 0.6,
+       "z": 6.0
+      },
+      "rotation": {
+       "x": 0,
+       "y": 0,
+       "z": 0
+      },
+      "scale": {
+       "x": 0,
+       "y": 0,
+       "z": 0
+      },
+      "color": 723726,
+      "shadeless": 1
+     }
+    },
+    {
+     "id": "c2_key",
+     "type": "light/directional",
+     "position": {
+      "x": -620,
+      "y": 0
+     },
+     "params": {
+      "location": {
+       "x": -3,
+       "y": 6,
+       "z": 9
+      },
+      "target": {
+       "x": 0,
+       "y": 0,
+       "z": 0
+      },
+      "color": 16777215,
+      "intensity": 2.2,
+      "castShadow": 0
+     }
+    },
+    {
+     "id": "c2_fill",
+     "type": "light/directional",
+     "position": {
+      "x": -620,
+      "y": 300
+     },
+     "params": {
+      "location": {
+       "x": 5,
+       "y": 1,
+       "z": 6
+      },
+      "target": {
+       "x": 0,
+       "y": 0,
+       "z": 0
+      },
+      "color": 16767433,
+      "intensity": 1.0,
+      "castShadow": 0
+     }
+    },
+    {
+     "id": "c2_h_chap",
+     "type": "hub/text",
+     "position": {
+      "x": 60,
+      "y": 0
+     },
+     "params": {
+      "text": "02 / KINETIC TYPE",
+      "trigger": 1,
+      "x": 198.0,
+      "y": 84,
+      "rotation": 0,
+      "scale": 1,
+      "visible": 1,
+      "fontFamily": "monospace",
+      "fontSize": 20,
+      "color": 723726,
+      "opacity": 1,
+      "enterAnimation": "none",
+      "exitAnimation": "none",
+      "durationIn": 0.05,
+      "durationOut": 0.05
+     }
+    },
+    {
+     "id": "c2_h_nodes",
+     "type": "hub/text",
+     "position": {
+      "x": 60,
+      "y": 300
+     },
+     "params": {
+      "text": "curve/from-points  →  text/animator  ·  path offset",
+      "trigger": 1,
+      "x": 1548.6,
+      "y": 1000,
+      "rotation": 0,
+      "scale": 1,
+      "visible": 1,
+      "fontFamily": "monospace",
+      "fontSize": 18,
+      "color": 5903368,
+      "opacity": 1,
+      "enterAnimation": "none",
+      "exitAnimation": "none",
+      "durationIn": 0.05,
+      "durationOut": 0.05
+     }
+    },
+    {
+     "id": "c2_scene",
+     "type": "structure/merge",
+     "position": {
+      "x": 1080,
+      "y": 600
+     },
+     "params": {}
+    }
+   ],
+   "connections": [
+    {
+     "id": "c2_env.environment->c2_render.environment",
+     "fromNode": "c2_env",
+     "fromSocket": "environment",
+     "toNode": "c2_render",
+     "toSocket": "environment"
+    },
+    {
+     "id": "c2_frame.frame->c2_t.x",
+     "fromNode": "c2_frame",
+     "fromSocket": "frame",
+     "toNode": "c2_t",
+     "toSocket": "x"
+    },
+    {
+     "id": "c2_vig.effect->c2_render.postprocess",
+     "fromNode": "c2_vig",
+     "fromSocket": "effect",
+     "toNode": "c2_render",
+     "toSocket": "postprocess"
+    },
+    {
+     "id": "c2_frame.frame->c2_end.a",
+     "fromNode": "c2_frame",
+     "fromSocket": "frame",
+     "toNode": "c2_end",
+     "toSocket": "a"
+    },
+    {
+     "id": "c2_end.out->c2_goto.trigger",
+     "fromNode": "c2_end",
+     "fromSocket": "out",
+     "toNode": "c2_goto",
+     "toSocket": "trigger"
+    },
+    {
+     "id": "c2_word_p.value->c2_word.progress",
+     "fromNode": "c2_word_p",
+     "fromSocket": "value",
+     "toNode": "c2_word",
+     "toSocket": "progress"
+    },
+    {
+     "id": "c2_ring_i.list->c2_ringA_pts.x",
+     "fromNode": "c2_ring_i",
+     "fromSocket": "list",
+     "toNode": "c2_ringA_pts",
+     "toSocket": "x"
+    },
+    {
+     "id": "c2_ringA_pts.list->c2_ringA_path.points",
+     "fromNode": "c2_ringA_pts",
+     "fromSocket": "list",
+     "toNode": "c2_ringA_path",
+     "toSocket": "points"
+    },
+    {
+     "id": "c2_ringA_path.curve->c2_ringA.curve",
+     "fromNode": "c2_ringA_path",
+     "fromSocket": "curve",
+     "toNode": "c2_ringA",
+     "toSocket": "curve"
+    },
+    {
+     "id": "c2_ring_i.list->c2_ringB_pts.x",
+     "fromNode": "c2_ring_i",
+     "fromSocket": "list",
+     "toNode": "c2_ringB_pts",
+     "toSocket": "x"
+    },
+    {
+     "id": "c2_ringB_pts.list->c2_ringB_path.points",
+     "fromNode": "c2_ringB_pts",
+     "fromSocket": "list",
+     "toNode": "c2_ringB_path",
+     "toSocket": "points"
+    },
+    {
+     "id": "c2_ringB_path.curve->c2_ringB.curve",
+     "fromNode": "c2_ringB_path",
+     "fromSocket": "curve",
+     "toNode": "c2_ringB",
+     "toSocket": "curve"
+    },
+    {
+     "id": "c2_ring_i.list->c2_ringC_pts.x",
+     "fromNode": "c2_ring_i",
+     "fromSocket": "list",
+     "toNode": "c2_ringC_pts",
+     "toSocket": "x"
+    },
+    {
+     "id": "c2_ringC_pts.list->c2_ringC_path.points",
+     "fromNode": "c2_ringC_pts",
+     "fromSocket": "list",
+     "toNode": "c2_ringC_path",
+     "toSocket": "points"
+    },
+    {
+     "id": "c2_ringC_path.curve->c2_ringC.curve",
+     "fromNode": "c2_ringC_path",
+     "fromSocket": "curve",
+     "toNode": "c2_ringC",
+     "toSocket": "curve"
+    },
+    {
+     "id": "c2_post_in.effect->c2_bloom.effect",
+     "fromNode": "c2_post_in",
+     "fromSocket": "effect",
+     "toNode": "c2_bloom",
+     "toSocket": "effect"
+    },
+    {
+     "id": "c2_bloom.effect->c2_grade.effect",
+     "fromNode": "c2_bloom",
+     "fromSocket": "effect",
+     "toNode": "c2_grade",
+     "toSocket": "effect"
+    },
+    {
+     "id": "c2_grade.effect->c2_chroma.effect",
+     "fromNode": "c2_grade",
+     "fromSocket": "effect",
+     "toNode": "c2_chroma",
+     "toSocket": "effect"
+    },
+    {
+     "id": "c2_chroma.effect->c2_grain.effect",
+     "fromNode": "c2_chroma",
+     "fromSocket": "effect",
+     "toNode": "c2_grain",
+     "toSocket": "effect"
+    },
+    {
+     "id": "c2_grain.effect->c2_vig.effect",
+     "fromNode": "c2_grain",
+     "fromSocket": "effect",
+     "toNode": "c2_vig",
+     "toSocket": "effect"
+    },
+    {
+     "id": "c2_word.geometry->c2_scene.in0",
+     "fromNode": "c2_word",
+     "fromSocket": "geometry",
+     "toNode": "c2_scene",
+     "toSocket": "in0"
+    },
+    {
+     "id": "c2_ringA.geometry->c2_scene.in1",
+     "fromNode": "c2_ringA",
+     "fromSocket": "geometry",
+     "toNode": "c2_scene",
+     "toSocket": "in1"
+    },
+    {
+     "id": "c2_ringB.geometry->c2_scene.in2",
+     "fromNode": "c2_ringB",
+     "fromSocket": "geometry",
+     "toNode": "c2_scene",
+     "toSocket": "in2"
+    },
+    {
+     "id": "c2_ringC.geometry->c2_scene.in3",
+     "fromNode": "c2_ringC",
+     "fromSocket": "geometry",
+     "toNode": "c2_scene",
+     "toSocket": "in3"
+    },
+    {
+     "id": "c2_iris.geometry->c2_scene.in4",
+     "fromNode": "c2_iris",
+     "fromSocket": "geometry",
+     "toNode": "c2_scene",
+     "toSocket": "in4"
+    },
+    {
+     "id": "c2_scene.geometry->c2_render.geometry",
+     "fromNode": "c2_scene",
+     "fromSocket": "geometry",
+     "toNode": "c2_render",
+     "toSocket": "geometry"
+    }
+   ],
+   "keyframes": {
+    "c2_chroma": {
+     "amount": [
+      {
+       "frame": 0,
+       "value": 0.014
+      },
+      {
+       "frame": 9,
+       "value": 0.0,
+       "easeIn": "expo",
+       "easeStrength": 6
+      }
+     ]
+    },
+    "c2_cam": {
+     "location": [
+      {
+       "frame": 0,
+       "value": {
+        "x": 0,
+        "y": 0.1,
+        "z": 7.2
+       }
+      },
+      {
+       "frame": 59,
+       "value": {
+        "x": 0,
+        "y": 0.1,
+        "z": 6.4
+       },
+       "easeIn": "linear"
+      },
+      {
+       "frame": 80,
+       "value": {
+        "x": 0,
+        "y": 0.6,
+        "z": 11.8
+       },
+       "easeIn": "expo",
+       "easeStrength": 6
+      },
+      {
+       "frame": 120,
+       "value": {
+        "x": -2.0,
+        "y": 3.6,
+        "z": 12.0
+       },
+       "easeIn": "expo",
+       "easeStrength": 4
+      },
+      {
+       "frame": 180,
+       "value": {
+        "x": 4.0,
+        "y": 2.4,
+        "z": 11.0
+       },
+       "easeIn": "bezier",
+       "easeBezier": [
+        0.7,
+        0.0,
+        0.2,
+        1.0
+       ]
+      },
+      {
+       "frame": 220,
+       "value": {
+        "x": 0.0,
+        "y": 1.0,
+        "z": 10.5
+       },
+       "easeIn": "bezier",
+       "easeBezier": [
+        0.7,
+        0.0,
+        0.2,
+        1.0
+       ]
+      },
+      {
+       "frame": 240,
+       "value": {
+        "x": 0.0,
+        "y": 0.6,
+        "z": 9.0
+       },
+       "easeIn": "smooth"
+      }
+     ]
+    },
+    "c2_word": {
+     "text": [
+      {
+       "frame": 0,
+       "value": "TYPE"
+      },
+      {
+       "frame": 15,
+       "value": "THAT",
+       "easeIn": "hold"
+      },
+      {
+       "frame": 30,
+       "value": "MOVES",
+       "easeIn": "hold"
+      },
+      {
+       "frame": 45,
+       "value": "ON BEAT.",
+       "easeIn": "hold"
+      },
+      {
+       "frame": 60,
+       "value": "KINETIC",
+       "easeIn": "hold"
+      },
+      {
+       "frame": 180,
+       "value": "ANY PATH.",
+       "easeIn": "hold"
+      }
+     ],
+     "scale": [
+      {
+       "frame": 0,
+       "value": {
+        "x": 1.16,
+        "y": 1.16,
+        "z": 1.16
+       }
+      },
+      {
+       "frame": 9,
+       "value": {
+        "x": 1,
+        "y": 1,
+        "z": 1
+       },
+       "easeIn": "expo",
+       "easeStrength": 5
+      },
+      {
+       "frame": 14,
+       "value": {
+        "x": 1,
+        "y": 1,
+        "z": 1
+       }
+      },
+      {
+       "frame": 15,
+       "value": {
+        "x": 1.16,
+        "y": 1.16,
+        "z": 1.16
+       },
+       "easeIn": "hold"
+      },
+      {
+       "frame": 24,
+       "value": {
+        "x": 1,
+        "y": 1,
+        "z": 1
+       },
+       "easeIn": "expo",
+       "easeStrength": 5
+      },
+      {
+       "frame": 29,
+       "value": {
+        "x": 1,
+        "y": 1,
+        "z": 1
+       }
+      },
+      {
+       "frame": 30,
+       "value": {
+        "x": 1.16,
+        "y": 1.16,
+        "z": 1.16
+       },
+       "easeIn": "hold"
+      },
+      {
+       "frame": 39,
+       "value": {
+        "x": 1,
+        "y": 1,
+        "z": 1
+       },
+       "easeIn": "expo",
+       "easeStrength": 5
+      },
+      {
+       "frame": 44,
+       "value": {
+        "x": 1,
+        "y": 1,
+        "z": 1
+       }
+      },
+      {
+       "frame": 45,
+       "value": {
+        "x": 1.16,
+        "y": 1.16,
+        "z": 1.16
+       },
+       "easeIn": "hold"
+      },
+      {
+       "frame": 54,
+       "value": {
+        "x": 1,
+        "y": 1,
+        "z": 1
+       },
+       "easeIn": "expo",
+       "easeStrength": 5
+      },
+      {
+       "frame": 59,
+       "value": {
+        "x": 1,
+        "y": 1,
+        "z": 1
+       }
+      },
+      {
+       "frame": 60,
+       "value": {
+        "x": 1.16,
+        "y": 1.16,
+        "z": 1.16
+       },
+       "easeIn": "hold"
+      },
+      {
+       "frame": 69,
+       "value": {
+        "x": 1,
+        "y": 1,
+        "z": 1
+       },
+       "easeIn": "expo",
+       "easeStrength": 5
+      },
+      {
+       "frame": 179,
+       "value": {
+        "x": 1,
+        "y": 1,
+        "z": 1
+       }
+      },
+      {
+       "frame": 180,
+       "value": {
+        "x": 1.16,
+        "y": 1.16,
+        "z": 1.16
+       },
+       "easeIn": "hold"
+      },
+      {
+       "frame": 189,
+       "value": {
+        "x": 1,
+        "y": 1,
+        "z": 1
+       },
+       "easeIn": "expo",
+       "easeStrength": 5
+      },
+      {
+       "frame": 216,
+       "value": {
+        "x": 1,
+        "y": 1,
+        "z": 1
+       }
+      },
+      {
+       "frame": 230,
+       "value": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+       },
+       "easeIn": "bezier",
+       "easeBezier": [
+        0.6,
+        0.0,
+        0.9,
+        0.35
+       ]
+      }
+     ]
+    },
+    "c2_word_p": {
+     "x": [
+      {
+       "frame": 0,
+       "value": 0.0
+      },
+      {
+       "frame": 10,
+       "value": 1.5,
+       "easeIn": "expo",
+       "easeStrength": 5
+      },
+      {
+       "frame": 14,
+       "value": 1.5
+      },
+      {
+       "frame": 15,
+       "value": 0.0,
+       "easeIn": "hold"
+      },
+      {
+       "frame": 25,
+       "value": 1.5,
+       "easeIn": "expo",
+       "easeStrength": 5
+      },
+      {
+       "frame": 29,
+       "value": 1.5
+      },
+      {
+       "frame": 30,
+       "value": 0.0,
+       "easeIn": "hold"
+      },
+      {
+       "frame": 40,
+       "value": 1.5,
+       "easeIn": "expo",
+       "easeStrength": 5
+      },
+      {
+       "frame": 44,
+       "value": 1.5
+      },
+      {
+       "frame": 45,
+       "value": 0.0,
+       "easeIn": "hold"
+      },
+      {
+       "frame": 55,
+       "value": 1.5,
+       "easeIn": "expo",
+       "easeStrength": 5
+      },
+      {
+       "frame": 59,
+       "value": 1.5
+      },
+      {
+       "frame": 60,
+       "value": 0.0,
+       "easeIn": "hold"
+      },
+      {
+       "frame": 70,
+       "value": 1.5,
+       "easeIn": "expo",
+       "easeStrength": 5
+      },
+      {
+       "frame": 179,
+       "value": 1.5
+      },
+      {
+       "frame": 180,
+       "value": 0.0,
+       "easeIn": "hold"
+      },
+      {
+       "frame": 190,
+       "value": 1.5,
+       "easeIn": "expo",
+       "easeStrength": 5
+      }
+     ]
+    },
+    "c2_ringA": {
+     "pathOffset": [
+      {
+       "frame": 0,
+       "value": 0.0
+      },
+      {
+       "frame": 240,
+       "value": 0.22,
+       "easeIn": "linear"
+      }
+     ],
+     "scale": [
+      {
+       "frame": 59,
+       "value": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+       }
+      },
+      {
+       "frame": 72,
+       "value": {
+        "x": 1,
+        "y": 1,
+        "z": 1
+       },
+       "easeIn": "back",
+       "easeStrength": 1.5
+      },
+      {
+       "frame": 210,
+       "value": {
+        "x": 1,
+        "y": 1,
+        "z": 1
+       }
+      },
+      {
+       "frame": 224,
+       "value": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+       },
+       "easeIn": "bezier",
+       "easeBezier": [
+        0.6,
+        0.0,
+        0.9,
+        0.35
+       ]
+      }
+     ],
+     "rotation": [
+      {
+       "frame": 120,
+       "value": {
+        "x": 0.42,
+        "y": 0,
+        "z": 0.1
+       }
+      },
+      {
+       "frame": 144,
+       "value": {
+        "x": 0.588,
+        "y": 0.35,
+        "z": 0.13
+       },
+       "easeIn": "back",
+       "easeStrength": 1.2
+      },
+      {
+       "frame": 200,
+       "value": {
+        "x": 0.588,
+        "y": 0.35,
+        "z": 0.13
+       }
+      },
+      {
+       "frame": 230,
+       "value": {
+        "x": 0.42,
+        "y": 0,
+        "z": 0.1
+       },
+       "easeIn": "smooth"
+      }
+     ]
+    },
+    "c2_ringB": {
+     "pathOffset": [
+      {
+       "frame": 0,
+       "value": 0.0
+      },
+      {
+       "frame": 240,
+       "value": -0.16,
+       "easeIn": "linear"
+      }
+     ],
+     "scale": [
+      {
+       "frame": 74,
+       "value": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+       }
+      },
+      {
+       "frame": 87,
+       "value": {
+        "x": 1,
+        "y": 1,
+        "z": 1
+       },
+       "easeIn": "back",
+       "easeStrength": 1.5
+      },
+      {
+       "frame": 214,
+       "value": {
+        "x": 1,
+        "y": 1,
+        "z": 1
+       }
+      },
+      {
+       "frame": 228,
+       "value": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+       },
+       "easeIn": "bezier",
+       "easeBezier": [
+        0.6,
+        0.0,
+        0.9,
+        0.35
+       ]
+      }
+     ],
+     "rotation": [
+      {
+       "frame": 120,
+       "value": {
+        "x": -0.3,
+        "y": 0,
+        "z": -0.42
+       }
+      },
+      {
+       "frame": 144,
+       "value": {
+        "x": -0.42,
+        "y": 0.35,
+        "z": -0.546
+       },
+       "easeIn": "back",
+       "easeStrength": 1.2
+      },
+      {
+       "frame": 200,
+       "value": {
+        "x": -0.42,
+        "y": 0.35,
+        "z": -0.546
+       }
+      },
+      {
+       "frame": 230,
+       "value": {
+        "x": -0.3,
+        "y": 0,
+        "z": -0.42
+       },
+       "easeIn": "smooth"
+      }
+     ]
+    },
+    "c2_ringC": {
+     "pathOffset": [
+      {
+       "frame": 0,
+       "value": 0.0
+      },
+      {
+       "frame": 240,
+       "value": 0.12,
+       "easeIn": "linear"
+      }
+     ],
+     "scale": [
+      {
+       "frame": 89,
+       "value": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+       }
+      },
+      {
+       "frame": 102,
+       "value": {
+        "x": 1,
+        "y": 1,
+        "z": 1
+       },
+       "easeIn": "back",
+       "easeStrength": 1.5
+      },
+      {
+       "frame": 218,
+       "value": {
+        "x": 1,
+        "y": 1,
+        "z": 1
+       }
+      },
+      {
+       "frame": 232,
+       "value": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+       },
+       "easeIn": "bezier",
+       "easeBezier": [
+        0.6,
+        0.0,
+        0.9,
+        0.35
+       ]
+      }
+     ],
+     "rotation": [
+      {
+       "frame": 120,
+       "value": {
+        "x": 0.12,
+        "y": 0,
+        "z": 0.55
+       }
+      },
+      {
+       "frame": 144,
+       "value": {
+        "x": 0.16799999999999998,
+        "y": 0.35,
+        "z": 0.7150000000000001
+       },
+       "easeIn": "back",
+       "easeStrength": 1.2
+      },
+      {
+       "frame": 200,
+       "value": {
+        "x": 0.16799999999999998,
+        "y": 0.35,
+        "z": 0.7150000000000001
+       }
+      },
+      {
+       "frame": 230,
+       "value": {
+        "x": 0.12,
+        "y": 0,
+        "z": 0.55
+       },
+       "easeIn": "smooth"
+      }
+     ]
+    },
+    "c2_iris": {
+     "scale": [
+      {
+       "frame": 227,
+       "value": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+       }
+      },
+      {
+       "frame": 238,
+       "value": {
+        "x": 4,
+        "y": 4,
+        "z": 4
+       },
+       "easeIn": "bezier",
+       "easeBezier": [
+        0.6,
+        0.0,
+        0.9,
+        0.35
+       ]
+      }
+     ]
+    }
+   },
+   "markers": [
+    {
+     "frame": 0,
+     "label": "words"
+    },
+    {
+     "frame": 60,
+     "label": "rings"
+    },
+    {
+     "frame": 120,
+     "label": "gyroscope"
+    },
+    {
+     "frame": 180,
+     "label": "any path"
+    }
+   ],
+   "exposedParams": []
+  },
+  {
+   "nodes": [
+    {
+     "id": "c3_render",
+     "type": "render",
+     "position": {
+      "x": 1420,
+      "y": 0
+     },
+     "params": {
+      "frameCount": 240,
+      "fps": 30,
+      "resolutionPreset": "16:9 (1920x1080)",
+      "width": 1920,
+      "height": 1080,
+      "timelineEnabled": true,
+      "motionBlur": 0
+     }
+    },
+    {
+     "id": "c3_env",
+     "type": "lighting/environment",
+     "position": {
+      "x": 1080,
+      "y": 0
+     },
+     "params": {
+      "color": 723726,
+      "intensity": 1,
+      "background": 1,
+      "ambientIntensity": 0.12,
+      "sunIntensity": 0.0
+     }
+    },
+    {
+     "id": "c3_frame",
+     "type": "time/frame",
+     "position": {
+      "x": -3000,
+      "y": 0
+     },
+     "params": {}
+    },
+    {
+     "id": "c3_t",
+     "type": "math/expression",
+     "position": {
+      "x": -2660,
+      "y": 0
+     },
+     "params": {
+      "formula": "x / 30"
+     }
+    },
+    {
+     "id": "c3_cam",
+     "type": "calibration/camera",
+     "position": {
+      "x": 1080,
+      "y": 300
+     },
+     "params": {
+      "active": true,
+      "mode": "manual",
+      "location": {
+       "x": 24,
+       "y": 26,
+       "z": 24
+      },
+      "useTarget": true,
+      "target": {
+       "x": 0,
+       "y": 0,
+       "z": 0
+      },
+      "up": {
+       "x": 0,
+       "y": 1,
+       "z": 0
+      },
+      "fov": 20,
+      "projectionType": "perspective"
+     }
+    },
+    {
+     "id": "c3_post_in",
+     "type": "postprocess/antialias",
+     "position": {
+      "x": 400,
+      "y": 0
+     },
+     "params": {
+      "enabled": 1
+     }
+    },
+    {
+     "id": "c3_bloom",
+     "type": "postprocess/bloom",
+     "position": {
+      "x": 740,
+      "y": 0
+     },
+     "params": {
+      "strength": 0.45,
+      "radius": 0.5,
+      "threshold": 0.86
+     }
+    },
+    {
+     "id": "c3_grade",
+     "type": "postprocess/color-correction",
+     "position": {
+      "x": 740,
+      "y": 300
+     },
+     "params": {
+      "brightness": 0.0,
+      "contrast": 1.0,
+      "saturation": 1.0
+     }
+    },
+    {
+     "id": "c3_chroma",
+     "type": "postprocess/rgb-shift",
+     "position": {
+      "x": 740,
+      "y": 600
+     },
+     "params": {
+      "amount": 0.0,
+      "angle": 0
+     }
+    },
+    {
+     "id": "c3_grain",
+     "type": "postprocess/film-grain",
+     "position": {
+      "x": 740,
+      "y": 900
+     },
+     "params": {
+      "noiseIntensity": 0.16,
+      "scanlinesIntensity": 0.0,
+      "scanlinesCount": 2048,
+      "grayscale": 0
+     }
+    },
+    {
+     "id": "c3_vig",
+     "type": "postprocess/vignette",
+     "position": {
+      "x": 740,
+      "y": 1200
+     },
+     "params": {
+      "offset": 1.0,
+      "darkness": 1.1
+     }
+    },
+    {
+     "id": "c3_end",
+     "type": "logic/compare",
+     "position": {
+      "x": -2660,
+      "y": 300
+     },
+     "params": {
+      "op": ">=",
+      "a": 0,
+      "b": 239
+     }
+    },
+    {
+     "id": "c3_goto",
+     "type": "canvas/goto",
+     "position": {
+      "x": -2320,
+      "y": 0
+     },
+     "params": {
+      "canvas": 4,
+      "trigger": 0
+     }
+    },
+    {
+     "id": "c3_column",
+     "type": "object/box",
+     "position": {
+      "x": -1980,
+      "y": 0
+     },
+     "params": {
+      "scale": {
+       "x": 0.5,
+       "y": 1,
+       "z": 0.5
+      },
+      "color": 15592162,
+      "roughness": 0.42,
+      "metalness": 0.05
+     }
+    },
+    {
+     "id": "c3_grid",
+     "type": "structure/array",
+     "position": {
+      "x": -1640,
+      "y": 0
+     },
+     "params": {
+      "mode": "grid",
+      "plane": "XZ",
+      "gridCols": 20,
+      "gridRows": 20,
+      "spacingX": 0.6,
+      "spacingY": 0.6,
+      "centerGrid": true,
+      "gpuInstancing": false
+     }
+    },
+    {
+     "id": "c3_d1",
+     "type": "math/distances",
+     "position": {
+      "x": -1300,
+      "y": 0
+     },
+     "params": {
+      "tx": 0,
+      "ty": 0,
+      "tz": 0
+     }
+    },
+    {
+     "id": "c3_src2",
+     "type": "math/expression",
+     "position": {
+      "x": -1640,
+      "y": 300
+     },
+     "params": {
+      "formula": "(3.2 cos(0.7 t + 1), 0, 3.2 sin(0.7 t + 1))"
+     }
+    },
+    {
+     "id": "c3_d2",
+     "type": "math/distances",
+     "position": {
+      "x": -1300,
+      "y": 300
+     },
+     "params": {}
+    },
+    {
+     "id": "c3_amp",
+     "type": "math/expression",
+     "position": {
+      "x": -1640,
+      "y": 600
+     },
+     "params": {
+      "formula": "x",
+      "x": 1.0
+     }
+    },
+    {
+     "id": "c3_mix",
+     "type": "math/expression",
+     "position": {
+      "x": -1640,
+      "y": 900
+     },
+     "params": {
+      "formula": "x",
+      "x": 0.0
+     }
+    },
+    {
+     "id": "c3_height",
+     "type": "math/expression",
+     "position": {
+      "x": -960,
+      "y": 0
+     },
+     "params": {
+      "formula": "(0.12 + a*(0.5 + 0.5*sin(1.7*x - 4.6*t))*exp(-0.075*x) + b*0.85*(0.5 + 0.5*sin(2.3*y - 5.8*t))*exp(-0.11*y)) * clamp((10*t - x)*0.35, 0, 1)"
+     }
+    },
+    {
+     "id": "c3_fade",
+     "type": "list/stagger",
+     "position": {
+      "x": -1300,
+      "y": 600
+     },
+     "params": {
+      "spacing": "total",
+      "total": 1.1,
+      "duration": 0.35,
+      "startAt": 6.85,
+      "order": "random",
+      "seed": 7,
+      "ease": "smooth",
+      "easeStrength": 1,
+      "from": 1.0,
+      "to": 0.0
+     }
+    },
+    {
+     "id": "c3_sy",
+     "type": "math/expression",
+     "position": {
+      "x": -620,
+      "y": 0
+     },
+     "params": {
+      "formula": "x*y"
+     }
+    },
+    {
+     "id": "c3_py",
+     "type": "math/expression",
+     "position": {
+      "x": -620,
+      "y": 300
+     },
+     "params": {
+      "formula": "x*0.5"
+     }
+    },
+    {
+     "id": "c3_xform",
+     "type": "structure/instance-transform",
+     "position": {
+      "x": -280,
+      "y": 0
+     },
+     "params": {
+      "mode": "relative",
+      "pivot": "individual",
+      "index": -1
+     }
+    },
+    {
+     "id": "c3_heat",
+     "type": "list/gradient",
+     "position": {
+      "x": -620,
+      "y": 600
+     },
+     "params": {
+      "radius": 1.95,
+      "power": 1.0,
+      "ramp": {
+       "stops": [
+        {
+         "position": 0.0,
+         "color": 1513501
+        },
+        {
+         "position": 0.3,
+         "color": 3882568
+        },
+        {
+         "position": 0.62,
+         "color": 16726815
+        },
+        {
+         "position": 0.85,
+         "color": 16742973
+        },
+        {
+         "position": 1.0,
+         "color": 16769996
+        }
+       ],
+       "interpolation": "linear"
+      }
+     }
+    },
+    {
+     "id": "c3_tint",
+     "type": "structure/instance-color",
+     "position": {
+      "x": 60,
+      "y": 0
+     },
+     "params": {
+      "index": -1
+     }
+    },
+    {
+     "id": "c3_key",
+     "type": "light/directional",
+     "position": {
+      "x": -620,
+      "y": 900
+     },
+     "params": {
+      "location": {
+       "x": -9,
+       "y": 16,
+       "z": 5
+      },
+      "target": {
+       "x": 0,
+       "y": 0,
+       "z": 0
+      },
+      "color": 16773604,
+      "intensity": 2.6,
+      "castShadow": 1,
+      "shadowSoftness": 1
+     }
+    },
+    {
+     "id": "c3_rim",
+     "type": "light/directional",
+     "position": {
+      "x": -620,
+      "y": 1200
+     },
+     "params": {
+      "location": {
+       "x": 10,
+       "y": 4,
+       "z": -12
+      },
+      "target": {
+       "x": 0,
+       "y": 0,
+       "z": 0
+      },
+      "color": 16726815,
+      "intensity": 1.6,
+      "castShadow": 0
+     }
+    },
+    {
+     "id": "c3_h_chap",
+     "type": "hub/text",
+     "position": {
+      "x": 60,
+      "y": 300
+     },
+     "params": {
+      "text": "03 / PROCEDURAL",
+      "trigger": 1,
+      "x": 186.0,
+      "y": 84,
+      "rotation": 0,
+      "scale": 1,
+      "visible": 1,
+      "fontFamily": "monospace",
+      "fontSize": 20,
+      "color": 15592162,
+      "opacity": 1,
+      "enterAnimation": "none",
+      "exitAnimation": "none",
+      "durationIn": 0.05,
+      "durationOut": 0.05
+     }
+    },
+    {
+     "id": "c3_h_nodes",
+     "type": "hub/text",
+     "position": {
+      "x": 60,
+      "y": 600
+     },
+     "params": {
+      "text": "structure/array  →  math/expression  →  instance-transform",
+      "trigger": 1,
+      "x": 1510.8,
+      "y": 1000,
+      "rotation": 0,
+      "scale": 1,
+      "visible": 1,
+      "fontFamily": "monospace",
+      "fontSize": 18,
+      "color": 9081766,
+      "opacity": 1,
+      "enterAnimation": "none",
+      "exitAnimation": "none",
+      "durationIn": 0.05,
+      "durationOut": 0.05
+     }
+    },
+    {
+     "id": "c3_h_count",
+     "type": "hub/text",
+     "position": {
+      "x": 60,
+      "y": 900
+     },
+     "params": {
+      "text": "400 INSTANCES   ·   1 EXPRESSION",
+      "trigger": 1,
+      "x": 960,
+      "y": 940,
+      "rotation": 0,
+      "scale": 1,
+      "visible": 1,
+      "fontFamily": "monospace",
+      "fontSize": 26,
+      "color": 15592162,
+      "opacity": 1,
+      "enterAnimation": "none",
+      "exitAnimation": "none",
+      "durationIn": 0.05,
+      "durationOut": 0.05
+     }
+    },
+    {
+     "id": "c3_scene",
+     "type": "structure/merge",
+     "position": {
+      "x": 1080,
+      "y": 600
+     },
+     "params": {}
+    }
+   ],
+   "connections": [
+    {
+     "id": "c3_env.environment->c3_render.environment",
+     "fromNode": "c3_env",
+     "fromSocket": "environment",
+     "toNode": "c3_render",
+     "toSocket": "environment"
+    },
+    {
+     "id": "c3_frame.frame->c3_t.x",
+     "fromNode": "c3_frame",
+     "fromSocket": "frame",
+     "toNode": "c3_t",
+     "toSocket": "x"
+    },
+    {
+     "id": "c3_vig.effect->c3_render.postprocess",
+     "fromNode": "c3_vig",
+     "fromSocket": "effect",
+     "toNode": "c3_render",
+     "toSocket": "postprocess"
+    },
+    {
+     "id": "c3_frame.frame->c3_end.a",
+     "fromNode": "c3_frame",
+     "fromSocket": "frame",
+     "toNode": "c3_end",
+     "toSocket": "a"
+    },
+    {
+     "id": "c3_end.out->c3_goto.trigger",
+     "fromNode": "c3_end",
+     "fromSocket": "out",
+     "toNode": "c3_goto",
+     "toSocket": "trigger"
+    },
+    {
+     "id": "c3_column.geometry->c3_grid.geometry",
+     "fromNode": "c3_column",
+     "fromSocket": "geometry",
+     "toNode": "c3_grid",
+     "toSocket": "geometry"
+    },
+    {
+     "id": "c3_grid.geometry->c3_d1.instances",
+     "fromNode": "c3_grid",
+     "fromSocket": "geometry",
+     "toNode": "c3_d1",
+     "toSocket": "instances"
+    },
+    {
+     "id": "c3_t.value->c3_src2.t",
+     "fromNode": "c3_t",
+     "fromSocket": "value",
+     "toNode": "c3_src2",
+     "toSocket": "t"
+    },
+    {
+     "id": "c3_grid.geometry->c3_d2.instances",
+     "fromNode": "c3_grid",
+     "fromSocket": "geometry",
+     "toNode": "c3_d2",
+     "toSocket": "instances"
+    },
+    {
+     "id": "c3_src2.vector->c3_d2.target",
+     "fromNode": "c3_src2",
+     "fromSocket": "vector",
+     "toNode": "c3_d2",
+     "toSocket": "target"
+    },
+    {
+     "id": "c3_d1.distances->c3_height.x",
+     "fromNode": "c3_d1",
+     "fromSocket": "distances",
+     "toNode": "c3_height",
+     "toSocket": "x"
+    },
+    {
+     "id": "c3_d2.distances->c3_height.y",
+     "fromNode": "c3_d2",
+     "fromSocket": "distances",
+     "toNode": "c3_height",
+     "toSocket": "y"
+    },
+    {
+     "id": "c3_t.value->c3_height.t",
+     "fromNode": "c3_t",
+     "fromSocket": "value",
+     "toNode": "c3_height",
+     "toSocket": "t"
+    },
+    {
+     "id": "c3_amp.value->c3_height.a",
+     "fromNode": "c3_amp",
+     "fromSocket": "value",
+     "toNode": "c3_height",
+     "toSocket": "a"
+    },
+    {
+     "id": "c3_mix.value->c3_height.b",
+     "fromNode": "c3_mix",
+     "fromSocket": "value",
+     "toNode": "c3_height",
+     "toSocket": "b"
+    },
+    {
+     "id": "c3_t.value->c3_fade.time",
+     "fromNode": "c3_t",
+     "fromSocket": "value",
+     "toNode": "c3_fade",
+     "toSocket": "time"
+    },
+    {
+     "id": "c3_grid.geometry->c3_fade.source",
+     "fromNode": "c3_grid",
+     "fromSocket": "geometry",
+     "toNode": "c3_fade",
+     "toSocket": "source"
+    },
+    {
+     "id": "c3_height.list->c3_sy.x",
+     "fromNode": "c3_height",
+     "fromSocket": "list",
+     "toNode": "c3_sy",
+     "toSocket": "x"
+    },
+    {
+     "id": "c3_fade.values->c3_sy.y",
+     "fromNode": "c3_fade",
+     "fromSocket": "values",
+     "toNode": "c3_sy",
+     "toSocket": "y"
+    },
+    {
+     "id": "c3_sy.list->c3_py.x",
+     "fromNode": "c3_sy",
+     "fromSocket": "list",
+     "toNode": "c3_py",
+     "toSocket": "x"
+    },
+    {
+     "id": "c3_grid.geometry->c3_xform.geometry",
+     "fromNode": "c3_grid",
+     "fromSocket": "geometry",
+     "toNode": "c3_xform",
+     "toSocket": "geometry"
+    },
+    {
+     "id": "c3_sy.list->c3_xform.scaleY",
+     "fromNode": "c3_sy",
+     "fromSocket": "list",
+     "toNode": "c3_xform",
+     "toSocket": "scaleY"
+    },
+    {
+     "id": "c3_py.list->c3_xform.posY",
+     "fromNode": "c3_py",
+     "fromSocket": "list",
+     "toNode": "c3_xform",
+     "toSocket": "posY"
+    },
+    {
+     "id": "c3_fade.values->c3_xform.scaleX",
+     "fromNode": "c3_fade",
+     "fromSocket": "values",
+     "toNode": "c3_xform",
+     "toSocket": "scaleX"
+    },
+    {
+     "id": "c3_fade.values->c3_xform.scaleZ",
+     "fromNode": "c3_fade",
+     "fromSocket": "values",
+     "toNode": "c3_xform",
+     "toSocket": "scaleZ"
+    },
+    {
+     "id": "c3_height.list->c3_heat.values",
+     "fromNode": "c3_height",
+     "fromSocket": "list",
+     "toNode": "c3_heat",
+     "toSocket": "values"
+    },
+    {
+     "id": "c3_xform.geometry->c3_tint.geometry",
+     "fromNode": "c3_xform",
+     "fromSocket": "geometry",
+     "toNode": "c3_tint",
+     "toSocket": "geometry"
+    },
+    {
+     "id": "c3_heat.list->c3_tint.colors",
+     "fromNode": "c3_heat",
+     "fromSocket": "list",
+     "toNode": "c3_tint",
+     "toSocket": "colors"
+    },
+    {
+     "id": "c3_post_in.effect->c3_bloom.effect",
+     "fromNode": "c3_post_in",
+     "fromSocket": "effect",
+     "toNode": "c3_bloom",
+     "toSocket": "effect"
+    },
+    {
+     "id": "c3_bloom.effect->c3_grade.effect",
+     "fromNode": "c3_bloom",
+     "fromSocket": "effect",
+     "toNode": "c3_grade",
+     "toSocket": "effect"
+    },
+    {
+     "id": "c3_grade.effect->c3_chroma.effect",
+     "fromNode": "c3_grade",
+     "fromSocket": "effect",
+     "toNode": "c3_chroma",
+     "toSocket": "effect"
+    },
+    {
+     "id": "c3_chroma.effect->c3_grain.effect",
+     "fromNode": "c3_chroma",
+     "fromSocket": "effect",
+     "toNode": "c3_grain",
+     "toSocket": "effect"
+    },
+    {
+     "id": "c3_grain.effect->c3_vig.effect",
+     "fromNode": "c3_grain",
+     "fromSocket": "effect",
+     "toNode": "c3_vig",
+     "toSocket": "effect"
+    },
+    {
+     "id": "c3_tint.geometry->c3_scene.in0",
+     "fromNode": "c3_tint",
+     "fromSocket": "geometry",
+     "toNode": "c3_scene",
+     "toSocket": "in0"
+    },
+    {
+     "id": "c3_scene.geometry->c3_render.geometry",
+     "fromNode": "c3_scene",
+     "fromSocket": "geometry",
+     "toNode": "c3_render",
+     "toSocket": "geometry"
+    }
+   ],
+   "keyframes": {
+    "c3_chroma": {
+     "amount": [
+      {
+       "frame": 0,
+       "value": 0.014
+      },
+      {
+       "frame": 9,
+       "value": 0.0,
+       "easeIn": "expo",
+       "easeStrength": 6
+      }
+     ]
+    },
+    "c3_grade": {
+     "brightness": [
+      {
+       "frame": 0,
+       "value": 0.0
+      },
+      {
+       "frame": 235,
+       "value": 0.0
+      },
+      {
+       "frame": 239,
+       "value": 0.9,
+       "easeIn": "linear"
+      }
+     ]
+    },
+    "c3_cam": {
+     "location": [
+      {
+       "frame": 0,
+       "value": {
+        "x": 17,
+        "y": 30,
+        "z": 25
+       }
+      },
+      {
+       "frame": 120,
+       "value": {
+        "x": 27,
+        "y": 21,
+        "z": 15
+       },
+       "easeIn": "smooth"
+      },
+      {
+       "frame": 180,
+       "value": {
+        "x": 25,
+        "y": 15,
+        "z": 10
+       },
+       "easeIn": "bezier",
+       "easeBezier": [
+        0.7,
+        0.0,
+        0.2,
+        1.0
+       ]
+      },
+      {
+       "frame": 240,
+       "value": {
+        "x": 17,
+        "y": 11,
+        "z": 7
+       },
+       "easeIn": "smooth"
+      }
+     ],
+     "target": [
+      {
+       "frame": 0,
+       "value": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+       }
+      },
+      {
+       "frame": 180,
+       "value": {
+        "x": 0,
+        "y": 0.4,
+        "z": 0
+       },
+       "easeIn": "smooth"
+      },
+      {
+       "frame": 240,
+       "value": {
+        "x": -0.5,
+        "y": 0.6,
+        "z": 0
+       },
+       "easeIn": "smooth"
+      }
+     ]
+    },
+    "c3_amp": {
+     "x": [
+      {
+       "frame": 0,
+       "value": 1.0
+      },
+      {
+       "frame": 119,
+       "value": 1.0
+      },
+      {
+       "frame": 120,
+       "value": 2.1,
+       "easeIn": "hold"
+      },
+      {
+       "frame": 132,
+       "value": 1.0,
+       "easeIn": "expo",
+       "easeStrength": 5
+      },
+      {
+       "frame": 135,
+       "value": 2.1,
+       "easeIn": "hold"
+      },
+      {
+       "frame": 147,
+       "value": 1.0,
+       "easeIn": "expo",
+       "easeStrength": 5
+      },
+      {
+       "frame": 150,
+       "value": 2.1,
+       "easeIn": "hold"
+      },
+      {
+       "frame": 162,
+       "value": 1.0,
+       "easeIn": "expo",
+       "easeStrength": 5
+      },
+      {
+       "frame": 165,
+       "value": 2.1,
+       "easeIn": "hold"
+      },
+      {
+       "frame": 177,
+       "value": 1.0,
+       "easeIn": "expo",
+       "easeStrength": 5
+      },
+      {
+       "frame": 210,
+       "value": 1.0
+      },
+      {
+       "frame": 230,
+       "value": 0.0,
+       "easeIn": "smooth"
+      }
+     ]
+    },
+    "c3_mix": {
+     "x": [
+      {
+       "frame": 59,
+       "value": 0.0
+      },
+      {
+       "frame": 80,
+       "value": 1.0,
+       "easeIn": "expo",
+       "easeStrength": 4
+      }
+     ]
+    },
+    "c3_h_count": {
+     "visible": [
+      {
+       "frame": 0,
+       "value": 0
+      },
+      {
+       "frame": 60,
+       "value": 1,
+       "easeIn": "hold"
+      },
+      {
+       "frame": 220,
+       "value": 0,
+       "easeIn": "hold"
+      }
+     ]
+    }
+   },
+   "markers": [
+    {
+     "frame": 0,
+     "label": "rise"
+    },
+    {
+     "frame": 60,
+     "label": "second source"
+    },
+    {
+     "frame": 120,
+     "label": "kicks"
+    },
+    {
+     "frame": 210,
+     "label": "dissolve"
+    }
+   ],
+   "exposedParams": []
+  },
+  {
+   "nodes": [
+    {
+     "id": "c4_render",
+     "type": "render",
+     "position": {
+      "x": 1420,
+      "y": 0
+     },
+     "params": {
+      "frameCount": 240,
+      "fps": 30,
+      "resolutionPreset": "16:9 (1920x1080)",
+      "width": 1920,
+      "height": 1080,
+      "timelineEnabled": true,
+      "motionBlur": 0
+     }
+    },
+    {
+     "id": "c4_env",
+     "type": "lighting/environment",
+     "position": {
+      "x": 1080,
+      "y": 0
+     },
+     "params": {
+      "color": 15592162,
+      "intensity": 1,
+      "background": 1,
+      "ambientIntensity": 0.75,
+      "sunIntensity": 0.0
+     }
+    },
+    {
+     "id": "c4_frame",
+     "type": "time/frame",
+     "position": {
+      "x": -3000,
+      "y": 0
+     },
+     "params": {}
+    },
+    {
+     "id": "c4_t",
+     "type": "math/expression",
+     "position": {
+      "x": -2660,
+      "y": 0
+     },
+     "params": {
+      "formula": "x / 30"
+     }
+    },
+    {
+     "id": "c4_cam",
+     "type": "calibration/camera",
+     "position": {
+      "x": 1080,
+      "y": 300
+     },
+     "params": {
+      "active": true,
+      "mode": "manual",
+      "location": {
+       "x": 2,
+       "y": 5,
+       "z": 17
+      },
+      "useTarget": true,
+      "target": {
+       "x": 0,
+       "y": 2,
+       "z": 0
+      },
+      "up": {
+       "x": 0,
+       "y": 1,
+       "z": 0
+      },
+      "fov": 30,
+      "projectionType": "perspective"
+     }
+    },
+    {
+     "id": "c4_post_in",
+     "type": "postprocess/antialias",
+     "position": {
+      "x": 400,
+      "y": 0
+     },
+     "params": {
+      "enabled": 1
+     }
+    },
+    {
+     "id": "c4_bloom",
+     "type": "postprocess/bloom",
+     "position": {
+      "x": 740,
+      "y": 0
+     },
+     "params": {
+      "strength": 0.15,
+      "radius": 0.3,
+      "threshold": 0.97
+     }
+    },
+    {
+     "id": "c4_grade",
+     "type": "postprocess/color-correction",
+     "position": {
+      "x": 740,
+      "y": 300
+     },
+     "params": {
+      "brightness": 0.0,
+      "contrast": 1.0,
+      "saturation": 1.0
+     }
+    },
+    {
+     "id": "c4_chroma",
+     "type": "postprocess/rgb-shift",
+     "position": {
+      "x": 740,
+      "y": 600
+     },
+     "params": {
+      "amount": 0.0,
+      "angle": 0
+     }
+    },
+    {
+     "id": "c4_grain",
+     "type": "postprocess/film-grain",
+     "position": {
+      "x": 740,
+      "y": 900
+     },
+     "params": {
+      "noiseIntensity": 0.12,
+      "scanlinesIntensity": 0.0,
+      "scanlinesCount": 2048,
+      "grayscale": 0
+     }
+    },
+    {
+     "id": "c4_vig",
+     "type": "postprocess/vignette",
+     "position": {
+      "x": 740,
+      "y": 1200
+     },
+     "params": {
+      "offset": 0.6,
+      "darkness": 1.0
+     }
+    },
+    {
+     "id": "c4_end",
+     "type": "logic/compare",
+     "position": {
+      "x": -2660,
+      "y": 300
+     },
+     "params": {
+      "op": ">=",
+      "a": 0,
+      "b": 239
+     }
+    },
+    {
+     "id": "c4_goto",
+     "type": "canvas/goto",
+     "position": {
+      "x": -2320,
+      "y": 0
+     },
+     "params": {
+      "canvas": 5,
+      "trigger": 0
+     }
+    },
+    {
+     "id": "c4_world",
+     "type": "physics/world",
+     "position": {
+      "x": -1980,
+      "y": 0
+     },
+     "params": {
+      "gravity": {
+       "x": 0,
+       "y": -9.81,
+       "z": 0
+      },
+      "timestep": 0.016666666666666666,
+      "maxSteps": 4,
+      "paused": 0,
+      "reset": 0
+     }
+    },
+    {
+     "id": "c4_restart",
+     "type": "math/expression",
+     "position": {
+      "x": -2320,
+      "y": 300
+     },
+     "params": {
+      "formula": "x >= 0 && x < 2"
+     }
+    },
+    {
+     "id": "c4_floor",
+     "type": "object/box",
+     "position": {
+      "x": -1640,
+      "y": 0
+     },
+     "params": {
+      "location": {
+       "x": 0,
+       "y": -0.25,
+       "z": 0
+      },
+      "scale": {
+       "x": 40,
+       "y": 0.5,
+       "z": 40
+      },
+      "color": 15592162,
+      "roughness": 0.95,
+      "metalness": 0
+     }
+    },
+    {
+     "id": "c4_floor_body",
+     "type": "physics/rigid-body",
+     "position": {
+      "x": -960,
+      "y": 0
+     },
+     "params": {
+      "bodyType": "fixed",
+      "shape": "box",
+      "split": "whole",
+      "friction": 0.8,
+      "restitution": 0.2
+     }
+    },
+    {
+     "id": "c4_letters",
+     "type": "text/animator",
+     "position": {
+      "x": -1640,
+      "y": 300
+     },
+     "params": {
+      "text": "TSUJI",
+      "fontPreset": "Anton",
+      "fontSize": 130,
+      "depth": 0.7,
+      "bevelEnabled": true,
+      "tracking": 10,
+      "align": "center",
+      "anchor": "glyph_center",
+      "basedOn": "characters",
+      "selectorShape": "linear",
+      "start": 0,
+      "end": 1,
+      "offset": 0,
+      "randomize": true,
+      "randomSeed": 5,
+      "positionDelta": [
+       0,
+       3.0,
+       0
+      ],
+      "rotationDelta": [
+       0.35,
+       0.25,
+       0.5
+      ],
+      "scaleDelta": [
+       1,
+       1,
+       1
+      ],
+      "location": {
+       "x": 0,
+       "y": 3.2,
+       "z": 0
+      },
+      "color": 723726,
+      "roughness": 0.5
+     }
+    },
+    {
+     "id": "c4_letter_bodies",
+     "type": "physics/rigid-body",
+     "position": {
+      "x": -960,
+      "y": 300
+     },
+     "params": {
+      "bodyType": "dynamic",
+      "shape": "hull",
+      "split": "per-child",
+      "mass": 1,
+      "friction": 0.6,
+      "restitution": 0.25,
+      "linearDamping": 0.05,
+      "angularDamping": 0.1,
+      "gravityScale": 1,
+      "ccd": 1
+     }
+    },
+    {
+     "id": "c4_ball",
+     "type": "object/sphere",
+     "position": {
+      "x": -1640,
+      "y": 600
+     },
+     "params": {
+      "scale": {
+       "x": 0.42,
+       "y": 0.42,
+       "z": 0.42
+      },
+      "color": 16726815,
+      "roughness": 0.35,
+      "metalness": 0.0,
+      "sphereType": "uv",
+      "segments": 24
+     }
+    },
+    {
+     "id": "c4_rain",
+     "type": "structure/array",
+     "position": {
+      "x": -1300,
+      "y": 0
+     },
+     "params": {
+      "mode": "grid3d",
+      "countX": 6,
+      "countY": 5,
+      "countZ": 2,
+      "spacingX": 1.5,
+      "spacingY": 1.9,
+      "spacingZ": 1.6,
+      "spacingVariance": 60,
+      "centerGrid": true,
+      "gpuInstancing": false
+     }
+    },
+    {
+     "id": "c4_rain_up",
+     "type": "transform",
+     "position": {
+      "x": -1640,
+      "y": 900
+     },
+     "params": {
+      "location": {
+       "x": 0.2,
+       "y": 19,
+       "z": 0.3
+      },
+      "rotation": {
+       "x": 0.45,
+       "y": 0.4,
+       "z": 0.35
+      },
+      "scale": {
+       "x": 1,
+       "y": 1,
+       "z": 1
+      },
+      "useLOCATION": true,
+      "useROTATION": true,
+      "useSCALE": true
+     }
+    },
+    {
+     "id": "c4_rain_at",
+     "type": "structure/merge",
+     "position": {
+      "x": -960,
+      "y": 600
+     },
+     "params": {}
+    },
+    {
+     "id": "c4_ball_bodies",
+     "type": "physics/rigid-body",
+     "position": {
+      "x": -620,
+      "y": 0
+     },
+     "params": {
+      "bodyType": "dynamic",
+      "shape": "sphere",
+      "split": "per-child",
+      "mass": 0.6,
+      "friction": 0.4,
+      "restitution": 0.5,
+      "linearDamping": 0.02,
+      "angularDamping": 0.05,
+      "gravityScale": 1,
+      "ccd": 1
+     }
+    },
+    {
+     "id": "c4_boulder",
+     "type": "object/sphere",
+     "position": {
+      "x": -1640,
+      "y": 1200
+     },
+     "params": {
+      "location": {
+       "x": -0.6,
+       "y": 80,
+       "z": 0.4
+      },
+      "scale": {
+       "x": 1.15,
+       "y": 1.15,
+       "z": 1.15
+      },
+      "color": 723726,
+      "roughness": 0.3,
+      "metalness": 0.0,
+      "sphereType": "uv",
+      "segments": 48
+     }
+    },
+    {
+     "id": "c4_boulder_body",
+     "type": "physics/rigid-body",
+     "position": {
+      "x": -620,
+      "y": 300
+     },
+     "params": {
+      "bodyType": "dynamic",
+      "shape": "sphere",
+      "split": "whole",
+      "mass": 40,
+      "friction": 0.5,
+      "restitution": 0.15,
+      "linearDamping": 0.0,
+      "angularDamping": 0.1,
+      "gravityScale": 1,
+      "ccd": 1
+     }
+    },
+    {
+     "id": "c4_sun",
+     "type": "light/directional",
+     "position": {
+      "x": -280,
+      "y": 0
+     },
+     "params": {
+      "location": {
+       "x": 5,
+       "y": 12,
+       "z": 6
+      },
+      "target": {
+       "x": 0,
+       "y": 0,
+       "z": 0
+      },
+      "color": 16774892,
+      "intensity": 2.2,
+      "castShadow": 1,
+      "shadowSoftness": 1
+     }
+    },
+    {
+     "id": "c4_h_chap",
+     "type": "hub/text",
+     "position": {
+      "x": 60,
+      "y": 0
+     },
+     "params": {
+      "text": "04 / SIMULATION",
+      "trigger": 1,
+      "x": 186.0,
+      "y": 84,
+      "rotation": 0,
+      "scale": 1,
+      "visible": 1,
+      "fontFamily": "monospace",
+      "fontSize": 20,
+      "color": 723726,
+      "opacity": 1,
+      "enterAnimation": "none",
+      "exitAnimation": "none",
+      "durationIn": 0.05,
+      "durationOut": 0.05
+     }
+    },
+    {
+     "id": "c4_h_nodes",
+     "type": "hub/text",
+     "position": {
+      "x": 60,
+      "y": 300
+     },
+     "params": {
+      "text": "physics/world  ·  rigid-body  (Rapier)",
+      "trigger": 1,
+      "x": 1618.8,
+      "y": 1000,
+      "rotation": 0,
+      "scale": 1,
+      "visible": 1,
+      "fontFamily": "monospace",
+      "fontSize": 18,
+      "color": 8025192,
+      "opacity": 1,
+      "enterAnimation": "none",
+      "exitAnimation": "none",
+      "durationIn": 0.05,
+      "durationOut": 0.05
+     }
+    },
+    {
+     "id": "c4_h_count",
+     "type": "hub/text",
+     "position": {
+      "x": 60,
+      "y": 600
+     },
+     "params": {
+      "text": "66 RIGID BODIES   ·   ALL SIMULATED",
+      "trigger": 1,
+      "x": 960,
+      "y": 940,
+      "rotation": 0,
+      "scale": 1,
+      "visible": 1,
+      "fontFamily": "monospace",
+      "fontSize": 26,
+      "color": 723726,
+      "opacity": 1,
+      "enterAnimation": "none",
+      "exitAnimation": "none",
+      "durationIn": 0.05,
+      "durationOut": 0.05
+     }
+    },
+    {
+     "id": "c4_scene",
+     "type": "structure/merge",
+     "position": {
+      "x": 1080,
+      "y": 600
+     },
+     "params": {}
+    }
+   ],
+   "connections": [
+    {
+     "id": "c4_env.environment->c4_render.environment",
+     "fromNode": "c4_env",
+     "fromSocket": "environment",
+     "toNode": "c4_render",
+     "toSocket": "environment"
+    },
+    {
+     "id": "c4_frame.frame->c4_t.x",
+     "fromNode": "c4_frame",
+     "fromSocket": "frame",
+     "toNode": "c4_t",
+     "toSocket": "x"
+    },
+    {
+     "id": "c4_vig.effect->c4_render.postprocess",
+     "fromNode": "c4_vig",
+     "fromSocket": "effect",
+     "toNode": "c4_render",
+     "toSocket": "postprocess"
+    },
+    {
+     "id": "c4_frame.frame->c4_end.a",
+     "fromNode": "c4_frame",
+     "fromSocket": "frame",
+     "toNode": "c4_end",
+     "toSocket": "a"
+    },
+    {
+     "id": "c4_end.out->c4_goto.trigger",
+     "fromNode": "c4_end",
+     "fromSocket": "out",
+     "toNode": "c4_goto",
+     "toSocket": "trigger"
+    },
+    {
+     "id": "c4_frame.frame->c4_restart.x",
+     "fromNode": "c4_frame",
+     "fromSocket": "frame",
+     "toNode": "c4_restart",
+     "toSocket": "x"
+    },
+    {
+     "id": "c4_restart.value->c4_world.reset",
+     "fromNode": "c4_restart",
+     "fromSocket": "value",
+     "toNode": "c4_world",
+     "toSocket": "reset"
+    },
+    {
+     "id": "c4_world.world->c4_floor_body.world",
+     "fromNode": "c4_world",
+     "fromSocket": "world",
+     "toNode": "c4_floor_body",
+     "toSocket": "world"
+    },
+    {
+     "id": "c4_floor.geometry->c4_floor_body.geometry",
+     "fromNode": "c4_floor",
+     "fromSocket": "geometry",
+     "toNode": "c4_floor_body",
+     "toSocket": "geometry"
+    },
+    {
+     "id": "c4_world.world->c4_letter_bodies.world",
+     "fromNode": "c4_world",
+     "fromSocket": "world",
+     "toNode": "c4_letter_bodies",
+     "toSocket": "world"
+    },
+    {
+     "id": "c4_letters.geometry->c4_letter_bodies.geometry",
+     "fromNode": "c4_letters",
+     "fromSocket": "geometry",
+     "toNode": "c4_letter_bodies",
+     "toSocket": "geometry"
+    },
+    {
+     "id": "c4_ball.geometry->c4_rain.geometry",
+     "fromNode": "c4_ball",
+     "fromSocket": "geometry",
+     "toNode": "c4_rain",
+     "toSocket": "geometry"
+    },
+    {
+     "id": "c4_rain.geometry->c4_rain_at.in0",
+     "fromNode": "c4_rain",
+     "fromSocket": "geometry",
+     "toNode": "c4_rain_at",
+     "toSocket": "in0"
+    },
+    {
+     "id": "c4_rain_up.matrix->c4_rain_at.matrix",
+     "fromNode": "c4_rain_up",
+     "fromSocket": "matrix",
+     "toNode": "c4_rain_at",
+     "toSocket": "matrix"
+    },
+    {
+     "id": "c4_world.world->c4_ball_bodies.world",
+     "fromNode": "c4_world",
+     "fromSocket": "world",
+     "toNode": "c4_ball_bodies",
+     "toSocket": "world"
+    },
+    {
+     "id": "c4_rain_at.geometry->c4_ball_bodies.geometry",
+     "fromNode": "c4_rain_at",
+     "fromSocket": "geometry",
+     "toNode": "c4_ball_bodies",
+     "toSocket": "geometry"
+    },
+    {
+     "id": "c4_world.world->c4_boulder_body.world",
+     "fromNode": "c4_world",
+     "fromSocket": "world",
+     "toNode": "c4_boulder_body",
+     "toSocket": "world"
+    },
+    {
+     "id": "c4_boulder.geometry->c4_boulder_body.geometry",
+     "fromNode": "c4_boulder",
+     "fromSocket": "geometry",
+     "toNode": "c4_boulder_body",
+     "toSocket": "geometry"
+    },
+    {
+     "id": "c4_post_in.effect->c4_bloom.effect",
+     "fromNode": "c4_post_in",
+     "fromSocket": "effect",
+     "toNode": "c4_bloom",
+     "toSocket": "effect"
+    },
+    {
+     "id": "c4_bloom.effect->c4_grade.effect",
+     "fromNode": "c4_bloom",
+     "fromSocket": "effect",
+     "toNode": "c4_grade",
+     "toSocket": "effect"
+    },
+    {
+     "id": "c4_grade.effect->c4_chroma.effect",
+     "fromNode": "c4_grade",
+     "fromSocket": "effect",
+     "toNode": "c4_chroma",
+     "toSocket": "effect"
+    },
+    {
+     "id": "c4_chroma.effect->c4_grain.effect",
+     "fromNode": "c4_chroma",
+     "fromSocket": "effect",
+     "toNode": "c4_grain",
+     "toSocket": "effect"
+    },
+    {
+     "id": "c4_grain.effect->c4_vig.effect",
+     "fromNode": "c4_grain",
+     "fromSocket": "effect",
+     "toNode": "c4_vig",
+     "toSocket": "effect"
+    },
+    {
+     "id": "c4_floor_body.geometry->c4_scene.in0",
+     "fromNode": "c4_floor_body",
+     "fromSocket": "geometry",
+     "toNode": "c4_scene",
+     "toSocket": "in0"
+    },
+    {
+     "id": "c4_letter_bodies.geometry->c4_scene.in1",
+     "fromNode": "c4_letter_bodies",
+     "fromSocket": "geometry",
+     "toNode": "c4_scene",
+     "toSocket": "in1"
+    },
+    {
+     "id": "c4_ball_bodies.geometry->c4_scene.in2",
+     "fromNode": "c4_ball_bodies",
+     "fromSocket": "geometry",
+     "toNode": "c4_scene",
+     "toSocket": "in2"
+    },
+    {
+     "id": "c4_boulder_body.geometry->c4_scene.in3",
+     "fromNode": "c4_boulder_body",
+     "fromSocket": "geometry",
+     "toNode": "c4_scene",
+     "toSocket": "in3"
+    },
+    {
+     "id": "c4_scene.geometry->c4_render.geometry",
+     "fromNode": "c4_scene",
+     "fromSocket": "geometry",
+     "toNode": "c4_render",
+     "toSocket": "geometry"
+    }
+   ],
+   "keyframes": {
+    "c4_chroma": {
+     "amount": [
+      {
+       "frame": 0,
+       "value": 0.014
+      },
+      {
+       "frame": 9,
+       "value": 0.0,
+       "easeIn": "expo",
+       "easeStrength": 6
+      }
+     ]
+    },
+    "c4_grade": {
+     "brightness": [
+      {
+       "frame": 0,
+       "value": 0.85
+      },
+      {
+       "frame": 7,
+       "value": 0.0,
+       "easeIn": "expo",
+       "easeStrength": 6
+      }
+     ]
+    },
+    "c4_cam": {
+     "location": [
+      {
+       "frame": 0,
+       "value": {
+        "x": 1.0,
+        "y": 4.2,
+        "z": 17.5
+       }
+      },
+      {
+       "frame": 60,
+       "value": {
+        "x": 3.5,
+        "y": 3.4,
+        "z": 15.0
+       },
+       "easeIn": "smooth"
+      },
+      {
+       "frame": 120,
+       "value": {
+        "x": 6.0,
+        "y": 4.6,
+        "z": 12.5
+       },
+       "easeIn": "bezier",
+       "easeBezier": [
+        0.7,
+        0.0,
+        0.2,
+        1.0
+       ]
+      },
+      {
+       "frame": 240,
+       "value": {
+        "x": 7.5,
+        "y": 5.5,
+        "z": 9.5
+       },
+       "easeIn": "smooth"
+      }
+     ],
+     "target": [
+      {
+       "frame": 0,
+       "value": {
+        "x": 0,
+        "y": 3.0,
+        "z": 0
+       }
+      },
+      {
+       "frame": 60,
+       "value": {
+        "x": 0,
+        "y": 1.2,
+        "z": 0
+       },
+       "easeIn": "smooth"
+      },
+      {
+       "frame": 120,
+       "value": {
+        "x": 0,
+        "y": 0.8,
+        "z": 0
+       },
+       "easeIn": "smooth"
+      },
+      {
+       "frame": 240,
+       "value": {
+        "x": 0.5,
+        "y": 0.4,
+        "z": 0.5
+       },
+       "easeIn": "smooth"
+      }
+     ]
+    },
+    "c4_h_count": {
+     "visible": [
+      {
+       "frame": 0,
+       "value": 0
+      },
+      {
+       "frame": 60,
+       "value": 1,
+       "easeIn": "hold"
+      }
+     ]
+    }
+   },
+   "markers": [
+    {
+     "frame": 0,
+     "label": "drop"
+    },
+    {
+     "frame": 54,
+     "label": "rain"
+    },
+    {
+     "frame": 120,
+     "label": "boulder"
+    }
+   ],
+   "exposedParams": []
+  },
+  {
+   "nodes": [
+    {
+     "id": "c5_render",
+     "type": "render",
+     "position": {
+      "x": 1420,
+      "y": 0
+     },
+     "params": {
+      "frameCount": 240,
+      "fps": 30,
+      "resolutionPreset": "16:9 (1920x1080)",
+      "width": 1920,
+      "height": 1080,
+      "timelineEnabled": true,
+      "motionBlur": 0
+     }
+    },
+    {
+     "id": "c5_env",
+     "type": "lighting/environment",
+     "position": {
+      "x": 1080,
+      "y": 0
+     },
+     "params": {
+      "color": 723726,
+      "intensity": 1,
+      "background": 1,
+      "ambientIntensity": 0.0,
+      "sunIntensity": 0.0
+     }
+    },
+    {
+     "id": "c5_frame",
+     "type": "time/frame",
+     "position": {
+      "x": -3000,
+      "y": 0
+     },
+     "params": {}
+    },
+    {
+     "id": "c5_t",
+     "type": "math/expression",
+     "position": {
+      "x": -2660,
+      "y": 0
+     },
+     "params": {
+      "formula": "x / 30"
+     }
+    },
+    {
+     "id": "c5_cam",
+     "type": "calibration/camera",
+     "position": {
+      "x": 1080,
+      "y": 300
+     },
+     "params": {
+      "active": true,
+      "mode": "manual",
+      "location": {
+       "x": 0,
+       "y": 0.6,
+       "z": 9.5
+      },
+      "useTarget": true,
+      "target": {
+       "x": 0,
+       "y": 0.25,
+       "z": 0
+      },
+      "up": {
+       "x": 0,
+       "y": 1,
+       "z": 0
+      },
+      "fov": 34,
+      "projectionType": "perspective"
+     }
+    },
+    {
+     "id": "c5_post_in",
+     "type": "postprocess/antialias",
+     "position": {
+      "x": 400,
+      "y": 0
+     },
+     "params": {
+      "enabled": 1
+     }
+    },
+    {
+     "id": "c5_bloom",
+     "type": "postprocess/bloom",
+     "position": {
+      "x": 740,
+      "y": 0
+     },
+     "params": {
+      "strength": 0.5,
+      "radius": 0.5,
+      "threshold": 0.85
+     }
+    },
+    {
+     "id": "c5_grade",
+     "type": "postprocess/color-correction",
+     "position": {
+      "x": 740,
+      "y": 300
+     },
+     "params": {
+      "brightness": 0.0,
+      "contrast": 1.0,
+      "saturation": 1.0
+     }
+    },
+    {
+     "id": "c5_chroma",
+     "type": "postprocess/rgb-shift",
+     "position": {
+      "x": 740,
+      "y": 600
+     },
+     "params": {
+      "amount": 0.0,
+      "angle": 0
+     }
+    },
+    {
+     "id": "c5_grain",
+     "type": "postprocess/film-grain",
+     "position": {
+      "x": 740,
+      "y": 900
+     },
+     "params": {
+      "noiseIntensity": 0.16,
+      "scanlinesIntensity": 0.0,
+      "scanlinesCount": 2048,
+      "grayscale": 0
+     }
+    },
+    {
+     "id": "c5_vig",
+     "type": "postprocess/vignette",
+     "position": {
+      "x": 740,
+      "y": 1200
+     },
+     "params": {
+      "offset": 1.0,
+      "darkness": 1.1
+     }
+    },
+    {
+     "id": "c5_end",
+     "type": "logic/compare",
+     "position": {
+      "x": -2660,
+      "y": 300
+     },
+     "params": {
+      "op": ">=",
+      "a": 0,
+      "b": 239
+     }
+    },
+    {
+     "id": "c5_goto",
+     "type": "canvas/goto",
+     "position": {
+      "x": -2320,
+      "y": 0
+     },
+     "params": {
+      "canvas": 6,
+      "trigger": 0
+     }
+    },
+    {
+     "id": "c5_irid",
+     "type": "material/iridescent",
+     "position": {
+      "x": -1980,
+      "y": 0
+     },
+     "params": {
+      "baseColor": 1052692,
+      "specularColor": 16777215,
+      "filmThickness": 420,
+      "refractiveIndex": 1.42,
+      "boost": 1.25,
+      "roughness": 0.18,
+      "rippleSpeed": 0.6,
+      "rippleFrequency": 5.0,
+      "rainbowMix": 0.7
+     }
+    },
+    {
+     "id": "c5_core",
+     "type": "object/box",
+     "position": {
+      "x": -1640,
+      "y": 0
+     },
+     "params": {
+      "scale": {
+       "x": 1.1,
+       "y": 2.9,
+       "z": 1.1
+      },
+      "color": 16777215
+     }
+    },
+    {
+     "id": "c5_round",
+     "type": "modifier/subdivide",
+     "position": {
+      "x": -1300,
+      "y": 0
+     },
+     "params": {
+      "mode": "simple",
+      "levels": 4
+     }
+    },
+    {
+     "id": "c5_twist_amt",
+     "type": "math/expression",
+     "position": {
+      "x": -1640,
+      "y": 300
+     },
+     "params": {
+      "formula": "150*sin(0.75*t + 0.5)",
+      "x": 0
+     }
+    },
+    {
+     "id": "c5_twist",
+     "type": "geometry/twist-bend-taper",
+     "position": {
+      "x": -960,
+      "y": 0
+     },
+     "params": {
+      "twist": 1.0,
+      "bend": 0,
+      "taper": 0,
+      "axis": "y"
+     }
+    },
+    {
+     "id": "c5_spin",
+     "type": "transform",
+     "position": {
+      "x": -1300,
+      "y": 300
+     },
+     "params": {
+      "location": {
+       "x": 0,
+       "y": 0,
+       "z": 0
+      },
+      "rotation": {
+       "x": 0.12,
+       "y": 0,
+       "z": 0.08
+      },
+      "scale": {
+       "x": 1,
+       "y": 1,
+       "z": 1
+      },
+      "useLOCATION": true,
+      "useROTATION": true,
+      "useSCALE": true
+     }
+    },
+    {
+     "id": "c5_smooth",
+     "type": "modifier/shade",
+     "position": {
+      "x": -960,
+      "y": 300
+     },
+     "params": {
+      "mode": "auto",
+      "autoAngle": 40
+     }
+    },
+    {
+     "id": "c5_hero",
+     "type": "structure/merge",
+     "position": {
+      "x": -620,
+      "y": 0
+     },
+     "params": {}
+    },
+    {
+     "id": "c5_moon0_at",
+     "type": "math/expression",
+     "position": {
+      "x": -1640,
+      "y": 600
+     },
+     "params": {
+      "formula": "(2.7*cos(1.4*t + 0.0000), 0.5*sin(1.4*t + 0.0000), 2.7*sin(1.4*t + 0.0000))"
+     }
+    },
+    {
+     "id": "c5_moon0_m",
+     "type": "transform",
+     "position": {
+      "x": -1300,
+      "y": 600
+     },
+     "params": {
+      "location": {
+       "x": 0.0,
+       "y": 0.0,
+       "z": 0.0
+      },
+      "rotation": {
+       "x": 0.0,
+       "y": 0.0,
+       "z": 0.0
+      },
+      "scale": {
+       "x": 0.55,
+       "y": 0.55,
+       "z": 0.55
+      },
+      "useLOCATION": true,
+      "useROTATION": true,
+      "useSCALE": true
+     }
+    },
+    {
+     "id": "c5_moon0",
+     "type": "object/sphere",
+     "position": {
+      "x": -960,
+      "y": 600
+     },
+     "params": {
+      "color": 16726815,
+      "roughness": 0.35,
+      "metalness": 0.0,
+      "sphereType": "uv",
+      "segments": 48
+     }
+    },
+    {
+     "id": "c5_moon1_at",
+     "type": "math/expression",
+     "position": {
+      "x": -1640,
+      "y": 900
+     },
+     "params": {
+      "formula": "(3.2*cos(1.4*t + 3.1416), -0.4*sin(1.4*t + 3.1416), 3.2*sin(1.4*t + 3.1416))"
+     }
+    },
+    {
+     "id": "c5_moon1_m",
+     "type": "transform",
+     "position": {
+      "x": -1300,
+      "y": 900
+     },
+     "params": {
+      "location": {
+       "x": 0.0,
+       "y": 0.0,
+       "z": 0.0
+      },
+      "rotation": {
+       "x": 0.0,
+       "y": 0.0,
+       "z": 0.0
+      },
+      "scale": {
+       "x": 0.4,
+       "y": 0.4,
+       "z": 0.4
+      },
+      "useLOCATION": true,
+      "useROTATION": true,
+      "useSCALE": true
+     }
+    },
+    {
+     "id": "c5_moon1",
+     "type": "object/sphere",
+     "position": {
+      "x": -960,
+      "y": 900
+     },
+     "params": {
+      "color": 15592162,
+      "roughness": 0.35,
+      "metalness": 0.0,
+      "sphereType": "uv",
+      "segments": 48
+     }
+    },
+    {
+     "id": "c5_halo",
+     "type": "object/disc",
+     "position": {
+      "x": -960,
+      "y": 1200
+     },
+     "params": {
+      "radius": 3.3,
+      "innerRadius": 3.26,
+      "depth": 0,
+      "location": {
+       "x": 0,
+       "y": 0,
+       "z": -2.5
+      },
+      "rotation": {
+       "x": 0,
+       "y": 0,
+       "z": 0
+      },
+      "color": 16726815,
+      "emissive": 16726815,
+      "emissiveIntensity": 0.6,
+      "shadeless": 1
+     }
+    },
+    {
+     "id": "c5_key",
+     "type": "light/directional",
+     "position": {
+      "x": -620,
+      "y": 300
+     },
+     "params": {
+      "location": {
+       "x": -4,
+       "y": 6,
+       "z": 6
+      },
+      "target": {
+       "x": 0,
+       "y": 0,
+       "z": 0
+      },
+      "color": 16777215,
+      "intensity": 2.0,
+      "castShadow": 0
+     }
+    },
+    {
+     "id": "c5_halftone",
+     "type": "postprocess/halftone",
+     "position": {
+      "x": 400,
+      "y": 300
+     },
+     "params": {
+      "radius": 7,
+      "screenAngle": 15,
+      "scatter": 0,
+      "amount": 0,
+      "shape": "dot",
+      "greyscale": 0
+     }
+    },
+    {
+     "id": "c5_duotone",
+     "type": "postprocess/duotone",
+     "position": {
+      "x": 400,
+      "y": 600
+     },
+     "params": {
+      "shadowColor": 723726,
+      "highlightColor": 15592162,
+      "balance": 0.5,
+      "softness": 0.45,
+      "amount": 0
+     }
+    },
+    {
+     "id": "c5_pixel",
+     "type": "postprocess/pixelate",
+     "position": {
+      "x": 400,
+      "y": 900
+     },
+     "params": {
+      "pixelSize": 1
+     }
+    },
+    {
+     "id": "c5_film",
+     "type": "postprocess/film-texture",
+     "position": {
+      "x": 400,
+      "y": 1200
+     },
+     "params": {
+      "grain": 0,
+      "dust": 0,
+      "scratches": 0,
+      "blotches": 0,
+      "rate": 12,
+      "seed": 3
+     }
+    },
+    {
+     "id": "c5_glitch",
+     "type": "postprocess/glitch",
+     "position": {
+      "x": 400,
+      "y": 1500
+     },
+     "params": {
+      "active": 0,
+      "wild": 1
+     }
+    },
+    {
+     "id": "c5_kaleido",
+     "type": "postprocess/kaleidoscope",
+     "position": {
+      "x": 400,
+      "y": 1800
+     },
+     "params": {
+      "sides": 6,
+      "angle": 0
+     }
+    },
+    {
+     "id": "c5_kaleido_on",
+     "type": "logic/bridge",
+     "position": {
+      "x": 400,
+      "y": 2100
+     },
+     "params": {
+      "condition": 0
+     }
+    },
+    {
+     "id": "c5_h_chap",
+     "type": "hub/text",
+     "position": {
+      "x": 60,
+      "y": 0
+     },
+     "params": {
+      "text": "05 / LOOK DEV",
+      "trigger": 1,
+      "x": 174.0,
+      "y": 84,
+      "rotation": 0,
+      "scale": 1,
+      "visible": 1,
+      "fontFamily": "monospace",
+      "fontSize": 20,
+      "color": 15592162,
+      "opacity": 1,
+      "enterAnimation": "none",
+      "exitAnimation": "none",
+      "durationIn": 0.05,
+      "durationOut": 0.05
+     }
+    },
+    {
+     "id": "c5_h_nodes",
+     "type": "hub/text",
+     "position": {
+      "x": 60,
+      "y": 300
+     },
+     "params": {
+      "text": "one scene  ·  eight looks  ·  every one real-time",
+      "trigger": 1,
+      "x": 1559.4,
+      "y": 1000,
+      "rotation": 0,
+      "scale": 1,
+      "visible": 1,
+      "fontFamily": "monospace",
+      "fontSize": 18,
+      "color": 9081766,
+      "opacity": 1,
+      "enterAnimation": "none",
+      "exitAnimation": "none",
+      "durationIn": 0.05,
+      "durationOut": 0.05
+     }
+    },
+    {
+     "id": "c5_h_look",
+     "type": "hub/text",
+     "position": {
+      "x": 60,
+      "y": 600
+     },
+     "params": {
+      "text": "material/iridescent",
+      "trigger": 1,
+      "x": 960,
+      "y": 948,
+      "rotation": 0,
+      "scale": 1,
+      "visible": 1,
+      "fontFamily": "monospace",
+      "fontSize": 30,
+      "color": 15592162,
+      "opacity": 1,
+      "enterAnimation": "none",
+      "exitAnimation": "none",
+      "durationIn": 0.05,
+      "durationOut": 0.05
+     }
+    },
+    {
+     "id": "c5_h_idx",
+     "type": "hub/text",
+     "position": {
+      "x": 60,
+      "y": 900
+     },
+     "params": {
+      "text": "LOOK 01 / 08",
+      "trigger": 1,
+      "x": 960,
+      "y": 905,
+      "rotation": 0,
+      "scale": 1,
+      "visible": 1,
+      "fontFamily": "monospace",
+      "fontSize": 18,
+      "color": 9081766,
+      "opacity": 1,
+      "enterAnimation": "none",
+      "exitAnimation": "none",
+      "durationIn": 0.05,
+      "durationOut": 0.05
+     }
+    },
+    {
+     "id": "c5_scene",
+     "type": "structure/merge",
+     "position": {
+      "x": 1080,
+      "y": 600
+     },
+     "params": {}
+    }
+   ],
+   "connections": [
+    {
+     "id": "c5_env.environment->c5_render.environment",
+     "fromNode": "c5_env",
+     "fromSocket": "environment",
+     "toNode": "c5_render",
+     "toSocket": "environment"
+    },
+    {
+     "id": "c5_frame.frame->c5_t.x",
+     "fromNode": "c5_frame",
+     "fromSocket": "frame",
+     "toNode": "c5_t",
+     "toSocket": "x"
+    },
+    {
+     "id": "c5_vig.effect->c5_render.postprocess",
+     "fromNode": "c5_vig",
+     "fromSocket": "effect",
+     "toNode": "c5_render",
+     "toSocket": "postprocess"
+    },
+    {
+     "id": "c5_frame.frame->c5_end.a",
+     "fromNode": "c5_frame",
+     "fromSocket": "frame",
+     "toNode": "c5_end",
+     "toSocket": "a"
+    },
+    {
+     "id": "c5_end.out->c5_goto.trigger",
+     "fromNode": "c5_end",
+     "fromSocket": "out",
+     "toNode": "c5_goto",
+     "toSocket": "trigger"
+    },
+    {
+     "id": "c5_irid.material->c5_core.material",
+     "fromNode": "c5_irid",
+     "fromSocket": "material",
+     "toNode": "c5_core",
+     "toSocket": "material"
+    },
+    {
+     "id": "c5_core.geometry->c5_round.geometry",
+     "fromNode": "c5_core",
+     "fromSocket": "geometry",
+     "toNode": "c5_round",
+     "toSocket": "geometry"
+    },
+    {
+     "id": "c5_t.value->c5_twist_amt.t",
+     "fromNode": "c5_t",
+     "fromSocket": "value",
+     "toNode": "c5_twist_amt",
+     "toSocket": "t"
+    },
+    {
+     "id": "c5_round.geometry->c5_twist.geometry",
+     "fromNode": "c5_round",
+     "fromSocket": "geometry",
+     "toNode": "c5_twist",
+     "toSocket": "geometry"
+    },
+    {
+     "id": "c5_twist_amt.value->c5_twist.twist",
+     "fromNode": "c5_twist_amt",
+     "fromSocket": "value",
+     "toNode": "c5_twist",
+     "toSocket": "twist"
+    },
+    {
+     "id": "c5_twist.geometry->c5_smooth.geometry",
+     "fromNode": "c5_twist",
+     "fromSocket": "geometry",
+     "toNode": "c5_smooth",
+     "toSocket": "geometry"
+    },
+    {
+     "id": "c5_smooth.geometry->c5_hero.in0",
+     "fromNode": "c5_smooth",
+     "fromSocket": "geometry",
+     "toNode": "c5_hero",
+     "toSocket": "in0"
+    },
+    {
+     "id": "c5_spin.matrix->c5_hero.matrix",
+     "fromNode": "c5_spin",
+     "fromSocket": "matrix",
+     "toNode": "c5_hero",
+     "toSocket": "matrix"
+    },
+    {
+     "id": "c5_t.value->c5_moon0_at.t",
+     "fromNode": "c5_t",
+     "fromSocket": "value",
+     "toNode": "c5_moon0_at",
+     "toSocket": "t"
+    },
+    {
+     "id": "c5_moon0_at.vector->c5_moon0_m.location",
+     "fromNode": "c5_moon0_at",
+     "fromSocket": "vector",
+     "toNode": "c5_moon0_m",
+     "toSocket": "location"
+    },
+    {
+     "id": "c5_moon0_m.matrix->c5_moon0.matrix",
+     "fromNode": "c5_moon0_m",
+     "fromSocket": "matrix",
+     "toNode": "c5_moon0",
+     "toSocket": "matrix"
+    },
+    {
+     "id": "c5_t.value->c5_moon1_at.t",
+     "fromNode": "c5_t",
+     "fromSocket": "value",
+     "toNode": "c5_moon1_at",
+     "toSocket": "t"
+    },
+    {
+     "id": "c5_moon1_at.vector->c5_moon1_m.location",
+     "fromNode": "c5_moon1_at",
+     "fromSocket": "vector",
+     "toNode": "c5_moon1_m",
+     "toSocket": "location"
+    },
+    {
+     "id": "c5_moon1_m.matrix->c5_moon1.matrix",
+     "fromNode": "c5_moon1_m",
+     "fromSocket": "matrix",
+     "toNode": "c5_moon1",
+     "toSocket": "matrix"
+    },
+    {
+     "id": "c5_post_in.effect->c5_halftone.effect",
+     "fromNode": "c5_post_in",
+     "fromSocket": "effect",
+     "toNode": "c5_halftone",
+     "toSocket": "effect"
+    },
+    {
+     "id": "c5_halftone.effect->c5_duotone.effect",
+     "fromNode": "c5_halftone",
+     "fromSocket": "effect",
+     "toNode": "c5_duotone",
+     "toSocket": "effect"
+    },
+    {
+     "id": "c5_duotone.effect->c5_pixel.effect",
+     "fromNode": "c5_duotone",
+     "fromSocket": "effect",
+     "toNode": "c5_pixel",
+     "toSocket": "effect"
+    },
+    {
+     "id": "c5_pixel.effect->c5_film.effect",
+     "fromNode": "c5_pixel",
+     "fromSocket": "effect",
+     "toNode": "c5_film",
+     "toSocket": "effect"
+    },
+    {
+     "id": "c5_film.effect->c5_glitch.effect",
+     "fromNode": "c5_film",
+     "fromSocket": "effect",
+     "toNode": "c5_glitch",
+     "toSocket": "effect"
+    },
+    {
+     "id": "c5_glitch.effect->c5_kaleido.effect",
+     "fromNode": "c5_glitch",
+     "fromSocket": "effect",
+     "toNode": "c5_kaleido",
+     "toSocket": "effect"
+    },
+    {
+     "id": "c5_kaleido.effect->c5_kaleido_on.ifTrue",
+     "fromNode": "c5_kaleido",
+     "fromSocket": "effect",
+     "toNode": "c5_kaleido_on",
+     "toSocket": "ifTrue"
+    },
+    {
+     "id": "c5_glitch.effect->c5_kaleido_on.ifFalse",
+     "fromNode": "c5_glitch",
+     "fromSocket": "effect",
+     "toNode": "c5_kaleido_on",
+     "toSocket": "ifFalse"
+    },
+    {
+     "id": "c5_kaleido_on.out->c5_bloom.effect",
+     "fromNode": "c5_kaleido_on",
+     "fromSocket": "out",
+     "toNode": "c5_bloom",
+     "toSocket": "effect"
+    },
+    {
+     "id": "c5_bloom.effect->c5_grade.effect",
+     "fromNode": "c5_bloom",
+     "fromSocket": "effect",
+     "toNode": "c5_grade",
+     "toSocket": "effect"
+    },
+    {
+     "id": "c5_grade.effect->c5_chroma.effect",
+     "fromNode": "c5_grade",
+     "fromSocket": "effect",
+     "toNode": "c5_chroma",
+     "toSocket": "effect"
+    },
+    {
+     "id": "c5_chroma.effect->c5_grain.effect",
+     "fromNode": "c5_chroma",
+     "fromSocket": "effect",
+     "toNode": "c5_grain",
+     "toSocket": "effect"
+    },
+    {
+     "id": "c5_grain.effect->c5_vig.effect",
+     "fromNode": "c5_grain",
+     "fromSocket": "effect",
+     "toNode": "c5_vig",
+     "toSocket": "effect"
+    },
+    {
+     "id": "c5_hero.geometry->c5_scene.in0",
+     "fromNode": "c5_hero",
+     "fromSocket": "geometry",
+     "toNode": "c5_scene",
+     "toSocket": "in0"
+    },
+    {
+     "id": "c5_moon0.geometry->c5_scene.in1",
+     "fromNode": "c5_moon0",
+     "fromSocket": "geometry",
+     "toNode": "c5_scene",
+     "toSocket": "in1"
+    },
+    {
+     "id": "c5_moon1.geometry->c5_scene.in2",
+     "fromNode": "c5_moon1",
+     "fromSocket": "geometry",
+     "toNode": "c5_scene",
+     "toSocket": "in2"
+    },
+    {
+     "id": "c5_halo.geometry->c5_scene.in3",
+     "fromNode": "c5_halo",
+     "fromSocket": "geometry",
+     "toNode": "c5_scene",
+     "toSocket": "in3"
+    },
+    {
+     "id": "c5_scene.geometry->c5_render.geometry",
+     "fromNode": "c5_scene",
+     "fromSocket": "geometry",
+     "toNode": "c5_render",
+     "toSocket": "geometry"
+    }
+   ],
+   "keyframes": {
+    "c5_chroma": {
+     "amount": [
+      {
+       "frame": 0,
+       "value": 0.014
+      },
+      {
+       "frame": 9,
+       "value": 0.0,
+       "easeIn": "expo",
+       "easeStrength": 6
+      },
+      {
+       "frame": 149,
+       "value": 0.0
+      },
+      {
+       "frame": 150,
+       "value": 0.012,
+       "easeIn": "hold"
+      },
+      {
+       "frame": 179,
+       "value": 0.012
+      },
+      {
+       "frame": 180,
+       "value": 0.0,
+       "easeIn": "hold"
+      }
+     ]
+    },
+    "c5_grade": {
+     "brightness": [
+      {
+       "frame": 0,
+       "value": 0.0
+      },
+      {
+       "frame": 235,
+       "value": 0.0
+      },
+      {
+       "frame": 239,
+       "value": 0.9,
+       "easeIn": "linear"
+      }
+     ]
+    },
+    "c5_cam": {
+     "location": [
+      {
+       "frame": 0,
+       "value": {
+        "x": -1.0,
+        "y": 0.4,
+        "z": 10.5
+       }
+      },
+      {
+       "frame": 120,
+       "value": {
+        "x": 1.2,
+        "y": 1.4,
+        "z": 9.0
+       },
+       "easeIn": "smooth"
+      },
+      {
+       "frame": 240,
+       "value": {
+        "x": 0.0,
+        "y": 0.2,
+        "z": 7.4
+       },
+       "easeIn": "smooth"
+      }
+     ]
+    },
+    "c5_spin": {
+     "rotation": [
+      {
+       "frame": 0,
+       "value": {
+        "x": 0.12,
+        "y": 0,
+        "z": 0.08
+       }
+      },
+      {
+       "frame": 240,
+       "value": {
+        "x": 0.12,
+        "y": 6.283185307179586,
+        "z": 0.08
+       },
+       "easeIn": "linear"
+      }
+     ]
+    },
+    "c5_halo": {
+     "scale": [
+      {
+       "frame": 0,
+       "value": {
+        "x": 0.6,
+        "y": 0.6,
+        "z": 0.6
+       }
+      },
+      {
+       "frame": 15,
+       "value": {
+        "x": 1,
+        "y": 1,
+        "z": 1
+       },
+       "easeIn": "back",
+       "easeStrength": 1.4
+      }
+     ]
+    },
+    "c5_kaleido": {
+     "angle": [
+      {
+       "frame": 120,
+       "value": 0.0
+      },
+      {
+       "frame": 150,
+       "value": 60.0,
+       "easeIn": "linear"
+      }
+     ]
+    },
+    "c5_halftone": {
+     "amount": [
+      {
+       "frame": 0,
+       "value": 0
+      },
+      {
+       "frame": 30,
+       "value": 1,
+       "easeIn": "hold"
+      },
+      {
+       "frame": 60,
+       "value": 0,
+       "easeIn": "hold"
+      },
+      {
+       "frame": 90,
+       "value": 0,
+       "easeIn": "hold"
+      },
+      {
+       "frame": 120,
+       "value": 0,
+       "easeIn": "hold"
+      },
+      {
+       "frame": 150,
+       "value": 0,
+       "easeIn": "hold"
+      },
+      {
+       "frame": 180,
+       "value": 0,
+       "easeIn": "hold"
+      },
+      {
+       "frame": 210,
+       "value": 1,
+       "easeIn": "hold"
+      }
+     ]
+    },
+    "c5_duotone": {
+     "amount": [
+      {
+       "frame": 0,
+       "value": 0
+      },
+      {
+       "frame": 30,
+       "value": 0,
+       "easeIn": "hold"
+      },
+      {
+       "frame": 60,
+       "value": 1,
+       "easeIn": "hold"
+      },
+      {
+       "frame": 90,
+       "value": 0,
+       "easeIn": "hold"
+      },
+      {
+       "frame": 120,
+       "value": 0,
+       "easeIn": "hold"
+      },
+      {
+       "frame": 150,
+       "value": 0,
+       "easeIn": "hold"
+      },
+      {
+       "frame": 180,
+       "value": 1,
+       "easeIn": "hold"
+      },
+      {
+       "frame": 210,
+       "value": 1,
+       "easeIn": "hold"
+      }
+     ],
+     "shadowColor": [
+      {
+       "frame": 0,
+       "value": 723726
+      },
+      {
+       "frame": 30,
+       "value": 723726,
+       "easeIn": "hold"
+      },
+      {
+       "frame": 60,
+       "value": 1312522,
+       "easeIn": "hold"
+      },
+      {
+       "frame": 90,
+       "value": 723726,
+       "easeIn": "hold"
+      },
+      {
+       "frame": 120,
+       "value": 723726,
+       "easeIn": "hold"
+      },
+      {
+       "frame": 150,
+       "value": 723726,
+       "easeIn": "hold"
+      },
+      {
+       "frame": 180,
+       "value": 1708556,
+       "easeIn": "hold"
+      },
+      {
+       "frame": 210,
+       "value": 723726,
+       "easeIn": "hold"
+      }
+     ],
+     "highlightColor": [
+      {
+       "frame": 0,
+       "value": 15592162
+      },
+      {
+       "frame": 30,
+       "value": 15592162,
+       "easeIn": "hold"
+      },
+      {
+       "frame": 60,
+       "value": 16726815,
+       "easeIn": "hold"
+      },
+      {
+       "frame": 90,
+       "value": 15592162,
+       "easeIn": "hold"
+      },
+      {
+       "frame": 120,
+       "value": 15592162,
+       "easeIn": "hold"
+      },
+      {
+       "frame": 150,
+       "value": 15592162,
+       "easeIn": "hold"
+      },
+      {
+       "frame": 180,
+       "value": 15915440,
+       "easeIn": "hold"
+      },
+      {
+       "frame": 210,
+       "value": 15592162,
+       "easeIn": "hold"
+      }
+     ]
+    },
+    "c5_pixel": {
+     "pixelSize": [
+      {
+       "frame": 0,
+       "value": 1
+      },
+      {
+       "frame": 30,
+       "value": 1,
+       "easeIn": "hold"
+      },
+      {
+       "frame": 60,
+       "value": 1,
+       "easeIn": "hold"
+      },
+      {
+       "frame": 90,
+       "value": 14,
+       "easeIn": "hold"
+      },
+      {
+       "frame": 120,
+       "value": 1,
+       "easeIn": "hold"
+      },
+      {
+       "frame": 150,
+       "value": 1,
+       "easeIn": "hold"
+      },
+      {
+       "frame": 180,
+       "value": 1,
+       "easeIn": "hold"
+      },
+      {
+       "frame": 210,
+       "value": 1,
+       "easeIn": "hold"
+      }
+     ]
+    },
+    "c5_film": {
+     "grain": [
+      {
+       "frame": 0,
+       "value": 0.0
+      },
+      {
+       "frame": 30,
+       "value": 0.0,
+       "easeIn": "hold"
+      },
+      {
+       "frame": 60,
+       "value": 0.0,
+       "easeIn": "hold"
+      },
+      {
+       "frame": 90,
+       "value": 0.0,
+       "easeIn": "hold"
+      },
+      {
+       "frame": 120,
+       "value": 0.0,
+       "easeIn": "hold"
+      },
+      {
+       "frame": 150,
+       "value": 0.0,
+       "easeIn": "hold"
+      },
+      {
+       "frame": 180,
+       "value": 0.35,
+       "easeIn": "hold"
+      },
+      {
+       "frame": 210,
+       "value": 0.0,
+       "easeIn": "hold"
+      }
+     ],
+     "dust": [
+      {
+       "frame": 0,
+       "value": 0.0
+      },
+      {
+       "frame": 30,
+       "value": 0.0,
+       "easeIn": "hold"
+      },
+      {
+       "frame": 60,
+       "value": 0.0,
+       "easeIn": "hold"
+      },
+      {
+       "frame": 90,
+       "value": 0.0,
+       "easeIn": "hold"
+      },
+      {
+       "frame": 120,
+       "value": 0.0,
+       "easeIn": "hold"
+      },
+      {
+       "frame": 150,
+       "value": 0.0,
+       "easeIn": "hold"
+      },
+      {
+       "frame": 180,
+       "value": 0.5,
+       "easeIn": "hold"
+      },
+      {
+       "frame": 210,
+       "value": 0.0,
+       "easeIn": "hold"
+      }
+     ],
+     "scratches": [
+      {
+       "frame": 0,
+       "value": 0.0
+      },
+      {
+       "frame": 30,
+       "value": 0.0,
+       "easeIn": "hold"
+      },
+      {
+       "frame": 60,
+       "value": 0.0,
+       "easeIn": "hold"
+      },
+      {
+       "frame": 90,
+       "value": 0.0,
+       "easeIn": "hold"
+      },
+      {
+       "frame": 120,
+       "value": 0.0,
+       "easeIn": "hold"
+      },
+      {
+       "frame": 150,
+       "value": 0.0,
+       "easeIn": "hold"
+      },
+      {
+       "frame": 180,
+       "value": 0.4,
+       "easeIn": "hold"
+      },
+      {
+       "frame": 210,
+       "value": 0.0,
+       "easeIn": "hold"
+      }
+     ],
+     "blotches": [
+      {
+       "frame": 0,
+       "value": 0.0
+      },
+      {
+       "frame": 30,
+       "value": 0.0,
+       "easeIn": "hold"
+      },
+      {
+       "frame": 60,
+       "value": 0.0,
+       "easeIn": "hold"
+      },
+      {
+       "frame": 90,
+       "value": 0.0,
+       "easeIn": "hold"
+      },
+      {
+       "frame": 120,
+       "value": 0.0,
+       "easeIn": "hold"
+      },
+      {
+       "frame": 150,
+       "value": 0.0,
+       "easeIn": "hold"
+      },
+      {
+       "frame": 180,
+       "value": 0.3,
+       "easeIn": "hold"
+      },
+      {
+       "frame": 210,
+       "value": 0.0,
+       "easeIn": "hold"
+      }
+     ]
+    },
+    "c5_glitch": {
+     "active": [
+      {
+       "frame": 0,
+       "value": 0
+      },
+      {
+       "frame": 30,
+       "value": 0,
+       "easeIn": "hold"
+      },
+      {
+       "frame": 60,
+       "value": 0,
+       "easeIn": "hold"
+      },
+      {
+       "frame": 90,
+       "value": 0,
+       "easeIn": "hold"
+      },
+      {
+       "frame": 120,
+       "value": 0,
+       "easeIn": "hold"
+      },
+      {
+       "frame": 150,
+       "value": 1,
+       "easeIn": "hold"
+      },
+      {
+       "frame": 158,
+       "value": 0,
+       "easeIn": "hold"
+      },
+      {
+       "frame": 180,
+       "value": 0,
+       "easeIn": "hold"
+      },
+      {
+       "frame": 210,
+       "value": 0,
+       "easeIn": "hold"
+      }
+     ]
+    },
+    "c5_kaleido_on": {
+     "condition": [
+      {
+       "frame": 0,
+       "value": 0
+      },
+      {
+       "frame": 30,
+       "value": 0,
+       "easeIn": "hold"
+      },
+      {
+       "frame": 60,
+       "value": 0,
+       "easeIn": "hold"
+      },
+      {
+       "frame": 90,
+       "value": 0,
+       "easeIn": "hold"
+      },
+      {
+       "frame": 120,
+       "value": 1,
+       "easeIn": "hold"
+      },
+      {
+       "frame": 150,
+       "value": 0,
+       "easeIn": "hold"
+      },
+      {
+       "frame": 180,
+       "value": 0,
+       "easeIn": "hold"
+      },
+      {
+       "frame": 210,
+       "value": 0,
+       "easeIn": "hold"
+      }
+     ]
+    },
+    "c5_h_look": {
+     "text": [
+      {
+       "frame": 0,
+       "value": "material/iridescent"
+      },
+      {
+       "frame": 30,
+       "value": "postprocess/halftone",
+       "easeIn": "hold"
+      },
+      {
+       "frame": 60,
+       "value": "postprocess/duotone",
+       "easeIn": "hold"
+      },
+      {
+       "frame": 90,
+       "value": "postprocess/pixelate",
+       "easeIn": "hold"
+      },
+      {
+       "frame": 120,
+       "value": "postprocess/kaleidoscope",
+       "easeIn": "hold"
+      },
+      {
+       "frame": 150,
+       "value": "postprocess/glitch",
+       "easeIn": "hold"
+      },
+      {
+       "frame": 180,
+       "value": "postprocess/film-texture",
+       "easeIn": "hold"
+      },
+      {
+       "frame": 210,
+       "value": "postprocess/duotone + halftone",
+       "easeIn": "hold"
+      }
+     ]
+    },
+    "c5_h_idx": {
+     "text": [
+      {
+       "frame": 0,
+       "value": "LOOK 01 / 08"
+      },
+      {
+       "frame": 30,
+       "value": "LOOK 02 / 08",
+       "easeIn": "hold"
+      },
+      {
+       "frame": 60,
+       "value": "LOOK 03 / 08",
+       "easeIn": "hold"
+      },
+      {
+       "frame": 90,
+       "value": "LOOK 04 / 08",
+       "easeIn": "hold"
+      },
+      {
+       "frame": 120,
+       "value": "LOOK 05 / 08",
+       "easeIn": "hold"
+      },
+      {
+       "frame": 150,
+       "value": "LOOK 06 / 08",
+       "easeIn": "hold"
+      },
+      {
+       "frame": 180,
+       "value": "LOOK 07 / 08",
+       "easeIn": "hold"
+      },
+      {
+       "frame": 210,
+       "value": "LOOK 08 / 08",
+       "easeIn": "hold"
+      }
+     ]
+    }
+   },
+   "markers": [
+    {
+     "frame": 0,
+     "label": "iridescent"
+    },
+    {
+     "frame": 30,
+     "label": "halftone"
+    },
+    {
+     "frame": 60,
+     "label": "duotone"
+    },
+    {
+     "frame": 90,
+     "label": "pixelate"
+    },
+    {
+     "frame": 120,
+     "label": "kaleidoscope"
+    },
+    {
+     "frame": 150,
+     "label": "glitch"
+    },
+    {
+     "frame": 180,
+     "label": "film-texture"
+    },
+    {
+     "frame": 210,
+     "label": "duotone + halftone"
+    }
+   ],
+   "exposedParams": []
+  },
+  {
+   "nodes": [
+    {
+     "id": "c6_render",
+     "type": "render",
+     "position": {
+      "x": 1420,
+      "y": 0
+     },
+     "params": {
+      "frameCount": 300,
+      "fps": 30,
+      "resolutionPreset": "16:9 (1920x1080)",
+      "width": 1920,
+      "height": 1080,
+      "timelineEnabled": true,
+      "motionBlur": 0
+     }
+    },
+    {
+     "id": "c6_env",
+     "type": "lighting/environment",
+     "position": {
+      "x": 1080,
+      "y": 0
+     },
+     "params": {
+      "color": 15592162,
+      "intensity": 1,
+      "background": 1,
+      "ambientIntensity": 0.8,
+      "sunIntensity": 0.0
+     }
+    },
+    {
+     "id": "c6_frame",
+     "type": "time/frame",
+     "position": {
+      "x": -3000,
+      "y": 0
+     },
+     "params": {}
+    },
+    {
+     "id": "c6_t",
+     "type": "math/expression",
+     "position": {
+      "x": -2660,
+      "y": 0
+     },
+     "params": {
+      "formula": "x / 30"
+     }
+    },
+    {
+     "id": "c6_cam",
+     "type": "calibration/camera",
+     "position": {
+      "x": 1080,
+      "y": 300
+     },
+     "params": {
+      "active": true,
+      "mode": "manual",
+      "location": {
+       "x": 0,
+       "y": 0,
+       "z": 40
+      },
+      "useTarget": true,
+      "target": {
+       "x": 0,
+       "y": 0,
+       "z": 0
+      },
+      "up": {
+       "x": 0,
+       "y": 1,
+       "z": 0
+      },
+      "fov": 10,
+      "projectionType": "perspective"
+     }
+    },
+    {
+     "id": "c6_post_in",
+     "type": "postprocess/antialias",
+     "position": {
+      "x": 400,
+      "y": 0
+     },
+     "params": {
+      "enabled": 1
+     }
+    },
+    {
+     "id": "c6_bloom",
+     "type": "postprocess/bloom",
+     "position": {
+      "x": 740,
+      "y": 0
+     },
+     "params": {
+      "strength": 0.1,
+      "radius": 0.3,
+      "threshold": 0.98
+     }
+    },
+    {
+     "id": "c6_grade",
+     "type": "postprocess/color-correction",
+     "position": {
+      "x": 740,
+      "y": 300
+     },
+     "params": {
+      "brightness": 0.0,
+      "contrast": 1.4,
+      "saturation": 1.0
+     }
+    },
+    {
+     "id": "c6_chroma",
+     "type": "postprocess/rgb-shift",
+     "position": {
+      "x": 740,
+      "y": 600
+     },
+     "params": {
+      "amount": 0.0,
+      "angle": 0
+     }
+    },
+    {
+     "id": "c6_grain",
+     "type": "postprocess/film-grain",
+     "position": {
+      "x": 740,
+      "y": 900
+     },
+     "params": {
+      "noiseIntensity": 0.1,
+      "scanlinesIntensity": 0.0,
+      "scanlinesCount": 2048,
+      "grayscale": 0
+     }
+    },
+    {
+     "id": "c6_vig",
+     "type": "postprocess/vignette",
+     "position": {
+      "x": 740,
+      "y": 1200
+     },
+     "params": {
+      "offset": 0.55,
+      "darkness": 1.0
+     }
+    },
+    {
+     "id": "c6_end",
+     "type": "logic/compare",
+     "position": {
+      "x": -2660,
+      "y": 300
+     },
+     "params": {
+      "op": ">=",
+      "a": 0,
+      "b": 299
+     }
+    },
+    {
+     "id": "c6_goto",
+     "type": "canvas/goto",
+     "position": {
+      "x": -2320,
+      "y": 0
+     },
+     "params": {
+      "canvas": 1,
+      "trigger": 0
+     }
+    },
+    {
+     "id": "c6_strokes",
+     "type": "curve/grease-pencil",
+     "position": {
+      "x": -1980,
+      "y": 0
+     },
+     "params": {
+      "name": "辻 — KanjiVG stroke order",
+      "activeColor": "#111111",
+      "brushSize": 4,
+      "brushType": "ink_pen",
+      "onionSkin": false,
+      "visible": true,
+      "location": {
+       "x": 0.0,
+       "y": 0.0,
+       "z": 0.0
+      },
+      "rotation": {
+       "x": 0.0,
+       "y": 0.0,
+       "z": 0.0
+      },
+      "scale": {
+       "x": 1,
+       "y": 1,
+       "z": 1
+      },
+      "frames": [
+       {
+        "frame": 0,
+        "strokes": [
+         {
+          "id": "showreel_tsuji_0",
+          "points": [
+           {
+            "x": -0.609,
+            "y": 0.558,
+            "z": 0,
+            "pressure": 0.85
+           },
+           {
+            "x": -0.5904,
+            "y": 0.5523,
+            "z": 0,
+            "pressure": 0.841
+           },
+           {
+            "x": -0.5695,
+            "y": 0.5474,
+            "z": 0,
+            "pressure": 0.817
+           },
+           {
+            "x": -0.5469,
+            "y": 0.5433,
+            "z": 0,
+            "pressure": 0.781
+           },
+           {
+            "x": -0.5231,
+            "y": 0.5401,
+            "z": 0,
+            "pressure": 0.739
+           },
+           {
+            "x": -0.4988,
+            "y": 0.5376,
+            "z": 0,
+            "pressure": 0.696
+           },
+           {
+            "x": -0.4745,
+            "y": 0.536,
+            "z": 0,
+            "pressure": 0.656
+           },
+           {
+            "x": -0.4508,
+            "y": 0.5352,
+            "z": 0,
+            "pressure": 0.623
+           },
+           {
+            "x": -0.4282,
+            "y": 0.5352,
+            "z": 0,
+            "pressure": 0.597
+           },
+           {
+            "x": -0.4075,
+            "y": 0.5359,
+            "z": 0,
+            "pressure": 0.579
+           },
+           {
+            "x": -0.389,
+            "y": 0.5375,
+            "z": 0,
+            "pressure": 0.567
+           },
+           {
+            "x": -0.3282,
+            "y": 0.5445,
+            "z": 0,
+            "pressure": 0.559
+           },
+           {
+            "x": -0.2673,
+            "y": 0.5514,
+            "z": 0,
+            "pressure": 0.555
+           },
+           {
+            "x": -0.2065,
+            "y": 0.5584,
+            "z": 0,
+            "pressure": 0.552
+           },
+           {
+            "x": -0.1381,
+            "y": 0.5665,
+            "z": 0,
+            "pressure": 0.551
+           },
+           {
+            "x": -0.0698,
+            "y": 0.5746,
+            "z": 0,
+            "pressure": 0.55
+           },
+           {
+            "x": -0.0014,
+            "y": 0.5827,
+            "z": 0,
+            "pressure": 0.55
+           },
+           {
+            "x": 0.0724,
+            "y": 0.5915,
+            "z": 0,
+            "pressure": 0.55
+           },
+           {
+            "x": 0.1463,
+            "y": 0.6003,
+            "z": 0,
+            "pressure": 0.55
+           },
+           {
+            "x": 0.2201,
+            "y": 0.6091,
+            "z": 0,
+            "pressure": 0.55
+           },
+           {
+            "x": 0.2974,
+            "y": 0.6182,
+            "z": 0,
+            "pressure": 0.55
+           },
+           {
+            "x": 0.3747,
+            "y": 0.6274,
+            "z": 0,
+            "pressure": 0.55
+           },
+           {
+            "x": 0.452,
+            "y": 0.6365,
+            "z": 0,
+            "pressure": 0.55
+           },
+           {
+            "x": 0.5308,
+            "y": 0.6455,
+            "z": 0,
+            "pressure": 0.55
+           },
+           {
+            "x": 0.6095,
+            "y": 0.6544,
+            "z": 0,
+            "pressure": 0.55
+           },
+           {
+            "x": 0.6883,
+            "y": 0.6634,
+            "z": 0,
+            "pressure": 0.55
+           },
+           {
+            "x": 0.7664,
+            "y": 0.6719,
+            "z": 0,
+            "pressure": 0.55
+           },
+           {
+            "x": 0.8445,
+            "y": 0.6803,
+            "z": 0,
+            "pressure": 0.55
+           },
+           {
+            "x": 0.9227,
+            "y": 0.6888,
+            "z": 0,
+            "pressure": 0.55
+           },
+           {
+            "x": 0.9982,
+            "y": 0.6963,
+            "z": 0,
+            "pressure": 0.55
+           },
+           {
+            "x": 1.0737,
+            "y": 0.7037,
+            "z": 0,
+            "pressure": 0.55
+           },
+           {
+            "x": 1.1492,
+            "y": 0.7112,
+            "z": 0,
+            "pressure": 0.55
+           },
+           {
+            "x": 1.22,
+            "y": 0.7173,
+            "z": 0,
+            "pressure": 0.55
+           },
+           {
+            "x": 1.2909,
+            "y": 0.7234,
+            "z": 0,
+            "pressure": 0.55
+           },
+           {
+            "x": 1.3617,
+            "y": 0.7295,
+            "z": 0,
+            "pressure": 0.55
+           },
+           {
+            "x": 1.4259,
+            "y": 0.7338,
+            "z": 0,
+            "pressure": 0.551
+           },
+           {
+            "x": 1.49,
+            "y": 0.7381,
+            "z": 0,
+            "pressure": 0.552
+           },
+           {
+            "x": 1.5542,
+            "y": 0.7423,
+            "z": 0,
+            "pressure": 0.555
+           },
+           {
+            "x": 1.6373,
+            "y": 0.7454,
+            "z": 0,
+            "pressure": 0.559
+           },
+           {
+            "x": 1.7205,
+            "y": 0.7485,
+            "z": 0,
+            "pressure": 0.567
+           },
+           {
+            "x": 1.748,
+            "y": 0.7486,
+            "z": 0,
+            "pressure": 0.579
+           },
+           {
+            "x": 1.7735,
+            "y": 0.748,
+            "z": 0,
+            "pressure": 0.597
+           },
+           {
+            "x": 1.797,
+            "y": 0.7467,
+            "z": 0,
+            "pressure": 0.623
+           },
+           {
+            "x": 1.8187,
+            "y": 0.745,
+            "z": 0,
+            "pressure": 0.656
+           },
+           {
+            "x": 1.8388,
+            "y": 0.7428,
+            "z": 0,
+            "pressure": 0.696
+           },
+           {
+            "x": 1.8575,
+            "y": 0.7403,
+            "z": 0,
+            "pressure": 0.739
+           },
+           {
+            "x": 1.875,
+            "y": 0.7375,
+            "z": 0,
+            "pressure": 0.781
+           },
+           {
+            "x": 1.8913,
+            "y": 0.7346,
+            "z": 0,
+            "pressure": 0.817
+           },
+           {
+            "x": 1.9068,
+            "y": 0.7315,
+            "z": 0,
+            "pressure": 0.841
+           },
+           {
+            "x": 1.9215,
+            "y": 0.7285,
+            "z": 0,
+            "pressure": 0.85
+           }
+          ],
+          "color": "#111111",
+          "width": 4,
+          "brushType": "ink_pen",
+          "fill": false,
+          "closed": false
+         },
+         {
+          "id": "showreel_tsuji_1",
+          "points": [
+           {
+            "x": 0.564,
+            "y": 2.031,
+            "z": 0,
+            "pressure": 0.9
+           },
+           {
+            "x": 0.5734,
+            "y": 2.0206,
+            "z": 0,
+            "pressure": 0.895
+           },
+           {
+            "x": 0.5843,
+            "y": 2.004,
+            "z": 0,
+            "pressure": 0.882
+           },
+           {
+            "x": 0.596,
+            "y": 1.9827,
+            "z": 0,
+            "pressure": 0.862
+           },
+           {
+            "x": 0.6082,
+            "y": 1.958,
+            "z": 0,
+            "pressure": 0.839
+           },
+           {
+            "x": 0.6201,
+            "y": 1.9312,
+            "z": 0,
+            "pressure": 0.815
+           },
+           {
+            "x": 0.6314,
+            "y": 1.9037,
+            "z": 0,
+            "pressure": 0.793
+           },
+           {
+            "x": 0.6414,
+            "y": 1.877,
+            "z": 0,
+            "pressure": 0.774
+           },
+           {
+            "x": 0.6497,
+            "y": 1.8523,
+            "z": 0,
+            "pressure": 0.759
+           },
+           {
+            "x": 0.6558,
+            "y": 1.831,
+            "z": 0,
+            "pressure": 0.747
+           },
+           {
+            "x": 0.659,
+            "y": 1.8145,
+            "z": 0,
+            "pressure": 0.738
+           },
+           {
+            "x": 0.6604,
+            "y": 1.7259,
+            "z": 0,
+            "pressure": 0.731
+           },
+           {
+            "x": 0.6605,
+            "y": 1.6531,
+            "z": 0,
+            "pressure": 0.724
+           },
+           {
+            "x": 0.6607,
+            "y": 1.5804,
+            "z": 0,
+            "pressure": 0.718
+           },
+           {
+            "x": 0.6609,
+            "y": 1.5077,
+            "z": 0,
+            "pressure": 0.713
+           },
+           {
+            "x": 0.6609,
+            "y": 1.4442,
+            "z": 0,
+            "pressure": 0.707
+           },
+           {
+            "x": 0.6608,
+            "y": 1.3808,
+            "z": 0,
+            "pressure": 0.701
+           },
+           {
+            "x": 0.6608,
+            "y": 1.3173,
+            "z": 0,
+            "pressure": 0.695
+           },
+           {
+            "x": 0.6608,
+            "y": 1.2539,
+            "z": 0,
+            "pressure": 0.688
+           },
+           {
+            "x": 0.6607,
+            "y": 1.1905,
+            "z": 0,
+            "pressure": 0.681
+           },
+           {
+            "x": 0.6606,
+            "y": 1.1262,
+            "z": 0,
+            "pressure": 0.673
+           },
+           {
+            "x": 0.6605,
+            "y": 1.0619,
+            "z": 0,
+            "pressure": 0.666
+           },
+           {
+            "x": 0.6604,
+            "y": 0.9977,
+            "z": 0,
+            "pressure": 0.657
+           },
+           {
+            "x": 0.6602,
+            "y": 0.9334,
+            "z": 0,
+            "pressure": 0.649
+           },
+           {
+            "x": 0.6601,
+            "y": 0.8691,
+            "z": 0,
+            "pressure": 0.64
+           },
+           {
+            "x": 0.66,
+            "y": 0.8049,
+            "z": 0,
+            "pressure": 0.63
+           },
+           {
+            "x": 0.6598,
+            "y": 0.7444,
+            "z": 0,
+            "pressure": 0.621
+           },
+           {
+            "x": 0.6596,
+            "y": 0.6839,
+            "z": 0,
+            "pressure": 0.611
+           },
+           {
+            "x": 0.6595,
+            "y": 0.6234,
+            "z": 0,
+            "pressure": 0.6
+           },
+           {
+            "x": 0.6593,
+            "y": 0.5629,
+            "z": 0,
+            "pressure": 0.589
+           },
+           {
+            "x": 0.6591,
+            "y": 0.5025,
+            "z": 0,
+            "pressure": 0.578
+           },
+           {
+            "x": 0.6589,
+            "y": 0.442,
+            "z": 0,
+            "pressure": 0.566
+           },
+           {
+            "x": 0.6588,
+            "y": 0.3815,
+            "z": 0,
+            "pressure": 0.554
+           },
+           {
+            "x": 0.6585,
+            "y": 0.32,
+            "z": 0,
+            "pressure": 0.542
+           },
+           {
+            "x": 0.6583,
+            "y": 0.2585,
+            "z": 0,
+            "pressure": 0.529
+           },
+           {
+            "x": 0.6581,
+            "y": 0.197,
+            "z": 0,
+            "pressure": 0.516
+           },
+           {
+            "x": 0.6578,
+            "y": 0.1355,
+            "z": 0,
+            "pressure": 0.502
+           },
+           {
+            "x": 0.6576,
+            "y": 0.0739,
+            "z": 0,
+            "pressure": 0.488
+           },
+           {
+            "x": 0.6574,
+            "y": 0.0124,
+            "z": 0,
+            "pressure": 0.474
+           },
+           {
+            "x": 0.6572,
+            "y": -0.0491,
+            "z": 0,
+            "pressure": 0.459
+           },
+           {
+            "x": 0.6569,
+            "y": -0.1169,
+            "z": 0,
+            "pressure": 0.444
+           },
+           {
+            "x": 0.6566,
+            "y": -0.1848,
+            "z": 0,
+            "pressure": 0.428
+           },
+           {
+            "x": 0.6562,
+            "y": -0.2527,
+            "z": 0,
+            "pressure": 0.413
+           },
+           {
+            "x": 0.6559,
+            "y": -0.3205,
+            "z": 0,
+            "pressure": 0.396
+           },
+           {
+            "x": 0.6556,
+            "y": -0.3884,
+            "z": 0,
+            "pressure": 0.38
+           },
+           {
+            "x": 0.6553,
+            "y": -0.4563,
+            "z": 0,
+            "pressure": 0.363
+           },
+           {
+            "x": 0.6549,
+            "y": -0.5269,
+            "z": 0,
+            "pressure": 0.345
+           },
+           {
+            "x": 0.6545,
+            "y": -0.5975,
+            "z": 0,
+            "pressure": 0.327
+           },
+           {
+            "x": 0.6542,
+            "y": -0.6682,
+            "z": 0,
+            "pressure": 0.309
+           },
+           {
+            "x": 0.6538,
+            "y": -0.7388,
+            "z": 0,
+            "pressure": 0.291
+           },
+           {
+            "x": 0.6534,
+            "y": -0.8095,
+            "z": 0,
+            "pressure": 0.272
+           },
+           {
+            "x": 0.6529,
+            "y": -0.8766,
+            "z": 0,
+            "pressure": 0.252
+           },
+           {
+            "x": 0.6524,
+            "y": -0.9438,
+            "z": 0,
+            "pressure": 0.233
+           },
+           {
+            "x": 0.6519,
+            "y": -1.0109,
+            "z": 0,
+            "pressure": 0.213
+           },
+           {
+            "x": 0.6514,
+            "y": -1.0781,
+            "z": 0,
+            "pressure": 0.192
+           },
+           {
+            "x": 0.6504,
+            "y": -1.1548,
+            "z": 0,
+            "pressure": 0.171
+           },
+           {
+            "x": 0.6495,
+            "y": -1.2315,
+            "z": 0,
+            "pressure": 0.15
+           }
+          ],
+          "color": "#111111",
+          "width": 4,
+          "brushType": "ink_pen",
+          "fill": false,
+          "closed": false
+         },
+         {
+          "id": "showreel_tsuji_2",
+          "points": [
+           {
+            "x": -1.5895,
+            "y": 1.9,
+            "z": 0,
+            "pressure": 0.3
+           },
+           {
+            "x": -1.5322,
+            "y": 1.8687,
+            "z": 0,
+            "pressure": 0.44
+           },
+           {
+            "x": -1.4707,
+            "y": 1.8282,
+            "z": 0,
+            "pressure": 0.527
+           },
+           {
+            "x": -1.4069,
+            "y": 1.7805,
+            "z": 0,
+            "pressure": 0.601
+           },
+           {
+            "x": -1.3431,
+            "y": 1.7276,
+            "z": 0,
+            "pressure": 0.669
+           },
+           {
+            "x": -1.2812,
+            "y": 1.6712,
+            "z": 0,
+            "pressure": 0.731
+           },
+           {
+            "x": -1.2235,
+            "y": 1.6134,
+            "z": 0,
+            "pressure": 0.79
+           },
+           {
+            "x": -1.1719,
+            "y": 1.556,
+            "z": 0,
+            "pressure": 0.845
+           },
+           {
+            "x": -1.1286,
+            "y": 1.5011,
+            "z": 0,
+            "pressure": 0.899
+           },
+           {
+            "x": -1.0956,
+            "y": 1.4504,
+            "z": 0,
+            "pressure": 0.95
+           },
+           {
+            "x": -1.075,
+            "y": 1.406,
+            "z": 0,
+            "pressure": 1.0
+           }
+          ],
+          "color": "#111111",
+          "width": 4,
+          "brushType": "ink_pen",
+          "fill": false,
+          "closed": false
+         },
+         {
+          "id": "showreel_tsuji_3",
+          "points": [
+           {
+            "x": -1.927,
+            "y": 0.775,
+            "z": 0,
+            "pressure": 0.3
+           },
+           {
+            "x": -1.8585,
+            "y": 0.7572,
+            "z": 0,
+            "pressure": 0.44
+           },
+           {
+            "x": -1.7849,
+            "y": 0.7341,
+            "z": 0,
+            "pressure": 0.527
+           },
+           {
+            "x": -1.7088,
+            "y": 0.7069,
+            "z": 0,
+            "pressure": 0.601
+           },
+           {
+            "x": -1.6325,
+            "y": 0.6767,
+            "z": 0,
+            "pressure": 0.669
+           },
+           {
+            "x": -1.5586,
+            "y": 0.6446,
+            "z": 0,
+            "pressure": 0.731
+           },
+           {
+            "x": -1.4896,
+            "y": 0.6116,
+            "z": 0,
+            "pressure": 0.79
+           },
+           {
+            "x": -1.428,
+            "y": 0.5789,
+            "z": 0,
+            "pressure": 0.845
+           },
+           {
+            "x": -1.3763,
+            "y": 0.5476,
+            "z": 0,
+            "pressure": 0.899
+           },
+           {
+            "x": -1.337,
+            "y": 0.5188,
+            "z": 0,
+            "pressure": 0.95
+           },
+           {
+            "x": -1.3125,
+            "y": 0.4935,
+            "z": 0,
+            "pressure": 1.0
+           }
+          ],
+          "color": "#111111",
+          "width": 4,
+          "brushType": "ink_pen",
+          "fill": false,
+          "closed": false
+         },
+         {
+          "id": "showreel_tsuji_4",
+          "points": [
+           {
+            "x": -2.0,
+            "y": -0.322,
+            "z": 0,
+            "pressure": 0.8
+           },
+           {
+            "x": -1.9674,
+            "y": -0.3329,
+            "z": 0,
+            "pressure": 0.797
+           },
+           {
+            "x": -1.9369,
+            "y": -0.3405,
+            "z": 0,
+            "pressure": 0.788
+           },
+           {
+            "x": -1.9085,
+            "y": -0.3451,
+            "z": 0,
+            "pressure": 0.774
+           },
+           {
+            "x": -1.8822,
+            "y": -0.3472,
+            "z": 0,
+            "pressure": 0.756
+           },
+           {
+            "x": -1.8578,
+            "y": -0.3473,
+            "z": 0,
+            "pressure": 0.735
+           },
+           {
+            "x": -1.8353,
+            "y": -0.3458,
+            "z": 0,
+            "pressure": 0.714
+           },
+           {
+            "x": -1.8146,
+            "y": -0.3431,
+            "z": 0,
+            "pressure": 0.693
+           },
+           {
+            "x": -1.7956,
+            "y": -0.3397,
+            "z": 0,
+            "pressure": 0.674
+           },
+           {
+            "x": -1.7783,
+            "y": -0.336,
+            "z": 0,
+            "pressure": 0.656
+           },
+           {
+            "x": -1.7625,
+            "y": -0.3325,
+            "z": 0,
+            "pressure": 0.642
+           },
+           {
+            "x": -1.7391,
+            "y": -0.3257,
+            "z": 0,
+            "pressure": 0.63
+           },
+           {
+            "x": -1.7011,
+            "y": -0.3127,
+            "z": 0,
+            "pressure": 0.621
+           },
+           {
+            "x": -1.652,
+            "y": -0.295,
+            "z": 0,
+            "pressure": 0.614
+           },
+           {
+            "x": -1.5953,
+            "y": -0.274,
+            "z": 0,
+            "pressure": 0.609
+           },
+           {
+            "x": -1.5344,
+            "y": -0.2511,
+            "z": 0,
+            "pressure": 0.606
+           },
+           {
+            "x": -1.4727,
+            "y": -0.228,
+            "z": 0,
+            "pressure": 0.604
+           },
+           {
+            "x": -1.4137,
+            "y": -0.2059,
+            "z": 0,
+            "pressure": 0.602
+           },
+           {
+            "x": -1.3609,
+            "y": -0.1865,
+            "z": 0,
+            "pressure": 0.601
+           },
+           {
+            "x": -1.3177,
+            "y": -0.1712,
+            "z": 0,
+            "pressure": 0.601
+           },
+           {
+            "x": -1.2875,
+            "y": -0.1615,
+            "z": 0,
+            "pressure": 0.601
+           },
+           {
+            "x": -1.2641,
+            "y": -0.1578,
+            "z": 0,
+            "pressure": 0.601
+           },
+           {
+            "x": -1.2396,
+            "y": -0.1593,
+            "z": 0,
+            "pressure": 0.606
+           },
+           {
+            "x": -1.2153,
+            "y": -0.1653,
+            "z": 0,
+            "pressure": 0.623
+           },
+           {
+            "x": -1.1923,
+            "y": -0.1751,
+            "z": 0,
+            "pressure": 0.671
+           },
+           {
+            "x": -1.1719,
+            "y": -0.1882,
+            "z": 0,
+            "pressure": 0.758
+           },
+           {
+            "x": -1.1552,
+            "y": -0.2038,
+            "z": 0,
+            "pressure": 0.856
+           },
+           {
+            "x": -1.1435,
+            "y": -0.2213,
+            "z": 0,
+            "pressure": 0.9
+           },
+           {
+            "x": -1.1379,
+            "y": -0.2401,
+            "z": 0,
+            "pressure": 0.856
+           },
+           {
+            "x": -1.1397,
+            "y": -0.2596,
+            "z": 0,
+            "pressure": 0.758
+           },
+           {
+            "x": -1.15,
+            "y": -0.279,
+            "z": 0,
+            "pressure": 0.671
+           },
+           {
+            "x": -1.1678,
+            "y": -0.3033,
+            "z": 0,
+            "pressure": 0.623
+           },
+           {
+            "x": -1.1903,
+            "y": -0.3362,
+            "z": 0,
+            "pressure": 0.605
+           },
+           {
+            "x": -1.2163,
+            "y": -0.3755,
+            "z": 0,
+            "pressure": 0.601
+           },
+           {
+            "x": -1.2444,
+            "y": -0.419,
+            "z": 0,
+            "pressure": 0.6
+           },
+           {
+            "x": -1.2734,
+            "y": -0.4644,
+            "z": 0,
+            "pressure": 0.6
+           },
+           {
+            "x": -1.3021,
+            "y": -0.5095,
+            "z": 0,
+            "pressure": 0.6
+           },
+           {
+            "x": -1.3291,
+            "y": -0.5521,
+            "z": 0,
+            "pressure": 0.601
+           },
+           {
+            "x": -1.3532,
+            "y": -0.5898,
+            "z": 0,
+            "pressure": 0.603
+           },
+           {
+            "x": -1.3731,
+            "y": -0.6206,
+            "z": 0,
+            "pressure": 0.613
+           },
+           {
+            "x": -1.3875,
+            "y": -0.642,
+            "z": 0,
+            "pressure": 0.641
+           },
+           {
+            "x": -1.3972,
+            "y": -0.6593,
+            "z": 0,
+            "pressure": 0.691
+           },
+           {
+            "x": -1.4039,
+            "y": -0.6787,
+            "z": 0,
+            "pressure": 0.748
+           },
+           {
+            "x": -1.4074,
+            "y": -0.6999,
+            "z": 0,
+            "pressure": 0.773
+           },
+           {
+            "x": -1.4077,
+            "y": -0.7225,
+            "z": 0,
+            "pressure": 0.748
+           },
+           {
+            "x": -1.4047,
+            "y": -0.7461,
+            "z": 0,
+            "pressure": 0.691
+           },
+           {
+            "x": -1.3983,
+            "y": -0.7704,
+            "z": 0,
+            "pressure": 0.641
+           },
+           {
+            "x": -1.3885,
+            "y": -0.7949,
+            "z": 0,
+            "pressure": 0.613
+           },
+           {
+            "x": -1.3751,
+            "y": -0.8192,
+            "z": 0,
+            "pressure": 0.603
+           },
+           {
+            "x": -1.3581,
+            "y": -0.8431,
+            "z": 0,
+            "pressure": 0.601
+           },
+           {
+            "x": -1.3375,
+            "y": -0.866,
+            "z": 0,
+            "pressure": 0.6
+           },
+           {
+            "x": -1.3154,
+            "y": -0.8886,
+            "z": 0,
+            "pressure": 0.6
+           },
+           {
+            "x": -1.2941,
+            "y": -0.9118,
+            "z": 0,
+            "pressure": 0.6
+           },
+           {
+            "x": -1.2737,
+            "y": -0.9351,
+            "z": 0,
+            "pressure": 0.6
+           },
+           {
+            "x": -1.2543,
+            "y": -0.9586,
+            "z": 0,
+            "pressure": 0.6
+           },
+           {
+            "x": -1.2359,
+            "y": -0.9819,
+            "z": 0,
+            "pressure": 0.6
+           },
+           {
+            "x": -1.2187,
+            "y": -1.005,
+            "z": 0,
+            "pressure": 0.6
+           },
+           {
+            "x": -1.2027,
+            "y": -1.0275,
+            "z": 0,
+            "pressure": 0.6
+           },
+           {
+            "x": -1.1879,
+            "y": -1.0493,
+            "z": 0,
+            "pressure": 0.6
+           },
+           {
+            "x": -1.1745,
+            "y": -1.0702,
+            "z": 0,
+            "pressure": 0.601
+           },
+           {
+            "x": -1.1625,
+            "y": -1.09,
+            "z": 0,
+            "pressure": 0.604
+           },
+           {
+            "x": -1.1524,
+            "y": -1.109,
+            "z": 0,
+            "pressure": 0.596
+           },
+           {
+            "x": -1.1448,
+            "y": -1.1275,
+            "z": 0,
+            "pressure": 0.61
+           },
+           {
+            "x": -1.1399,
+            "y": -1.1454,
+            "z": 0,
+            "pressure": 0.652
+           },
+           {
+            "x": -1.1379,
+            "y": -1.1628,
+            "z": 0,
+            "pressure": 0.701
+           },
+           {
+            "x": -1.1391,
+            "y": -1.1799,
+            "z": 0,
+            "pressure": 0.712
+           },
+           {
+            "x": -1.1436,
+            "y": -1.1966,
+            "z": 0,
+            "pressure": 0.661
+           },
+           {
+            "x": -1.1517,
+            "y": -1.2131,
+            "z": 0,
+            "pressure": 0.572
+           },
+           {
+            "x": -1.1637,
+            "y": -1.2293,
+            "z": 0,
+            "pressure": 0.49
+           },
+           {
+            "x": -1.1797,
+            "y": -1.2454,
+            "z": 0,
+            "pressure": 0.436
+           },
+           {
+            "x": -1.2,
+            "y": -1.2615,
+            "z": 0,
+            "pressure": 0.404
+           },
+           {
+            "x": -1.2309,
+            "y": -1.2844,
+            "z": 0,
+            "pressure": 0.381
+           },
+           {
+            "x": -1.2762,
+            "y": -1.3188,
+            "z": 0,
+            "pressure": 0.36
+           },
+           {
+            "x": -1.3323,
+            "y": -1.3617,
+            "z": 0,
+            "pressure": 0.34
+           },
+           {
+            "x": -1.3956,
+            "y": -1.4099,
+            "z": 0,
+            "pressure": 0.32
+           },
+           {
+            "x": -1.4625,
+            "y": -1.4603,
+            "z": 0,
+            "pressure": 0.3
+           },
+           {
+            "x": -1.5294,
+            "y": -1.5096,
+            "z": 0,
+            "pressure": 0.28
+           },
+           {
+            "x": -1.5927,
+            "y": -1.555,
+            "z": 0,
+            "pressure": 0.26
+           },
+           {
+            "x": -1.6488,
+            "y": -1.593,
+            "z": 0,
+            "pressure": 0.24
+           },
+           {
+            "x": -1.6941,
+            "y": -1.6208,
+            "z": 0,
+            "pressure": 0.22
+           },
+           {
+            "x": -1.725,
+            "y": -1.635,
+            "z": 0,
+            "pressure": 0.2
+           }
+          ],
+          "color": "#111111",
+          "width": 4,
+          "brushType": "ink_pen",
+          "fill": false,
+          "closed": false
+         },
+         {
+          "id": "showreel_tsuji_5",
+          "points": [
+           {
+            "x": -1.9375,
+            "y": -1.6785,
+            "z": 0,
+            "pressure": 0.35
+           },
+           {
+            "x": -1.8889,
+            "y": -1.6744,
+            "z": 0,
+            "pressure": 0.35
+           },
+           {
+            "x": -1.8327,
+            "y": -1.6697,
+            "z": 0,
+            "pressure": 0.35
+           },
+           {
+            "x": -1.7703,
+            "y": -1.6647,
+            "z": 0,
+            "pressure": 0.35
+           },
+           {
+            "x": -1.703,
+            "y": -1.6599,
+            "z": 0,
+            "pressure": 0.35
+           },
+           {
+            "x": -1.6322,
+            "y": -1.6558,
+            "z": 0,
+            "pressure": 0.35
+           },
+           {
+            "x": -1.5591,
+            "y": -1.6527,
+            "z": 0,
+            "pressure": 0.352
+           },
+           {
+            "x": -1.4851,
+            "y": -1.6511,
+            "z": 0,
+            "pressure": 0.357
+           },
+           {
+            "x": -1.4115,
+            "y": -1.6516,
+            "z": 0,
+            "pressure": 0.363
+           },
+           {
+            "x": -1.3397,
+            "y": -1.6544,
+            "z": 0,
+            "pressure": 0.37
+           },
+           {
+            "x": -1.271,
+            "y": -1.66,
+            "z": 0,
+            "pressure": 0.379
+           },
+           {
+            "x": -1.1753,
+            "y": -1.6712,
+            "z": 0,
+            "pressure": 0.388
+           },
+           {
+            "x": -1.1024,
+            "y": -1.6802,
+            "z": 0,
+            "pressure": 0.397
+           },
+           {
+            "x": -1.0296,
+            "y": -1.6892,
+            "z": 0,
+            "pressure": 0.408
+           },
+           {
+            "x": -0.9686,
+            "y": -1.6969,
+            "z": 0,
+            "pressure": 0.419
+           },
+           {
+            "x": -0.9076,
+            "y": -1.7046,
+            "z": 0,
+            "pressure": 0.43
+           },
+           {
+            "x": -0.8465,
+            "y": -1.7123,
+            "z": 0,
+            "pressure": 0.442
+           },
+           {
+            "x": -0.7772,
+            "y": -1.7211,
+            "z": 0,
+            "pressure": 0.454
+           },
+           {
+            "x": -0.7079,
+            "y": -1.7299,
+            "z": 0,
+            "pressure": 0.467
+           },
+           {
+            "x": -0.6386,
+            "y": -1.7388,
+            "z": 0,
+            "pressure": 0.48
+           },
+           {
+            "x": -0.5651,
+            "y": -1.7482,
+            "z": 0,
+            "pressure": 0.494
+           },
+           {
+            "x": -0.4916,
+            "y": -1.7577,
+            "z": 0,
+            "pressure": 0.508
+           },
+           {
+            "x": -0.4182,
+            "y": -1.7671,
+            "z": 0,
+            "pressure": 0.522
+           },
+           {
+            "x": -0.3448,
+            "y": -1.7766,
+            "z": 0,
+            "pressure": 0.537
+           },
+           {
+            "x": -0.2713,
+            "y": -1.7862,
+            "z": 0,
+            "pressure": 0.552
+           },
+           {
+            "x": -0.1979,
+            "y": -1.7957,
+            "z": 0,
+            "pressure": 0.567
+           },
+           {
+            "x": -0.1287,
+            "y": -1.8047,
+            "z": 0,
+            "pressure": 0.583
+           },
+           {
+            "x": -0.0595,
+            "y": -1.8138,
+            "z": 0,
+            "pressure": 0.599
+           },
+           {
+            "x": 0.0098,
+            "y": -1.8228,
+            "z": 0,
+            "pressure": 0.615
+           },
+           {
+            "x": 0.0706,
+            "y": -1.8309,
+            "z": 0,
+            "pressure": 0.632
+           },
+           {
+            "x": 0.1314,
+            "y": -1.8389,
+            "z": 0,
+            "pressure": 0.649
+           },
+           {
+            "x": 0.1923,
+            "y": -1.8469,
+            "z": 0,
+            "pressure": 0.666
+           },
+           {
+            "x": 0.2648,
+            "y": -1.8566,
+            "z": 0,
+            "pressure": 0.683
+           },
+           {
+            "x": 0.3372,
+            "y": -1.8664,
+            "z": 0,
+            "pressure": 0.701
+           },
+           {
+            "x": 0.432,
+            "y": -1.8795,
+            "z": 0,
+            "pressure": 0.719
+           },
+           {
+            "x": 0.5188,
+            "y": -1.8914,
+            "z": 0,
+            "pressure": 0.737
+           },
+           {
+            "x": 0.6057,
+            "y": -1.9033,
+            "z": 0,
+            "pressure": 0.755
+           },
+           {
+            "x": 0.6888,
+            "y": -1.9134,
+            "z": 0,
+            "pressure": 0.774
+           },
+           {
+            "x": 0.772,
+            "y": -1.9234,
+            "z": 0,
+            "pressure": 0.793
+           },
+           {
+            "x": 0.8518,
+            "y": -1.9316,
+            "z": 0,
+            "pressure": 0.812
+           },
+           {
+            "x": 0.9316,
+            "y": -1.9398,
+            "z": 0,
+            "pressure": 0.831
+           },
+           {
+            "x": 1.0085,
+            "y": -1.9461,
+            "z": 0,
+            "pressure": 0.851
+           },
+           {
+            "x": 1.0854,
+            "y": -1.9524,
+            "z": 0,
+            "pressure": 0.871
+           },
+           {
+            "x": 1.1597,
+            "y": -1.9568,
+            "z": 0,
+            "pressure": 0.891
+           },
+           {
+            "x": 1.234,
+            "y": -1.9612,
+            "z": 0,
+            "pressure": 0.911
+           },
+           {
+            "x": 1.3061,
+            "y": -1.9637,
+            "z": 0,
+            "pressure": 0.931
+           },
+           {
+            "x": 1.3782,
+            "y": -1.9661,
+            "z": 0,
+            "pressure": 0.94
+           },
+           {
+            "x": 1.4484,
+            "y": -1.9666,
+            "z": 0,
+            "pressure": 0.842
+           },
+           {
+            "x": 1.5186,
+            "y": -1.9672,
+            "z": 0,
+            "pressure": 0.744
+           },
+           {
+            "x": 1.5873,
+            "y": -1.9657,
+            "z": 0,
+            "pressure": 0.646
+           },
+           {
+            "x": 1.6561,
+            "y": -1.9643,
+            "z": 0,
+            "pressure": 0.548
+           },
+           {
+            "x": 1.7237,
+            "y": -1.9608,
+            "z": 0,
+            "pressure": 0.449
+           },
+           {
+            "x": 1.7913,
+            "y": -1.9574,
+            "z": 0,
+            "pressure": 0.351
+           },
+           {
+            "x": 1.8581,
+            "y": -1.9519,
+            "z": 0,
+            "pressure": 0.253
+           },
+           {
+            "x": 1.925,
+            "y": -1.9465,
+            "z": 0,
+            "pressure": 0.155
+           }
+          ],
+          "color": "#111111",
+          "width": 4,
+          "brushType": "ink_pen",
+          "fill": false,
+          "closed": false
+         }
+        ]
+       }
+      ]
+     }
+    },
+    {
+     "id": "c6_write",
+     "type": "curve/write-on",
+     "position": {
+      "x": -1640,
+      "y": 0
+     },
+     "params": {
+      "timing": "progress",
+      "progress": 0,
+      "startTime": 0,
+      "speed": 2.4,
+      "pause": 0.35,
+      "overlap": 0.1,
+      "ease": "brush"
+     }
+    },
+    {
+     "id": "c6_write_p",
+     "type": "math/expression",
+     "position": {
+      "x": -1980,
+      "y": 300
+     },
+     "params": {
+      "formula": "x",
+      "x": 0
+     }
+    },
+    {
+     "id": "c6_brush",
+     "type": "texture/brush-canvas",
+     "position": {
+      "x": -1300,
+      "y": 0
+     },
+     "params": {
+      "resolution": "2048x2048",
+      "background": "#EDEAE2",
+      "transparent": false,
+      "frameMode": "fixed",
+      "frameCenter": {
+       "x": 0,
+       "y": 0,
+       "z": 0
+      },
+      "frameSize": 6.4,
+      "frameMargin": 0.1,
+      "seed": 7,
+      "boil": 0,
+      "brushScale": 1,
+      "curvature": 0.5,
+      "strokeEnabled": true,
+      "strokeBrush": "sumi",
+      "strokeColor": "#111111",
+      "strokeWeight": 9,
+      "useStrokeColors": false,
+      "fillMode": "none",
+      "hatchEnabled": false,
+      "field": "none",
+      "fieldSpeed": 0,
+      "wiggle": 0
+     }
+    },
+    {
+     "id": "c6_wash_shape",
+     "type": "curve/stroke-outline",
+     "position": {
+      "x": -1640,
+      "y": 300
+     },
+     "params": {
+      "width": 0.042,
+      "minWidth": 0.013,
+      "spread": 0.038,
+      "usePressure": true,
+      "caps": "round"
+     }
+    },
+    {
+     "id": "c6_wash_in",
+     "type": "list/map-range",
+     "position": {
+      "x": -1300,
+      "y": 300
+     },
+     "params": {
+      "inMin": 0,
+      "inMax": 0.6,
+      "outMin": 0,
+      "outMax": 1,
+      "clamp": 1,
+      "power": 1
+     }
+    },
+    {
+     "id": "c6_wash_spread",
+     "type": "list/map-range",
+     "position": {
+      "x": -1300,
+      "y": 600
+     },
+     "params": {
+      "inMin": 0,
+      "inMax": 2.5,
+      "outMin": 0.08,
+      "outMax": 0.6,
+      "clamp": 1,
+      "power": 0.6
+     }
+    },
+    {
+     "id": "c6_wash_style",
+     "type": "curve/stroke-style",
+     "position": {
+      "x": -960,
+      "y": 0
+     },
+     "params": {
+      "opacity": 1,
+      "weight": 1,
+      "setBleed": false,
+      "bleed": 0.3,
+      "setFillColor": false,
+      "fillColor": 7039851
+     }
+    },
+    {
+     "id": "c6_wash",
+     "type": "texture/brush-canvas",
+     "position": {
+      "x": -960,
+      "y": 300
+     },
+     "params": {
+      "resolution": "512x512",
+      "background": "#ffffff",
+      "transparent": false,
+      "frameMode": "fixed",
+      "frameCenter": {
+       "x": 0,
+       "y": 0,
+       "z": 0
+      },
+      "frameSize": 6.4,
+      "frameMargin": 0.1,
+      "seed": 3,
+      "boil": 0,
+      "brushScale": 1,
+      "curvature": 0.5,
+      "strokeEnabled": false,
+      "strokeBrush": "2B",
+      "strokeColor": "#111111",
+      "strokeWeight": 1,
+      "fillMode": "watercolor",
+      "watercolorLook": "custom",
+      "fillColor": "#6a6a6a",
+      "fillOpacity": 70,
+      "bleed": 0.3,
+      "bleedDirection": "out",
+      "bleedRandomDirection": true,
+      "bleedAngle": 0,
+      "fillTexture": 0.7,
+      "fillBorder": 0.15,
+      "fillScatter": true,
+      "hatchEnabled": false,
+      "field": "none",
+      "fieldSpeed": 0,
+      "wiggle": 0
+     }
+    },
+    {
+     "id": "c6_ink_on_wash",
+     "type": "texture/mix",
+     "position": {
+      "x": -620,
+      "y": 0
+     },
+     "params": {
+      "blendMode": "multiply",
+      "factor": 1
+     }
+    },
+    {
+     "id": "c6_paper",
+     "type": "object/plane",
+     "position": {
+      "x": -280,
+      "y": 0
+     },
+     "params": {
+      "visible": 1,
+      "location": {
+       "x": 0.0,
+       "y": 0,
+       "z": 0.05
+      },
+      "rotation": {
+       "x": 0.0,
+       "y": 0.0,
+       "z": 0.0
+      },
+      "scale": {
+       "x": 6.4,
+       "y": 6.4,
+       "z": 1
+      },
+      "color": 16777215,
+      "shadeless": 1,
+      "roughness": 1,
+      "metalness": 0
+     }
+    },
+    {
+     "id": "c6_seal",
+     "type": "object/box",
+     "position": {
+      "x": -960,
+      "y": 600
+     },
+     "params": {
+      "location": {
+       "x": 2.75,
+       "y": -2.05,
+       "z": 0.2
+      },
+      "rotation": {
+       "x": 0,
+       "y": 0,
+       "z": -0.06981317007977318
+      },
+      "scale": {
+       "x": 0,
+       "y": 0,
+       "z": 0
+      },
+      "color": 16726815,
+      "shadeless": 1
+     }
+    },
+    {
+     "id": "c6_seal_txt",
+     "type": "text/animator",
+     "position": {
+      "x": -960,
+      "y": 900
+     },
+     "params": {
+      "text": "TSU\nJI",
+      "fontPreset": "Anton",
+      "fontSize": 17,
+      "depth": 0.01,
+      "bevelEnabled": false,
+      "tracking": 0,
+      "lineHeight": 0.95,
+      "align": "center",
+      "anchor": "glyph_center",
+      "positionDelta": [
+       0,
+       0,
+       0
+      ],
+      "rotationDelta": [
+       0,
+       0,
+       0
+      ],
+      "scaleDelta": [
+       1,
+       1,
+       1
+      ],
+      "location": {
+       "x": 2.75,
+       "y": -2.05,
+       "z": 0.3
+      },
+      "rotation": {
+       "x": 0,
+       "y": 0,
+       "z": -0.06981317007977318
+      },
+      "scale": {
+       "x": 0,
+       "y": 0,
+       "z": 0
+      },
+      "color": 15592162,
+      "shadeless": 1
+     }
+    },
+    {
+     "id": "c6_name",
+     "type": "text/animator",
+     "position": {
+      "x": -960,
+      "y": 1200
+     },
+     "params": {
+      "text": "TSUJI",
+      "fontPreset": "Anton",
+      "fontSize": 100,
+      "depth": 0.02,
+      "bevelEnabled": false,
+      "tracking": 8,
+      "align": "left",
+      "anchor": "glyph_center",
+      "selectorShape": "smooth",
+      "start": 0,
+      "end": 0.5,
+      "offset": -0.5,
+      "invert": true,
+      "positionDelta": [
+       0,
+       -0.6,
+       0
+      ],
+      "rotationDelta": [
+       0,
+       0,
+       0
+      ],
+      "scaleDelta": [
+       1,
+       0,
+       1
+      ],
+      "location": {
+       "x": 3.75,
+       "y": 0.7,
+       "z": 0.2
+      },
+      "color": 723726,
+      "shadeless": 1
+     }
+    },
+    {
+     "id": "c6_name_p",
+     "type": "math/expression",
+     "position": {
+      "x": -1640,
+      "y": 600
+     },
+     "params": {
+      "formula": "x",
+      "x": 0
+     }
+    },
+    {
+     "id": "c6_line",
+     "type": "text/animator",
+     "position": {
+      "x": -960,
+      "y": 1500
+     },
+     "params": {
+      "text": "MOTION DESIGN, WIRED.",
+      "fontPreset": "Nova Mono",
+      "fontSize": 17,
+      "depth": 0.01,
+      "bevelEnabled": false,
+      "tracking": 1,
+      "align": "left",
+      "anchor": "glyph_center",
+      "selectorShape": "square",
+      "start": 0,
+      "end": 0,
+      "offset": -0.04,
+      "positionDelta": [
+       0,
+       0,
+       0
+      ],
+      "rotationDelta": [
+       0,
+       0,
+       0
+      ],
+      "scaleDelta": [
+       0,
+       0,
+       0
+      ],
+      "location": {
+       "x": 3.78,
+       "y": -0.36,
+       "z": 0.2
+      },
+      "color": 16726815,
+      "shadeless": 1
+     }
+    },
+    {
+     "id": "c6_line_p",
+     "type": "math/expression",
+     "position": {
+      "x": -1640,
+      "y": 900
+     },
+     "params": {
+      "formula": "x",
+      "x": 0
+     }
+    },
+    {
+     "id": "c6_h_info",
+     "type": "hub/text",
+     "position": {
+      "x": 60,
+      "y": 0
+     },
+     "params": {
+      "text": "real-time · web · macOS · windows · linux · open source",
+      "trigger": 1,
+      "x": 1435.0,
+      "y": 700,
+      "rotation": 0,
+      "scale": 1,
+      "visible": 1,
+      "fontFamily": "monospace",
+      "fontSize": 18,
+      "color": 5591628,
+      "opacity": 1,
+      "enterAnimation": "none",
+      "exitAnimation": "none",
+      "durationIn": 0.05,
+      "durationOut": 0.05
+     }
+    },
+    {
+     "id": "c6_h_url",
+     "type": "hub/text",
+     "position": {
+      "x": 60,
+      "y": 300
+     },
+     "params": {
+      "text": "nikos-unilasalle.github.io/tsuji",
+      "trigger": 1,
+      "x": 1387.6,
+      "y": 752,
+      "rotation": 0,
+      "scale": 1,
+      "visible": 1,
+      "fontFamily": "monospace",
+      "fontSize": 26,
+      "color": 723726,
+      "opacity": 1,
+      "enterAnimation": "none",
+      "exitAnimation": "none",
+      "durationIn": 0.05,
+      "durationOut": 0.05
+     }
+    },
+    {
+     "id": "c6_h_chap",
+     "type": "hub/text",
+     "position": {
+      "x": 60,
+      "y": 600
+     },
+     "params": {
+      "text": "06 / INK",
+      "trigger": 1,
+      "x": 144.0,
+      "y": 84,
+      "rotation": 0,
+      "scale": 1,
+      "visible": 1,
+      "fontFamily": "monospace",
+      "fontSize": 20,
+      "color": 723726,
+      "opacity": 1,
+      "enterAnimation": "none",
+      "exitAnimation": "none",
+      "durationIn": 0.05,
+      "durationOut": 0.05
+     }
+    },
+    {
+     "id": "c6_h_nodes",
+     "type": "hub/text",
+     "position": {
+      "x": 60,
+      "y": 900
+     },
+     "params": {
+      "text": "grease-pencil  →  write-on  →  brush-canvas (sumi)",
+      "trigger": 1,
+      "x": 1554.0,
+      "y": 1000,
+      "rotation": 0,
+      "scale": 1,
+      "visible": 1,
+      "fontFamily": "monospace",
+      "fontSize": 18,
+      "color": 8025192,
+      "opacity": 1,
+      "enterAnimation": "none",
+      "exitAnimation": "none",
+      "durationIn": 0.05,
+      "durationOut": 0.05
+     }
+    },
+    {
+     "id": "c6_h_credit",
+     "type": "hub/text",
+     "position": {
+      "x": 60,
+      "y": 1200
+     },
+     "params": {
+      "text": "辻 stroke data: KanjiVG © Ulrich Apel, CC BY-SA 3.0",
+      "trigger": 1,
+      "x": 306.0,
+      "y": 1040,
+      "rotation": 0,
+      "scale": 1,
+      "visible": 1,
+      "fontFamily": "monospace",
+      "fontSize": 14,
+      "color": 10130826,
+      "opacity": 1,
+      "enterAnimation": "none",
+      "exitAnimation": "none",
+      "durationIn": 0.05,
+      "durationOut": 0.05
+     }
+    },
+    {
+     "id": "c6_scene",
+     "type": "structure/merge",
+     "position": {
+      "x": 1080,
+      "y": 600
+     },
+     "params": {}
+    }
+   ],
+   "connections": [
+    {
+     "id": "c6_env.environment->c6_render.environment",
+     "fromNode": "c6_env",
+     "fromSocket": "environment",
+     "toNode": "c6_render",
+     "toSocket": "environment"
+    },
+    {
+     "id": "c6_frame.frame->c6_t.x",
+     "fromNode": "c6_frame",
+     "fromSocket": "frame",
+     "toNode": "c6_t",
+     "toSocket": "x"
+    },
+    {
+     "id": "c6_vig.effect->c6_render.postprocess",
+     "fromNode": "c6_vig",
+     "fromSocket": "effect",
+     "toNode": "c6_render",
+     "toSocket": "postprocess"
+    },
+    {
+     "id": "c6_frame.frame->c6_end.a",
+     "fromNode": "c6_frame",
+     "fromSocket": "frame",
+     "toNode": "c6_end",
+     "toSocket": "a"
+    },
+    {
+     "id": "c6_end.out->c6_goto.trigger",
+     "fromNode": "c6_end",
+     "fromSocket": "out",
+     "toNode": "c6_goto",
+     "toSocket": "trigger"
+    },
+    {
+     "id": "c6_strokes.curves->c6_write.curves",
+     "fromNode": "c6_strokes",
+     "fromSocket": "curves",
+     "toNode": "c6_write",
+     "toSocket": "curves"
+    },
+    {
+     "id": "c6_write_p.value->c6_write.progress",
+     "fromNode": "c6_write_p",
+     "fromSocket": "value",
+     "toNode": "c6_write",
+     "toSocket": "progress"
+    },
+    {
+     "id": "c6_write.curves->c6_brush.curves",
+     "fromNode": "c6_write",
+     "fromSocket": "curves",
+     "toNode": "c6_brush",
+     "toSocket": "curves"
+    },
+    {
+     "id": "c6_strokes.curves->c6_wash_shape.curves",
+     "fromNode": "c6_strokes",
+     "fromSocket": "curves",
+     "toNode": "c6_wash_shape",
+     "toSocket": "curves"
+    },
+    {
+     "id": "c6_write.age->c6_wash_in.list",
+     "fromNode": "c6_write",
+     "fromSocket": "age",
+     "toNode": "c6_wash_in",
+     "toSocket": "list"
+    },
+    {
+     "id": "c6_write.age->c6_wash_spread.list",
+     "fromNode": "c6_write",
+     "fromSocket": "age",
+     "toNode": "c6_wash_spread",
+     "toSocket": "list"
+    },
+    {
+     "id": "c6_wash_shape.curves->c6_wash_style.curves",
+     "fromNode": "c6_wash_shape",
+     "fromSocket": "curves",
+     "toNode": "c6_wash_style",
+     "toSocket": "curves"
+    },
+    {
+     "id": "c6_wash_in.list->c6_wash_style.opacities",
+     "fromNode": "c6_wash_in",
+     "fromSocket": "list",
+     "toNode": "c6_wash_style",
+     "toSocket": "opacities"
+    },
+    {
+     "id": "c6_wash_spread.list->c6_wash_style.bleeds",
+     "fromNode": "c6_wash_spread",
+     "fromSocket": "list",
+     "toNode": "c6_wash_style",
+     "toSocket": "bleeds"
+    },
+    {
+     "id": "c6_wash_style.curves->c6_wash.curves",
+     "fromNode": "c6_wash_style",
+     "fromSocket": "curves",
+     "toNode": "c6_wash",
+     "toSocket": "curves"
+    },
+    {
+     "id": "c6_brush.texture->c6_ink_on_wash.textureA",
+     "fromNode": "c6_brush",
+     "fromSocket": "texture",
+     "toNode": "c6_ink_on_wash",
+     "toSocket": "textureA"
+    },
+    {
+     "id": "c6_wash.texture->c6_ink_on_wash.textureB",
+     "fromNode": "c6_wash",
+     "fromSocket": "texture",
+     "toNode": "c6_ink_on_wash",
+     "toSocket": "textureB"
+    },
+    {
+     "id": "c6_ink_on_wash.texture->c6_paper.texture",
+     "fromNode": "c6_ink_on_wash",
+     "fromSocket": "texture",
+     "toNode": "c6_paper",
+     "toSocket": "texture"
+    },
+    {
+     "id": "c6_name_p.value->c6_name.progress",
+     "fromNode": "c6_name_p",
+     "fromSocket": "value",
+     "toNode": "c6_name",
+     "toSocket": "progress"
+    },
+    {
+     "id": "c6_line_p.value->c6_line.progress",
+     "fromNode": "c6_line_p",
+     "fromSocket": "value",
+     "toNode": "c6_line",
+     "toSocket": "progress"
+    },
+    {
+     "id": "c6_post_in.effect->c6_bloom.effect",
+     "fromNode": "c6_post_in",
+     "fromSocket": "effect",
+     "toNode": "c6_bloom",
+     "toSocket": "effect"
+    },
+    {
+     "id": "c6_bloom.effect->c6_grade.effect",
+     "fromNode": "c6_bloom",
+     "fromSocket": "effect",
+     "toNode": "c6_grade",
+     "toSocket": "effect"
+    },
+    {
+     "id": "c6_grade.effect->c6_chroma.effect",
+     "fromNode": "c6_grade",
+     "fromSocket": "effect",
+     "toNode": "c6_chroma",
+     "toSocket": "effect"
+    },
+    {
+     "id": "c6_chroma.effect->c6_grain.effect",
+     "fromNode": "c6_chroma",
+     "fromSocket": "effect",
+     "toNode": "c6_grain",
+     "toSocket": "effect"
+    },
+    {
+     "id": "c6_grain.effect->c6_vig.effect",
+     "fromNode": "c6_grain",
+     "fromSocket": "effect",
+     "toNode": "c6_vig",
+     "toSocket": "effect"
+    },
+    {
+     "id": "c6_paper.geometry->c6_scene.in0",
+     "fromNode": "c6_paper",
+     "fromSocket": "geometry",
+     "toNode": "c6_scene",
+     "toSocket": "in0"
+    },
+    {
+     "id": "c6_seal.geometry->c6_scene.in1",
+     "fromNode": "c6_seal",
+     "fromSocket": "geometry",
+     "toNode": "c6_scene",
+     "toSocket": "in1"
+    },
+    {
+     "id": "c6_seal_txt.geometry->c6_scene.in2",
+     "fromNode": "c6_seal_txt",
+     "fromSocket": "geometry",
+     "toNode": "c6_scene",
+     "toSocket": "in2"
+    },
+    {
+     "id": "c6_name.geometry->c6_scene.in3",
+     "fromNode": "c6_name",
+     "fromSocket": "geometry",
+     "toNode": "c6_scene",
+     "toSocket": "in3"
+    },
+    {
+     "id": "c6_line.geometry->c6_scene.in4",
+     "fromNode": "c6_line",
+     "fromSocket": "geometry",
+     "toNode": "c6_scene",
+     "toSocket": "in4"
+    },
+    {
+     "id": "c6_scene.geometry->c6_render.geometry",
+     "fromNode": "c6_scene",
+     "fromSocket": "geometry",
+     "toNode": "c6_render",
+     "toSocket": "geometry"
+    }
+   ],
+   "keyframes": {
+    "c6_chroma": {
+     "amount": [
+      {
+       "frame": 0,
+       "value": 0.014
+      },
+      {
+       "frame": 9,
+       "value": 0.0,
+       "easeIn": "expo",
+       "easeStrength": 6
+      }
+     ]
+    },
+    "c6_grade": {
+     "brightness": [
+      {
+       "frame": 0,
+       "value": 0.85
+      },
+      {
+       "frame": 7,
+       "value": 0.0,
+       "easeIn": "expo",
+       "easeStrength": 6
+      }
+     ],
+     "saturation": [
+      {
+       "frame": 274,
+       "value": 1.0
+      },
+      {
+       "frame": 298,
+       "value": 0.0,
+       "easeIn": "smooth"
+      }
+     ]
+    },
+    "c6_cam": {
+     "location": [
+      {
+       "frame": 0,
+       "value": {
+        "x": 2.5,
+        "y": 0.1,
+        "z": 36.5
+       }
+      },
+      {
+       "frame": 300,
+       "value": {
+        "x": 2.9,
+        "y": 0,
+        "z": 33.5
+       },
+       "easeIn": "smooth"
+      }
+     ],
+     "target": [
+      {
+       "frame": 0,
+       "value": {
+        "x": 2.5,
+        "y": 0.1,
+        "z": 0
+       }
+      },
+      {
+       "frame": 300,
+       "value": {
+        "x": 2.9,
+        "y": 0,
+        "z": 0
+       },
+       "easeIn": "smooth"
+      }
+     ]
+    },
+    "c6_write_p": {
+     "x": [
+      {
+       "frame": 6,
+       "value": 0.0
+      },
+      {
+       "frame": 150,
+       "value": 1.0,
+       "easeIn": "linear"
+      }
+     ]
+    },
+    "c6_seal": {
+     "scale": [
+      {
+       "frame": 164,
+       "value": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+       }
+      },
+      {
+       "frame": 165,
+       "value": {
+        "x": 1.25,
+        "y": 1.25,
+        "z": 0.05
+       },
+       "easeIn": "hold"
+      },
+      {
+       "frame": 173,
+       "value": {
+        "x": 0.8,
+        "y": 0.8,
+        "z": 0.05
+       },
+       "easeIn": "expo",
+       "easeStrength": 7
+      }
+     ]
+    },
+    "c6_seal_txt": {
+     "scale": [
+      {
+       "frame": 164,
+       "value": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+       }
+      },
+      {
+       "frame": 165,
+       "value": {
+        "x": 1.55,
+        "y": 1.55,
+        "z": 1
+       },
+       "easeIn": "hold"
+      },
+      {
+       "frame": 173,
+       "value": {
+        "x": 1,
+        "y": 1,
+        "z": 1
+       },
+       "easeIn": "expo",
+       "easeStrength": 7
+      }
+     ]
+    },
+    "c6_name_p": {
+     "x": [
+      {
+       "frame": 180,
+       "value": 0.0
+      },
+      {
+       "frame": 204,
+       "value": 1.5,
+       "easeIn": "expo",
+       "easeStrength": 5
+      }
+     ]
+    },
+    "c6_line_p": {
+     "x": [
+      {
+       "frame": 195,
+       "value": 0.0
+      },
+      {
+       "frame": 217,
+       "value": 1.08,
+       "easeIn": "linear"
+      }
+     ]
+    },
+    "c6_h_info": {
+     "visible": [
+      {
+       "frame": 0,
+       "value": 0
+      },
+      {
+       "frame": 220,
+       "value": 1,
+       "easeIn": "hold"
+      }
+     ]
+    },
+    "c6_h_url": {
+     "visible": [
+      {
+       "frame": 0,
+       "value": 0
+      },
+      {
+       "frame": 225,
+       "value": 1,
+       "easeIn": "hold"
+      }
+     ]
+    }
+   },
+   "markers": [
+    {
+     "frame": 6,
+     "label": "brush"
+    },
+    {
+     "frame": 165,
+     "label": "seal"
+    },
+    {
+     "frame": 180,
+     "label": "name"
+    },
+    {
+     "frame": 274,
+     "label": "fade"
+    }
+   ],
+   "exposedParams": []
+  }
+ ],
+ "activeCanvas": 0
+}
