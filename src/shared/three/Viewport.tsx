@@ -75,6 +75,7 @@ import { QuadMesh, getLoopCutPreviewSegments, loopCut, quadMeshSignature, transf
 import { swapInUVChecker } from "./uvChecker";
 import { UV_PANEL_WIDTH, UVPreviewPanel, type UVPanelData } from "./UVPreviewPanel";
 import { HudBar, HudSeparator, HudToolColumn, useHudToolMaxRows } from "./HudToolbars";
+import { MaskEditor } from "./maskEditor/MaskEditor";
 import { createPostProcessChain } from "./postProcessChain";
 import { computeGizmoWriteback, TransformGizmoMode, TransformPatch } from "./gizmoWriteback";
 import { enableSmoothShadows } from "./smoothShadows";
@@ -1247,6 +1248,8 @@ export function Viewport({
   }, []);
 
   const hostRef = useRef<HTMLDivElement>(null);
+  /** The camera this pane is rendering from right now — the Roto Mask editor projects through it. */
+  const liveCameraRef = useRef<() => THREE.Camera | null>(() => null);
   const hudToolMaxRows = useHudToolMaxRows(hostRef);
   // The tool columns sit right of the UV panel while it is open (both top-left).
   const hudToolColumnLeft = uvPanelOpen ? 12 + UV_PANEL_WIDTH + 8 : 12;
@@ -1467,6 +1470,7 @@ export function Viewport({
       element: renderer.domElement,
       getCamera: () => camera,
     });
+    liveCameraRef.current = () => camera;
 
     const composer = new EffectComposer(renderer);
     const renderPass = new RenderPass(scene, activeCamera);
@@ -4735,6 +4739,15 @@ export function Viewport({
       }
       if (!down || !onSelectNodeRef.current || !raycaster) return;
       if (Math.hypot(e.clientX - down.x, e.clientY - down.y) > CLICK_MOVE_THRESHOLD_PX) return;
+
+      // A selected Roto Mask is an editing mode, like painting: the clicks
+      // belong to its palette (shapes are picked and drawn on the very image
+      // that would otherwise take the selection). Pick another node in the
+      // graph to leave it.
+      const selectedForClick = selectedNodeIdRef.current
+        ? graphRef.current.nodes.find((n) => n.id === selectedNodeIdRef.current)
+        : null;
+      if (selectedForClick?.type === "mask/roto") return;
 
       const rect = renderer.domElement.getBoundingClientRect();
       const ndc = new THREE.Vector2(
@@ -9343,6 +9356,26 @@ export function Viewport({
                 Reset
               </button>
             </div>
+          );
+        })()}
+      {/* Roto Mask drawing palette */}
+      {!outputMode &&
+        !elevationView &&
+        selectedNodeId &&
+        (() => {
+          const maskNode = graph.nodes.find((n) => n.id === selectedNodeId && n.type === "mask/roto");
+          if (!maskNode) return null;
+          return (
+            <MaskEditor
+              key={maskNode.id}
+              node={maskNode}
+              graph={graph}
+              getResults={() => latestResultsRef.current}
+              getCamera={() => liveCameraRef.current()}
+              onParamsChange={(updates, options) => onParamChange?.(updates, maskNode.id, undefined, options)}
+              hudMaxRows={hudToolMaxRows}
+              hudLeft={hudToolColumnLeft}
+            />
           );
         })()}
       {/* Texture Paint Floating Toolbar */}

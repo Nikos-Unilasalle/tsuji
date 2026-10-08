@@ -143,6 +143,9 @@ Briques d'entrée conçues pour que le reste du graphe **ignore d'où vient la c
 - **`physics/vehicle`** (*Vehicle*) : Véhicule à quatre roues sur le contrôleur raycast de Rapier.
 - **`physics/constraint`** (*Constraint*) : Articulation Rapier entre deux corps (ou un corps et le monde) : hinge, fixed, ball, slider, spring, rope. Limites, moteur, `Break Force`, sorties `Angle / Distance`, `Stress`, `Broken`. Se branche sur la sortie `Body` d'un Rigid Body ou d'un Chain.
 - **`physics/chain`** (*Chain*) : Corde, chaîne ou pont de planches : maillons rigides joints par rotules ou hinges, extrémités fixées au monde ou à un corps. Sorties `Link Matrices`, `Joint Points`, `Body`.
+- **`mask/roto`** (*Roto Mask*) : Masque dessiné à la main (plume Bézier, ellipse, rectangle, main levée) avec une palette dans la vue 3D ; calques à modes Add / Subtract / Intersect / Difference, opacité, plume, expansion. Sortie : texture grise (blanc = visible), à brancher sur l'entrée `Mask` de Texture to Plane ou sur Apply Mask.
+- **`texture/apply-mask`** (*Apply Mask*) : Multiplie l'alpha d'une texture par un masque.
+- **`texture/mask`** (*Channel Mask*, anciennement *Mask*) : Extraction de canal / combinaison de deux textures.
   - Centre de gravité ajustable, publication continue des poses de roues (`wheels`) même à l'arrêt, et préservation d'échelle locale.
 - **`physics/character`** (*Character (Physics)*) : Personnage cinématique Rapier avec franchissement automatique de marches, accrochage au sol et poussée sur corps dynamiques.
 - **`physics/capsule-controller`** (*Capsule Controller*) : Contrôleur cinématique CPU contre arbre BVH (`three-mesh-bvh`) insensible aux échelles non uniformes.

@@ -485,6 +485,11 @@ export const DEMO_CATALOG: DemoCategory[] = [
     title: "Textures",
     demos: [
       {
+        file: "demo_mask_roto.tsuji",
+        label: "Roto Mask",
+        description: "Select the Roto Mask node and draw on the picture: pen, ellipse, rectangle, freehand, with soft edges and Add / Subtract / Intersect / Difference.",
+      },
+      {
         file: "demo_texture_procedural.tsuji",
         label: "Procedural Textures",
         description: "Two patterns mixed, transformed, and used as a normal map.",

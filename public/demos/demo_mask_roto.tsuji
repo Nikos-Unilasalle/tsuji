@@ -1,0 +1,376 @@
+{
+  "canvases": [
+    {
+      "nodes": [
+        {
+          "id": "tex",
+          "type": "texture/procedural",
+          "position": {
+            "x": 60,
+            "y": 120
+          },
+          "params": {
+            "type": "gradient",
+            "colorA": 16757575,
+            "colorB": 1780331,
+            "size": "1024 \u00d7 1024",
+            "scale": 1,
+            "seed": 1
+          }
+        },
+        {
+          "id": "backdrop_tex",
+          "type": "texture/procedural",
+          "position": {
+            "x": 60,
+            "y": 360
+          },
+          "params": {
+            "type": "checker",
+            "colorA": 3883602,
+            "colorB": 3028032,
+            "size": "1024 \u00d7 1024",
+            "scale": 10,
+            "seed": 1
+          }
+        },
+        {
+          "id": "roto",
+          "type": "mask/roto",
+          "position": {
+            "x": 360,
+            "y": 220
+          },
+          "params": {
+            "masks": [
+              {
+                "id": "m_oval",
+                "name": "Oval",
+                "mode": "add",
+                "opacity": 1.0,
+                "invert": false,
+                "feather": 0.06,
+                "expansion": 0.0,
+                "visible": true,
+                "points": [
+                  {
+                    "x": 0.9199999999999999,
+                    "y": 0.5,
+                    "ix": 0,
+                    "iy": -0.231959594916,
+                    "ox": 0,
+                    "oy": 0.231959594916
+                  },
+                  {
+                    "x": 0.5,
+                    "y": 0.9199999999999999,
+                    "ix": 0.231959594916,
+                    "iy": 0,
+                    "ox": -0.231959594916,
+                    "oy": 0
+                  },
+                  {
+                    "x": 0.08000000000000002,
+                    "y": 0.5,
+                    "ix": 0,
+                    "iy": 0.231959594916,
+                    "ox": 0,
+                    "oy": -0.231959594916
+                  },
+                  {
+                    "x": 0.5,
+                    "y": 0.08000000000000002,
+                    "ix": -0.231959594916,
+                    "iy": 0,
+                    "ox": 0.231959594916,
+                    "oy": 0
+                  }
+                ]
+              },
+              {
+                "id": "m_cut",
+                "name": "Cut-out",
+                "mode": "subtract",
+                "opacity": 1.0,
+                "invert": false,
+                "feather": 0.03,
+                "expansion": 0.0,
+                "visible": true,
+                "points": [
+                  {
+                    "x": 0.67,
+                    "y": 0.5,
+                    "ix": 0,
+                    "iy": -0.093888407466,
+                    "ox": 0,
+                    "oy": 0.093888407466
+                  },
+                  {
+                    "x": 0.5,
+                    "y": 0.67,
+                    "ix": 0.093888407466,
+                    "iy": 0,
+                    "ox": -0.093888407466,
+                    "oy": 0
+                  },
+                  {
+                    "x": 0.32999999999999996,
+                    "y": 0.5,
+                    "ix": 0,
+                    "iy": 0.093888407466,
+                    "ox": 0,
+                    "oy": -0.093888407466
+                  },
+                  {
+                    "x": 0.5,
+                    "y": 0.32999999999999996,
+                    "ix": -0.093888407466,
+                    "iy": 0,
+                    "ox": 0.093888407466,
+                    "oy": 0
+                  }
+                ]
+              }
+            ],
+            "activeLayer": 0,
+            "drawMode": "add",
+            "resolution": "1024",
+            "aspect": 1,
+            "showFull": false
+          }
+        },
+        {
+          "id": "plane",
+          "type": "texture/plane",
+          "position": {
+            "x": 700,
+            "y": 120
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 0,
+              "y": 1.2,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 2.4,
+              "y": 2.4,
+              "z": 2.4
+            },
+            "transparent": true,
+            "alphaCutoff": 0.001,
+            "doubleSided": true,
+            "keepAspect": true,
+            "roughness": 0.6,
+            "metalness": 0.0
+          }
+        },
+        {
+          "id": "backdrop",
+          "type": "texture/plane",
+          "position": {
+            "x": 700,
+            "y": 360
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 0,
+              "y": 1.2,
+              "z": -0.6
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 5,
+              "y": 5,
+              "z": 5
+            },
+            "transparent": false,
+            "doubleSided": true,
+            "keepAspect": true,
+            "roughness": 0.9,
+            "metalness": 0.0
+          }
+        },
+        {
+          "id": "amb",
+          "type": "light/ambient",
+          "position": {
+            "x": 700,
+            "y": 560
+          },
+          "params": {
+            "color": 10465488,
+            "intensity": 0.9
+          }
+        },
+        {
+          "id": "sun",
+          "type": "light/directional",
+          "position": {
+            "x": 700,
+            "y": 660
+          },
+          "params": {
+            "color": 16774608,
+            "intensity": 1.2,
+            "location": {
+              "x": 3,
+              "y": 6,
+              "z": 6
+            },
+            "castShadow": 0
+          }
+        },
+        {
+          "id": "scene",
+          "type": "structure/merge",
+          "position": {
+            "x": 1000,
+            "y": 360
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 0.0,
+              "y": 0.0,
+              "z": 0.0
+            },
+            "rotation": {
+              "x": 0.0,
+              "y": 0.0,
+              "z": 0.0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            }
+          }
+        },
+        {
+          "id": "render_1",
+          "type": "render",
+          "position": {
+            "x": 1260,
+            "y": 360
+          },
+          "params": {
+            "frameCount": 600,
+            "fps": 60,
+            "resolutionPreset": "16:9 (1920x1080)",
+            "width": 1920,
+            "height": 1080
+          }
+        }
+      ],
+      "connections": [
+        {
+          "id": "tex.texture->plane.texture",
+          "fromNode": "tex",
+          "fromSocket": "texture",
+          "toNode": "plane",
+          "toSocket": "texture"
+        },
+        {
+          "id": "roto.mask->plane.mask",
+          "fromNode": "roto",
+          "fromSocket": "mask",
+          "toNode": "plane",
+          "toSocket": "mask"
+        },
+        {
+          "id": "backdrop_tex.texture->backdrop.texture",
+          "fromNode": "backdrop_tex",
+          "fromSocket": "texture",
+          "toNode": "backdrop",
+          "toSocket": "texture"
+        },
+        {
+          "id": "plane.geometry->scene.in0",
+          "fromNode": "plane",
+          "fromSocket": "geometry",
+          "toNode": "scene",
+          "toSocket": "in0"
+        },
+        {
+          "id": "backdrop.geometry->scene.in1",
+          "fromNode": "backdrop",
+          "fromSocket": "geometry",
+          "toNode": "scene",
+          "toSocket": "in1"
+        },
+        {
+          "id": "amb.light->scene.in2",
+          "fromNode": "amb",
+          "fromSocket": "light",
+          "toNode": "scene",
+          "toSocket": "in2"
+        },
+        {
+          "id": "sun.light->scene.in3",
+          "fromNode": "sun",
+          "fromSocket": "light",
+          "toNode": "scene",
+          "toSocket": "in3"
+        },
+        {
+          "id": "scene.geometry->render_1.geometry",
+          "fromNode": "scene",
+          "fromSocket": "geometry",
+          "toNode": "render_1",
+          "toSocket": "geometry"
+        }
+      ],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    },
+    {
+      "nodes": [],
+      "connections": [],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    },
+    {
+      "nodes": [],
+      "connections": [],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    },
+    {
+      "nodes": [],
+      "connections": [],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    },
+    {
+      "nodes": [],
+      "connections": [],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    },
+    {
+      "nodes": [],
+      "connections": [],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    }
+  ],
+  "activeCanvas": 0
+}
