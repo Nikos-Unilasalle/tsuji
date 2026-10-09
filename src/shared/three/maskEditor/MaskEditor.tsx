@@ -20,7 +20,8 @@ import {
 import { decodeBitmap, emptyBitmap, encodeBitmap } from "../../graph/maskBitmap";
 import { maskRasterSize } from "../../graph/nodes/maskRoto";
 import { strokeBrush, toBytes, toWorking } from "./maskBrush";
-import { HudBar, HudSeparator, HudToolColumn } from "../HudToolbars";
+import { HudBar, HudToolColumn } from "../HudToolbars";
+import { DragNumberInput } from "../../../windows/DragNumberInput";
 import {
   deletePoints,
   isSmooth,
@@ -97,6 +98,7 @@ const controlStyle: CSSProperties = {
   padding: "2px 4px",
 };
 
+/** The same scrub field as the parameter panel: drag up or down to change, click to type. */
 function NumberField({
   value,
   onChange,
@@ -104,7 +106,6 @@ function NumberField({
   min,
   max,
   step,
-  width = 50,
 }: {
   value: number;
   onChange: (v: number) => void;
@@ -112,22 +113,11 @@ function NumberField({
   min: number;
   max: number;
   step: number;
-  width?: number;
 }) {
   return (
-    <input
-      type="number"
-      title={title}
-      value={Math.round(value * 1000) / 1000}
-      min={min}
-      max={max}
-      step={step}
-      style={{ ...controlStyle, width }}
-      onChange={(e) => {
-        const n = Number(e.target.value);
-        if (Number.isFinite(n)) onChange(Math.max(min, Math.min(max, n)));
-      }}
-    />
+    <span title={title} style={{ display: "inline-flex" }}>
+      <DragNumberInput value={value} onChange={onChange} min={min} max={max} step={step} />
+    </span>
   );
 }
 
@@ -203,16 +193,13 @@ export function MaskEditor({ node, graph, getResults, getCamera, onParamsChange,
   const layers = useMemo(() => sanitizeLayers(node.params.masks), [node.params.masks]);
   const activeIndex = Math.max(0, Math.min(layers.length - 1, Math.round(Number(node.params.activeLayer) || 0)));
   const active: MaskLayer | undefined = layers[activeIndex];
-  const drawMode = (MASK_MODES as readonly string[]).includes(node.params.drawMode as string)
-    ? (node.params.drawMode as MaskLayer["mode"])
-    : "add";
   const brushSize = Math.max(2, Math.min(600, Number(node.params.brushSize) || 48));
   const brushHardness = Math.max(0, Math.min(1, Number(node.params.brushHardness ?? 0.3)));
   const brushFlow = Math.max(0.01, Math.min(1, Number(node.params.brushFlow ?? 1)));
 
   // Handlers read the latest of these without being re-created on every render.
-  const live = useRef({ layers, activeIndex, tool, selection, draft, drawMode, nodeId: node.id, brushSize, brushHardness, brushFlow, resolution: node.params.resolution });
-  live.current = { layers, activeIndex, tool, selection, draft, drawMode, nodeId: node.id, brushSize, brushHardness, brushFlow, resolution: node.params.resolution };
+  const live = useRef({ layers, activeIndex, tool, selection, draft, nodeId: node.id, brushSize, brushHardness, brushFlow, resolution: node.params.resolution });
+  live.current = { layers, activeIndex, tool, selection, draft, nodeId: node.id, brushSize, brushHardness, brushFlow, resolution: node.params.resolution };
   const emit = useRef(onParamsChange);
   emit.current = onParamsChange;
 
@@ -286,9 +273,9 @@ export function MaskEditor({ node, graph, getResults, getCamera, onParamsChange,
 
   const addLayer = useCallback(
     (points: MaskPoint[]) => {
-      const { layers: current, drawMode: mode } = live.current;
+      const { layers: current } = live.current;
       if (points.length < 3) return;
-      const layer = createLayer(points, { name: `Mask ${current.length + 1}`, mode });
+      const layer = createLayer(points, { name: `Mask ${current.length + 1}` });
       commitLayers([...current, layer], { activeLayer: current.length });
       setSelection({ layerId: layer.id, points: new Set() });
       setDraft([]);
@@ -400,7 +387,7 @@ export function MaskEditor({ node, graph, getResults, getCamera, onParamsChange,
     v: View,
     ppu: { x: number; y: number },
   ) => {
-    const { layers: current, activeIndex: index, drawMode: mode, resolution, brushSize: size, brushHardness: hardness, brushFlow: flow } = live.current;
+    const { layers: current, activeIndex: index, resolution, brushSize: size, brushHardness: hardness, brushFlow: flow } = live.current;
     const existing = current[index];
     const onPaint = existing && isPaintLayer(existing) && existing.bitmap !== undefined;
 
@@ -414,7 +401,7 @@ export function MaskEditor({ node, graph, getResults, getCamera, onParamsChange,
       const fresh = createPaintLayer(bitmap, {
         name: erase ? `Erase ${current.length + 1}` : `Paint ${current.length + 1}`,
         // Rubbing out something that is not a paint layer is subtracting from the mask.
-        mode: erase ? "subtract" : mode,
+        mode: erase ? "subtract" : "add",
       });
       layers = [...current, fresh];
       targetIndex = current.length;
@@ -818,14 +805,7 @@ export function MaskEditor({ node, graph, getResults, getCamera, onParamsChange,
         {(["select", "pen", "ellipse", "rect", "freehand", "brush", "eraser"] as Tool[]).map(toolButton)}
       </HudToolColumn>
 
-      <HudBar>
-        <div
-          style={{ fontSize: 11, fontWeight: 700, color: ACCENT, padding: "2px 8px", background: "rgba(56,189,248,0.15)", borderRadius: 4, letterSpacing: "0.04em", userSelect: "none" }}
-          title="Roto Mask"
-        >
-          MASK
-        </div>
-
+      <HudBar align="right">
         {!view && (
           <span style={{ fontSize: 11, opacity: 0.8, maxWidth: 360 }}>
             Connect this mask to a Texture to Plane (or any surface with UVs) to draw on it.
@@ -853,12 +833,6 @@ export function MaskEditor({ node, graph, getResults, getCamera, onParamsChange,
                 </option>
               ))}
             </select>
-            <input
-              title="Layer name"
-              value={active.name}
-              style={{ ...controlStyle, width: 80 }}
-              onChange={(e) => updateLayer(activeIndex, { name: e.target.value })}
-            />
             <button type="button" className="viewport-hud-button" title="Move down the stack (applied earlier)" onClick={() => moveLayer(activeIndex, activeIndex - 1)}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M6 13l6 6 6-6" /></svg>
             </button>
@@ -885,8 +859,6 @@ export function MaskEditor({ node, graph, getResults, getCamera, onParamsChange,
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" /></svg>
             </button>
-
-            <HudSeparator />
 
             <select
               title="How this layer combines with the ones below it"
@@ -940,7 +912,6 @@ export function MaskEditor({ node, graph, getResults, getCamera, onParamsChange,
 
         {(tool === "brush" || tool === "eraser") && (
           <>
-            <HudSeparator />
             <label style={{ display: "flex", alignItems: "center", gap: 3 }} title="Brush diameter on screen, in px ([ and ] change it)">
               Size
               <NumberField title="Brush size (px)" value={brushSize} min={2} max={600} step={2} onChange={(v) => emit.current({ brushSize: v })} />
@@ -956,18 +927,6 @@ export function MaskEditor({ node, graph, getResults, getCamera, onParamsChange,
           </>
         )}
 
-        <HudSeparator />
-
-        <label style={{ display: "flex", alignItems: "center", gap: 3 }} title="Mode given to the next shape you draw">
-          New
-          <select style={controlStyle} value={drawMode} onChange={(e) => commitLayers(layers, { drawMode: e.target.value })}>
-            {MASK_MODES.map((m) => (
-              <option key={m} value={m}>
-                {MODE_LABELS[m]}
-              </option>
-            ))}
-          </select>
-        </label>
         <button
           type="button"
           className={`viewport-hud-button ${node.params.showFull ? "viewport-hud-button-active" : ""}`}

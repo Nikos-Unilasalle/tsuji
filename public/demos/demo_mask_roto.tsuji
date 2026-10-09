@@ -133,7 +133,6 @@
               }
             ],
             "activeLayer": 0,
-            "drawMode": "add",
             "resolution": "1024",
             "aspect": 1,
             "showFull": false
@@ -200,6 +199,44 @@
             "keepAspect": true,
             "roughness": 0.9,
             "metalness": 0.0
+          }
+        },
+        {
+          "id": "cut",
+          "type": "texture/apply-mask",
+          "position": {
+            "x": 360,
+            "y": 420
+          },
+          "params": {}
+        },
+        {
+          "id": "cube",
+          "type": "object/box",
+          "position": {
+            "x": 700,
+            "y": 760
+          },
+          "params": {
+            "location": {
+              "x": 3.4,
+              "y": 1.2,
+              "z": 0.3
+            },
+            "rotation": {
+              "x": 0.3,
+              "y": 0.6,
+              "z": 0
+            },
+            "scale": {
+              "x": 1.6,
+              "y": 1.6,
+              "z": 1.6
+            },
+            "color": 16777215,
+            "roughness": 0.5,
+            "metalness": 0.0,
+            "opacity": 1
           }
         },
         {
@@ -295,6 +332,34 @@
           "fromSocket": "texture",
           "toNode": "backdrop",
           "toSocket": "texture"
+        },
+        {
+          "id": "tex.texture->cut.texture",
+          "fromNode": "tex",
+          "fromSocket": "texture",
+          "toNode": "cut",
+          "toSocket": "texture"
+        },
+        {
+          "id": "roto.mask->cut.mask",
+          "fromNode": "roto",
+          "fromSocket": "mask",
+          "toNode": "cut",
+          "toSocket": "mask"
+        },
+        {
+          "id": "cut.texture->cube.texture",
+          "fromNode": "cut",
+          "fromSocket": "texture",
+          "toNode": "cube",
+          "toSocket": "texture"
+        },
+        {
+          "id": "cube.geometry->scene.in4",
+          "fromNode": "cube",
+          "fromSocket": "geometry",
+          "toNode": "scene",
+          "toSocket": "in4"
         },
         {
           "id": "plane.geometry->scene.in0",

@@ -147,6 +147,9 @@ export interface TextureParams {
 const textureAlphaCache = new WeakMap<THREE.Texture, boolean>();
 
 export function textureHasAlpha(tex: THREE.Texture): boolean {
+  // A texture a GPU pass drew into has no pixels to scan; the node that knows
+  // it carries alpha (Apply Mask) says so.
+  if (tex.userData?.hasAlpha === true) return true;
   const cached = textureAlphaCache.get(tex);
   if (cached !== undefined) return cached;
 

@@ -380,6 +380,9 @@ export const TEXTURE_APPLY_MASK_NODE: NodeDefinition = {
           return vec4(a.rgb, a.a * m);
         }`,
     });
+    // The result is drawn on the GPU, so an object's material has no pixels to
+    // scan for alpha: say so, or the cut-out would be ignored and the object drawn opaque.
+    if (texture) texture.userData.hasAlpha = true;
     return { texture };
   },
 };

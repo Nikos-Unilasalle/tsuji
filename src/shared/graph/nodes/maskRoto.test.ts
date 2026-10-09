@@ -177,3 +177,13 @@ describe("Texture to Plane with a mask", () => {
     disposeNodeCaches(["rm-plane", "plane-masked"]);
   });
 });
+
+describe("a masked texture on a 3D object", () => {
+  it("is known to have alpha, so the object is not drawn opaque", async () => {
+    const { textureHasAlpha } = await import("./object");
+    const gpuTexture = new THREE.Texture();
+    expect(textureHasAlpha(gpuTexture)).toBe(false);
+    gpuTexture.userData.hasAlpha = true;
+    expect(textureHasAlpha(gpuTexture)).toBe(true);
+  });
+});

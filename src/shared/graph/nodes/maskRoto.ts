@@ -80,8 +80,6 @@ export const ROTO_MASK_NODE: NodeDefinition = {
   defaultParams: {
     masks: [] as MaskLayer[],
     activeLayer: 0,
-    /** The mode the next shape drawn in the viewport gets. */
-    drawMode: "add",
     /** The brush: diameter on screen in px, hardness (0 = soft falloff), flow. */
     brushSize: 48,
     brushHardness: 0.3,
