@@ -1,0 +1,106 @@
+.about-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 999999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(8, 11, 18, 0.55);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  animation: aboutFadeIn 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes aboutFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.about-modal {
+  width: 100%;
+  max-width: 320px;
+  padding: 28px 28px 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  background: var(--chrome-surface-raised, #1e293b);
+  border: 1px solid var(--chrome-border, rgba(255, 255, 255, 0.1));
+  border-radius: 14px;
+  box-shadow: 0 24px 48px -12px rgba(0, 0, 0, 0.55);
+  color: var(--chrome-text, #f8fafc);
+}
+
+.about-logo {
+  height: 56px;
+  width: auto;
+  object-fit: contain;
+}
+
+.about-name {
+  margin-top: 12px;
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+}
+
+.about-name span {
+  color: var(--chrome-text-muted, #94a3b8);
+}
+
+.about-tagline {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--chrome-text-muted, #94a3b8);
+}
+
+.about-rule {
+  width: 32px;
+  height: 1px;
+  margin: 18px 0 14px;
+  background: var(--chrome-border, rgba(255, 255, 255, 0.15));
+}
+
+.about-credits {
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 6px 14px;
+  margin: 0;
+  font-size: 12px;
+}
+
+.about-credits dt {
+  text-align: right;
+  color: var(--chrome-text-muted, #94a3b8);
+}
+
+.about-credits dd {
+  margin: 0;
+  text-align: left;
+}
+
+.about-credits a {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: var(--chrome-border, rgba(255, 255, 255, 0.3));
+  text-underline-offset: 3px;
+}
+
+.about-credits a:hover {
+  text-decoration-color: currentColor;
+}
+
+.about-version {
+  margin-top: 18px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--chrome-text-muted, #94a3b8);
+  opacity: 0.8;
+}

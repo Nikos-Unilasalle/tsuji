@@ -50,6 +50,8 @@
   font-size: 14px;
   letter-spacing: 0.05em;
   color: var(--chrome-text, #ffffff);
+  cursor: pointer;
+  outline: none;
 }
 
 .top-bar-logo-img {

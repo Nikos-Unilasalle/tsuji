@@ -22,6 +22,7 @@ import { DemosMenu } from "./DemosMenu";
 import { ExportSource, ShareMenu } from "./ShareMenu";
 import { DownloadMenu } from "./DownloadMenu";
 import { PreferencesModal } from "./PreferencesModal";
+import { AboutModal } from "./AboutModal";
 import { createStarterProject } from "../shared/graph/starterGraph";
 import "./top-bar.css";
 
@@ -93,6 +94,7 @@ export const TopBar: React.FC<TopBarProps> = ({
   const [isOutputOpen, setIsOutputOpen] = useState(false);
   const [isView2DOpen, setIsView2DOpen] = useState(false);
   const [isPreferencesOpen, setIsPreferencesOpen] = useState(false);
+  const [isAboutOpen, setIsAboutOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
   // Blender-style horizontal drag-to-scroll header behavior
@@ -309,7 +311,16 @@ export const TopBar: React.FC<TopBarProps> = ({
     >
       {/* Left section: Logo + File Operations */}
       <div className="top-bar-left">
-        <div className="top-bar-logo">
+        <div
+          className="top-bar-logo"
+          role="button"
+          tabIndex={0}
+          title="About tsuji"
+          onClick={() => setIsAboutOpen(true)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") setIsAboutOpen(true);
+          }}
+        >
           <img src={logoUrl} alt="Tsuji" className="top-bar-logo-img" />
           <span className="top-bar-logo-text">
             tsu<span className="top-bar-logo-v">ji</span>
@@ -597,6 +608,7 @@ export const TopBar: React.FC<TopBarProps> = ({
           </svg>
         </button>
       </div>
+      <AboutModal isOpen={isAboutOpen} onClose={() => setIsAboutOpen(false)} />
       <PreferencesModal isOpen={isPreferencesOpen} onClose={() => setIsPreferencesOpen(false)} />
     </header>
   );
