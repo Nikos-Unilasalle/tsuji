@@ -27,6 +27,11 @@ HUD naming the nodes on screen, grain over everything.
 The calligraphy is KanjiVG stroke data (© Ulrich Apel, CC BY-SA 3.0), shared
 with tools/gen_calligraphy.py; the file this writes carries it.
 
+The committed demo was finished by hand in the editor (a ring that unwinds,
+a deeper title, a shadow-catcher floor under a glass boulder, the end-card
+address...). Those edits are folded back in here, so this script makes the
+same film; only its node ids and graph layout differ from the committed file.
+
 Run from the repo root: python3 tools/gen_showreel.py
 """
 import json
@@ -177,7 +182,7 @@ class Scene:
 # ---------------------------------------------------------------- shared rig
 
 def rig(s, *, bg=INK, cam_loc=v3(0, 0, 10), cam_target=v3(0, 0, 0), fov=35, next_canvas=None,
-        bloom=(0.55, 0.45, 0.9), grain=0.16, vignette=(1.0, 1.1), ambient=0.0, contrast=1.0):
+        bloom=(0.55, 0.45, 0.9), grain=0.16, vignette=(1.0, 1.1), ambient=0.0, contrast=1.0, motion_blur=0):
     """Render, background, camera, the post stack, the chapter clock and the
     hand-off to the next canvas — the same skeleton under every chapter.
 
@@ -185,7 +190,7 @@ def rig(s, *, bg=INK, cam_loc=v3(0, 0, 10), cam_target=v3(0, 0, 0), fov=35, next
     off the timeline frame) to drive things from, `cam`, and the post stack:
     effects added with post() run before the finishing passes."""
     s.add("render", "render", 13, frameCount=s.frames, fps=FPS, resolutionPreset="16:9 (1920x1080)",
-          width=1920, height=1080, timelineEnabled=True, motionBlur=0)
+          width=1920, height=1080, timelineEnabled=True, motionBlur=motion_blur)
     s.add("env", "lighting/environment", 12, color=bg, intensity=1, background=1, ambientIntensity=ambient, sunIntensity=0.0)
     s.wire("env", "environment", "render", "environment")
 
@@ -302,7 +307,8 @@ def chapter_ignition():
     out what it is, the letters fly up and the sun swallows the frame — into
     chapter 2's red."""
     s = Scene("c1", 4 * BAR)
-    rig(s, cam_loc=v3(0, 0.3, 16), cam_target=v3(0, 0.3, 0), fov=30, next_canvas=2)
+    rig(s, cam_loc=v3(0, 0.3, 16), cam_target=v3(0, 0.3, 0), fov=30, next_canvas=2, bloom=(0.55, 0.45, 0.51),
+        motion_blur=0.138)
     s.key("chroma", "amount", [(0, 0.0)])
     fade(s, [(0, 0.0), (10, 1.0, "expo", 5)])
 
@@ -324,22 +330,32 @@ def chapter_ignition():
     s.key("sun", "scale", sun)
     s.key("sun", "location", [(0, v3(0, -1.6, -4)), (BEAT + 4, v3(0, 0.55, -4), "expo", 6)])
 
-    # Rings breathing out of it on beats 2, 3 and 4 of the first bar.
-    s.add("ring", "object/disc", 5, radius=2.6, innerRadius=2.55, depth=0, location=v3(0, 0.55, -4.05),
-          rotation=v3(0, 0, 0), color=BONE, emissive=BONE, emissiveIntensity=0.3, shadeless=1, opacity=0.0, scale=v3(1, 1, 1))
+    # Rings breathing out of it on beats 2 and 3 of the first bar; on beat 4
+    # the ring flares white and unwinds (Arc Angle) instead of breathing out.
+    s.add("ring", "object/disc", 5, radius=2.6, innerRadius=2.089, depth=0, location=v3(0, 0.55, -4.05),
+          rotation=v3(0, 0, 0), color=BONE, emissive=0xFFFFFF, emissiveIntensity=0.3, shadeless=1, opacity=1,
+          scale=v3(1.175, 1.175, 1.175), arcAngle=0)
     ring_s, ring_o = [], []
     for f in [BEAT, 2 * BEAT, 3 * BEAT] + [2 * BAR + b * BEAT for b in range(4)]:
+        if f == 3 * BEAT:
+            ring_s += [(f, v3(0.9, 0.9, 0.9), "hold"), (f + 1, v3(1.175, 1.175, 1.175)), (f + 14, v3(1.175, 1.175, 1.175))]
+            ring_o += [(f - 1, 0), (f, 0.85, "hold"), (f + 14, 1)]
+            continue
         ring_s += [(f, v3(0.9, 0.9, 0.9), "hold"), (f + 14, v3(2.1, 2.1, 2.1), "expo", 5)]
-        ring_o += [(f - 1, 0.0), (f, 0.85, "hold"), (f + 14, 0.0, "expo", 3)]
+        ring_o += [(f - 1, 0), (f, 0.85, "hold"), (f + 14, 0, "expo", 3)]
     s.key("ring", "scale", ring_s)
     s.key("ring", "opacity", ring_o)
+    # Thinning as each breath widens.
+    s.key("ring", "innerRadius", [(BEAT + 1, 2.126), (BEAT + 5, 2.551), (2 * BEAT, 2.551), (2 * BEAT + 1, 2.089),
+                                  (2 * BEAT + 5, 2.564), (3 * BEAT, 2.564), (3 * BEAT + 1, 2.089)])
+    s.key("ring", "arcAngle", [(3 * BEAT + 1, 2 * math.pi), (BAR - 2, 0)])
 
     # TSUJI, one letter landing per eighth note from bar 2.
-    s.add("title", "text/animator", 6, text="TSUJI", fontPreset="Anton", fontSize=150, depth=0.5, bevelEnabled=True,
+    s.add("title", "text/animator", 6, text="TSUJI", fontPreset="Anton", fontSize=150, depth=6.375, bevelEnabled=True,
           tracking=6, lineHeight=1.0, align="center", anchor="glyph_center", basedOn="characters",
           selectorShape="smooth", start=0, end=0.45, offset=-0.45, invert=True, randomize=False,
           positionDelta=[0, -2.4, 2.2], rotationDelta=[-80 * DEG, 0, 10 * DEG], scaleDelta=[0, 0, 0],
-          location=v3(0, 0.3, 0), color=BONE, roughness=0.45, metalness=0.0, emissive=0x1C1A17, emissiveIntensity=1)
+          location=v3(0, 0.3, 0), color=BONE, roughness=0.5, metalness=0.0, emissive=0x1C1A17, emissiveIntensity=1, wireframe=0)
     text_in(s, "title", BAR, 36)
     # ... and leaving the way it came, upward, on the last bar.
     out = 3 * BAR + 15
@@ -377,7 +393,7 @@ def chapter_type():
     chapter 3's black."""
     s = Scene("c2", 4 * BAR)
     rig(s, bg=VERMILION, cam_loc=v3(0, 1.2, 12), cam_target=v3(0, 0.1, 0), fov=36, next_canvas=3,
-        bloom=(0.2, 0.4, 0.96), grain=0.14, vignette=(0.7, 1.0))
+        bloom=(0.2, 0.4, 0.96), grain=0.14, vignette=(0.7, 1.0), motion_blur=0.325)
     # Bar 1 sits right on the words, so each one fills the frame; the downbeat
     # of bar 2 pulls back to reveal the rings.
     s.key("cam", "location", [(0, v3(0, 0.1, 7.2)), (BAR - 1, v3(0, 0.1, 6.4), "linear"), (BAR + 20, v3(0, 0.6, 11.8), "expo", 6),
@@ -386,11 +402,13 @@ def chapter_type():
 
     words = [(0, "TYPE"), (BEAT, "THAT"), (2 * BEAT, "MOVES"), (3 * BEAT, "ON BEAT."), (BAR, "KINETIC"),
              (3 * BAR, "ANY PATH.")]
-    s.add("word", "text/animator", 6, text="TYPE", fontPreset="Anton", fontSize=100, depth=0.35, bevelEnabled=True,
+    s.add("word", "text/animator", 6, text="TYPE", fontPreset="Anton", fontSize=100, depth=0, bevelEnabled=True,
           tracking=4, align="center", anchor="glyph_center", basedOn="characters", selectorShape="smooth",
           start=0, end=0.5, offset=-0.5, invert=True, positionDelta=[0, -1.0, 0.8], rotationDelta=[-90 * DEG, 0, 0],
-          scaleDelta=[0, 0, 0], location=v3(0, 0.0, 0), color=INK, roughness=0.55, metalness=0.0)
+          scaleDelta=[0, 0, 0], location=v3(0, 0.0, 0), color=0xEDE9E9, roughness=0.55, metalness=0.0)
     s.key("word", "text", [(f, w, "hold") for f, w in words])
+    # Flat while the words fill the frame, extruded once the camera pulls back.
+    s.key("word", "depth", [(BAR - 1, 0), (BAR, 0.35)])
     s.add("word_p", "math/expression", 4, formula="x", x=0)
     s.wire("word_p", "value", "word", "progress")
     keys = []
@@ -410,7 +428,7 @@ def chapter_type():
 
     rings = [
         # id, radius, tilt (x, z), text, font, size, colour, turns over the chapter, appears on
-        ("ringA", 3.0, (0.42, 0.10), "KINETIC TYPE  /  ON ANY PATH  /  KINETIC TYPE  /  ON ANY PATH  /  ", "Anton", 40, BONE, 0.22, BAR),
+        ("ringA", 3.0, (0.42, 0.10), "KINETIC TYPE  /  ON ANY PATH  /  KINETIC TYPE  /  ON ANY PATH  /  ", "Anton", 40, 0xEAB308, 0.22, BAR),
         ("ringB", 3.6, (-0.30, -0.42), "RANGE SELECTOR · PER-GLYPH TRANSFORMS · TEXT ON PATH · RANGE SELECTOR · PER-GLYPH TRANSFORMS · TEXT ON PATH · ",
          "Nova Mono", 34, INK, -0.16, BAR + BEAT),
         ("ringC", 4.1, (0.12, 0.55), "TSUJI  /  TYPE IN MOTION  /  TSUJI  /  TYPE IN MOTION  /  TSUJI  /  TYPE IN MOTION  /  ", "Anton", 40, BONE, 0.12, BAR + 2 * BEAT),
@@ -551,13 +569,11 @@ def chapter_physics():
     sixty vermilion balls rain on it and scatter the letters across the
     floor. Cut to black."""
     s = Scene("c4", 4 * BAR)
-    rig(s, bg=BONE, cam_loc=v3(2, 5, 17), cam_target=v3(0, 2, 0), fov=30, next_canvas=5,
+    rig(s, bg=0xD8D4C5, cam_loc=v3(2, 5, 17), cam_target=v3(0, 2, 0), fov=30, next_canvas=5,
         bloom=(0.15, 0.3, 0.97), grain=0.12, vignette=(0.6, 1.0), ambient=0.75)
     flash_in(s)
-    s.key("cam", "location", [(0, v3(1.0, 4.2, 17.5)), (BAR, v3(3.5, 3.4, 15.0), "smooth"), (2 * BAR, v3(6.0, 4.6, 12.5), EASE_IO),
-                              (4 * BAR, v3(7.5, 5.5, 9.5), "smooth")])
-    s.key("cam", "target", [(0, v3(0, 3.0, 0)), (BAR, v3(0, 1.2, 0), "smooth"), (2 * BAR, v3(0, 0.8, 0), "smooth"),
-                            (4 * BAR, v3(0.5, 0.4, 0.5), "smooth")])
+    s.key("cam", "location", [(0, v3(1.0, 4.2, 17.5)), (2 * BAR, v3(6.0, 4.6, 12.5), EASE_IO), (4 * BAR, v3(7.5, 5.5, 9.5), "smooth")])
+    s.key("cam", "target", [(0, v3(0, 3.0, 0)), (2 * BAR, v3(0, 0.8, 0), "smooth"), (4 * BAR, v3(0.5, 0.4, 0.5), "smooth")])
 
     # The world runs on the engine's own clock and is rebuilt on the chapter's
     # first frames, so every pass through the chapter drops the same way. (Not
@@ -568,7 +584,11 @@ def chapter_physics():
     s.wire("frame", "frame", "restart", "x")
     s.wire("restart", "value", "world", "reset")
 
-    s.add("floor", "object/box", 4, location=v3(0, -0.25, 0), scale=v3(40, 0.5, 40), color=BONE, roughness=0.95, metalness=0)
+    # A shadow catcher: the floor shows only the shadows cast on it.
+    s.add("floor", "object/box", 4, location=v3(0, -0.25, -5.605976323943239), scale=v3(40, 0.001, 82.12746131541188),
+          color=BONE, roughness=0.95, metalness=0)
+    s.add("catcher", "material/shadow-catcher", 3, opacity=0.6, color=0x000000, doubleSided=1)
+    s.wire("catcher", "material", "floor", "material")
     s.add("floor_body", "physics/rigid-body", 6, bodyType="fixed", shape="box", split="whole", friction=0.8, restitution=0.2)
     s.wire("world", "world", "floor_body", "world")
     s.wire("floor", "geometry", "floor_body", "geometry")
@@ -576,13 +596,14 @@ def chapter_physics():
     s.add("letters", "text/animator", 4, text="TSUJI", fontPreset="Anton", fontSize=130, depth=0.7, bevelEnabled=True,
           tracking=10, align="center", anchor="glyph_center", basedOn="characters", selectorShape="linear",
           start=0, end=1, offset=0, randomize=True, randomSeed=5, positionDelta=[0, 3.0, 0],
-          rotationDelta=[0.35, 0.25, 0.5], scaleDelta=[1, 1, 1], location=v3(0, 3.2, 0), color=INK, roughness=0.5)
+          rotationDelta=[0.35, 0.25, 0.5], scaleDelta=[1, 1, 1], location=v3(0, 3.2, 0), color=0xCEF8FF, roughness=1,
+          wireframe=0)
     s.add("letter_bodies", "physics/rigid-body", 6, bodyType="dynamic", shape="hull", split="per-child", mass=1,
           friction=0.6, restitution=0.25, linearDamping=0.05, angularDamping=0.1, gravityScale=1, ccd=1)
     s.wire("world", "world", "letter_bodies", "world")
     s.wire("letters", "geometry", "letter_bodies", "geometry")
 
-    s.add("ball", "object/sphere", 4, scale=v3(0.42, 0.42, 0.42), color=VERMILION, roughness=0.35, metalness=0.0,
+    s.add("ball", "object/sphere", 4, scale=v3(0.42, 0.42, 0.42), color=VERMILION, roughness=1, metalness=0.0,
           sphereType="uv", segments=24)
     s.add("rain", "structure/array", 5, mode="grid3d", countX=6, countY=5, countZ=2, spacingX=1.5, spacingY=1.9,
           spacingZ=1.6, spacingVariance=60, centerGrid=True, gpuInstancing=False)
@@ -598,10 +619,10 @@ def chapter_physics():
     s.wire("world", "world", "ball_bodies", "world")
     s.wire("rain_at", "geometry", "ball_bodies", "geometry")
 
-    # Bar 3: the wrecking ball. Dropped from 80 m it needs four seconds to
-    # come down — timed by gravity alone to land on the downbeat.
-    s.add("boulder", "object/sphere", 4, location=v3(-0.6, 80, 0.4), scale=v3(1.15, 1.15, 1.15), color=INK, roughness=0.3,
-          metalness=0.0, sphereType="uv", segments=48)
+    # Bar 3: the wrecking ball, in glass. Dropped from 80 m it needs four
+    # seconds to come down — timed by gravity alone to land on the downbeat.
+    s.add("boulder", "object/sphere", 4, location=v3(-0.6, 80, 0.4), scale=v3(1.15, 1.15, 1.15), color=0xFFFFFF,
+          roughness=0.1, metalness=0.0, sphereType="uv", segments=48, shadeless=0, transmission=1, thickness=0.825)
     s.add("boulder_body", "physics/rigid-body", 7, bodyType="dynamic", shape="sphere", split="whole", mass=40,
           friction=0.5, restitution=0.15, linearDamping=0.0, angularDamping=0.1, gravityScale=1, ccd=1)
     s.wire("world", "world", "boulder_body", "world")
@@ -807,9 +828,11 @@ def chapter_ink():
     s.key("line_p", "x", [(stamp + 2 * BEAT, 0.0), (stamp + 2 * BEAT + 22, 1.08, "linear")])
 
     info = "real-time · web · macOS · windows · linux · open source"
-    url = "nikos-unilasalle.github.io/tsuji"
+    url = "TSUJI.XYZ"
     hud(s, "h_info", info, mono_x(info, 18, left=1138), 700, size=18, color=0x55524C, show=[(0, 0), (stamp + 3 * BEAT + 10, 1)])
-    hud(s, "h_url", url, mono_x(url, 26, left=1138), 752, size=26, color=INK, show=[(0, 0), (stamp + 4 * BEAT, 1)])
+    # Set by hand in the editor: twice the size, tipped 5° like the seal.
+    hud(s, "h_url", url, 1439.8930775082124, 815.2574956917443, size=26, color=INK, show=[(0, 0), (stamp + 4 * BEAT, 1)],
+        rotation=355.040068215064, scale=2.04990234375)
 
     chrome_hud(s, 6, "INK", "grease-pencil  →  write-on  →  brush-canvas (sumi)", color=INK, dim=0x7A7468)
     credit = "辻 stroke data: KanjiVG © Ulrich Apel, CC BY-SA 3.0"
