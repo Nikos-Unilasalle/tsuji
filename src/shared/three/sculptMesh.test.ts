@@ -1,5 +1,6 @@
 import { describe, test, expect } from "vitest";
-import { buildAdjacency, buildBasePrimitive, computeVertexNormals } from "./sculptMesh";
+import * as THREE from "three";
+import { buildAdjacency, buildBasePrimitive, computeVertexNormals, meshDataFromGeometry } from "./sculptMesh";
 
 describe("sculptMesh base primitives", () => {
   test("icosphere: all vertices lie on the target radius, normals point outward", () => {
@@ -49,5 +50,41 @@ describe("sculptMesh base primitives", () => {
       const len = Math.hypot(normals[i * 3], normals[i * 3 + 1], normals[i * 3 + 2]);
       expect(len).toBeCloseTo(1.0, 3);
     }
+  });
+
+  test("cube faces point outward on all six sides", () => {
+    const mesh = buildBasePrimitive("cube", 2, 2.0);
+    for (let t = 0; t < mesh.indices.length; t += 3) {
+      const [a, b, c] = [0, 1, 2].map((k) => {
+        const i = mesh.indices[t + k];
+        return new THREE.Vector3(mesh.positions[i * 3], mesh.positions[i * 3 + 1], mesh.positions[i * 3 + 2]);
+      });
+      const normal = new THREE.Vector3().crossVectors(b.clone().sub(a), c.clone().sub(a));
+      const centroid = a.clone().add(b).add(c).divideScalar(3);
+      expect(normal.dot(centroid)).toBeGreaterThan(0);
+    }
+  });
+
+  test("plane faces up", () => {
+    const mesh = buildBasePrimitive("plane", 2, 2.0);
+    const normals = computeVertexNormals(mesh.positions, mesh.indices);
+    for (let i = 0; i < normals.length / 3; i++) expect(normals[i * 3 + 1]).toBeGreaterThan(0.99);
+  });
+
+  test("meshDataFromGeometry welds seams of a BoxGeometry into a closed shell", () => {
+    const mesh = meshDataFromGeometry(new THREE.BoxGeometry(2, 2, 2, 2, 2, 2));
+    expect(mesh).not.toBeNull();
+    // 3x3x3 box lattice surface = 26 vertices, instead of 6*9 = 54 unwelded.
+    expect(mesh!.positions.length / 3).toBe(26);
+    const counts = new Map<string, number>();
+    for (let t = 0; t < mesh!.indices.length; t += 3) {
+      for (let e = 0; e < 3; e++) {
+        const u = mesh!.indices[t + e];
+        const v = mesh!.indices[t + ((e + 1) % 3)];
+        const k = u < v ? `${u}_${v}` : `${v}_${u}`;
+        counts.set(k, (counts.get(k) ?? 0) + 1);
+      }
+    }
+    for (const c of counts.values()) expect(c).toBe(2);
   });
 });

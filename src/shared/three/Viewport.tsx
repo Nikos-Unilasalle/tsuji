@@ -253,6 +253,7 @@ import {
 import { TerrainGridConfig, hasAnyMaskWeight } from "./terrainEngine";
 import { SculptMeshData, buildAdjacency, computeVertexNormals, syncBufferGeometry } from "./sculptMesh";
 import { refineNearBrush } from "./sculptDyntopo";
+import { BrushHud, BrushHudTool } from "./BrushHud";
 import { applySculptStroke3D, SculptBrushTool, SculptStrokeParams3D } from "./sculptEngine";
 import { BrushFalloff } from "./brushFalloff";
 
@@ -271,6 +272,31 @@ function getTerrainMeshForNode(
   }
   return null;
 }
+
+/** Same palette order on both nodes; a node just omits the tools its surface can't do (Terrain is a heightfield, so no Inflate/Grab; Sculpt has no Erode). */
+const TERRAIN_HUD_TOOLS: BrushHudTool[] = [
+  { id: "sculpt", kind: "draw" },
+  { id: "clayStrip", kind: "clay" },
+  { id: "smooth", kind: "smooth" },
+  { id: "pinch", kind: "pinch" },
+  { id: "crease", kind: "crease" },
+  { id: "flatten", kind: "flatten" },
+  { id: "noise", kind: "noise" },
+  { id: "erode", kind: "erode" },
+  { id: "mask", kind: "mask" },
+];
+const SCULPT_HUD_TOOLS: BrushHudTool[] = [
+  { id: "draw", kind: "draw" },
+  { id: "clay", kind: "clay" },
+  { id: "inflate", kind: "inflate" },
+  { id: "smooth", kind: "smooth" },
+  { id: "pinch", kind: "pinch" },
+  { id: "crease", kind: "crease" },
+  { id: "flatten", kind: "flatten" },
+  { id: "grab", kind: "grab" },
+  { id: "noise", kind: "noise" },
+  { id: "mask", kind: "mask" },
+];
 
 function isSculptNode(node: { type: string } | null | undefined): boolean {
   if (!node) return false;
@@ -8837,303 +8863,51 @@ export function Viewport({
           const brushFalloff = (tNode.params.brushFalloff as TerrainBrushFalloff) || terrainBrushFalloff;
 
           return (
-            <div
-              className="viewport-terrain-hud"
-              style={{
-                position: "absolute",
-                bottom: 16,
-                left: "50%",
-                transform: "translateX(-50%)",
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                padding: "6px 14px",
-                background: "var(--chrome-surface-raised)",
-                backdropFilter: "blur(12px)",
-                border: "1px solid rgba(16, 185, 129, 0.45)",
-                borderRadius: "8px",
-                boxShadow:
-                  "0 8px 24px rgba(0, 0, 0, 0.5), 0 0 16px rgba(16, 185, 129, 0.2)",
-                color: "#ffffff",
-                fontSize: "12px",
-                zIndex: 45,
-                pointerEvents: "auto",
+            <BrushHud
+              badge="TERRAIN"
+              badgeTitle="Terrain Sculpting Tool"
+              accentRgb="16, 185, 129"
+              accentHex="#10b981"
+              tools={TERRAIN_HUD_TOOLS}
+              currentTool={currentTool}
+              onTool={(id) => {
+                setTerrainBrushTool(id as TerrainBrushTool);
+                onParamChange?.("brushTool", id, tNode.id);
               }}
-            >
-              {/* Badge */}
-              <div
-                style={{
-                  fontSize: "11px",
-                  fontWeight: 700,
-                  color: "#10b981",
-                  padding: "2px 8px",
-                  background: "rgba(16, 185, 129, 0.15)",
-                  borderRadius: "4px",
-                  letterSpacing: "0.04em",
-                  userSelect: "none",
-                }}
-                title="Terrain Sculpting Tool"
-              >
-                TERRAIN
-              </div>
-
-              <div style={{ width: 1, height: 16, background: "rgba(255, 255, 255, 0.15)" }} />
-
-              {/* Tool: Sculpt */}
-              <button
-                type="button"
-                className={`viewport-hud-button ${currentTool === "sculpt" ? "viewport-hud-button-active" : ""}`}
-                onClick={() => {
-                  setTerrainBrushTool("sculpt");
-                  onParamChange?.("brushTool", "sculpt", tNode.id);
-                }}
-                title="Sculpt: Raise / Lower (Hold Alt to dig)"
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="m8 3 4 8 5-5 5 15H2L8 3z" />
-                </svg>
-              </button>
-
-              {/* Tool: Clay Strip */}
-              <button
-                type="button"
-                className={`viewport-hud-button ${currentTool === "clayStrip" ? "viewport-hud-button-active" : ""}`}
-                onClick={() => {
-                  setTerrainBrushTool("clayStrip");
-                  onParamChange?.("brushTool", "clayStrip", tNode.id);
-                }}
-                title="Clay Strip: Build up material toward the brush-local average"
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="3" y="9" width="18" height="7" rx="1.5" />
-                </svg>
-              </button>
-
-              {/* Tool: Smooth */}
-              <button
-                type="button"
-                className={`viewport-hud-button ${currentTool === "smooth" ? "viewport-hud-button-active" : ""}`}
-                onClick={() => {
-                  setTerrainBrushTool("smooth");
-                  onParamChange?.("brushTool", "smooth", tNode.id);
-                }}
-                title="Smooth: Soften sharp slopes and rough peaks"
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M2 12c3-4 6-4 9 0s6 4 9 0" />
-                  <path d="M2 17c3-4 6-4 9 0s6 4 9 0" />
-                </svg>
-              </button>
-
-              {/* Tool: Pinch */}
-              <button
-                type="button"
-                className={`viewport-hud-button ${currentTool === "pinch" ? "viewport-hud-button-active" : ""}`}
-                onClick={() => {
-                  setTerrainBrushTool("pinch");
-                  onParamChange?.("brushTool", "pinch", tNode.id);
-                }}
-                title="Pinch: Sharpen ridges (opposite of Smooth)"
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M4 4 20 20M20 4 4 20" />
-                </svg>
-              </button>
-
-              {/* Tool: Crease */}
-              <button
-                type="button"
-                className={`viewport-hud-button ${currentTool === "crease" ? "viewport-hud-button-active" : ""}`}
-                onClick={() => {
-                  setTerrainBrushTool("crease");
-                  onParamChange?.("brushTool", "crease", tNode.id);
-                }}
-                title="Crease: Carve a sharp valley line"
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M3 12h7l2 6 4-14 2 8h3" />
-                </svg>
-              </button>
-
-              {/* Tool: Flatten */}
-              <button
-                type="button"
-                className={`viewport-hud-button ${currentTool === "flatten" ? "viewport-hud-button-active" : ""}`}
-                onClick={() => {
-                  setTerrainBrushTool("flatten");
-                  onParamChange?.("brushTool", "flatten", tNode.id);
-                }}
-                title="Flatten: Level to target elevation (roads, plateaus)"
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M3 15h18" />
-                  <path d="M7 10h10" />
-                  <path d="M10 5h4" />
-                </svg>
-              </button>
-
-              {/* Tool: Noise */}
-              <button
-                type="button"
-                className={`viewport-hud-button ${currentTool === "noise" ? "viewport-hud-button-active" : ""}`}
-                onClick={() => {
-                  setTerrainBrushTool("noise");
-                  onParamChange?.("brushTool", "noise", tNode.id);
-                }}
-                title="Noise: Add natural rockiness and rough texture"
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M2 13.5 5 11l4 5 5-9 4 6 4-3" />
-                </svg>
-              </button>
-
-              {/* Tool: Erode */}
-              <button
-                type="button"
-                className={`viewport-hud-button ${currentTool === "erode" ? "viewport-hud-button-active" : ""}`}
-                onClick={() => {
-                  setTerrainBrushTool("erode");
-                  onParamChange?.("brushTool", "erode", tNode.id);
-                }}
-                title="Erode: Simulate natural sediment and thermal erosion"
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M12 2v6" />
-                  <path d="m4.93 10.93 4.24 4.24" />
-                  <path d="m14.83 15.17 4.24-4.24" />
-                  <path d="M2 18h20" />
-                </svg>
-              </button>
-
-              {/* Tool: Mask */}
-              <button
-                type="button"
-                className={`viewport-hud-button ${currentTool === "mask" ? "viewport-hud-button-active" : ""}`}
-                onClick={() => {
-                  setTerrainBrushTool("mask");
-                  onParamChange?.("brushTool", "mask", tNode.id);
-                }}
-                title="Mask: Paint protection (Hold Shift to erase)"
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="12" cy="12" r="9" />
-                  <path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor" stroke="none" />
-                </svg>
-              </button>
-
-              <div style={{ width: 1, height: 16, background: "rgba(255, 255, 255, 0.15)" }} />
-
-              {/* Invert (+ / -) */}
-              <button
-                type="button"
-                className={`viewport-hud-button ${terrainInvert ? "viewport-hud-button-active" : ""}`}
-                onClick={() => setTerrainInvert(!terrainInvert)}
-                title={terrainInvert ? "Inverted: Digging / Lowering (or hold Alt)" : "Normal: Raising (or hold Alt to invert)"}
-                style={{ fontWeight: 700, fontSize: "13px", minWidth: 26 }}
-              >
-                {terrainInvert ? "−" : "+"}
-              </button>
-
-              {/* Symmetry X / Z */}
-              <button
-                type="button"
-                className={`viewport-hud-button ${tNode.params.symmetryX ? "viewport-hud-button-active" : ""}`}
-                onClick={() => onParamChange?.("symmetryX", !tNode.params.symmetryX, tNode.id)}
-                title="Symmetry X: Mirror strokes across the X axis"
-                style={{ fontWeight: 700, fontSize: "11px", minWidth: 22 }}
-              >
-                X
-              </button>
-              <button
-                type="button"
-                className={`viewport-hud-button ${tNode.params.symmetryZ ? "viewport-hud-button-active" : ""}`}
-                onClick={() => onParamChange?.("symmetryZ", !tNode.params.symmetryZ, tNode.id)}
-                title="Symmetry Z: Mirror strokes across the Z axis"
-                style={{ fontWeight: 700, fontSize: "11px", minWidth: 22 }}
-              >
-                Z
-              </button>
-
-              <div style={{ width: 1, height: 16, background: "rgba(255, 255, 255, 0.15)" }} />
-
-              {/* Radius / Size */}
-              <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                <span style={{ fontSize: "11px", color: "#94a3b8", minWidth: 32 }} title="Radius (use [ and ] shortcuts)">
-                  R: {brushSize}m
-                </span>
-                <input
-                  type="range"
-                  min={0.5}
-                  max={30}
-                  step={0.5}
-                  value={brushSize}
-                  onChange={(e) => onParamChange?.("brushSize", Number(e.target.value), tNode.id)}
-                  style={{ width: 56, accentColor: "#10b981", cursor: "pointer" }}
-                  title="Brush Radius"
-                />
-              </div>
-
-              {/* Strength */}
-              <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                <span style={{ fontSize: "11px", color: "#94a3b8", minWidth: 30 }} title="Brush Strength">
-                  {Math.round(brushStrength * 100)}%
-                </span>
-                <input
-                  type="range"
-                  min={0.05}
-                  max={1.0}
-                  step={0.05}
-                  value={brushStrength}
-                  onChange={(e) => onParamChange?.("brushStrength", Number(e.target.value), tNode.id)}
-                  style={{ width: 50, accentColor: "#10b981", cursor: "pointer" }}
-                  title="Brush Strength"
-                />
-              </div>
-
-              {/* Falloff */}
-              <select
-                value={brushFalloff}
-                onChange={(e) => {
-                  const f = e.target.value as TerrainBrushFalloff;
-                  setTerrainBrushFalloff(f);
+              invert={terrainInvert}
+              invertTitles={{
+                on: "Inverted: Digging / Lowering (or hold Alt)",
+                off: "Normal: Raising (or hold Alt to invert)",
+              }}
+              onInvert={() => setTerrainInvert(!terrainInvert)}
+              symmetry={(["symmetryX", "symmetryZ"] as const).map((key) => ({
+                axis: key === "symmetryX" ? "X" : "Z",
+                active: Boolean(tNode.params[key]),
+                onToggle: () => onParamChange?.(key, !tNode.params[key], tNode.id),
+              }))}
+              radius={{
+                value: brushSize,
+                min: 0.5,
+                max: 30,
+                step: 0.5,
+                label: `R: ${brushSize}m`,
+                onChange: (v) => onParamChange?.("brushSize", v, tNode.id),
+              }}
+              strength={{ value: brushStrength, onChange: (v) => onParamChange?.("brushStrength", v, tNode.id) }}
+              falloff={{
+                value: brushFalloff,
+                onChange: (f) => {
+                  setTerrainBrushFalloff(f as TerrainBrushFalloff);
                   onParamChange?.("brushFalloff", f, tNode.id);
-                }}
-                style={{
-                  background: "rgba(255, 255, 255, 0.08)",
-                  color: "#f1f5f9",
-                  border: "1px solid rgba(255, 255, 255, 0.15)",
-                  borderRadius: 4,
-                  fontSize: "11px",
-                  height: 24,
-                  padding: "0 6px",
-                  outline: "none",
-                  cursor: "pointer",
-                }}
-                title="Brush Falloff Shape"
-              >
-                <option value="smooth" style={{ background: "#1e293b", color: "#fff" }}>Smooth</option>
-                <option value="linear" style={{ background: "#1e293b", color: "#fff" }}>Linear</option>
-                <option value="sphere" style={{ background: "#1e293b", color: "#fff" }}>Sphere</option>
-                <option value="flat" style={{ background: "#1e293b", color: "#fff" }}>Flat</option>
-              </select>
-
-              <div style={{ width: 1, height: 16, background: "rgba(255, 255, 255, 0.15)" }} />
-
-              {/* Clear / Reset button */}
-              <button
-                type="button"
-                className="viewport-hud-button"
-                onClick={() => {
-                  if (window.confirm("Reset all manual sculpt offsets on this terrain?")) {
-                    onParamChange?.({ sculptOffsets: {}, maskWeights: {} }, tNode.id);
-                  }
-                }}
-                title="Reset manual sculpting offsets"
-                style={{ fontSize: "11px", padding: "2px 6px" }}
-              >
-                Reset
-              </button>
-            </div>
+                },
+              }}
+              resetTitle="Reset manual sculpting offsets"
+              onReset={() => {
+                if (window.confirm("Reset all manual sculpt offsets on this terrain?")) {
+                  onParamChange?.({ sculptOffsets: {}, maskWeights: {} }, tNode.id);
+                }
+              }}
+            />
           );
         })()}
       {/* Sculpt Floating Toolbar */}
@@ -9149,213 +8923,83 @@ export function Viewport({
           const brushFalloff = (sNode.params.brushFalloff as BrushFalloff) || sculptBrushFalloff;
           const dyntopoDetail = Math.max(0.1, Math.min(0.5, Number(sNode.params.dyntopoDetail) || 0.25));
 
-          const TOOL_LABELS: { id: SculptBrushTool; label: string; title: string }[] = [
-            { id: "draw", label: "Dr", title: "Draw: Raise / Lower along the stroke normal (Hold Alt to invert)" },
-            { id: "clay", label: "Cl", title: "Clay: Build up material toward the brush-local average plane" },
-            { id: "inflate", label: "In", title: "Inflate: Puff the surface out along each vertex's own normal" },
-            { id: "smooth", label: "Sm", title: "Smooth: Laplacian-average neighbors" },
-            { id: "pinch", label: "Pi", title: "Pinch: Sharpen toward the stroke center" },
-            { id: "crease", label: "Cr", title: "Crease: Carve a sharp valley line" },
-            { id: "flatten", label: "Fl", title: "Flatten: Project onto the plane frozen at stroke start" },
-            { id: "grab", label: "Gr", title: "Grab: Drag the brush footprint with the pointer" },
-            { id: "mask", label: "Ma", title: "Mask: Paint protection (Hold Shift to erase)" },
-          ];
-
           return (
-            <div
-              className="viewport-terrain-hud"
-              style={{
-                position: "absolute",
-                bottom: 16,
-                left: "50%",
-                transform: "translateX(-50%)",
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                padding: "6px 14px",
-                background: "var(--chrome-surface-raised)",
-                backdropFilter: "blur(12px)",
-                border: "1px solid rgba(56, 189, 248, 0.45)",
-                borderRadius: "8px",
-                boxShadow: "0 8px 24px rgba(0, 0, 0, 0.5), 0 0 16px rgba(56, 189, 248, 0.2)",
-                color: "#ffffff",
-                fontSize: "12px",
-                zIndex: 45,
-                pointerEvents: "auto",
+            <BrushHud
+              badge="SCULPT"
+              badgeTitle="Sculpt Tool"
+              accentRgb="56, 189, 248"
+              accentHex="#38bdf8"
+              tools={SCULPT_HUD_TOOLS}
+              currentTool={currentTool}
+              onTool={(id) => {
+                setSculptBrushTool(id as SculptBrushTool);
+                onParamChange?.("brushTool", id, sNode.id);
               }}
-            >
-              <div
-                style={{
-                  fontSize: "11px",
-                  fontWeight: 700,
-                  color: "#38bdf8",
-                  padding: "2px 8px",
-                  background: "rgba(56, 189, 248, 0.15)",
-                  borderRadius: "4px",
-                  letterSpacing: "0.04em",
-                  userSelect: "none",
-                }}
-                title="Sculpt Tool"
-              >
-                SCULPT
-              </div>
-
-              <div style={{ width: 1, height: 16, background: "rgba(255, 255, 255, 0.15)" }} />
-
-              {TOOL_LABELS.map(({ id, label, title }) => (
-                <button
-                  key={id}
-                  type="button"
-                  className={`viewport-hud-button ${currentTool === id ? "viewport-hud-button-active" : ""}`}
-                  onClick={() => {
-                    setSculptBrushTool(id);
-                    onParamChange?.("brushTool", id, sNode.id);
-                  }}
-                  title={title}
-                  style={{ fontSize: "10px", fontWeight: 700, minWidth: 22 }}
-                >
-                  {label}
-                </button>
-              ))}
-
-              <div style={{ width: 1, height: 16, background: "rgba(255, 255, 255, 0.15)" }} />
-
-              {/* Invert (+ / -) */}
-              <button
-                type="button"
-                className={`viewport-hud-button ${sculptInvert ? "viewport-hud-button-active" : ""}`}
-                onClick={() => setSculptInvert(!sculptInvert)}
-                title={sculptInvert ? "Inverted (or hold Alt)" : "Normal (or hold Alt to invert)"}
-                style={{ fontWeight: 700, fontSize: "13px", minWidth: 26 }}
-              >
-                {sculptInvert ? "−" : "+"}
-              </button>
-
-              {/* Symmetry X / Y / Z */}
-              {(["symmetryX", "symmetryY", "symmetryZ"] as const).map((key, i) => (
-                <button
-                  key={key}
-                  type="button"
-                  className={`viewport-hud-button ${sNode.params[key] ? "viewport-hud-button-active" : ""}`}
-                  onClick={() => onParamChange?.(key, !sNode.params[key], sNode.id)}
-                  title={`Symmetry ${"XYZ"[i]}: Mirror strokes across the ${"XYZ"[i]} axis`}
-                  style={{ fontWeight: 700, fontSize: "11px", minWidth: 22 }}
-                >
-                  {"XYZ"[i]}
-                </button>
-              ))}
-
-              <div style={{ width: 1, height: 16, background: "rgba(255, 255, 255, 0.15)" }} />
-
-              {/* Radius / Size */}
-              <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                <span style={{ fontSize: "11px", color: "#94a3b8", minWidth: 32 }} title="Radius (use [ and ] shortcuts)">
-                  R: {brushSize.toFixed(2)}
-                </span>
-                <input
-                  type="range"
-                  min={0.02}
-                  max={2}
-                  step={0.02}
-                  value={brushSize}
-                  onChange={(e) => onParamChange?.("brushSize", Number(e.target.value), sNode.id)}
-                  style={{ width: 56, accentColor: "#38bdf8", cursor: "pointer" }}
-                  title="Brush Radius"
-                />
-              </div>
-
-              {/* Strength */}
-              <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                <span style={{ fontSize: "11px", color: "#94a3b8", minWidth: 30 }} title="Brush Strength">
-                  {Math.round(brushStrength * 100)}%
-                </span>
-                <input
-                  type="range"
-                  min={0.05}
-                  max={1.0}
-                  step={0.05}
-                  value={brushStrength}
-                  onChange={(e) => onParamChange?.("brushStrength", Number(e.target.value), sNode.id)}
-                  style={{ width: 50, accentColor: "#38bdf8", cursor: "pointer" }}
-                  title="Brush Strength"
-                />
-              </div>
-
-
-              {/* Falloff */}
-              <select
-                value={brushFalloff}
-                onChange={(e) => {
-                  const f = e.target.value as BrushFalloff;
-                  setSculptBrushFalloff(f);
+              invert={sculptInvert}
+              invertTitles={{
+                on: "Inverted (or hold Alt)",
+                off: "Normal (or hold Alt to invert)",
+              }}
+              onInvert={() => setSculptInvert(!sculptInvert)}
+              symmetry={(["symmetryX", "symmetryY", "symmetryZ"] as const).map((key) => ({
+                axis: key.slice(-1),
+                active: Boolean(sNode.params[key]),
+                onToggle: () => onParamChange?.(key, !sNode.params[key], sNode.id),
+              }))}
+              radius={{
+                value: brushSize,
+                min: 0.02,
+                max: 2,
+                step: 0.02,
+                label: `R: ${brushSize.toFixed(2)}`,
+                onChange: (v) => onParamChange?.("brushSize", v, sNode.id),
+              }}
+              strength={{ value: brushStrength, onChange: (v) => onParamChange?.("brushStrength", v, sNode.id) }}
+              falloff={{
+                value: brushFalloff,
+                onChange: (f) => {
+                  setSculptBrushFalloff(f as BrushFalloff);
                   onParamChange?.("brushFalloff", f, sNode.id);
-                }}
-                style={{
-                  background: "rgba(255, 255, 255, 0.08)",
-                  color: "#f1f5f9",
-                  border: "1px solid rgba(255, 255, 255, 0.15)",
-                  borderRadius: 4,
-                  fontSize: "11px",
-                  height: 24,
-                  padding: "0 6px",
-                  outline: "none",
-                  cursor: "pointer",
-                }}
-                title="Brush Falloff Shape"
-              >
-                <option value="smooth" style={{ background: "#1e293b", color: "#fff" }}>Smooth</option>
-                <option value="linear" style={{ background: "#1e293b", color: "#fff" }}>Linear</option>
-                <option value="sphere" style={{ background: "#1e293b", color: "#fff" }}>Sphere</option>
-                <option value="flat" style={{ background: "#1e293b", color: "#fff" }}>Flat</option>
-              </select>
-
-              <div style={{ width: 1, height: 16, background: "rgba(255, 255, 255, 0.15)" }} />
-
-              {/* Dyntopo Detail */}
-              <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                <span style={{ fontSize: "11px", color: "#94a3b8", minWidth: 20 }} title="Dyntopo detail as a fraction of brush radius — smaller means finer detail under the brush">
-                  Det
-                </span>
-                <input
-                  type="range"
-                  min={0.1}
-                  max={0.5}
-                  step={0.01}
-                  value={dyntopoDetail}
-                  onChange={(e) => onParamChange?.("dyntopoDetail", Number(e.target.value), sNode.id)}
-                  style={{ width: 50, accentColor: "#38bdf8", cursor: "pointer" }}
-                  title="Dyntopo Detail"
-                />
-              </div>
-
-              {/* Stylus Pressure */}
-              <button
-                type="button"
-                className={`viewport-hud-button ${Boolean(sNode.params.usePressure ?? true) ? "viewport-hud-button-active" : ""}`}
-                onClick={() => onParamChange?.("usePressure", !Boolean(sNode.params.usePressure ?? true), sNode.id)}
-                title="Stylus Pressure Sensitivity (Tablet / Pen)"
-                style={{ fontSize: "11px", padding: "2px 6px" }}
-              >
-                🖊️ Pen
-              </button>
-
-              <div style={{ width: 1, height: 16, background: "rgba(255, 255, 255, 0.15)" }} />
-
-              {/* Clear / Reset button */}
-              <button
-                type="button"
-                className="viewport-hud-button"
-                onClick={() => {
-                  if (window.confirm("Reset this sculpt back to its base primitive? All sculpted detail will be lost.")) {
-                    onParamChange?.("sculptMesh", null, sNode.id);
-                  }
-                }}
-                title="Reset to base primitive"
-                style={{ fontSize: "11px", padding: "2px 6px" }}
-              >
-                Reset
-              </button>
-            </div>
+                },
+              }}
+              extras={
+                <>
+                  <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                    <span
+                      style={{ fontSize: "11px", color: "#94a3b8", minWidth: 20 }}
+                      title="Dyntopo detail as a fraction of brush radius — smaller means finer detail under the brush"
+                    >
+                      Det
+                    </span>
+                    <input
+                      type="range"
+                      min={0.1}
+                      max={0.5}
+                      step={0.01}
+                      value={dyntopoDetail}
+                      onChange={(e) => onParamChange?.("dyntopoDetail", Number(e.target.value), sNode.id)}
+                      style={{ width: 50, accentColor: "#38bdf8", cursor: "pointer" }}
+                      title="Dyntopo Detail"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    className={`viewport-hud-button ${Boolean(sNode.params.usePressure ?? true) ? "viewport-hud-button-active" : ""}`}
+                    onClick={() => onParamChange?.("usePressure", !Boolean(sNode.params.usePressure ?? true), sNode.id)}
+                    title="Stylus Pressure Sensitivity (Tablet / Pen)"
+                    style={{ fontSize: "11px", padding: "2px 6px", width: "auto" }}
+                  >
+                    🖊️ Pen
+                  </button>
+                </>
+              }
+              resetTitle="Reset to base primitive"
+              onReset={() => {
+                if (window.confirm("Reset this sculpt back to its base mesh? All sculpted detail will be lost.")) {
+                  onParamChange?.("sculptMesh", null, sNode.id);
+                }
+              }}
+            />
           );
         })()}
       {/* Roto Mask drawing palette */}

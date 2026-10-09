@@ -181,6 +181,7 @@ const APPEARANCE_BY_DESIGN: Record<string, string> = {
   "modifier/dry-brush": "stylizes mesh appearance with dry-brush paper speckle shader",
   "modifier/super8": "stylizes mesh appearance with super 8 projector vintage shader",
   "modifier/outline": "stylizes mesh appearance with contour and edge outline shader",
+  "object/sculpt": "reads a wired mesh only as its starting shape — welded and re-topologised by dyntopo, so UVs and the source's material do not survive; the sculpt has its own",
   render: "the scene root, not a modifier",
 };
 

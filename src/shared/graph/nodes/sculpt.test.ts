@@ -43,4 +43,46 @@ describe("SCULPT_NODE", () => {
     const outMesh = out.geometry as THREE.Mesh;
     expect(outMesh.geometry.attributes.position.array[1]).toBeCloseTo(positions[1], 4);
   });
+
+  test("loads with sculpted data on the very first evaluation", () => {
+    const ctx = { nodeId: "sculpt_test_4" };
+    const probe = SCULPT_NODE.evaluate({}, { ...SCULPT_NODE.defaultParams, baseResolution: 0 }, { nodeId: "sculpt_probe" } as any);
+    const m = probe.geometry as THREE.Mesh;
+    const positions = Array.from(m.geometry.attributes.position.array as Float32Array);
+    const indices = Array.from(m.geometry.index!.array as Uint32Array);
+    positions[1] += 3;
+    const out = SCULPT_NODE.evaluate(
+      {},
+      { ...SCULPT_NODE.defaultParams, baseResolution: 0, sculptMesh: { positions, indices } },
+      ctx as any,
+    );
+    expect((out.geometry as THREE.Mesh).geometry.attributes.position.array[1]).toBeCloseTo(positions[1], 4);
+  });
+
+  test("Reset (sculptMesh back to null) restores the base mesh", () => {
+    const ctx = { nodeId: "sculpt_test_5" };
+    const base = SCULPT_NODE.evaluate({}, { ...SCULPT_NODE.defaultParams, baseResolution: 0 }, ctx as any);
+    const mesh = base.geometry as THREE.Mesh;
+    const original = Array.from(mesh.geometry.attributes.position.array as Float32Array);
+    const positions = original.slice();
+    positions[1] += 5;
+    const indices = Array.from(mesh.geometry.index!.array as Uint32Array);
+    SCULPT_NODE.evaluate({}, { ...SCULPT_NODE.defaultParams, baseResolution: 0, sculptMesh: { positions, indices } }, ctx as any);
+    const out = SCULPT_NODE.evaluate({}, { ...SCULPT_NODE.defaultParams, baseResolution: 0, sculptMesh: null }, ctx as any);
+    expect((out.geometry as THREE.Mesh).geometry.attributes.position.array[1]).toBeCloseTo(original[1], 4);
+  });
+
+  test("a wired Geometry input replaces the primitive as the base mesh", () => {
+    const ctx = { nodeId: "sculpt_test_6" };
+    const box = new THREE.Mesh(new THREE.BoxGeometry(2, 2, 2, 3, 3, 3));
+    const out = SCULPT_NODE.evaluate({ geometry: box }, { ...SCULPT_NODE.defaultParams }, ctx as any);
+    const mesh = out.geometry as THREE.Mesh;
+    // 4x4x4 lattice surface = 56 welded vertices.
+    expect(mesh.geometry.attributes.position.count).toBe(56);
+  });
+
+  test("cube primitive starts fine enough to sculpt at the default level", () => {
+    const out = SCULPT_NODE.evaluate({}, { ...SCULPT_NODE.defaultParams, primitive: "cube" }, { nodeId: "sculpt_test_7" } as any);
+    expect((out.geometry as THREE.Mesh).geometry.attributes.position.count).toBeGreaterThan(200);
+  });
 });

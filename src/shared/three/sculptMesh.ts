@@ -173,8 +173,8 @@ function buildSubdividedCube(size: number, segments: number): MutableMesh {
   const faces: { origin: THREE.Vector3; uAxis: THREE.Vector3; vAxis: THREE.Vector3 }[] = [
     { origin: new THREE.Vector3(-half, -half, half), uAxis: new THREE.Vector3(1, 0, 0), vAxis: new THREE.Vector3(0, 1, 0) }, // +Z
     { origin: new THREE.Vector3(half, -half, -half), uAxis: new THREE.Vector3(-1, 0, 0), vAxis: new THREE.Vector3(0, 1, 0) }, // -Z
-    { origin: new THREE.Vector3(-half, half, -half), uAxis: new THREE.Vector3(1, 0, 0), vAxis: new THREE.Vector3(0, 0, 1) }, // +Y
-    { origin: new THREE.Vector3(-half, -half, half), uAxis: new THREE.Vector3(1, 0, 0), vAxis: new THREE.Vector3(0, 0, -1) }, // -Y
+    { origin: new THREE.Vector3(-half, half, half), uAxis: new THREE.Vector3(1, 0, 0), vAxis: new THREE.Vector3(0, 0, -1) }, // +Y
+    { origin: new THREE.Vector3(-half, -half, -half), uAxis: new THREE.Vector3(1, 0, 0), vAxis: new THREE.Vector3(0, 0, 1) }, // -Y
     { origin: new THREE.Vector3(half, -half, half), uAxis: new THREE.Vector3(0, 0, -1), vAxis: new THREE.Vector3(0, 1, 0) }, // +X
     { origin: new THREE.Vector3(-half, -half, -half), uAxis: new THREE.Vector3(0, 0, 1), vAxis: new THREE.Vector3(0, 1, 0) }, // -X
   ];
@@ -223,13 +223,74 @@ function buildFlatPlane(size: number, segments: number): MutableMesh {
       const b = j * cols + i + 1;
       const c = (j + 1) * cols + i + 1;
       const d = (j + 1) * cols + i;
-      indices.push(a, b, c, a, c, d);
+      // Counter-clockwise seen from +Y, so the plane faces up.
+      indices.push(a, c, b, a, d, c);
     }
   }
   return { positions, indices };
 }
 
-/** Builds a base sculpt mesh. `subdivisions` is icosphere subdivision depth for spheres, or a grid-segment count for cube/plane. */
+/**
+ * Maps the node's single "Base Resolution" level onto each primitive's own
+ * knob: icosphere subdivision depth for a sphere, grid segments per side
+ * (doubling per level) for cube/plane. Without this a cube at the default
+ * level was 2 segments a side, so the very first dab dragged whole faces.
+ */
+export function baseSubdivisionsFor(kind: SculptPrimitiveKind, resolution: number): number {
+  const level = Math.max(0, Math.round(resolution));
+  return kind === "sphere" ? level : 2 ** (level + 1);
+}
+
+/**
+ * Turns an arbitrary triangle geometry into a sculptable indexed mesh.
+ * Vertices at the same position are welded — a Box or Sphere geometry has a
+ * duplicate vertex per UV seam/face, and sculpting that would tear the
+ * surface open along every seam.
+ */
+export function meshDataFromGeometry(geometry: THREE.BufferGeometry, matrix?: THREE.Matrix4): SculptMeshData | null {
+  const pos = geometry.getAttribute("position");
+  if (!pos || pos.count < 3) return null;
+  if (!geometry.boundingBox) geometry.computeBoundingBox();
+  const size = geometry.boundingBox ? geometry.boundingBox.getSize(new THREE.Vector3()).length() : 1;
+  const quantum = Math.max(1e-7, size * 1e-5);
+
+  const weld = new Map<string, number>();
+  const remap = new Int32Array(pos.count);
+  const positions: number[] = [];
+  const v = new THREE.Vector3();
+  for (let i = 0; i < pos.count; i++) {
+    v.fromBufferAttribute(pos, i);
+    if (matrix) v.applyMatrix4(matrix);
+    const k = `${Math.round(v.x / quantum)}_${Math.round(v.y / quantum)}_${Math.round(v.z / quantum)}`;
+    let idx = weld.get(k);
+    if (idx === undefined) {
+      idx = positions.length / 3;
+      positions.push(v.x, v.y, v.z);
+      weld.set(k, idx);
+    }
+    remap[i] = idx;
+  }
+
+  const src = geometry.index;
+  const count = src ? src.count : pos.count;
+  const indices: number[] = [];
+  const flip = matrix ? matrix.determinant() < 0 : false;
+  for (let t = 0; t + 2 < count; t += 3) {
+    const a = remap[src ? src.getX(t) : t];
+    const b = remap[src ? src.getX(t + 1) : t + 1];
+    const c = remap[src ? src.getX(t + 2) : t + 2];
+    if (a === b || b === c || a === c) continue;
+    if (flip) indices.push(a, c, b);
+    else indices.push(a, b, c);
+  }
+  if (indices.length === 0) return null;
+
+  const positionsArr = new Float32Array(positions);
+  const indicesArr = new Uint32Array(indices);
+  return { positions: positionsArr, normals: computeVertexNormals(positionsArr, indicesArr), indices: indicesArr };
+}
+
+/** Builds `subdivisions` is icosphere subdivision depth for spheres, or a grid-segment count for cube/plane. */
 export function buildBasePrimitive(
   kind: SculptPrimitiveKind,
   subdivisions: number,

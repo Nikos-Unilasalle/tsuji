@@ -15,13 +15,16 @@ import {
   SculptMeshData,
   SculptPrimitiveKind,
   buildAdjacency,
+  baseSubdivisionsFor,
   buildBasePrimitive,
   computeVertexNormals,
+  meshDataFromGeometry,
   meshHasActiveMask,
   syncBufferGeometry,
 } from "../../three/sculptMesh";
 import { SculptBrushTool } from "../../three/sculptEngine";
 import { BrushFalloff } from "../../three/brushFalloff";
+import { findFirstMesh } from "../meshRequired";
 
 interface SculptNodeState {
   mesh: THREE.Mesh;
@@ -50,6 +53,7 @@ export const SCULPT_BRUSH_TOOLS: SculptBrushTool[] = [
   "crease",
   "flatten",
   "grab",
+  "noise",
   "mask",
 ];
 export const SCULPT_BRUSH_FALLOFFS: BrushFalloff[] = ["smooth", "linear", "sphere", "flat"];
@@ -57,6 +61,12 @@ export const SCULPT_BRUSH_FALLOFFS: BrushFalloff[] = ["smooth", "linear", "spher
 const SCULPT_PARAM_FIELDS: ParamFieldDef[] = [
   { id: "primitive", label: "Primitive", kind: "select", options: [...SCULPT_PRIMITIVE_OPTIONS], group: "Base Mesh" },
   { id: "size", label: "Size", kind: "number", step: 0.1, group: "Base Mesh" },
+  {
+    id: "geometryNote",
+    label: "Wire a mesh into Geometry to sculpt it instead of the primitive. Reset in the toolbar goes back to the incoming mesh.",
+    kind: "note",
+    group: "Base Mesh",
+  },
   { id: "baseResolution", label: "Base Resolution", kind: "number", step: 1, group: "Base Mesh" },
   {
     id: "dyntopoDetail",
@@ -100,7 +110,7 @@ export const SCULPT_NODE: NodeDefinition = {
   type: "object/sculpt",
   label: "Sculpt",
   category: "object",
-  inputs: [...COMMON_PRIMITIVE_INPUTS],
+  inputs: [{ id: "geometry", label: "Geometry", type: "geometry" }, ...COMMON_PRIMITIVE_INPUTS],
   outputs: [...COMMON_PRIMITIVE_OUTPUTS],
   reset: { params: ["sculptMesh"] },
   defaultParams: {
@@ -139,7 +149,27 @@ export const SCULPT_NODE: NodeDefinition = {
     const size = Math.max(0.01, Number(params.size ?? 2));
     const baseResolution = Math.max(0, Math.round(Number(params.baseResolution ?? 2)));
     const wireframe = Boolean(params.wireframe ?? false);
-    const primitiveSignature = `${primitive}|${size}|${baseResolution}`;
+
+    // A wired mesh replaces the primitive as the starting point. Its transform
+    // relative to the wired root is baked in, since this node's own Location /
+    // Rotation / Scale apply on top of it.
+    const inputObj = inputs.geometry instanceof THREE.Object3D ? inputs.geometry : null;
+    const inputMesh = inputObj ? findFirstMesh(inputObj) : null;
+    const inputPosition = inputMesh?.geometry.getAttribute("position");
+    const primitiveSignature = inputMesh && inputPosition
+      ? `geometry|${inputMesh.geometry.uuid}|${inputPosition.count}|${(inputPosition as THREE.BufferAttribute).version}`
+      : `${primitive}|${size}|${baseResolution}`;
+    const buildBase = (): SculptMeshData => {
+      if (inputObj && inputMesh) {
+        const relative = new THREE.Matrix4();
+        for (let o: THREE.Object3D | null = inputMesh; o && o !== inputObj; o = o.parent) {
+          relative.premultiply(o.matrix);
+        }
+        const fromInput = meshDataFromGeometry(inputMesh.geometry, relative);
+        if (fromInput) return fromInput;
+      }
+      return buildBasePrimitive(primitive, baseSubdivisionsFor(primitive, baseResolution), size);
+    };
 
     const serialized =
       params.sculptMesh && typeof params.sculptMesh === "object"
@@ -150,7 +180,7 @@ export const SCULPT_NODE: NodeDefinition = {
     let state = sculptCache.get(ctx.nodeId);
 
     if (!state) {
-      const meshData = buildBasePrimitive(primitive, baseResolution, size);
+      const meshData = buildBase();
       const adjacency = buildAdjacency(meshData.indices, meshData.positions.length / 3);
       const geometry = new THREE.BufferGeometry();
       syncBufferGeometry(geometry, meshData);
@@ -167,19 +197,31 @@ export const SCULPT_NODE: NodeDefinition = {
         material,
         meshData,
         adjacency,
-        lastSculptMeshParam: params.sculptMesh,
+        // Not yet synced: if the node was loaded with sculpted data, the
+        // branch below applies it on this very first evaluation.
+        lastSculptMeshParam: null,
         primitiveSignature,
       };
       sculptCache.set(ctx.nodeId, state);
-    } else if (state.primitiveSignature !== primitiveSignature && !hasSculptData) {
-      // Base shape/resolution changed and there's no sculpted data to
-      // preserve — rebuild from scratch (same "signature changed" idiom
+    }
+
+    if (state.primitiveSignature !== primitiveSignature && !hasSculptData) {
+      // Base shape/resolution/wired mesh changed and there's no sculpted data
+      // to preserve — rebuild from scratch (same "signature changed" idiom
       // Terrain uses for its own grid rebuild).
-      const meshData = buildBasePrimitive(primitive, baseResolution, size);
+      const meshData = buildBase();
       state.meshData = meshData;
       state.adjacency = buildAdjacency(meshData.indices, meshData.positions.length / 3);
       syncBufferGeometry(state.geometry, meshData);
       state.primitiveSignature = primitiveSignature;
+      state.lastSculptMeshParam = params.sculptMesh;
+    } else if (!hasSculptData && state.lastSculptMeshParam && !params.sculptMesh) {
+      // Sculpted data was cleared (toolbar Reset, or undo past the first
+      // stroke) — go back to the base mesh.
+      const meshData = buildBase();
+      state.meshData = meshData;
+      state.adjacency = buildAdjacency(meshData.indices, meshData.positions.length / 3);
+      syncBufferGeometry(state.geometry, meshData);
       state.lastSculptMeshParam = params.sculptMesh;
     } else if (hasSculptData && state.lastSculptMeshParam !== params.sculptMesh) {
       // A stroke was committed (or the graph was loaded/undone) — sync the

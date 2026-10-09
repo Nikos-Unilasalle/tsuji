@@ -11,6 +11,7 @@ export type SculptBrushTool =
   | "grab"
   | "pinch"
   | "crease"
+  | "noise"
   | "mask";
 
 export interface SculptStrokeParams3D {
@@ -149,6 +150,23 @@ function applyStrokeAtOrigin(
     const factor = dir * baseStrength * r * 0.12;
     for (const [v, d] of verts) {
       const w = calculateFalloff(d / r, stroke.falloff) * factor;
+      displace(v, normals[v * 3] * w, normals[v * 3 + 1] * w, normals[v * 3 + 2] * w);
+    }
+    return;
+  }
+
+  if (stroke.tool === "noise") {
+    // Smooth 3D sine-lattice noise at a frequency tied to the brush size, so
+    // the bumps scale with the brush instead of turning into per-vertex fuzz.
+    const dir = stroke.invert ? -1 : 1;
+    const freq = 3 / r;
+    const factor = dir * baseStrength * r * 0.2;
+    for (const [v, d] of verts) {
+      const fx = positions[v * 3] * freq;
+      const fy = positions[v * 3 + 1] * freq;
+      const fz = positions[v * 3 + 2] * freq;
+      const n = (Math.sin(fx * 1.7 + fy * 2.3) + Math.sin(fy * 1.3 + fz * 2.9) + Math.sin(fz * 1.9 + fx * 2.1)) / 3;
+      const w = calculateFalloff(d / r, stroke.falloff) * factor * n;
       displace(v, normals[v * 3] * w, normals[v * 3 + 1] * w, normals[v * 3 + 2] * w);
     }
     return;
