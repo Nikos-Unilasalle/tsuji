@@ -94,6 +94,7 @@ import {
 import { TEXTURE_MIX_PAINT_NODE } from "./shared/graph/nodes/textureMixPaint";
 import { serializeSplatToPng } from "./shared/three/splatSerialization";
 import { broadcastGraph, maximizeMainWindow, PreviewCameraPose, startBroadcasting } from "./shared/ipc";
+import { createCanvasTour, type CanvasTour } from "./shared/export/canvasTour";
 import { exportVideo, mimeToExtension, saveVideoBlob } from "./shared/export/videoExport";
 import { exportPngSequence, saveZipBlob } from "./shared/export/imageSequenceExport";
 import { renderGraphToSvg, saveGraphSvg } from "./shared/export/graphSvg";
@@ -408,6 +409,46 @@ function MainEditor() {
   const [exportMode, setExportMode] = useState<"video" | "sequence" | null>(null);
   const [exportSource, setExportSource] = useState<ExportSource>("3d");
   const [exportProgress, setExportProgress] = useState(0);
+  // Canvas the export is rendering. Starts on the active one and follows Go To
+  // Canvas nodes frame by frame, without touching the editor's own canvas.
+  const [exportCanvas, setExportCanvas] = useState(0);
+  const exportGraph = canvases[exportCanvas] ?? graph;
+  const exportTourRef = useRef<CanvasTour | null>(null);
+  const onExportEvaluated = useCallback(() => {
+    const requested = consumeCanvasSwitchRequest();
+    const tour = exportTourRef.current;
+    if (requested === null || !tour || requested < 0 || requested >= CANVAS_COUNT) return;
+    tour.switchTo(requested);
+    setExportCanvas(requested);
+  }, []);
+
+  /**
+   * Wraps the export viewport's handle so every frame reads its canvas's own
+   * timeline, and says when the tour is over — see canvasTour.ts. Handed to
+   * the exporters in place of the raw handle; `isCancelled` doubles as their
+   * "scene chain finished" check.
+   */
+  const startCanvasTour = useCallback((handle: ViewportExportHandle) => {
+    const tour = createCanvasTour(
+      canvasesRef.current.map((c) => {
+        const render = c.nodes.find((n) => n.type === "render");
+        const raw = Number(render?.params?.frameCount);
+        return Number.isFinite(raw) && raw > 0 ? Math.round(raw) : 120;
+      }),
+      activeCanvasRef.current,
+    );
+    exportTourRef.current = tour;
+    const tourHandle: ViewportExportHandle = {
+      getCanvas: () => handle.getCanvas(),
+      captureFrame: (frameIndex, fps) => handle.captureFrame(frameIndex, fps, tour.timelineFrame(frameIndex)),
+    };
+    return {
+      handle: tourHandle,
+      totalFrames: tour.maxFrames,
+      isCancelled: () => exportCancelledRef.current || tour.done(),
+      onProgress: (done: number) => setExportProgress(Math.min(1, done / Math.max(done, tour.expectedFrames()))),
+    };
+  }, []);
 
   const waitForExportHandle = useCallback(async () => {
     // Wait for the hidden export Viewport to mount and expose its handle
@@ -437,6 +478,9 @@ function MainEditor() {
       // the previous one points at a dead render loop and would never resolve.
       exportHandleRef.current = null;
       exportCancelledRef.current = false;
+      consumeCanvasSwitchRequest(); // drop any stale request left by the editor
+      exportTourRef.current = null;
+      setExportCanvas(activeCanvasRef.current);
       setExportSource(source);
       setIsExporting(true);
       setExportMode(mode);
@@ -451,11 +495,12 @@ function MainEditor() {
     try {
       const handle = await waitForExportHandle();
 
-      const blob = await exportVideo(handle, {
-        totalFrames,
+      const tour = startCanvasTour(handle);
+      const blob = await exportVideo(tour.handle, {
+        totalFrames: tour.totalFrames,
         fps: exportFps,
-        onProgress: (done, total) => setExportProgress(done / total),
-        isCancelled: () => exportCancelledRef.current,
+        onProgress: tour.onProgress,
+        isCancelled: tour.isCancelled,
       });
 
       const base = (currentFilename.replace(/\.[^.]+$/, "") || "export") + (source === "2d" ? "_2d" : "");
@@ -472,7 +517,7 @@ function MainEditor() {
       setIsExporting(false);
       setExportMode(null);
     }
-  }, [beginExport, totalFrames, exportFps, currentFilename, waitForExportHandle]);
+  }, [beginExport, startCanvasTour, exportFps, currentFilename, waitForExportHandle]);
 
   const handleExportSequence = useCallback(async (source: ExportSource = "3d") => {
     if (!beginExport("sequence", source)) return;
@@ -480,11 +525,12 @@ function MainEditor() {
     try {
       const handle = await waitForExportHandle();
 
-      const blob = await exportPngSequence(handle, {
-        totalFrames,
+      const tour = startCanvasTour(handle);
+      const blob = await exportPngSequence(tour.handle, {
+        totalFrames: tour.totalFrames,
         fps: exportFps,
-        onProgress: (done, total) => setExportProgress(done / total),
-        isCancelled: () => exportCancelledRef.current,
+        onProgress: tour.onProgress,
+        isCancelled: tour.isCancelled,
       });
 
       const base = (currentFilename.replace(/\.[^.]+$/, "") || "export") + (source === "2d" ? "_2d" : "");
@@ -498,7 +544,7 @@ function MainEditor() {
       setIsExporting(false);
       setExportMode(null);
     }
-  }, [beginExport, totalFrames, exportFps, currentFilename, waitForExportHandle]);
+  }, [beginExport, startCanvasTour, exportFps, currentFilename, waitForExportHandle]);
 
   const handleExportGraphSvg = useCallback(async () => {
     if (graph.nodes.length === 0) {
@@ -2720,13 +2766,14 @@ function MainEditor() {
           }}
         >
           <Viewport
-            graph={graph}
+            graph={exportGraph}
             registry={DEFAULT_REGISTRY}
-            renderNodeId={findRenderNodeId(graph) ?? ""}
-            view2DNodeId={exportSource === "2d" ? findView2DNodeId(graph) : undefined}
+            renderNodeId={findRenderNodeId(exportGraph) ?? ""}
+            view2DNodeId={exportSource === "2d" ? findView2DNodeId(exportGraph) : undefined}
             epochMs={epochMs}
             outputMode
             exportHandleRef={exportHandleRef}
+            onEvaluatedResults={onExportEvaluated}
           />
         </div>
       )}

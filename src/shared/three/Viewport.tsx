@@ -887,7 +887,12 @@ interface ViewportProps {
 
 export interface ViewportExportHandle {
   getCanvas: () => HTMLCanvasElement | null;
-  captureFrame: (frameIndex: number, fps: number) => Promise<void>;
+  /**
+   * `timelineFrame` is the frame keyframes and the playhead read, when it
+   * isn't `frameIndex` — an export that follows Go To Canvas restarts the
+   * timeline on each canvas while the clock keeps running.
+   */
+  captureFrame: (frameIndex: number, fps: number, timelineFrame?: number) => Promise<void>;
 }
 
 
@@ -962,6 +967,7 @@ export function Viewport({
   const pendingCaptureRef = useRef<{
     frameIndex: number;
     fps: number;
+    timelineFrame?: number;
     resolve: () => void;
     /** Ticks this frame has been held waiting on HUD image decodes. */
     waited?: number;
@@ -5187,9 +5193,9 @@ export function Viewport({
     if (exportHandleRef) {
       exportHandleRef.current = {
         getCanvas: () => exportCanvas,
-        captureFrame: (frameIndex, fps) =>
+        captureFrame: (frameIndex, fps, timelineFrame) =>
           new Promise<void>((resolve) => {
-            pendingCaptureRef.current = { frameIndex, fps, resolve };
+            pendingCaptureRef.current = { frameIndex, fps, timelineFrame, resolve };
           }),
       };
     }
@@ -5317,7 +5323,7 @@ export function Viewport({
       // frameIndex directly rather than racing the currentFrame prop's own
       // React commit.
       const capture = pendingCaptureRef.current;
-      const exportFrameIndex = capture?.frameIndex ?? currentFrameRef.current;
+      const exportFrameIndex = capture ? capture.timelineFrame ?? capture.frameIndex : currentFrameRef.current;
       if (capture) {
         const stepSeconds = 1 / capture.fps;
         const time = capture.frameIndex * stepSeconds;
