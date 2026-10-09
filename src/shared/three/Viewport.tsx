@@ -6675,7 +6675,9 @@ export function Viewport({
         setRenderFrame(frame);
       }
 
-      const postConfigs = Array.isArray(renderResult?.postprocess)
+      // Editor viewport: post-prod effects only show with the environment
+      // toggle on (applyEnv); the output window always applies them.
+      const postConfigs = applyEnv && Array.isArray(renderResult?.postprocess)
         ? (renderResult.postprocess as PostProcessConfig[])
         : [];
 
@@ -6740,7 +6742,7 @@ export function Viewport({
       // postprocess chain (it's a property of the output, not an effect a
       // graph wires up), so it can switch the composer path on by itself
       // even with no postprocess node connected at all.
-      const motionBlur = typeof renderResult?.motionBlur === "number" ? renderResult.motionBlur : 0;
+      const motionBlur = applyEnv && typeof renderResult?.motionBlur === "number" ? renderResult.motionBlur : 0;
 
       // Un maillage volumétrique demandant une résolution réduite impose le
       // chemin composer : la passe séparée ne peut pas s'exécuter autrement.
