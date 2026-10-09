@@ -8,8 +8,7 @@
   overflow-y: auto;
   scrollbar-width: none;
   -ms-overflow-style: none;
-  background: color-mix(in srgb, var(--chrome-pill-bg) 92%, transparent);
-  backdrop-filter: blur(10px);
+  background: var(--chrome-surface-raised);
   border: 1px solid color-mix(in srgb, var(--chrome-text) 10%, transparent);
   border-radius: 8px;
   color: var(--chrome-text);

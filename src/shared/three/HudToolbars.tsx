@@ -3,7 +3,7 @@ import { type ReactNode, useEffect, useLayoutEffect, useRef, useState, type RefO
 /** Shared look of the floating editing HUDs (Grease Pencil, Edit Mesh). */
 const HUD_PANEL_STYLE = {
   boxSizing: "border-box",
-  background: "rgba(24, 28, 38, 0.95)",
+  background: "var(--chrome-surface-raised)",
   backdropFilter: "blur(12px)",
   border: "1px solid rgba(56, 189, 248, 0.4)",
   borderRadius: "8px",
@@ -88,9 +88,10 @@ export function HudToolColumn({ maxRows, left = 12, children }: { maxRows: numbe
 /**
  * Options / actions bar along the pane's bottom, centred in the strip right of
  * the corner gizmo. Wraps instead of overflowing when the pane is narrow
- * (e.g. 3D + Camera split).
+ * (e.g. 3D + Camera split). `align="right"` puts it against the right edge instead
+ * of centring it — for a bar that would otherwise cover the pinned params at the left.
  */
-export function HudBar({ children }: { children: ReactNode }) {
+export function HudBar({ children, align = "center" }: { children: ReactNode; align?: "center" | "right" }) {
   return (
     <div
       className="viewport-gp-hud"
@@ -101,7 +102,7 @@ export function HudBar({ children }: { children: ReactNode }) {
         left: BAR_LEFT,
         right: 12,
         marginLeft: "auto",
-        marginRight: "auto",
+        marginRight: align === "right" ? 0 : "auto",
         width: "max-content",
         maxWidth: `calc(100% - ${BAR_LEFT + 12}px)`,
         display: "flex",

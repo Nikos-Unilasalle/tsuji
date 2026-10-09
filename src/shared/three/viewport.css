@@ -391,7 +391,7 @@
   flex-direction: column;
   padding: 6px;
   gap: 6px;
-  background: rgba(20, 24, 33, 0.95);
+  background: var(--chrome-surface-raised);
   border: 1px solid var(--chrome-border);
   border-radius: 8px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
@@ -430,3 +430,29 @@
   display: block;
 }
 
+
+/* The scrub fields in a viewport HUD bar: the parameter panel's own control, a little more compact. */
+.viewport-gp-hud .drag-number {
+  width: 46px;
+  padding: 2px 0;
+  font-size: 11px;
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.2);
+  color: #fff;
+}
+
+.viewport-gp-hud .drag-number-editing {
+  width: 46px;
+}
+
+/* The tool palettes sit on the raised surface colour, so a button's hover can't be that same colour: a wash of the text colour instead. */
+.viewport-gp-hud .viewport-hud-button:hover,
+.viewport-gp-hud .viewport-hud-button-active:hover,
+.viewport-terrain-hud .viewport-hud-button:hover,
+.viewport-terrain-hud .viewport-hud-button-active:hover,
+.viewport-texture-paint-hud .viewport-hud-button:hover,
+.viewport-texture-paint-hud .viewport-hud-button-active:hover,
+.viewport-texture-mix-hud .viewport-hud-button:hover,
+.viewport-texture-mix-hud .viewport-hud-button-active:hover {
+  background: color-mix(in srgb, var(--chrome-text, #fff) 14%, transparent);
+}
