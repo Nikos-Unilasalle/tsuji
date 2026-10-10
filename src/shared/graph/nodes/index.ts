@@ -182,6 +182,7 @@ import { OBJECT_LASER_BEAM_NODE } from "./laserBeam";
 import { LIGHT_PROBE_NODE } from "./lightProbe";
 import { DECAL_NODE } from "./decal";
 import { INVERT_NORMALS_NODE } from "./invertNormals";
+import { PALETTE_SHADE_NODE } from "./paletteShade";
 import { HUB_TEXT_NODE, HUB_IMAGE_NODE } from "./hub";
 import { SVG_TO_CURVES_NODE, SVG_TO_MESH_NODE, SVG_TO_SOLID_NODE } from "./svg";
 import { RAYCAST_NODE, RAY_BURST_NODE, SAMPLE_SURFACE_NODE, VOLUME_SCATTER_NODE } from "./raycast";
@@ -509,6 +510,7 @@ export const STARTER_NODES = [
   LIGHT_PROBE_NODE,
   DECAL_NODE,
   INVERT_NORMALS_NODE,
+  PALETTE_SHADE_NODE,
   HUB_TEXT_NODE,
   HUB_IMAGE_NODE,
   SVG_TO_CURVES_NODE,
