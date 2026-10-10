@@ -11,6 +11,7 @@ import {
   MAP_TO_TEXTURES_NODE,
 } from "./mapGen";
 import { TERRAIN_NODE } from "./terrain";
+import { MAP_PAINT_NODE, commitMapPaint, flushMapPaint, getMapPaintState, paintDab } from "./mapPaint";
 
 const ctx = (id: string): EvalContext => ({ time: 0, step: 0, nodeId: id });
 const P = (node: { defaultParams: Record<string, unknown> }, over: Record<string, unknown> = {}) => ({
@@ -136,5 +137,58 @@ describe("Map Generator nodes", () => {
       }
     }
     expect(checked).toBeGreaterThan(5);
+  });
+});
+
+describe("Map Paint", () => {
+  const paintCtx = (id: string): EvalContext => ({ time: 0, step: 0, nodeId: id });
+  const heightSum = (paint: THREE.Texture | undefined, tag: string): number => {
+    const mesh = MAP_MESH_NODE.evaluate({}, P(MAP_MESH_NODE, { spacing: 0.03 }), ctx(`${tag}-mesh`));
+    const e = MAP_ELEVATION_NODE.evaluate({ map: mesh.map, paint }, P(MAP_ELEVATION_NODE, { island: 0 }), ctx(`${tag}-e`));
+    const t = MAP_TO_TEXTURES_NODE.evaluate({ map: e.map }, P(MAP_TO_TEXTURES_NODE, { resolution: "128" }), ctx(`${tag}-t`));
+    const d = (t.heightmap as THREE.DataTexture).image.data as Float32Array;
+    let sum = 0;
+    for (let i = 0; i < d.length; i += 4) sum += d[i];
+    return sum;
+  };
+
+  it("is registered, has no inputs, and an unpainted layer changes nothing", () => {
+    expect(DEFAULT_REGISTRY.get("map/paint")?.inputs).toEqual([]);
+    const blank = MAP_PAINT_NODE.evaluate({}, P(MAP_PAINT_NODE), paintCtx("mp-blank")).paint as THREE.Texture;
+    expect(heightSum(blank, "mp-a")).toBeCloseTo(heightSum(undefined, "mp-b"), 4);
+  });
+
+  it("returns the same texture every frame, and a stroke flows through to the heightmap", () => {
+    const params = P(MAP_PAINT_NODE);
+    const first = MAP_PAINT_NODE.evaluate({}, params, paintCtx("mp-live")).paint as THREE.Texture;
+    expect(MAP_PAINT_NODE.evaluate({}, params, paintCtx("mp-live")).paint).toBe(first);
+
+    const before = heightSum(first, "mp-live-1");
+    const state = getMapPaintState("mp-live", 256, params.paintData);
+    for (let i = 0; i < 8; i++) paintDab(state, { x: 0.5, y: 0.5, radius: 0.25, strength: 1, tool: "raise", falloff: "smooth" });
+    flushMapPaint(state);
+    const after = heightSum(first, "mp-live-2");
+    expect(after).toBeGreaterThan(before);
+
+    const saved = commitMapPaint(state);
+    expect(saved.length).toBeGreaterThan(0);
+    // Committing must not look like an external change: no reload, same texture.
+    expect(MAP_PAINT_NODE.evaluate({}, { ...params, paintData: saved }, paintCtx("mp-live")).paint).toBe(first);
+    expect(heightSum(first, "mp-live-3")).toBeCloseTo(after, 4);
+  });
+
+  it("reloads when the saved data changes underneath it (undo / reset)", () => {
+    const params = P(MAP_PAINT_NODE);
+    const tex = MAP_PAINT_NODE.evaluate({}, params, paintCtx("mp-undo")).paint as THREE.Texture;
+    const state = getMapPaintState("mp-undo", 256, "");
+    for (let i = 0; i < 8; i++) paintDab(state, { x: 0.5, y: 0.5, radius: 0.25, strength: 1, tool: "raise", falloff: "smooth" });
+    const saved = commitMapPaint(state);
+    const painted = heightSum(tex, "mp-undo-1");
+
+    MAP_PAINT_NODE.evaluate({}, { ...params, paintData: "" }, paintCtx("mp-undo"));
+    expect(heightSum(tex, "mp-undo-2")).toBeLessThan(painted);
+    MAP_PAINT_NODE.evaluate({}, { ...params, paintData: saved }, paintCtx("mp-undo"));
+    // Saved data is quantised to 8 bits, so the reload matches to well under 0.1%, not exactly.
+    expect(Math.abs(heightSum(tex, "mp-undo-3") - painted) / painted).toBeLessThan(0.001);
   });
 });

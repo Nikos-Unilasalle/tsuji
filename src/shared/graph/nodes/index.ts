@@ -205,6 +205,7 @@ import {
   MAP_BIOMES_NODE,
   MAP_TO_TEXTURES_NODE,
 } from "./mapGen";
+import { MAP_PAINT_NODE } from "./mapPaint";
 import { SAMPLE_TEXTURE_NODE } from "./sampleTexture";
 import {
   CURL_NOISE_FIELD_3D_NODE,
@@ -536,6 +537,7 @@ export const STARTER_NODES = [
   DISTANCES_NODE,
   HEX_GRID_NODE,
   MAP_MESH_NODE,
+  MAP_PAINT_NODE,
   MAP_ELEVATION_NODE,
   MAP_MOISTURE_NODE,
   MAP_RIVERS_NODE,
@@ -666,6 +668,7 @@ export * from "./distance";
 export * from "./paintOnGeometry";
 export * from "./hexGrid";
 export * from "./mapGen";
+export * from "./mapPaint";
 export * from "./sampleTexture";
 export * from "./fluidSim";
 export * from "./tileableNoise";

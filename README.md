@@ -240,12 +240,13 @@ Les prises de connexion (sockets) sont identifiées par des codes couleur normal
 
 Pipeline de génération de terrain inspiré de [mapgen4](https://github.com/redblobgames/mapgen4) (Red Blob Games, Apache 2.0), découpé en une étape par nœud. Chaque nœud reçoit la carte de l'étape précédente sur un seul fil (`any`) et en renvoie une nouvelle enrichie de son champ : une étape peut donc être remplacée, supprimée ou dupliquée en branche. Le calcul est déterministe (même graine, même carte) et mémorisé : rien n'est recalculé tant qu'un paramètre ou l'entrée ne change pas.
 
-`Map Mesh → Map Elevation → Map Moisture → Map Rivers → Map Biomes → Map To Textures`
+`Map Mesh → (Map Paint →) Map Elevation → Map Moisture → Map Rivers → Map Biomes → Map To Textures`
 
 | Node | Type | Description |
 | :--- | :--- | :--- |
 | **Map Mesh** | `map/mesh` | Points Poisson-disk + triangulation de Delaunay (graine, espacement). |
-| **Map Elevation** | `map/elevation` | Bruit fBm + crêtes montagneuses, forme d'île, niveau de la mer. Entrée `paint` optionnelle : une texture (gris 50 % = neutre) soulève ou abaisse le relief. Le rivage est exactement à 0. |
+| **Map Paint** | `map/paint` | Pinceau interactif. Nœud sélectionné, glisser sur le Terrain affiché : lever / abaisser / lisser / effacer (Alt inverse, `[` `]` règlent le rayon). Sort la texture `paint`, sauvegardée dans le projet. Sans Terrain à l'écran, vise un plan au sol (largeur / profondeur de repli). |
+| **Map Elevation** | `map/elevation` | Bruit fBm + crêtes montagneuses, forme d'île, niveau de la mer. Entrée `paint` optionnelle (typiquement Map Paint ; toute texture convient, gris 50 % = neutre) : soulève ou abaisse le relief. Le rivage est exactement à 0. |
 | **Map Moisture** | `map/moisture` | Vent balayant la carte : l'air se charge d'eau sur la mer et la perd en montant (versant humide, ombre pluviométrique). |
 | **Map Rivers** | `map/rivers` | Drainage par remplissage de dépressions (les cuvettes deviennent des lacs), accumulation des débits. Sort aussi `paths`, une liste de polylignes `Vector3[]` à brancher sur `curve/from_point_lists`. Réglez largeur / profondeur / amplitude comme sur le nœud Terrain. |
 | **Map Biomes** | `map/biomes` | Classification altitude × humidité (océan, plage, lac, marais, prairie, forêt, jungle, savane, désert, roche, neige). |

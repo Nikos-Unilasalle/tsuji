@@ -131,7 +131,7 @@ export const MAP_ELEVATION_NODE: NodeDefinition = {
     mountains: 2.6,
     island: 0.8,
     seaLevel: 0.42,
-    paintStrength: 0.5,
+    paintStrength: 1,
   },
   paramFields: ELEVATION_FIELDS,
   evaluate: (inputs, params, ctx) => {
@@ -144,14 +144,16 @@ export const MAP_ELEVATION_NODE: NodeDefinition = {
     const mountains = clamp(num(inputs.mountains, params.mountains, 2.6), 0, 6);
     const island = clamp(num(inputs.island, params.island, 0.8), 0, 1);
     const seaLevel = clamp(num(inputs.seaLevel, params.seaLevel, 0.42), 0, 1);
-    const paintStrength = clamp(num(undefined, params.paintStrength, 0.5), 0, 2);
+    const paintStrength = clamp(num(undefined, params.paintStrength, 1), 0, 2);
     const paintTex = inputs.paint instanceof THREE.Texture ? inputs.paint : null;
 
     const sig = [src.rev, seed, scale, octaves, ridges, mountains, island, seaLevel, paintStrength, textureSig(paintTex)].join("|");
     const map = memoized(elevationCache, ctx.nodeId, sig, () => {
       const pixels = paintTex ? getTexturePixels(paintTex) : null;
       // Same orientation as the Terrain heightmap: image row 0 is the map's y = 0 edge.
-      const paint = pixels ? (x: number, y: number) => samplePixelHeight(pixels, x, 1 - y) : undefined;
+      // An 8-bit image's mid grey is 128/255, not 0.5; shift it so "no change" really is no change.
+      const shift = pixels && !(pixels.data instanceof Float32Array) ? 128 / 255 - 0.5 : 0;
+      const paint = pixels ? (x: number, y: number) => samplePixelHeight(pixels, x, 1 - y) - shift : undefined;
       const elevation = generateElevation(src.mesh, { seed, scale, octaves, ridges, mountains, island, seaLevel, paint, paintStrength });
       // Anything computed from the old elevation is stale now.
       return extendMapData(src, { elevation, moisture: undefined, rivers: undefined, biomes: undefined });
