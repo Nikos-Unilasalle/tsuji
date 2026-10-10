@@ -47,17 +47,103 @@ describe("PALETTE_SHADE_NODE", () => {
     expect(evaluate({}).geometry).toBeNull();
   });
 
-  it("paints every mesh with one palette material and passes the object through", () => {
+  it("paints every mesh with the palette, sharing it between materials, and passes the object through", () => {
     const group = new THREE.Group();
-    const a = new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshStandardMaterial());
-    const b = new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshStandardMaterial());
-    group.add(a, b);
+    const shared = new THREE.MeshStandardMaterial();
+    const a = new THREE.Mesh(new THREE.BoxGeometry(), shared);
+    const b = new THREE.Mesh(new THREE.BoxGeometry(), shared);
+    const c = new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshStandardMaterial());
+    group.add(a, b, c);
     const out = evaluate({ geometry: group, palette: grays(0, 0.5, 1) });
     expect(out.geometry).toBe(group);
+    // Meshes that shared a material keep sharing; each source gets its own variant.
     expect(a.material).toBe(b.material);
+    expect(c.material).not.toBe(a.material);
     expect((a.material as any).__isPaletteMaterial).toBe(true);
     const u = (a.material as any).__paletteUniforms;
     expect(u.uPaletteCount.value).toBe(3);
+    // One palette for all of them, by reference.
+    expect((c.material as any).__paletteUniforms).toBe(u);
+  });
+
+  it("keeps the alpha of the original material: map, alpha map, alpha test, opacity, sidedness", () => {
+    const map = new THREE.DataTexture(new Uint8Array([255, 255, 255, 0]), 1, 1);
+    const alphaMap = new THREE.DataTexture(new Uint8Array([255]), 1, 1);
+    const original = new THREE.MeshStandardMaterial({
+      map,
+      alphaMap,
+      alphaTest: 0.4,
+      transparent: true,
+      opacity: 0.7,
+      side: THREE.DoubleSide,
+    });
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(), original);
+    evaluate({ geometry: mesh });
+    const painted = mesh.material as unknown as THREE.MeshLambertMaterial;
+    expect(painted).not.toBe(original);
+    expect(painted.map).toBe(map);
+    expect(painted.alphaMap).toBe(alphaMap);
+    expect(painted.alphaTest).toBe(0.4);
+    expect(painted.transparent).toBe(true);
+    expect(painted.opacity).toBe(0.7);
+    expect(painted.side).toBe(THREE.DoubleSide);
+    expect(painted.color.getHex()).toBe(0xffffff);
+  });
+
+  it("follows later changes to the original's alpha", () => {
+    const original = new THREE.MeshStandardMaterial({ opacity: 1 });
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(), original);
+    evaluate({ geometry: mesh });
+    original.opacity = 0.25;
+    original.transparent = true;
+    evaluate({ geometry: mesh });
+    expect((mesh.material as unknown as THREE.MeshLambertMaterial).opacity).toBe(0.25);
+    expect((mesh.material as unknown as THREE.MeshLambertMaterial).transparent).toBe(true);
+  });
+
+  it("brings a material's vertex patches along, and drops its fragment ones", () => {
+    const original = new THREE.MeshStandardMaterial();
+    original.onBeforeCompile = (shader) => {
+      shader.vertexShader = shader.vertexShader.replace("#include <begin_vertex>", "#include <begin_vertex>\n// VERTEX_PATCH");
+      shader.fragmentShader = shader.fragmentShader.replace("void main() {", "// FRAGMENT_PATCH\nvoid main() {");
+      shader.uniforms.uProbe = { value: 1 };
+    };
+    original.customProgramCacheKey = () => "orig-key";
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(), original);
+    evaluate({ geometry: mesh });
+    const painted = mesh.material as unknown as THREE.MeshLambertMaterial;
+    const shader = {
+      uniforms: {} as Record<string, unknown>,
+      vertexShader: THREE.ShaderLib.lambert.vertexShader,
+      fragmentShader: THREE.ShaderLib.lambert.fragmentShader,
+    };
+    painted.onBeforeCompile(shader as any, undefined as any);
+    expect(shader.vertexShader).toContain("VERTEX_PATCH");
+    expect(shader.fragmentShader).not.toContain("FRAGMENT_PATCH");
+    expect(shader.uniforms.uProbe).toBeDefined();
+    expect(painted.customProgramCacheKey()).toContain("orig-key");
+  });
+
+  it("lets a material with a palette adapter redraw itself (a leaf card cuts its blade)", () => {
+    const leaf = new THREE.ShaderMaterial({ side: THREE.DoubleSide });
+    (leaf as any).__paletteAdapter = {
+      key: "test-leaf",
+      patch: (shader: { fragmentShader: string }) => {
+        shader.fragmentShader = shader.fragmentShader.replace("void main() {", "// ADAPTER\nvoid main() {");
+      },
+    };
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(), leaf);
+    evaluate({ geometry: mesh });
+    const painted = mesh.material as unknown as THREE.MeshLambertMaterial;
+    expect(painted.side).toBe(THREE.DoubleSide);
+    const shader = {
+      uniforms: {} as Record<string, unknown>,
+      vertexShader: THREE.ShaderLib.lambert.vertexShader,
+      fragmentShader: THREE.ShaderLib.lambert.fragmentShader,
+    };
+    painted.onBeforeCompile(shader as any, undefined as any);
+    expect(shader.fragmentShader).toContain("ADAPTER");
+    expect(painted.customProgramCacheKey()).toContain("test-leaf");
   });
 
   it("honours Steps, and works with the node's own ramp when no palette is wired", () => {

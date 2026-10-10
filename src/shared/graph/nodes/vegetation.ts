@@ -503,11 +503,22 @@ interface TreeState {
   leafMaterial: THREE.ShaderMaterial;
   leaves: THREE.InstancedMesh | null;
   bark: THREE.Mesh;
+  /**
+   * What the Trunk and Foliage outputs hand out: groups of their own holding
+   * a proxy of each mesh — same geometry and material, but a mesh slot a
+   * consumer can restyle (Palette Shade swaps the material) or reparent
+   * without touching the tree's own group.
+   */
+  trunkOut: THREE.Group;
+  foliageOut: THREE.Group;
   signature: string;
   tips: THREE.Vector3[];
   branchCount: number;
   height: number;
 }
+
+/** How much further a tree leans in the wind than a generic swaying mesh. */
+const TREE_SWAY_GAIN = 2.5;
 
 const treeCache = createNodeCache<TreeState>((state) => {
   disposeObject3D(state.group);
@@ -596,6 +607,11 @@ function treeParamsFrom(inputs: Record<string, unknown>, params: Record<string, 
  * and transform are uniforms, so dragging them is free while dragging Levels
  * is not. Changing Seed re-rolls the tree without touching its statistics,
  * which is how you fill a forest: one node, an Array, and a seed per instance.
+ *
+ * Besides the whole tree (Geometry), the Trunk and Foliage outputs hand out
+ * the two meshes separately, so each can take its own look downstream — a
+ * Palette Shade per part, say. A consumer that takes either one owns it, so
+ * wire both (or the Geometry output) to keep the whole tree on screen.
  */
 export const TREE_NODE: NodeDefinition = {
   type: "object/tree",
@@ -627,6 +643,8 @@ export const TREE_NODE: NodeDefinition = {
   outputs: [
     { id: "geometry", label: "Geometry", type: "geometry" },
     { id: "matrix", label: "Matrix", type: "matrix" },
+    { id: "trunk", label: "Trunk", type: "geometry" },
+    { id: "foliage", label: "Foliage", type: "geometry" },
     { id: "tips", label: "Branch Tips", type: "list" },
     { id: "branchCount", label: "Branch Count", type: "value" },
   ],
@@ -764,6 +782,13 @@ export const TREE_NODE: NodeDefinition = {
         group.add(leaves);
       }
 
+      const trunkOut = state?.trunkOut ?? new THREE.Group();
+      const foliageOut = state?.foliageOut ?? new THREE.Group();
+      trunkOut.clear();
+      foliageOut.clear();
+      trunkOut.add(bark.clone());
+      if (leaves) foliageOut.add(leaves.clone());
+
       barkGeometry.computeBoundingBox();
       const height = barkGeometry.boundingBox ? barkGeometry.boundingBox.max.y : treeParams.trunkHeight;
 
@@ -772,6 +797,8 @@ export const TREE_NODE: NodeDefinition = {
       state = {
         group,
         bark,
+        trunkOut,
+        foliageOut,
         barkMaterial,
         barkUniforms,
         leafMaterial,
@@ -792,11 +819,24 @@ export const TREE_NODE: NodeDefinition = {
     }
     group.visible = Boolean(numberInput(undefined, params.visible, 1));
 
+    // The split outputs sit exactly where the whole tree does.
+    for (const part of [state.trunkOut, state.foliageOut]) {
+      part.matrixAutoUpdate = false;
+      part.matrix.copy(group.matrix);
+      part.visible = group.visible;
+      part.userData.nodeId = ctx.nodeId;
+    }
+
     const wind = resolveWind(inputs.wind, ctx.time ?? 0);
     const windInfluence = numberInput(undefined, params.windInfluence, 1);
 
     applyWindUniforms(barkUniforms, wind);
-    barkUniforms.uSwayInfluence.value = windInfluence;
+    // Trees get more lean than the generic sway node asks of a mesh: at the
+    // default breeze the plain sway was a few centimetres — invisible on a
+    // tree several metres tall. Bark and leaves read the same numbers so they
+    // move as one.
+    const swayInfluence = windInfluence * TREE_SWAY_GAIN;
+    barkUniforms.uSwayInfluence.value = swayInfluence;
     barkUniforms.uSwayAnchorY.value = 0;
     barkUniforms.uSwayHeight.value = state.height;
     barkUniforms.uSwayStiffness.value = Math.max(0.1, numberInput(undefined, params.trunkStiffness, 2.2));
@@ -807,6 +847,10 @@ export const TREE_NODE: NodeDefinition = {
 
     applyWindUniforms(leafMaterial.uniforms, wind);
     leafMaterial.uniforms.uLeafWindInfluence.value = windInfluence;
+    leafMaterial.uniforms.uSwayInfluence.value = swayInfluence;
+    leafMaterial.uniforms.uSwayAnchorY.value = barkUniforms.uSwayAnchorY.value;
+    leafMaterial.uniforms.uSwayHeight.value = barkUniforms.uSwayHeight.value;
+    leafMaterial.uniforms.uSwayStiffness.value = barkUniforms.uSwayStiffness.value;
     (leafMaterial.uniforms.uLeafColorA.value as THREE.Color).copy(asColor(params.leafColorA, new THREE.Color(0x4d7c2a)));
     (leafMaterial.uniforms.uLeafColorB.value as THREE.Color).copy(asColor(params.leafColorB, new THREE.Color(0x8bbf3d)));
     (leafMaterial.uniforms.uLightDirection.value as THREE.Vector3)
@@ -848,6 +892,8 @@ export const TREE_NODE: NodeDefinition = {
 
     return {
       ...primitiveOutputs(group, params),
+      trunk: state.trunkOut,
+      foliage: state.foliageOut,
       tips: state.tips.map((tip) => tip.clone()),
       branchCount: state.branchCount,
     };

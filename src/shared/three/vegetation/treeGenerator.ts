@@ -768,17 +768,26 @@ export function createLeafCardGeometry(): THREE.BufferGeometry {
   return geometry;
 }
 
-const LEAF_VERTEX = /* glsl */ `
+/**
+ * How one leaf moves in the wind, as GLSL shared by the card shader and the
+ * Palette Shade variant, so the two can never drift apart.
+ *
+ * A real leaf does three things at once, and each is a layer here:
+ *  1. it rides its branch — the whole card is carried by the same sway the
+ *     bark vertices get at that height (same uniforms, same mask), so the
+ *     foliage stays attached to the wood instead of hovering beside it;
+ *  2. it leans downwind about its stem — a mean lean that grows with the
+ *     wind's strength, plus the local gust on top of it;
+ *  3. it flutters — a quick pitch and twist of the blade about its own axes,
+ *     out of phase from leaf to leaf, whose amplitude opens up in the gusts.
+ */
+const LEAF_MOTION_GLSL = /* glsl */ `
   ${WIND_UNIFORM_DECL}
   uniform float uLeafWindInfluence;
-
-  attribute float aLeafRandom;
-  attribute float aLeafHeight;
-
-  varying vec2 vLeafUv;
-  varying float vLeafRandom;
-  varying float vLeafHeight;
-  varying vec3 vLeafNormal;
+  uniform float uSwayInfluence;
+  uniform float uSwayAnchorY;
+  uniform float uSwayHeight;
+  uniform float uSwayStiffness;
 
   ${WIND_GLSL}
 
@@ -789,63 +798,73 @@ const LEAF_VERTEX = /* glsl */ `
     return v * c + cross(axis, v) * s + axis * dot(axis, v) * (1.0 - c);
   }
 
-  void main() {
-    vLeafUv = uv;
-    vLeafRandom = aLeafRandom;
-    vLeafHeight = aLeafHeight;
+  /** World position and normal of one vertex of a leaf card, under the wind. */
+  void leafMotion(mat4 leafM, vec3 localPos, vec3 localNormal, float rnd, out vec3 worldPos, out vec3 worldNormal) {
+    vec3 anchor = (leafM * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
+    float influence = uLeafWindInfluence;
 
-    // The stem: the instance's own origin, which is where the card is attached
-    // (createLeafCardGeometry puts the quad's origin on its bottom edge).
-    vec3 anchor = (modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
-    vec4 world = modelMatrix * instanceMatrix * vec4(position, 1.0);
+    // Sampled once per leaf at its stem, never per vertex: four different
+    // displacements for four corners would shear the card instead of moving it.
+    vec2 gustVec = windOffset(anchor.xz + rnd * 12.0);
+    float gust = clamp(length(gustVec) / max(uWindStrength, 1e-4) * 2.0, 0.0, 1.0);
 
-    // Sampled ONCE per leaf, at the stem — not per vertex.
-    //
-    // Sampling at each vertex's own position gave the four corners of one card
-    // four different displacements, which sheared and stretched the leaf
-    // instead of moving it. The offset per leaf, plus the random, is what makes
-    // a cluster flutter rather than slide as a slab; the offset per *vertex*
-    // was just noise tearing the quad apart.
-    vec2 offset = windOffset(anchor.xz + aLeafRandom * 12.0) * uLeafWindInfluence;
+    // 3. flutter, in the card's own space (it pivots on its stem, the origin).
+    float tt = uWindPhase * 40.0 * (0.6 + uWindStrength) + rnd * 6.2831853;
+    float amp = influence * uWindStrength * (0.35 + 1.1 * gust);
+    float flap = sin(tt) * 0.8 + sin(tt * 2.3 + rnd * 9.0) * 0.4;
+    float twist = sin(tt * 1.7 + 1.3) * 0.7;
+    vec3 p = rotateAboutAxis(localPos, vec3(1.0, 0.0, 0.0), flap * amp);
+    vec3 n = rotateAboutAxis(localNormal, vec3(1.0, 0.0, 0.0), flap * amp);
+    p = rotateAboutAxis(p, vec3(0.0, 1.0, 0.0), twist * amp);
+    n = rotateAboutAxis(n, vec3(0.0, 1.0, 0.0), twist * amp);
 
-    // And applied as a rotation about the stem rather than a translation of the
-    // vertices: a leaf pivots where it is attached, and a rotation cannot
-    // change the shape of the card no matter how hard the wind blows.
-    float strength = length(offset);
-    if (strength > 1e-5) {
-      vec3 direction = vec3(offset.x, 0.0, offset.y) / strength;
-      vec3 axis = normalize(vec3(direction.z, 0.0, -direction.x));
-      // Bounded so a strong gust lays the leaf flat instead of spinning it.
-      float angle = atan(strength) * (0.75 + 0.5 * aLeafRandom);
-      world.xyz = anchor + rotateAboutAxis(world.xyz - anchor, axis, angle);
-      vLeafNormal = normalize(rotateAboutAxis(mat3(modelMatrix) * mat3(instanceMatrix) * normal, axis, angle));
-    } else {
-      vLeafNormal = normalize(mat3(modelMatrix) * mat3(instanceMatrix) * normal);
-    }
+    worldPos = (leafM * vec4(p, 1.0)).xyz;
+    worldNormal = normalize(mat3(leafM) * n);
 
-    gl_Position = projectionMatrix * viewMatrix * world;
+    // 2. lean downwind about the stem: a mean push that grows with strength,
+    // modulated by the local gust, bounded so a storm lays the leaf over
+    // rather than spinning it.
+    float lean = influence * (0.35 * uWindStrength + dot(gustVec, uWindDirection) * 1.6);
+    lean = clamp(lean, -0.6, 1.1);
+    vec3 axis = normalize(vec3(uWindDirection.y, 0.0, -uWindDirection.x));
+    worldPos = anchor + rotateAboutAxis(worldPos - anchor, axis, lean);
+    worldNormal = normalize(rotateAboutAxis(worldNormal, axis, lean));
+
+    // 1. ride the branch: the bark's own sway at this height (windSway.ts).
+    float swayMask = clamp((anchor.y - uSwayAnchorY) / max(0.0001, uSwayHeight), 0.0, 1.0);
+    swayMask = pow(swayMask, uSwayStiffness);
+    vec2 swayOffset = windOffset(anchor.xz) * uSwayInfluence * swayMask;
+    worldPos += vec3(swayOffset.x, -length(swayOffset) * 0.25, swayOffset.y);
   }
 `;
 
-const LEAF_FRAGMENT = /* glsl */ `
-  uniform vec3 uLeafColorA;
-  uniform vec3 uLeafColorB;
-  uniform vec3 uAutumnColorA;
-  uniform vec3 uAutumnColorB;
-  uniform vec3 uLightDirection;
-  uniform float uAmbient;
-  uniform float uLeafShape;
-  uniform float uLeafTip;
-  uniform float uSeason;
-  uniform float uSeasonVariance;
-  uniform float uCanopyShade;
-  uniform float uCanopyShadePower;
+const LEAF_VERTEX = /* glsl */ `
+  ${LEAF_MOTION_GLSL}
+
+  attribute float aLeafRandom;
+  attribute float aLeafHeight;
 
   varying vec2 vLeafUv;
   varying float vLeafRandom;
   varying float vLeafHeight;
   varying vec3 vLeafNormal;
 
+  void main() {
+    vLeafUv = uv;
+    vLeafRandom = aLeafRandom;
+    vLeafHeight = aLeafHeight;
+
+    vec3 worldPos;
+    leafMotion(modelMatrix * instanceMatrix, position, normal, aLeafRandom, worldPos, vLeafNormal);
+    gl_Position = projectionMatrix * viewMatrix * vec4(worldPos, 1.0);
+  }
+`;
+
+/**
+ * The leaf silhouette as GLSL, shared by the leaf's own fragment shader and by
+ * the Palette Shade variant, so both cut exactly the same blade out of the card.
+ */
+const LEAF_SHAPE_GLSL = /* glsl */ `
   /**
    * Half-width of the blade at height y, in [0,1]. The silhouette is cut out
    * of the card procedurally rather than sampled from an alpha texture: no
@@ -879,6 +898,28 @@ const LEAF_FRAGMENT = /* glsl */ `
     float base = pow(sin(y * 3.14159265), pointiness * 0.8);
     return base * (0.72 + 0.28 * cos(y * 18.84955592));
   }
+`;
+
+const LEAF_FRAGMENT = /* glsl */ `
+  uniform vec3 uLeafColorA;
+  uniform vec3 uLeafColorB;
+  uniform vec3 uAutumnColorA;
+  uniform vec3 uAutumnColorB;
+  uniform vec3 uLightDirection;
+  uniform float uAmbient;
+  uniform float uLeafShape;
+  uniform float uLeafTip;
+  uniform float uSeason;
+  uniform float uSeasonVariance;
+  uniform float uCanopyShade;
+  uniform float uCanopyShadePower;
+
+  varying vec2 vLeafUv;
+  varying float vLeafRandom;
+  varying float vLeafHeight;
+  varying vec3 vLeafNormal;
+
+  ${LEAF_SHAPE_GLSL}
 
   void main() {
     float x = (vLeafUv.x - 0.5) * 2.0;
@@ -913,11 +954,75 @@ const LEAF_FRAGMENT = /* glsl */ `
   }
 `;
 
+/**
+ * Teaches a lit material (Palette Shade's Lambert) to draw leaf cards like the
+ * leaf shader does: the same wind pivoting about the stem, and the same blade
+ * cut out of the card with `discard`, so the leaf's alpha silhouette survives
+ * when its colour is replaced by a palette. `uniforms` are the leaf
+ * material's own, shared by reference so the shape, tip and wind stay live.
+ */
+export function patchLeafForPalette(
+  shader: { uniforms: Record<string, THREE.IUniform>; vertexShader: string; fragmentShader: string },
+  uniforms: Record<string, THREE.IUniform>,
+): void {
+  Object.assign(shader.uniforms, uniforms);
+
+  shader.vertexShader = shader.vertexShader
+    .replace(
+      "void main() {",
+      `${LEAF_MOTION_GLSL}
+      attribute float aLeafRandom;
+      varying vec2 vLeafUv;
+      void main() {
+        vLeafUv = uv;`,
+    )
+    .replace(
+      "#include <beginnormal_vertex>",
+      `#include <beginnormal_vertex>
+      mat4 leafMatrix = modelMatrix * instanceMatrix;
+      vec3 leafWorldPos;
+      vec3 leafWorldNormal;
+      leafMotion(leafMatrix, position, objectNormal, aLeafRandom, leafWorldPos, leafWorldNormal);
+      objectNormal = normalize(transpose(mat3(leafMatrix)) * leafWorldNormal);`,
+    )
+    .replace(
+      "#include <begin_vertex>",
+      `#include <begin_vertex>
+      transformed = (inverse(leafMatrix) * vec4(leafWorldPos, 1.0)).xyz;`,
+    );
+
+  shader.fragmentShader = shader.fragmentShader
+    .replace(
+      "void main() {",
+      `uniform float uLeafShape;
+      uniform float uLeafTip;
+      varying vec2 vLeafUv;
+      ${LEAF_SHAPE_GLSL}
+      void main() {`,
+    )
+    .replace(
+      "vec4 diffuseColor = vec4( diffuse, opacity );",
+      `vec4 diffuseColor = vec4( diffuse, opacity );
+      {
+        float leafX = (vLeafUv.x - 0.5) * 2.0;
+        float leafY = clamp(vLeafUv.y, 0.0, 1.0);
+        if (abs(leafX) > 0.62 * leafHalfWidth(leafY, uLeafShape, uLeafTip)) discard;
+      }`,
+    );
+}
+
+export const LEAF_PALETTE_KEY = "leaf-card";
+
 export function createLeafMaterial(): THREE.ShaderMaterial {
-  return new THREE.ShaderMaterial({
+  const material = new THREE.ShaderMaterial({
     uniforms: {
       ...createWindUniforms(),
       uLeafWindInfluence: { value: 1 },
+      // The bark's sway, mirrored: set from the same numbers each frame so a leaf follows its branch.
+      uSwayInfluence: { value: 1 },
+      uSwayAnchorY: { value: 0 },
+      uSwayHeight: { value: 1 },
+      uSwayStiffness: { value: 1.6 },
       uLeafColorA: { value: new THREE.Color(0x4d7c2a) },
       uLeafColorB: { value: new THREE.Color(0x8bbf3d) },
       uAutumnColorA: { value: new THREE.Color(0xe0a52c) },
@@ -935,6 +1040,13 @@ export function createLeafMaterial(): THREE.ShaderMaterial {
     fragmentShader: LEAF_FRAGMENT,
     side: THREE.DoubleSide,
   });
+  // Palette Shade asks a material how to redraw itself under a palette: a
+  // leaf card is not an ordinary mesh, so it brings its own wind and blade cut.
+  (material as any).__paletteAdapter = {
+    key: LEAF_PALETTE_KEY,
+    patch: (shader: Parameters<typeof patchLeafForPalette>[0]) => patchLeafForPalette(shader, material.uniforms),
+  };
+  return material;
 }
 
 /** Per-leaf random, fed to both the wind offset and the colour mix. */

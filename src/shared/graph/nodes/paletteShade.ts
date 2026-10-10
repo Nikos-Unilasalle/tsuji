@@ -25,6 +25,11 @@ import { asColor, inheritSourceMaterial, numberInput, primitiveOutputs } from ".
  * palette colour afterwards. So each geometry keeps its own hand-painted
  * ramp, and a neighbour's shadow still falls across it unquantised.
  *
+ * Alpha is never touched: a material's opacity, alpha map, the alpha channel
+ * of its texture and its alpha test carry over to the painted result, so a
+ * cut-out leaf card keeps its silhouette — the Tree's leaves bring their own
+ * blade cut and wind through an adapter on the material.
+ *
  * Wired between an object and whatever consumes it, so each geometry can take
  * a different palette and a different number of shades.
  */
@@ -175,24 +180,86 @@ function createPaletteUniforms(): PaletteUniforms {
   };
 }
 
-/** One shared Lambert material per node: every mesh under the input draws with it. */
-export function createPaletteMaterial(uniforms: PaletteUniforms = createPaletteUniforms()): THREE.MeshLambertMaterial {
+/** What a material may expose so Palette Shade can redraw it faithfully (a leaf card brings its own wind and blade cut). */
+interface PaletteAdapter {
+  key: string;
+  patch: (shader: { uniforms: Record<string, THREE.IUniform>; vertexShader: string; fragmentShader: string }) => void;
+}
+
+const adapterOf = (m: THREE.Material | null | undefined): PaletteAdapter | undefined =>
+  (m as any)?.__paletteAdapter as PaletteAdapter | undefined;
+
+/** The alpha side of a material: what must survive a change of colour. */
+function syncAlpha(variant: THREE.MeshLambertMaterial, source: THREE.Material | null | undefined, doubleSided: boolean): void {
+  const src = source as (THREE.Material & { map?: THREE.Texture | null; alphaMap?: THREE.Texture | null }) | null | undefined;
+  const side = doubleSided ? THREE.DoubleSide : (src?.side ?? THREE.FrontSide);
+  const map = src?.map ?? null;
+  const alphaMap = src?.alphaMap ?? null;
+  const alphaTest = src?.alphaTest ?? 0;
+  const transparent = src?.transparent ?? false;
+  const needsRecompile =
+    variant.side !== side ||
+    variant.alphaTest !== alphaTest ||
+    variant.transparent !== transparent ||
+    !!variant.map !== !!map ||
+    !!variant.alphaMap !== !!alphaMap ||
+    variant.alphaToCoverage !== (src?.alphaToCoverage ?? false) ||
+    variant.alphaHash !== (src?.alphaHash ?? false);
+  variant.side = side;
+  variant.map = map;
+  variant.alphaMap = alphaMap;
+  variant.alphaTest = alphaTest;
+  variant.transparent = transparent;
+  variant.alphaToCoverage = src?.alphaToCoverage ?? false;
+  variant.alphaHash = src?.alphaHash ?? false;
+  variant.opacity = src?.opacity ?? 1;
+  variant.depthWrite = src?.depthWrite ?? true;
+  if (needsRecompile) variant.needsUpdate = true;
+}
+
+/**
+ * A Lambert material that paints with the palette while keeping the look of
+ * `source` that is not colour: its alpha (opacity, alpha map, the alpha channel
+ * of its texture, alpha test), its sidedness, and its vertex behaviour (wind
+ * sway, and a leaf card's own pivoting and blade cut).
+ */
+export function createPaletteMaterial(
+  uniforms: PaletteUniforms = createPaletteUniforms(),
+  source?: THREE.Material | null,
+): THREE.MeshLambertMaterial {
   const mat = new THREE.MeshLambertMaterial({ color: 0xffffff });
   (mat as any).__isSharedCustom = true;
   (mat as any).__isPaletteMaterial = true;
   (mat as any).__paletteUniforms = uniforms;
-  mat.onBeforeCompile = (shader) => compilePalette(uniforms, shader);
-  mat.customProgramCacheKey = () => "palette-shade";
+  const adapter = adapterOf(source);
+  const isShader = !!(source as THREE.ShaderMaterial | undefined)?.isShaderMaterial;
+  const sourceCompile = !isShader && source ? source.onBeforeCompile : undefined;
+  const sourceKey = !isShader && source ? source.customProgramCacheKey() : "";
+
+  mat.onBeforeCompile = (shader, renderer) => {
+    // The source's own vertex patches (wind sway on bark) come along; its
+    // fragment side is thrown away — that is the colour being replaced.
+    if (sourceCompile) {
+      const probe = { uniforms: {} as Record<string, THREE.IUniform>, vertexShader: shader.vertexShader, fragmentShader: shader.fragmentShader };
+      sourceCompile.call(source, probe as never, renderer);
+      shader.vertexShader = probe.vertexShader;
+      Object.assign(shader.uniforms, probe.uniforms);
+    }
+    adapter?.patch(shader as never);
+    compilePalette(uniforms, shader);
+  };
+  mat.customProgramCacheKey = () => `palette-shade|${adapter?.key ?? ""}|${sourceKey}`;
+  syncAlpha(mat, source, false);
   return mat;
 }
 
-/** Writes a resolved palette and the shading knobs into a palette material's uniforms. */
+/** Writes a resolved palette and the shading knobs into palette uniforms. */
 export function setPaletteUniforms(
-  mat: THREE.Material,
+  target: THREE.Material | PaletteUniforms,
   palette: THREE.Color[],
   options: { softness: number; bias: number; exposure: number; shadowStrength: number },
 ): void {
-  const u = (mat as any).__paletteUniforms as PaletteUniforms | undefined;
+  const u = ("uPalette" in target ? target : (target as any).__paletteUniforms) as PaletteUniforms | undefined;
   if (!u) return;
   const count = Math.max(1, Math.min(MAX_PALETTE_COLORS, palette.length));
   for (let i = 0; i < MAX_PALETTE_COLORS; i++) {
@@ -206,22 +273,34 @@ export function setPaletteUniforms(
   u.uPaletteShadow.value = options.shadowStrength;
 }
 
+type MeshMaterial = THREE.Material | THREE.Material[];
+
 interface PaletteShadeState {
-  material: THREE.MeshLambertMaterial;
+  /** The palette every variant shares, by reference: one write repaints them all. */
+  uniforms: PaletteUniforms;
+  /** One palette variant per source material, so meshes sharing a material keep sharing. */
+  variants: Map<THREE.Material, THREE.MeshLambertMaterial>;
+  /** Stable arrays for multi-material meshes, keyed by the source array. */
+  arrays: WeakMap<THREE.Material[], THREE.Material[]>;
   /** What each mesh was wearing before this node took over, so unwiring gives it back. */
-  originals: Map<THREE.Mesh, THREE.Material | THREE.Material[]>;
+  originals: Map<THREE.Mesh, MeshMaterial>;
+}
+
+function disposeVariants(state: PaletteShadeState): void {
+  for (const v of state.variants.values()) v.dispose();
+  state.variants.clear();
 }
 
 const paletteShadeCache = createNodeCache<PaletteShadeState>((state) => {
   for (const [mesh, original] of state.originals) inheritSourceMaterial(mesh, original);
   state.originals.clear();
-  state.material.dispose();
+  disposeVariants(state);
 });
 
 function getState(nodeId: string): PaletteShadeState {
   let state = paletteShadeCache.get(nodeId);
   if (!state) {
-    state = { material: createPaletteMaterial(), originals: new Map() };
+    state = { uniforms: createPaletteUniforms(), variants: new Map(), arrays: new WeakMap(), originals: new Map() };
     paletteShadeCache.set(nodeId, state);
   }
   return state;
@@ -238,8 +317,29 @@ export function collectPaletteTargets(root: THREE.Object3D): THREE.Mesh[] {
   return meshes;
 }
 
-/** Puts the palette material on `targets`, and gives back the original on every mesh that is no longer reached. */
-export function syncPaletteMaterial(state: PaletteShadeState, targets: THREE.Mesh[]): void {
+const isVariant = (m: THREE.Material | undefined): boolean => !!(m as any)?.__isPaletteMaterial;
+
+function variantFor(state: PaletteShadeState, source: THREE.Material, doubleSided: boolean): THREE.MeshLambertMaterial {
+  let v = state.variants.get(source);
+  if (!v) {
+    v = createPaletteMaterial(state.uniforms, source);
+    state.variants.set(source, v);
+  }
+  syncAlpha(v, source, doubleSided);
+  return v;
+}
+
+function variantsOf(state: PaletteShadeState, original: MeshMaterial, doubleSided: boolean): MeshMaterial {
+  if (!Array.isArray(original)) return variantFor(state, original, doubleSided);
+  const mapped = original.map((m) => variantFor(state, m, doubleSided));
+  const previous = state.arrays.get(original);
+  if (previous && previous.length === mapped.length && previous.every((m, i) => m === mapped[i])) return previous;
+  state.arrays.set(original, mapped);
+  return mapped;
+}
+
+/** Puts the palette on `targets`, and gives back the original on every mesh that is no longer reached. */
+export function syncPaletteMaterial(state: PaletteShadeState, targets: THREE.Mesh[], doubleSided = false): void {
   const wanted = new Set(targets);
   for (const [mesh, original] of [...state.originals]) {
     if (wanted.has(mesh)) continue;
@@ -249,8 +349,19 @@ export function syncPaletteMaterial(state: PaletteShadeState, targets: THREE.Mes
   for (const mesh of targets) {
     // Anything on the mesh that isn't ours is the true original — including a
     // material an upstream node swapped in since we last looked.
-    if (mesh.material !== state.material) state.originals.set(mesh, mesh.material);
-    inheritSourceMaterial(mesh, state.material);
+    const current = mesh.material;
+    const ours = Array.isArray(current) ? current.every(isVariant) : isVariant(current);
+    if (!ours) state.originals.set(mesh, current);
+    const original = state.originals.get(mesh) ?? current;
+    inheritSourceMaterial(mesh, variantsOf(state, original, doubleSided));
+  }
+  // Drop variants nothing reads any more (a source replaced upstream).
+  const live = new Set<THREE.Material>();
+  for (const original of state.originals.values()) for (const m of Array.isArray(original) ? original : [original]) live.add(m);
+  for (const [source, v] of [...state.variants]) {
+    if (live.has(source)) continue;
+    v.dispose();
+    state.variants.delete(source);
   }
 }
 
@@ -290,7 +401,7 @@ export const PALETTE_SHADE_NODE: NodeDefinition = {
     { id: "bias", label: "Light Bias", kind: "number", step: 0.05 },
     { id: "exposure", label: "Light Gain", kind: "number", step: 0.1 },
     { id: "shadowStrength", label: "Shadow Strength", kind: "number", step: 0.05 },
-    { id: "doubleSided", label: "Double Sided", kind: "boolean" },
+    { id: "doubleSided", label: "Force Double Sided", kind: "boolean" },
   ],
   evaluate: (inputs, params, ctx) => {
     const state = getState(ctx.nodeId);
@@ -319,20 +430,14 @@ export const PALETTE_SHADE_NODE: NodeDefinition = {
     const sort = params.sort === undefined ? true : Boolean(params.sort);
     const palette = buildPalette(colors, steps, sort);
 
-    setPaletteUniforms(state.material, palette, {
+    setPaletteUniforms(state.uniforms, palette, {
       softness: Math.max(0, Math.min(0.5, numberInput(inputs.softness, params.softness, 0))),
       bias: Math.max(-1, Math.min(1, numberInput(inputs.bias, params.bias, 0))),
       exposure: Math.max(0, numberInput(inputs.exposure, params.exposure, 1)),
       shadowStrength: Math.max(0, Math.min(1, numberInput(inputs.shadowStrength, params.shadowStrength, 1))),
     });
 
-    const side = params.doubleSided ? THREE.DoubleSide : THREE.FrontSide;
-    if (state.material.side !== side) {
-      state.material.side = side;
-      state.material.needsUpdate = true;
-    }
-
-    syncPaletteMaterial(state, targets);
+    syncPaletteMaterial(state, targets, Boolean(params.doubleSided));
 
     return primitiveOutputs(inputObj);
   },

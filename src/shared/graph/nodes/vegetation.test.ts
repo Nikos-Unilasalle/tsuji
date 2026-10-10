@@ -630,6 +630,72 @@ describe("object/tree node", () => {
     expect(isPatchedForSway(bark.material as THREE.Material, "tree-5")).toBe(true);
   });
 
+  test("Trunk and Foliage outputs hand out each mesh on its own", () => {
+    const out = TREE_NODE.evaluate({}, params(), makeContext("tree-split")) as {
+      geometry: THREE.Group;
+      trunk: THREE.Group;
+      foliage: THREE.Group;
+    };
+    const bark = out.geometry.children.find((c) => !(c instanceof THREE.InstancedMesh)) as THREE.Mesh;
+    const leaves = out.geometry.children.find((c) => c instanceof THREE.InstancedMesh) as THREE.InstancedMesh;
+
+    expect(out.trunk).toBeInstanceOf(THREE.Group);
+    expect(out.foliage).toBeInstanceOf(THREE.Group);
+    expect(out.trunk.children).toHaveLength(1);
+    expect(out.foliage.children).toHaveLength(1);
+    expect(out.trunk.children[0]).not.toBeInstanceOf(THREE.InstancedMesh);
+    expect(out.foliage.children[0]).toBeInstanceOf(THREE.InstancedMesh);
+
+    // Same geometry and look as the tree's own meshes, in a slot of their own.
+    const trunkMesh = out.trunk.children[0] as THREE.Mesh;
+    const foliageMesh = out.foliage.children[0] as THREE.InstancedMesh;
+    expect(trunkMesh).not.toBe(bark);
+    expect(trunkMesh.geometry).toBe(bark.geometry);
+    expect(trunkMesh.material).toBe(bark.material);
+    expect(foliageMesh.geometry).toBe(leaves.geometry);
+    expect(foliageMesh.material).toBe(leaves.material);
+    expect(foliageMesh.count).toBe(leaves.count);
+
+    // Restyling one output leaves the whole tree untouched.
+    trunkMesh.material = new THREE.MeshBasicMaterial();
+    expect(bark.material).not.toBe(trunkMesh.material);
+  });
+
+  test("the split outputs follow the tree's transform and keep their identity across frames", () => {
+    const first = TREE_NODE.evaluate({}, { ...params(), location: new THREE.Vector3(2, 0, 3) }, makeContext("tree-split2", 0)) as {
+      geometry: THREE.Group;
+      trunk: THREE.Group;
+      foliage: THREE.Group;
+    };
+    const second = TREE_NODE.evaluate({}, { ...params(), location: new THREE.Vector3(2, 0, 3) }, makeContext("tree-split2", 1)) as {
+      trunk: THREE.Group;
+      foliage: THREE.Group;
+    };
+    expect(second.trunk).toBe(first.trunk);
+    expect(second.foliage).toBe(first.foliage);
+    expect(first.trunk.matrix.elements).toEqual(first.geometry.matrix.elements);
+    expect(first.foliage.matrix.elements).toEqual(first.geometry.matrix.elements);
+  });
+
+  test("the leaf material can be redrawn under a palette with its blade cut intact", () => {
+    const out = TREE_NODE.evaluate({}, params(), makeContext("tree-palette")) as { foliage: THREE.Group };
+    const leafMaterial = (out.foliage.children[0] as THREE.InstancedMesh).material as THREE.ShaderMaterial;
+    const adapter = (leafMaterial as any).__paletteAdapter;
+    expect(adapter).toBeDefined();
+
+    const shader = {
+      uniforms: {} as Record<string, unknown>,
+      vertexShader: THREE.ShaderLib.lambert.vertexShader,
+      fragmentShader: THREE.ShaderLib.lambert.fragmentShader,
+    };
+    adapter.patch(shader);
+    // The blade is cut with discard, the wind pivots the card, and the leaf's own uniforms are shared.
+    expect(shader.fragmentShader).toContain("leafHalfWidth");
+    expect(shader.fragmentShader).toContain("discard");
+    expect(shader.vertexShader).toContain("aLeafRandom");
+    expect(shader.uniforms.uLeafShape).toBe(leafMaterial.uniforms.uLeafShape);
+  });
+
   test("an absurd levels × children cannot hang the graph", () => {
     // Clamping each input alone is not enough — it is their product that
     // explodes — so the generator stops at a hard branch budget.
@@ -1326,28 +1392,52 @@ describe("object/tree node — season and canopy", () => {
     expect(uniforms.uSeasonVariance.value).toBe(0.9);
   });
 
-  test("wind moves a leaf rigidly: sampled once at the stem, applied as a rotation", () => {
+  test("wind moves a leaf rigidly: sampled once at the stem, applied as rotations about it", () => {
     // The bug this pins: sampling windOffset at each vertex's own world
     // position gave the four corners of one card four different displacements,
     // which sheared and stretched the leaf. Wind must be read once per
-    // instance, at its anchor, and applied as a rotation about that anchor —
-    // a rotation cannot change the card's shape at any wind strength.
+    // instance, at its anchor, and applied as rotations about that anchor (and
+    // one shared translation) — none of which can change the card's shape.
     const out = TREE_NODE.evaluate({}, params(), makeContext("tree-a7")) as { geometry: THREE.Group };
     const shader = (leavesOf(out.geometry).material as THREE.ShaderMaterial).vertexShader;
 
-    expect(shader).toContain("vec3 anchor = (modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz");
-    expect(shader).toContain("windOffset(anchor.xz + aLeafRandom * 12.0)");
-    expect(shader).toContain("rotateAboutAxis(world.xyz - anchor, axis, angle)");
+    expect(shader).toContain("vec3 anchor = (leafM * vec4(0.0, 0.0, 0.0, 1.0)).xyz");
+    expect(shader).toContain("windOffset(anchor.xz + rnd * 12.0)");
+    expect(shader).toContain("rotateAboutAxis(worldPos - anchor, axis, lean)");
 
     // The per-vertex sample and the per-vertex bend mask are both gone.
     expect(shader).not.toContain("windOffset(world.xz");
     expect(shader).not.toContain("0.4 + uv.y");
   });
 
+  test("a leaf rides its branch: it reads the bark's sway uniforms, kept in step each frame", () => {
+    const out = TREE_NODE.evaluate({}, { ...params(), windInfluence: 0.8, trunkStiffness: 3 }, makeContext("tree-ride")) as {
+      geometry: THREE.Group;
+    };
+    const leafMaterial = leavesOf(out.geometry).material as THREE.ShaderMaterial;
+    const bark = out.geometry.children.find((c) => !(c instanceof THREE.InstancedMesh)) as THREE.Mesh;
+    expect(leafMaterial.vertexShader).toContain("swayOffset = windOffset(anchor.xz) * uSwayInfluence * swayMask");
+
+    // Same numbers as the bark gets, so wood and leaves move as one.
+    const swayUniforms = (bark.material as THREE.Material).onBeforeCompile;
+    expect(swayUniforms).toBeDefined();
+    expect(leafMaterial.uniforms.uSwayInfluence.value).toBeGreaterThan(0.8);
+    expect(leafMaterial.uniforms.uSwayStiffness.value).toBe(3);
+  });
+
+  test("leaves flutter: a pitch and a twist of the blade whose amplitude follows the wind", () => {
+    const out = TREE_NODE.evaluate({}, params(), makeContext("tree-flutter")) as { geometry: THREE.Group };
+    const shader = (leavesOf(out.geometry).material as THREE.ShaderMaterial).vertexShader;
+    expect(shader).toContain("float flap");
+    expect(shader).toContain("float twist");
+    expect(shader).toContain("uWindStrength * (0.35 + 1.1 * gust)");
+  });
+
   test("the leaf normal turns with the leaf, so shading follows the gust", () => {
     const out = TREE_NODE.evaluate({}, params(), makeContext("tree-a8")) as { geometry: THREE.Group };
     const shader = (leavesOf(out.geometry).material as THREE.ShaderMaterial).vertexShader;
-    expect(shader).toContain("vLeafNormal = normalize(rotateAboutAxis(");
+    expect(shader).toContain("worldNormal = normalize(rotateAboutAxis(worldNormal, axis, lean))");
+    expect(shader).toContain("leafMotion(modelMatrix * instanceMatrix, position, normal, aLeafRandom, worldPos, vLeafNormal)");
   });
 
   test("the ramp is per leaf, not per tree — the shader offsets it by the leaf's random", () => {
