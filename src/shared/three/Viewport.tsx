@@ -273,21 +273,6 @@ function getTerrainMeshForNode(
   return null;
 }
 
-import { MapPaintState, commitMapPaint, flushMapPaint, getMapPaintState, paintDab } from "../graph/nodes/mapPaint";
-import { MapPaintHit, pickMapPaintHit } from "./mapPaintPick";
-import type { MapBrushTool } from "../math/mapgen/paintLayer";
-
-function isMapPaintNode(node: { type: string } | null | undefined): boolean {
-  return node?.type === "map/paint";
-}
-
-const MAP_PAINT_HUD_TOOLS: BrushHudTool[] = [
-  { id: "raise", kind: "draw", title: "Raise: build mountains (Alt lowers)" },
-  { id: "lower", kind: "crease", title: "Lower: carve valleys and sea (Alt raises)" },
-  { id: "smooth", kind: "smooth", title: "Smooth: soften the painted relief" },
-  { id: "erase", kind: "flatten", title: "Erase: fade the paint back to the generated terrain" },
-];
-
 /** Same palette order on both nodes; a node just omits the tools its surface can't do (Terrain is a heightfield, so no Inflate/Grab; Sculpt has no Erode). */
 const TERRAIN_HUD_TOOLS: BrushHudTool[] = [
   { id: "sculpt", kind: "draw" },
@@ -1191,13 +1176,6 @@ export function Viewport({
   const terrainInvertRef = useRef(false);
   terrainInvertRef.current = terrainInvert;
   const isTerrainSculptingRef = useRef(false);
-  const [mapPaintInvert, setMapPaintInvert] = useState(false);
-  const mapPaintInvertRef = useRef(false);
-  mapPaintInvertRef.current = mapPaintInvert;
-  const isMapPaintingRef = useRef(false);
-  const mapPaintStateRef = useRef<MapPaintState | null>(null);
-  const mapPaintLastRef = useRef<{ x: number; y: number } | null>(null);
-  const mapPaintFlushedAtRef = useRef(0);
   const terrainSculptWorkingOffsetsRef = useRef<Record<number, number> | null>(null);
   const terrainMaskWorkingRef = useRef<Record<number, number> | null>(null);
   const terrainTargetHeightRef = useRef<number | null>(null);
@@ -2429,7 +2407,6 @@ export function Viewport({
               (n) =>
                 n.id === selectedNodeIdRef.current &&
                 (isTerrainNode(n) ||
-                  isMapPaintNode(n) ||
                   isSculptNode(n) ||
                   isTexturePaintNode(n) ||
                   isTextureMixNode(n) ||
@@ -2443,12 +2420,9 @@ export function Viewport({
           // pixel-space brushes (halves would be far too coarse at 0.02-2).
           const isTerrain = isTerrainNode(brushNode);
           const isSculpt = isSculptNode(brushNode);
-          const isMapPaint = isMapPaintNode(brushNode);
-          const cur = Number(brushNode.params.brushSize) || (isTerrain ? 4 : isSculpt ? 0.3 : isMapPaint ? 0.08 : 24);
+          const cur = Number(brushNode.params.brushSize) || (isTerrain ? 4 : isSculpt ? 0.3 : 24);
           const next = isTerrain
             ? Math.max(0.5, Math.min(50, Math.round((cur + (bigger ? 0.5 : -0.5)) * 2) / 2))
-            : isMapPaint
-            ? Math.max(0.01, Math.min(0.5, bigger ? cur * 1.15 : cur / 1.15))
             : isSculpt
             ? Math.max(0.02, Math.min(2, bigger ? cur * 1.15 : cur / 1.15))
             : Math.max(1, Math.min(512, Math.round(bigger ? cur * 1.15 + 1 : cur / 1.15 - 1)));
@@ -3409,30 +3383,6 @@ export function Viewport({
         }
       }
 
-      const mapPaintNode = selectedNodeIdRef.current
-        ? graphRef.current.nodes.find((n) => n.id === selectedNodeIdRef.current && isMapPaintNode(n))
-        : null;
-
-      if (mapPaintNode && !outputMode && !elevationView && e.button === 0 && !isMarqueeModifier && raycaster) {
-        const rect = renderer.domElement.getBoundingClientRect();
-        const ndc = new THREE.Vector2(
-          ((e.clientX - rect.left) / rect.width) * 2 - 1,
-          -((e.clientY - rect.top) / rect.height) * 2 + 1,
-        );
-        const hit = pickMapPaintHit(raycaster, camera, ndc, latestResultsRef.current, mapPaintNode);
-        if (hit) {
-          const size = Number(mapPaintNode.params.resolution) || 256;
-          mapPaintStateRef.current = getMapPaintState(mapPaintNode.id, size, mapPaintNode.params.paintData);
-          isMapPaintingRef.current = true;
-          mapPaintLastRef.current = null;
-          mapPaintFlushedAtRef.current = 0;
-          controls.enabled = false;
-          mapPaintApply(mapPaintNode, hit, e, null);
-          e.stopImmediatePropagation();
-          return;
-        }
-      }
-
       const sculptNode = selectedNodeIdRef.current
         ? graphRef.current.nodes.find((n) => n.id === selectedNodeIdRef.current && isSculptNode(n))
         : null;
@@ -3842,40 +3792,6 @@ export function Viewport({
       }
     }
 
-    // Map Paint: lay down one dab, or a run of dabs from the last pointer position so a fast drag leaves a continuous stroke.
-    function mapPaintApply(
-      node: { params: Record<string, unknown> },
-      hit: MapPaintHit,
-      ev: PointerEvent,
-      from: { x: number; y: number } | null,
-    ) {
-      const st = mapPaintStateRef.current;
-      if (!st) return;
-      const radius = Math.max(0.005, Math.min(0.5, Number(node.params.brushSize) || 0.08));
-      const base = {
-        radius,
-        strength: Math.max(0, Math.min(1, Number(node.params.brushStrength) || 0.5)),
-        tool: ((node.params.brushTool as MapBrushTool) || "raise") as MapBrushTool,
-        falloff: ((node.params.brushFalloff as BrushFalloff) || "smooth") as BrushFalloff,
-        invert: mapPaintInvertRef.current || ev.altKey,
-      };
-      if (from) {
-        const dx = hit.x - from.x;
-        const dy = hit.y - from.y;
-        const n = Math.min(64, Math.max(1, Math.ceil(Math.hypot(dx, dy) / Math.max(0.0005, radius * 0.25))));
-        for (let i = 1; i <= n; i++) paintDab(st, { ...base, x: from.x + (dx * i) / n, y: from.y + (dy * i) / n });
-      } else {
-        paintDab(st, { ...base, x: hit.x, y: hit.y });
-      }
-      mapPaintLastRef.current = { x: hit.x, y: hit.y };
-      // The texture refresh makes Map Elevation recompute the whole map, so it is paced rather than per event.
-      const now = performance.now();
-      if (st.dirty && now - mapPaintFlushedAtRef.current > 60) {
-        flushMapPaint(st);
-        mapPaintFlushedAtRef.current = now;
-      }
-    }
-
     function onCanvasPointerMove(e: PointerEvent) {
       // A running Edit Mesh tool follows the mouse and nothing else does.
       if (editCtl.modalNodeId !== null) {
@@ -3958,34 +3874,6 @@ export function Viewport({
         }
       } else if (terrainBrushGizmo && terrainBrushGizmo.visible) {
         terrainBrushGizmo.visible = false;
-      }
-
-      const mapPaintNode = selectedNodeIdRef.current
-        ? graphRef.current.nodes.find((n) => n.id === selectedNodeIdRef.current && isMapPaintNode(n))
-        : null;
-
-      if (mapPaintNode && !outputMode && host && raycaster) {
-        const rect = renderer.domElement.getBoundingClientRect();
-        const ndc = new THREE.Vector2(
-          ((e.clientX - rect.left) / rect.width) * 2 - 1,
-          -((e.clientY - rect.top) / rect.height) * 2 + 1,
-        );
-        const hit = pickMapPaintHit(raycaster, camera, ndc, latestResultsRef.current, mapPaintNode);
-        if (hit) {
-          const radius = Math.max(0.005, Math.min(0.5, Number(mapPaintNode.params.brushSize) || 0.08));
-          terrainBrushGizmo.visible = true;
-          terrainBrushGizmo.position.copy(hit.point);
-          terrainBrushGizmo.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), hit.normal);
-          const ring = radius * hit.worldWidth;
-          terrainBrushGizmo.scale.set(ring, ring, ring);
-          if (isMapPaintingRef.current) {
-            mapPaintApply(mapPaintNode, hit, e, mapPaintLastRef.current);
-            e.stopImmediatePropagation();
-            return;
-          }
-        } else if (!isMapPaintingRef.current) {
-          terrainBrushGizmo.visible = false;
-        }
       }
 
       const sculptNode = selectedNodeIdRef.current
@@ -4586,21 +4474,6 @@ export function Viewport({
         terrainSculptWorkingOffsetsRef.current = null;
         terrainMaskWorkingRef.current = null;
         terrainTargetHeightRef.current = null;
-        return;
-      }
-
-      if (isMapPaintingRef.current) {
-        isMapPaintingRef.current = false;
-        controls.enabled = true;
-        const mapPaintNode = selectedNodeIdRef.current
-          ? graphRef.current.nodes.find((n) => n.id === selectedNodeIdRef.current && isMapPaintNode(n))
-          : null;
-        const st = mapPaintStateRef.current;
-        if (mapPaintNode && st) {
-          onParamChangeRef.current?.({ paintData: commitMapPaint(st) }, mapPaintNode.id, undefined, { coalesce: false });
-        }
-        mapPaintStateRef.current = null;
-        mapPaintLastRef.current = null;
         return;
       }
 
@@ -9040,54 +8913,6 @@ export function Viewport({
               onReset={() => {
                 if (window.confirm("Reset all manual sculpt offsets on this terrain?")) {
                   onParamChange?.({ sculptOffsets: {}, maskWeights: {} }, tNode.id);
-                }
-              }}
-            />
-          );
-        })()}
-      {/* Map Paint Floating Toolbar */}
-      {!outputMode &&
-        !elevationView &&
-        selectedNodeId &&
-        (() => {
-          const mNode = graph.nodes.find((n) => n.id === selectedNodeId && isMapPaintNode(n));
-          if (!mNode) return null;
-          const brushSize = Number(mNode.params.brushSize) || 0.08;
-          const brushStrength = Number(mNode.params.brushStrength) || 0.5;
-
-          return (
-            <BrushHud
-              badge="MAP"
-              badgeTitle="Map Paint: draw mountains and seas on the generated map"
-              accentRgb="101, 163, 13"
-              accentHex="#65a30d"
-              tools={MAP_PAINT_HUD_TOOLS}
-              currentTool={(mNode.params.brushTool as string) || "raise"}
-              onTool={(id) => onParamChange?.("brushTool", id, mNode.id)}
-              invert={mapPaintInvert}
-              invertTitles={{
-                on: "Inverted: raise lowers and lower raises (or hold Alt)",
-                off: "Normal (or hold Alt to swap raise and lower)",
-              }}
-              onInvert={() => setMapPaintInvert(!mapPaintInvert)}
-              symmetry={[]}
-              radius={{
-                value: brushSize,
-                min: 0.01,
-                max: 0.5,
-                step: 0.005,
-                label: `R: ${Math.round(brushSize * 100)}%`,
-                onChange: (v) => onParamChange?.("brushSize", v, mNode.id),
-              }}
-              strength={{ value: brushStrength, onChange: (v) => onParamChange?.("brushStrength", v, mNode.id) }}
-              falloff={{
-                value: (mNode.params.brushFalloff as string) || "smooth",
-                onChange: (f) => onParamChange?.("brushFalloff", f, mNode.id),
-              }}
-              resetTitle="Erase all painting on this map"
-              onReset={() => {
-                if (window.confirm("Erase all painting on this map?")) {
-                  onParamChange?.({ paintData: "" }, mNode.id);
                 }
               }}
             />

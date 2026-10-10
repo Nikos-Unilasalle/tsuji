@@ -10,7 +10,6 @@ export type NodeCategory =
   | "lighting"
   | "list"
   | "logic"
-  | "map"
   | "material"
   | "math"
   | "object"
@@ -40,7 +39,6 @@ export const CATEGORY_ORDER: NodeCategory[] = [
   "lighting",
   "list",
   "logic",
-  "map",
   "material",
   "math",
   "object",
@@ -70,7 +68,6 @@ export const CATEGORY_LABEL: Record<NodeCategory, string> = {
   lighting: "Lighting & Shadows",
   list: "List",
   logic: "Logic",
-  map: "Map Generator",
   material: "Material",
   math: "Math",
   object: "Object",
@@ -103,7 +100,6 @@ export const CATEGORY_COLOR: Record<NodeCategory, string> = {
   lighting: "#f59e0b",
   list: "#8b5cf6",
   logic: "#fb923c",
-  map: "#65a30d",
   material: "#d97706",
   math: "#f2c14e",
   object: "#0284c7",
