@@ -26,6 +26,7 @@ Disponible directement en ligne sur le Web et en application Desktop haute perfo
    - [Lumières, Matériaux et Environnement](#lumières-matériaux-et-environnement)
    - [Instanciation et Formations (Array & Spawner)](#instanciation-et-formations-array--spawner)
    - [Système de Particules, Champs de Forces et Trajectoires](#système-de-particules-champs-de-forces-et-trajectoires)
+   - [Générateur de Cartes (Map Generator)](#générateur-de-cartes-map-generator)
    - [Caméra et Calibration Vidéo-Mapping (DLT)](#caméra-et-calibration-vidéo-mapping-dlt)
    - [Data-Visualisation et Graphiques](#data-visualisation-et-graphiques)
    - [Post-Traitement et Shaders GPU](#post-traitement-et-shaders-gpu)
@@ -234,6 +235,23 @@ Les prises de connexion (sockets) sont identifiées par des codes couleur normal
 | **Particle Render** | `particles/render` | Rendu graphique sous forme de sprites 2D ou billboard. |
 | **Render Instances** | `particles/render_instances` | Rendu des particules sous forme de géométries 3D instanciées. |
 | **Capture Trails** | `particles/capture_trails` | Capture et génère les rubans de trajectoires des particules. |
+
+### Générateur de Cartes (Map Generator)
+
+Pipeline de génération de terrain inspiré de [mapgen4](https://github.com/redblobgames/mapgen4) (Red Blob Games, Apache 2.0), découpé en une étape par nœud. Chaque nœud reçoit la carte de l'étape précédente sur un seul fil (`any`) et en renvoie une nouvelle enrichie de son champ : une étape peut donc être remplacée, supprimée ou dupliquée en branche. Le calcul est déterministe (même graine, même carte) et mémorisé : rien n'est recalculé tant qu'un paramètre ou l'entrée ne change pas.
+
+`Map Mesh → Map Elevation → Map Moisture → Map Rivers → Map Biomes → Map To Textures`
+
+| Node | Type | Description |
+| :--- | :--- | :--- |
+| **Map Mesh** | `map/mesh` | Points Poisson-disk + triangulation de Delaunay (graine, espacement). |
+| **Map Elevation** | `map/elevation` | Bruit fBm + crêtes montagneuses, forme d'île, niveau de la mer. Entrée `paint` optionnelle : une texture (gris 50 % = neutre) soulève ou abaisse le relief. Le rivage est exactement à 0. |
+| **Map Moisture** | `map/moisture` | Vent balayant la carte : l'air se charge d'eau sur la mer et la perd en montant (versant humide, ombre pluviométrique). |
+| **Map Rivers** | `map/rivers` | Drainage par remplissage de dépressions (les cuvettes deviennent des lacs), accumulation des débits. Sort aussi `paths`, une liste de polylignes `Vector3[]` à brancher sur `curve/from_point_lists`. Réglez largeur / profondeur / amplitude comme sur le nœud Terrain. |
+| **Map Biomes** | `map/biomes` | Classification altitude × humidité (océan, plage, lac, marais, prairie, forêt, jungle, savane, désert, roche, neige). |
+| **Map To Textures** | `map/to-textures` | Rastérise en textures : `heightmap` (compatible Terrain, mer à 0), `biome` (couleurs), `moisture`, `rivers` (masque). |
+
+Voir la démo « Procedural Island ».
 
 ### Caméra et Calibration Vidéo-Mapping (DLT)
 

@@ -22,6 +22,16 @@ export interface DemoCategory {
 
 export const DEMO_CATALOG: DemoCategory[] = [
   {
+    title: "Map Generator",
+    demos: [
+      {
+        file: "demo_map_generator.tsuji",
+        label: "Procedural Island",
+        description: "The whole map pipeline in nodes: mesh, elevation, wind-driven moisture, rivers and biomes, rasterised onto a Terrain with water and river tubes.",
+      },
+    ],
+  },
+  {
     title: "Objects",
     demos: [
       {

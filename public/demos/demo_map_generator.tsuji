@@ -1,0 +1,342 @@
+{
+ "canvases": [
+  {
+   "nodes": [
+    {
+     "id": "setup_2",
+     "type": "light/point",
+     "position": {
+      "x": 857,
+      "y": 193
+     },
+     "params": {
+      "location": {
+       "x": 0,
+       "y": 2.185514752224622,
+       "z": -4.5179526088705275
+      },
+      "rotation": {
+       "x": 0,
+       "y": 0,
+       "z": 0
+      },
+      "scale": {
+       "x": 1,
+       "y": 1,
+       "z": 1
+      },
+      "color": 16768110,
+      "intensity": 50,
+      "distance": 15,
+      "decay": 2,
+      "castShadow": 1
+     }
+    },
+    {
+     "id": "setup_3",
+     "type": "light/point",
+     "position": {
+      "x": 1043,
+      "y": 187
+     },
+     "params": {
+      "location": {
+       "x": 0,
+       "y": 2.185514752224622,
+       "z": 4.487400919453167
+      },
+      "rotation": {
+       "x": 0,
+       "y": 0,
+       "z": 0
+      },
+      "scale": {
+       "x": 1,
+       "y": 1,
+       "z": 1
+      },
+      "color": 440020,
+      "intensity": 50,
+      "distance": 15,
+      "decay": 2,
+      "castShadow": 1
+     }
+    },
+    {
+     "id": "setup_4",
+     "type": "render",
+     "position": {
+      "x": 610,
+      "y": 393
+     },
+     "params": {
+      "frameCount": 120,
+      "fps": 30,
+      "motionBlur": 0,
+      "resolutionPreset": "16:9 (1920x1080)",
+      "width": 1920,
+      "height": 1080,
+      "holdout": false
+     }
+    },
+    {
+     "id": "setup_5",
+     "type": "lighting/environment",
+     "position": {
+      "x": 340,
+      "y": 406
+     },
+     "params": {
+      "color": 4147542,
+      "intensity": 1,
+      "background": 1,
+      "blurriness": 0,
+      "filePath": "",
+      "backgroundImagePath": "",
+      "backgroundFit": "cover",
+      "backgroundScale": {
+       "x": 1,
+       "y": 1,
+       "z": 1
+      },
+      "backgroundOffset": {
+       "x": 0,
+       "y": 0,
+       "z": 0
+      },
+      "backgroundRotation": 0,
+      "ambientIntensity": 0,
+      "sunIntensity": 0
+     }
+    },
+    {
+     "id": "setup_6",
+     "type": "light/point",
+     "position": {
+      "x": 860,
+      "y": 389
+     },
+     "params": {
+      "location": {
+       "x": 3.583607412619263,
+       "y": 2.185514752224622,
+       "z": -0.48624947478730096
+      },
+      "rotation": {
+       "x": 0,
+       "y": 0,
+       "z": 0
+      },
+      "scale": {
+       "x": 1,
+       "y": 1,
+       "z": 1
+      },
+      "color": 16777215,
+      "intensity": 50,
+      "distance": 15,
+      "decay": 2,
+      "castShadow": 1
+     }
+    },
+    {
+     "id": "mesh",
+     "type": "map/mesh",
+     "position": {
+      "x": -2400,
+      "y": 0
+     },
+     "params": {
+      "seed": 4,
+      "spacing": 0.012
+     }
+    },
+    {
+     "id": "elev",
+     "type": "map/elevation",
+     "position": {
+      "x": -2100,
+      "y": 0
+     },
+     "params": {
+      "seed": 4,
+      "island": 0.85
+     }
+    },
+    {
+     "id": "moist",
+     "type": "map/moisture",
+     "position": {
+      "x": -1800,
+      "y": 0
+     },
+     "params": {
+      "windAngle": 20
+     }
+    },
+    {
+     "id": "rivers",
+     "type": "map/rivers",
+     "position": {
+      "x": -1500,
+      "y": 0
+     },
+     "params": {
+      "density": 0.035
+     }
+    },
+    {
+     "id": "biomes",
+     "type": "map/biomes",
+     "position": {
+      "x": -1200,
+      "y": 0
+     },
+     "params": {}
+    },
+    {
+     "id": "tex",
+     "type": "map/to-textures",
+     "position": {
+      "x": -900,
+      "y": 0
+     },
+     "params": {
+      "resolution": "512",
+      "riverWidth": 1
+     }
+    },
+    {
+     "id": "land",
+     "type": "object/terrain",
+     "position": {
+      "x": -560,
+      "y": -60
+     },
+     "params": {
+      "width": 40,
+      "depth": 40,
+      "resolution": "256x256",
+      "heightScale": 6,
+      "heightOffset": 0,
+      "slopeShading": false,
+      "color": 16777215,
+      "roughness": 0.95,
+      "metalness": 0
+     }
+    },
+    {
+     "id": "water",
+     "type": "object/plane",
+     "position": {
+      "x": -560,
+      "y": 260
+     },
+     "params": {
+      "location": {
+       "x": 0,
+       "y": 0.06,
+       "z": 0
+      },
+      "rotation": {
+       "x": -1.5707963267948966,
+       "y": 0,
+       "z": 0
+      },
+      "scale": {
+       "x": 40,
+       "y": 40,
+       "z": 1
+      },
+      "color": 2781086,
+      "roughness": 0.15,
+      "metalness": 0.1,
+      "opacity": 0.72
+     }
+    },
+    {
+     "id": "streams",
+     "type": "curve/from_point_lists",
+     "position": {
+      "x": -1200,
+      "y": 300
+     },
+     "params": {
+      "radius": 0.07,
+      "color": 4034500,
+      "roughness": 0.2
+     }
+    }
+   ],
+   "connections": [
+    {
+     "id": "setup_c1",
+     "fromNode": "setup_5",
+     "fromSocket": "environment",
+     "toNode": "setup_4",
+     "toSocket": "environment"
+    },
+    {
+     "id": "mesh.map->elev.map",
+     "fromNode": "mesh",
+     "fromSocket": "map",
+     "toNode": "elev",
+     "toSocket": "map"
+    },
+    {
+     "id": "elev.map->moist.map",
+     "fromNode": "elev",
+     "fromSocket": "map",
+     "toNode": "moist",
+     "toSocket": "map"
+    },
+    {
+     "id": "moist.map->rivers.map",
+     "fromNode": "moist",
+     "fromSocket": "map",
+     "toNode": "rivers",
+     "toSocket": "map"
+    },
+    {
+     "id": "rivers.map->biomes.map",
+     "fromNode": "rivers",
+     "fromSocket": "map",
+     "toNode": "biomes",
+     "toSocket": "map"
+    },
+    {
+     "id": "biomes.map->tex.map",
+     "fromNode": "biomes",
+     "fromSocket": "map",
+     "toNode": "tex",
+     "toSocket": "map"
+    },
+    {
+     "id": "tex.heightmap->land.heightmap",
+     "fromNode": "tex",
+     "fromSocket": "heightmap",
+     "toNode": "land",
+     "toSocket": "heightmap"
+    },
+    {
+     "id": "tex.biome->land.texture",
+     "fromNode": "tex",
+     "fromSocket": "biome",
+     "toNode": "land",
+     "toSocket": "texture"
+    },
+    {
+     "id": "rivers.paths->streams.pointLists",
+     "fromNode": "rivers",
+     "fromSocket": "paths",
+     "toNode": "streams",
+     "toSocket": "pointLists"
+    }
+   ],
+   "keyframes": {},
+   "markers": [],
+   "exposedParams": []
+  }
+ ],
+ "activeCanvas": 0
+}
