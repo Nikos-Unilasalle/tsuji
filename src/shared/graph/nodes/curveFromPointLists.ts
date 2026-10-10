@@ -33,6 +33,7 @@ function numberInput(input: unknown, param: unknown, fallback: number): number {
 interface NodeState {
   mesh?: THREE.Mesh;
   geometrySignature?: string;
+  curves?: THREE.Curve<THREE.Vector3>[];
 }
 
 const stateCache = createNodeCache<NodeState>((s) => {
@@ -78,7 +79,7 @@ export const CURVES_FROM_POINT_LISTS_NODE: NodeDefinition = {
   label: "Curves from Point Lists",
   category: "curve",
   inputs: [{ id: "pointLists", label: "Point Lists (List of Lists)", type: "list" }, ...COMMON_PRIMITIVE_INPUTS],
-  outputs: [...COMMON_PRIMITIVE_OUTPUTS],
+  outputs: [{ id: "curves", label: "Curves (List)", type: "list" }, ...COMMON_PRIMITIVE_OUTPUTS],
   defaultParams: {
     ...COMMON_DEFAULT_PARAMS,
     radius: 0.1,
@@ -129,21 +130,26 @@ export const CURVES_FROM_POINT_LISTS_NODE: NodeDefinition = {
       mesh.geometry.dispose();
 
       const tubes: THREE.BufferGeometry[] = [];
+      const curves: THREE.Curve<THREE.Vector3>[] = [];
       for (const list of pointLists) {
         if (!Array.isArray(list) || list.length < 2) continue;
         const points = list.map((p) => asVector3(p, new THREE.Vector3()));
         const curve = new THREE.CatmullRomCurve3(points, closed);
+        curves.push(curve);
         tubes.push(new THREE.TubeGeometry(curve, tubularSegments, radius, radialSegments, closed));
       }
 
       mesh.geometry = tubes.length > 0 ? (mergeGeometries(tubes, false) ?? new THREE.BufferGeometry()) : new THREE.BufferGeometry();
       for (const tube of tubes) tube.dispose();
+      // Same array identity until the signature changes, so downstream curve
+      // consumers can cache on it.
+      state.curves = curves;
     }
 
     const matParams = extractMaterialParams(inputs, params);
     const texParams = extractTextureParams(inputs, params, ctx.nodeId);
     applyMaterialParams(mesh, matParams, THREE.FrontSide, texParams);
 
-    return primitiveOutputs(mesh);
+    return { curves: state.curves ?? [], ...primitiveOutputs(mesh) };
   },
 };

@@ -49,6 +49,17 @@ describe("CURVES_FROM_POINT_LISTS_NODE", () => {
     expect(mat.roughness).toBeCloseTo(0.9);
   });
 
+  it("outputs one curve per usable point list", () => {
+    const res = CURVES_FROM_POINT_LISTS_NODE.evaluate(
+      { pointLists: [line(0), [new THREE.Vector3()], line(2)] },
+      CURVES_FROM_POINT_LISTS_NODE.defaultParams,
+      { ...CTX, nodeId: "curve-lists-out" },
+    );
+    const curves = res.curves as THREE.Curve<THREE.Vector3>[];
+    expect(curves).toHaveLength(2);
+    expect(curves[1].getPoint(0).x).toBeCloseTo(2);
+  });
+
   it("rebuilds geometry only when the signature actually changes", () => {
     const nodeId = "curve-lists-cache";
     const a = CURVES_FROM_POINT_LISTS_NODE.evaluate({ pointLists: [line(0)] }, CURVES_FROM_POINT_LISTS_NODE.defaultParams, { ...CTX, nodeId });
