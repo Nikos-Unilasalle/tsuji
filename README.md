@@ -240,7 +240,7 @@ Les prises de connexion (sockets) sont identifiées par des codes couleur normal
 
 Pipeline de génération de terrain inspiré de [mapgen4](https://github.com/redblobgames/mapgen4) (Red Blob Games, Apache 2.0), découpé en une étape par nœud. Chaque nœud reçoit la carte de l'étape précédente sur un seul fil (`any`) et en renvoie une nouvelle enrichie de son champ : une étape peut donc être remplacée, supprimée ou dupliquée en branche. Le calcul est déterministe (même graine, même carte) et mémorisé : rien n'est recalculé tant qu'un paramètre ou l'entrée ne change pas.
 
-`Map Mesh → (Map Paint →) Map Elevation → Map Moisture → Map Rivers → Map Biomes → Map To Textures`
+`Map Mesh → (Map Paint →) Map Elevation → Map Moisture → Map Rivers → Map Biomes → Map Stylize / Map To Textures`
 
 | Node | Type | Description |
 | :--- | :--- | :--- |
@@ -250,9 +250,10 @@ Pipeline de génération de terrain inspiré de [mapgen4](https://github.com/red
 | **Map Moisture** | `map/moisture` | Vent balayant la carte : l'air se charge d'eau sur la mer et la perd en montant (versant humide, ombre pluviométrique). |
 | **Map Rivers** | `map/rivers` | Drainage par remplissage de dépressions (les cuvettes deviennent des lacs), accumulation des débits. Sort aussi `paths`, une liste de polylignes `Vector3[]` à brancher sur `curve/from_point_lists`. Réglez largeur / profondeur / amplitude comme sur le nœud Terrain. |
 | **Map Biomes** | `map/biomes` | Classification altitude × humidité (océan, plage, lac, marais, prairie, forêt, jungle, savane, désert, roche, neige). |
+| **Map Stylize** | `map/stylize` | Le rendu « Red Blob Games » cuit dans une image : dégradé altitude × humidité, éclairage par la pente (lumière fixe), contours, rivières bleues plates, océan qui s'assombrit avec la profondeur. Les réglages (angle de lumière 80°, pente 2, plat 2,5, ambiance 0,25, contours 15…) reprennent les valeurs par défaut de mapgen4. À brancher sur l'entrée `texture` d'un Terrain avec **Shadeless** activé et une couleur blanche (l'éclairage est déjà dans les pixels). |
 | **Map To Textures** | `map/to-textures` | Rastérise en textures : `heightmap` (compatible Terrain, mer à 0), `biome` (couleurs), `moisture`, `rivers` (masque). |
 
-Voir la démo « Procedural Island ».
+`Map Elevation` expose aussi *Lowland Bias* (aplatit les plaines, ne laisse que quelques sommets) et *Ocean Depth* (le fond marin se creuse régulièrement avec la distance à la côte). Voir la démo « Procedural Island ».
 
 ### Caméra et Calibration Vidéo-Mapping (DLT)
 

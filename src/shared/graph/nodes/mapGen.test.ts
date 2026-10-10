@@ -9,6 +9,7 @@ import {
   MAP_MOISTURE_NODE,
   MAP_RIVERS_NODE,
   MAP_TO_TEXTURES_NODE,
+  MAP_STYLIZE_NODE,
 } from "./mapGen";
 import { TERRAIN_NODE } from "./terrain";
 import { MAP_PAINT_NODE, commitMapPaint, flushMapPaint, getMapPaintState, paintDab } from "./mapPaint";
@@ -190,5 +191,41 @@ describe("Map Paint", () => {
     MAP_PAINT_NODE.evaluate({}, { ...params, paintData: saved }, paintCtx("mp-undo"));
     // Saved data is quantised to 8 bits, so the reload matches to well under 0.1%, not exactly.
     expect(Math.abs(heightSum(tex, "mp-undo-3") - painted) / painted).toBeLessThan(0.001);
+  });
+});
+
+describe("Map Stylize", () => {
+  const run = (tag: string, over: Record<string, unknown> = {}, elevation: Record<string, unknown> = {}) => {
+    const r = chain(tag, { elevation });
+    return { map: r.biomes.map, node: MAP_STYLIZE_NODE.evaluate({ map: r.biomes.map }, P(MAP_STYLIZE_NODE, { resolution: "256", ...over }), ctx(`${tag}-style`)) };
+  };
+
+  it("is registered and defaults to mapgen4's own render sliders", () => {
+    expect(DEFAULT_REGISTRY.get("map/stylize")?.category).toBe("map");
+    const d = MAP_STYLIZE_NODE.defaultParams;
+    expect([d.lightAngle, d.slope, d.flat, d.ambient, d.overhead, d.outlineStrength, d.outlineWater]).toEqual([80, 2, 2.5, 0.25, 30, 15, 13]);
+  });
+
+  it("outputs an sRGB image the size of the resolution", () => {
+    const { node } = run("sty-a");
+    const tex = node.image as THREE.DataTexture;
+    expect(tex).toBeInstanceOf(THREE.DataTexture);
+    expect(tex.image.width).toBe(256);
+    expect(tex.colorSpace).toBe(THREE.SRGBColorSpace);
+  });
+
+  it("keeps the same texture when only a look param changes, so Terrain isn't re-keyed", () => {
+    const a = run("sty-b").node.image;
+    const mapNode = chain("sty-b").biomes.map;
+    const before = Array.from((a as THREE.DataTexture).image.data as Uint8Array).join(",");
+    const b = MAP_STYLIZE_NODE.evaluate({ map: mapNode }, P(MAP_STYLIZE_NODE, { resolution: "256", lightAngle: 200 }), ctx("sty-b-style")).image as THREE.DataTexture;
+    expect(b).toBe(a);
+    expect(Array.from(b.image.data as Uint8Array).join(",")).not.toBe(before);
+    const c = MAP_STYLIZE_NODE.evaluate({ map: mapNode }, P(MAP_STYLIZE_NODE, { resolution: "512" }), ctx("sty-b-style")).image as THREE.DataTexture;
+    expect(c.image.width).toBe(512);
+  });
+
+  it("returns null without a map or elevation", () => {
+    expect(MAP_STYLIZE_NODE.evaluate({}, P(MAP_STYLIZE_NODE), ctx("sty-n")).image).toBeNull();
   });
 });

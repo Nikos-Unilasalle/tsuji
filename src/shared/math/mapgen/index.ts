@@ -7,3 +7,4 @@ export * from "./raster";
 export * from "./noise2d";
 export * from "./mapData";
 export * from "./paintLayer";
+export * from "./stylize";

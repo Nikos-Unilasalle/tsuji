@@ -18,6 +18,10 @@ export interface ElevationParams {
   paint?: (x: number, y: number) => number;
   /** How strongly paint pushes the terrain, in elevation units. */
   paintStrength: number;
+  /** Land is raised to this power: above 1 flattens lowlands and leaves only a few high peaks, as in mapgen4. */
+  lowlands: number;
+  /** How deep the open sea gets, 0..1; it deepens smoothly with distance from the coast. */
+  oceanDepth: number;
 }
 
 const smoothstep = (a: number, b: number, x: number): number => {
@@ -44,7 +48,45 @@ export function generateElevation(mesh: MapMesh, p: ElevationParams): Float32Arr
     e -= p.island * smoothstep(0.3, 1, d) * 1.4;
 
     if (p.paint) e += (p.paint(x, y) - 0.5) * 2 * p.paintStrength;
-    out[i] = Math.max(-1, Math.min(1, e));
+    e = Math.max(-1, Math.min(1, e));
+    out[i] = e > 0 ? Math.pow(e, Math.max(0.2, p.lowlands)) : e;
   }
+  shapeOcean(mesh, out, p.oceanDepth);
   return out;
+}
+
+/**
+ * The sea floor is rebuilt from distance to the coast rather than left as
+ * whatever the noise gave: a shallow shelf that falls away smoothly, which is
+ * what makes mapgen4's ocean read as a clean gradient instead of blotches.
+ * Land is untouched, and so is the shoreline at exactly 0.
+ */
+function shapeOcean(mesh: MapMesh, elevation: Float32Array, depth: number): void {
+  const n = mesh.numPoints;
+  const dist = new Float32Array(n).fill(-1);
+  const queue: number[] = [];
+  for (let i = 0; i < n; i++) {
+    if (elevation[i] > 0) {
+      dist[i] = 0;
+      queue.push(i);
+    }
+  }
+  // No land at all: leave the noise alone rather than inventing a bottomless ocean.
+  if (queue.length === 0) return;
+  for (let head = 0; head < queue.length; head++) {
+    const i = queue[head];
+    for (let k = mesh.adjStart[i]; k < mesh.adjStart[i + 1]; k++) {
+      const j = mesh.adjList[k];
+      if (dist[j] >= 0) continue;
+      dist[j] = dist[i] + 1;
+      queue.push(j);
+    }
+  }
+  // Hops to map distance: one hop is about one point spacing.
+  const reach = 0.12;
+  for (let i = 0; i < n; i++) {
+    if (elevation[i] > 0) continue;
+    const d = dist[i] * mesh.spacing;
+    elevation[i] = -Math.max(0.02, depth * (1 - Math.exp(-d / reach)));
+  }
 }

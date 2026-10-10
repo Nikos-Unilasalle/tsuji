@@ -14,6 +14,8 @@ import {
   generateRivers,
   isMapData,
   rasterize,
+  MAPGEN4_STYLE,
+  stylizeMap,
 } from "../../math/mapgen";
 import { getTexturePixels, samplePixelHeight } from "../../three/terrainEngine";
 
@@ -104,6 +106,8 @@ const ELEVATION_FIELDS: ParamFieldDef[] = [
   { id: "octaves", label: "Octaves", kind: "number", step: 1, group: "Noise" },
   { id: "ridges", label: "Mountain Ridges", kind: "number", step: 0.05, group: "Relief" },
   { id: "mountains", label: "Mountain Height", kind: "number", step: 0.1, group: "Relief" },
+  { id: "lowlands", label: "Lowland Bias", kind: "number", step: 0.1, group: "Relief" },
+  { id: "oceanDepth", label: "Ocean Depth", kind: "number", step: 0.05, group: "Shape" },
   { id: "island", label: "Island", kind: "number", step: 0.05, group: "Shape" },
   { id: "seaLevel", label: "Sea Level", kind: "number", step: 0.01, group: "Shape" },
   { id: "paintStrength", label: "Paint Strength", kind: "number", step: 0.05, group: "Paint" },
@@ -132,6 +136,8 @@ export const MAP_ELEVATION_NODE: NodeDefinition = {
     island: 0.8,
     seaLevel: 0.42,
     paintStrength: 1,
+    lowlands: 1.7,
+    oceanDepth: 0.9,
   },
   paramFields: ELEVATION_FIELDS,
   evaluate: (inputs, params, ctx) => {
@@ -145,16 +151,18 @@ export const MAP_ELEVATION_NODE: NodeDefinition = {
     const island = clamp(num(inputs.island, params.island, 0.8), 0, 1);
     const seaLevel = clamp(num(inputs.seaLevel, params.seaLevel, 0.42), 0, 1);
     const paintStrength = clamp(num(undefined, params.paintStrength, 1), 0, 2);
+    const lowlands = clamp(num(undefined, params.lowlands, 1.7), 0.5, 4);
+    const oceanDepth = clamp(num(undefined, params.oceanDepth, 0.9), 0.1, 1);
     const paintTex = inputs.paint instanceof THREE.Texture ? inputs.paint : null;
 
-    const sig = [src.rev, seed, scale, octaves, ridges, mountains, island, seaLevel, paintStrength, textureSig(paintTex)].join("|");
+    const sig = [src.rev, seed, scale, octaves, ridges, mountains, island, seaLevel, paintStrength, lowlands, oceanDepth, textureSig(paintTex)].join("|");
     const map = memoized(elevationCache, ctx.nodeId, sig, () => {
       const pixels = paintTex ? getTexturePixels(paintTex) : null;
       // Same orientation as the Terrain heightmap: image row 0 is the map's y = 0 edge.
       // An 8-bit image's mid grey is 128/255, not 0.5; shift it so "no change" really is no change.
       const shift = pixels && !(pixels.data instanceof Float32Array) ? 128 / 255 - 0.5 : 0;
       const paint = pixels ? (x: number, y: number) => samplePixelHeight(pixels, x, 1 - y) - shift : undefined;
-      const elevation = generateElevation(src.mesh, { seed, scale, octaves, ridges, mountains, island, seaLevel, paint, paintStrength });
+      const elevation = generateElevation(src.mesh, { seed, scale, octaves, ridges, mountains, island, seaLevel, paint, paintStrength, lowlands, oceanDepth });
       // Anything computed from the old elevation is stale now.
       return extendMapData(src, { elevation, moisture: undefined, rivers: undefined, biomes: undefined });
     });
@@ -233,12 +241,12 @@ export const MAP_RIVERS_NODE: NodeDefinition = {
     { id: "map", label: "Map", type: "any" },
     { id: "paths", label: "River Paths", type: "list" },
   ],
-  defaultParams: { density: 0.04, width: 40, depth: 40, heightScale: 6, heightOffset: 0, lift: 0.05 },
+  defaultParams: { density: 0.05, width: 40, depth: 40, heightScale: 6, heightOffset: 0, lift: 0.05 },
   paramFields: RIVERS_FIELDS,
   evaluate: (inputs, params, ctx) => {
     if (!isMapData(inputs.map) || !inputs.map.elevation || !inputs.map.moisture) return { map: null, paths: [] };
     const src = inputs.map;
-    const density = clamp(num(inputs.density, params.density, 0.04), 0, 0.5);
+    const density = clamp(num(inputs.density, params.density, 0.05), 0, 0.5);
     const width = Math.max(0.01, num(undefined, params.width, 40));
     const depth = Math.max(0.01, num(undefined, params.depth, 40));
     const heightScale = num(undefined, params.heightScale, 6);
@@ -441,5 +449,88 @@ export const MAP_TO_TEXTURES_NODE: NodeDefinition = {
       texturesCache.set(ctx.nodeId, state);
     }
     return { ...state.set };
+  },
+};
+
+/* -------------------------------------------------------------------------- */
+/* Map Stylize                                                                */
+/* -------------------------------------------------------------------------- */
+
+interface StylizeState {
+  sig: string;
+  texture: THREE.DataTexture;
+}
+
+const stylizeCache = createNodeCache<StylizeState>((s) => s.texture.dispose());
+
+export const MAP_STYLE_RESOLUTIONS = ["256", "512", "1024"];
+
+const STYLIZE_FIELDS: ParamFieldDef[] = [
+  { id: "resolution", label: "Resolution", kind: "select", options: MAP_STYLE_RESOLUTIONS },
+  { id: "biomeColors", label: "Biome Colors", kind: "number", step: 0.05, group: "Color" },
+  { id: "lightAngle", label: "Light Angle (°)", kind: "number", step: 5, group: "Light" },
+  { id: "slope", label: "Slope", kind: "number", step: 0.1, group: "Light" },
+  { id: "flat", label: "Flat", kind: "number", step: 0.1, group: "Light" },
+  { id: "ambient", label: "Ambient", kind: "number", step: 0.05, group: "Light" },
+  { id: "overhead", label: "Overhead", kind: "number", step: 1, group: "Light" },
+  { id: "outlineStrength", label: "Outline Strength", kind: "number", step: 1, group: "Outline" },
+  { id: "outlineDepth", label: "Outline Depth", kind: "number", step: 0.1, group: "Outline" },
+  { id: "outlineThreshold", label: "Outline Threshold", kind: "number", step: 1, group: "Outline" },
+  { id: "outlineWater", label: "River Channel / Coast Lift", kind: "number", step: 1, group: "Outline" },
+  { id: "riverWidth", label: "River Width", kind: "number", step: 0.1, group: "Rivers" },
+];
+
+/**
+ * Map Stylize — the Red Blob Games look. Bakes elevation × moisture colours,
+ * slope lighting, outlines and flat blue rivers into one image; show it on a
+ * Terrain with Shadeless on (the lighting is already in the pixels) and a
+ * white material colour. Defaults are mapgen4's own render sliders.
+ */
+export const MAP_STYLIZE_NODE: NodeDefinition = {
+  type: "map/stylize",
+  label: "Map Stylize",
+  category: "map",
+  inputs: [{ id: "map", label: "Map", type: "any" }],
+  outputs: [{ id: "image", label: "Image", type: "texture" }],
+  defaultParams: { resolution: "512", ...MAPGEN4_STYLE },
+  paramFields: STYLIZE_FIELDS,
+  evaluate: (inputs, params, ctx) => {
+    if (!isMapData(inputs.map) || !inputs.map.elevation) return { image: null };
+    const map = inputs.map;
+    const size = MAP_STYLE_RESOLUTIONS.includes(String(params.resolution)) ? Number(params.resolution) : 512;
+    const d = MAPGEN4_STYLE;
+    const style = {
+      size,
+      lightAngle: num(undefined, params.lightAngle, d.lightAngle),
+      slope: clamp(num(undefined, params.slope, d.slope), 0, 10),
+      flat: clamp(num(undefined, params.flat, d.flat), 0, 10),
+      ambient: clamp(num(undefined, params.ambient, d.ambient), 0, 2),
+      overhead: clamp(num(undefined, params.overhead, d.overhead), 0, 100),
+      outlineStrength: clamp(num(undefined, params.outlineStrength, d.outlineStrength), 0, 60),
+      outlineDepth: clamp(num(undefined, params.outlineDepth, d.outlineDepth), 0, 4),
+      outlineThreshold: clamp(num(undefined, params.outlineThreshold, d.outlineThreshold), 0, 100),
+      outlineWater: clamp(num(undefined, params.outlineWater, d.outlineWater), 0, 20),
+      biomeColors: clamp(num(undefined, params.biomeColors, d.biomeColors), 0, 1),
+      riverWidth: clamp(num(undefined, params.riverWidth, d.riverWidth), 0.1, 6),
+    };
+    const sig = `${map.rev}|${Object.values(style).join("|")}`;
+    let state = stylizeCache.get(ctx.nodeId);
+    if (!state || state.sig !== sig) {
+      const data = stylizeMap(
+        { mesh: map.mesh, elevation: map.elevation!, moisture: map.moisture, rivers: map.rivers },
+        style,
+      );
+      // Rebuilt rather than refilled when the size changes; the same texture object is kept otherwise so Terrain isn't re-keyed.
+      if (state && state.texture.image.width === size) {
+        (state.texture.image.data as Uint8Array).set(data);
+        state.texture.needsUpdate = true;
+        state.sig = sig;
+      } else {
+        state?.texture.dispose();
+        state = { sig, texture: makeTexture(data, size, THREE.UnsignedByteType, THREE.SRGBColorSpace) };
+        stylizeCache.set(ctx.nodeId, state);
+      }
+    }
+    return { image: state.texture };
   },
 };

@@ -9,7 +9,7 @@ import {
   rasterize,
 } from "./index";
 
-const ELEV = { seed: 3, scale: 3, octaves: 5, ridges: 0.5, mountains: 2.6, island: 0.9, seaLevel: 0.42, paintStrength: 0.5 };
+const ELEV = { seed: 3, scale: 3, octaves: 5, ridges: 0.5, mountains: 2.6, island: 0.9, seaLevel: 0.42, paintStrength: 0.5, lowlands: 1.7, oceanDepth: 0.9 };
 const WIND = { windAngle: 0, evaporation: 0.15, rainShadow: 0.6 };
 const BIOME = { snowLine: 0.8, treeLine: 0.6, beach: 0.04, wetness: 0 };
 
