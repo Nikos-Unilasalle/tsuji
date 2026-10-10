@@ -616,6 +616,12 @@ export const DEMO_CATALOG: DemoCategory[] = [
     title: "Showcases",
     demos: [
       {
+        file: "demo_material_palette_shade.tsuji",
+        label: "Palette Shade (gouache countryside)",
+        description:
+          "Turn on Toggle Environment, then press Play: a hand-painted diorama where every family of objects — meadow, ridge, trees, house, roof, windows, pond, clouds — is limited to its own Palette Shade (own colours, own number of shades). One sun sweeps across it, sliding the bands over the hills while neighbours' and clouds' shadows still fall across the flats unquantised.",
+      },
+      {
         file: "demo_shan_shui.tsuji",
         label: "Shan Shui (endless scroll)",
         description:

@@ -15,6 +15,10 @@ import { asColor, inheritSourceMaterial, numberInput, primitiveOutputs } from ".
  * colours, and each band paints with its colour. Dark bands take the dark end
  * of the palette, lit ones the bright end.
  *
+ * The bands split the range 0 to 1 of summed light evenly: a light of
+ * intensity 1 facing a surface head-on reaches the top of the palette. Light
+ * Gain and Light Bias slide that scale for brighter or dimmer rigs.
+ *
  * Shadows cast onto the geometry by *other* objects are deliberately not part
  * of that measurement. The bands come from the light as if nothing blocked it;
  * the shadow-map result is tracked separately and only darkens the finished
@@ -128,12 +132,12 @@ function compilePalette(uniforms: PaletteUniforms, shader: { uniforms: Record<st
       float pcLitShadowed = 0.0;
       float pcLuma( vec3 c ) { return dot( c, vec3( 0.2126, 0.7152, 0.0722 ) ); }
       void RE_Direct_Lambert( const in IncidentLight directLight, const in vec3 geometryPosition, const in vec3 geometryNormal, const in vec3 geometryViewDir, const in vec3 geometryClearcoatNormal, const in LambertMaterial material, inout ReflectedLight reflectedLight ) {
-        float l = saturate( dot( geometryNormal, directLight.direction ) ) * pcLuma( directLight.color ) * RECIPROCAL_PI;
+        float l = saturate( dot( geometryNormal, directLight.direction ) ) * pcLuma( directLight.color );
         pcLit += l;
         pcLitShadowed += l * pcShadow;
       }
       void RE_IndirectDiffuse_Lambert( const in vec3 irradiance, const in vec3 geometryPosition, const in vec3 geometryNormal, const in vec3 geometryViewDir, const in vec3 geometryClearcoatNormal, const in LambertMaterial material, inout ReflectedLight reflectedLight ) {
-        float l = pcLuma( irradiance ) * RECIPROCAL_PI;
+        float l = pcLuma( irradiance );
         pcLit += l;
         pcLitShadowed += l;
       }
