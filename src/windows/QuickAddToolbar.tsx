@@ -17,7 +17,7 @@ const ICON_PROPS = {
 };
 
 /**
- * The ten node types a new graph almost always starts with — one click each,
+ * The node types a new graph almost always starts with — one click each,
  * instead of hunting through the full category tree in NodePalette. That
  * tree is still the complete reference; this is just the well-worn path to
  * it shortcut.
@@ -113,6 +113,16 @@ const QUICK_ADD_ITEMS: QuickAddItem[] = [
       <svg {...ICON_PROPS}>
         <circle cx="12" cy="12" r="9" />
         <path d="M3 12h18M12 3a14 14 0 0 1 0 18 14 14 0 0 1 0-18z" />
+      </svg>
+    ),
+  },
+  {
+    type: "utility/frame",
+    label: "Frame",
+    icon: (
+      <svg {...ICON_PROPS}>
+        <rect x="3" y="4" width="18" height="16" rx="2" strokeDasharray="3 2" />
+        <path d="M3 9h18" />
       </svg>
     ),
   },

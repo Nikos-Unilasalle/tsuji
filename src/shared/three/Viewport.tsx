@@ -19,6 +19,7 @@ import { insertCurvePointAfter, removeCurvePoint } from "../graph/curvePoints";
 import { GizmoTarget, resolveGizmoTarget } from "../graph/transformLookup";
 import { CLIP_BOX_NODE, VISUAL_SLICE_NODE } from "../graph/nodes/visualSlice";
 import { DECAL_NODE } from "../graph/nodes/decal";
+import { POSE_PROXY_NODES } from "./poseProxyNodes";
 import { createCurvePointHandles } from "./curveHandles";
 import { createPointCloudHandles } from "./pointCloudHandles";
 import { createSceneMembership, isSelfOrDescendantOf } from "./sceneMembership";
@@ -1965,6 +1966,22 @@ export function Viewport({
     decalProxy.visible = false;
     let decalProxyNodeId: string | null = null;
 
+    // Pose proxy for nodes that own a `location` but draw nothing the gizmo
+    // can grab (explosions, fluid solver) — see poseProxyNodes.ts.
+    const poseProxy = new THREE.Object3D();
+    const poseProxyColor = 0xf97316;
+    const poseProxyCoreGeo = new THREE.SphereGeometry(0.18, 16, 16);
+    const poseProxyCoreMat = new THREE.MeshBasicMaterial({ color: poseProxyColor, depthWrite: false });
+    const poseProxySphereGeo = new THREE.WireframeGeometry(new THREE.SphereGeometry(1, 16, 12));
+    const poseProxySphereMat = new THREE.LineBasicMaterial({ color: poseProxyColor, transparent: true, opacity: 0.35 });
+    const poseProxySphere = new THREE.LineSegments(poseProxySphereGeo, poseProxySphereMat);
+    const poseProxyBoxUnitGeo = new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 1, 1));
+    const poseProxyBox = new THREE.LineSegments(poseProxyBoxUnitGeo, new THREE.LineBasicMaterial({ color: poseProxyColor }));
+    poseProxy.add(new THREE.Mesh(poseProxyCoreGeo, poseProxyCoreMat), poseProxySphere, poseProxyBox);
+    poseProxy.visible = false;
+    let poseProxyNodeId: string | null = null;
+    let poseProxyChannels: "location" | "trs" = "location";
+
     // Force Field 3D proxy: shows interactive position & direction helper for
     // particles/force-field — same structure as the Particle Emitter proxy
     // (core + one ring + arrow) so the editor's helper markers read as one
@@ -2033,6 +2050,7 @@ export function Viewport({
       editorUiScene.add(sliceProxy);
       editorUiScene.add(clipBoxProxy);
       editorUiScene.add(decalProxy);
+      editorUiScene.add(poseProxy);
       editorUiScene.add(forceFieldProxy);
       editorUiScene.add(emitterProxy);
       editorUiScene.add(gizmoPivotProxy);
@@ -2568,6 +2586,21 @@ export function Viewport({
             rotation: new THREE.Vector3(euler.x, euler.y, euler.z),
             scale: new THREE.Vector3(Math.abs(object.scale.x), Math.abs(object.scale.y), Math.abs(object.scale.z)),
           });
+          return;
+        }
+
+        // Pose proxy: a bare location, or the full pose for the fluid solver.
+        if (object === poseProxy && poseProxyNodeId && onTransformChangeRef.current) {
+          if (poseProxyChannels === "location") {
+            onTransformChangeRef.current(poseProxyNodeId, { location: object.position.clone() });
+          } else {
+            const euler = new THREE.Euler().setFromQuaternion(object.quaternion);
+            onTransformChangeRef.current(poseProxyNodeId, {
+              location: object.position.clone(),
+              rotation: new THREE.Vector3(euler.x, euler.y, euler.z),
+              scale: new THREE.Vector3(Math.abs(object.scale.x), Math.abs(object.scale.y), Math.abs(object.scale.z)),
+            });
+          }
           return;
         }
 
@@ -6162,6 +6195,43 @@ export function Viewport({
         decalProxyNodeId = null;
       }
 
+      // Pose proxy — location (or full pose) gizmo for nodes with nothing else to grab.
+      const poseProxyConfig = !outputMode && selectedNodeForPivot ? POSE_PROXY_NODES[selectedNodeForPivot.type] : undefined;
+      if (poseProxyConfig && selectedNodeForPivot) {
+        const params = selectedNodeForPivot.params;
+        poseProxyNodeId = selectedNodeForPivot.id;
+        poseProxyChannels = poseProxyConfig.channels;
+        poseProxy.visible = true;
+        if (!transformControls?.dragging || transformControls.object !== poseProxy) {
+          poseProxy.position.copy(asVector3(params.location, new THREE.Vector3()));
+          if (poseProxyConfig.channels === "trs") {
+            const rotation = asVector3(params.rotation, new THREE.Vector3());
+            const scale = asVector3(params.scale, new THREE.Vector3(1, 1, 1));
+            poseProxy.quaternion.setFromEuler(new THREE.Euler(rotation.x, rotation.y, rotation.z));
+            poseProxy.scale.set(scale.x || 1e-3, scale.y || 1e-3, scale.z || 1e-3);
+          } else {
+            poseProxy.quaternion.identity();
+            poseProxy.scale.set(1, 1, 1);
+          }
+        }
+        // Children are in the proxy's local space, so the sphere/box dimensions
+        // never touch the proxy's own scale (that is the gizmo's to drag).
+        poseProxySphere.visible = !!poseProxyConfig.radiusParam;
+        if (poseProxyConfig.radiusParam) {
+          const radius = Number(params[poseProxyConfig.radiusParam]);
+          poseProxySphere.scale.setScalar(Number.isFinite(radius) && radius > 0 ? radius : 1e-3);
+        }
+        poseProxyBox.visible = !!poseProxyConfig.box;
+        if (poseProxyConfig.box) {
+          const size = asVector3(params.boxSize, new THREE.Vector3(1, 1, 1));
+          poseProxyBox.scale.set(size.x || 1e-3, size.y || 1e-3, size.z || 1e-3);
+          poseProxyBox.position.set(0, params.groundAnchor === false ? 0 : size.y / 2, 0);
+        }
+      } else if (poseProxyNodeId) {
+        poseProxy.visible = false;
+        poseProxyNodeId = null;
+      }
+
       // Force Field proxy — position and axis gizmo
       if (!outputMode && (selectedNodeForPivot?.type === "particles/force-field" || selectedNodeForPivot?.type === "particles/curl-noise")) {
         forceFieldProxyNodeId = selectedNodeForPivot.id;
@@ -6254,6 +6324,8 @@ export function Viewport({
           pickedCurveHandle = clipBoxProxy;
         } else if (decalProxyNodeId) {
           pickedCurveHandle = decalProxy;
+        } else if (poseProxyNodeId) {
+          pickedCurveHandle = poseProxy;
         } else if (forceFieldProxyNodeId) {
           pickedCurveHandle = forceFieldProxy;
         } else if (emitterProxyNodeId) {
@@ -6266,7 +6338,7 @@ export function Viewport({
       if (transformControls && !transformControls.dragging && pickedCurveHandle) {
         targetObject = pickedCurveHandle;
         if (transformControls.object !== pickedCurveHandle) transformControls.attach(pickedCurveHandle);
-        transformControls.setMode(transformModeRef.current);
+        transformControls.setMode(pickedCurveHandle === poseProxy && poseProxyChannels === "location" ? "translate" : transformModeRef.current);
         transformControls.enabled = true;
         transformControls.showX = true;
         transformControls.showY = true;
@@ -6946,6 +7018,13 @@ export function Viewport({
       decalProxyEdges.material.dispose();
       decalProxyFace.geometry.dispose();
       decalProxyFace.material.dispose();
+      poseProxy.removeFromParent();
+      poseProxyCoreGeo.dispose();
+      poseProxyCoreMat.dispose();
+      poseProxySphereGeo.dispose();
+      poseProxySphereMat.dispose();
+      poseProxyBoxUnitGeo.dispose();
+      poseProxyBox.material.dispose();
       forceFieldProxy.removeFromParent();
       forceFieldCoreGeo.dispose();
       forceFieldCoreMat.dispose();

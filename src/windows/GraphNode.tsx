@@ -1,11 +1,12 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
-import { Handle, Position, useUpdateNodeInternals } from "@xyflow/react";
+import { Handle, NodeResizeControl, Position, useUpdateNodeInternals } from "@xyflow/react";
 import * as THREE from "three";
 import { CATEGORY_COLOR, NodeCategory, UNKNOWN_CATEGORY_COLOR } from "../shared/graph/categories";
 import { NEW_PORT_SOCKET } from "../shared/graph/groups";
 import { getInspectorValue, subscribeInspector } from "../shared/graph/inspectorStore";
 import { SOCKET_COLOR, SocketDef } from "../shared/graph/sockets";
 import { NODE_FREEZE_ACTION } from "../shared/graph/nodeActions";
+import { FRAME_MIN_HEIGHT, FRAME_MIN_WIDTH, FRAME_TYPE } from "../shared/graph/nodes/frame";
 
 export interface GraphNodeData {
   nodeId?: string;
@@ -17,6 +18,9 @@ export interface GraphNodeData {
   outputs: SocketDef[];
   /** How many nodes a group holds — absent on every other kind of node. */
   groupSize?: number;
+  /** A Frame's title and colour (hex) — absent on every other kind of node. */
+  frameTitle?: string;
+  frameColor?: string;
   [key: string]: unknown;
 }
 
@@ -29,6 +33,87 @@ export interface NodeActions {
   run: (nodeId: string, action: string) => void;
 }
 export const NodeActionsContext = createContext<NodeActions | null>(null);
+
+/** What a Frame can write back to its own params: title, colour, size. */
+export interface FrameActions {
+  updateParams: (nodeId: string, patch: Record<string, unknown>) => void;
+}
+export const FrameActionsContext = createContext<FrameActions | null>(null);
+
+const FRAME_SWATCHES = ["#3b82f6", "#22c55e", "#eab308", "#f97316", "#ef4444", "#ec4899", "#a855f7", "#8b949e"];
+
+/**
+ * A canvas Frame: a titled, tinted rectangle behind the nodes. Only its title
+ * bar is draggable/clickable (the rest lets pointer events through to the
+ * canvas — see .graph-frame-node in graph-editor.css), so it never gets in
+ * the way of moving the nodes it sits under.
+ */
+function FrameNodeView({ data, selected }: { data: GraphNodeData; selected?: boolean }) {
+  const actions = useContext(FrameActionsContext);
+  const nodeId = data.nodeId;
+  const title = data.frameTitle ?? "Frame";
+  const color = data.frameColor ?? "#3b82f6";
+  const [draft, setDraft] = useState<string | null>(null);
+
+  const commitTitle = () => {
+    if (draft !== null && nodeId && draft !== title) actions?.updateParams(nodeId, { title: draft });
+    setDraft(null);
+  };
+
+  return (
+    <>
+      {selected && (
+        <NodeResizeControl
+          position="bottom-right"
+          minWidth={FRAME_MIN_WIDTH}
+          minHeight={FRAME_MIN_HEIGHT}
+          className="graph-frame-resize-handle"
+          onResizeEnd={(_event, params) => {
+            if (nodeId) actions?.updateParams(nodeId, { width: Math.round(params.width), height: Math.round(params.height) });
+          }}
+        />
+      )}
+      <div className={selected ? "graph-frame selected" : "graph-frame"} style={{ ["--frame-color" as string]: color }}>
+        <div className="graph-frame-titlebar">
+          <input
+            className="graph-frame-title nodrag"
+            value={draft ?? title}
+            size={Math.max(4, (draft ?? title).length + 1)}
+            placeholder="Frame"
+            spellCheck={false}
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={commitTitle}
+            onKeyDown={(e) => {
+              e.stopPropagation();
+              if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+              else if (e.key === "Escape") {
+                setDraft(null);
+                (e.target as HTMLInputElement).blur();
+              }
+            }}
+          />
+          {selected && (
+            <div className="graph-frame-swatches nodrag">
+              {FRAME_SWATCHES.map((hex) => (
+                <button
+                  key={hex}
+                  type="button"
+                  className={"graph-frame-swatch" + (hex === color ? " active" : "")}
+                  style={{ background: hex }}
+                  title={`Frame color ${hex}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (nodeId) actions?.updateParams(nodeId, { color: new THREE.Color(hex) });
+                  }}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
 
 const FreezeIcon = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -171,6 +256,8 @@ export function GraphNode({ data, selected }: { data: GraphNodeData; selected?: 
       updateNodeInternals(data.nodeId);
     }
   }, [data.nodeId, socketSignature, updateNodeInternals]);
+
+  if (data.nodeType === FRAME_TYPE) return <FrameNodeView data={data} selected={selected} />;
 
   if (data.nodeType === "utility/reroute") {
     const socketType = data.inputs[0]?.type || "any";

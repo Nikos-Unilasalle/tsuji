@@ -38,7 +38,9 @@ import { isKeyReservedForPlayback } from "../shared/graph/playbackKeys";
 import { randomId } from "../shared/randomId";
 import { SOCKET_COLOR } from "../shared/graph/sockets";
 import { Connection, ExposedParamRef, Graph, KeyframeStore, Marker, NodeInstance, NodeRegistry } from "../shared/graph/types";
-import { GraphNode, GraphNodeData, NodeActions, NodeActionsContext } from "./GraphNode";
+import { FRAME_TYPE, frameSize } from "../shared/graph/nodes/frame";
+import { parseColorToHex } from "./color-utils";
+import { FrameActions, FrameActionsContext, GraphNode, GraphNodeData, NodeActions, NodeActionsContext } from "./GraphNode";
 import { resetActionOf } from "../shared/graph/nodeActions";
 import { NodePalette } from "./NodePalette";
 import { QuickAddToolbar } from "./QuickAddToolbar";
@@ -76,6 +78,25 @@ function SpawnCursorMarker({ position }: { position: { x: number; y: number } })
 }
 
 const NODE_TYPES = { graphNode: GraphNode };
+
+/**
+ * Well below every real node (0) even after React Flow adds its +1000 for a
+ * selected one, so a Frame never covers — or intercepts — what it frames.
+ */
+const FRAME_Z_INDEX = -2000;
+
+/** React Flow props a Frame needs on top of a plain node: size, bottom layer, title-bar-only drag. */
+function frameFlowProps(instance: NodeInstance): Partial<Node<GraphNodeData>> {
+  if (instance.type !== FRAME_TYPE) return {};
+  const { width, height } = frameSize(instance.params);
+  return { width, height, zIndex: FRAME_Z_INDEX, dragHandle: ".graph-frame-titlebar", className: "graph-frame-node" };
+}
+
+function frameData(instance: NodeInstance): Partial<GraphNodeData> {
+  if (instance.type !== FRAME_TYPE) return {};
+  const title = instance.params?.title;
+  return { frameTitle: typeof title === "string" ? title : "Frame", frameColor: parseColorToHex(instance.params?.color) };
+}
 /** Node types that only ever exist because a group put them there. */
 const GROUP_INTERNAL_TYPES = new Set([GROUP_TYPE, GROUP_INPUT_TYPE, GROUP_OUTPUT_TYPE]);
 const EDGE_STROKE_WIDTH = 3;
@@ -98,7 +119,9 @@ function toFlowNodes(graph: Graph, registry: NodeRegistry, selectedIds?: Set<str
       type: "graphNode",
       position: instance.position,
       selected: selectedIds ? selectedIds.has(instance.id) : false,
+      ...frameFlowProps(instance),
       data: {
+        ...frameData(instance),
         nodeId: instance.id,
         nodeType: instance.type,
         label: def?.label ?? `${instance.type} (unknown)`,
@@ -390,8 +413,10 @@ function GraphEditorContent({
           // behind whatever snapshot this effect happens to be holding.
           selected: selectedIdsRef.current.has(fn.id),
           position: graphNode.position,
+          ...frameFlowProps(graphNode),
           data: {
             ...fn.data,
+            ...frameData(graphNode),
             ...(nextNode ? nextNode.data : {}),
             params: graphNode.params,
             customName: typeof graphNode.params?.name === "string" ? graphNode.params.name : "",
@@ -902,7 +927,12 @@ function GraphEditorContent({
       const currentSpawnPos = spawnCursorPosRef.current;
       const position = pendingWireConnection
         ? { x: pendingWireConnection.position.x, y: pendingWireConnection.position.y }
-        : { x: currentSpawnPos.x - DEFAULT_NODE_WIDTH / 2, y: currentSpawnPos.y - DEFAULT_NODE_HEIGHT / 2 };
+        : type === FRAME_TYPE
+          ? {
+              x: currentSpawnPos.x - frameSize(def.defaultParams).width / 2,
+              y: currentSpawnPos.y - frameSize(def.defaultParams).height / 2,
+            }
+          : { x: currentSpawnPos.x - DEFAULT_NODE_WIDTH / 2, y: currentSpawnPos.y - DEFAULT_NODE_HEIGHT / 2 };
 
       const instance: NodeInstance = {
         id,
@@ -918,7 +948,9 @@ function GraphEditorContent({
         id,
         type: "graphNode",
         position,
+        ...frameFlowProps(instance),
         data: {
+          ...frameData(instance),
           nodeId: id,
           nodeType: type,
           label: def.label,
@@ -1132,7 +1164,9 @@ function GraphEditorContent({
         type: "graphNode",
         position: instance.position,
         selected: true,
+        ...frameFlowProps(instance),
         data: {
+          ...frameData(instance),
           nodeId: instance.id,
           nodeType: instance.type,
           label: def?.label ?? instance.type,
@@ -1585,7 +1619,21 @@ function GraphEditorContent({
     [registry],
   );
 
+  // A Frame writes its own title/colour/size back through here. Goes via
+  // toGraph so positions the user has dragged since the last commit (a resize
+  // from the top/left edge moves the frame too) are kept.
+  const frameActions = useMemo<FrameActions>(
+    () => ({
+      updateParams: (nodeId, patch) => {
+        const baseNodes = graph.nodes.map((n) => (n.id === nodeId ? { ...n, params: { ...n.params, ...patch } } : n));
+        onGraphChange?.(toGraph(baseNodes, nodes, edges, graph.keyframes, graph.markers, graph.exposedParams));
+      },
+    }),
+    [edges, graph.exposedParams, graph.keyframes, graph.markers, graph.nodes, nodes, onGraphChange],
+  );
+
   return (
+    <FrameActionsContext.Provider value={frameActions}>
     <div
       className="graph-editor"
       onMouseEnter={() => setInputZone("graph")}
@@ -1826,6 +1874,7 @@ function GraphEditorContent({
         />
       )}
     </div>
+    </FrameActionsContext.Provider>
   );
 }
 
