@@ -6,12 +6,13 @@ import { clearMeshWarning, collectMeshes, warnMeshRequired } from "../meshRequir
 import { createNodeCache } from "../nodeCaches";
 import { NodeDefinition } from "../types";
 import { cellToTriangles, tessellate, Vec3 } from "../voronoi";
+import { clipSurfaceToCell, isWatertight } from "../meshClip";
 import { asVector3 } from "./transform";
 import { applyMaterialParams, materialParamsFromValue, MaterialParams, numberInput } from "./object";
 import { isSimulating } from "./rapier";
 import { isEpochCurrent } from "../simulationEpoch";
 
-const MODES = ["mesh", "cells"] as const;
+const MODES = ["mesh", "shell", "cells"] as const;
 type FractureMode = (typeof MODES)[number];
 
 interface FractureState {
@@ -182,6 +183,9 @@ function restorePose(state: FractureState): void {
  *  - **mesh** mode intersects the (watertight) source mesh with every cell via
  *    CSG: the pieces keep the real surface, and each cut gets a flat inner face
  *    in the inside material. Slower, and needs a closed mesh.
+ *  - **shell** mode clips the surface triangles to each cell instead. No inside
+ *    faces, but it needs no inside/outside test, so it works on any mesh — and
+ *    it is what `mesh` falls back to when the mesh is not watertight.
  *  - **cells** mode skips the CSG and outputs the raw convex cells, clipped to
  *    the object's bounding box. Instant, perfectly closed and convex — the
  *    right choice for a box, for filling a volume, or for thousands of shards.
@@ -225,8 +229,9 @@ export const FRACTURE_NODE: NodeDefinition = {
     {
       id: "modeNote",
       label:
-        "mesh: cuts the real surface with CSG (closed mesh required, slower). cells: raw convex cells " +
-        "clipped to the bounding box — instant, and ideal for physics.",
+        "mesh: solid pieces cut with CSG (closed mesh; an open mesh automatically becomes shell). " +
+        "shell: cuts only the surface, works on anything (trees, planes, open tubes) but pieces are hollow. " +
+        "cells: raw convex cells clipped to the bounding box — instant, ideal for physics.",
       kind: "note",
     },
     { id: "count", label: "Random Count (no Seed Points wired)", kind: "number", step: 1 },
@@ -261,7 +266,7 @@ export const FRACTURE_NODE: NodeDefinition = {
     }
     clearMeshWarning(ctx.nodeId);
 
-    const mode: FractureMode = (MODES as readonly string[]).includes(String(params.mode)) ? (params.mode as FractureMode) : "mesh";
+    const requestedMode: FractureMode = (MODES as readonly string[]).includes(String(params.mode)) ? (params.mode as FractureMode) : "mesh";
     const count = Math.max(2, Math.min(2000, Math.round(numberInput(inputs.count, params.count, 16))));
     const seed = Math.round(numberInput(undefined, params.seed, 1));
     const gap = Math.max(0, numberInput(inputs.gap, params.gap, 0));
@@ -280,7 +285,7 @@ export const FRACTURE_NODE: NodeDefinition = {
         })
       : [`random:${count}:${seed}`];
 
-    const signature = JSON.stringify([mode, gap, pointKey, sideSignature(meshes)]);
+    const signature = JSON.stringify([requestedMode, gap, pointKey, sideSignature(meshes)]);
     if (state.group && state.signature === signature) {
       applyPieceMaterials(state, inside);
       return empty();
@@ -295,9 +300,19 @@ export const FRACTURE_NODE: NodeDefinition = {
     baked.computeBoundingBox();
     const box = baked.boundingBox!.clone();
 
+    // CSG can only tell inside from outside on a closed mesh. On an open one
+    // (a tube with no caps, a plane, overlapping sheets — a tree trunk) it
+    // leaves stray cut faces floating in empty space, so fall back to cutting
+    // the surface itself, which works on anything.
+    let mode: FractureMode = requestedMode;
+    if (mode === "mesh" && !isWatertight(baked)) {
+      mode = "shell";
+      console.warn("Fracture: the mesh is not watertight, cutting its surface only (no inside faces). Use a closed mesh for solid pieces.");
+    }
+
     // `mesh` mode needs cells that fully contain the surface; `cells` mode is
     // the box itself.
-    const pad = mode === "mesh" ? Math.max(box.getSize(new THREE.Vector3()).length() * 0.02, 1e-3) : 0;
+    const pad = mode !== "cells" ? Math.max(box.getSize(new THREE.Vector3()).length() * 0.02, 1e-3) : 0;
     const min: Vec3 = [box.min.x - pad, box.min.y - pad, box.min.z - pad];
     const max: Vec3 = [box.max.x + pad, box.max.y + pad, box.max.z + pad];
 
@@ -334,6 +349,20 @@ export const FRACTURE_NODE: NodeDefinition = {
         if (cell.isEmpty) continue;
         const geometry = cellGeometry(cell);
         if (geometry) pieces.push(makePiece(geometry, materials, [0, -1], ctx.nodeId));
+      }
+    } else if (mode === "shell") {
+      try {
+        const flat = baked.index ? baked.toNonIndexed() : baked;
+        flat.groups = baked.groups;
+        const roles = outerMaterials.map((_, i) => i);
+        for (const cell of cells) {
+          if (cell.isEmpty) continue;
+          const geometry = clipSurfaceToCell(flat, cell);
+          if (geometry) pieces.push(makePiece(geometry, [...outerMaterials], roles, ctx.nodeId));
+        }
+        if (flat !== baked) flat.dispose();
+      } finally {
+        disposeGeometry(baked);
       }
     } else {
       const sourceBrush = new Brush(baked, outerMaterials.length > 1 ? outerMaterials : outerMaterials[0]);

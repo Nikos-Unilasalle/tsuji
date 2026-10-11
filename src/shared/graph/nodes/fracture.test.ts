@@ -222,3 +222,55 @@ describe("Pause keeps the simulation, only Reset ends it", () => {
     last.frac.pieces.forEach((p, i) => expect(p.position.distanceTo(home[i])).toBeLessThan(1e-6));
   });
 });
+
+describe("open meshes (a tree trunk, a plane)", () => {
+  const plane = () => {
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(2, 2, 4, 4), new THREE.MeshStandardMaterial({ side: THREE.DoubleSide }));
+    m.updateMatrixWorld(true);
+    return m;
+  };
+  const area = (mesh: THREE.Mesh) => {
+    const p = mesh.geometry.attributes.position;
+    const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
+    let s = 0;
+    for (let i = 0; i < p.count; i += 3) {
+      a.fromBufferAttribute(p, i); b.fromBufferAttribute(p, i + 1); c.fromBufferAttribute(p, i + 2);
+      s += b.clone().sub(a).cross(c.clone().sub(a)).length() / 2;
+    }
+    return s;
+  };
+
+  it("detects watertightness", async () => {
+    const { isWatertight } = await import("../meshClip");
+    expect(isWatertight(new THREE.BoxGeometry(1, 1, 1))).toBe(true);
+    expect(isWatertight(new THREE.SphereGeometry(1, 16, 12))).toBe(true);
+    expect(isWatertight(new THREE.PlaneGeometry(1, 1))).toBe(false);
+    expect(isWatertight(new THREE.CylinderGeometry(1, 1, 2, 12, 1, true))).toBe(false);
+  });
+
+  it("mesh mode on an open mesh cuts the surface only — no stray cut faces", () => {
+    const res = FRACTURE_NODE.evaluate({ geometry: plane() }, { ...defaults, mode: "mesh", count: 6 }, ctx());
+    const pieces = res.pieces as THREE.Mesh[];
+    expect(pieces.length).toBeGreaterThan(1);
+    // The pieces' surface adds up to the plane's (4): nothing added, nothing lost.
+    expect(pieces.reduce((s, p) => s + area(p), 0)).toBeCloseTo(4, 3);
+    // Only the source material is in use.
+    for (const p of pieces) expect((p.material as THREE.Material[]).every((m) => m !== undefined)).toBe(true);
+  });
+
+  it("shell mode keeps the material groups of a multi-part source", () => {
+    const group = new THREE.Group();
+    const a = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshStandardMaterial({ color: 0xff0000 }));
+    const b = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshStandardMaterial({ color: 0x0000ff }));
+    b.position.x = 1.2;
+    group.add(a, b);
+    group.updateMatrixWorld(true);
+    const res = FRACTURE_NODE.evaluate({ geometry: group }, { ...defaults, mode: "shell", count: 4 }, ctx());
+    const colors = new Set<number>();
+    for (const p of res.pieces as THREE.Mesh[]) {
+      const mats = p.material as THREE.MeshStandardMaterial[];
+      for (const g of p.geometry.groups) colors.add(mats[g.materialIndex ?? 0].color.getHex());
+    }
+    expect(colors).toEqual(new Set([0xff0000, 0x0000ff]));
+  });
+});
