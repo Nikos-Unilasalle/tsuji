@@ -5172,6 +5172,9 @@ export function Viewport({
     resize();
 
     let currentObject: THREE.Object3D | null = null;
+    // The last frame region drawn (container size + letterbox rect). When it
+    // changes the whole canvas is cleared once — see where it is used.
+    let lastViewKey = "";
     let cachedRootsGraph: Graph | null = null;
     let cachedRoots: string[] = [];
     const activeLights = new Map<string, THREE.Light>();
@@ -6687,6 +6690,22 @@ export function Viewport({
         }
       }
 
+      // The perspective branches above keep aspect in step with the drawn
+      // region every frame; an orthographic camera needs the same, or its
+      // frustum (sized for the whole pane by resize(), or by the other
+      // projection before a switch) is squashed into the letterboxed region —
+      // the frame looks stretched until something happens to resize the pane.
+      // Height is kept, width follows the region.
+      if (camera instanceof THREE.OrthographicCamera && !projectionOverridden && viewWidth > 0 && viewHeight > 0) {
+        const halfHeight = (camera.top - camera.bottom) / 2;
+        const halfWidth = halfHeight * (viewWidth / viewHeight);
+        if (halfHeight > 0 && (Math.abs(camera.right - halfWidth) > 1e-6 || Math.abs(camera.left + halfWidth) > 1e-6)) {
+          camera.left = -halfWidth;
+          camera.right = halfWidth;
+          camera.updateProjectionMatrix();
+        }
+      }
+
       // Passe-partout guide: the editor's own camera keeps this pane's live
       // aspect ratio (free orbit, unconstrained by any Camera node — see the
       // comment above the calibrationMatrix branch), but "Aligner Caméra"
@@ -6719,6 +6738,20 @@ export function Viewport({
         } else {
           guideEl.style.display = "none";
         }
+      }
+
+      // renderer.clear() honours the scissor, so once a letterboxed region is
+      // active nothing ever wipes the bars around it. Whatever was drawn
+      // there before the region changed (a pane that just went from half to
+      // full width, or from the free 3D view into camera view) would stay
+      // on screen as stale residue — so wipe the whole canvas whenever the
+      // region changes.
+      const viewKey = `${width}x${height}:${viewX},${viewY},${viewWidth},${viewHeight}`;
+      if (viewKey !== lastViewKey) {
+        lastViewKey = viewKey;
+        renderer.setScissorTest(false);
+        renderer.setViewport(0, 0, width, height);
+        renderer.clear();
       }
 
       renderer.setViewport(viewX, viewY, viewWidth, viewHeight);
