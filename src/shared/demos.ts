@@ -285,6 +285,11 @@ export const DEMO_CATALOG: DemoCategory[] = [
         description: "A ball shattered into shards with glowing cut faces — press b and Rapier scatters every piece.",
       },
       {
+        file: "demo_physics_fracture_collision.tsuji",
+        label: "Fracture on Impact",
+        description: "A ball drops on a held sphere: the Collision node fires the blast and the Fracture pieces fly apart — no key needed. Reset puts everything back.",
+      },
+      {
         file: "demo_physics_scatter.tsuji",
         label: "Surface Scatter",
         description: "Sample points on a mesh, spawn objects on them.",
