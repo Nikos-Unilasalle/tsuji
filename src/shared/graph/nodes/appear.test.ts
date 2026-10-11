@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
-import { APPEAR_NODE, appearPose, easeOutBack, localProgress } from "./appear";
+import { advanceTransition, APPEAR_NODE, appearPose, easeOutBack, localProgress } from "./appear";
 import { EvalContext } from "../types";
 
 const defaults = APPEAR_NODE.defaultParams;
@@ -151,5 +151,49 @@ describe("APPEAR_NODE", () => {
     g.updateMatrix();
     const out = APPEAR_NODE.evaluate({ geometry: g }, defaults, ctx()).geometry as THREE.Group;
     expect(out.matrix.elements[13]).toBeCloseTo(7);
+  });
+});
+
+describe("trigger drive", () => {
+  it("starts at rest, then runs over the duration when Show flips", () => {
+    let st = advanceTransition(undefined, 1, 0, 2);
+    expect(st.value).toBe(1);
+    st = advanceTransition(st.state, 0, 1, 2);
+    expect(st.value).toBeCloseTo(1);
+    expect(advanceTransition(st.state, 0, 2, 2).value).toBeCloseTo(0.5);
+    expect(advanceTransition(st.state, 0, 3, 2).value).toBe(0);
+    expect(advanceTransition(st.state, 0, 9, 2).value).toBe(0);
+  });
+
+  it("turns around mid-way from where it is", () => {
+    let st = advanceTransition(undefined, 0, 0, 1);
+    st = advanceTransition(st.state, 1, 1, 1);
+    st = advanceTransition(st.state, 1, 1.5, 1);
+    expect(st.value).toBeCloseTo(0.5);
+    st = advanceTransition(st.state, 0, 1.5, 1);
+    expect(st.value).toBeCloseTo(0.5);
+    expect(advanceTransition(st.state, 0, 1.75, 1).value).toBeCloseTo(0.25);
+  });
+
+  it("snaps when the clock runs backwards or the duration is zero", () => {
+    let st = advanceTransition(undefined, 0, 5, 1);
+    st = advanceTransition(st.state, 1, 6, 1);
+    expect(advanceTransition(st.state, 1, 2, 1).value).toBe(1);
+    expect(advanceTransition(st.state, 1, 6.5, 0).value).toBe(1);
+  });
+
+  it("drives the node from ctx.time", () => {
+    const id = "ap-trigger";
+    const src = cube(0);
+    const params = { ...defaults, drive: "trigger", duration: 1, mode: "pop", overshoot: 0, lift: 0 };
+    const at = (time: number, show: number) =>
+      APPEAR_NODE.evaluate({ geometry: src, show }, params, { ...ctx(id), time }).geometry as THREE.Mesh;
+    expect(at(0, 0).visible).toBe(false);
+    expect(at(1, 1).visible).toBe(false);
+    const half = at(1.5, 1);
+    expect(half.visible).toBe(true);
+    expect(readPose(half).scale).toBeGreaterThan(0.5);
+    expect(readPose(half).scale).toBeLessThan(1);
+    expect(readPose(at(2.5, 1)).scale).toBeCloseTo(1);
   });
 });

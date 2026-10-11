@@ -10,6 +10,9 @@ type AppearMode = (typeof MODES)[number];
 const PIVOTS = ["center", "base", "origin"] as const;
 type AppearPivot = (typeof PIVOTS)[number];
 
+const DRIVES = ["progress", "trigger"] as const;
+type AppearDrive = (typeof DRIVES)[number];
+
 const ORDERS = ["index", "reverse", "random", "x", "y", "z", "distance"] as const;
 type AppearOrder = (typeof ORDERS)[number];
 
@@ -59,6 +62,40 @@ export function appearPose(
   };
 }
 
+interface Transition {
+  from: number;
+  target: number;
+  startedAt: number;
+}
+
+/**
+ * Where a self-timed transition stands at `time`, moving the state on when
+ * `target` (0 or 1) has changed. A flip mid-way turns around from wherever the
+ * item is, taking time in proportion to the distance left. The first call
+ * starts at rest on the target, and a clock that runs backwards (Stop, a
+ * scrub) snaps to it rather than replaying a stale transition.
+ *
+ * Idempotent for a given `time`, so several evaluations in one frame agree.
+ */
+export function advanceTransition(state: Transition | undefined, target: number, time: number, duration: number): { state: Transition; value: number } {
+  const valueAt = (t: Transition, now: number): number => {
+    const span = Math.abs(t.target - t.from) * duration;
+    if (span <= 1e-9 || now < t.startedAt) return t.target;
+    return t.from + (t.target - t.from) * Math.min(1, (now - t.startedAt) / span);
+  };
+  if (!state) {
+    const rest = { from: target, target, startedAt: time };
+    return { state: rest, value: target };
+  }
+  if (time < state.startedAt) {
+    const rest = { from: target, target, startedAt: time };
+    return { state: rest, value: target };
+  }
+  if (state.target === target) return { state, value: valueAt(state, time) };
+  const turned = { from: valueAt(state, time), target, startedAt: time };
+  return { state: turned, value: turned.from };
+}
+
 /** Deterministic per-item hash in [0,1) — evaluate() has to stay pure, so no Math.random. */
 function hash01(i: number, seed: number): number {
   const x = Math.sin(i * 12.9898 + seed * 78.233) * 43758.5453;
@@ -71,6 +108,8 @@ interface AppearState {
   proxies: Map<string, THREE.Mesh>;
   /** Faded copies of source materials. Never written onto the source: it is shared with other meshes. */
   fade: Map<THREE.Material, THREE.Material>;
+  /** Trigger mode: the running transition. */
+  transition?: Transition;
 }
 
 const stateCache = createNodeCache<AppearState>((s) => {
@@ -78,6 +117,7 @@ const stateCache = createNodeCache<AppearState>((s) => {
   s.proxies.clear();
   s.fade.forEach((m) => m.dispose());
   s.fade.clear();
+  s.transition = undefined;
 });
 
 function getState(nodeId: string): AppearState {
@@ -222,12 +262,16 @@ export const APPEAR_NODE: NodeDefinition = {
   inputs: [
     { id: "geometry", label: "Geometry", type: "geometry", owns: true },
     { id: "progress", label: "Progress", type: "value" },
+    { id: "show", label: "Show (0/1)", type: "value" },
     { id: "stagger", label: "Stagger", type: "value" },
     { id: "origin", label: "Order Origin", type: "vector" },
   ],
   outputs: [{ id: "geometry", label: "Geometry", type: "geometry" }, { id: "matrix", label: "Matrix", type: "matrix" }],
   defaultParams: {
     progress: 1,
+    drive: "progress",
+    show: 1,
+    duration: 0.6,
     mode: "both",
     overshoot: 1,
     lift: 0.3,
@@ -239,7 +283,21 @@ export const APPEAR_NODE: NodeDefinition = {
     hideAtZero: 1,
   },
   paramFields: [
-    { id: "progress", label: "Progress (0 = hidden, 1 = shown)", kind: "number", step: 0.05 },
+    {
+      id: "drive",
+      label: "Drive",
+      kind: "select",
+      options: [...DRIVES],
+    },
+    {
+      id: "driveNote",
+      label:
+        "progress: you set Progress (keyframe it or wire it). trigger: Show flips 0/1 and the node animates itself over Duration.",
+      kind: "note",
+    },
+    { id: "progress", label: "Progress (drive = progress; 0 = hidden, 1 = shown)", kind: "number", step: 0.05 },
+    { id: "show", label: "Show (drive = trigger)", kind: "boolean" },
+    { id: "duration", label: "Duration (s, drive = trigger)", kind: "number", step: 0.1 },
     { id: "mode", label: "Mode", kind: "select", options: [...MODES] },
     { id: "overshoot", label: "Overshoot (0 = smooth)", kind: "number", step: 0.1, group: "Pop" },
     { id: "lift", label: "Lift (rise into place, − = drop in)", kind: "number", step: 0.05, group: "Pop" },
@@ -262,7 +320,18 @@ export const APPEAR_NODE: NodeDefinition = {
       return primitiveOutputs(out);
     }
 
-    const progress = Math.min(1, Math.max(0, numberInput(inputs.progress, params.progress, 1)));
+    const drive: AppearDrive = params.drive === "trigger" ? "trigger" : "progress";
+    let progress: number;
+    if (drive === "trigger") {
+      const target = numberInput(inputs.show, params.show, 1) > 0.5 ? 1 : 0;
+      const duration = Math.max(0, numberInput(params.duration, undefined, 0.6));
+      const step = advanceTransition(state.transition, target, ctx.time, duration);
+      state.transition = step.state;
+      progress = step.value;
+    } else {
+      state.transition = undefined;
+      progress = Math.min(1, Math.max(0, numberInput(inputs.progress, params.progress, 1)));
+    }
     const stagger = Math.max(0, numberInput(inputs.stagger, params.stagger, 0));
     const overshoot = numberInput(params.overshoot, undefined, 1);
     const lift = numberInput(params.lift, undefined, 0.3);
