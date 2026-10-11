@@ -138,6 +138,7 @@ import { LATTICE_DEFORM_NODE } from "./lattice";
 import { METABALLS_NODE } from "./metaballs";
 import { BOOLEAN_NODE } from "./boolean";
 import { FRACTURE_NODE } from "./fracture";
+import { COLLISION_NODE } from "./collision";
 import { APPEAR_NODE } from "./appear";
 import { CONTOUR_SCAN_NODE } from "./contourScan";
 import { WELD_NODE } from "./weld";
@@ -461,6 +462,7 @@ export const STARTER_NODES = [
   METABALLS_NODE,
   BOOLEAN_NODE,
   FRACTURE_NODE,
+  COLLISION_NODE,
   APPEAR_NODE,
   CONTOUR_SCAN_NODE,
   WELD_NODE,
