@@ -109,6 +109,11 @@ export const DEMO_CATALOG: DemoCategory[] = [
         label: "Contour Scan",
         description: "Radial BVH slicing and morphing between a sphere and a box, with outward bulge wave (inspired by Makio64).",
       },
+      {
+        file: "demo_modifier_appear.tsuji",
+        label: "Appear",
+        description: "Five shapes pop in one after another — scale with overshoot, a little rise and a fade — then pop back out, from one keyframed Progress.",
+      },
     ],
   },
   {
@@ -273,6 +278,11 @@ export const DEMO_CATALOG: DemoCategory[] = [
         file: "demo_physics_explosion.tsuji",
         label: "Explosion Impulse",
         description: "Press b: a fireball and a blast wave off one trigger, throwing a grid of crates.",
+      },
+      {
+        file: "demo_physics_fracture.tsuji",
+        label: "Fracture",
+        description: "A ball shattered into shards with glowing cut faces — press b and Rapier scatters every piece.",
       },
       {
         file: "demo_physics_scatter.tsuji",

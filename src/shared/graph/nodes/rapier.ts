@@ -34,13 +34,27 @@ const REWIND_THRESHOLD = 0.5;
 /**
  * Whether this evaluate call is part of an actually-running simulation
  * (Play pressed, or an export frame being captured) rather than the editor
- * idling — see `EvalContext.isPlaying`. A caller that never set either field
+ * idling — see `EvalContext.isPlaying`. Paused counts as simulating (see
+ * `EvalContext.simulationRun`): the bodies are held where they stopped, and only
+ * Reset Simulation takes the scene back to its authored state. A caller that never set either field
  * (every existing headless test, and any other code that predates this
  * concept) gets the old always-on behavior: gating only kicks in once a
  * caller actually opts in by setting one of them, which today only the live
  * viewport does.
  */
 export function isSimulating(ctx: EvalContext): boolean {
+  if (ctx.isPlaying === undefined && ctx.capturing === undefined) return true;
+  return Boolean(ctx.isPlaying) || Boolean(ctx.capturing) || Boolean(ctx.simulationRun);
+}
+
+/**
+ * Whether time is actually moving: playing, or an export frame being captured.
+ * Distinct from `isSimulating`, which stays true while *paused* so the scene
+ * is held rather than torn down. Anything that pushes the solver each frame —
+ * forces, kinematic targets — belongs to this one: applied while paused it
+ * would pile up on a world that is not stepping.
+ */
+export function isAdvancing(ctx: EvalContext): boolean {
   if (ctx.isPlaying === undefined && ctx.capturing === undefined) return true;
   return Boolean(ctx.isPlaying) || Boolean(ctx.capturing);
 }
@@ -155,7 +169,7 @@ export const PHYSICS_WORLD_NODE: NodeDefinition = {
     // (see evaluate.ts), so without this a dynamic body would free-fall from
     // the moment it's wired up even while the editor sits idle — leaving
     // nothing to hand-position and, once it settles, nowhere to go back to.
-    const halted = paused || !isSimulating(ctx);
+    const halted = paused || !isAdvancing(ctx);
 
     // Stepped before the bodies read their poses back, so what they publish is
     // the state the solver just produced.
@@ -470,6 +484,10 @@ export const RIGID_BODY_NODE: NodeDefinition = {
     { id: "force", label: "Force", type: "vector" },
     { id: "target", label: "Kinematic Target", type: "vector" },
     { id: "mass", label: "Mass", type: "value" },
+    // Unwired = always active. Wired and <= 0.5: every body is held motionless in place (no
+    // gravity, no drift) until it goes above — e.g. Explosion Impulse's Detonated output, so
+    // a shattered object stays whole until the blast.
+    { id: "active", label: "Active", type: "value" },
   ],
   outputs: [
     { id: "geometry", label: "Geometry", type: "geometry" },
@@ -697,13 +715,23 @@ export const RIGID_BODY_NODE: NodeDefinition = {
     const kinematicTarget = inputs.target instanceof THREE.Vector3 ? inputs.target : null;
 
     const touchedInstances = new Set<THREE.InstancedMesh>();
+    const held = inputs.active !== undefined && Number(inputs.active) <= 0.5;
+    const advancing = isAdvancing(ctx);
 
     for (const entry of state.entries) {
       const { body } = entry;
 
       body.setLinearDamping(linearDamping);
       body.setAngularDamping(angularDamping);
-      body.setGravityScale(gravityScale, true);
+      if (held && isDynamic) {
+        // Held: not frozen as a fixed body (an explosion's impulse still has to be able to move
+        // it, in the same frame it releases) but with nothing acting on it.
+        body.setGravityScale(0, true);
+        body.setLinvel({ x: 0, y: 0, z: 0 }, false);
+        body.setAngvel({ x: 0, y: 0, z: 0 }, false);
+      } else {
+        body.setGravityScale(gravityScale, true);
+      }
       body.enableCcd(ccd);
 
       const collider = body.collider(0);
@@ -714,10 +742,10 @@ export const RIGID_BODY_NODE: NodeDefinition = {
 
       if (isDynamic) {
         if (mass > 0) body.setAdditionalMass(mass, true);
-        if (hasForce) body.addForce({ x: force.x, y: force.y, z: force.z }, true);
+        if (hasForce && advancing) body.addForce({ x: force.x, y: force.y, z: force.z }, true);
       }
 
-      if (bodyType === "kinematic" && kinematicTarget) {
+      if (bodyType === "kinematic" && kinematicTarget && advancing) {
         body.setNextKinematicTranslation({
           x: kinematicTarget.x,
           y: kinematicTarget.y,

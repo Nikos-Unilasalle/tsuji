@@ -10,6 +10,9 @@ interface ImpulseState {
   prevTrigger: boolean;
   lastHits: number;
   lastTime: number;
+  /** Set once a blast has actually gone off; cleared by a rewind or a Reset Simulation. */
+  detonated: boolean;
+  epoch: number;
 }
 
 const impulseCache = createNodeCache<ImpulseState>();
@@ -80,6 +83,9 @@ export const PHYSICS_EXPLOSION_NODE: NodeDefinition = {
   outputs: [
     { id: "world", label: "World", type: "any" },
     { id: "hits", label: "Bodies Hit", type: "value" },
+    // 0 until the blast goes off, 1 from then on. Wire it into a Rigid Body's Active input to hold
+    // its bodies still until the moment of the blast (see the Active note there).
+    { id: "fired", label: "Detonated", type: "value" },
   ],
   defaultParams: {
     location: new THREE.Vector3(0, 0, 0),
@@ -114,21 +120,32 @@ export const PHYSICS_EXPLOSION_NODE: NodeDefinition = {
 
     let state = impulseCache.get(ctx.nodeId);
     if (!state) {
-      state = { prevTrigger: false, lastHits: 0, lastTime: ctx.time };
+      state = { prevTrigger: false, lastHits: 0, lastTime: ctx.time, detonated: false, epoch: ctx.simulationEpoch ?? 0 };
       impulseCache.set(ctx.nodeId, state);
     }
 
     const trigger = toBoolean(inputs.trigger);
     // Scrubbing backwards re-arms the edge, so replaying the timeline explodes again instead of
     // staying silent because the trigger was already high when the playhead jumped.
-    if (ctx.time < state.lastTime) state.prevTrigger = false;
+    if (ctx.time < state.lastTime) {
+      state.prevTrigger = false;
+      state.detonated = false;
+    }
+    // Reset Simulation: the world is rebuilt, so the blast has not happened yet.
+    const epoch = ctx.simulationEpoch ?? 0;
+    if (state.epoch !== epoch) {
+      state.epoch = epoch;
+      state.prevTrigger = false;
+      state.detonated = false;
+      state.lastHits = 0;
+    }
     state.lastTime = ctx.time;
 
     const fired = trigger && !state.prevTrigger;
     state.prevTrigger = trigger;
 
     if (!fired || !handle || !getRapier() || !isRapierReady()) {
-      return { world: passthrough, hits: fired ? 0 : state.lastHits };
+      return { world: passthrough, hits: fired ? 0 : state.lastHits, fired: state.detonated ? 1 : 0 };
     }
 
     const centre = asVector3(inputs.location, asVector3(params.location, new THREE.Vector3()));
@@ -158,6 +175,7 @@ export const PHYSICS_EXPLOSION_NODE: NodeDefinition = {
     }
 
     state.lastHits = hits;
-    return { world: passthrough, hits };
+    state.detonated = true;
+    return { world: passthrough, hits, fired: 1 };
   },
 };

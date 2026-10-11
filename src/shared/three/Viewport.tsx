@@ -976,6 +976,9 @@ export function Viewport({
   onEvaluatedResultsRef.current = onEvaluatedResults;
   const isPlayingRef = useRef(isPlaying);
   isPlayingRef.current = isPlaying;
+  // A simulation run is live from the first Play until Reset Simulation: Pause keeps it (bodies and
+  // pieces stay where they are), only Reset ends it. See EvalContext.simulationRun.
+  const simulationRunRef = useRef(false);
   const suspendedRef = useRef(suspended);
   suspendedRef.current = suspended;
   // One evaluator session per mounted viewport — see EvalContext.sessionId.
@@ -5187,6 +5190,7 @@ export function Viewport({
     // listens rather than being called directly — which also means a reset
     // triggered from anywhere reaches every mounted pane.
     const stopListeningForReset = onSimulationReset(() => {
+      simulationRunRef.current = false;
       resetSimulationRef.current();
     });
 
@@ -5400,6 +5404,7 @@ export function Viewport({
           onFrameChangeRef.current?.(timelineFrame);
         }
 
+        if (isPlayingRef.current) simulationRunRef.current = true;
         results = evaluateGraph(graphRef.current, registryRef.current, {
           time: clock.time,
           step: clock.step,
@@ -5415,6 +5420,7 @@ export function Viewport({
           keyframes: graphRef.current.keyframes,
           simulationEpoch: getSimulationEpoch(),
           isPlaying: isPlayingRef.current,
+          simulationRun: simulationRunRef.current,
           scene,
         });
       } catch (err) {

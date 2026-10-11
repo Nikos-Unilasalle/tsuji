@@ -136,6 +136,8 @@ import { CURVE_SHAPE_KEY_NODE, MESH_SHAPE_KEY_NODE } from "./shapeKey";
 import { LATTICE_DEFORM_NODE } from "./lattice";
 import { METABALLS_NODE } from "./metaballs";
 import { BOOLEAN_NODE } from "./boolean";
+import { FRACTURE_NODE } from "./fracture";
+import { APPEAR_NODE } from "./appear";
 import { CONTOUR_SCAN_NODE } from "./contourScan";
 import { WELD_NODE } from "./weld";
 import { SUBDIVIDE_NODE } from "./subdivide";
@@ -456,6 +458,8 @@ export const STARTER_NODES = [
   LATTICE_DEFORM_NODE,
   METABALLS_NODE,
   BOOLEAN_NODE,
+  FRACTURE_NODE,
+  APPEAR_NODE,
   CONTOUR_SCAN_NODE,
   WELD_NODE,
   SUBDIVIDE_NODE,

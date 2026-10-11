@@ -195,6 +195,14 @@ export interface EvalContext {
    * `isPlaying` itself may be false during one.
    */
   isPlaying?: boolean;
+  /**
+   * A simulation run is live: Play has been pressed since the last Reset
+   * Simulation. Stays true through Pause, so a paused physics scene keeps its
+   * bodies and poses instead of snapping back to the authored state — only
+   * Reset (or never having played) ends it. `isPlaying` alone cannot say this:
+   * it is false both while paused and while idle in the editor.
+   */
+  simulationRun?: boolean;
   /** The graph's timeline markers — see the Marker node in nodes/marker.ts. */
   markers?: Marker[];
   /**

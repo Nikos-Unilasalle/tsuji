@@ -79,7 +79,7 @@ describe("PHYSICS_EXPLOSION_NODE", () => {
   it("has the expected node schema", () => {
     expect(PHYSICS_EXPLOSION_NODE.type).toBe("physics/explosion");
     expect(PHYSICS_EXPLOSION_NODE.category).toBe("physics");
-    expect(PHYSICS_EXPLOSION_NODE.outputs.map((o) => o.id)).toEqual(["world", "hits"]);
+    expect(PHYSICS_EXPLOSION_NODE.outputs.map((o) => o.id)).toEqual(["world", "hits", "fired"]);
   });
 
   it("passes the world through so it can sit mid-chain", () => {
