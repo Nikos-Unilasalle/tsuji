@@ -2733,6 +2733,7 @@ function MainEditor() {
         currentFilename={currentFilename}
         currentFilePath={currentFilePath}
         onFilenameChange={handleFilenameChange}
+        onFilesLoaded={() => setCanvases((prev) => [...prev])}
         onUndo={undo}
         onRedo={redo}
         onExportVideo={keyframesEnabled ? handleExportVideo : undefined}

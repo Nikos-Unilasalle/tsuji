@@ -294,6 +294,26 @@
   animation: fadeIn 0.2s ease-out;
 }
 
+.top-bar-toast-error {
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.4);
+  color: #f87171;
+}
+
+.top-bar-toast-action {
+  padding: 1px 8px;
+  background: transparent;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.top-bar-toast-action:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
 @keyframes fadeIn {
   from {
     opacity: 0;

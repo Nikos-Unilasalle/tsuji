@@ -5,7 +5,8 @@ import {
   saveProjectAsWithFilePicker,
   saveProjectToPath,
 } from "../shared/graph/storage";
-import { setProjectDirectory } from "../shared/graph/rehydrateFiles";
+import { pickProjectFolder } from "../shared/graph/browserFiles";
+import { countUnreadableFiles, rehydrateFileNodesFromDisk, setProjectDirectory } from "../shared/graph/rehydrateFiles";
 import { Project } from "../shared/graph/types";
 import {
   closeOutputWindow,
@@ -31,6 +32,8 @@ export interface TopBarProps {
   /** The whole document — every canvas, not just the one on screen: saving writes them all. */
   project: Project;
   onLoadProject: (project: Project, filename?: string) => void;
+  /** Fired after files were read in for the project (browser: from a folder the user chose) so the views pick them up. */
+  onFilesLoaded?: () => void;
   /** Fired after a Save/Save As/Incremental Save actually wrote a file — clears the unsaved-changes guard in App. */
   onProjectSaved?: () => void;
   currentFilename: string;
@@ -65,6 +68,7 @@ export interface TopBarProps {
 export const TopBar: React.FC<TopBarProps> = ({
   project,
   onLoadProject,
+  onFilesLoaded,
   onProjectSaved,
   currentFilename,
   currentFilePath,
@@ -90,6 +94,8 @@ export const TopBar: React.FC<TopBarProps> = ({
 }) => {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [toastError, setToastError] = useState(false);
+  // Browser only: the project names files a web page cannot open by path; ask for the project folder to read them from.
+  const [missingFiles, setMissingFiles] = useState(0);
   const [isEditingFilename, setIsEditingFilename] = useState(false);
   const [filenameInput, setFilenameInput] = useState(currentFilename);
   const [isOutputOpen, setIsOutputOpen] = useState(false);
@@ -172,6 +178,37 @@ export const TopBar: React.FC<TopBarProps> = ({
 
   useEffect(() => () => clearTimeout(toastTimer.current ?? undefined), []);
 
+  // A recovered document in the browser has lost its files too.
+  useEffect(() => {
+    setMissingFiles(countUnreadableFiles(project.canvases));
+    // Once, for the document the page opened with.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleChooseFolder = async () => {
+    try {
+      const found = await pickProjectFolder();
+      if (found === 0) return;
+      let missing = 0;
+      let loaded = 0;
+      for (const canvas of project.canvases) {
+        const res = await rehydrateFileNodesFromDisk(canvas);
+        missing += res.missing;
+        loaded += res.succeeded;
+      }
+      onFilesLoaded?.();
+      setMissingFiles(missing);
+      showToast(
+        missing > 0
+          ? `${loaded} file(s) loaded, ${missing} not found in that folder`
+          : `${loaded} file(s) loaded`,
+        missing > 0,
+      );
+    } catch (err: unknown) {
+      showToast(`Folder error: ${(err as Error).message}`, true);
+    }
+  };
+
   // Tracks the OS-level close (red X on the output window), not just our own button.
   useEffect(() => onOutputClosed(() => setIsOutputOpen(false)), []);
   useEffect(() => onView2DClosed(() => setIsView2DOpen(false)), []);
@@ -248,6 +285,7 @@ export const TopBar: React.FC<TopBarProps> = ({
       if (res) {
         setProjectDirectory(res.path ?? null);
         onLoadProject(res.project, res.filename);
+        setMissingFiles(countUnreadableFiles(res.project.canvases));
         showToast(`"${res.filename}" loaded!`);
       }
     } catch (err: unknown) {
@@ -532,6 +570,17 @@ export const TopBar: React.FC<TopBarProps> = ({
 
       {/* Right area: Toast + Shortcuts + Preferences + Filename + Download + Share */}
       <div className="top-bar-right">
+        {missingFiles > 0 && (
+          <div className="top-bar-toast top-bar-toast-error">
+            ⚠ {missingFiles} file(s) of this project can't be read by a browser
+            <button className="top-bar-toast-action" onClick={handleChooseFolder} title="Pick the folder that holds the project and its files">
+              Choose project folder
+            </button>
+            <button className="top-bar-toast-action" onClick={() => setMissingFiles(0)} title="Dismiss">
+              ×
+            </button>
+          </div>
+        )}
         {toastMessage && (
           <div className={`top-bar-toast${toastError ? " top-bar-toast-error" : ""}`}>
             {toastError ? "⚠ " : "✓ "}{toastMessage}

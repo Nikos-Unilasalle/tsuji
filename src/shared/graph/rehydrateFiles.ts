@@ -1,6 +1,7 @@
 import { readFile, readTextFile } from "@tauri-apps/plugin-fs";
 import { walkNodes } from "./groups";
 import { DEFAULT_REGISTRY } from "./nodes";
+import { findBrowserFile } from "./browserFiles";
 import { isTauri } from "./storage";
 import { Graph } from "./types";
 
@@ -45,6 +46,8 @@ export interface RehydrateFileResult {
   attempted: number;
   succeeded: number;
   failed: number;
+  /** Browser only: files the project names that are not in the folder the user chose (or no folder was chosen yet). */
+  missing: number;
 }
 
 /**
@@ -79,40 +82,71 @@ async function fetchFile(path: string, binary: boolean): Promise<Uint8Array | st
   return binary ? new Uint8Array(await res.arrayBuffer()) : res.text();
 }
 
+/** Every file param that names a path, as [node id, param id, path, onLoaded] — interiors of groups included. */
+function fileParams(graph: Graph): { nodeId: string; fieldId: string; path: string; onLoaded: (nodeId: string, path: string, content: unknown) => void }[] {
+  const out: ReturnType<typeof fileParams> = [];
+  for (const node of walkNodes(graph)) {
+    const def = DEFAULT_REGISTRY.get(node.type);
+    for (const field of def?.dynamicParamFields?.(node) ?? []) {
+      if (field.kind !== "file" || !field.onLoaded) continue;
+      const path = node.params?.[field.id];
+      if (typeof path === "string" && path) out.push({ nodeId: node.id, fieldId: field.id, path, onLoaded: field.onLoaded });
+    }
+  }
+  return out;
+}
+
+/**
+ * Browser only: how many distinct files of these graphs cannot be read yet — they are neither served by the app nor in a folder the
+ * user chose. Non-zero is the cue to ask for the project folder (see browserFiles.pickProjectFolder).
+ */
+export function countUnreadableFiles(graphs: Graph[]): number {
+  if (isTauri()) return 0;
+  const paths = new Set<string>();
+  for (const graph of graphs) {
+    for (const { path } of fileParams(graph)) {
+      if (!isFetchablePath(path) && !findBrowserFile(path)) paths.add(path);
+    }
+  }
+  return paths.size;
+}
+
 export async function rehydrateFileNodesFromDisk(graph: Graph): Promise<RehydrateFileResult> {
   const desktop = isTauri();
+  let missing = 0;
 
   const jobs: Promise<boolean>[] = [];
   // Interiors included: a CSV Reader or a GLTF loader inside a group has the
   // same path in its params and the same nothing-in-memory problem on load.
-  for (const node of walkNodes(graph)) {
-    const def = DEFAULT_REGISTRY.get(node.type);
-    const fields = def?.dynamicParamFields?.(node) ?? [];
-    for (const field of fields) {
-      if (field.kind !== "file" || !field.onLoaded) continue;
-      const path = node.params?.[field.id];
-      if (typeof path !== "string" || !path) continue;
-      const fetchable = isFetchablePath(path);
-      // A plain browser can only load what the app serves; a disk path needs the desktop app.
-      if (!fetchable && !desktop) continue;
-      const onLoaded = field.onLoaded;
-
-      jobs.push(
-        (async () => {
-          try {
-            const ext = path.split(".").pop()?.toLowerCase() ?? "";
-            const binary = BINARY_EXTENSIONS.has(ext);
-            const real = resolveProjectPath(path);
-            const content = fetchable ? await fetchFile(path, binary) : binary ? await readFile(real) : await readTextFile(real);
-            onLoaded(node.id, path, content);
-            return true;
-          } catch (err) {
-            console.error(`Failed to reload file for node ${node.id} (${field.id}) from ${path}:`, err);
-            return false;
-          }
-        })(),
-      );
+  for (const { nodeId, fieldId, path, onLoaded } of fileParams(graph)) {
+    const fetchable = isFetchablePath(path);
+    // A plain browser reads what the app serves, or what is in the folder the user chose; the desktop app reads the disk.
+    const picked = !fetchable && !desktop ? findBrowserFile(path) : null;
+    if (!fetchable && !desktop && !picked) {
+      missing++;
+      continue;
     }
+
+    jobs.push(
+      (async () => {
+        try {
+          const ext = path.split(".").pop()?.toLowerCase() ?? "";
+          const binary = BINARY_EXTENSIONS.has(ext);
+          let content: unknown;
+          if (picked) content = binary ? new Uint8Array(await picked.arrayBuffer()) : await picked.text();
+          else if (fetchable) content = await fetchFile(path, binary);
+          else {
+            const real = resolveProjectPath(path);
+            content = binary ? await readFile(real) : await readTextFile(real);
+          }
+          onLoaded(nodeId, path, content);
+          return true;
+        } catch (err) {
+          console.error(`Failed to reload file for node ${nodeId} (${fieldId}) from ${path}:`, err);
+          return false;
+        }
+      })(),
+    );
   }
 
   const results = await Promise.all(jobs);
@@ -120,5 +154,6 @@ export async function rehydrateFileNodesFromDisk(graph: Graph): Promise<Rehydrat
     attempted: results.length,
     succeeded: results.filter(Boolean).length,
     failed: results.length - results.filter(Boolean).length,
+    missing,
   };
 }

@@ -1,9 +1,10 @@
 import { describe, expect, test } from "vitest";
 import { Graph } from "./types";
-import { isFetchablePath, rehydrateFileNodesFromDisk, resolveProjectPath, setProjectDirectory } from "./rehydrateFiles";
+import { clearBrowserFolder, findBrowserFile, setBrowserFolder } from "./browserFiles";
+import { countUnreadableFiles, isFetchablePath, rehydrateFileNodesFromDisk, resolveProjectPath, setProjectDirectory } from "./rehydrateFiles";
 
 describe("rehydrateFileNodesFromDisk", () => {
-  test("no-op outside Tauri (browser dev mode), regardless of file-backed nodes present", async () => {
+  test("outside Tauri (browser), disk paths are reported missing until a project folder is chosen", async () => {
     const graph: Graph = {
       nodes: [
         { id: "csv-x", type: "io/csv-reader", params: { filePath: "/tmp/data.csv" }, position: { x: 0, y: 0 } },
@@ -14,7 +15,8 @@ describe("rehydrateFileNodesFromDisk", () => {
       connections: [],
     };
 
-    await expect(rehydrateFileNodesFromDisk(graph)).resolves.toEqual({ attempted: 0, succeeded: 0, failed: 0 });
+    await expect(rehydrateFileNodesFromDisk(graph)).resolves.toEqual({ attempted: 0, succeeded: 0, failed: 0, missing: 4 });
+    expect(countUnreadableFiles([graph])).toBe(4);
   });
 
   test("no-op when no node has a file param set", async () => {
@@ -23,7 +25,49 @@ describe("rehydrateFileNodesFromDisk", () => {
       connections: [],
     };
 
-    await expect(rehydrateFileNodesFromDisk(graph)).resolves.toEqual({ attempted: 0, succeeded: 0, failed: 0 });
+    await expect(rehydrateFileNodesFromDisk(graph)).resolves.toEqual({ attempted: 0, succeeded: 0, failed: 0, missing: 0 });
+  });
+
+  test("a file in the chosen folder is read, the others stay missing", async () => {
+    setBrowserFolder([{ path: "proj/assets/photo.png", file: new File([new Uint8Array([1, 2, 3])], "photo.png") }]);
+    const graph: Graph = {
+      nodes: [
+        { id: "a", type: "texture/image", params: { filePath: "assets/photo.png" }, position: { x: 0, y: 0 } },
+        { id: "b", type: "texture/image", params: { filePath: "assets/other.png" }, position: { x: 0, y: 0 } },
+      ],
+      connections: [],
+    };
+    const res = await rehydrateFileNodesFromDisk(graph);
+    expect(res.attempted).toBe(1);
+    expect(res.missing).toBe(1);
+    expect(countUnreadableFiles([graph])).toBe(1);
+    clearBrowserFolder();
+  });
+});
+
+describe("findBrowserFile", () => {
+  const file = (name: string) => new File(["x"], name);
+
+  test("matches the project-relative path inside the chosen folder, whichever level was picked", () => {
+    setBrowserFolder([
+      { path: "proj/title.tsuji", file: file("title.tsuji") },
+      { path: "proj/assets/photo.png", file: file("photo.png") },
+    ]);
+    expect(findBrowserFile("assets/photo.png")?.name).toBe("photo.png");
+    expect(findBrowserFile("./assets/photo.png")?.name).toBe("photo.png");
+    expect(findBrowserFile("assets/none.png")).toBeNull();
+    clearBrowserFolder();
+  });
+
+  test("an absolute path from another machine falls back to the one file of that name", () => {
+    setBrowserFolder([
+      { path: "assets/photo.png", file: file("photo.png") },
+      { path: "assets/dup.png", file: file("dup.png") },
+      { path: "other/dup.png", file: file("dup.png") },
+    ]);
+    expect(findBrowserFile("/Users/me/Desktop/photo.png")?.name).toBe("photo.png");
+    expect(findBrowserFile("/Users/me/Desktop/dup.png")).toBeNull();
+    clearBrowserFolder();
   });
 });
 
