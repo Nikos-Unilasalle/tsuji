@@ -23,6 +23,8 @@ interface TimelineBarProps {
   waveformUrl?: string;
   /** Where the audio clip starts on the timeline, and how long it runs. */
   waveformStartFrame?: number;
+  /** The part of the file that will sound, in timeline frames; the rest is drawn faint. */
+  waveformActive?: { from: number; to: number };
   waveformDuration?: number;
   fps?: number;
   onToggleMarker?: (frame: number) => void;
@@ -88,12 +90,14 @@ function WaveformCanvas({
   duration,
   fps,
   totalFrames,
+  active,
 }: {
   url?: string;
   startFrame: number;
   duration: number;
   fps: number;
   totalFrames: number;
+  active?: { from: number; to: number };
 }) {
   const ref = useRef<HTMLCanvasElement>(null);
   const [peaks, setPeaks] = useState<WaveformPeak[] | null>(null);
@@ -132,12 +136,16 @@ function WaveformCanvas({
 
       const clipX = range.x;
       const bw = range.width / peaks.length;
-      ctx.fillStyle = "rgba(56, 189, 248, 0.22)";
+      const framesPerPeak = (duration * fps) / peaks.length;
       peaks.forEach((p, i) => {
         const x = clipX + i * bw;
         // A clip can start before the timeline or run off its end; draw only
         // the part that is actually on screen.
         if (x + bw < 0 || x > w) return;
+        // What will not sound (before the start point, after the stop point) is drawn faint.
+        const frame = startFrame + i * framesPerPeak;
+        const sounds = !active || (frame >= active.from && frame < active.to);
+        ctx.fillStyle = sounds ? "rgba(56, 189, 248, 0.34)" : "rgba(56, 189, 248, 0.09)";
         const top = (0.5 - p.max / 2) * h;
         const bottom = (0.5 - p.min / 2) * h;
         ctx.fillRect(x, top, Math.max(1, bw), Math.max(1, bottom - top));
@@ -147,7 +155,7 @@ function WaveformCanvas({
     const ro = new ResizeObserver(draw);
     if (canvas.parentElement) ro.observe(canvas.parentElement);
     return () => ro.disconnect();
-  }, [peaks, startFrame, duration, fps, totalFrames]);
+  }, [peaks, startFrame, duration, fps, totalFrames, active?.from, active?.to]);
 
   return <canvas ref={ref} className="timeline-waveform" />;
 }
@@ -161,6 +169,7 @@ export function TimelineBar({
   markers = [],
   waveformUrl,
   waveformStartFrame,
+  waveformActive,
   waveformDuration,
   fps,
   onToggleMarker,
@@ -506,6 +515,7 @@ export function TimelineBar({
           <WaveformCanvas
             url={waveformUrl}
             startFrame={waveformStartFrame ?? 0}
+            active={waveformActive}
             duration={waveformDuration ?? 0}
             fps={fps ?? 30}
             totalFrames={totalFrames}

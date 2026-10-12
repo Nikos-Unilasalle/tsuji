@@ -276,7 +276,7 @@ Les prises de connexion (sockets) sont identifiées par des codes couleur normal
 | **Microphone Input**| `sound/microphone` | Capture le flux du microphone ou de la carte son en temps réel. |
 | **Audio Spectrum** | `sound/spectrum` | Analyseur de spectre FFT (Basses, Médiums, Aigus). |
 | **Peak Detector** | `sound/peak_detector` | Détecteur d'attaques percussives (beats, kicks) avec seuil. |
-| **Audio Player** | `sound/player` | Lecteur de fichiers audio (.mp3, .wav) avec contrôle de transport. |
+| **Audio Player** | `sound/player` | Lecteur de fichiers audio (.mp3, .wav, .m4a…). **Ancré à la timeline** (`Start Frame` ≥ 0) : le son suit la tête de lecture à la milliseconde (sources Web Audio), se tait quand la timeline est en pause, reprend à son point de départ quand la timeline revient en arrière ou boucle, et se resynchronise après un saut ou un scrub. **Libre** (`Start Frame` = -1) : piloté par `Play` / `Trigger`. `Start in File` / `Stop in File` (s) découpent la zone jouée du fichier (un seul morceau peut servir plusieurs scènes) ; `Loop` répète cette zone. La bande d'onde de la timeline montre la zone jouée. |
 | **Audio Synth** | `sound/synth` | Synthétiseur générateur d'ondes audio pures. |
 
 ### Mathématiques, Vecteurs et Logique

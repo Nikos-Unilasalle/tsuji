@@ -2232,11 +2232,19 @@ function MainEditor() {
       // A trigger-driven clip (startFrame -1) has no knowable position on the
       // timeline, so it is drawn from frame 0 rather than not at all.
       const start = Number(res?.startFrame);
+      const anchored = Number.isFinite(start) && start >= 0;
+      // The strip is drawn where the file's first second would sit: a start point pushes it before the start frame.
+      const fileStart = anchored ? start - (Number(res?.clipOffsetFrames) || 0) : 0;
+      const endFrames = Number(res?.clipEndFrames) || 0;
       return {
         url,
-        // The strip is drawn where the file's first second would sit: Start in Clip pushes it before the start frame.
-        startFrame: Number.isFinite(start) && start >= 0 ? start - (Number(res?.clipOffsetFrames) || 0) : 0,
+        startFrame: fileStart,
         duration: Number(res?.duration) || 0,
+        // Only this part of the file will sound: from the start frame to the stop point, or on to the end of the
+        // timeline when the region loops.
+        active: anchored
+          ? { from: start, to: Number(res?.loop) > 0 || endFrames <= 0 ? Infinity : fileStart + endFrames }
+          : { from: -Infinity, to: Infinity },
       };
     }
     return undefined;
@@ -2857,6 +2865,7 @@ function MainEditor() {
             waveformUrl={waveformClip?.url}
             waveformStartFrame={waveformClip?.startFrame}
             waveformDuration={waveformClip?.duration}
+            waveformActive={waveformClip?.active}
             fps={exportFps}
             onToggleMarker={onToggleMarker}
             onMoveMarker={onMoveMarker}

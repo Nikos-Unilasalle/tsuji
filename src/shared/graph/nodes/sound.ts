@@ -1,4 +1,6 @@
 import {
+  clipOffsetNow,
+  decodePlayerBuffer,
   enableMicrophone,
   getAudioContext,
   getAudioOutput,
@@ -9,29 +11,31 @@ import {
   getOrCreateSynth,
   requestPause,
   requestPlay,
+  stopClip,
+  syncClip,
 } from "../../audio/audioStore";
+import { planClip } from "../../audio/clipPlan";
 import { NodeDefinition } from "../types";
 import { numberInput } from "./object";
 
-/** Audio Player node — loads and plays local audio files (.mp3, .wav, .ogg) with playback controls. */
 /**
- * Where a clip anchored to a timeline frame should be at `frame`: playing or not, and the position (s) inside the file.
- * `clipStart` is the second of the file that plays at `startFrame`, so a clip can be entered part-way — a soundtrack cut
- * across several canvases needs no pre-cut files.
+ * Audio Player — plays a local sound file.
+ *
+ * Two ways to drive it:
+ *  - Anchored (Start Frame ≥ 0): the sound is part of the timeline. It starts at Start Frame, plays only while the timeline
+ *    plays, stays in step with the playhead, begins again at its start point whenever the timeline comes back round, and
+ *    lands on the same frame in an export. The playhead decides; the speaker follows (see audio/clipPlan.ts).
+ *  - Free (Start Frame −1): driven by the Play and Trigger inputs, as a game or an installation would.
+ *
+ * In both, "Start in file" and "Stop in file" cut the region of the file that plays, so one long track can serve several
+ * scenes without being split.
  */
-export function anchoredClipPosition(
-  frame: number,
-  startFrame: number,
-  fps: number,
-  clipStart: number,
-  clipLength: number,
-  loop: boolean,
-): { playing: boolean; target: number } {
-  const position = clipStart + (frame - startFrame) / fps;
-  const playing = frame >= 0 && frame >= startFrame && (loop || clipLength <= 0 || position < clipLength);
-  const target = loop && clipLength > 0 ? position % clipLength : position;
-  return { playing, target };
-}
+/**
+ * When an export last captured a frame. The viewport on screen keeps evaluating the same graph while an export runs, from a
+ * paused timeline; if it were allowed to say "silence" it would cut the sound the export is asking for, every frame.
+ */
+let lastCaptureAt = -Infinity;
+const nowMs = () => (typeof performance !== "undefined" ? performance.now() : Date.now());
 
 export const AUDIO_PLAYER_NODE: NodeDefinition = {
   type: "sound/player",
@@ -44,6 +48,8 @@ export const AUDIO_PLAYER_NODE: NodeDefinition = {
     { id: "playbackRate", label: "Speed", type: "value" },
     { id: "seek", label: "Seek (s)", type: "value" },
     { id: "startFrame", label: "Start Frame", type: "value" },
+    { id: "clipStart", label: "Start in File (s)", type: "value" },
+    { id: "clipEnd", label: "Stop in File (s)", type: "value" },
   ],
   outputs: [
     { id: "audio", label: "Audio", type: "any" },
@@ -56,9 +62,13 @@ export const AUDIO_PLAYER_NODE: NodeDefinition = {
     // React had no way of knowing had changed.
     { id: "url", label: "Audio URL", type: "text" },
     { id: "startFrame", label: "Start Frame", type: "value" },
+    // Where the file's first second sits relative to Start Frame, and where the played region ends: the waveform strip
+    // draws the whole file at its true place and shades what will not sound.
     { id: "clipOffsetFrames", label: "Clip Offset (frames)", type: "value" },
+    { id: "clipEndFrames", label: "Clip End (frames)", type: "value" },
+    { id: "loop", label: "Loop", type: "value" },
   ],
-  defaultParams: { filePath: "", loop: 1, volume: 1, playbackRate: 1, startFrame: -1, clipStart: 0 },
+  defaultParams: { filePath: "", loop: 1, volume: 1, playbackRate: 1, startFrame: -1, clipStart: 0, clipEnd: 0 },
   dynamicParamFields: () => [
     {
       id: "filePath",
@@ -76,6 +86,8 @@ export const AUDIO_PLAYER_NODE: NodeDefinition = {
           m4a: "audio/mp4",
           aac: "audio/aac",
         };
+        stopClip(player);
+        player.buffer = undefined;
         const blob = new Blob([content], { type: mime[ext] || "audio/mpeg" });
         const url = URL.createObjectURL(blob);
         // Preload + force a load now so a later play() starts instantly instead
@@ -84,21 +96,19 @@ export const AUDIO_PLAYER_NODE: NodeDefinition = {
         player.audioEl.src = url;
         player.audioEl.load();
         player.loadedPath = url;
+        // The same bytes, decoded, for timeline playback.
+        if (content instanceof Uint8Array || content instanceof ArrayBuffer) void decodePlayerBuffer(player, content);
       },
     },
-    { id: "loop", label: "Loop", kind: "boolean" },
+    { id: "loop", label: "Loop (the start→stop region)", kind: "boolean" },
     {
       id: "startFrame",
-      label: "Start Frame (-1 = trigger-driven)",
+      label: "Start Frame on the timeline (-1 = driven by Play / Trigger)",
       kind: "number",
       step: 1,
     },
-    {
-      id: "clipStart",
-      label: "Start in Clip (s) — which second of the file plays at Start Frame",
-      kind: "number",
-      step: 0.1,
-    },
+    { id: "clipStart", label: "Start in File (s)", kind: "number", step: 0.1 },
+    { id: "clipEnd", label: "Stop in File (s, 0 = end of file)", kind: "number", step: 0.1 },
     { id: "volume", label: "Volume", kind: "number", step: 0.05 },
     { id: "playbackRate", label: "Speed", kind: "number", step: 0.1 },
   ],
@@ -110,14 +120,78 @@ export const AUDIO_PLAYER_NODE: NodeDefinition = {
     const volume = Math.max(0, Math.min(1, inputs.volume !== undefined ? Number(inputs.volume) : Number(params.volume) || 1));
     const rate = Math.max(0.25, Math.min(4, inputs.playbackRate !== undefined ? Number(inputs.playbackRate) : Number(params.playbackRate) || 1));
     const loop = params.loop !== undefined ? Boolean(params.loop) : true;
+    const clipStart = Math.max(0, numberInput(inputs.clipStart, params.clipStart, 0));
+    const clipEnd = Math.max(0, numberInput(inputs.clipEnd, params.clipEnd, 0));
+    const fps = Math.max(1, Number(ctx.fps) || 30);
 
-    audioEl.loop = loop;
     audioEl.volume = volume;
     audioEl.playbackRate = rate;
+    if (player.gainNode) player.gainNode.gain.value = volume;
 
-    if (player.gainNode) {
-      player.gainNode.gain.value = volume;
+    const fileLength = player.buffer?.duration ?? (isNaN(audioEl.duration) ? 0 : audioEl.duration);
+    const inPoint = Math.min(clipStart, fileLength || clipStart);
+    const outPoint = clipEnd > 0 ? Math.min(clipEnd, fileLength || clipEnd) : fileLength;
+    const regionActive = clipStart > 0 || clipEnd > 0;
+    const published = {
+      audio: player,
+      url: player.loadedPath ?? "",
+      clipOffsetFrames: clipStart * fps,
+      clipEndFrames: outPoint * fps,
+      loop: loop ? 1 : 0,
+    };
+
+    // Anchoring the clip to a frame. -1 (the default) keeps the node exactly as
+    // it was — driven by Play and Trigger — so nothing already built changes
+    // behaviour. Set to a frame and the clip becomes part of the timeline.
+    const startFrame = Math.round(numberInput(inputs.startFrame, params.startFrame, -1));
+    if (startFrame >= 0) {
+      audioEl.loop = false;
+      // Sound only while the timeline runs (or while a frame is being captured for an export); a paused timeline is silent.
+      const running = ctx.isPlaying !== false || ctx.capturing === true;
+      const frame = ctx.currentFrame ?? -1;
+      if (ctx.capturing) lastCaptureAt = nowMs();
+      const yieldToExport = !ctx.capturing && nowMs() - lastCaptureAt < 400;
+      // One render loop at a time tells the speaker where to be: whichever drove it last keeps it while it keeps driving.
+      const sessionId = ctx.sessionId ?? "main";
+      const now = nowMs();
+      const taken = player.driver !== undefined && player.driver.id !== sessionId && now - player.driver.at < 300;
+      if (!taken) player.driver = { id: sessionId, at: now };
+      const plan = planClip({ frame, fps, startFrame, clipStart, clipEnd, clipLength: fileLength, loop, rate });
+
+      if (yieldToExport || taken) {
+        // An export, or another viewport, is driving the sound; leave it alone.
+      } else if (player.buffer) {
+        syncClip(player, running ? plan : { ...plan, active: false }, { rate, loop, tolerance: ctx.capturing ? 0.15 : 0.08 });
+        player.isPlaying = player.clip !== undefined;
+      } else if (audioEl.src) {
+        // No decoded buffer (no Web Audio here, or the file would not decode): a media element does what it can.
+        if (running && plan.active) {
+          if (Math.abs(audioEl.currentTime - plan.offset) > 0.25) audioEl.currentTime = plan.offset;
+          if (audioEl.paused) {
+            requestPlay(player);
+            player.isPlaying = true;
+          }
+        } else if (!audioEl.paused) {
+          requestPause(player);
+          player.isPlaying = false;
+        }
+      }
+
+      return {
+        ...published,
+        volume: player.isPlaying ? volume : 0,
+        duration: fileLength,
+        position: plan.active ? plan.offset : clipOffsetNowOrZero(player, audioEl),
+        startFrame,
+      };
     }
+
+    // Free-running: the clip is not on the timeline, so any buffer source it had must not go on sounding.
+    stopClip(player);
+
+    // The region: a media element plays the whole file unless told otherwise, so with a start or stop point the loop is
+    // done by hand below.
+    audioEl.loop = loop && !regionActive;
 
     if (inputs.seek !== undefined && !isNaN(Number(inputs.seek))) {
       const targetPos = Math.max(0, Math.min(audioEl.duration || 0, Number(inputs.seek)));
@@ -126,50 +200,7 @@ export const AUDIO_PLAYER_NODE: NodeDefinition = {
       }
     }
 
-    // Anchoring the clip to a frame. -1 (the default) keeps the node exactly as
-    // it was — driven by Play and Trigger — so nothing already built changes
-    // behaviour. Set to a frame and the clip becomes part of the timeline
-    // instead: it starts there, scrubs with the playhead, and lands on the same
-    // frame in an export as it does in the preview. That is what makes the
-    // waveform strip honest, and what lets a sound be pinned to the frame an
-    // event happens on.
-    const startFrame = Math.round(numberInput(inputs.startFrame, params.startFrame, -1));
-    const anchored = startFrame >= 0;
-
-    if (anchored) {
-      const fps = Math.max(1, Number(ctx.fps) || 30);
-      const frame = ctx.currentFrame ?? -1;
-      const clipLength = isNaN(audioEl.duration) ? 0 : audioEl.duration;
-      const clipStart = Math.max(0, numberInput(inputs.clipStart, params.clipStart, 0));
-      const { playing, target } = anchoredClipPosition(frame, startFrame, fps, clipStart, clipLength, loop);
-
-      if (playing && audioEl.src) {
-        // Only correct the position when it has genuinely drifted: writing
-        // currentTime every frame restarts the decoder and stutters the sound.
-        if (Math.abs(audioEl.currentTime - target) > 0.25) {
-          audioEl.currentTime = Math.max(0, target);
-        }
-        if (audioEl.paused) {
-          requestPlay(player);
-          player.isPlaying = true;
-        }
-      } else if (!audioEl.paused) {
-        requestPause(player);
-        player.isPlaying = false;
-      }
-
-      return {
-        audio: player,
-        volume: audioEl.paused ? 0 : volume,
-        duration: clipLength,
-        position: isNaN(audioEl.currentTime) ? 0 : audioEl.currentTime,
-        url: player.loadedPath ?? "",
-        startFrame,
-        clipOffsetFrames: clipStart * fps,
-      };
-    }
-
-    // Trigger: a rising edge (0 -> 1) starts the sound from the beginning and
+    // Trigger: a rising edge (0 -> 1) starts the sound from its start point and
     // plays it to completion. While that playback is running the trigger is
     // inactive — holding it at 1 (or re-pulsing it) does not restart until the
     // sound has actually ended.
@@ -178,7 +209,7 @@ export const AUDIO_PLAYER_NODE: NodeDefinition = {
     player.lastTrigger = trigger;
 
     if (risingTrigger && audioEl.src) {
-      audioEl.currentTime = 0;
+      audioEl.currentTime = inPoint;
       requestPlay(player);
       player.isPlaying = true;
       player.triggerLocked = true;
@@ -192,6 +223,8 @@ export const AUDIO_PLAYER_NODE: NodeDefinition = {
     } else {
       audioEl.onended = null;
       if (playInput && audioEl.paused && audioEl.src) {
+        // Starting (or resuming past the end): begin at the start point.
+        if (audioEl.currentTime < inPoint || (outPoint > 0 && audioEl.currentTime >= outPoint)) audioEl.currentTime = inPoint;
         requestPlay(player);
         player.isPlaying = true;
       } else if (!playInput && !audioEl.paused) {
@@ -200,19 +233,34 @@ export const AUDIO_PLAYER_NODE: NodeDefinition = {
       }
     }
 
+    // The stop point: loop back to the start point, or end the sound there.
+    if (regionActive && !audioEl.paused && outPoint > 0 && audioEl.currentTime >= outPoint) {
+      if (loop) {
+        audioEl.currentTime = inPoint;
+      } else {
+        requestPause(player);
+        player.isPlaying = false;
+        player.triggerLocked = false;
+      }
+    }
+
     return {
-      audio: player,
+      ...published,
       volume: audioEl.paused ? 0 : volume,
-      duration: isNaN(audioEl.duration) ? 0 : audioEl.duration,
+      duration: fileLength,
       position: isNaN(audioEl.currentTime) ? 0 : audioEl.currentTime,
-      url: player.loadedPath ?? "",
       // Published so the timeline's waveform strip can draw the clip where it
       // will actually be heard.
       startFrame,
-      clipOffsetFrames: 0,
     };
   },
 };
+
+function clipOffsetNowOrZero(player: Parameters<typeof clipOffsetNow>[0], audioEl: HTMLAudioElement): number {
+  const now = clipOffsetNow(player);
+  if (now !== null) return now;
+  return isNaN(audioEl.currentTime) ? 0 : audioEl.currentTime;
+}
 
 /** Resamples a numeric array to a target length via linear interpolation */
 function resampleArray(source: number[], targetLength: number): number[] {

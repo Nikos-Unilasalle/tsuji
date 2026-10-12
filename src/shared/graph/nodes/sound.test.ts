@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { anchoredClipPosition, AUDIO_PLAYER_NODE } from "./sound";
+import { AUDIO_PLAYER_NODE } from "./sound";
 import { EvalContext } from "../types";
 
 const CTX: EvalContext = { time: 0, step: 0, nodeId: "audio-test" };
@@ -52,19 +52,20 @@ describe("AUDIO_PLAYER_NODE", () => {
   });
 });
 
-describe("anchoredClipPosition", () => {
-  it("enters the clip at Start in Clip, then follows the timeline", () => {
-    // frame 30 is where the clip starts; the file's second 8 plays there
-    expect(anchoredClipPosition(30, 30, 30, 8, 50, false)).toEqual({ playing: true, target: 8 });
-    expect(anchoredClipPosition(60, 30, 30, 8, 50, false)).toEqual({ playing: true, target: 9 });
+describe("AUDIO_PLAYER_NODE start and stop points", () => {
+  it("has a start and a stop point, defaulting to the whole file", () => {
+    expect(AUDIO_PLAYER_NODE.defaultParams.clipStart).toBe(0);
+    expect(AUDIO_PLAYER_NODE.defaultParams.clipEnd).toBe(0);
+    expect(AUDIO_PLAYER_NODE.inputs.map((i) => i.id)).toEqual(expect.arrayContaining(["clipStart", "clipEnd"]));
   });
 
-  it("is silent before the start frame and after the end of a non-looping clip", () => {
-    expect(anchoredClipPosition(10, 30, 30, 0, 5, false).playing).toBe(false);
-    expect(anchoredClipPosition(30 + 30 * 6, 30, 30, 0, 5, false).playing).toBe(false);
-  });
-
-  it("wraps inside the file when looping", () => {
-    expect(anchoredClipPosition(30 + 30 * 7, 30, 30, 0, 5, true)).toEqual({ playing: true, target: 2 });
+  it("publishes where the played region sits, for the waveform strip", () => {
+    const res = AUDIO_PLAYER_NODE.evaluate(
+      {},
+      { ...AUDIO_PLAYER_NODE.defaultParams, startFrame: 30, clipStart: 4, clipEnd: 7 },
+      { ...CTX, nodeId: "audio-region", currentFrame: 0, fps: 30 },
+    );
+    expect(res.clipOffsetFrames).toBe(120);
+    expect(res.startFrame).toBe(30);
   });
 });

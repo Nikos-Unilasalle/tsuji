@@ -4,6 +4,7 @@
  */
 
 import { createNodeCache } from "../graph/nodeCaches";
+import { ClipPlan, clipDrift } from "./clipPlan";
 
 let globalAudioCtx: AudioContext | null = null;
 let gestureListenerInstalled = false;
@@ -142,9 +143,94 @@ export interface PlayerState {
   lastTrigger?: boolean;
   /** A trigger-driven playback is running to completion: the trigger can't re-fire and the Play input is ignored until the sound ends. */
   triggerLocked?: boolean;
+  /** The decoded file, for timeline playback (Web Audio buffer sources start and stop at exact points; a media element does not). */
+  buffer?: AudioBuffer;
+  /** The render loop that last drove the clip. Several viewports evaluate the same graph (editor, camera view, output); if each told the speaker a slightly different position it would restart the sound all the time. */
+  driver?: { id: string; at: number };
+  /** The running buffer source and where it was started from — enough to tell later how far it has drifted from the plan. */
+  clip?: { source: AudioBufferSourceNode; ctxStart: number; offset: number; rate: number; loop: boolean; inPoint: number; outPoint: number };
+}
+
+/** Decodes a file for timeline playback. Resolves without a buffer when decoding is impossible (no Web Audio, bad file). */
+export async function decodePlayerBuffer(player: PlayerState, bytes: ArrayBuffer | Uint8Array): Promise<void> {
+  const ctx = getAudioContext();
+  if (!ctx) return;
+  const copy = bytes instanceof Uint8Array ? bytes.slice().buffer : bytes.slice(0);
+  try {
+    player.buffer = await ctx.decodeAudioData(copy as ArrayBuffer);
+  } catch {
+    player.buffer = undefined;
+  }
+}
+
+export function stopClip(player: PlayerState): void {
+  const clip = player.clip;
+  if (!clip) return;
+  player.clip = undefined;
+  clip.source.onended = null;
+  try {
+    clip.source.stop();
+  } catch {}
+  try {
+    clip.source.disconnect();
+  } catch {}
+}
+
+/** Where the running source is in the file now (s), or null when nothing is sounding. */
+export function clipOffsetNow(player: PlayerState): number | null {
+  const ctx = getAudioContext();
+  const clip = player.clip;
+  if (!ctx || !clip) return null;
+  const advanced = clip.offset + (ctx.currentTime - clip.ctxStart) * clip.rate;
+  const region = clip.outPoint - clip.inPoint;
+  if (clip.loop && region > 0) return clip.inPoint + (((advanced - clip.inPoint) % region) + region) % region;
+  return advanced;
+}
+
+/**
+ * Makes the speaker agree with the plan: silent when the plan is, otherwise a buffer source at the planned offset. A
+ * source that is already playing is left alone while it stays within `tolerance` seconds of the plan — a restart is
+ * audible — and replaced as soon as it is not, which is what a timeline jump (loop back to the start, a scrub while
+ * playing, Reset) looks like from here.
+ */
+export function syncClip(player: PlayerState, plan: ClipPlan, opts: { rate: number; loop: boolean; tolerance: number }): void {
+  const ctx = getAudioContext();
+  if (!ctx || !player.buffer) return;
+  if (!plan.active) {
+    stopClip(player);
+    return;
+  }
+  if (ctx.state !== "running") {
+    // Autoplay policy: nothing can sound yet. Asked again every frame, so it starts at the right place the moment it can.
+    ctx.resume().catch(() => {});
+    return;
+  }
+  const cur = player.clip;
+  if (cur) {
+    const actual = clipOffsetNow(player) ?? cur.offset;
+    const same = cur.loop === opts.loop && cur.rate === opts.rate && cur.inPoint === plan.inPoint && cur.outPoint === plan.outPoint;
+    if (same && Math.abs(clipDrift(actual, plan.offset, plan.inPoint, plan.outPoint, opts.loop)) <= opts.tolerance) return;
+    stopClip(player);
+  }
+  const source = ctx.createBufferSource();
+  source.buffer = player.buffer;
+  source.playbackRate.value = opts.rate;
+  if (opts.loop) {
+    source.loop = true;
+    source.loopStart = plan.inPoint;
+    source.loopEnd = plan.outPoint;
+  }
+  source.connect(player.gainNode ?? getAudioOutput() ?? ctx.destination);
+  source.onended = () => {
+    if (player.clip?.source === source) player.clip = undefined;
+  };
+  if (opts.loop || plan.remaining === null) source.start(0, plan.offset);
+  else source.start(0, plan.offset, plan.remaining);
+  player.clip = { source, ctxStart: ctx.currentTime, offset: plan.offset, rate: opts.rate, loop: opts.loop, inPoint: plan.inPoint, outPoint: plan.outPoint };
 }
 
 const playerCache = createNodeCache<PlayerState>((state) => {
+  stopClip(state);
   if (state.loadedPath) {
     try {
       URL.revokeObjectURL(state.loadedPath);
