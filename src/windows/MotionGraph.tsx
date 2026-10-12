@@ -334,9 +334,8 @@ export const MotionGraph: React.FC<MotionGraphProps> = ({
 
       if (drag.kind === "handle" && drag.channelId === c.id) {
         const next = [...c.keys];
-        // The segment's easing lives on its arrival key, except for the first
-        // segment when the opening key carries one (resolveSegmentEasing).
-        const owner = drag.segment === 0 && next[0]?.easeIn !== undefined ? 0 : drag.segment + 1;
+        // The segment's easing lives on its arrival key (resolveSegmentEasing).
+        const owner = drag.segment + 1;
         if (next[owner]) next[owner] = { ...next[owner], easeBezier: drag.bezier };
         return next;
       }
@@ -534,9 +533,7 @@ export const MotionGraph: React.FC<MotionGraphProps> = ({
   const commitHandleDrag = (state: Extract<DragState, { kind: "handle" }>) => {
     const channel = channels.find((c) => c.id === state.channelId);
     if (!channel) return;
-    const owner =
-      state.segment === 0 && channel.keys[0]?.easeIn !== undefined ? 0 : state.segment + 1;
-    const key = channel.keys[owner];
+    const key = channel.keys[state.segment + 1];
     if (!key) return;
     onEditKeyframes([
       {

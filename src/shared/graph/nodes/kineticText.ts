@@ -1,5 +1,6 @@
 import * as THREE from "three";
-import { Font, FontLoader } from "three/examples/jsm/loaders/FontLoader.js";
+import { FONT_FILE_ACCEPT, parseFontFile } from "../../three/fonts/fontFile";
+import { Font } from "three/examples/jsm/loaders/FontLoader.js";
 import { BUILTIN_FONTS, FONT_NAMES } from "../../three/fonts/fonts";
 import { createNodeCache, disposeObject3D } from "../nodeCaches";
 import { NodeDefinition, ParamFieldDef } from "../types";
@@ -142,14 +143,14 @@ export const TEXT_ANIMATOR_PARAM_FIELDS: ParamFieldDef[] = [
   { id: "fontPreset", label: "Font", kind: "select", options: FONT_NAMES, group: "Typography" },
   {
     id: "fontPath",
-    label: "Custom Font (.json)",
+    label: "Custom Font (.json, .ttf, .otf)",
     kind: "file",
-    accept: [".json"],
+    accept: FONT_FILE_ACCEPT,
     group: "Typography",
-    onLoaded: (nodeId, _path, content) => {
+    onLoaded: (nodeId, path, content) => {
       const state = getOrCreateAnimatorState(nodeId);
       try {
-        state.font = new FontLoader().parse(JSON.parse(String(content)));
+        state.font = parseFontFile(path, content);
       } catch (err) {
         console.error("Failed to parse font:", err);
         state.font = undefined;

@@ -14,6 +14,25 @@ import { NodeDefinition } from "../types";
 import { numberInput } from "./object";
 
 /** Audio Player node — loads and plays local audio files (.mp3, .wav, .ogg) with playback controls. */
+/**
+ * Where a clip anchored to a timeline frame should be at `frame`: playing or not, and the position (s) inside the file.
+ * `clipStart` is the second of the file that plays at `startFrame`, so a clip can be entered part-way — a soundtrack cut
+ * across several canvases needs no pre-cut files.
+ */
+export function anchoredClipPosition(
+  frame: number,
+  startFrame: number,
+  fps: number,
+  clipStart: number,
+  clipLength: number,
+  loop: boolean,
+): { playing: boolean; target: number } {
+  const position = clipStart + (frame - startFrame) / fps;
+  const playing = frame >= 0 && frame >= startFrame && (loop || clipLength <= 0 || position < clipLength);
+  const target = loop && clipLength > 0 ? position % clipLength : position;
+  return { playing, target };
+}
+
 export const AUDIO_PLAYER_NODE: NodeDefinition = {
   type: "sound/player",
   label: "Audio Player",
@@ -37,8 +56,9 @@ export const AUDIO_PLAYER_NODE: NodeDefinition = {
     // React had no way of knowing had changed.
     { id: "url", label: "Audio URL", type: "text" },
     { id: "startFrame", label: "Start Frame", type: "value" },
+    { id: "clipOffsetFrames", label: "Clip Offset (frames)", type: "value" },
   ],
-  defaultParams: { filePath: "", loop: 1, volume: 1, playbackRate: 1, startFrame: -1 },
+  defaultParams: { filePath: "", loop: 1, volume: 1, playbackRate: 1, startFrame: -1, clipStart: 0 },
   dynamicParamFields: () => [
     {
       id: "filePath",
@@ -72,6 +92,12 @@ export const AUDIO_PLAYER_NODE: NodeDefinition = {
       label: "Start Frame (-1 = trigger-driven)",
       kind: "number",
       step: 1,
+    },
+    {
+      id: "clipStart",
+      label: "Start in Clip (s) — which second of the file plays at Start Frame",
+      kind: "number",
+      step: 0.1,
     },
     { id: "volume", label: "Volume", kind: "number", step: 0.05 },
     { id: "playbackRate", label: "Speed", kind: "number", step: 0.1 },
@@ -113,14 +139,13 @@ export const AUDIO_PLAYER_NODE: NodeDefinition = {
     if (anchored) {
       const fps = Math.max(1, Number(ctx.fps) || 30);
       const frame = ctx.currentFrame ?? -1;
-      const offsetSeconds = (frame - startFrame) / fps;
       const clipLength = isNaN(audioEl.duration) ? 0 : audioEl.duration;
-      const withinClip = frame >= startFrame && (loop || clipLength <= 0 || offsetSeconds < clipLength);
+      const clipStart = Math.max(0, numberInput(inputs.clipStart, params.clipStart, 0));
+      const { playing, target } = anchoredClipPosition(frame, startFrame, fps, clipStart, clipLength, loop);
 
-      if (frame >= 0 && withinClip && audioEl.src) {
+      if (playing && audioEl.src) {
         // Only correct the position when it has genuinely drifted: writing
         // currentTime every frame restarts the decoder and stutters the sound.
-        const target = loop && clipLength > 0 ? offsetSeconds % clipLength : offsetSeconds;
         if (Math.abs(audioEl.currentTime - target) > 0.25) {
           audioEl.currentTime = Math.max(0, target);
         }
@@ -140,6 +165,7 @@ export const AUDIO_PLAYER_NODE: NodeDefinition = {
         position: isNaN(audioEl.currentTime) ? 0 : audioEl.currentTime,
         url: player.loadedPath ?? "",
         startFrame,
+        clipOffsetFrames: clipStart * fps,
       };
     }
 
@@ -183,6 +209,7 @@ export const AUDIO_PLAYER_NODE: NodeDefinition = {
       // Published so the timeline's waveform strip can draw the clip where it
       // will actually be heard.
       startFrame,
+      clipOffsetFrames: 0,
     };
   },
 };

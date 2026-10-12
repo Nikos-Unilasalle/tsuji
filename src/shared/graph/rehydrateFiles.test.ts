@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 import { Graph } from "./types";
-import { rehydrateFileNodesFromDisk } from "./rehydrateFiles";
+import { isFetchablePath, rehydrateFileNodesFromDisk, resolveProjectPath, setProjectDirectory } from "./rehydrateFiles";
 
 describe("rehydrateFileNodesFromDisk", () => {
   test("no-op outside Tauri (browser dev mode), regardless of file-backed nodes present", async () => {
@@ -24,5 +24,30 @@ describe("rehydrateFileNodesFromDisk", () => {
     };
 
     await expect(rehydrateFileNodesFromDisk(graph)).resolves.toEqual({ attempted: 0, succeeded: 0, failed: 0 });
+  });
+});
+
+describe("resolveProjectPath", () => {
+  test("a relative path is read next to the project file; an absolute one is left alone", () => {
+    setProjectDirectory("/Users/me/work/title.tsuji");
+    expect(resolveProjectPath("assets/photo.png")).toBe("/Users/me/work/assets/photo.png");
+    expect(resolveProjectPath("./assets/photo.png")).toBe("/Users/me/work/assets/photo.png");
+    expect(resolveProjectPath("/tmp/photo.png")).toBe("/tmp/photo.png");
+    expect(resolveProjectPath("C:\\media\\photo.png")).toBe("C:\\media\\photo.png");
+  });
+
+  test("with no project folder known, the path is untouched", () => {
+    setProjectDirectory(null);
+    expect(resolveProjectPath("assets/photo.png")).toBe("assets/photo.png");
+  });
+});
+
+describe("isFetchablePath", () => {
+  test("URLs and bundled demo files can be fetched; disk paths cannot", () => {
+    expect(isFetchablePath("https://example.com/a.png")).toBe(true);
+    expect(isFetchablePath("demos/goodboy/a.png")).toBe(true);
+    expect(isFetchablePath("/demos/goodboy/a.png")).toBe(true);
+    expect(isFetchablePath("assets/a.png")).toBe(false);
+    expect(isFetchablePath("/Users/me/a.png")).toBe(false);
   });
 });

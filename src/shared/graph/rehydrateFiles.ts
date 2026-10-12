@@ -28,7 +28,7 @@ import { Graph } from "./types";
 const BINARY_EXTENSIONS = new Set([
   "png", "jpg", "jpeg", "webp", "bmp", "hdr", "exr", "tif", "tiff",
   "mp3", "wav", "ogg", "flac", "m4a", "aac",
-  "glb", "ply",
+  "glb", "ply", "mp4", "ttf", "otf", "woff",
 ]);
 
 /**
@@ -47,9 +47,40 @@ export interface RehydrateFileResult {
   failed: number;
 }
 
+/**
+ * Folder of the project file last opened (desktop only). A file param that is not an absolute path —
+ * `assets/photo.png` — is read relative to it, so a project and its `assets/` folder can move together.
+ */
+let projectDirectory: string | null = null;
+
+export function setProjectDirectory(projectFilePath: string | null): void {
+  const cut = projectFilePath ? Math.max(projectFilePath.lastIndexOf("/"), projectFilePath.lastIndexOf("\\")) : -1;
+  projectDirectory = projectFilePath && cut >= 0 ? projectFilePath.slice(0, cut) : null;
+}
+
+export function resolveProjectPath(path: string): string {
+  const absolute = path.startsWith("/") || path.startsWith("\\") || /^[A-Za-z]:[\\/]/.test(path);
+  if (absolute || !projectDirectory) return path;
+  return `${projectDirectory}/${path.replace(/^\.\//, "")}`;
+}
+
+/**
+ * A path the app can fetch itself — an http(s) URL, or a file under the bundled `demos/` folder — as opposed to a file on
+ * the user's disk. The browser build cannot read the disk, but it can load these, so a project that names its images this
+ * way opens with them.
+ */
+export function isFetchablePath(path: string): boolean {
+  return /^(https?:\/\/|\.?\/?demos\/)/.test(path);
+}
+
+async function fetchFile(path: string, binary: boolean): Promise<Uint8Array | string> {
+  const res = await fetch(new URL(path.replace(/^\//, ""), document.baseURI).href);
+  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+  return binary ? new Uint8Array(await res.arrayBuffer()) : res.text();
+}
+
 export async function rehydrateFileNodesFromDisk(graph: Graph): Promise<RehydrateFileResult> {
-  const empty: RehydrateFileResult = { attempted: 0, succeeded: 0, failed: 0 };
-  if (!isTauri()) return empty;
+  const desktop = isTauri();
 
   const jobs: Promise<boolean>[] = [];
   // Interiors included: a CSV Reader or a GLTF loader inside a group has the
@@ -61,13 +92,18 @@ export async function rehydrateFileNodesFromDisk(graph: Graph): Promise<Rehydrat
       if (field.kind !== "file" || !field.onLoaded) continue;
       const path = node.params?.[field.id];
       if (typeof path !== "string" || !path) continue;
+      const fetchable = isFetchablePath(path);
+      // A plain browser can only load what the app serves; a disk path needs the desktop app.
+      if (!fetchable && !desktop) continue;
       const onLoaded = field.onLoaded;
 
       jobs.push(
         (async () => {
           try {
             const ext = path.split(".").pop()?.toLowerCase() ?? "";
-            const content = BINARY_EXTENSIONS.has(ext) ? await readFile(path) : await readTextFile(path);
+            const binary = BINARY_EXTENSIONS.has(ext);
+            const real = resolveProjectPath(path);
+            const content = fetchable ? await fetchFile(path, binary) : binary ? await readFile(real) : await readTextFile(real);
             onLoaded(node.id, path, content);
             return true;
           } catch (err) {

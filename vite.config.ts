@@ -1,4 +1,5 @@
 import { defineConfig } from "vite";
+import { configDefaults } from "vitest/config";
 import react from "@vitejs/plugin-react";
 
 // @ts-expect-error process is a nodejs global
@@ -55,5 +56,7 @@ export default defineConfig(async () => ({
   test: {
     environment: "node",
     testTimeout: 15_000,
+    // Other checkouts (git worktrees) hold their own copy of every test; only this tree's count.
+    exclude: [...configDefaults.exclude, ".claude/worktrees/**"],
   },
 }));

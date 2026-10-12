@@ -1,5 +1,6 @@
 import { open as dialogOpen, save as dialogSave } from "@tauri-apps/plugin-dialog";
 import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
+import { moveOpeningEasing } from "./evaluate";
 import { DEFAULT_REGISTRY } from "./nodes";
 import { pruneDanglingConnections } from "./pruneConnections";
 import { CANVAS_COUNT, Graph, Marker, NodeRegistry, normalizeCanvases, Project } from "./types";
@@ -84,8 +85,14 @@ function cleanGraph(graph: Graph): Graph {
   };
 }
 
+/**
+ * Marks files written since an easing belongs to the keyframe it arrives at (the opening
+ * keyframe's easing no longer shapes anything). An unmarked file is migrated on load.
+ */
+const EASING_MODEL = "arrival";
+
 export function serializeGraph(graph: Graph): string {
-  return JSON.stringify(cleanGraph(graph), null, 2);
+  return JSON.stringify({ ...cleanGraph(graph), keyframeEasing: EASING_MODEL }, null, 2);
 }
 
 /**
@@ -100,6 +107,7 @@ export function serializeProject(project: Project): string {
     {
       canvases: normalizeCanvases(project.canvases).map(cleanGraph),
       activeCanvas: clampCanvasIndex(project.activeCanvas),
+      keyframeEasing: EASING_MODEL,
     },
     null,
     2,
@@ -146,7 +154,7 @@ export function deserializeGraph(jsonString: string, registry: NodeRegistry = DE
   }
 
   validateGraphShape(data, "");
-  return adoptGraph(data, registry);
+  return adoptGraph(data, registry, data.keyframeEasing !== EASING_MODEL);
 }
 
 /** Brings every node's params, groups' interiors included, up to its type's current shape — see NodeDefinition.upgradeParams. */
@@ -162,6 +170,7 @@ function upgradeNodes(nodes: Graph["nodes"], registry: NodeRegistry): Graph["nod
 function adoptGraph(
   data: { nodes: unknown[]; connections: unknown[]; keyframes?: unknown; markers?: unknown; exposedParams?: unknown },
   registry: NodeRegistry,
+  migrateEasing: boolean,
 ): Graph {
   // Sockets are a public surface — every saved file references them by id —
   // so a file outlives any socket that gets retired (the Camera's unused
@@ -174,7 +183,12 @@ function adoptGraph(
     {
       nodes: upgradeNodes(data.nodes as Graph["nodes"], registry),
       connections: data.connections as Graph["connections"],
-      keyframes: data.keyframes && typeof data.keyframes === "object" ? (data.keyframes as Graph["keyframes"]) : {},
+      keyframes:
+        data.keyframes && typeof data.keyframes === "object"
+          ? migrateEasing
+            ? moveOpeningEasing(data.keyframes as Graph["keyframes"])
+            : (data.keyframes as Graph["keyframes"])
+          : {},
       markers: normalizeMarkers(data.markers),
       exposedParams: Array.isArray(data.exposedParams) ? (data.exposedParams as Graph["exposedParams"]) : [],
     },
@@ -197,12 +211,12 @@ export function deserializeProject(jsonString: string, registry: NodeRegistry = 
 
   if (!Array.isArray(data.canvases)) {
     validateGraphShape(data, "");
-    return { canvases: normalizeCanvases([adoptGraph(data, registry)]), activeCanvas: 0 };
+    return { canvases: normalizeCanvases([adoptGraph(data, registry, data.keyframeEasing !== EASING_MODEL)]), activeCanvas: 0 };
   }
 
   const canvases = data.canvases.map((canvas: { nodes?: unknown; connections?: unknown }, i: number) => {
     validateGraphShape(canvas, ` (canvas ${i + 1})`);
-    return adoptGraph(canvas as { nodes: unknown[]; connections: unknown[] }, registry);
+    return adoptGraph(canvas as { nodes: unknown[]; connections: unknown[] }, registry, data.keyframeEasing !== EASING_MODEL);
   });
 
   return { canvases: normalizeCanvases(canvases), activeCanvas: clampCanvasIndex(data.activeCanvas) };
@@ -215,7 +229,7 @@ export { isTauri };
  * Open file via native Tauri dialog or browser file picker.
  * Returns { project, filename } on success, null on cancel.
  */
-export async function openProjectWithFilePicker(): Promise<{ project: Project; filename: string } | null> {
+export async function openProjectWithFilePicker(): Promise<{ project: Project; filename: string; path?: string } | null> {
   if (!isTauri()) {
     return new Promise((resolve) => {
       const input = document.createElement("input");
@@ -252,7 +266,7 @@ export async function openProjectWithFilePicker(): Promise<{ project: Project; f
   const project = deserializeProject(content);
   const parts = selected.split(/[\/\\]/);
   const filename = parts[parts.length - 1] || "project_v1.tsuji";
-  return { project, filename };
+  return { project, filename, path: selected };
 }
 
 /**

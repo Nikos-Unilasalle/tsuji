@@ -1,6 +1,7 @@
 import * as THREE from "three";
+import { FONT_FILE_ACCEPT, parseFontFile } from "../../three/fonts/fontFile";
 import { faceCamera } from "../billboard";
-import { Font, FontLoader } from "three/examples/jsm/loaders/FontLoader.js";
+import { Font } from "three/examples/jsm/loaders/FontLoader.js";
 import { NodeDefinition, ParamFieldDef } from "../types";
 import { toBoolean } from "../sockets";
 import { defaultFont } from "../../three/fonts/helvetikerFont";
@@ -1855,10 +1856,10 @@ export const OBJECT_TEXT_NODE: NodeDefinition = {
   paramFields: buildPrimitiveDynamicParamFields([
     { id: "text", label: "Text (fallback)", kind: "text" },
     { id: "fontPreset", label: "Font", kind: "select", options: FONT_NAMES },
-    { id: "fontPath", label: "Custom Font (.json)", kind: "file", accept: [".json"], onLoaded: (nodeId, _path, content) => {
+    { id: "fontPath", label: "Custom Font (.json, .ttf, .otf)", kind: "file", accept: FONT_FILE_ACCEPT, onLoaded: (nodeId, path, content) => {
       const state = textMesh(nodeId);
       try {
-        state.font = new FontLoader().parse(JSON.parse(String(content)));
+        state.font = parseFontFile(path, content);
       } catch (err) {
         console.error("Failed to parse font:", err);
         state.font = undefined;
@@ -1871,10 +1872,10 @@ export const OBJECT_TEXT_NODE: NodeDefinition = {
   dynamicParamFields: buildPrimitiveDynamicParamFields([
     { id: "text", label: "Text (fallback)", kind: "text" },
     { id: "fontPreset", label: "Font", kind: "select", options: FONT_NAMES },
-    { id: "fontPath", label: "Custom Font (.json)", kind: "file", accept: [".json"], onLoaded: (nodeId, _path, content) => {
+    { id: "fontPath", label: "Custom Font (.json, .ttf, .otf)", kind: "file", accept: FONT_FILE_ACCEPT, onLoaded: (nodeId, path, content) => {
       const state = textMesh(nodeId);
       try {
-        state.font = new FontLoader().parse(JSON.parse(String(content)));
+        state.font = parseFontFile(path, content);
       } catch (err) {
         console.error("Failed to parse font:", err);
         state.font = undefined;

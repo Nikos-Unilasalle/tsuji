@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { describe, expect, test } from "vitest";
-import { disposeEvalSession, evaluateGraph, topoSort } from "./evaluate";
+import { disposeEvalSession, evaluateGraph, evaluateKeyframeValue, moveOpeningEasing, resolveSegmentEasing, topoSort } from "./evaluate";
 import { Connection, EvalContext, Graph, NodeDefinition, NodeInstance, createRegistry } from "./types";
 
 const CTX: EvalContext = { time: 0, step: 0, nodeId: "" };
@@ -408,5 +408,26 @@ describe("structural cache", () => {
       expect(evaluateGraph(graphA, registry, CTX).get("sum")?.out).toBe(1);
       expect(evaluateGraph(graphB, registry, CTX).get("sum")?.out).toBe(100);
     }
+  });
+});
+
+describe("keyframe easing", () => {
+  const key = (frame: number, value: number, easeIn?: string) => ({ frame, value, ...(easeIn ? { easeIn } : {}) }) as never;
+
+  test("a segment always uses the easing of the keyframe it arrives at; the opening key's easing shapes nothing", () => {
+    // A "hold" on the first key used to freeze the whole first segment.
+    const list = [key(0, 0, "hold"), key(10, 100, "linear")];
+    expect(evaluateKeyframeValue({ n: { x: list } }, "n", "x", 5, 0)).toBeCloseTo(50);
+    expect(resolveSegmentEasing(list, 0).easing).toBe("linear");
+  });
+
+  test("moveOpeningEasing hands the opening easing to the arrival key, so older files play as before", () => {
+    const old = { n: { x: [key(0, 0, "hold"), key(10, 100, "expo"), key(20, 0, "linear")] } };
+    const migrated = moveOpeningEasing(old as never)!;
+    expect(migrated.n.x[0]).toEqual({ frame: 0, value: 0 });
+    expect(migrated.n.x[1].easeIn).toBe("hold");
+    expect(migrated.n.x[2].easeIn).toBe("linear");
+    // idempotent: nothing left to move
+    expect(moveOpeningEasing(migrated)).toBe(migrated);
   });
 });

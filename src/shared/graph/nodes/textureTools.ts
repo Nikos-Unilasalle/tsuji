@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { EvalContext, NodeDefinition } from "../types";
 import { createNodeCache } from "../nodeCaches";
 import { ColorRamp, DEFAULT_COLOR_RAMP, sampleColorRamp } from "../colorRamp";
+import { textureHasAlpha } from "./object";
 import { evalProfileCurve, ProfilePoint } from "../profileCurve";
 import {
   bindPassInputs,
@@ -56,6 +57,11 @@ interface FilterRun {
   /** Every value the shader output depends on besides the inputs' pixels. */
   signature: unknown[];
   setUniforms?: (material: THREE.ShaderMaterial, state: GpuPassState) => void;
+  /**
+   * The shader passes the first input's alpha through (`a.a`). The output then says so, because a texture a GPU pass drew
+   * into has no pixels to scan: a modifier such as Outline or Dual Tone can only find a cut-out's edge if told it has one.
+   */
+  keepsAlpha?: boolean;
 }
 
 /** Single-pass filter: returns the output texture, or null without a renderer (tests, headless evaluate). */
@@ -74,6 +80,7 @@ function runFilter(run: FilterRun): THREE.Texture | null {
     renderPass(renderer, material, target);
     state.signatures.set(renderer, sig);
   }
+  target.texture.userData.hasAlpha = Boolean(run.keepsAlpha && inputs[0] && textureHasAlpha(inputs[0]));
   return target.texture;
 }
 
@@ -167,6 +174,7 @@ export const TEXTURE_TRANSFORM_NODE: NodeDefinition = {
     const texture = runFilter({
       ctx,
       cache: transformCache,
+      keepsAlpha: true,
       params,
       inputs: [asTexture(inputs.texture)],
       colorSpace: SRGB,
@@ -489,6 +497,7 @@ export const TEXTURE_MAP_RANGE_NODE: NodeDefinition = {
     const texture = runFilter({
       ctx,
       cache: mapRangeCache,
+      keepsAlpha: true,
       params,
       inputs: [asTexture(inputs.texture), asTexture(inputs.outMinTexture), asTexture(inputs.outMaxTexture)],
       colorSpace: LINEAR,
@@ -676,7 +685,9 @@ export const TEXTURE_BLUR_NODE: NodeDefinition = {
       }
       state.signatures.set(renderer, sig);
     }
-    return { texture: (factor > 1 ? out : blurred)!.texture };
+    const blurredTexture = (factor > 1 ? out : blurred)!.texture;
+    blurredTexture.userData.hasAlpha = source ? textureHasAlpha(source) : false;
+    return { texture: blurredTexture };
   },
 };
 
@@ -711,6 +722,7 @@ export const TEXTURE_COLOR_RAMP_NODE: NodeDefinition = {
     const texture = runFilter({
       ctx,
       cache: colorRampCache,
+      keepsAlpha: true,
       params,
       inputs: [asTexture(inputs.texture)],
       colorSpace: SRGB,
@@ -910,6 +922,7 @@ export const TEXTURE_INVERT_NODE: NodeDefinition = {
     const texture = runFilter({
       ctx,
       cache: invertCache,
+      keepsAlpha: true,
       params,
       inputs: [asTexture(inputs.texture)],
       colorSpace: SRGB,
@@ -963,6 +976,7 @@ export const TEXTURE_LEVELS_NODE: NodeDefinition = {
     const texture = runFilter({
       ctx,
       cache: levelsCache,
+      keepsAlpha: true,
       params,
       inputs: [asTexture(inputs.texture)],
       colorSpace: SRGB,
@@ -1019,6 +1033,7 @@ export const TEXTURE_HUE_SAT_VAL_NODE: NodeDefinition = {
     const texture = runFilter({
       ctx,
       cache: hsvCache,
+      keepsAlpha: true,
       params,
       inputs: [asTexture(inputs.texture)],
       colorSpace: SRGB,
@@ -1090,6 +1105,7 @@ export const TEXTURE_RGB_CURVES_NODE: NodeDefinition = {
     const texture = runFilter({
       ctx,
       cache: curvesCache,
+      keepsAlpha: true,
       params,
       inputs: [asTexture(inputs.texture)],
       colorSpace: SRGB,
@@ -1713,6 +1729,7 @@ export const TEXTURE_FILM_GRAIN_NODE: NodeDefinition = {
     const texture = runFilter({
       ctx,
       cache: grainCache,
+      keepsAlpha: true,
       params,
       inputs: [asTexture(inputs.texture)],
       colorSpace: SRGB,

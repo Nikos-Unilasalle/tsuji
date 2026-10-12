@@ -182,10 +182,9 @@ describe("sampleSegment", () => {
     expect(pts[pts.length - 1].value).toBeCloseTo(100);
   });
 
-  it("draws what the evaluator plays, including the first-keyframe rule", () => {
-    // K1 carries an easing, so it shapes the FIRST segment (see
-    // resolveSegmentEasing) — the graph must agree or it lies about playback.
-    const keys = [key(0, 0, { easeIn: "linear" }), key(10, 100, { easeIn: "hold" })];
+  it("draws what the evaluator plays: the first segment arrives with the second key's easing", () => {
+    // The opening key's own easing shapes nothing (see resolveSegmentEasing) — the graph must agree.
+    const keys = [key(0, 0, { easeIn: "hold" }), key(10, 100, { easeIn: "linear" })];
     const mid = sampleSegment(keys, 0, 10).find((p) => p.frame === 5);
     expect(mid?.value).toBeCloseTo(50);
   });

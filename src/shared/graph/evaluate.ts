@@ -220,11 +220,13 @@ function cloneKeyframeValue(value: any): any {
 /**
  * Which easing shapes the segment from `list[index]` to `list[index + 1]`.
  *
- * Only the *arrival* easing shapes a segment — K2's. The easeOut fallback
- * reads pre-simplification .tsuji files that stored a departure easing only.
- * The FIRST keyframe has no arrival segment, so its own easing shapes the
- * first segment instead — that way changing any keyframe always affects a
- * curve.
+ * Always the *arrival* easing — K2's. A keyframe's easing is how the value gets
+ * TO it, so the first keyframe of a list, which nothing arrives at, carries none
+ * that matters: its easing never shapes anything. (It used to shape the first
+ * segment, which made a "hold" on the opening key freeze the whole first
+ * segment. Files saved that way are migrated on load by `moveOpeningEasing`, so
+ * they play exactly as before.) The easeOut fallback reads pre-simplification
+ * .tsuji files that stored a departure easing only.
  *
  * Exported because the motion graph has to *draw* exactly what the evaluator
  * *plays*: the rule used to be written out twice, and the two copies had
@@ -234,14 +236,40 @@ export function resolveSegmentEasing(
   list: Keyframe[],
   index: number,
 ): { easing: EasingType; strength?: number; bezier?: [number, number, number, number] } {
-  const k1 = list[index];
   const k2 = list[index + 1];
-  const first = index === 0 && k1?.easeIn !== undefined;
-  if (first) {
-    return { easing: k1.easeIn as EasingType, strength: k1.easeStrength, bezier: k1.easeBezier };
-  }
   const easing = k2?.easeIn ?? (k2 as { easeOut?: EasingType } | undefined)?.easeOut ?? "smooth";
   return { easing, strength: k2?.easeStrength, bezier: k2?.easeBezier };
+}
+
+/**
+ * Migration for projects saved while the opening keyframe's easing shaped the
+ * first segment: hand that easing to the keyframe the segment arrives at and
+ * clear it from the opening key, so the project plays exactly as it did.
+ */
+export function moveOpeningEasing(keyframes: KeyframeStore | undefined): KeyframeStore | undefined {
+  if (!keyframes) return keyframes;
+  let changed = false;
+  const next: KeyframeStore = {};
+  for (const [nodeId, params] of Object.entries(keyframes)) {
+    const nodeNext: Record<string, Keyframe[]> = {};
+    for (const [paramKey, list] of Object.entries(params)) {
+      const [first, second] = list;
+      if (!first || !second || first.easeIn === undefined) {
+        nodeNext[paramKey] = list;
+        continue;
+      }
+      changed = true;
+      const { easeIn, easeStrength, easeBezier, ...opening } = first;
+      const arrival: Keyframe = { ...second, easeIn };
+      if (easeStrength !== undefined) arrival.easeStrength = easeStrength;
+      else delete arrival.easeStrength;
+      if (easeBezier !== undefined) arrival.easeBezier = easeBezier;
+      else delete arrival.easeBezier;
+      nodeNext[paramKey] = [opening, arrival, ...list.slice(2)];
+    }
+    next[nodeId] = nodeNext;
+  }
+  return changed ? next : keyframes;
 }
 
 function evaluateKeyframeList(list: Keyframe[], currentFrame: number, fallback: any): any {

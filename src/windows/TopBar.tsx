@@ -5,6 +5,7 @@ import {
   saveProjectAsWithFilePicker,
   saveProjectToPath,
 } from "../shared/graph/storage";
+import { setProjectDirectory } from "../shared/graph/rehydrateFiles";
 import { Project } from "../shared/graph/types";
 import {
   closeOutputWindow,
@@ -245,6 +246,7 @@ export const TopBar: React.FC<TopBarProps> = ({
     try {
       const res = await openProjectWithFilePicker();
       if (res) {
+        setProjectDirectory(res.path ?? null);
         onLoadProject(res.project, res.filename);
         showToast(`"${res.filename}" loaded!`);
       }

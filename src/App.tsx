@@ -2234,7 +2234,8 @@ function MainEditor() {
       const start = Number(res?.startFrame);
       return {
         url,
-        startFrame: Number.isFinite(start) && start >= 0 ? start : 0,
+        // The strip is drawn where the file's first second would sit: Start in Clip pushes it before the start frame.
+        startFrame: Number.isFinite(start) && start >= 0 ? start - (Number(res?.clipOffsetFrames) || 0) : 0,
         duration: Number(res?.duration) || 0,
       };
     }
