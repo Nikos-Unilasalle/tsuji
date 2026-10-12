@@ -3538,7 +3538,7 @@ dependencies = [
 
 [[package]]
 name = "tauri-app"
-version = "0.6.9"
+version = "0.6.10"
 dependencies = [
  "gilrs",
  "serde",
