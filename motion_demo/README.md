@@ -17,7 +17,7 @@ Aucun `Merge` : chaque objet est posé sur le canvas, rangé en chaînes dans un
 | 6 | Podium & titre | 225 | 50,20 |
 
 Musique : `assets/music.m4a` (103 BPM, 1er temps à 0,91 s), un seul fichier : chaque canvas a un `Audio Player` ancré à la frame 0 dont
-`Start in Clip` vaut le début de la scène dans le morceau. Les frontières de scènes tombent sur des mesures. Chaque scène est retimée par une table `warp=[(frame écrite, frame finale)…]` pour que ses coupes tombent sur les temps.
+`Start in File` / `Stop in File` valent le début et la fin de la scène dans le morceau. Les frontières de scènes tombent sur des mesures. Chaque scène est retimée par une table `warp=[(frame écrite, frame finale)…]` pour que ses coupes tombent sur les temps.
 
 ## Régénérer
 
@@ -37,5 +37,5 @@ Le texte (chinois simplifié) est dans `tools/gen_goodboy_demo.py`; les glyphes 
 - Les nœuds texture qui conservent l'alpha (Levels, Blur, Color Ramp…) le déclarent maintenant : `Outline` et `Dual Tone` voient
   le détourage même après eux.
 - Le nœud Text accepte un `.ttf`/`.otf` directement (glyphes convertis à la demande) ; le sous-ensemble JSON reste utilisable.
-- `Audio Player` : `Start in Clip` (s) = seconde du fichier jouée à `Start Frame` — un seul morceau pour tous les canvases.
+- `Audio Player` : `Start in File` / `Stop in File` (s) découpent la zone jouée — un seul morceau pour tous les canvases ; le son suit la timeline (silence en pause, reprise au point de départ quand la timeline revient).
 - `GB_MODE=served` écrit des chemins `demos/goodboy/…` (test web jetable : lien symbolique `public/demos/goodboy` → `motion_demo/assets`).

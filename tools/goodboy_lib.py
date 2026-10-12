@@ -190,10 +190,11 @@ class Canvas:
         self.add("fx_grain", "postprocess/film-grain", noiseIntensity=0.16, scanlinesIntensity=0, scanlinesCount=2048, grayscale=0)
         self.wire("fx_film", "effect", "fx_grain", "effect")
         self.wire("fx_grain", "effect", "render", "postprocess")
-        # One soundtrack, entered at the second where this scene begins (Audio Player's Start in Clip).
+        # One soundtrack: this scene plays the part of it between its own start and end (Audio Player's Start / Stop in File).
         scene_start = sum(MUSIC_FRAMES[: (index or 1) - 1]) / FPS
+        scene_end = sum(MUSIC_FRAMES[: (index or 1)]) / FPS
         self.add("music", "sound/player", filePath=ASSET + "music.m4a" if os.path.exists(os.path.join(ASSETS_DIR, "music.m4a")) else "",
-                 loop=0, volume=1, playbackRate=1, startFrame=0, clipStart=round(scene_start, 4))
+                 loop=0, volume=1, playbackRate=1, startFrame=0, clipStart=round(scene_start, 4), clipEnd=round(scene_end, 4))
         if next_canvas:
             # Rising edge of (frame >= last frame) switches to the next canvas.
             self.add("g_frame", "time/frame")
