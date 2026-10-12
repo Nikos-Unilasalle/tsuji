@@ -33,3 +33,6 @@ __pycache__/
 docs_vault/.obsidian/
 
 scratch/
+
+# Motion-design demo: the source font is large; the demo ships the converted subset instead.
+motion_demo/assets/fonts/*.otf
