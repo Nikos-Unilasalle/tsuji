@@ -49,7 +49,8 @@ Le texte (chinois simplifié) est dans `tools/gen_goodboy_demo.py`; les glyphes 
 | Traits (sillage de la voiture, éclair, éclat) | `Curve from Points` → `Curve to Line` | des `Texture to Plane` étirées en barres |
 | Rayons de vitesse | un trait + `Array` (circulaire) | N barres posées une à une |
 | Cible (anneaux) | `Curve Primitive` → `Curve Array` → `Curves to Lines` | polygones à 72 côtés |
-| Fissures, croix, soulignement, étoile gribouillée | `Grease Pencil` (frames dessinées) | `Curve to Mesh` à `endProgress` animé |
+| Fissures | `Curve from Points` (segments droits) → `Curve to Mesh`, paramètre `End` animé : elles se propagent du point d'impact vers le bas, une branche partant quand la pointe de sa mère l'atteint | — |
+| Croix, soulignement, étoile gribouillée | `Grease Pencil` (frames dessinées) | barres de plans étirées |
 | Balancement médaille, badges, bannières, montre | `Oscillator` → `Pivot Transform` | une keyframe de rotation toutes les 3 images |
 | Tremblement du papier découpé | `Wiggle` (temps par pas de 2 images) → Matrix | — |
 | Glissades d'entrée | `Compose Matrix` animé (+ `Matrix Math` pour cumuler avec Wiggle) | keyframes de location par élément |

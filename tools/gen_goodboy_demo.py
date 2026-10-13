@@ -129,13 +129,19 @@ def scene2():
 
 # --------------------------------------------------------------------------- 3. L'IMPACT
 def crack(rnd, x, y, ang, length, segs=7, jit=0.45):
+    """A straight-segmented crack heading downward: every vertex turns a little, but never back up."""
     pts, a = [(x, y)], ang
     step = length / segs
     for _ in range(segs):
-        a += rnd.uniform(-jit, jit)
-        x += math.cos(a) * step * rnd.uniform(0.7, 1.3); y += math.sin(a) * step * rnd.uniform(0.7, 1.3)
+        a = max(-math.pi + 0.3, min(-0.3, a + rnd.uniform(-jit, jit)))
+        d = step * rnd.uniform(0.7, 1.3)
+        x += math.cos(a) * d; y += math.sin(a) * d
         pts.append((x, y))
     return pts
+
+
+def path_len(pts, k):
+    return sum(math.dist(pts[i], pts[i + 1]) for i in range(k))
 
 
 def scene3():
@@ -170,13 +176,29 @@ def scene3():
     c.burst("hit_gold", 0.3, -0.5, 1.3, MUSTARD, z=-0.9, n=7, inner=0.3, jag=0.5, seed=54, t=(102, 120), pop=3)
 
     c.label("Fissures")
-    # One Grease Pencil node: the cracks are drawn on, frame by frame, from the point of impact.
+    # Each crack is a Curve from Points (straight segments) -> Curve to Mesh, its End animated from 0 to 1: the crack grows
+    # from the impact downward. A branch starts when its parent's tip reaches the branching point.
     rnd = random.Random(5)
-    cr = [crack(rnd, 0.3, -0.5, -math.pi / 2 + rnd.uniform(-1.4, 1.4), rnd.uniform(3.2, 7.5), segs=8) for _ in range(12)]
+    SPEED = 0.2          # world units per frame
+    cracks = []          # (points, start frame)
+    for _ in range(10):
+        pts = crack(rnd, 0.3, -0.5, -math.pi / 2 + rnd.uniform(-1.1, 1.1), rnd.uniform(3.2, 7.0), segs=8)
+        cracks.append((pts, 106 + rnd.uniform(0, 4)))
     for _ in range(14):
-        base = rnd.choice(cr[:12]); k = rnd.randrange(2, len(base) - 1)
-        cr.append(crack(rnd, base[k][0], base[k][1], rnd.uniform(0, math.tau), rnd.uniform(1.2, 3.2), segs=5, jit=0.6))
-    c.gp("cracks", Canvas.draw_on(cr, 106, 150, CREAM, width=2.4, brush="ink_pen", steps=22), z=0.2, t=(106, 216))
+        pts0, t0 = rnd.choice(cracks[:10]); k = rnd.randrange(1, len(pts0) - 2)
+        x0, y0 = pts0[k]
+        cracks.append((crack(rnd, x0, y0, -math.pi / 2 + rnd.uniform(-1.2, 1.2), rnd.uniform(1.4, 3.2), segs=5, jit=0.6),
+                       t0 + path_len(pts0, k) / SPEED))
+    for n, (pts, t0) in enumerate(cracks):
+        t1 = t0 + path_len(pts, len(pts) - 1) / SPEED
+        with c.block():
+          c.add(f"cr{n}_p", "curve/from_points", type="linear", closed=False, tension=0.5, sag=0,
+              pointsList=[v3(px, py, 0) for px, py in pts], location=v3(), rotation=v3(), scale=v3(1, 1, 1))
+          c.add(f"cr{n}", "curve/to_mesh", thickness=0.05 if n < 10 else 0.035, startProgress=0.0, endProgress=1.0, tubularSegments=96, radialSegments=3,
+                closed=False, visible=1, location=v3(0, 0, 0.2), rotation=v3(), scale=v3(1, 1, 1), color=CREAM, shadeless=1)
+          c.wire(f"cr{n}_p", "curve", f"cr{n}", "curve")
+        c.key(f"cr{n}", "endProgress", [(t0, 0.0), (t1, 1.0, "linear")])
+        c.key(f"cr{n}", "visible", [(0, 0), (t0, 1, "hold"), (216, 0, "hold")])
 
     c.label("Visage dans la déchirure")
     asp = aspect("10_woman_face_intense.jpg")
