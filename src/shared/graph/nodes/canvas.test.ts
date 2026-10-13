@@ -86,4 +86,20 @@ describe("canvasSwitchStore", () => {
 
     expect(consumeCanvasSwitchRequest()).toBe(5);
   });
+
+  test("a paused timeline never switches; Play with the trigger already true switches once", () => {
+    const paused: EvalContext = { time: 0, step: 0, nodeId: "goto-paused", isPlaying: false };
+    expect(CANVAS_GOTO_NODE.evaluate({ trigger: 1 }, { canvas: 2 }, paused).switched).toBe(0);
+    expect(consumeCanvasSwitchRequest()).toBeNull();
+
+    const playing: EvalContext = { ...paused, isPlaying: true };
+    expect(CANVAS_GOTO_NODE.evaluate({ trigger: 1 }, { canvas: 2 }, playing).switched).toBe(1);
+    expect(consumeCanvasSwitchRequest()).toBe(1);
+  });
+
+  test("an export frame switches even though the timeline is not playing", () => {
+    const exporting: EvalContext = { time: 0, step: 0, nodeId: "goto-export", isPlaying: false, capturing: true };
+    expect(CANVAS_GOTO_NODE.evaluate({ trigger: 1 }, { canvas: 3 }, exporting).switched).toBe(1);
+    expect(consumeCanvasSwitchRequest()).toBe(2);
+  });
 });

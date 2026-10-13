@@ -16,6 +16,8 @@ const triggerStateCache = createNodeCache<boolean>();
  * node sitting in canvas 3 isn't running and could not pull anything towards
  * it. The node that switches is always in the canvas you're leaving.
  *
+ * Only while the timeline plays (or an export runs): scrubbing a paused timeline past the last frame does not jump away.
+ *
  * Rising edge rather than level, deliberately — a held-down key or a
  * permanently-true condition would otherwise re-request the same switch every
  * frame, and pin the document there by making every other switch impossible.
@@ -35,6 +37,14 @@ export const CANVAS_GOTO_NODE: NodeDefinition = {
     { id: "trigger", label: "Trigger (fallback)", kind: "boolean" },
   ],
   evaluate: (inputs, params, ctx) => {
+    // Only a running document switches: while the timeline is paused (scrubbing, editing) nothing may leave the canvas
+    // being worked on. An export counts as running. `isPlaying` is absent outside the viewport (tests, headless), where
+    // there is no pause to respect.
+    if (ctx.isPlaying === false && !ctx.capturing) {
+      // Forget the edge, so a trigger that is already true when Play is pressed still fires once.
+      triggerStateCache.set(ctx.nodeId, false);
+      return { switched: fromBoolean(false) };
+    }
     const current = toBoolean(inputs.trigger !== undefined ? inputs.trigger : params.trigger);
     const previous = triggerStateCache.get(ctx.nodeId) ?? false;
     triggerStateCache.set(ctx.nodeId, current);
