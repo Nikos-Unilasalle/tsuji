@@ -1,5 +1,9 @@
 """Helpers for gen_goodboy_demo.py — a thin builder over the .tsuji JSON (see gen_joint_demos.py).
 
+Each helper is a small recipe of Tsuji's own nodes (Texture to Plane → Dual Tone → Halftone → Outline → Appear; Curve from
+Points → Curve to Line; Array; Pivot Transform + Oscillator; Wiggle; Grease Pencil…): the scene is made of the same nodes a
+user would wire, not of a private engine.
+
 World: the camera sees H=6 units vertically, W=14.34 horizontally (1912x800, 2.39:1). z orders layers:
 background -5, bursts -2..-1, photos 0..1, text 2+. Keyframes are in frames at 30 fps.
 """
@@ -64,7 +68,11 @@ NODE_H = {"texture/image": 100, "texture/plane": 190, "modifier/duotone": 200, "
           "object/text": 280, "curve/from_points": 180, "curve/fill": 200, "curve/to_mesh": 240, "mask/roto": 100, "object/polygon": 290,
           "object/sphere": 290, "light/ambient": 100, "light/directional": 220, "sound/player": 180, "render": 140,
           "postprocess/film-texture": 180, "postprocess/film-grain": 160, "time/frame": 80, "logic/compare": 100, "canvas/goto": 100,
-          "texture/procedural": 240, "lighting/environment": 220, "calibration/camera": 200, "transform": 150}
+          "texture/procedural": 240, "lighting/environment": 220, "calibration/camera": 200, "transform": 150,
+          "modifier/appear": 200, "modifier/super8": 200, "curve/to_line": 220, "curve/to_line_list": 220, "structure/array": 330,
+          "structure/merge": 160, "animation/wiggle": 330, "animation/oscillator": 170, "transform/pivot": 190, "value/math": 100,
+          "converter/value-to-vector": 90, "vector/compose": 130, "math/expression": 280, "curve/primitive": 200, "curve/array": 180,
+          "curve/grease-pencil": 300, "physics/rolling": 140, "matrix/math": 120}
 NODE_STEP = 280         # horizontal distance between nodes of one chain (cards are ~170-240 px wide)
 ROW_W = 3800            # a row of chains wraps beyond this width
 
@@ -195,6 +203,13 @@ class Canvas:
         scene_end = sum(MUSIC_FRAMES[: (index or 1)]) / FPS
         self.add("music", "sound/player", filePath=ASSET + "music.m4a" if os.path.exists(os.path.join(ASSETS_DIR, "music.m4a")) else "",
                  loop=0, volume=1, playbackRate=1, startFrame=0, clipStart=round(scene_start, 4), clipEnd=round(scene_end, 4))
+        # Time as the timeline's frame (not the wall clock), so Wiggle and Oscillator follow a scrub exactly as they follow
+        # Play and an export. `stp` holds each value for two frames: motion on twos, the stop-motion boil of cut paper.
+        self.add("t_frame", "time/frame")
+        self.add("t_secs", "value/math", op="divide", a=0, b=FPS)
+        self.add("t_steps", "math/expression", formula="floor(a / 2) / 12", a=0)
+        self.wire("t_frame", "frame", "t_secs", "a")
+        self.wire("t_frame", "frame", "t_steps", "a")
         if next_canvas:
             # Rising edge of (frame >= last frame) switches to the next canvas.
             self.add("g_frame", "time/frame")
@@ -203,37 +218,89 @@ class Canvas:
             self.wire("g_frame", "frame", "g_cmp", "a")
             self.wire("g_cmp", "out", "g_go", "trigger")
 
-    # --- elements ----------------------------------------------------------------
-    def appear(self, nid, base, t0, t1, pop=7, drift=0.0, zero=None):
-        """Scale track: hidden before t0 and after t1, pops in with overshoot, optional slow push-in until t1."""
-        z = zero or v3(0, 0, 0)
-        sx, sy, sz = base
-        keys = []
-        if t0 > 0:
-            keys.append((0, z))
-        keys.append((t0, z, "hold"))
-        keys.append((t0 + pop, v3(sx, sy, sz), "back"))
-        if drift:
-            keys.append((t1 - 1, v3(sx * (1 + drift), sy * (1 + drift), sz), "linear"))
-        else:
-            keys.append((t1 - 1, v3(sx, sy, sz), "hold"))
-        keys.append((t1, z, "hold"))
-        self.key(nid, "scale", keys)
+    # --- recipes: motion --------------------------------------------------------
+    def _wm(self, matrix, target):
+        """Wire a matrix source ("node", or "node:socket" for one whose Matrix output is not called `matrix`) into target."""
+        node, _, sock = matrix.partition(":")
+        self.wire(node, sock or "matrix", target, "matrix")
 
-    def move(self, nid, frm, to, t0, dur=10, ease="expo"):
-        self.key(nid, "location", [(t0, v3(*frm), "hold"), (t0 + dur, v3(*to), ease)])
+    @_builder
+    def mul(self, key, a, b):
+        """Matrix Math (multiply): two motions on one object, e.g. a slide and a wiggle. Returns "key:out"."""
+        self.add(key, "matrix/math", op="multiply", factor=0.5)
+        for src, sock in ((a, "a"), (b, "b")):
+            node, _, out = src.partition(":")
+            self.wire(node, out or "matrix", key, sock)
+        return f"{key}:out"
+
+    @_builder
+    def reveal(self, src, t, pop=7, mode="both", over=1.2, lift=0.0, stagger=0.0, order="index", sock="geometry"):
+        """An Appear node after `src`, shown from t[0] to t[1]: pops in (Overshoot, Lift, Stagger are the node's own),
+        and is hidden again at t[1]. Progress is keyframed; the node does the easing. Returns the Appear node."""
+        if t is None:
+            return src
+        t0, t1 = t
+        ap = f"{src}_ap"
+        self.add(ap, "modifier/appear", drive="progress", progress=1, mode=mode, overshoot=over, lift=lift, pivot="center",
+                 stagger=stagger, order=order, seed=1, hideAtZero=1)
+        self.wire(src, sock, ap, "geometry")
+        keys = [(0, 0), (t0, 0, "hold")] if t0 > 0 else [(0, 0)]
+        keys += [(t0 + pop, 1, "linear"), (t1, 0, "hold")]
+        self.key(ap, "progress", keys)
+        return ap
+
+    def flicker(self, ap, frames):
+        """Replaces an Appear's progress with explicit (frame, value) holds — a flash, a flicker."""
+        self.key(ap, "progress", [(f, v, "hold") if n else (f, v) for n, (f, v) in enumerate(frames)])
+
+    @_builder
+    def wiggle(self, key, pos=(0.05, 0.04, 0.0), rot=1.2, speed=1.0, seed=1):
+        """A Wiggle node on stepped time — its Matrix output goes into any object's Matrix input. Returns the key."""
+        self.add(key, "animation/wiggle", speed=speed, amplitude=1, amplitudeVector=v3(*pos), rotationAmplitude=v3(0, 0, rot),
+                 scaleAmplitude=v3(0, 0, 0), seed=seed, octaves=2)
+        self.wire("t_steps", "value", key, "evolution")
+        return key
+
+    @_builder
+    def mover(self, key, keys, rot=None):
+        """A Compose Matrix whose Location is keyframed: wire its Matrix into everything that should travel together."""
+        self.add(key, "transform", location=v3(), rotation=v3(0, 0, rot or 0), scale=v3(1, 1, 1))
+        self.key(key, "location", keys)
+        return key
+
+    def slide(self, key, frm, t0, dur=9, ease="expo"):
+        """A mover that brings things in from an offset (dx, dy) to where they are."""
+        return self.mover(key, [(t0, v3(frm[0], frm[1], 0)), (t0 + dur, v3(0, 0, 0), ease)])
+
+    @_builder
+    def swing(self, key, px, py, amp, freq=0.8, phase=0.0):
+        """A pendulum about the point (px, py): Oscillator → Compose Vector (Z) → Pivot Transform. Returns the Pivot node."""
+        self.add(f"{key}_ph", "value/math", op="multiply", a=0, b=freq)
+        self.add(f"{key}_pa", "value/math", op="add", a=0, b=phase)
+        self.add(f"{key}_osc", "animation/oscillator", type="sine", frequency=1, phase=0, amplitude=amp, offset=0)
+        self.add(f"{key}_vec", "vector/compose", x=0, y=0, z=0)
+        self.add(key, "transform/pivot", pivot=v3(px, py, 0), location=v3(), rotation=v3(), scale=v3(1, 1, 1))
+        self.wire("t_secs", "out", f"{key}_ph", "a")
+        self.wire(f"{key}_ph", "out", f"{key}_pa", "a")
+        self.wire(f"{key}_pa", "out", f"{key}_osc", "phase")
+        self.wire(f"{key}_osc", "out", f"{key}_vec", "z")
+        self.wire(f"{key}_vec", "out", key, "rotation")
+        return key
 
     def spin(self, nid, t0, t1, a0, a1, ease="linear"):
         self.key(nid, "rotation", [(t0, v3(0, 0, a0)), (t1, v3(0, 0, a1), ease)])
 
-    def sway(self, nid, t0, t1, amp, period, phase=0.0, base=0.0):
-        keys, t, i = [], t0, 0
-        while t <= t1:
-            keys.append((t, v3(0, 0, base + amp * (1 if (i + phase) % 2 == 0 else -1)), "smooth"))
-            t += period / 2; i += 1
-        self.key(nid, "rotation", keys)
+    @_builder
+    def group(self, key, members, matrix=None, sock="geometry"):
+        """A Merge of `members` (node ids): the unit an Appear's Stagger spreads its pops across."""
+        self.add(key, "structure/merge", visible=1, location=v3(), rotation=v3(), scale=v3(1, 1, 1))
+        for i, m in enumerate(members):
+            self.wire(m, sock, key, f"in{i}")
+        if matrix:
+            self._wm(matrix, key)
+        return key
 
-    # --- builders ----------------------------------------------------------------
+    # --- recipes: pictures ------------------------------------------------------
     TONES = {
         "ink":     dict(shadow=INK, high=CREAM, bal=0.12, soft=0.25),
         "inkwhite": dict(shadow=INK, high=WHITE, bal=0.12, soft=0.25),
@@ -246,120 +313,176 @@ class Canvas:
     }
 
     @_builder
-    def photo(self, key, file, x, y, h, z=0.5, tone="ink", sticker=CREAM, thick=8, halftone=3, rot=0.0, flip=False, mask=None, wfac=1.0):
-        """Photo → Plane → Dual Tone → Halftone → Outline. Returns (plane id, final geometry id)."""
-        t = self.TONES[tone]
+    def photo(self, key, file, x, y, h, z=0.5, tone="ink", sticker=CREAM, thick=8, halftone=3, rot=0.0, flip=False, mask=None,
+              wfac=1.0, matrix=None, t=None, pop=7, extra=None, drift=0.0):
+        """Image → Texture to Plane → Dual Tone → Halftone → Outline (→ Super 8) → Appear. Returns the last node."""
+        tn = self.TONES[tone]
         asp = aspect(file)
-        self.add(f"{key}_img", "texture/image", 0, 0, filePath=ASSET + file, wrapS="clamp", wrapT="clamp")
-        self.add(key, "texture/plane", 0, 0, visible=1, location=v3(x, y, z), rotation=v3(0, 0, rot), scale=v3(h * asp * wfac * (-1 if flip else 1), h, 1),
+        self.add(f"{key}_img", "texture/image", filePath=ASSET + file, wrapS="clamp", wrapT="clamp")
+        self.add(key, "texture/plane", visible=1, location=v3(x, y, z), rotation=v3(0, 0, rot), scale=v3(h * asp * wfac * (-1 if flip else 1), h, 1),
                  transparent=True, alphaCutoff=0.01, doubleSided=True, keepAspect=False, shadeless=1)
         self.wire(f"{key}_img", "texture", key, "texture")
         if mask:
             self.wire(mask, "mask", key, "mask")
+        if matrix:
+            self._wm(matrix, key)
+        if drift and t:
+            # a slow push-in over the shot
+            self.key(key, "scale", [(t[0], v3(h * asp * wfac, h, 1)), (t[1], v3(h * asp * wfac * (1 + drift), h * (1 + drift), 1), "linear")])
         prev = key
-        self.add(f"{key}_dt", "modifier/duotone", 0, 0, shadowColor=t["shadow"], highlightColor=t["high"], balance=t["bal"], softness=t["soft"], amount=1.0)
+        self.add(f"{key}_dt", "modifier/duotone", shadowColor=tn["shadow"], highlightColor=tn["high"], balance=tn["bal"], softness=tn["soft"], amount=1.0)
         self.wire(prev, "geometry", f"{key}_dt", "geometry"); prev = f"{key}_dt"
         if halftone:
-            self.add(f"{key}_ht", "modifier/halftone", 0, 0, shape="dot", space="screen", radius=halftone, screenAngle=15, scatter=0, amount=1.0, greyscale=0)
+            self.add(f"{key}_ht", "modifier/halftone", shape="dot", space="screen", radius=halftone, screenAngle=15, scatter=0, amount=1.0, greyscale=0)
             self.wire(prev, "geometry", f"{key}_ht", "geometry"); prev = f"{key}_ht"
         if sticker is not None:
-            self.add(f"{key}_ol", "modifier/outline", 0, 0, edgeColor=sticker, edgeThickness=thick, sharpness=1, outlineSide="outside",
+            self.add(f"{key}_ol", "modifier/outline", edgeColor=sticker, edgeThickness=thick, sharpness=1, outlineSide="outside",
                      edgeStrength=1, alphaThreshold=0.1, silhouette=False, alphaEdge=True)
             self.wire(prev, "geometry", f"{key}_ol", "geometry"); prev = f"{key}_ol"
-        self.put(prev)
-        return key
+        if extra == "super8":
+            self.add(f"{key}_s8", "modifier/super8", softness=0.6, flicker=0.18, weave=0.5, warmth=0.1, rate=12, seed=2)
+            self.wire(prev, "geometry", f"{key}_s8", "geometry"); prev = f"{key}_s8"
+        return self.reveal(prev, t, pop)
 
     @_builder
-    def burst(self, key, x, y, r, color, z=-1.0, n=12, inner=0.45, jag=0.3, seed=1, rot=0.0):
-        """A jagged printed-star burst: closed polyline filled flat."""
-        rnd = random.Random(seed)
-        pts = []
-        for i in range(n * 2):
-            a = i / (n * 2) * math.tau
-            base = r if i % 2 == 0 else r * inner
-            rr = base * (1 - jag + jag * 2 * rnd.random())
-            pts.append(v3(math.cos(a) * rr, math.sin(a) * rr, 0))
-        self.add(f"{key}_p", "curve/from_points", 0, 0, type="linear", closed=True, tension=0.5, sag=0, pointsList=pts,
-                 location=v3(), rotation=v3(), scale=v3(1, 1, 1))
-        self.add(key, "curve/fill", 0, 0, color=color, opacity=1, baseDrop=0, gradient=False, zOffset=0,
-                 location=v3(x, y, z), rotation=v3(0, 0, rot), scale=v3(1, 1, 1), shadeless=1)
-        self.wire(f"{key}_p", "curve", key, "curve")
-        self.put(key)
-        return key
+    def paper(self, key, color=None, dark=True, z=-5.0, x=0, y=0, w=W * 1.15, h=H * 1.25, rot=0.0, t=None):
+        """Textured paper background tinted to `color` (Dual Tone: dark grain → shadow tone, light grain → colour)."""
+        f = "21_paper_dark_grain.jpg" if dark else "20_paper_cream.jpg"
+        self.add(f"{key}_img", "texture/image", filePath=ASSET + f, wrapS="clamp", wrapT="clamp")
+        self.add(key, "texture/plane", visible=1, location=v3(x, y, z), rotation=v3(0, 0, rot), scale=v3(w, h, 1),
+                 transparent=False, alphaCutoff=0.0, doubleSided=True, keepAspect=False, shadeless=1)
+        self.wire(f"{key}_img", "texture", key, "texture")
+        last = key
+        if color is not None:
+            self.add(f"{key}_dt", "modifier/duotone", shadowColor=_mix(color, 0x000000, 0.35), highlightColor=color,
+                     balance=0.5 if dark else 0.55, softness=0.9, amount=1.0)
+            self.wire(key, "geometry", f"{key}_dt", "geometry"); last = f"{key}_dt"
+        return self.reveal(last, t, pop=1, mode="pop", over=0.0)
 
-    @_builder
-    def poly(self, key, pts, color, x=0, y=0, z=-1.0, rot=0.0):
-        """Any closed flat polygon from (x, y) points."""
-        self.add(f"{key}_p", "curve/from_points", 0, 0, type="linear", closed=True, tension=0.5, sag=0,
-                 pointsList=[v3(px, py, 0) for px, py in pts], location=v3(), rotation=v3(), scale=v3(1, 1, 1))
-        self.add(key, "curve/fill", 0, 0, color=color, opacity=1, baseDrop=0, gradient=False, zOffset=0,
-                 location=v3(x, y, z), rotation=v3(0, 0, rot), scale=v3(1, 1, 1), shadeless=1)
-        self.wire(f"{key}_p", "curve", key, "curve")
-        self.put(key)
-        return key
-
-    @_builder
-    def star(self, key, x, y, r, color, z=3.0, points=4, inner=0.12, rot=0.0):
-        """Sparkle: a thin n-pointed star."""
-        pts = []
-        for i in range(points * 2):
-            a = i / (points * 2) * math.tau + math.pi / 2
-            rr = r if i % 2 == 0 else r * inner
-            pts.append((math.cos(a) * rr, math.sin(a) * rr))
-        return self.poly(key, pts, color, x, y, z, rot)
-
-    @_builder
-    def text(self, key, s, x, y, units, color, z=3.0, rot=0.0):
-        CHARS.update(s)
-        self.add(key, "object/text", 0, 0, text=s, fontPreset="Helvetiker", fontPath=FONT, fontSize=units / TEXT_UNIT, depth=0.01,
-                 location=v3(x, y, z), rotation=v3(0, 0, rot), scale=v3(1, 1, 1), color=color, shadeless=1)
-        self.put(key)
-        return key
-
-    @_builder
-    def line(self, key, x0, y0, x1, y1, w, color, z=-0.5, taper=True):
-        """A speed line: a thin flat quad/triangle from (x0, y0) to (x1, y1)."""
-        dx, dy = x1 - x0, y1 - y0
-        L = math.hypot(dx, dy) or 1.0
-        nx, ny = -dy / L * w / 2, dx / L * w / 2
-        pts = [(x0 + nx, y0 + ny), (x1, y1), (x0 - nx, y0 - ny)] if taper else [(x0 + nx, y0 + ny), (x1 + nx, y1 + ny), (x1 - nx, y1 - ny), (x0 - nx, y0 - ny)]
-        return self.poly(key, pts, color, 0, 0, z)
-
-    @_builder
-    def bar(self, key, x, y, length, w, color, rot=0.0, z=0.0):
-        """A flat coloured rectangle (a plane without a texture): moves reliably, unlike a Curve Fill."""
-        self.add(key, "texture/plane", 0, 0, visible=1, location=v3(x, y, z), rotation=v3(0, 0, rot), scale=v3(length, w, 1),
-                 transparent=False, alphaCutoff=0.0, doubleSided=True, keepAspect=False, shadeless=1, color=color)
-        self.put(key)
-        return key
-
-    @_builder
     def roto(self, key, pts, ref=None, feather=0.0, asp=1.0):
         """Roto Mask with one polygon layer; pts are (u, v) in 0..1."""
         layer = {"id": f"{key}_l", "name": "Torn paper", "mode": "add", "opacity": 1.0, "invert": False, "feather": feather,
                  "expansion": 0.0, "visible": True,
                  "points": [{"x": u, "y": v, "ix": 0.0, "iy": 0.0, "ox": 0.0, "oy": 0.0} for u, v in pts]}
-        self.add(key, "mask/roto", 0, 0, masks=[layer], activeLayer=0, resolution="1024", aspect=asp, showFull=False)
+        self.add(key, "mask/roto", masks=[layer], activeLayer=0, resolution="1024", aspect=asp, showFull=False)
         if ref:
             self.wire(ref, "texture", key, "reference")
         return key
 
+    # --- recipes: shapes and lines ---------------------------------------------
     @_builder
-    def paper(self, key, color=None, dark=True, z=-5.0, x=0, y=0, w=W * 1.15, h=H * 1.25, rot=0.0):
-        """Textured paper background tinted to `color`."""
-        f = "21_paper_dark_grain.jpg" if dark else "20_paper_cream.jpg"
-        self.add(f"{key}_img", "texture/image", 0, 0, filePath=ASSET + f, wrapS="clamp", wrapT="clamp")
-        self.add(key, "texture/plane", 0, 0, visible=1, location=v3(x, y, z), rotation=v3(0, 0, rot), scale=v3(w, h, 1),
-                 transparent=False, alphaCutoff=0.0, doubleSided=True, keepAspect=False, shadeless=1)
-        self.wire(f"{key}_img", "texture", key, "texture")
-        last = key
-        if color is not None:
-            # Same flat-colour paper the reference prints on: dark grain → shadow tone, light grain → colour.
-            self.add(f"{key}_dt", "modifier/duotone", 0, 0, shadowColor=_mix(color, 0x000000, 0.35), highlightColor=color,
-                     balance=0.5 if dark else 0.55, softness=0.9, amount=1.0)
-            self.wire(key, "geometry", f"{key}_dt", "geometry"); last = f"{key}_dt"
-        self.put(last)
+    def poly(self, key, pts, color, x=0, y=0, z=-1.0, rot=0.0, matrix=None, t=None, pop=7):
+        """Curve from Points (closed, linear) → Curve Fill → Appear."""
+        self.add(f"{key}_p", "curve/from_points", type="linear", closed=True, tension=0.5, sag=0,
+                 pointsList=[v3(px, py, 0) for px, py in pts], location=v3(), rotation=v3(), scale=v3(1, 1, 1))
+        self.add(key, "curve/fill", color=color, opacity=1, baseDrop=0, gradient=False, zOffset=0,
+                 location=v3(x, y, z), rotation=v3(0, 0, rot), scale=v3(1, 1, 1), shadeless=1)
+        self.wire(f"{key}_p", "curve", key, "curve")
+        if matrix:
+            self._wm(matrix, key)
+        return self.reveal(key, t, pop)
+
+    def burst(self, key, x, y, r, color, z=-1.0, n=12, inner=0.45, jag=0.3, seed=1, rot=0.0, matrix=None, t=None, pop=7):
+        """A jagged printed star."""
+        rnd = random.Random(seed)
+        pts = []
+        for i in range(n * 2):
+            a = i / (n * 2) * math.tau
+            rr = (r if i % 2 == 0 else r * inner) * (1 - jag + jag * 2 * rnd.random())
+            pts.append((math.cos(a) * rr, math.sin(a) * rr))
+        return self.poly(key, pts, color, x, y, z, rot, matrix, t, pop)
+
+    def star(self, key, x, y, r, color, z=3.0, points=4, inner=0.12, rot=0.0, matrix=None, t=None, pop=5):
+        """A sparkle: a thin n-pointed star."""
+        pts = []
+        for i in range(points * 2):
+            a = i / (points * 2) * math.tau + math.pi / 2
+            rr = r if i % 2 == 0 else r * inner
+            pts.append((math.cos(a) * rr, math.sin(a) * rr))
+        return self.poly(key, pts, color, x, y, z, rot, matrix, t, pop)
+
+    @_builder
+    def text(self, key, s, x, y, units, color, z=3.0, rot=0.0, matrix=None, t=None, pop=6):
+        CHARS.update(s)
+        self.add(key, "object/text", text=s, fontPreset="Helvetiker", fontPath=FONT, fontSize=units / TEXT_UNIT, depth=0.01,
+                 location=v3(x, y, z), rotation=v3(0, 0, rot), scale=v3(1, 1, 1), color=color, shadeless=1)
+        if matrix:
+            self._wm(matrix, key)
+        return self.reveal(key, t, pop)
+
+    @_builder
+    def line(self, key, pts, w, color, z=0.0, matrix=None, t=None, pop=4, x=0.0, y=0.0):
+        """Curve from Points (open) → Curve to Line, drawn `w` world units wide."""
+        self.add(f"{key}_p", "curve/from_points", type="linear", closed=False, tension=0.5, sag=0,
+                 pointsList=[v3(px, py, 0) for px, py in pts], location=v3(), rotation=v3(), scale=v3(1, 1, 1))
+        self.add(key, "curve/to_line", linewidth=w, worldUnits=True, color=color, shadeless=1, location=v3(x, y, z), rotation=v3(), scale=v3(1, 1, 1))
+        self.wire(f"{key}_p", "curve", key, "curve")
+        if matrix:
+            self._wm(matrix, key)
+        return self.reveal(key, t, pop)
+
+    @_builder
+    def rays(self, key, cx, cy, a0, spread, n, r0, r1, w, color, z=-1.0, t=None, pop=4):
+        """One line, repeated around a point by Array (circular): a fan of speed lines from (cx, cy), starting at angle a0."""
+        self.add(f"{key}_p", "curve/from_points", type="linear", closed=False, tension=0.5, sag=0,
+                 pointsList=[v3(r0, 0, 0), v3(r1, 0, 0)], location=v3(), rotation=v3(), scale=v3(1, 1, 1))
+        self.add(f"{key}_l", "curve/to_line", linewidth=w, worldUnits=True, color=color, shadeless=1, location=v3(), rotation=v3(), scale=v3(1, 1, 1))
+        self.wire(f"{key}_p", "curve", f"{key}_l", "curve")
+        self.add(f"{key}_pose", "transform", location=v3(cx, cy, z), rotation=v3(0, 0, a0), scale=v3(1, 1, 1))
+        self.add(key, "structure/array", mode="circular", count=n, radius=0, plane="XY", totalAngle=spread, orient=True, visible=1)
+        self.wire(f"{key}_l", "geometry", key, "geometry")
+        self.wire(f"{key}_pose", "matrix", key, "matrix")
+        return self.reveal(key, t, pop)
+
+    @_builder
+    def rings(self, key, cx, cy, r0, dr, n, w, color, z=-1.0, t=None, pop=6):
+        """A circle, copied outward by Curve Array and drawn by Curves to Lines: concentric rings (a target)."""
+        self.add(f"{key}_c", "curve/primitive", primitiveType="circle", radius=r0, location=v3(), scale=v3(1, 1, 1))
+        self.add(f"{key}_a", "curve/array", count=n, spacing=dr, start=1, step=0)
+        self.add(key, "curve/to_line_list", linewidth=w, worldUnits=True, color=color, shadeless=1,
+                 location=v3(cx, cy, z), rotation=v3(-math.pi / 2, 0, 0), scale=v3(1, 1, 1))
+        self.wire(f"{key}_c", "curve", f"{key}_a", "curve")
+        self.wire(f"{key}_a", "curves", key, "curves")
+        return self.reveal(key, t, pop)
+
+    # --- recipes: drawn by hand (Grease Pencil) ---------------------------------
+    def gp(self, key, frames, x=0.0, y=0.0, z=1.0, t=None, brush="marker_bold"):
+        """A Grease Pencil node holding hand-drawn frames: [(frame, [stroke, ...])]. Shown from t[0] to t[1]."""
+        fr = [{"frame": int(round(self.tw(f))), "strokes": strokes} for f, strokes in frames]
+        self.add(key, "curve/grease-pencil", activeColor="#ffffff", brushSize=8, brushType=brush, smoothing=0.2, frames=fr,
+                 visible=True, location=v3(x, y, z), rotation=v3(), scale=v3(1, 1, 1), onionSkin=False)
+        if t is not None:
+            self.key(key, "visible", [(0, 0), (t[0], 1, "hold"), (t[1], 0, "hold")] if t[0] > 0 else [(0, 1), (t[1], 0, "hold")])
         return key
+
+    @staticmethod
+    def stroke(pts, color, width=10, brush="marker_bold", taper=True):
+        """One Grease Pencil stroke through (x, y) points; pressure swells in the middle and thins at both ends."""
+        n = len(pts)
+        out = []
+        for i, (px, py) in enumerate(pts):
+            u = i / max(1, n - 1)
+            p = 0.25 + 0.75 * math.sin(math.pi * u) if taper else 0.8
+            out.append({"x": px, "y": py, "z": 0.0, "pressure": round(p, 3)})
+        return {"id": f"s{random.randint(0, 10**9)}", "points": out, "color": "#%06x" % color, "width": width, "brushType": brush, "fill": False}
+
+    @classmethod
+    def draw_on(cls, polylines, f0, f1, color, width=6, brush="ink_pen", steps=14):
+        """Frames that draw `polylines` on, a little further each step — a hand-drawn reveal in one Grease Pencil node."""
+        frames = []
+        for k in range(1, steps + 1):
+            p = k / steps
+            strokes = []
+            for pts in polylines:
+                m = max(2, int(round(len(pts) * p)))
+                cut = pts[:m]
+                if m < len(pts) and len(pts) > 1:
+                    frac = len(pts) * p - (m - 1)
+                    (ax, ay), (bx, by) = pts[m - 1], pts[min(m, len(pts) - 1)]
+                    cut = pts[:m - 1] + [(ax, ay), (ax + (bx - ax) * max(0.0, min(1.0, frac)), ay + (by - ay) * max(0.0, min(1.0, frac)))]
+                strokes.append(cls.stroke(cut, color, width, brush, taper=False))
+            frames.append((f0 + (f1 - f0) * (k - 1) / max(1, steps - 1), strokes))
+        return frames
 
 
 def _mix(a, b, t):

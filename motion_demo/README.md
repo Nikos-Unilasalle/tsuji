@@ -5,7 +5,7 @@ Projet : `motion_demo/motion_title_sequence.tsuji` — **hors du catalogue des d
 `.tsuji` (dossier `assets/` voisin). Le projet et son dossier `assets/` peuvent être déplacés ensemble.
 
 6 canvases = 6 scènes, enchaînées par `Go To Canvas` sur le dernier frame (la 6 reboucle sur la 1). 1912×800 (2.39:1), 30 fps, 50,2 s.
-Aucun `Merge` : chaque objet est posé sur le canvas, rangé en chaînes dans un `Frame` par plan (Frame = titre du plan).
+Chaque objet est posé sur le canvas, rangé en chaînes dans un `Frame` par plan (Frame = titre du plan). Un `Merge` n'apparaît que là où il sert : regrouper des objets qu'un seul `Appear` (Stagger) ou un seul `Pivot Transform` doit animer ensemble.
 
 | Canvas | Scène | Frames | Fin (s) |
 | :-- | :-- | :-- | :-- |
@@ -39,3 +39,21 @@ Le texte (chinois simplifié) est dans `tools/gen_goodboy_demo.py`; les glyphes 
 - Le nœud Text accepte un `.ttf`/`.otf` directement (glyphes convertis à la demande) ; le sous-ensemble JSON reste utilisable.
 - `Audio Player` : `Start in File` / `Stop in File` (s) découpent la zone jouée — un seul morceau pour tous les canvases ; le son suit la timeline (silence en pause, reprise au point de départ quand la timeline revient).
 - `GB_MODE=served` écrit des chemins `demos/goodboy/…` (test web jetable : lien symbolique `public/demos/goodboy` → `motion_demo/assets`).
+
+## Nœuds natifs utilisés (et ce qu'ils remplacent)
+
+| Besoin | Nœuds | Remplace |
+| :-- | :-- | :-- |
+| Entrée « pop » de chaque élément | `Appear` (progress animé 0→1, Overshoot, Stagger) | 3 keyframes de scale par élément |
+| Cinq badges / chiffres de la cible qui sortent l'un après l'autre | `Merge` → un seul `Appear` avec `Stagger` | une entrée décalée à la main par élément |
+| Traits (sillage de la voiture, éclair, éclat) | `Curve from Points` → `Curve to Line` | des `Texture to Plane` étirées en barres |
+| Rayons de vitesse | un trait + `Array` (circulaire) | N barres posées une à une |
+| Cible (anneaux) | `Curve Primitive` → `Curve Array` → `Curves to Lines` | polygones à 72 côtés |
+| Fissures, croix, soulignement, étoile gribouillée | `Grease Pencil` (frames dessinées) | `Curve to Mesh` à `endProgress` animé |
+| Balancement médaille, badges, bannières, montre | `Oscillator` → `Pivot Transform` | une keyframe de rotation toutes les 3 images |
+| Tremblement du papier découpé | `Wiggle` (temps par pas de 2 images) → Matrix | — |
+| Glissades d'entrée | `Compose Matrix` animé (+ `Matrix Math` pour cumuler avec Wiggle) | keyframes de location par élément |
+| Boule de bowling | `Rolling` (rotation déduite de la position) | rotation calculée en Python |
+| Projecteur Super 8 sur la plaque N&B | `Super 8` | flash keyframé à la main |
+
+Keyframes : 2763 → 681.
