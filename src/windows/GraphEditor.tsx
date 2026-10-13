@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { setDropProjector } from "../shared/graph/imageDrop";
 import {
   Background,
   Connection as FlowConnection,
@@ -1380,6 +1381,16 @@ function GraphEditorContent({
   const edgeZoomDraggingRef = useRef(false);
   const edgeZoomLastYRef = useRef(0);
   const canvasPaneRef = useRef<HTMLDivElement>(null);
+
+  // A file dropped on the node canvas lands where it was released (see shared/graph/imageDrop.ts); a drop elsewhere does not.
+  useEffect(() => {
+    setDropProjector((clientX, clientY) => {
+      const rect = canvasPaneRef.current?.getBoundingClientRect();
+      if (!rect || clientX < rect.left || clientX > rect.right || clientY < rect.top || clientY > rect.bottom) return null;
+      return screenToFlowPosition({ x: clientX, y: clientY });
+    });
+    return () => setDropProjector(null);
+  }, [screenToFlowPosition]);
   const edgeZoomHandlersRef = useRef<{ move: (e: PointerEvent) => void; up: () => void } | null>(null);
   useEffect(
     () => () => {

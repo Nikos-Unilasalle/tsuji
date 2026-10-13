@@ -322,7 +322,7 @@ Les prises de connexion (sockets) sont identifiées par des codes couleur normal
 | Node | Type | Description |
 | :--- | :--- | :--- |
 | **Reroute** | `utility/reroute` | Point de dérivation compact pour organiser le câblage du graphe. |
-| **Canvas Go To** | `canvas/goto` | Bascule vers l'un des canevas du projet lors d'un trigger. |
+| **Canvas Go To** | `canvas/goto` | Bascule vers l'un des canevas du projet sur le front montant d'un trigger, **seulement quand la timeline joue** (ou à l'export) ; l'option `Only While Playing` désactivée le laisse aussi agir en pause (touche, installation). |
 
 ---
 

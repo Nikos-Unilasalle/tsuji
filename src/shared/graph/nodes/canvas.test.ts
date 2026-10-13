@@ -102,4 +102,10 @@ describe("canvasSwitchStore", () => {
     expect(CANVAS_GOTO_NODE.evaluate({ trigger: 1 }, { canvas: 3 }, exporting).switched).toBe(1);
     expect(consumeCanvasSwitchRequest()).toBe(2);
   });
+
+  test("with Only While Playing off, a paused timeline switches too", () => {
+    const paused: EvalContext = { time: 0, step: 0, nodeId: "goto-always", isPlaying: false };
+    expect(CANVAS_GOTO_NODE.evaluate({ trigger: 1 }, { canvas: 2, onlyWhilePlaying: false }, paused).switched).toBe(1);
+    expect(consumeCanvasSwitchRequest()).toBe(1);
+  });
 });

@@ -46,6 +46,7 @@ import {
 } from "./shared/graph/nodes/frozenGeometry";
 import type { KeyframeDrawing } from "./shared/graph/nodes/greasePencil";
 import { randomId } from "./shared/randomId";
+import { buildImageNodes, DroppedImage, isDroppableImage, projectDrop } from "./shared/graph/imageDrop";
 import { findRenderNodeId } from "./shared/graph/nodes/render";
 import { findView2DNodeId } from "./shared/graph/nodes/view2d";
 import { rehydrateFileNodesFromDisk } from "./shared/graph/rehydrateFiles";
@@ -1163,6 +1164,77 @@ function MainEditor() {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [undo, redo, handleExportGraphSvg]);
+
+  /**
+   * Dropping images on the window — the 3D view or the node canvas — creates an Image Texture wired to a Texture to Plane for
+   * each. On the node canvas the nodes land where the files were released; elsewhere they go beside the existing nodes.
+   */
+  const addDroppedImages = useCallback(
+    (images: DroppedImage[], at: { clientX: number; clientY: number } | null) => {
+      if (images.length === 0) return;
+      setGraphWithHistory((prevGraph) => {
+        const projected = at ? projectDrop(at.clientX, at.clientY) : null;
+        const right = prevGraph.nodes.reduce((m, n) => Math.max(m, n.position.x), 0);
+        const top = prevGraph.nodes.length ? Math.min(...prevGraph.nodes.map((n) => n.position.y)) : 0;
+        const origin = projected ?? { x: prevGraph.nodes.length ? right + 360 : 120, y: prevGraph.nodes.length ? top : 120 };
+        const added = buildImageNodes(images, origin);
+        return { ...prevGraph, nodes: [...prevGraph.nodes, ...added.nodes], connections: [...prevGraph.connections, ...added.connections] };
+      }, "drop:images");
+    },
+    [setGraphWithHistory],
+  );
+
+  useEffect(() => {
+    const carriesFiles = (e: DragEvent) => Array.from(e.dataTransfer?.types ?? []).includes("Files");
+    const onDragOver = (e: DragEvent) => {
+      if (!carriesFiles(e)) return;
+      e.preventDefault();
+      if (e.dataTransfer) e.dataTransfer.dropEffect = "copy";
+    };
+    // Browser build: the files arrive as File objects.
+    const onDrop = async (e: DragEvent) => {
+      if (!carriesFiles(e)) return;
+      const files = Array.from(e.dataTransfer?.files ?? []).filter((f) => isDroppableImage(f.name));
+      if (files.length === 0) return;
+      e.preventDefault();
+      const images = await Promise.all(files.map(async (f) => ({ path: f.name, bytes: new Uint8Array(await f.arrayBuffer()) })));
+      addDroppedImages(images, { clientX: e.clientX, clientY: e.clientY });
+    };
+    window.addEventListener("dragover", onDragOver);
+    window.addEventListener("drop", onDrop);
+
+    // Desktop build: Tauri takes file drops over itself and reports real paths, in physical pixels.
+    let unlisten: (() => void) | null = null;
+    let disposed = false;
+    if (isTauri()) {
+      void (async () => {
+        const [{ getCurrentWebview }, { readFile }] = await Promise.all([import("@tauri-apps/api/webview"), import("@tauri-apps/plugin-fs")]);
+        const stop = await getCurrentWebview().onDragDropEvent(async (event) => {
+          if (event.payload.type !== "drop") return;
+          const paths = event.payload.paths.filter((p) => isDroppableImage(p));
+          if (paths.length === 0) return;
+          const ratio = window.devicePixelRatio || 1;
+          const images: DroppedImage[] = [];
+          for (const path of paths) {
+            try {
+              images.push({ path, bytes: await readFile(path) });
+            } catch (err) {
+              console.error(`Drop: could not read ${path}:`, err);
+            }
+          }
+          addDroppedImages(images, { clientX: event.payload.position.x / ratio, clientY: event.payload.position.y / ratio });
+        });
+        if (disposed) stop();
+        else unlisten = stop;
+      })();
+    }
+    return () => {
+      disposed = true;
+      window.removeEventListener("dragover", onDragOver);
+      window.removeEventListener("drop", onDrop);
+      unlisten?.();
+    };
+  }, [addDroppedImages]);
 
   const handleLoadProject = (newProject: Project, filename?: string) => {
     historyRef.current = {};

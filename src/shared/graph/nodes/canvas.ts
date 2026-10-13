@@ -31,16 +31,21 @@ export const CANVAS_GOTO_NODE: NodeDefinition = {
     { id: "canvas", label: "Canvas (1-6)", type: "value" },
   ],
   outputs: [{ id: "switched", label: "Switched", type: "value" }],
-  defaultParams: { canvas: 1, trigger: 0 },
+  defaultParams: { canvas: 1, trigger: 0, onlyWhilePlaying: true },
   paramFields: [
     { id: "canvas", label: "Canvas (fallback)", kind: "number", step: 1 },
     { id: "trigger", label: "Trigger (fallback)", kind: "boolean" },
+    {
+      id: "onlyWhilePlaying",
+      label: "Only While Playing (off: also switches on a paused timeline — a key, an installation)",
+      kind: "boolean",
+    },
   ],
   evaluate: (inputs, params, ctx) => {
-    // Only a running document switches: while the timeline is paused (scrubbing, editing) nothing may leave the canvas
-    // being worked on. An export counts as running. `isPlaying` is absent outside the viewport (tests, headless), where
+    // By default only a running document switches: while the timeline is paused (scrubbing, editing) nothing may leave the
+    // canvas being worked on. "Only While Playing" off lifts that, for a switch driven by a key or a sensor. An export counts as running. `isPlaying` is absent outside the viewport (tests, headless), where
     // there is no pause to respect.
-    if (ctx.isPlaying === false && !ctx.capturing) {
+    if (Boolean(params.onlyWhilePlaying ?? true) && ctx.isPlaying === false && !ctx.capturing) {
       // Forget the edge, so a trigger that is already true when Play is pressed still fires once.
       triggerStateCache.set(ctx.nodeId, false);
       return { switched: fromBoolean(false) };
