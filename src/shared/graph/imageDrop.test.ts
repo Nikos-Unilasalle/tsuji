@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildImageNodes, isDroppableImage, projectDrop, setDropProjector } from "./imageDrop";
+import { buildDroppedNodes, droppedKind, isDroppableImage, projectDrop, setDropProjector } from "./imageDrop";
 
 describe("image drop", () => {
   it("accepts the image formats Image Texture loads, whatever the case", () => {
@@ -10,7 +10,7 @@ describe("image drop", () => {
   });
 
   it("makes an Image Texture wired to a Texture to Plane for each image, side by side", () => {
-    const { nodes, connections } = buildImageNodes(
+    const { nodes, connections } = buildDroppedNodes(
       [
         { path: "/x/a.png", bytes: new Uint8Array([1]) },
         { path: "b.jpg", bytes: new Uint8Array([2]) },
@@ -25,6 +25,29 @@ describe("image drop", () => {
     expect(connections).toHaveLength(2);
     expect(connections[0]).toMatchObject({ fromNode: nodes[0].id, fromSocket: "texture", toNode: nodes[1].id, toSocket: "texture" });
     expect((nodes[3].params.location as { x: number }).x).toBeCloseTo(1.6);
+  });
+
+  it("tells images, videos and sounds apart", () => {
+    expect(droppedKind("a.mp4")).toBe("video");
+    expect(droppedKind("a.MOV")).toBe("video");
+    expect(droppedKind("song.m4a")).toBe("audio");
+    expect(droppedKind("a.png")).toBe("image");
+    expect(droppedKind("a.pdf")).toBeNull();
+  });
+
+  it("a video is an Image Texture + plane started with the timeline; a sound is an Audio Player started with it", () => {
+    const { nodes, connections } = buildDroppedNodes(
+      [
+        { path: "clip.mp4", bytes: new Uint8Array([1]) },
+        { path: "song.mp3", bytes: new Uint8Array([2]) },
+        { path: "notes.txt", bytes: new Uint8Array([3]) },
+      ],
+      { x: 0, y: 0 },
+    );
+    expect(nodes.map((n) => n.type)).toEqual(["texture/image", "texture/plane", "sound/player"]);
+    expect(nodes[0].params.startFrame).toBe(0);
+    expect(nodes[2].params).toMatchObject({ filePath: "song.mp3", startFrame: 0, loop: 0, spatialMode: "global" });
+    expect(connections).toHaveLength(1);
   });
 
   it("projects a drop only when a canvas registered", () => {

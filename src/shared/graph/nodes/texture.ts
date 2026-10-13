@@ -47,7 +47,7 @@ interface TextureNodeState {
   videoEl?: HTMLVideoElement;
 }
 
-const VIDEO_EXTENSIONS = new Set(["mp4"]);
+const VIDEO_EXTENSIONS = new Set(["mp4", "webm", "mov", "m4v"]);
 
 const textureCache = createNodeCache<TextureNodeState>((s) => {
   s.texture?.dispose();
@@ -77,6 +77,9 @@ function createTextureBlob(content: unknown, path: string): Blob {
     bmp: "image/bmp",
     svg: "image/svg+xml",
     mp4: "video/mp4",
+    m4v: "video/mp4",
+    webm: "video/webm",
+    mov: "video/quicktime",
   };
   const mime = mimeMap[ext] || "image/png";
   return content instanceof Uint8Array ? new Blob([content], { type: mime }) : new Blob([content as any], { type: mime });
@@ -213,7 +216,7 @@ export const TEXTURE_IMAGE_NODE: NodeDefinition = {
       id: "filePath",
       label: "Image / Video File",
       kind: "file",
-      accept: [".png", ".jpg", ".jpeg", ".webp", ".bmp", ".svg", ".mp4"],
+      accept: [".png", ".jpg", ".jpeg", ".webp", ".bmp", ".svg", ".mp4", ".webm", ".mov", ".m4v"],
       onLoaded: (nodeId, path, content) => {
         const state = getState(nodeId);
         state.lastPath = path;
@@ -316,7 +319,7 @@ export const TEXTURE_PLANE_NODE: NodeDefinition = {
       id: "filePath",
       label: "Image / Video File (Fallback)",
       kind: "file",
-      accept: [".png", ".jpg", ".jpeg", ".webp", ".bmp", ".svg", ".mp4"],
+      accept: [".png", ".jpg", ".jpeg", ".webp", ".bmp", ".svg", ".mp4", ".webm", ".mov", ".m4v"],
       onLoaded: (nodeId, path, content) => {
         const state = getState(nodeId);
         state.lastPath = path;

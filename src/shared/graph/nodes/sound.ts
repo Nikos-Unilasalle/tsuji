@@ -15,6 +15,9 @@ import {
   syncClip,
 } from "../../audio/audioStore";
 import { planClip } from "../../audio/clipPlan";
+import { Rolloff, ROLLOFFS, SpatialMode, spatialGain } from "../../audio/spatial";
+import * as THREE from "three";
+import { asVector3 } from "./transform";
 import { NodeDefinition } from "../types";
 import { numberInput } from "./object";
 
@@ -50,6 +53,9 @@ export const AUDIO_PLAYER_NODE: NodeDefinition = {
     { id: "startFrame", label: "Start Frame", type: "value" },
     { id: "clipStart", label: "Start in File (s)", type: "value" },
     { id: "clipEnd", label: "Stop in File (s)", type: "value" },
+    { id: "position", label: "Position (local)", type: "vector" },
+    { id: "innerRadius", label: "Full-Volume Radius", type: "value" },
+    { id: "outerRadius", label: "Fade-Out Radius", type: "value" },
   ],
   outputs: [
     { id: "audio", label: "Audio", type: "any" },
@@ -68,7 +74,20 @@ export const AUDIO_PLAYER_NODE: NodeDefinition = {
     { id: "clipEndFrames", label: "Clip End (frames)", type: "value" },
     { id: "loop", label: "Loop", type: "value" },
   ],
-  defaultParams: { filePath: "", loop: 1, volume: 1, playbackRate: 1, startFrame: -1, clipStart: 0, clipEnd: 0 },
+  defaultParams: {
+    filePath: "",
+    loop: 1,
+    volume: 1,
+    playbackRate: 1,
+    startFrame: -1,
+    clipStart: 0,
+    clipEnd: 0,
+    spatialMode: "global",
+    position: new THREE.Vector3(0, 0, 0),
+    innerRadius: 2,
+    outerRadius: 12,
+    rolloff: "linear",
+  },
   dynamicParamFields: () => [
     {
       id: "filePath",
@@ -94,7 +113,7 @@ export const AUDIO_PLAYER_NODE: NodeDefinition = {
         // of buffering the whole file on the trigger's rising edge.
         player.audioEl.preload = "auto";
         player.audioEl.src = url;
-        player.audioEl.load();
+        player.audioEl.load?.();
         player.loadedPath = url;
         // The same bytes, decoded, for timeline playback.
         if (content instanceof Uint8Array || content instanceof ArrayBuffer) void decodePlayerBuffer(player, content);
@@ -111,6 +130,16 @@ export const AUDIO_PLAYER_NODE: NodeDefinition = {
     { id: "clipEnd", label: "Stop in File (s, 0 = end of file)", kind: "number", step: 0.1 },
     { id: "volume", label: "Volume", kind: "number", step: 0.05 },
     { id: "playbackRate", label: "Speed", kind: "number", step: 0.1 },
+    {
+      id: "spatialMode",
+      label: "Sound (global: the same everywhere · local: heard inside a sphere that fades out, from the camera)",
+      kind: "select",
+      options: ["global", "local"],
+    },
+    { id: "position", label: "Position (local)", kind: "vector", group: "Local sound" },
+    { id: "innerRadius", label: "Full-Volume Radius", kind: "number", step: 0.5, group: "Local sound" },
+    { id: "outerRadius", label: "Fade-Out Radius (silent beyond)", kind: "number", step: 0.5, group: "Local sound" },
+    { id: "rolloff", label: "Fall-Off", kind: "select", options: [...ROLLOFFS], group: "Local sound" },
   ],
   evaluate: (inputs, params, ctx) => {
     const player = getOrCreatePlayer(ctx.nodeId);
@@ -124,9 +153,24 @@ export const AUDIO_PLAYER_NODE: NodeDefinition = {
     const clipEnd = Math.max(0, numberInput(inputs.clipEnd, params.clipEnd, 0));
     const fps = Math.max(1, Number(ctx.fps) || 30);
 
-    audioEl.volume = volume;
+    // Global: the same everywhere. Local: a sphere around Position that fades out; the listener is the active camera.
+    const mode: SpatialMode = params.spatialMode === "local" ? "local" : "global";
+    const rolloff: Rolloff = (ROLLOFFS as string[]).includes(String(params.rolloff)) ? (params.rolloff as Rolloff) : "linear";
+    let listener: { x: number; y: number; z: number } | null = null;
+    if (ctx.activeCameraPose) listener = new THREE.Vector3().setFromMatrixPosition(ctx.activeCameraPose.matrix);
+    const heard = spatialGain(
+      mode,
+      listener,
+      asVector3(inputs.position ?? params.position, new THREE.Vector3()),
+      numberInput(inputs.innerRadius, params.innerRadius, 2),
+      numberInput(inputs.outerRadius, params.outerRadius, 12),
+      rolloff,
+    );
+    const level = volume * heard;
+
+    audioEl.volume = Math.max(0, Math.min(1, level));
     audioEl.playbackRate = rate;
-    if (player.gainNode) player.gainNode.gain.value = volume;
+    if (player.gainNode) player.gainNode.gain.value = level;
 
     const fileLength = player.buffer?.duration ?? (isNaN(audioEl.duration) ? 0 : audioEl.duration);
     const inPoint = Math.min(clipStart, fileLength || clipStart);
@@ -179,7 +223,7 @@ export const AUDIO_PLAYER_NODE: NodeDefinition = {
 
       return {
         ...published,
-        volume: player.isPlaying ? volume : 0,
+        volume: player.isPlaying ? level : 0,
         duration: fileLength,
         position: plan.active ? plan.offset : clipOffsetNowOrZero(player, audioEl),
         startFrame,
@@ -246,7 +290,7 @@ export const AUDIO_PLAYER_NODE: NodeDefinition = {
 
     return {
       ...published,
-      volume: audioEl.paused ? 0 : volume,
+      volume: audioEl.paused ? 0 : level,
       duration: fileLength,
       position: isNaN(audioEl.currentTime) ? 0 : audioEl.currentTime,
       // Published so the timeline's waveform strip can draw the clip where it

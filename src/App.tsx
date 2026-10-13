@@ -46,7 +46,7 @@ import {
 } from "./shared/graph/nodes/frozenGeometry";
 import type { KeyframeDrawing } from "./shared/graph/nodes/greasePencil";
 import { randomId } from "./shared/randomId";
-import { buildImageNodes, DroppedImage, isDroppableImage, projectDrop } from "./shared/graph/imageDrop";
+import { buildDroppedNodes, DroppedImage, isDroppableMedia, projectDrop } from "./shared/graph/imageDrop";
 import { findRenderNodeId } from "./shared/graph/nodes/render";
 import { findView2DNodeId } from "./shared/graph/nodes/view2d";
 import { rehydrateFileNodesFromDisk } from "./shared/graph/rehydrateFiles";
@@ -1166,8 +1166,8 @@ function MainEditor() {
   }, [undo, redo, handleExportGraphSvg]);
 
   /**
-   * Dropping images on the window — the 3D view or the node canvas — creates an Image Texture wired to a Texture to Plane for
-   * each. On the node canvas the nodes land where the files were released; elsewhere they go beside the existing nodes.
+   * Dropping files on the window — the 3D view or the node canvas — creates, for each image or video, an Image Texture wired to a
+   * Texture to Plane, and for each sound an Audio Player. On the node canvas the nodes land where the files were released; elsewhere they go beside the existing nodes.
    */
   const addDroppedImages = useCallback(
     (images: DroppedImage[], at: { clientX: number; clientY: number } | null) => {
@@ -1177,7 +1177,7 @@ function MainEditor() {
         const right = prevGraph.nodes.reduce((m, n) => Math.max(m, n.position.x), 0);
         const top = prevGraph.nodes.length ? Math.min(...prevGraph.nodes.map((n) => n.position.y)) : 0;
         const origin = projected ?? { x: prevGraph.nodes.length ? right + 360 : 120, y: prevGraph.nodes.length ? top : 120 };
-        const added = buildImageNodes(images, origin);
+        const added = buildDroppedNodes(images, origin);
         return { ...prevGraph, nodes: [...prevGraph.nodes, ...added.nodes], connections: [...prevGraph.connections, ...added.connections] };
       }, "drop:images");
     },
@@ -1194,7 +1194,7 @@ function MainEditor() {
     // Browser build: the files arrive as File objects.
     const onDrop = async (e: DragEvent) => {
       if (!carriesFiles(e)) return;
-      const files = Array.from(e.dataTransfer?.files ?? []).filter((f) => isDroppableImage(f.name));
+      const files = Array.from(e.dataTransfer?.files ?? []).filter((f) => isDroppableMedia(f.name));
       if (files.length === 0) return;
       e.preventDefault();
       const images = await Promise.all(files.map(async (f) => ({ path: f.name, bytes: new Uint8Array(await f.arrayBuffer()) })));
@@ -1211,7 +1211,7 @@ function MainEditor() {
         const [{ getCurrentWebview }, { readFile }] = await Promise.all([import("@tauri-apps/api/webview"), import("@tauri-apps/plugin-fs")]);
         const stop = await getCurrentWebview().onDragDropEvent(async (event) => {
           if (event.payload.type !== "drop") return;
-          const paths = event.payload.paths.filter((p) => isDroppableImage(p));
+          const paths = event.payload.paths.filter((p) => isDroppableMedia(p));
           if (paths.length === 0) return;
           const ratio = window.devicePixelRatio || 1;
           const images: DroppedImage[] = [];

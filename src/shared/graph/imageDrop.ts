@@ -4,11 +4,27 @@ import { DEFAULT_REGISTRY } from "./nodes";
 import { cloneParams } from "./cloneGraph";
 import { Connection, NodeInstance } from "./types";
 
-/** What a dropped file can be: the formats Image Texture loads. */
+/** What a dropped file can be: the formats Image Texture and Audio Player load. */
 const IMAGE_EXTENSIONS = ["png", "jpg", "jpeg", "webp", "bmp", "svg"];
+const VIDEO_EXTENSIONS = ["mp4", "webm", "mov", "m4v"];
+const AUDIO_EXTENSIONS = ["mp3", "wav", "ogg", "flac", "m4a", "aac"];
+
+export type DroppedKind = "image" | "video" | "audio";
+
+export function droppedKind(name: string): DroppedKind | null {
+  const ext = name.split(".").pop()?.toLowerCase() ?? "";
+  if (IMAGE_EXTENSIONS.includes(ext)) return "image";
+  if (VIDEO_EXTENSIONS.includes(ext)) return "video";
+  if (AUDIO_EXTENSIONS.includes(ext)) return "audio";
+  return null;
+}
 
 export function isDroppableImage(name: string): boolean {
-  return IMAGE_EXTENSIONS.includes(name.split(".").pop()?.toLowerCase() ?? "");
+  return droppedKind(name) === "image";
+}
+
+export function isDroppableMedia(name: string): boolean {
+  return droppedKind(name) !== null;
 }
 
 /**
@@ -32,38 +48,64 @@ export interface DroppedImage {
 }
 
 /**
- * Image Texture + Texture to Plane, wired, for each dropped image. Each file is fed through the node's own file loader
- * (the path a manual pick takes), so it shows on screen at once. Returns the nodes and wires to add to the graph.
+ * What each dropped file becomes: an image is an Image Texture wired to a Texture to Plane; a video is the same, started with
+ * the timeline; a sound is an Audio Player started with the timeline. Each file is fed through its node's own file loader
+ * (the path a manual pick takes), so it shows or sounds at once. Returns the nodes and wires to add to the graph.
  */
-export function buildImageNodes(
-  images: DroppedImage[],
+export function buildDroppedNodes(
+  files: DroppedImage[],
   origin: { x: number; y: number },
 ): { nodes: NodeInstance[]; connections: Connection[] } {
   const imageDef = DEFAULT_REGISTRY.get("texture/image");
   const planeDef = DEFAULT_REGISTRY.get("texture/plane");
-  if (!imageDef || !planeDef) return { nodes: [], connections: [] };
+  const audioDef = DEFAULT_REGISTRY.get("sound/player");
+  if (!imageDef || !planeDef || !audioDef) return { nodes: [], connections: [] };
 
   const nodes: NodeInstance[] = [];
   const connections: Connection[] = [];
-  images.forEach((image, i) => {
+  let row = 0;
+  let visual = 0;
+  const load = (def: typeof imageDef, node: NodeInstance, file: DroppedImage) => {
+    const field = def.dynamicParamFields?.(node).find((f) => f.id === "filePath");
+    if (field && field.kind === "file") field.onLoaded?.(node.id, file.path, file.bytes);
+  };
+
+  for (const file of files) {
+    const kind = droppedKind(file.path);
+    if (!kind) continue;
+    const y = origin.y + row * 220;
+    row++;
+
+    if (kind === "audio") {
+      const audioNode: NodeInstance = {
+        id: randomId(),
+        type: audioDef.type,
+        // Anchored at frame 0 so it plays with the timeline; once, not looping.
+        params: { ...cloneParams(audioDef.defaultParams), filePath: file.path, startFrame: 0, loop: 0 },
+        position: { x: origin.x, y },
+      };
+      load(audioDef, audioNode, file);
+      nodes.push(audioNode);
+      continue;
+    }
+
     const imageId = randomId();
     const planeId = randomId();
-    const y = origin.y + i * 220;
     const imageNode: NodeInstance = {
       id: imageId,
       type: imageDef.type,
-      params: { ...cloneParams(imageDef.defaultParams), filePath: image.path },
+      params: { ...cloneParams(imageDef.defaultParams), filePath: file.path, ...(kind === "video" ? { startFrame: 0 } : {}) },
       position: { x: origin.x, y },
     };
     const planeNode: NodeInstance = {
       id: planeId,
       type: planeDef.type,
-      // Side by side in the scene too, so several images dropped together do not sit on top of each other.
-      params: { ...cloneParams(planeDef.defaultParams), location: new THREE.Vector3(i * 1.6, 0, 0) },
+      // Side by side in the scene too, so several pictures dropped together do not sit on top of each other.
+      params: { ...cloneParams(planeDef.defaultParams), location: new THREE.Vector3(visual * 1.6, 0, 0) },
       position: { x: origin.x + 300, y },
     };
-    const field = imageDef.dynamicParamFields?.(imageNode).find((f) => f.id === "filePath");
-    if (field && field.kind === "file") field.onLoaded?.(imageId, image.path, image.bytes);
+    visual++;
+    load(imageDef, imageNode, file);
     nodes.push(imageNode, planeNode);
     connections.push({
       id: `${imageId}.texture->${planeId}.texture`,
@@ -72,6 +114,6 @@ export function buildImageNodes(
       toNode: planeId,
       toSocket: "texture",
     });
-  });
+  }
   return { nodes, connections };
 }

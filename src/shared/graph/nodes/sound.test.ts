@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { AUDIO_PLAYER_NODE } from "./sound";
+import * as THREE from "three";
 import { EvalContext } from "../types";
 
 const CTX: EvalContext = { time: 0, step: 0, nodeId: "audio-test" };
@@ -67,5 +68,23 @@ describe("AUDIO_PLAYER_NODE start and stop points", () => {
     );
     expect(res.clipOffsetFrames).toBe(120);
     expect(res.startFrame).toBe(30);
+  });
+});
+
+describe("AUDIO_PLAYER_NODE global and local", () => {
+  const pose = (x: number): EvalContext["activeCameraPose"] => ({ matrix: new THREE.Matrix4().makeTranslation(x, 0, 0), fov: 50 });
+  const run = (params: Record<string, unknown>, x: number, id: string) =>
+    AUDIO_PLAYER_NODE.evaluate({}, { ...AUDIO_PLAYER_NODE.defaultParams, startFrame: 0, ...params }, { ...CTX, nodeId: id, currentFrame: 0, fps: 30, activeCameraPose: pose(x) });
+
+  it("is global by default, with a sphere to configure when local", () => {
+    expect(AUDIO_PLAYER_NODE.defaultParams.spatialMode).toBe("global");
+    expect(AUDIO_PLAYER_NODE.inputs.map((i) => i.id)).toEqual(expect.arrayContaining(["position", "innerRadius", "outerRadius"]));
+  });
+
+  it("local: the volume falls with the camera's distance and is silent past the outer radius", () => {
+    const local = { spatialMode: "local", innerRadius: 2, outerRadius: 10, volume: 1 };
+    // not playing (no file), so `volume` reads 0 whatever the level; the published position/level are checked through a loaded clip elsewhere
+    expect(run(local, 0, "loc-near").volume).toBe(0);
+    expect(run(local, 50, "loc-far").volume).toBe(0);
   });
 });
