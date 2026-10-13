@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { attenuation, spatialGain } from "./spatial";
+import { attenuation, spatialGain, stereoPan } from "./spatial";
 
 describe("attenuation", () => {
   it("is full inside the inner radius and silent at and beyond the outer", () => {
@@ -43,5 +43,26 @@ describe("spatialGain", () => {
   });
   it("without a camera the listener stands at the origin", () => {
     expect(spatialGain("local", null, { x: 6, y: 0, z: 0 }, 2, 10, "linear")).toBeCloseTo(0.5);
+  });
+});
+
+describe("stereoPan", () => {
+  const listener = { x: 0, y: 0, z: 0 };
+  const right = { x: 1, y: 0, z: 0 };
+  it("pans to the side the sound is on", () => {
+    expect(stereoPan(listener, right, { x: 10, y: 0, z: 0 }, 1)).toBeCloseTo(1);
+    expect(stereoPan(listener, right, { x: -10, y: 0, z: 0 }, 1)).toBeCloseTo(-1);
+  });
+  it("is centred for a sound straight ahead or behind, and halfway at 45°", () => {
+    expect(stereoPan(listener, right, { x: 0, y: 0, z: -10 }, 1)).toBeCloseTo(0);
+    expect(stereoPan(listener, right, { x: 0, y: 0, z: 10 }, 1)).toBeCloseTo(0);
+    expect(stereoPan(listener, right, { x: 7.07, y: 0, z: -7.07 }, 1)).toBeCloseTo(0.707, 2);
+  });
+  it("eases to the centre when the listener is inside the sound", () => {
+    expect(stereoPan(listener, right, { x: 1, y: 0, z: 0 }, 4)).toBeCloseTo(0.25);
+    expect(stereoPan(listener, right, { x: 0, y: 0, z: 0 }, 4)).toBe(0);
+  });
+  it("is centred without a camera", () => {
+    expect(stereoPan(null, null, { x: 5, y: 0, z: 0 }, 1)).toBe(0);
   });
 });

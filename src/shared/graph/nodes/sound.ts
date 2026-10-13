@@ -15,7 +15,7 @@ import {
   syncClip,
 } from "../../audio/audioStore";
 import { planClip } from "../../audio/clipPlan";
-import { Rolloff, ROLLOFFS, SpatialMode, spatialGain } from "../../audio/spatial";
+import { Rolloff, ROLLOFFS, SpatialMode, spatialGain, stereoPan } from "../../audio/spatial";
 import * as THREE from "three";
 import { asVector3 } from "./transform";
 import { NodeDefinition } from "../types";
@@ -87,6 +87,7 @@ export const AUDIO_PLAYER_NODE: NodeDefinition = {
     innerRadius: 2,
     outerRadius: 12,
     rolloff: "linear",
+    stereo: true,
   },
   dynamicParamFields: () => [
     {
@@ -140,6 +141,7 @@ export const AUDIO_PLAYER_NODE: NodeDefinition = {
     { id: "innerRadius", label: "Full-Volume Radius", kind: "number", step: 0.5, group: "Local sound" },
     { id: "outerRadius", label: "Fade-Out Radius (silent beyond)", kind: "number", step: 0.5, group: "Local sound" },
     { id: "rolloff", label: "Fall-Off", kind: "select", options: [...ROLLOFFS], group: "Local sound" },
+    { id: "stereo", label: "Stereo (pan left / right with the camera's side)", kind: "boolean", group: "Local sound" },
   ],
   evaluate: (inputs, params, ctx) => {
     const player = getOrCreatePlayer(ctx.nodeId);
@@ -157,15 +159,20 @@ export const AUDIO_PLAYER_NODE: NodeDefinition = {
     const mode: SpatialMode = params.spatialMode === "local" ? "local" : "global";
     const rolloff: Rolloff = (ROLLOFFS as string[]).includes(String(params.rolloff)) ? (params.rolloff as Rolloff) : "linear";
     let listener: { x: number; y: number; z: number } | null = null;
-    if (ctx.activeCameraPose) listener = new THREE.Vector3().setFromMatrixPosition(ctx.activeCameraPose.matrix);
-    const heard = spatialGain(
-      mode,
-      listener,
-      asVector3(inputs.position ?? params.position, new THREE.Vector3()),
-      numberInput(inputs.innerRadius, params.innerRadius, 2),
-      numberInput(inputs.outerRadius, params.outerRadius, 12),
-      rolloff,
-    );
+    let right: { x: number; y: number; z: number } | null = null;
+    if (ctx.activeCameraPose) {
+      const m = ctx.activeCameraPose.matrix;
+      listener = new THREE.Vector3().setFromMatrixPosition(m);
+      right = new THREE.Vector3().setFromMatrixColumn(m, 0);
+    }
+    const source = asVector3(inputs.position ?? params.position, new THREE.Vector3());
+    const inner = numberInput(inputs.innerRadius, params.innerRadius, 2);
+    const outer = numberInput(inputs.outerRadius, params.outerRadius, 12);
+    const heard = spatialGain(mode, listener, source, inner, outer, rolloff);
+    if (player.pannerNode) {
+      const pan = mode === "local" && Boolean(params.stereo ?? true) ? stereoPan(listener, right, source, inner) : 0;
+      player.pannerNode.pan.value = pan;
+    }
     const level = volume * heard;
 
     audioEl.volume = Math.max(0, Math.min(1, level));

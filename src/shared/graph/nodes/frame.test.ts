@@ -24,7 +24,7 @@ describe("pose proxy nodes", () => {
     for (const type of Object.keys(POSE_PROXY_NODES)) {
       const def = DEFAULT_REGISTRY.get(type);
       expect(def, type).toBeDefined();
-      expect(def!.defaultParams, type).toHaveProperty("location");
+      expect(def!.defaultParams, type).toHaveProperty(POSE_PROXY_NODES[type].locationParam ?? "location");
     }
   });
 });

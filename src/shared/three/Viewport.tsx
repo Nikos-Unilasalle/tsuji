@@ -1975,12 +1975,18 @@ export function Viewport({
     const poseProxySphereGeo = new THREE.WireframeGeometry(new THREE.SphereGeometry(1, 16, 12));
     const poseProxySphereMat = new THREE.LineBasicMaterial({ color: poseProxyColor, transparent: true, opacity: 0.35 });
     const poseProxySphere = new THREE.LineSegments(poseProxySphereGeo, poseProxySphereMat);
+    // The inner zone (a sound's full-volume radius): a fainter filled shell inside the outer wire sphere.
+    const poseProxyInnerGeo = new THREE.SphereGeometry(1, 24, 16);
+    const poseProxyInnerMat = new THREE.MeshBasicMaterial({ color: poseProxyColor, transparent: true, opacity: 0.12, depthWrite: false, side: THREE.DoubleSide });
+    const poseProxyInner = new THREE.Mesh(poseProxyInnerGeo, poseProxyInnerMat);
+    poseProxyInner.visible = false;
     const poseProxyBoxUnitGeo = new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 1, 1));
     const poseProxyBox = new THREE.LineSegments(poseProxyBoxUnitGeo, new THREE.LineBasicMaterial({ color: poseProxyColor }));
-    poseProxy.add(new THREE.Mesh(poseProxyCoreGeo, poseProxyCoreMat), poseProxySphere, poseProxyBox);
+    poseProxy.add(new THREE.Mesh(poseProxyCoreGeo, poseProxyCoreMat), poseProxySphere, poseProxyInner, poseProxyBox);
     poseProxy.visible = false;
     let poseProxyNodeId: string | null = null;
     let poseProxyChannels: "location" | "trs" = "location";
+    let poseProxyLocationParam = "location";
 
     // Force Field 3D proxy: shows interactive position & direction helper for
     // particles/force-field — same structure as the Particle Emitter proxy
@@ -2592,7 +2598,8 @@ export function Viewport({
         // Pose proxy: a bare location, or the full pose for the fluid solver.
         if (object === poseProxy && poseProxyNodeId && onTransformChangeRef.current) {
           if (poseProxyChannels === "location") {
-            onTransformChangeRef.current(poseProxyNodeId, { location: object.position.clone() });
+            // A node whose point is not called `location` (a sound's `position`) gets its own key; the patch is just a param write.
+            onTransformChangeRef.current(poseProxyNodeId, { [poseProxyLocationParam]: object.position.clone() } as TransformPatch);
           } else {
             const euler = new THREE.Euler().setFromQuaternion(object.quaternion);
             onTransformChangeRef.current(poseProxyNodeId, {
@@ -6199,14 +6206,16 @@ export function Viewport({
       }
 
       // Pose proxy — location (or full pose) gizmo for nodes with nothing else to grab.
-      const poseProxyConfig = !outputMode && selectedNodeForPivot ? POSE_PROXY_NODES[selectedNodeForPivot.type] : undefined;
+      const poseProxyConfigRaw = !outputMode && selectedNodeForPivot ? POSE_PROXY_NODES[selectedNodeForPivot.type] : undefined;
+      const poseProxyConfig = poseProxyConfigRaw && (!poseProxyConfigRaw.when || poseProxyConfigRaw.when(selectedNodeForPivot!.params)) ? poseProxyConfigRaw : undefined;
       if (poseProxyConfig && selectedNodeForPivot) {
         const params = selectedNodeForPivot.params;
         poseProxyNodeId = selectedNodeForPivot.id;
         poseProxyChannels = poseProxyConfig.channels;
+        poseProxyLocationParam = poseProxyConfig.locationParam ?? "location";
         poseProxy.visible = true;
         if (!transformControls?.dragging || transformControls.object !== poseProxy) {
-          poseProxy.position.copy(asVector3(params.location, new THREE.Vector3()));
+          poseProxy.position.copy(asVector3(params[poseProxyLocationParam], new THREE.Vector3()));
           if (poseProxyConfig.channels === "trs") {
             const rotation = asVector3(params.rotation, new THREE.Vector3());
             const scale = asVector3(params.scale, new THREE.Vector3(1, 1, 1));
@@ -6223,6 +6232,11 @@ export function Viewport({
         if (poseProxyConfig.radiusParam) {
           const radius = Number(params[poseProxyConfig.radiusParam]);
           poseProxySphere.scale.setScalar(Number.isFinite(radius) && radius > 0 ? radius : 1e-3);
+        }
+        poseProxyInner.visible = !!poseProxyConfig.innerRadiusParam;
+        if (poseProxyConfig.innerRadiusParam) {
+          const inner = Number(params[poseProxyConfig.innerRadiusParam]);
+          poseProxyInner.scale.setScalar(Number.isFinite(inner) && inner > 0 ? inner : 1e-3);
         }
         poseProxyBox.visible = !!poseProxyConfig.box;
         if (poseProxyConfig.box) {
@@ -7056,6 +7070,8 @@ export function Viewport({
       poseProxyCoreMat.dispose();
       poseProxySphereGeo.dispose();
       poseProxySphereMat.dispose();
+      poseProxyInnerGeo.dispose();
+      poseProxyInnerMat.dispose();
       poseProxyBoxUnitGeo.dispose();
       poseProxyBox.material.dispose();
       forceFieldProxy.removeFromParent();

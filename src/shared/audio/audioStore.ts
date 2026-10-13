@@ -137,6 +137,8 @@ export interface PlayerState {
   audioEl: HTMLAudioElement;
   sourceNode?: MediaElementAudioSourceNode;
   gainNode?: GainNode;
+  /** Left/right position of a local sound (see spatial.ts); centred when global. */
+  pannerNode?: StereoPannerNode;
   loadedPath?: string;
   isPlaying: boolean;
   /** Last value of the Trigger input — used to detect the rising edge (one-shot start). */
@@ -242,6 +244,7 @@ const playerCache = createNodeCache<PlayerState>((state) => {
   } catch {}
   state.sourceNode?.disconnect();
   state.gainNode?.disconnect();
+  state.pannerNode?.disconnect();
 });
 
 export function getOrCreatePlayer(nodeId: string): PlayerState {
@@ -287,7 +290,16 @@ export function getOrCreatePlayer(nodeId: string): PlayerState {
       const sourceNode = ctx.createMediaElementSource(audioEl);
       const gainNode = ctx.createGain();
       sourceNode.connect(gainNode);
-      gainNode.connect(getAudioOutput() ?? ctx.destination);
+      // Gain -> stereo panner -> the output bus; the panner sits at the centre until a local sound moves it.
+      const out = getAudioOutput() ?? ctx.destination;
+      if (typeof ctx.createStereoPanner === "function") {
+        const pannerNode = ctx.createStereoPanner();
+        gainNode.connect(pannerNode);
+        pannerNode.connect(out);
+        state.pannerNode = pannerNode;
+      } else {
+        gainNode.connect(out);
+      }
       state.sourceNode = sourceNode;
       state.gainNode = gainNode;
     } catch {

@@ -45,3 +45,24 @@ export function spatialGain(
   const l = listener ?? { x: 0, y: 0, z: 0 };
   return attenuation(Math.hypot(l.x - source.x, l.y - source.y, l.z - source.z), inner, outer, rolloff);
 }
+
+type Vec = { x: number; y: number; z: number };
+
+/**
+ * Stereo position (-1 left … +1 right) of a local sound for a listener whose right-hand direction is `right` (the camera's
+ * X axis): the sound is panned by how far to the listener's side it lies. Close to the listener (inside the full-volume
+ * radius, or within half a unit) the sound is "on top of you" and the pan eases back to the centre instead of flicking
+ * left and right as the camera passes through it.
+ */
+export function stereoPan(listener: Vec | null, right: Vec | null, source: Vec, inner: number): number {
+  if (!listener || !right) return 0;
+  const dx = source.x - listener.x;
+  const dy = source.y - listener.y;
+  const dz = source.z - listener.z;
+  const dist = Math.hypot(dx, dy, dz);
+  if (!(dist > 1e-6)) return 0;
+  const rl = Math.hypot(right.x, right.y, right.z) || 1;
+  const side = (dx * right.x + dy * right.y + dz * right.z) / (dist * rl); // cosine of the angle to the right axis
+  const ease = Math.min(1, dist / Math.max(inner, 0.5));
+  return Math.max(-1, Math.min(1, side * ease));
+}
