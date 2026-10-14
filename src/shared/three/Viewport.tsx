@@ -1987,6 +1987,34 @@ export function Viewport({
     let poseProxyNodeId: string | null = null;
     let poseProxyChannels: "location" | "trs" = "location";
     let poseProxyLocationParam = "location";
+    // Scale mode on a sound: the radii as they were when the drag began, and which params they live in.
+    // Params with the node type's defaults under them: a project saved before a param existed does not carry it.
+    const paramsWithDefaults = (n: { type: string; params: Record<string, unknown> }): Record<string, unknown> => ({
+      ...(registryRef.current.get(n.type)?.defaultParams ?? {}),
+      ...n.params,
+    });
+    let poseProxyRadii: { outerParam: string; innerParam: string | null } | null = null;
+    let poseProxyRadiiBase: { outer: number; inner: number } | null = null;
+
+    // Speaker icons: one billboard per local sound, always visible in the editor (not in the output), so a sound can be
+    // seen and clicked without selecting it first. Drawn once on a canvas.
+    const soundIconGroup = new THREE.Group();
+    const soundIconTexture = (() => {
+      const c = document.createElement("canvas");
+      c.width = c.height = 128;
+      const g = c.getContext("2d")!;
+      g.fillStyle = "rgba(17,24,39,0.82)";
+      g.beginPath(); g.arc(64, 64, 60, 0, Math.PI * 2); g.fill();
+      g.strokeStyle = "#f97316"; g.lineWidth = 5; g.stroke();
+      g.fillStyle = "#f97316";
+      g.beginPath(); g.moveTo(30, 52); g.lineTo(48, 52); g.lineTo(70, 34); g.lineTo(70, 94); g.lineTo(48, 76); g.lineTo(30, 76); g.closePath(); g.fill();
+      g.lineWidth = 6; g.lineCap = "round";
+      for (const r of [14, 26]) { g.beginPath(); g.arc(70, 64, r, -0.9, 0.9); g.stroke(); }
+      const t = new THREE.CanvasTexture(c);
+      t.colorSpace = THREE.SRGBColorSpace;
+      return t;
+    })();
+    const soundIcons = new Map<string, THREE.Sprite>();
 
     // Force Field 3D proxy: shows interactive position & direction helper for
     // particles/force-field — same structure as the Particle Emitter proxy
@@ -2057,6 +2085,7 @@ export function Viewport({
       editorUiScene.add(clipBoxProxy);
       editorUiScene.add(decalProxy);
       editorUiScene.add(poseProxy);
+      editorUiScene.add(soundIconGroup);
       editorUiScene.add(forceFieldProxy);
       editorUiScene.add(emitterProxy);
       editorUiScene.add(gizmoPivotProxy);
@@ -2598,6 +2627,25 @@ export function Viewport({
         // Pose proxy: a bare location, or the full pose for the fluid solver.
         if (object === poseProxy && poseProxyNodeId && onTransformChangeRef.current) {
           if (poseProxyChannels === "location") {
+            if (poseProxyRadii && transformControls?.getMode() === "scale") {
+              // Scale mode resizes the sphere: both radii grow by the same factor, from where they were when the drag began.
+              if (!poseProxyRadiiBase) {
+                const found = graphRef.current.nodes.find((n) => n.id === poseProxyNodeId);
+                const params = found ? paramsWithDefaults(found) : {};
+                poseProxyRadiiBase = {
+                  outer: Number(params[poseProxyRadii.outerParam]) || 1,
+                  inner: poseProxyRadii.innerParam ? Number(params[poseProxyRadii.innerParam]) || 0 : 0,
+                };
+              }
+              const sx = object.scale.x, sy = object.scale.y, sz = object.scale.z;
+              // The axis dragged the furthest from 1 decides (the centre handle moves all three together).
+              const factor = [sx, sy, sz].reduce((best, v) => (Math.abs(v - 1) > Math.abs(best - 1) ? v : best), 1);
+              const k = Math.max(0.01, Math.abs(factor));
+              const patch: Record<string, number> = { [poseProxyRadii.outerParam]: poseProxyRadiiBase.outer * k };
+              if (poseProxyRadii.innerParam) patch[poseProxyRadii.innerParam] = poseProxyRadiiBase.inner * k;
+              onTransformChangeRef.current(poseProxyNodeId, patch as TransformPatch);
+              return;
+            }
             // A node whose point is not called `location` (a sound's `position`) gets its own key; the patch is just a param write.
             onTransformChangeRef.current(poseProxyNodeId, { [poseProxyLocationParam]: object.position.clone() } as TransformPatch);
           } else {
@@ -5050,6 +5098,16 @@ export function Viewport({
       // the object.
       selectedPointIndices.clear();
 
+      // A speaker icon is clickable too: it is drawn over everything, so it wins over what lies behind it.
+      if (raycaster && soundIcons.size > 0) {
+        const iconHit = raycaster.intersectObjects(soundIconGroup.children, false)[0];
+        const iconId = iconHit?.object.userData.soundNodeId as string | undefined;
+        if (iconId) {
+          onSelectNodeRef.current(iconId);
+          return;
+        }
+      }
+
       // three's Raycaster hits invisible objects too — it only skips them if
       // you filter yourself — so a hidden object would otherwise still be
       // clickable, and would steal clicks from whatever is visible behind it.
@@ -6207,12 +6265,15 @@ export function Viewport({
 
       // Pose proxy — location (or full pose) gizmo for nodes with nothing else to grab.
       const poseProxyConfigRaw = !outputMode && selectedNodeForPivot ? POSE_PROXY_NODES[selectedNodeForPivot.type] : undefined;
-      const poseProxyConfig = poseProxyConfigRaw && (!poseProxyConfigRaw.when || poseProxyConfigRaw.when(selectedNodeForPivot!.params)) ? poseProxyConfigRaw : undefined;
+      const poseProxyConfig = poseProxyConfigRaw && (!poseProxyConfigRaw.when || poseProxyConfigRaw.when(paramsWithDefaults(selectedNodeForPivot!))) ? poseProxyConfigRaw : undefined;
       if (poseProxyConfig && selectedNodeForPivot) {
-        const params = selectedNodeForPivot.params;
+        const params = paramsWithDefaults(selectedNodeForPivot);
         poseProxyNodeId = selectedNodeForPivot.id;
         poseProxyChannels = poseProxyConfig.channels;
         poseProxyLocationParam = poseProxyConfig.locationParam ?? "location";
+        poseProxyRadii = poseProxyConfig.scaleRadii && poseProxyConfig.radiusParam
+          ? { outerParam: poseProxyConfig.radiusParam, innerParam: poseProxyConfig.innerRadiusParam ?? null }
+          : null;
         poseProxy.visible = true;
         if (!transformControls?.dragging || transformControls.object !== poseProxy) {
           poseProxy.position.copy(asVector3(params[poseProxyLocationParam], new THREE.Vector3()));
@@ -6224,19 +6285,23 @@ export function Viewport({
           } else {
             poseProxy.quaternion.identity();
             poseProxy.scale.set(1, 1, 1);
+            poseProxyRadiiBase = null;
           }
         }
+        // While a Scale drag is running the proxy itself is scaled by the gizmo and the params already follow it, so the
+        // spheres divide that scale back out — otherwise they would grow twice.
+        const radiusShown = poseProxyChannels === "location" ? Math.max(Math.abs(poseProxy.scale.x), 1e-3) : 1;
         // Children are in the proxy's local space, so the sphere/box dimensions
         // never touch the proxy's own scale (that is the gizmo's to drag).
         poseProxySphere.visible = !!poseProxyConfig.radiusParam;
         if (poseProxyConfig.radiusParam) {
           const radius = Number(params[poseProxyConfig.radiusParam]);
-          poseProxySphere.scale.setScalar(Number.isFinite(radius) && radius > 0 ? radius : 1e-3);
+          poseProxySphere.scale.setScalar((Number.isFinite(radius) && radius > 0 ? radius : 1e-3) / radiusShown);
         }
         poseProxyInner.visible = !!poseProxyConfig.innerRadiusParam;
         if (poseProxyConfig.innerRadiusParam) {
           const inner = Number(params[poseProxyConfig.innerRadiusParam]);
-          poseProxyInner.scale.setScalar(Number.isFinite(inner) && inner > 0 ? inner : 1e-3);
+          poseProxyInner.scale.setScalar((Number.isFinite(inner) && inner > 0 ? inner : 1e-3) / radiusShown);
         }
         poseProxyBox.visible = !!poseProxyConfig.box;
         if (poseProxyConfig.box) {
@@ -6247,6 +6312,32 @@ export function Viewport({
       } else if (poseProxyNodeId) {
         poseProxy.visible = false;
         poseProxyNodeId = null;
+        poseProxyRadii = null;
+        poseProxyRadiiBase = null;
+      }
+
+      // Speaker icons for local sounds: a billboard at each one's Position, in the editor only.
+      const localSounds = outputMode ? [] : graphRef.current.nodes.filter((n) => n.type === "sound/player" && n.params.spatialMode === "local");
+      const liveSounds = new Set<string>();
+      for (const n of localSounds) {
+        liveSounds.add(n.id);
+        let icon = soundIcons.get(n.id);
+        if (!icon) {
+          icon = new THREE.Sprite(new THREE.SpriteMaterial({ map: soundIconTexture, depthTest: false, depthWrite: false, sizeAttenuation: false, transparent: true }));
+          icon.scale.set(0.07, 0.07, 1);
+          icon.renderOrder = 999;
+          icon.userData.soundNodeId = n.id;
+          soundIcons.set(n.id, icon);
+          soundIconGroup.add(icon);
+        }
+        icon.position.copy(asVector3(n.params.position, new THREE.Vector3()));
+        (icon.material as THREE.SpriteMaterial).opacity = n.id === selectedNodeIdRef.current ? 1 : 0.8;
+      }
+      for (const [id, icon] of [...soundIcons]) {
+        if (liveSounds.has(id)) continue;
+        soundIconGroup.remove(icon);
+        (icon.material as THREE.Material).dispose();
+        soundIcons.delete(id);
       }
 
       // Force Field proxy — position and axis gizmo
@@ -6355,7 +6446,11 @@ export function Viewport({
       if (transformControls && !transformControls.dragging && pickedCurveHandle) {
         targetObject = pickedCurveHandle;
         if (transformControls.object !== pickedCurveHandle) transformControls.attach(pickedCurveHandle);
-        transformControls.setMode(pickedCurveHandle === poseProxy && poseProxyChannels === "location" ? "translate" : transformModeRef.current);
+        transformControls.setMode(
+          pickedCurveHandle === poseProxy && poseProxyChannels === "location"
+            ? (poseProxyRadii && transformModeRef.current === "scale" ? "scale" : "translate")
+            : transformModeRef.current,
+        );
         transformControls.enabled = true;
         transformControls.showX = true;
         transformControls.showY = true;
@@ -7066,6 +7161,10 @@ export function Viewport({
       decalProxyFace.geometry.dispose();
       decalProxyFace.material.dispose();
       poseProxy.removeFromParent();
+      soundIconGroup.removeFromParent();
+      for (const icon of soundIcons.values()) (icon.material as THREE.Material).dispose();
+      soundIcons.clear();
+      soundIconTexture.dispose();
       poseProxyCoreGeo.dispose();
       poseProxyCoreMat.dispose();
       poseProxySphereGeo.dispose();

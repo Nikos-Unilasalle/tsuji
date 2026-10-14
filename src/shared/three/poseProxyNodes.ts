@@ -8,6 +8,8 @@
  *   scale are not parameters), so the gizmo is held in translate mode.
  * - "trs": a full pose (location / rotation / scale), like the Decal's box.
  *
+ * `scaleRadii` lets the gizmo's Scale mode resize the sphere: dragging scales `radiusParam` and `innerRadiusParam` together.
+ *
  * `locationParam` names the vector param the marker stands for when it is not `location` (Audio Player's `position`);
  * `innerRadiusParam` adds a second, filled sphere inside the first (a sound's full-volume zone); `when` shows the proxy only
  * while it makes sense (a sound is only spatial in local mode).
@@ -20,6 +22,7 @@ export interface PoseProxyConfig {
   channels: "location" | "trs";
   radiusParam?: string;
   innerRadiusParam?: string;
+  scaleRadii?: boolean;
   locationParam?: string;
   when?: (params: Record<string, unknown>) => boolean;
   box?: boolean;
@@ -35,6 +38,7 @@ export const POSE_PROXY_NODES: Readonly<Record<string, PoseProxyConfig>> = {
     locationParam: "position",
     radiusParam: "outerRadius",
     innerRadiusParam: "innerRadius",
+    scaleRadii: true,
     when: (params) => params.spatialMode === "local",
   },
 };
