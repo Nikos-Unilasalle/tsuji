@@ -1969,16 +1969,36 @@ export function Viewport({
     // Pose proxy for nodes that own a `location` but draw nothing the gizmo
     // can grab (explosions, fluid solver) — see poseProxyNodes.ts.
     const poseProxy = new THREE.Object3D();
-    const poseProxyColor = 0xf97316;
+    // Helper colours come from the theme palette (Preferences > Themes), never fixed values: the accent colour for the marker
+    // and its circles. Refreshed whenever the palette changes (see paintPoseProxy below).
+    const poseProxyColor = new THREE.Color(getCurrentColors().accentColor);
     const poseProxyCoreGeo = new THREE.SphereGeometry(0.18, 16, 16);
     const poseProxyCoreMat = new THREE.MeshBasicMaterial({ color: poseProxyColor, depthWrite: false });
-    const poseProxySphereGeo = new THREE.WireframeGeometry(new THREE.SphereGeometry(1, 16, 12));
-    const poseProxySphereMat = new THREE.LineBasicMaterial({ color: poseProxyColor, transparent: true, opacity: 0.35 });
-    const poseProxySphere = new THREE.LineSegments(poseProxySphereGeo, poseProxySphereMat);
-    // The inner zone (a sound's full-volume radius): a fainter filled shell inside the outer wire sphere.
-    const poseProxyInnerGeo = new THREE.SphereGeometry(1, 24, 16);
-    const poseProxyInnerMat = new THREE.MeshBasicMaterial({ color: poseProxyColor, transparent: true, opacity: 0.12, depthWrite: false, side: THREE.DoubleSide });
-    const poseProxyInner = new THREE.Mesh(poseProxyInnerGeo, poseProxyInnerMat);
+    // A radius is drawn as three discrete circles, one per axis plane — a skeleton of a sphere, not a surface.
+    const poseCircleGeo = (() => {
+      const pts: THREE.Vector3[] = [];
+      for (let i = 0; i <= 64; i++) {
+        const a = (i / 64) * Math.PI * 2;
+        pts.push(new THREE.Vector3(Math.cos(a), Math.sin(a), 0));
+      }
+      return new THREE.BufferGeometry().setFromPoints(pts);
+    })();
+    const makePoseRings = (opacity: number) => {
+      const material = new THREE.LineBasicMaterial({ color: poseProxyColor, transparent: true, opacity, depthWrite: false });
+      const group = new THREE.Group();
+      for (const rot of [[0, 0, 0], [Math.PI / 2, 0, 0], [0, Math.PI / 2, 0]]) {
+        const ring = new THREE.Line(poseCircleGeo, material);
+        ring.rotation.set(rot[0], rot[1], rot[2]);
+        group.add(ring);
+      }
+      return { group, material };
+    };
+    const poseOuter = makePoseRings(0.55);
+    const poseInner = makePoseRings(0.95);
+    const poseProxySphere = poseOuter.group;
+    const poseProxySphereMat = poseOuter.material;
+    const poseProxyInner = poseInner.group;
+    const poseProxyInnerMat = poseInner.material;
     poseProxyInner.visible = false;
     const poseProxyBoxUnitGeo = new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 1, 1));
     const poseProxyBox = new THREE.LineSegments(poseProxyBoxUnitGeo, new THREE.LineBasicMaterial({ color: poseProxyColor }));
@@ -1999,21 +2019,41 @@ export function Viewport({
     // Speaker icons: one billboard per local sound, always visible in the editor (not in the output), so a sound can be
     // seen and clicked without selecting it first. Drawn once on a canvas.
     const soundIconGroup = new THREE.Group();
-    const soundIconTexture = (() => {
-      const c = document.createElement("canvas");
-      c.width = c.height = 128;
-      const g = c.getContext("2d")!;
-      g.fillStyle = "rgba(17,24,39,0.82)";
+    const soundIconCanvas = document.createElement("canvas");
+    soundIconCanvas.width = soundIconCanvas.height = 128;
+    const soundIconTexture = new THREE.CanvasTexture(soundIconCanvas);
+    soundIconTexture.colorSpace = THREE.SRGBColorSpace;
+    let soundIconPaint = "";
+    /** Redraws the icon in the theme's colours: the chrome pill for the disc, the accent for the speaker. */
+    const paintSoundIcon = (accent: string, disc: string) => {
+      const g = soundIconCanvas.getContext("2d")!;
+      g.clearRect(0, 0, 128, 128);
+      g.fillStyle = disc;
       g.beginPath(); g.arc(64, 64, 60, 0, Math.PI * 2); g.fill();
-      g.strokeStyle = "#f97316"; g.lineWidth = 5; g.stroke();
-      g.fillStyle = "#f97316";
+      g.strokeStyle = accent; g.lineWidth = 5; g.stroke();
+      g.fillStyle = accent;
       g.beginPath(); g.moveTo(30, 52); g.lineTo(48, 52); g.lineTo(70, 34); g.lineTo(70, 94); g.lineTo(48, 76); g.lineTo(30, 76); g.closePath(); g.fill();
-      g.lineWidth = 6; g.lineCap = "round";
+      g.strokeStyle = accent; g.lineWidth = 6; g.lineCap = "round";
       for (const r of [14, 26]) { g.beginPath(); g.arc(70, 64, r, -0.9, 0.9); g.stroke(); }
-      const t = new THREE.CanvasTexture(c);
-      t.colorSpace = THREE.SRGBColorSpace;
-      return t;
-    })();
+      soundIconTexture.needsUpdate = true;
+    };
+    /** Follows the palette: called every frame, repaints only when the accent or the pill colour changed. */
+    let paintTick = 0;
+    const paintPoseProxy = () => {
+      // The palette lives in localStorage; look at it twice a second, not every frame.
+      if (soundIconPaint !== "" && paintTick++ % 30 !== 0) return;
+      const colors = getCurrentColors();
+      const key = `${colors.accentColor}|${colors.chromePillBg}`;
+      if (key === soundIconPaint) return;
+      soundIconPaint = key;
+      poseProxyColor.set(colors.accentColor);
+      poseProxyCoreMat.color.copy(poseProxyColor);
+      poseProxySphereMat.color.copy(poseProxyColor);
+      poseProxyInnerMat.color.copy(poseProxyColor);
+      (poseProxyBox.material as THREE.LineBasicMaterial).color.copy(poseProxyColor);
+      paintSoundIcon(colors.accentColor, colors.chromePillBg);
+    };
+    paintPoseProxy();
     const soundIcons = new Map<string, THREE.Sprite>();
 
     // Force Field 3D proxy: shows interactive position & direction helper for
@@ -6316,6 +6356,8 @@ export function Viewport({
         poseProxyRadiiBase = null;
       }
 
+      paintPoseProxy();
+
       // Speaker icons for local sounds: a billboard at each one's Position, in the editor only.
       const localSounds = outputMode ? [] : graphRef.current.nodes.filter((n) => n.type === "sound/player" && n.params.spatialMode === "local");
       const liveSounds = new Set<string>();
@@ -7167,9 +7209,8 @@ export function Viewport({
       soundIconTexture.dispose();
       poseProxyCoreGeo.dispose();
       poseProxyCoreMat.dispose();
-      poseProxySphereGeo.dispose();
+      poseCircleGeo.dispose();
       poseProxySphereMat.dispose();
-      poseProxyInnerGeo.dispose();
       poseProxyInnerMat.dispose();
       poseProxyBoxUnitGeo.dispose();
       poseProxyBox.material.dispose();
