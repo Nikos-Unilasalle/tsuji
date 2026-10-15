@@ -115,3 +115,24 @@ describe("Skin node: modes and binding", () => {
     expect(after - before).toBeCloseTo(1, 3);
   });
 });
+
+describe("Skin on a T-posed mesh", () => {
+  it("binds to a T-pose while the rig stands in its own neutral pose", () => {
+    const rig = RIG_HUMAN_NODE.evaluate({}, { ...RIG_HUMAN_NODE.defaultParams, bindArmAngle: 90 }, ctx("t-rig")).geometry as THREE.Object3D;
+    const data = rig.userData.rig as { rest: THREE.Vector3[]; pose: THREE.Vector3[] };
+    const hand = 8;
+    // Bind: arm straight out. Pose: still hanging at the A-pose.
+    expect(data.rest[hand].y).toBeCloseTo(data.rest[6].y, 1);
+    expect(data.pose[hand].y).toBeLessThan(data.rest[6].y - 0.4);
+
+    // An arm modelled out in a T, from the shoulder to the hand.
+    const length = data.rest[hand].x - data.rest[6].x;
+    const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, length, 8, 24).rotateZ(Math.PI / 2).translate(data.rest[6].x + length / 2, data.rest[6].y, 0), new THREE.MeshStandardMaterial());
+    const skinned = SKIN_NODE.evaluate({ geometry: arm, rig }, params({ mode: "CPU", influences: 2 }), ctx("t-skin")).geometry;
+    const xs = positionsOf(skinned).filter((_, i) => i % 3 === 0);
+    const ys = positionsOf(skinned).filter((_, i) => i % 3 === 1);
+    // The tip of the arm has swung down to where the rig's hand hangs.
+    const tip = xs.indexOf(Math.max(...xs));
+    expect(ys[tip]).toBeLessThan(data.rest[6].y - 0.3);
+  });
+});

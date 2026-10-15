@@ -25,6 +25,8 @@ export interface HumanParams {
   legs: number;
   shoulderWidth: number;
   hipWidth: number;
+  /** Rest pose of the arms, in degrees out from hanging straight down: 22 is an A-pose, 90 a T-pose. */
+  armAngle: number;
   spineSegments: number;
   /** Joint limits on (1) or off (0). The angles below are in degrees. */
   jointLimits: number;
@@ -50,6 +52,7 @@ export const HUMAN_DEFAULTS: HumanParams = {
   legs: 1,
   shoulderWidth: 1,
   hipWidth: 1,
+  armAngle: 22,
   spineSegments: 3,
   jointLimits: 1,
   kneeBend: 150,
@@ -94,8 +97,8 @@ export interface HumanSkeleton extends Skeleton {
 
 /**
  * Proportions are fractions of the height (roughly anthropometric), each
- * scaled by its own multiplier. The rest pose is an A-pose with the elbows
- * bent slightly back and the knees slightly forward — toward their poles — so
+ * scaled by its own multiplier. The rest pose is an A-pose (or, with Arm Angle,
+ * any other: 90 is a T-pose) with the elbows bent slightly back and the knees slightly forward — toward their poles — so
  * the solver starts with a bend to work from.
  */
 export function buildHumanSkeleton(input: Partial<HumanParams> = {}): HumanSkeleton {
@@ -134,8 +137,9 @@ export function buildHumanSkeleton(input: Partial<HumanParams> = {}): HumanSkele
 
   const upperArm = 0.17 * H * p.arms;
   const forearm = 0.155 * H * p.arms;
-  const armAngle = 22 * DEG; // A-pose: arms this far out from hanging straight down
-  const elbowBend = 12 * DEG;
+  const armAngle = Math.max(0, Math.min(150, p.armAngle)) * DEG; // arms this far out from hanging straight down
+  // Bent a little so the solver has a side to bend to; less in a T-pose, where the arm is meant to read straight.
+  const elbowBend = (12 - 8 * Math.min(1, Math.max(0, (armAngle / DEG - 22) / 68))) * DEG;
   const hand: [number, number] = [0, 0];
   const elbow: [number, number] = [0, 0];
   const shoulder: [number, number] = [0, 0];
