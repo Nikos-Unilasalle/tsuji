@@ -110,3 +110,53 @@ describe("Biped Motion node", () => {
     expect(worstFoot).toBeLessThan(0.05);
   });
 });
+
+describe("Biped Motion speed", () => {
+  const skeleton = RIG_HUMAN_NODE.evaluate({}, { ...RIG_HUMAN_NODE.defaultParams }, ctx("speed-skel")).geometry;
+  const { hand } = (skeleton as THREE.Object3D).userData.humanRig.skeleton.joint as { hand: [number, number] };
+  const play = (params: Record<string, unknown>, metresPerSecond: number, frames: number, id: string) => {
+    const outs: Record<string, unknown>[] = [];
+    for (let frame = 0; frame <= frames; frame++) {
+      outs.push(
+        RIG_BIPED_MOTION_NODE.evaluate(
+          { skeleton },
+          { ...params, location: new THREE.Vector3(0, 0, (frame / 60) * metresPerSecond) },
+          ctx(id, { time: frame / 60, capturing: true, sessionId: "test" }),
+        ),
+      );
+    }
+    return outs;
+  };
+  const airborne = (f: THREE.Vector3) => f.y > 0.04 * 1.8 + 1e-3;
+
+  it("at 0.5 is the walk it always was", () => {
+    // A node saved before Speed existed has no speed at all: the same gait as 0.5.
+    const { speed: _speed, ...legacy } = RIG_BIPED_MOTION_NODE.defaultParams;
+    const a = play(legacy, 1, 150, "speed-legacy").pop()!;
+    const b = play({ ...legacy, speed: 0.5 }, 1, 150, "speed-half").pop()!;
+    (a.joints as THREE.Vector3[]).forEach((j, i) => expect(j.distanceTo((b.joints as THREE.Vector3[])[i])).toBeLessThan(1e-9));
+  });
+
+  it("at 0 stands: no steps for a body that barely moves, the hands drift loosely", () => {
+    const base = { ...RIG_BIPED_MOTION_NODE.defaultParams };
+    const still = play({ ...base, speed: 0 }, 0.12, 240, "speed-still");
+    const walk = play({ ...base, speed: 0.5 }, 0.12, 240, "speed-walk-slow");
+    const stepped = (outs: Record<string, unknown>[]) => outs.some((o) => (o.feet as THREE.Vector3[]).some(airborne));
+    expect(stepped(still)).toBe(false);
+    expect(stepped(walk)).toBe(true);
+    const zs = still.slice(60).map((o) => (o.joints as THREE.Vector3[])[hand[0]].z);
+    expect(Math.max(...zs) - Math.min(...zs)).toBeGreaterThan(0.01);
+  });
+
+  it("at 1 runs: a wider arm swing than the walk, and both feet can leave the ground", () => {
+    const base = { ...RIG_BIPED_MOTION_NODE.defaultParams };
+    const run = play({ ...base, speed: 1 }, 3, 300, "speed-run");
+    const walk = play({ ...base, speed: 0.5 }, 3, 300, "speed-walk-fast");
+    const spread = (outs: Record<string, unknown>[]) => {
+      const zs = outs.slice(120).map((o) => (o.joints as THREE.Vector3[])[hand[0]].z - (o.joints as THREE.Vector3[])[0].z);
+      return Math.max(...zs) - Math.min(...zs);
+    };
+    expect(spread(run)).toBeGreaterThan(spread(walk));
+    expect(run.some((o) => (o.feet as THREE.Vector3[]).every(airborne))).toBe(true);
+  });
+});

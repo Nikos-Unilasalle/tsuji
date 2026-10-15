@@ -22,6 +22,7 @@ import { createSkeletonView, SkeletonView } from "../ik/skeletonView";
 import { createGait, GAIT_DEFAULTS, GaitParams, GaitState, polypedeNeighbors, stepGait } from "../ik/polypedeGait";
 import { boneLengths, IkRig } from "../ik/fabrik";
 import { publishRig } from "../ik/skinning";
+import { bipedStyle, idleSwayOffset } from "../ik/bipedStyle";
 
 /**
  * Rig nodes: FABRIK inverse kinematics on two ready-made skeletons — a human
@@ -615,6 +616,7 @@ export const RIG_BIPED_MOTION_NODE: NodeDefinition = {
   inputs: [
     { id: "skeleton", label: "Skeleton", type: "geometry", owns: true },
     { id: "matrix", label: "Matrix", type: "matrix" },
+    { id: "speed", label: "Speed", type: "value" },
   ],
   outputs: [
     { id: "geometry", label: "Geometry", type: "geometry" },
@@ -626,11 +628,13 @@ export const RIG_BIPED_MOTION_NODE: NodeDefinition = {
   defaultParams: {
     ...TRANSFORM_DEFAULTS,
     ...BIPED_DEFAULTS,
+    speed: 0.5,
     showCircles: false,
     showControls: false,
   },
   paramFields: [
     ...NATIVE_TRANSFORM_PARAM_FIELDS,
+    { id: "speed", label: "Speed (0 still · 0.5 walk · 1 run)", kind: "number", step: 0.05, group: "Gait" },
     { id: "stepRadius", label: "Step Radius", kind: "number", step: 0.02, group: "Gait" },
     { id: "stepDuration", label: "Step Duration (s)", kind: "number", step: 0.02, group: "Gait" },
     { id: "stepHeight", label: "Step Height", kind: "number", step: 0.01, group: "Gait" },
@@ -687,13 +691,15 @@ export const RIG_BIPED_MOTION_NODE: NodeDefinition = {
     const dt = state.lastTime === null ? 0 : Math.max(0, Math.min(0.1, now - state.lastTime));
     state.lastTime = now;
 
+    // The parameters are the walk; Speed moves the gait from standing still (0) through it (0.5) to a run (1).
+    const style = bipedStyle(numberInput(inputs.speed, params.speed, 0.5));
     const gaitParams: GaitParams = {
-      stepRadius: Math.max(0.001, num("stepRadius")),
-      stepDuration: Math.max(0.01, num("stepDuration")),
-      stepHeight: num("stepHeight"),
+      stepRadius: Math.max(0.001, num("stepRadius") * style.stepRadius),
+      stepDuration: Math.max(0.01, num("stepDuration") * style.stepDuration),
+      stepHeight: num("stepHeight") * style.stepHeight,
       overshoot: num("overshoot"),
       // Wait for the other foot rather than hop, until the stride would tear.
-      urgency: 2.4,
+      urgency: style.urgency,
       // Past this a leg cannot reach its foot anyway: put it back under the body.
       snap: 3.5,
     };
@@ -749,22 +755,25 @@ export const RIG_BIPED_MOTION_NODE: NodeDefinition = {
     state.gait.legs.forEach((leg, s) => {
       if (!leg.stepping) return;
       const lift = Math.sin(Math.PI * Math.min(1, leg.t));
-      bob = Math.max(bob, lift * num("pelvisBob"));
-      sway += lift * num("hipSway") * Math.sign(restFeet[1 - s].x || 1);
+      bob = Math.max(bob, lift * num("pelvisBob") * style.pelvisBob);
+      sway += lift * num("hipSway") * style.hipSway * Math.sign(restFeet[1 - s].x || 1);
     });
     const delta = new THREE.Vector3(sway, bob - state.drop, 0);
-    const lean = Math.max(-0.3, Math.min(0.3, num("lean") * speed)) * (height / 1.7);
+    const lean = Math.max(-0.3, Math.min(0.3, num("lean") * style.lean * speed)) * (height / 1.7);
     // Clamped to a real stride, so a foot left somewhere odd (a jump, a reload)
     // cannot fling the arms — and, through Arm Pull, the torso — along with it.
     const maxStride = 2 * gaitParams.stepRadius / unit;
     const stride = (s: number) => Math.max(-maxStride, Math.min(maxStride, feet[s].z - restFeet[s].z));
-    const armSwing = num("armSwing");
+    const armSwing = num("armSwing") * style.armSwing;
+    // Standing, the hands just hang and drift; running, they are lifted and flexed.
+    const drift = (hand: 0 | 1) => idleSwayOffset(now, hand, 0.045 * (height / 1.7) * style.idleSway);
+    const handLift = new THREE.Vector3(0, style.armLift * height, 0);
 
     const controls = [
       rc[0].clone().add(delta),
       rc[1].clone().add(delta).add(new THREE.Vector3(0, 0, lean)),
-      rc[2].clone().add(delta).add(new THREE.Vector3(0, 0, armSwing * stride(1) + lean * 0.5)),
-      rc[3].clone().add(delta).add(new THREE.Vector3(0, 0, armSwing * stride(0) + lean * 0.5)),
+      rc[2].clone().add(delta).add(handLift).add(new THREE.Vector3(0, 0, armSwing * stride(1) + lean * 0.5 + drift(0))),
+      rc[3].clone().add(delta).add(handLift).add(new THREE.Vector3(0, 0, armSwing * stride(0) + lean * 0.5 + drift(1))),
       feet[0],
       feet[1],
       rc[6].clone().add(delta),
