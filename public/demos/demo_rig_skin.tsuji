@@ -1,0 +1,1308 @@
+{
+  "canvases": [
+    {
+      "nodes": [
+        {
+          "id": "setup_0",
+          "type": "object/plane",
+          "position": {
+            "x": 599,
+            "y": 160
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "rotation": {
+              "x": 1.5707963267948966,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 20,
+              "y": 20,
+              "z": 1
+            },
+            "texturePath": "",
+            "normalMapPath": "",
+            "roughnessMapPath": "",
+            "uvScaleX": 1,
+            "uvScaleY": 1,
+            "uvOffsetX": 0,
+            "uvOffsetY": 0,
+            "color": 16777215,
+            "emissive": 0,
+            "emissiveIntensity": 1,
+            "shadeless": 0,
+            "roughness": 0.1,
+            "metalness": 0.1,
+            "wireframe": 0,
+            "opacity": 1,
+            "transmission": 0,
+            "thickness": 0.5
+          }
+        },
+        {
+          "id": "setup_1",
+          "type": "texture/procedural",
+          "position": {
+            "x": 375,
+            "y": 223
+          },
+          "params": {
+            "type": "checker",
+            "colorA": 16777215,
+            "colorB": 2236962,
+            "scale": 8,
+            "seed": 1,
+            "octaves": 3,
+            "resolution": 256,
+            "uvScaleX": 1,
+            "uvScaleY": 1,
+            "uvOffsetX": 0,
+            "uvOffsetY": 0
+          }
+        },
+        {
+          "id": "setup_2",
+          "type": "light/point",
+          "position": {
+            "x": 857,
+            "y": 193
+          },
+          "params": {
+            "location": {
+              "x": 0,
+              "y": 2.185514752224622,
+              "z": -4.5179526088705275
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "color": 16768110,
+            "intensity": 50,
+            "distance": 15,
+            "decay": 2,
+            "castShadow": 1
+          }
+        },
+        {
+          "id": "setup_3",
+          "type": "light/point",
+          "position": {
+            "x": 1043,
+            "y": 187
+          },
+          "params": {
+            "location": {
+              "x": 0,
+              "y": 2.185514752224622,
+              "z": 4.487400919453167
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "color": 440020,
+            "intensity": 50,
+            "distance": 15,
+            "decay": 2,
+            "castShadow": 1
+          }
+        },
+        {
+          "id": "setup_4",
+          "type": "render",
+          "position": {
+            "x": 610,
+            "y": 393
+          },
+          "params": {
+            "frameCount": 600,
+            "fps": 30,
+            "motionBlur": 0,
+            "resolutionPreset": "16:9 (1920x1080)",
+            "width": 1920,
+            "height": 1080,
+            "holdout": false
+          }
+        },
+        {
+          "id": "setup_5",
+          "type": "lighting/environment",
+          "position": {
+            "x": 340,
+            "y": 406
+          },
+          "params": {
+            "color": 4147542,
+            "intensity": 1,
+            "background": 1,
+            "blurriness": 0,
+            "filePath": "",
+            "backgroundImagePath": "",
+            "backgroundFit": "cover",
+            "backgroundScale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "backgroundOffset": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "backgroundRotation": 0,
+            "ambientIntensity": 0,
+            "sunIntensity": 0
+          }
+        },
+        {
+          "id": "setup_6",
+          "type": "light/point",
+          "position": {
+            "x": 860,
+            "y": 389
+          },
+          "params": {
+            "location": {
+              "x": 3.583607412619263,
+              "y": 2.185514752224622,
+              "z": -0.48624947478730096
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "color": 16777215,
+            "intensity": 50,
+            "distance": 15,
+            "decay": 2,
+            "castShadow": 1
+          }
+        },
+        {
+          "id": "path",
+          "type": "curve/primitive",
+          "position": {
+            "x": -1500,
+            "y": 120
+          },
+          "params": {
+            "primitiveType": "ellipse",
+            "radius": 3.5,
+            "height": 5.5
+          }
+        },
+        {
+          "id": "clock",
+          "type": "time",
+          "position": {
+            "x": -1500,
+            "y": 420
+          },
+          "params": {}
+        },
+        {
+          "id": "speed",
+          "type": "value/math",
+          "position": {
+            "x": -1250,
+            "y": 420
+          },
+          "params": {
+            "op": "multiply",
+            "b": 0.05
+          }
+        },
+        {
+          "id": "follow",
+          "type": "curve/sample",
+          "position": {
+            "x": -1000,
+            "y": 260
+          },
+          "params": {}
+        },
+        {
+          "id": "human",
+          "type": "rig/human",
+          "position": {
+            "x": -1000,
+            "y": -120
+          },
+          "params": {}
+        },
+        {
+          "id": "walk",
+          "type": "rig/biped-motion",
+          "position": {
+            "x": -650,
+            "y": 120
+          },
+          "params": {
+            "showCircles": true
+          }
+        },
+        {
+          "id": "body_0",
+          "type": "object/cylinder",
+          "position": {
+            "x": -300,
+            "y": -830
+          },
+          "params": {
+            "location": {
+              "x": 0.0,
+              "y": 1.237,
+              "z": 0.0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 0.28,
+              "y": 0.4680000000000002,
+              "z": 0.28
+            },
+            "color": 3108767,
+            "roughness": 0.55,
+            "metalness": 0.0
+          }
+        },
+        {
+          "id": "body_1",
+          "type": "object/cylinder",
+          "position": {
+            "x": -300,
+            "y": -760
+          },
+          "params": {
+            "location": {
+              "x": 0.0,
+              "y": 1.471,
+              "z": 0.0
+            },
+            "rotation": {
+              "x": -0.0,
+              "y": 0.0,
+              "z": 1.5707963267948966
+            },
+            "scale": {
+              "x": 0.12,
+              "y": 0.396,
+              "z": 0.12
+            },
+            "color": 3108767,
+            "roughness": 0.55,
+            "metalness": 0.0
+          }
+        },
+        {
+          "id": "body_2",
+          "type": "object/cylinder",
+          "position": {
+            "x": -300,
+            "y": -690
+          },
+          "params": {
+            "location": {
+              "x": 0.0,
+              "y": 0.949,
+              "z": 0.0
+            },
+            "rotation": {
+              "x": -0.0,
+              "y": 0.0,
+              "z": 1.5707963267948966
+            },
+            "scale": {
+              "x": 0.15,
+              "y": 0.324,
+              "z": 0.15
+            },
+            "color": 3816010,
+            "roughness": 0.55,
+            "metalness": 0.0
+          }
+        },
+        {
+          "id": "body_3",
+          "type": "object/cylinder",
+          "position": {
+            "x": -300,
+            "y": -620
+          },
+          "params": {
+            "location": {
+              "x": 0.0,
+              "y": 1.516,
+              "z": 0.0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 0.1,
+              "y": 0.08999999999999986,
+              "z": 0.1
+            },
+            "color": 14264196,
+            "roughness": 0.55,
+            "metalness": 0.0
+          }
+        },
+        {
+          "id": "body_4",
+          "type": "object/cylinder",
+          "position": {
+            "x": -300,
+            "y": -550
+          },
+          "params": {
+            "location": {
+              "x": 0.0,
+              "y": 1.633,
+              "z": 0.0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 0.1,
+              "y": 0.14400000000000013,
+              "z": 0.1
+            },
+            "color": 14264196,
+            "roughness": 0.55,
+            "metalness": 0.0
+          }
+        },
+        {
+          "id": "body_5",
+          "type": "object/sphere",
+          "position": {
+            "x": -300,
+            "y": -480
+          },
+          "params": {
+            "location": {
+              "x": 0,
+              "y": 1.74,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 0.22,
+              "y": 0.22,
+              "z": 0.22
+            },
+            "color": 14264196,
+            "roughness": 0.55,
+            "metalness": 0.0
+          }
+        },
+        {
+          "id": "body_6",
+          "type": "object/sphere",
+          "position": {
+            "x": -300,
+            "y": -410
+          },
+          "params": {
+            "location": {
+              "x": 0,
+              "y": 1.003,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 0.28,
+              "y": 0.28,
+              "z": 0.28
+            },
+            "color": 3816010,
+            "roughness": 0.55,
+            "metalness": 0.0
+          }
+        },
+        {
+          "id": "body_7",
+          "type": "object/cylinder",
+          "position": {
+            "x": -300,
+            "y": -340
+          },
+          "params": {
+            "location": {
+              "x": 0.2555,
+              "y": 1.3290000000000002,
+              "z": 0.0
+            },
+            "rotation": {
+              "x": 0.0,
+              "y": 0.0,
+              "z": -2.7568438776866775
+            },
+            "scale": {
+              "x": 0.1,
+              "y": 0.30640006527414454,
+              "z": 0.1
+            },
+            "color": 3108767,
+            "roughness": 0.55,
+            "metalness": 0.0
+          }
+        },
+        {
+          "id": "body_8",
+          "type": "object/cylinder",
+          "position": {
+            "x": -300,
+            "y": -270
+          },
+          "params": {
+            "location": {
+              "x": 0.364,
+              "y": 1.0605,
+              "z": 0.029
+            },
+            "rotation": {
+              "x": 0.3713802286490181,
+              "y": -0.9605403926407367,
+              "z": -2.449425868787078
+            },
+            "scale": {
+              "x": 0.08,
+              "y": 0.27888528107449484,
+              "z": 0.08
+            },
+            "color": 14264196,
+            "roughness": 0.55,
+            "metalness": 0.0
+          }
+        },
+        {
+          "id": "body_9",
+          "type": "object/sphere",
+          "position": {
+            "x": -300,
+            "y": -200
+          },
+          "params": {
+            "location": {
+              "x": 0.198,
+              "y": 1.471,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 0.12,
+              "y": 0.12,
+              "z": 0.12
+            },
+            "color": 3108767,
+            "roughness": 0.55,
+            "metalness": 0.0
+          }
+        },
+        {
+          "id": "body_10",
+          "type": "object/sphere",
+          "position": {
+            "x": -300,
+            "y": -130
+          },
+          "params": {
+            "location": {
+              "x": 0.313,
+              "y": 1.187,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 0.09,
+              "y": 0.09,
+              "z": 0.09
+            },
+            "color": 3108767,
+            "roughness": 0.55,
+            "metalness": 0.0
+          }
+        },
+        {
+          "id": "body_11",
+          "type": "object/sphere",
+          "position": {
+            "x": -300,
+            "y": -60
+          },
+          "params": {
+            "location": {
+              "x": 0.415,
+              "y": 0.934,
+              "z": 0.058
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 0.1,
+              "y": 0.1,
+              "z": 0.1
+            },
+            "color": 14264196,
+            "roughness": 0.55,
+            "metalness": 0.0
+          }
+        },
+        {
+          "id": "body_12",
+          "type": "object/cylinder",
+          "position": {
+            "x": -300,
+            "y": 10
+          },
+          "params": {
+            "location": {
+              "x": 0.162,
+              "y": 0.73,
+              "z": 0.023
+            },
+            "rotation": {
+              "x": 3.0369534139280563,
+              "y": 0.0,
+              "z": -0.0
+            },
+            "scale": {
+              "x": 0.16,
+              "y": 0.4404089009091437,
+              "z": 0.16
+            },
+            "color": 3816010,
+            "roughness": 0.55,
+            "metalness": 0.0
+          }
+        },
+        {
+          "id": "body_13",
+          "type": "object/cylinder",
+          "position": {
+            "x": -300,
+            "y": 80
+          },
+          "params": {
+            "location": {
+              "x": 0.162,
+              "y": 0.2915,
+              "z": 0.023
+            },
+            "rotation": {
+              "x": -3.0371900418724866,
+              "y": 0.0,
+              "z": -0.0
+            },
+            "scale": {
+              "x": 0.12,
+              "y": 0.4414034435751493,
+              "z": 0.12
+            },
+            "color": 3816010,
+            "roughness": 0.55,
+            "metalness": 0.0
+          }
+        },
+        {
+          "id": "body_14",
+          "type": "object/sphere",
+          "position": {
+            "x": -300,
+            "y": 150
+          },
+          "params": {
+            "location": {
+              "x": 0.162,
+              "y": 0.511,
+              "z": 0.046
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 0.14,
+              "y": 0.14,
+              "z": 0.14
+            },
+            "color": 3816010,
+            "roughness": 0.55,
+            "metalness": 0.0
+          }
+        },
+        {
+          "id": "body_15",
+          "type": "object/sphere",
+          "position": {
+            "x": -300,
+            "y": 220
+          },
+          "params": {
+            "location": {
+              "x": 0.162,
+              "y": 0.072,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 0.12,
+              "y": 0.12,
+              "z": 0.12
+            },
+            "color": 2236962,
+            "roughness": 0.55,
+            "metalness": 0.0
+          }
+        },
+        {
+          "id": "body_16",
+          "type": "object/box",
+          "position": {
+            "x": -300,
+            "y": 290
+          },
+          "params": {
+            "location": {
+              "x": 0.162,
+              "y": 0.035,
+              "z": 0.08
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 0.1,
+              "y": 0.07,
+              "z": 0.28
+            },
+            "color": 2236962,
+            "roughness": 0.55,
+            "metalness": 0.0
+          }
+        },
+        {
+          "id": "body_17",
+          "type": "object/cylinder",
+          "position": {
+            "x": -300,
+            "y": 360
+          },
+          "params": {
+            "location": {
+              "x": -0.2555,
+              "y": 1.3290000000000002,
+              "z": 0.0
+            },
+            "rotation": {
+              "x": -0.0,
+              "y": 0.0,
+              "z": 2.7568438776866775
+            },
+            "scale": {
+              "x": 0.1,
+              "y": 0.30640006527414454,
+              "z": 0.1
+            },
+            "color": 3108767,
+            "roughness": 0.55,
+            "metalness": 0.0
+          }
+        },
+        {
+          "id": "body_18",
+          "type": "object/cylinder",
+          "position": {
+            "x": -300,
+            "y": 430
+          },
+          "params": {
+            "location": {
+              "x": -0.364,
+              "y": 1.0605,
+              "z": 0.029
+            },
+            "rotation": {
+              "x": 0.3713802286490181,
+              "y": 0.9605403926407367,
+              "z": 2.449425868787078
+            },
+            "scale": {
+              "x": 0.08,
+              "y": 0.27888528107449484,
+              "z": 0.08
+            },
+            "color": 14264196,
+            "roughness": 0.55,
+            "metalness": 0.0
+          }
+        },
+        {
+          "id": "body_19",
+          "type": "object/sphere",
+          "position": {
+            "x": -300,
+            "y": 500
+          },
+          "params": {
+            "location": {
+              "x": -0.198,
+              "y": 1.471,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 0.12,
+              "y": 0.12,
+              "z": 0.12
+            },
+            "color": 3108767,
+            "roughness": 0.55,
+            "metalness": 0.0
+          }
+        },
+        {
+          "id": "body_20",
+          "type": "object/sphere",
+          "position": {
+            "x": -300,
+            "y": 570
+          },
+          "params": {
+            "location": {
+              "x": -0.313,
+              "y": 1.187,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 0.09,
+              "y": 0.09,
+              "z": 0.09
+            },
+            "color": 3108767,
+            "roughness": 0.55,
+            "metalness": 0.0
+          }
+        },
+        {
+          "id": "body_21",
+          "type": "object/sphere",
+          "position": {
+            "x": -300,
+            "y": 640
+          },
+          "params": {
+            "location": {
+              "x": -0.415,
+              "y": 0.934,
+              "z": 0.058
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 0.1,
+              "y": 0.1,
+              "z": 0.1
+            },
+            "color": 14264196,
+            "roughness": 0.55,
+            "metalness": 0.0
+          }
+        },
+        {
+          "id": "body_22",
+          "type": "object/cylinder",
+          "position": {
+            "x": -300,
+            "y": 710
+          },
+          "params": {
+            "location": {
+              "x": -0.162,
+              "y": 0.73,
+              "z": 0.023
+            },
+            "rotation": {
+              "x": 3.0369534139280563,
+              "y": 0.0,
+              "z": -0.0
+            },
+            "scale": {
+              "x": 0.16,
+              "y": 0.4404089009091437,
+              "z": 0.16
+            },
+            "color": 3816010,
+            "roughness": 0.55,
+            "metalness": 0.0
+          }
+        },
+        {
+          "id": "body_23",
+          "type": "object/cylinder",
+          "position": {
+            "x": -300,
+            "y": 780
+          },
+          "params": {
+            "location": {
+              "x": -0.162,
+              "y": 0.2915,
+              "z": 0.023
+            },
+            "rotation": {
+              "x": -3.0371900418724866,
+              "y": 0.0,
+              "z": -0.0
+            },
+            "scale": {
+              "x": 0.12,
+              "y": 0.4414034435751493,
+              "z": 0.12
+            },
+            "color": 3816010,
+            "roughness": 0.55,
+            "metalness": 0.0
+          }
+        },
+        {
+          "id": "body_24",
+          "type": "object/sphere",
+          "position": {
+            "x": -300,
+            "y": 850
+          },
+          "params": {
+            "location": {
+              "x": -0.162,
+              "y": 0.511,
+              "z": 0.046
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 0.14,
+              "y": 0.14,
+              "z": 0.14
+            },
+            "color": 3816010,
+            "roughness": 0.55,
+            "metalness": 0.0
+          }
+        },
+        {
+          "id": "body_25",
+          "type": "object/sphere",
+          "position": {
+            "x": -300,
+            "y": 920
+          },
+          "params": {
+            "location": {
+              "x": -0.162,
+              "y": 0.072,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 0.12,
+              "y": 0.12,
+              "z": 0.12
+            },
+            "color": 2236962,
+            "roughness": 0.55,
+            "metalness": 0.0
+          }
+        },
+        {
+          "id": "body_26",
+          "type": "object/box",
+          "position": {
+            "x": -300,
+            "y": 990
+          },
+          "params": {
+            "location": {
+              "x": -0.162,
+              "y": 0.035,
+              "z": 0.08
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 0.1,
+              "y": 0.07,
+              "z": 0.28
+            },
+            "color": 2236962,
+            "roughness": 0.55,
+            "metalness": 0.0
+          }
+        },
+        {
+          "id": "body",
+          "type": "structure/merge",
+          "position": {
+            "x": 0,
+            "y": -900
+          },
+          "params": {}
+        },
+        {
+          "id": "skin",
+          "type": "rig/skin",
+          "position": {
+            "x": -300,
+            "y": 120
+          },
+          "params": {
+            "influences": 4,
+            "falloff": 4,
+            "smooth": 2
+          }
+        }
+      ],
+      "connections": [
+        {
+          "id": "setup_c0",
+          "fromNode": "setup_1",
+          "fromSocket": "texture",
+          "toNode": "setup_0",
+          "toSocket": "texture"
+        },
+        {
+          "id": "setup_c1",
+          "fromNode": "setup_5",
+          "fromSocket": "environment",
+          "toNode": "setup_4",
+          "toSocket": "environment"
+        },
+        {
+          "id": "clock.seconds->speed.a",
+          "fromNode": "clock",
+          "fromSocket": "seconds",
+          "toNode": "speed",
+          "toSocket": "a"
+        },
+        {
+          "id": "speed.out->follow.progress",
+          "fromNode": "speed",
+          "fromSocket": "out",
+          "toNode": "follow",
+          "toSocket": "progress"
+        },
+        {
+          "id": "path.curve->follow.curve",
+          "fromNode": "path",
+          "fromSocket": "curve",
+          "toNode": "follow",
+          "toSocket": "curve"
+        },
+        {
+          "id": "human.geometry->walk.skeleton",
+          "fromNode": "human",
+          "fromSocket": "geometry",
+          "toNode": "walk",
+          "toSocket": "skeleton"
+        },
+        {
+          "id": "follow.matrix->walk.matrix",
+          "fromNode": "follow",
+          "fromSocket": "matrix",
+          "toNode": "walk",
+          "toSocket": "matrix"
+        },
+        {
+          "id": "body_0.geometry->body.in0",
+          "fromNode": "body_0",
+          "fromSocket": "geometry",
+          "toNode": "body",
+          "toSocket": "in0"
+        },
+        {
+          "id": "body_1.geometry->body.in1",
+          "fromNode": "body_1",
+          "fromSocket": "geometry",
+          "toNode": "body",
+          "toSocket": "in1"
+        },
+        {
+          "id": "body_2.geometry->body.in2",
+          "fromNode": "body_2",
+          "fromSocket": "geometry",
+          "toNode": "body",
+          "toSocket": "in2"
+        },
+        {
+          "id": "body_3.geometry->body.in3",
+          "fromNode": "body_3",
+          "fromSocket": "geometry",
+          "toNode": "body",
+          "toSocket": "in3"
+        },
+        {
+          "id": "body_4.geometry->body.in4",
+          "fromNode": "body_4",
+          "fromSocket": "geometry",
+          "toNode": "body",
+          "toSocket": "in4"
+        },
+        {
+          "id": "body_5.geometry->body.in5",
+          "fromNode": "body_5",
+          "fromSocket": "geometry",
+          "toNode": "body",
+          "toSocket": "in5"
+        },
+        {
+          "id": "body_6.geometry->body.in6",
+          "fromNode": "body_6",
+          "fromSocket": "geometry",
+          "toNode": "body",
+          "toSocket": "in6"
+        },
+        {
+          "id": "body_7.geometry->body.in7",
+          "fromNode": "body_7",
+          "fromSocket": "geometry",
+          "toNode": "body",
+          "toSocket": "in7"
+        },
+        {
+          "id": "body_8.geometry->body.in8",
+          "fromNode": "body_8",
+          "fromSocket": "geometry",
+          "toNode": "body",
+          "toSocket": "in8"
+        },
+        {
+          "id": "body_9.geometry->body.in9",
+          "fromNode": "body_9",
+          "fromSocket": "geometry",
+          "toNode": "body",
+          "toSocket": "in9"
+        },
+        {
+          "id": "body_10.geometry->body.in10",
+          "fromNode": "body_10",
+          "fromSocket": "geometry",
+          "toNode": "body",
+          "toSocket": "in10"
+        },
+        {
+          "id": "body_11.geometry->body.in11",
+          "fromNode": "body_11",
+          "fromSocket": "geometry",
+          "toNode": "body",
+          "toSocket": "in11"
+        },
+        {
+          "id": "body_12.geometry->body.in12",
+          "fromNode": "body_12",
+          "fromSocket": "geometry",
+          "toNode": "body",
+          "toSocket": "in12"
+        },
+        {
+          "id": "body_13.geometry->body.in13",
+          "fromNode": "body_13",
+          "fromSocket": "geometry",
+          "toNode": "body",
+          "toSocket": "in13"
+        },
+        {
+          "id": "body_14.geometry->body.in14",
+          "fromNode": "body_14",
+          "fromSocket": "geometry",
+          "toNode": "body",
+          "toSocket": "in14"
+        },
+        {
+          "id": "body_15.geometry->body.in15",
+          "fromNode": "body_15",
+          "fromSocket": "geometry",
+          "toNode": "body",
+          "toSocket": "in15"
+        },
+        {
+          "id": "body_16.geometry->body.in16",
+          "fromNode": "body_16",
+          "fromSocket": "geometry",
+          "toNode": "body",
+          "toSocket": "in16"
+        },
+        {
+          "id": "body_17.geometry->body.in17",
+          "fromNode": "body_17",
+          "fromSocket": "geometry",
+          "toNode": "body",
+          "toSocket": "in17"
+        },
+        {
+          "id": "body_18.geometry->body.in18",
+          "fromNode": "body_18",
+          "fromSocket": "geometry",
+          "toNode": "body",
+          "toSocket": "in18"
+        },
+        {
+          "id": "body_19.geometry->body.in19",
+          "fromNode": "body_19",
+          "fromSocket": "geometry",
+          "toNode": "body",
+          "toSocket": "in19"
+        },
+        {
+          "id": "body_20.geometry->body.in20",
+          "fromNode": "body_20",
+          "fromSocket": "geometry",
+          "toNode": "body",
+          "toSocket": "in20"
+        },
+        {
+          "id": "body_21.geometry->body.in21",
+          "fromNode": "body_21",
+          "fromSocket": "geometry",
+          "toNode": "body",
+          "toSocket": "in21"
+        },
+        {
+          "id": "body_22.geometry->body.in22",
+          "fromNode": "body_22",
+          "fromSocket": "geometry",
+          "toNode": "body",
+          "toSocket": "in22"
+        },
+        {
+          "id": "body_23.geometry->body.in23",
+          "fromNode": "body_23",
+          "fromSocket": "geometry",
+          "toNode": "body",
+          "toSocket": "in23"
+        },
+        {
+          "id": "body_24.geometry->body.in24",
+          "fromNode": "body_24",
+          "fromSocket": "geometry",
+          "toNode": "body",
+          "toSocket": "in24"
+        },
+        {
+          "id": "body_25.geometry->body.in25",
+          "fromNode": "body_25",
+          "fromSocket": "geometry",
+          "toNode": "body",
+          "toSocket": "in25"
+        },
+        {
+          "id": "body_26.geometry->body.in26",
+          "fromNode": "body_26",
+          "fromSocket": "geometry",
+          "toNode": "body",
+          "toSocket": "in26"
+        },
+        {
+          "id": "body.geometry->skin.geometry",
+          "fromNode": "body",
+          "fromSocket": "geometry",
+          "toNode": "skin",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "walk.geometry->skin.rig",
+          "fromNode": "walk",
+          "fromSocket": "geometry",
+          "toNode": "skin",
+          "toSocket": "rig"
+        }
+      ],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    }
+  ],
+  "activeCanvas": 0
+}

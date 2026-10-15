@@ -588,6 +588,11 @@ export const DEMO_CATALOG: DemoCategory[] = [
         label: "Biped Walk",
         description: "A human walking an elliptical path: stepping feet, swinging arms, bobbing hips (press Play).",
       },
+      {
+        file: "demo_rig_skin.tsuji",
+        label: "Skinned Biped",
+        description: "A procedural body bound to the walking skeleton by Skin: the mesh bends at elbows and knees as the rig moves (press Play).",
+      },
     ],
   },
   {

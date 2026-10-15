@@ -21,12 +21,14 @@ import {
 import { createSkeletonView, SkeletonView } from "../ik/skeletonView";
 import { createGait, GAIT_DEFAULTS, GaitParams, GaitState, polypedeNeighbors, stepGait } from "../ik/polypedeGait";
 import { boneLengths, IkRig } from "../ik/fabrik";
+import { publishRig } from "../ik/skinning";
 
 /**
  * Rig nodes: FABRIK inverse kinematics on two ready-made skeletons — a human
  * posed by its controls, and a polypede walked by Polypede Motion. Skeletons
  * only, nothing deforms a mesh yet; Joints / Bones outputs let objects be
- * attached to them.
+ * attached to them. Each also publishes its joints on `userData.rig`, which
+ * Skin reads to deform a mesh.
  */
 
 const views = createNodeCache<SkeletonView>((view) => view.dispose());
@@ -52,6 +54,8 @@ function placeGroup(group: THREE.Group, inputs: Record<string, unknown>, params:
   }
   group.matrixWorldNeedsUpdate = true;
 }
+
+const parentsOf = (rig: IkRig) => rig.joints.map((j) => j.parent);
 
 function bonesOf(rig: IkRig): [number, number][] {
   return rig.joints.flatMap((j, i) => (j.parent >= 0 ? [[j.parent, i] as [number, number]] : []));
@@ -259,6 +263,7 @@ export const RIG_HUMAN_NODE: NodeDefinition = {
       solver: solverOptions(params),
     };
     group.userData.humanRig = rigData;
+    publishRig(group, parentsOf(skeleton.rig), skeleton.rig.rest, positions, group.matrix);
 
     group.updateMatrixWorld(true);
     const world = positions.map((p) => p.clone().applyMatrix4(group.matrix));
@@ -379,6 +384,7 @@ export const RIG_POLYPEDE_NODE: NodeDefinition = {
     drawPolypede(view, skeleton, skeleton.rig.rest, thickness, color);
     const data: PolypedeRigData = { skeleton, key, thickness, color };
     view.group.userData.polypedeRig = data;
+    publishRig(view.group, parentsOf(skeleton.rig), skeleton.rig.rest, skeleton.rig.rest, view.group.matrix);
     return { geometry: view.group, matrix: view.group.matrix.clone() };
   },
 };
@@ -506,6 +512,7 @@ export const RIG_POLYPEDE_MOTION_NODE: NodeDefinition = {
       ? skeleton.legs.map((leg) => ({ center: leg.restFoot, radius: localRadius }))
       : undefined;
     drawPolypede(view, skeleton, positions, data.thickness, data.color, circles);
+    publishRig(group, parentsOf(skeleton.rig), skeleton.rig.rest, positions, body);
 
     group.updateMatrixWorld(true);
     const world = positions.map((p) => p.clone().applyMatrix4(body));
@@ -520,6 +527,7 @@ export const RIG_POLYPEDE_MOTION_NODE: NodeDefinition = {
 };
 
 function drawEmpty(view: SkeletonView) {
+  delete view.group.userData.rig;
   view.update({ positions: [], bones: [], thickness: 0, color: 0xffffff, jointRadius: 0 });
 }
 
@@ -765,6 +773,7 @@ export const RIG_BIPED_MOTION_NODE: NodeDefinition = {
         : undefined,
     });
 
+    publishRig(group, parentsOf(skeleton.rig), skeleton.rig.rest, positions, body);
     group.updateMatrixWorld(true);
     const world = positions.map((p) => p.clone().applyMatrix4(body));
     return { geometry: group, matrix: body, feet: feetWorld, joints: world, bones: boneMatrices(skeleton.rig, world) };
