@@ -81,14 +81,14 @@ export interface PosedBones {
   nrm: Float32Array;
 }
 
-/**
- * The bone matrices for a pose, in the frame of `frame` (a mesh's bind matrix:
- * the mesh's local space -> the space `rest` and `pose` are given in), so they
- * apply straight to the mesh's own vertices.
- */
-export function poseBones(bones: SkinBone[], pose: THREE.Vector3[], frame: THREE.Matrix4, options: PoseOptions, into?: PosedBones): PosedBones {
-  const count = bones.length;
-  const out = into && into.pos.length === count * 12 ? into : { pos: new Float32Array(count * 12), nrm: new Float32Array(count * 9) };
+/** How each bone turned from rest to the posed segment; the same for every mesh bound to the rig. */
+export interface BoneRotations {
+  rotations: THREE.Quaternion[];
+  /** Whether the bone has a posed segment to turn to (a point bone or a collapsed bone does not). */
+  real: boolean[];
+}
+
+export function boneRotations(bones: SkinBone[], pose: THREE.Vector3[]): BoneRotations {
   const rotations: THREE.Quaternion[] = bones.map(() => new THREE.Quaternion());
   const real: boolean[] = bones.map(() => false);
   const dir = new THREE.Vector3();
@@ -117,6 +117,19 @@ export function poseBones(bones: SkinBone[], pose: THREE.Vector3[], frame: THREE
     if (bone.parent >= 0) return;
     if (used[i] > 0 && sums[i].lengthSq() > EPS) rotations[i].copy(sums[i]).normalize();
   });
+  return { rotations, real };
+}
+
+/**
+ * The bone matrices for a pose, in the frame of `frame` (a mesh's bind matrix:
+ * the mesh's local space -> the space `rest` and `pose` are given in), so they
+ * apply straight to the mesh's own vertices. `turns` can be shared between
+ * meshes: the rotations do not depend on the mesh.
+ */
+export function poseBones(bones: SkinBone[], pose: THREE.Vector3[], frame: THREE.Matrix4, options: PoseOptions, into?: PosedBones, turns?: BoneRotations): PosedBones {
+  const count = bones.length;
+  const out = into && into.pos.length === count * 12 ? into : { pos: new Float32Array(count * 12), nrm: new Float32Array(count * 9) };
+  const { rotations, real } = turns ?? boneRotations(bones, pose);
 
   const toWorld = frame;
   const toLocal = frame.clone().invert();
@@ -205,19 +218,61 @@ export interface WeightOptions {
   smooth: number;
 }
 
-/** Above this many weld x bone weights, smoothing is skipped rather than allocate a huge table. */
-const MAX_DENSE = 12_000_000;
+/** Bones kept per vertex while smoothing: enough to blend across a joint without a table of every bone. */
+const WORKING_BONES = 8;
 
-function segmentDistanceSq(p: THREE.Vector3, bone: SkinBone): number {
-  if (bone.length === 0) return p.distanceToSquared(bone.head);
-  const dx = p.x - bone.head.x;
-  const dy = p.y - bone.head.y;
-  const dz = p.z - bone.head.z;
-  const t = Math.max(0, Math.min(bone.length, dx * bone.dir.x + dy * bone.dir.y + dz * bone.dir.z));
-  const cx = dx - bone.dir.x * t;
-  const cy = dy - bone.dir.y * t;
-  const cz = dz - bone.dir.z * t;
-  return cx * cx + cy * cy + cz * cz;
+/**
+ * Welds coincident vertices (a mesh split along seams or flat-shaded still has
+ * one weight set per position): the weld id of each vertex, and a vertex
+ * standing for each weld. Open addressing over quantised integer coordinates,
+ * no string keys.
+ */
+function weldVertices(positions: ArrayLike<number>, vertexCount: number): { weldOf: Int32Array; reps: Int32Array; welds: number } {
+  const qx = new Int32Array(vertexCount);
+  const qy = new Int32Array(vertexCount);
+  const qz = new Int32Array(vertexCount);
+  let size = 16;
+  while (size < vertexCount * 2) size <<= 1;
+  const mask = size - 1;
+  const table = new Int32Array(size).fill(-1);
+  const weldOf = new Int32Array(vertexCount);
+  const reps = new Int32Array(vertexCount);
+  let welds = 0;
+  for (let v = 0; v < vertexCount; v++) {
+    const x = (qx[v] = Math.round(positions[v * 3] * 1e5));
+    const y = (qy[v] = Math.round(positions[v * 3 + 1] * 1e5));
+    const z = (qz[v] = Math.round(positions[v * 3 + 2] * 1e5));
+    let slot = (Math.imul(x, 73856093) ^ Math.imul(y, 19349663) ^ Math.imul(z, 83492791)) & mask;
+    for (;;) {
+      const other = table[slot];
+      if (other < 0) {
+        table[slot] = v;
+        weldOf[v] = welds;
+        reps[welds++] = v;
+        break;
+      }
+      if (qx[other] === x && qy[other] === y && qz[other] === z) {
+        weldOf[v] = weldOf[other];
+        break;
+      }
+      slot = (slot + 1) & mask;
+    }
+  }
+  return { weldOf, reps, welds };
+}
+
+/** Zeroes weights too small to show, renormalises the rest. `wt` is sorted strongest first. */
+function pruneAndNormalise(wt: Float32Array, o: number, keep: number) {
+  let total = 0;
+  for (let k = 0; k < keep; k++) total += wt[o + k];
+  if (total <= 0) return;
+  let kept = 0;
+  const floor = total * 1e-3;
+  for (let k = 0; k < keep; k++) {
+    if (wt[o + k] < floor) wt[o + k] = 0;
+    else kept += wt[o + k];
+  }
+  for (let k = 0; k < keep; k++) wt[o + k] /= kept;
 }
 
 /**
@@ -226,6 +281,11 @@ function segmentDistanceSq(p: THREE.Vector3, bone: SkinBone): number {
  * `index` is the mesh's triangle list, or null for an unindexed one: it only
  * serves to find neighbours for smoothing, through welded positions so that
  * the seams of a split mesh smooth together.
+ *
+ * Cost is vertices x bones for the distances, then vertices x a handful for
+ * everything else: smoothing works on each vertex's strongest few bones, never
+ * on a table of every bone, so a rig of hundreds of joints costs no more to
+ * smooth than one of ten.
  */
 export function computeSkinWeights(positions: ArrayLike<number>, index: ArrayLike<number> | null, frame: THREE.Matrix4, bones: SkinBone[], options: WeightOptions): SkinWeights {
   const vertexCount = Math.floor(positions.length / 3);
@@ -235,21 +295,7 @@ export function computeSkinWeights(positions: ArrayLike<number>, index: ArrayLik
   const weights = new Float32Array(vertexCount * influences);
   if (vertexCount === 0 || boneCount === 0) return { influences, indices, weights };
 
-  // Weld coincident vertices: one weight set per position.
-  const weldOf = new Int32Array(vertexCount);
-  const reps: number[] = [];
-  const seen = new Map<string, number>();
-  for (let v = 0; v < vertexCount; v++) {
-    const key = `${Math.round(positions[v * 3] * 1e5)},${Math.round(positions[v * 3 + 1] * 1e5)},${Math.round(positions[v * 3 + 2] * 1e5)}`;
-    let id = seen.get(key);
-    if (id === undefined) {
-      id = reps.length;
-      reps.push(v);
-      seen.set(key, id);
-    }
-    weldOf[v] = id;
-  }
-  const welds = reps.length;
+  const { weldOf, reps, welds } = weldVertices(positions, vertexCount);
 
   let meanLength = 0;
   let real = 0;
@@ -260,99 +306,201 @@ export function computeSkinWeights(positions: ArrayLike<number>, index: ArrayLik
     }
   }
   const eps = 1e-9 + 0.01 * (real > 0 ? meanLength / real : 1);
-  const falloff = Math.max(0.1, options.falloff);
+  const eps2 = eps * eps;
+  // weight = (nearest / distance)^falloff = ((nearest² + e²) / (distance² + e²))^(falloff / 2):
+  // a whole power is a few multiplications, no pow, no sqrt.
+  const half = Math.max(0.05, options.falloff) / 2;
+  const wholeHalf = Number.isInteger(half) && half <= 8;
+  const negligible = Math.pow(1e-3, 1 / half);
 
-  const dense = new Float32Array(welds * boneCount);
-  const p = new THREE.Vector3();
-  const dist = new Float64Array(boneCount);
+  // Flat copies of the segments, and the frame, for the hot loop.
+  const hx = new Float64Array(boneCount);
+  const hy = new Float64Array(boneCount);
+  const hz = new Float64Array(boneCount);
+  const dx = new Float64Array(boneCount);
+  const dy = new Float64Array(boneCount);
+  const dz = new Float64Array(boneCount);
+  const len = new Float64Array(boneCount);
+  bones.forEach((bone, b) => {
+    hx[b] = bone.head.x;
+    hy[b] = bone.head.y;
+    hz[b] = bone.head.z;
+    dx[b] = bone.dir.x;
+    dy[b] = bone.dir.y;
+    dz[b] = bone.dir.z;
+    len[b] = bone.length;
+  });
+  const m = frame.elements;
+
+  const keep = Math.min(boneCount, Math.max(Math.min(WORKING_BONES, influences + 2), influences));
+  let idx = new Uint16Array(welds * keep);
+  let wt = new Float32Array(welds * keep);
+  const dist2 = new Float64Array(boneCount);
+
   for (let w = 0; w < welds; w++) {
     const v = reps[w];
-    p.set(positions[v * 3], positions[v * 3 + 1], positions[v * 3 + 2]).applyMatrix4(frame);
+    const lx = positions[v * 3];
+    const ly = positions[v * 3 + 1];
+    const lz = positions[v * 3 + 2];
+    const px = m[0] * lx + m[4] * ly + m[8] * lz + m[12];
+    const py = m[1] * lx + m[5] * ly + m[9] * lz + m[13];
+    const pz = m[2] * lx + m[6] * ly + m[10] * lz + m[14];
     let nearest = Infinity;
     for (let b = 0; b < boneCount; b++) {
-      dist[b] = Math.sqrt(segmentDistanceSq(p, bones[b]));
-      if (dist[b] < nearest) nearest = dist[b];
+      const ox = px - hx[b];
+      const oy = py - hy[b];
+      const oz = pz - hz[b];
+      let t = ox * dx[b] + oy * dy[b] + oz * dz[b];
+      if (t < 0) t = 0;
+      else if (t > len[b]) t = len[b];
+      const cx = ox - dx[b] * t;
+      const cy = oy - dy[b] * t;
+      const cz = oz - dz[b] * t;
+      const d2 = cx * cx + cy * cy + cz * cz;
+      dist2[b] = d2;
+      if (d2 < nearest) nearest = d2;
     }
-    let total = 0;
+    const near = nearest + eps2;
+    const o = w * keep;
+    // Strongest `keep` bones by insertion, weight computed only when it can make the cut.
+    let filled = 0;
+    // A bone weighing under a thousandth of the nearest is pruned anyway: skip its power.
+    const farthest = near / negligible;
     for (let b = 0; b < boneCount; b++) {
-      const k = Math.pow((nearest + eps) / (dist[b] + eps), falloff);
-      dense[w * boneCount + b] = k;
-      total += k;
+      const d2 = dist2[b] + eps2;
+      if (d2 > farthest) continue;
+      const r = near / d2;
+      let value: number;
+      if (wholeHalf) {
+        value = 1;
+        for (let k = 0; k < half; k++) value *= r;
+      } else {
+        value = Math.pow(r, half);
+      }
+      if (filled === keep && value <= wt[o + keep - 1]) continue;
+      let slot = filled < keep ? filled++ : keep - 1;
+      while (slot > 0 && wt[o + slot - 1] < value) {
+        wt[o + slot] = wt[o + slot - 1];
+        idx[o + slot] = idx[o + slot - 1];
+        slot--;
+      }
+      wt[o + slot] = value;
+      idx[o + slot] = b;
     }
-    for (let b = 0; b < boneCount; b++) dense[w * boneCount + b] /= total;
+    pruneAndNormalise(wt, o, keep);
   }
 
-  let table = dense;
-  if (options.smooth > 0 && welds * boneCount <= MAX_DENSE) {
+  if (options.smooth > 0 && welds > 1) {
+    const passes = Math.min(20, Math.round(options.smooth));
     // Neighbours as a CSR list over weld ids.
-    const triangleCorners = index ? index.length : vertexCount - (vertexCount % 3);
+    const corners = index ? index.length - (index.length % 3) : vertexCount - (vertexCount % 3);
     const corner = (c: number) => weldOf[index ? index[c] : c];
-    const degree = new Int32Array(welds + 1);
-    for (let c = 0; c + 2 < triangleCorners; c += 3) {
+    const start = new Int32Array(welds + 1);
+    for (let c = 0; c < corners; c++) start[corner(c) + 1] += 2;
+    for (let w = 0; w < welds; w++) start[w + 1] += start[w];
+    const fill = start.slice(0, welds);
+    const neighbours = new Int32Array(start[welds]);
+    for (let c = 0; c < corners; c += 3) {
       const a = corner(c);
       const b = corner(c + 1);
       const d = corner(c + 2);
-      degree[a] += 2;
-      degree[b] += 2;
-      degree[d] += 2;
+      neighbours[fill[a]++] = b;
+      neighbours[fill[a]++] = d;
+      neighbours[fill[b]++] = d;
+      neighbours[fill[b]++] = a;
+      neighbours[fill[d]++] = a;
+      neighbours[fill[d]++] = b;
     }
-    const start = new Int32Array(welds + 1);
-    for (let w = 0; w < welds; w++) start[w + 1] = start[w] + degree[w];
-    const fill = start.slice(0, welds);
-    const neighbours = new Int32Array(start[welds]);
-    for (let c = 0; c + 2 < triangleCorners; c += 3) {
-      const tri = [corner(c), corner(c + 1), corner(c + 2)];
-      for (let e = 0; e < 3; e++) {
-        const a = tri[e];
-        neighbours[fill[a]++] = tri[(e + 1) % 3];
-        neighbours[fill[a]++] = tri[(e + 2) % 3];
-      }
-    }
-    let from = dense;
-    let to = new Float32Array(dense.length);
-    for (let pass = 0; pass < Math.min(20, Math.round(options.smooth)); pass++) {
+
+    let nextIdx = new Uint16Array(idx.length);
+    let nextWt = new Float32Array(wt.length);
+    // One dense row, cleared by undoing what was written.
+    const row = new Float32Array(boneCount);
+    const touchedList: number[] = [];
+    for (let pass = 0; pass < passes; pass++) {
       for (let w = 0; w < welds; w++) {
-        const n = start[w + 1] - start[w];
-        for (let b = 0; b < boneCount; b++) {
-          let sum = 0;
-          for (let k = start[w]; k < start[w + 1]; k++) sum += from[neighbours[k] * boneCount + b];
-          const own = from[w * boneCount + b];
-          to[w * boneCount + b] = n > 0 ? 0.5 * own + 0.5 * (sum / n) : own;
+        const first = start[w];
+        const last = start[w + 1];
+        const n = last - first;
+        const o = w * keep;
+        // Far from any joint a vertex and all its neighbours follow one bone alone: nothing to blend.
+        if (wt[o] >= 0.9999) {
+          const only = idx[o];
+          let alone = true;
+          for (let e = first; e < last; e++) {
+            const q = neighbours[e] * keep;
+            if (idx[q] !== only || wt[q] < 0.9999) {
+              alone = false;
+              break;
+            }
+          }
+          if (alone) {
+            for (let k = 0; k < keep; k++) {
+              nextWt[o + k] = wt[o + k];
+              nextIdx[o + k] = idx[o + k];
+            }
+            continue;
+          }
         }
+        touchedList.length = 0;
+        const own = n > 0 ? 0.5 : 1;
+        for (let k = 0; k < keep; k++) {
+          const value = wt[o + k];
+          if (value === 0) break;
+          const b = idx[o + k];
+          if (row[b] === 0) touchedList.push(b);
+          row[b] += own * value;
+        }
+        if (n > 0) {
+          const share = 0.5 / n;
+          for (let e = first; e < last; e++) {
+            const q = neighbours[e] * keep;
+            for (let k = 0; k < keep; k++) {
+              const value = wt[q + k];
+              if (value === 0) break;
+              const b = idx[q + k];
+              if (row[b] === 0) touchedList.push(b);
+              row[b] += share * value;
+            }
+          }
+        }
+        // Keep the strongest `keep`, clearing the row as it is read.
+        let filled = 0;
+        for (let t = 0; t < touchedList.length; t++) {
+          const b = touchedList[t];
+          const value = row[b];
+          row[b] = 0;
+          if (value === 0) continue;
+          if (filled === keep && value <= nextWt[o + keep - 1]) continue;
+          let slot = filled < keep ? filled++ : keep - 1;
+          while (slot > 0 && nextWt[o + slot - 1] < value) {
+            nextWt[o + slot] = nextWt[o + slot - 1];
+            nextIdx[o + slot] = nextIdx[o + slot - 1];
+            slot--;
+          }
+          nextWt[o + slot] = value;
+          nextIdx[o + slot] = b;
+        }
+        for (let k = filled; k < keep; k++) {
+          nextWt[o + k] = 0;
+          nextIdx[o + k] = 0;
+        }
+        pruneAndNormalise(nextWt, o, keep);
       }
-      [from, to] = [to, from];
+      [idx, nextIdx] = [nextIdx, idx];
+      [wt, nextWt] = [nextWt, wt];
     }
-    table = from;
   }
 
-  // Keep the strongest `influences` per weld, renormalised.
-  const keptIndex = new Uint16Array(welds * influences);
-  const keptWeight = new Float32Array(welds * influences);
-  for (let w = 0; w < welds; w++) {
-    const o = w * influences;
-    let filled = 0;
-    for (let b = 0; b < boneCount; b++) {
-      const value = table[w * boneCount + b];
-      if (filled === influences && value <= keptWeight[o + influences - 1]) continue;
-      let slot = filled < influences ? filled++ : influences - 1;
-      while (slot > 0 && keptWeight[o + slot - 1] < value) {
-        keptWeight[o + slot] = keptWeight[o + slot - 1];
-        keptIndex[o + slot] = keptIndex[o + slot - 1];
-        slot--;
-      }
-      keptWeight[o + slot] = value;
-      keptIndex[o + slot] = b;
-    }
-    let total = 0;
-    for (let k = 0; k < influences; k++) total += keptWeight[o + k];
-    if (total > 0) for (let k = 0; k < influences; k++) keptWeight[o + k] /= total;
-  }
+  // The strongest `influences` of each weld (already sorted), renormalised, per vertex.
   for (let v = 0; v < vertexCount; v++) {
-    const from = weldOf[v] * influences;
+    const from = weldOf[v] * keep;
     const to = v * influences;
+    let total = 0;
+    for (let k = 0; k < influences; k++) total += wt[from + k];
     for (let k = 0; k < influences; k++) {
-      indices[to + k] = keptIndex[from + k];
-      weights[to + k] = keptWeight[from + k];
+      indices[to + k] = idx[from + k];
+      weights[to + k] = total > 0 ? wt[from + k] / total : 0;
     }
   }
   return { influences, indices, weights };
@@ -361,37 +509,105 @@ export function computeSkinWeights(positions: ArrayLike<number>, index: ArrayLik
 // ---------------------------------------------------------------------------
 // Skinning
 
-/** Blends the bone matrices into each vertex of `base`, writing `out`. */
-export function skinPositions(out: Float32Array, base: ArrayLike<number>, skin: SkinWeights, mats: Float32Array) {
+export interface SkinBounds {
+  min: THREE.Vector3;
+  max: THREE.Vector3;
+}
+
+/**
+ * Blends the bone matrices into each vertex of `base`, writing `out` — and,
+ * when given, the normals likewise — in one pass over the weights. Returns the
+ * skinned bounds, so nobody has to walk the vertices again for them.
+ */
+export function skinVertices(
+  out: Float32Array,
+  base: ArrayLike<number>,
+  skin: SkinWeights,
+  mats: Float32Array,
+  normals?: { out: Float32Array; base: ArrayLike<number>; mats: Float32Array },
+  bounds?: SkinBounds,
+) {
   const { influences, indices, weights } = skin;
   const count = Math.floor(base.length / 3);
+  let minX = Infinity;
+  let minY = Infinity;
+  let minZ = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  let maxZ = -Infinity;
+  const nOut = normals?.out;
+  const nBase = normals?.base;
+  const nMats = normals?.mats;
   for (let v = 0; v < count; v++) {
     const x = base[v * 3];
     const y = base[v * 3 + 1];
     const z = base[v * 3 + 2];
-    let ox = 0;
-    let oy = 0;
-    let oz = 0;
+    const o = v * influences;
+    let px = 0;
+    let py = 0;
+    let pz = 0;
     let total = 0;
     for (let k = 0; k < influences; k++) {
-      const w = weights[v * influences + k];
-      if (w === 0) continue;
-      const m = indices[v * influences + k] * 12;
-      ox += w * (mats[m] * x + mats[m + 1] * y + mats[m + 2] * z + mats[m + 3]);
-      oy += w * (mats[m + 4] * x + mats[m + 5] * y + mats[m + 6] * z + mats[m + 7]);
-      oz += w * (mats[m + 8] * x + mats[m + 9] * y + mats[m + 10] * z + mats[m + 11]);
+      const w = weights[o + k];
+      if (w === 0) break; // weights are sorted: nothing follows a zero
+      const b = indices[o + k] * 12;
+      px += w * (mats[b] * x + mats[b + 1] * y + mats[b + 2] * z + mats[b + 3]);
+      py += w * (mats[b + 4] * x + mats[b + 5] * y + mats[b + 6] * z + mats[b + 7]);
+      pz += w * (mats[b + 8] * x + mats[b + 9] * y + mats[b + 10] * z + mats[b + 11]);
       total += w;
     }
     if (total === 0) {
-      out[v * 3] = x;
-      out[v * 3 + 1] = y;
-      out[v * 3 + 2] = z;
-    } else {
-      out[v * 3] = ox;
-      out[v * 3 + 1] = oy;
-      out[v * 3 + 2] = oz;
+      px = x;
+      py = y;
+      pz = z;
+    }
+    out[v * 3] = px;
+    out[v * 3 + 1] = py;
+    out[v * 3 + 2] = pz;
+    if (px < minX) minX = px;
+    if (px > maxX) maxX = px;
+    if (py < minY) minY = py;
+    if (py > maxY) maxY = py;
+    if (pz < minZ) minZ = pz;
+    if (pz > maxZ) maxZ = pz;
+
+    if (nOut && nBase && nMats) {
+      const nx = nBase[v * 3];
+      const ny = nBase[v * 3 + 1];
+      const nz = nBase[v * 3 + 2];
+      let ox = 0;
+      let oy = 0;
+      let oz = 0;
+      for (let k = 0; k < influences; k++) {
+        const w = weights[o + k];
+        if (w === 0) break;
+        const b = indices[o + k] * 9;
+        ox += w * (nMats[b] * nx + nMats[b + 1] * ny + nMats[b + 2] * nz);
+        oy += w * (nMats[b + 3] * nx + nMats[b + 4] * ny + nMats[b + 5] * nz);
+        oz += w * (nMats[b + 6] * nx + nMats[b + 7] * ny + nMats[b + 8] * nz);
+      }
+      const length = Math.sqrt(ox * ox + oy * oy + oz * oz);
+      if (length < 1e-12) {
+        nOut[v * 3] = nx;
+        nOut[v * 3 + 1] = ny;
+        nOut[v * 3 + 2] = nz;
+      } else {
+        const inv = 1 / length;
+        nOut[v * 3] = ox * inv;
+        nOut[v * 3 + 1] = oy * inv;
+        nOut[v * 3 + 2] = oz * inv;
+      }
     }
   }
+  if (bounds && count > 0) {
+    bounds.min.set(minX, minY, minZ);
+    bounds.max.set(maxX, maxY, maxZ);
+  }
+}
+
+/** Positions only; kept for callers (and tests) that have no normals to carry. */
+export function skinPositions(out: Float32Array, base: ArrayLike<number>, skin: SkinWeights, mats: Float32Array) {
+  skinVertices(out, base, skin, mats);
 }
 
 export function skinNormals(out: Float32Array, base: ArrayLike<number>, skin: SkinWeights, mats: Float32Array) {
@@ -406,7 +622,7 @@ export function skinNormals(out: Float32Array, base: ArrayLike<number>, skin: Sk
     let oz = 0;
     for (let k = 0; k < influences; k++) {
       const w = weights[v * influences + k];
-      if (w === 0) continue;
+      if (w === 0) break;
       const m = indices[v * influences + k] * 9;
       ox += w * (mats[m] * x + mats[m + 1] * y + mats[m + 2] * z);
       oy += w * (mats[m + 3] * x + mats[m + 4] * y + mats[m + 5] * z);

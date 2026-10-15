@@ -59,3 +59,59 @@ describe("Skin node", () => {
     expect(Math.min(...xs)).toBeLessThan(-0.7);
   });
 });
+
+describe("Skin node: modes and binding", () => {
+  const humanRig = (nodeId: string, hand?: THREE.Vector3) => {
+    const controls = (RIG_HUMAN_NODE.evaluate({}, { ...RIG_HUMAN_NODE.defaultParams }, ctx(nodeId)).__controlPoints as THREE.Vector3[]).map((p) => p.clone());
+    if (hand) controls[2] = hand;
+    return RIG_HUMAN_NODE.evaluate({}, { ...RIG_HUMAN_NODE.defaultParams, ...(hand ? { pointsList: controls } : {}) }, ctx(nodeId)).geometry;
+  };
+
+  it("skins on the GPU with a SkinnedMesh whose bones carry the pose", () => {
+    const mesh = body();
+    const out = SKIN_NODE.evaluate({ geometry: mesh, rig: humanRig("gpu-rig") }, params({ mode: "GPU" }), ctx("skin-gpu")).geometry as THREE.SkinnedMesh;
+    expect(out).toBeInstanceOf(THREE.SkinnedMesh);
+    expect(out.geometry.attributes.skinIndex.itemSize).toBe(4);
+    expect(out.skeleton.bones.length).toBe(18);
+    const at = (bones: THREE.Bone[]) => bones.map((b) => b.matrixWorld.elements.slice());
+    const before = at(out.skeleton.bones);
+    const moved = SKIN_NODE.evaluate({ geometry: mesh, rig: humanRig("gpu-rig", new THREE.Vector3(0.9, 1.7, 0.2)) }, params({ mode: "GPU" }), ctx("skin-gpu")).geometry as THREE.SkinnedMesh;
+    expect(moved).toBe(out);
+    expect(at(moved.skeleton.bones)).not.toEqual(before);
+  });
+
+  it("chooses the GPU on its own for a big mesh, and never for a custom shader", () => {
+    const big = new THREE.Mesh(new THREE.SphereGeometry(0.5, 200, 120).translate(0, 0.85, 0), new THREE.MeshStandardMaterial());
+    expect(SKIN_NODE.evaluate({ geometry: big, rig: humanRig("auto-rig") }, params(), ctx("skin-auto-big")).geometry).toBeInstanceOf(THREE.SkinnedMesh);
+    expect(SKIN_NODE.evaluate({ geometry: body(), rig: humanRig("auto-rig") }, params(), ctx("skin-auto-small")).geometry).not.toBeInstanceOf(THREE.SkinnedMesh);
+    const shader = new THREE.Mesh(big.geometry, new THREE.ShaderMaterial());
+    expect(SKIN_NODE.evaluate({ geometry: shader, rig: humanRig("auto-rig") }, params({ mode: "GPU" }), ctx("skin-shader")).geometry).not.toBeInstanceOf(THREE.SkinnedMesh);
+  });
+
+  it("does not weigh again when the mesh moves, only when asked", () => {
+    const mesh = body();
+    const rig = humanRig("rebind-rig");
+    const first = SKIN_NODE.evaluate({ geometry: mesh, rig }, params(), ctx("skin-rebind")).geometry as THREE.Mesh;
+    const geometry = first.geometry;
+    mesh.matrixAutoUpdate = false;
+    mesh.matrix.makeTranslation(1, 0, 0);
+    mesh.matrixWorldNeedsUpdate = true;
+    const moved = SKIN_NODE.evaluate({ geometry: mesh, rig }, params(), ctx("skin-rebind")).geometry as THREE.Mesh;
+    expect(moved.geometry).toBe(geometry);
+    expect(moved.matrix.elements[12]).toBeCloseTo(1, 4);
+    const rebound = SKIN_NODE.evaluate({ geometry: mesh, rig }, params({ rebind: true }), ctx("skin-rebind")).geometry as THREE.Mesh;
+    expect(rebound.geometry).not.toBe(geometry);
+  });
+
+  it("follows a source that an upstream deformer rewrites in place", () => {
+    const mesh = body();
+    const rig = humanRig("sync-rig");
+    const first = SKIN_NODE.evaluate({ geometry: mesh, rig }, params({ mode: "CPU" }), ctx("skin-sync")).geometry as THREE.Mesh;
+    const before = positionsOf(first)[1];
+    const position = mesh.geometry.attributes.position as THREE.BufferAttribute;
+    for (let i = 0; i < position.count; i++) position.setY(i, position.getY(i) + 1);
+    position.needsUpdate = true;
+    const after = positionsOf(SKIN_NODE.evaluate({ geometry: mesh, rig }, params({ mode: "CPU" }), ctx("skin-sync")).geometry)[1];
+    expect(after - before).toBeCloseTo(1, 3);
+  });
+});
