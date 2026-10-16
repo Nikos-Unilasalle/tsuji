@@ -25,6 +25,7 @@ import { createPointCloudHandles } from "./pointCloudHandles";
 import { SKELETON_NODE_TYPE } from "../graph/nodes/skeleton";
 import { SKIN_NODE } from "../graph/nodes/skin";
 import { SkeletonHud, SkinHud } from "./RigHuds";
+import { isRigNodeType, setInFront } from "./inFront";
 import { skeletonOp, SkeletonOp } from "./skeletonEditor";
 import { createSceneMembership, isSelfOrDescendantOf } from "./sceneMembership";
 import {
@@ -1779,6 +1780,8 @@ export function Viewport({
     const pointsSelectionHandles = createPointCloudHandles();
     // The selected Skin node's joints: dots to click, one at a time, to edit how that joint pulls on the mesh.
     const skinJointHandles = createPointCloudHandles();
+    // Rigs drawn in front of the scene right now (see setInFront).
+    const rigsInFront = new Set<string>();
     let pointsSelectionNodeId: string | null = null;
     let selectedPointsSelectionIndices = new Set<number>();
 
@@ -6037,6 +6040,28 @@ export function Viewport({
       if (!isSkeletonNode && lastSkeletonSelection !== "") {
         lastSkeletonSelection = "";
         setSkeletonSelection([]);
+      }
+
+      // A selected rig is drawn over everything else, as Blender's armature
+      // "In Front": inside a mesh it would otherwise be hidden by the very
+      // mesh it moves. A selected Skin brings the rig wired into it forward too.
+      const frontIds = new Set<string>();
+      const frontSelected = !outputMode ? graphRef.current.nodes.find((n) => n.id === selectedNodeIdRef.current) : undefined;
+      if (frontSelected && isRigNodeType(frontSelected.type)) frontIds.add(frontSelected.id);
+      if (frontSelected?.type === SKIN_NODE.type) {
+        for (const c of graphRef.current.connections) if (c.toNode === frontSelected.id && c.toSocket === "rig") frontIds.add(c.fromNode);
+      }
+      for (const id of [...rigsInFront]) {
+        if (frontIds.has(id)) continue;
+        const rig = results.get(id)?.geometry;
+        if (rig instanceof THREE.Object3D) setInFront(rig, false);
+        rigsInFront.delete(id);
+      }
+      for (const id of frontIds) {
+        const rig = results.get(id)?.geometry;
+        if (!(rig instanceof THREE.Object3D)) continue;
+        setInFront(rig, true);
+        rigsInFront.add(id);
       }
 
       // A Skin node's joints, where its rig stands now: dots to click to pick
