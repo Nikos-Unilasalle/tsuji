@@ -2,7 +2,8 @@ import * as THREE from "three";
 import { NodeDefinition, NodeInstance, ParamFieldDef } from "../types";
 import type { SocketDef } from "../sockets";
 import { createNodeCache, disposeObject3D } from "../nodeCaches";
-import { findFirstMesh } from "../meshRequired";
+import { collectMeshes, findFirstMesh } from "../meshRequired";
+import { bakeMeshesToGeometry, collectMeshMaterials } from "../bakeGeometry";
 import {
   applyMaterialParams,
   clearAppliedMaterialSignature,
@@ -72,7 +73,7 @@ export function resolveEditMeshData(
   // Check evaluated inputs if available
   const evalInputs = evalResult?.__evaluatedInputs as Record<string, unknown> | undefined;
   const inGeomObj = evalInputs?.geometry instanceof THREE.Object3D ? evalInputs.geometry : null;
-  const inMesh = inGeomObj ? findFirstMesh(inGeomObj) : null;
+  const inMesh = inGeomObj ? editSourceMesh(inGeomObj, node.id) : null;
   if (inMesh?.geometry) {
     return bufferGeometryToQuadMesh(inMesh.geometry);
   }
@@ -172,12 +173,15 @@ interface EditMeshState {
   baseMaterial?: THREE.Material | THREE.Material[];
   /** Holders whose materials are slots 1..3 (Material 2..4 inputs). */
   slotHolders?: THREE.Mesh[];
+  /** The wired object's several meshes as one, when it has several (see editSourceMesh). */
+  merged?: { key: string; mesh: THREE.Mesh; geometry: THREE.BufferGeometry };
   /** Copies of materials this node doesn't own, for vertex colours or a Face Side of its own. */
   colorClones?: Map<THREE.Material, { copy: THREE.Material; version: number }>;
 }
 
 const editMeshCache = createNodeCache<EditMeshState>((s) => {
   if (s.mesh) disposeObject3D(s.mesh);
+  s.merged?.geometry.dispose();
 });
 
 function getState(cache: typeof editMeshCache, nodeId: string): EditMeshState {
@@ -187,6 +191,66 @@ function getState(cache: typeof editMeshCache, nodeId: string): EditMeshState {
     cache.set(nodeId, state);
   }
   return state;
+}
+
+/**
+ * The mesh Edit Mesh works on for a wired object. One mesh is that mesh. An
+ * object of several — a glTF with its parts as separate meshes, a Merge —
+ * becomes one mesh whose parts keep their materials (a group per part), so
+ * every part can be edited and none drops out of the result.
+ *
+ * The parts are laid out in the frame of the first one and the merged mesh
+ * takes that part's world matrix, which is exactly what a single mesh would
+ * have given: moving the wired object moves the result, and what was frozen
+ * from it does not look changed. Rebuilt only when a part, or where it sits
+ * relative to the first, changes, so the geometry keeps its identity from
+ * frame to frame like a single mesh's does.
+ */
+export function editSourceMesh(root: THREE.Object3D, nodeId: string): THREE.Mesh | null {
+  const meshes = collectMeshes(root);
+  if (meshes.length === 0) return null;
+  const state = getState(editMeshCache, nodeId);
+  if (meshes.length === 1) {
+    state.merged?.geometry.dispose();
+    state.merged = undefined;
+    return meshes[0];
+  }
+
+  root.updateMatrixWorld(true);
+  const first = meshes[0];
+  const toFirst = first.matrixWorld.clone().invert();
+  const relatives = meshes.map((mesh) => toFirst.clone().multiply(mesh.matrixWorld));
+  const key = meshes
+    .map((mesh, i) => {
+      const position = mesh.geometry.attributes.position;
+      const version = !position ? -1 : "isInterleavedBufferAttribute" in position ? position.data.version : position.version;
+      return `${mesh.geometry.uuid}:${position?.count ?? 0}:${version}:${mesh.geometry.index?.version ?? -1}:${relatives[i].elements.map((e) => Math.round(e * 1e6)).join(",")}`;
+    })
+    .join("|");
+
+  if (state.merged?.key !== key) {
+    state.merged?.geometry.dispose();
+    state.merged = undefined;
+    // Stand-ins carrying each part's place in the first one's frame: the bake works in "world", which here means that frame.
+    const stand = meshes.map((mesh, i) => {
+      const proxy = new THREE.Mesh(mesh.geometry, mesh.material);
+      proxy.matrixWorld.copy(relatives[i]);
+      return proxy;
+    });
+    const geometry = bakeMeshesToGeometry(stand);
+    if (!geometry) return first;
+    const mesh = new THREE.Mesh(geometry, collectMeshMaterials(meshes));
+    mesh.castShadow = first.castShadow;
+    mesh.receiveShadow = first.receiveShadow;
+    mesh.userData = { ...first.userData };
+    state.merged = { key, mesh, geometry };
+  }
+  const merged = state.merged!.mesh;
+  // The first part's pose is the merged mesh's: every other part is already placed relative to it.
+  merged.matrixAutoUpdate = false;
+  merged.matrix.copy(first.matrixWorld);
+  merged.matrixWorld.copy(first.matrixWorld);
+  return merged;
 }
 
 /**
@@ -643,7 +707,7 @@ export const EDIT_MESH_NODE: NodeDefinition = {
   dynamicParamFields: (instance: NodeInstance) => editMeshParamFields(instance),
   evaluate: (inputs, params, ctx) => {
     const inputObj = inputs.geometry instanceof THREE.Object3D ? inputs.geometry : null;
-    const srcMesh = inputObj ? findFirstMesh(inputObj) : null;
+    const srcMesh = inputObj ? editSourceMesh(inputObj, ctx.nodeId) : null;
     const srcGeom = srcMesh?.geometry;
 
     const state = getState(editMeshCache, ctx.nodeId);

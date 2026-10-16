@@ -558,3 +558,59 @@ describe("Edit Mesh on an edges-only mesh", () => {
     expect(lines.geometry.getAttribute("position").count).toBe(12);
   });
 });
+
+describe("Edit Mesh on an object of several meshes", () => {
+  // A glTF's parts come as separate meshes in a group, each with its own material, placed apart.
+  const parts = () => {
+    const group = new THREE.Group();
+    const a = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial({ color: 0xff0000 }));
+    const b = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial({ color: 0x0000ff }));
+    b.position.set(5, 0, 0);
+    group.add(a, b);
+    return { group, a, b };
+  };
+  const ctx = (id: string) => ({ nodeId: id }) as EvalContext;
+  const xRange = (mesh: THREE.Mesh) => {
+    const xs = Array.from(mesh.geometry.attributes.position.array as Float32Array).filter((_, i) => i % 3 === 0);
+    return [Math.min(...xs), Math.max(...xs)];
+  };
+
+  it("keeps every part, each with its own material, and places them as they were", () => {
+    const { group } = parts();
+    const mesh = EDIT_MESH_NODE.evaluate({ geometry: group }, { ...EDIT_MESH_NODE.defaultParams }, ctx("multi-a")).geometry as THREE.Mesh;
+    const [min, max] = xRange(mesh);
+    expect(min).toBeCloseTo(-0.5, 4);
+    expect(max).toBeCloseTo(5.5, 4);
+    expect(mesh.geometry.userData.quadMesh.faces.length).toBe(12);
+    const colours = (Array.isArray(mesh.material) ? mesh.material : [mesh.material]).map((m) => (m as THREE.MeshStandardMaterial).color.getHex());
+    expect(colours).toContain(0xff0000);
+    expect(colours).toContain(0x0000ff);
+  });
+
+  it("edits the later parts too: the stored copy holds all of them", () => {
+    const { group } = parts();
+    const node = { id: "multi-b", params: { ...EDIT_MESH_NODE.defaultParams } };
+    const mesh = EDIT_MESH_NODE.evaluate({ geometry: group }, node.params, ctx(node.id)).geometry as THREE.Mesh;
+    const stored = cloneQuadMesh(mesh.geometry.userData.quadMesh as QuadMesh);
+    expect(stored.positions.length).toBe(16);
+    // The same data is what the viewport reads before anything is frozen.
+    expect(resolveEditMeshData(node, new Map([[node.id, { geometry: mesh, __evaluatedInputs: { geometry: group } }]])).positions.length).toBe(16);
+  });
+
+  it("follows the wired object when it moves, and keeps the same geometry while it does", () => {
+    const { group } = parts();
+    const first = EDIT_MESH_NODE.evaluate({ geometry: group }, { ...EDIT_MESH_NODE.defaultParams }, ctx("multi-c")).geometry as THREE.Mesh;
+    const geometry = first.geometry;
+    group.position.set(0, 3, 0);
+    group.updateMatrixWorld(true);
+    const moved = EDIT_MESH_NODE.evaluate({ geometry: group }, { ...EDIT_MESH_NODE.defaultParams }, ctx("multi-c")).geometry as THREE.Mesh;
+    expect(moved.geometry).toBe(geometry);
+    expect(moved.matrix.elements[13]).toBeCloseTo(3, 4);
+  });
+
+  it("a single mesh is still just that mesh", () => {
+    const { a } = parts();
+    const out = EDIT_MESH_NODE.evaluate({ geometry: a }, { ...EDIT_MESH_NODE.defaultParams }, ctx("multi-d")).geometry as THREE.Mesh;
+    expect(out.geometry.userData.quadMesh.faces.length).toBe(6);
+  });
+});
