@@ -58,3 +58,26 @@ describe("image drop", () => {
     setDropProjector(null);
   });
 });
+
+describe("3D models dropped", () => {
+  it("knows an OBJ, a glTF and a GLB for a model", () => {
+    expect(droppedKind("woman.obj")).toBe("model");
+    expect(droppedKind("scene.GLTF")).toBe("model");
+    expect(droppedKind("/a/b/robot.glb")).toBe("model");
+  });
+
+  it("makes an OBJ Model or a glTF Model, loaded, one per file and not wired to anything", () => {
+    const cube = "v 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n";
+    const { nodes, connections } = buildDroppedNodes(
+      [
+        { path: "tri.obj", bytes: new TextEncoder().encode(cube) },
+        { path: "robot.glb", bytes: new Uint8Array([1, 2, 3]) },
+      ],
+      { x: 10, y: 20 },
+    );
+    expect(nodes.map((n) => n.type)).toEqual(["object/obj", "object/gltf"]);
+    expect(nodes.map((n) => n.params.filePath)).toEqual(["tri.obj", "robot.glb"]);
+    expect(nodes[1].position.y).toBeGreaterThan(nodes[0].position.y);
+    expect(connections).toEqual([]);
+  });
+});

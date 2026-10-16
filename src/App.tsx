@@ -5,7 +5,8 @@ import { asVector3, composeTransform } from "./shared/graph/nodes/transform";
 import { DEFAULT_REGISTRY } from "./shared/graph/nodes";
 import { toBoolean } from "./shared/graph/sockets";
 import { BAKE_INSTANCES_ACTION, bakeInstancesToGeometryData } from "./shared/graph/nodes/particleInstances";
-import { EXPLODE_GLTF_ACTION, ExplodedTexture, explodeGltfToMeshData, gltfSourceDirectory } from "./shared/graph/nodes/gltfLoader";
+import { EXPLODE_GLTF_ACTION, ExplodedTexture, explodeGltfToMeshData, GLTF_CHOOSE_FOLDER_ACTION, gltfSourceDirectory } from "./shared/graph/nodes/gltfLoader";
+import { addBrowserFiles, filesFromDrop, requestProjectFolder } from "./shared/graph/browserFiles";
 import { isTauri } from "./shared/isTauri";
 import { TOGGLE_POINTS_KEYFRAME_ACTION } from "./shared/graph/nodes/curve";
 import { EDIT_MESH_POINTS_NODE, RESEED_MESH_POINTS_ACTION } from "./shared/graph/nodes/editMeshPoints";
@@ -46,7 +47,7 @@ import {
 } from "./shared/graph/nodes/frozenGeometry";
 import type { KeyframeDrawing } from "./shared/graph/nodes/greasePencil";
 import { randomId } from "./shared/randomId";
-import { buildDroppedNodes, DroppedImage, isDroppableMedia, projectDrop } from "./shared/graph/imageDrop";
+import { buildDroppedNodes, DroppedImage, droppedKind, isDroppableMedia, projectDrop } from "./shared/graph/imageDrop";
 import { findRenderNodeId } from "./shared/graph/nodes/render";
 import { findView2DNodeId } from "./shared/graph/nodes/view2d";
 import { rehydrateFileNodesFromDisk } from "./shared/graph/rehydrateFiles";
@@ -1193,12 +1194,25 @@ function MainEditor() {
     };
     // Browser build: the files arrive as File objects.
     const onDrop = async (e: DragEvent) => {
-      if (!carriesFiles(e)) return;
-      const files = Array.from(e.dataTransfer?.files ?? []).filter((f) => isDroppableMedia(f.name));
-      if (files.length === 0) return;
+      if (!carriesFiles(e) || !e.dataTransfer) return;
+      // Taken before anything is awaited: the event's data is gone once the handler yields.
+      const transfer = e.dataTransfer;
+      const at = { clientX: e.clientX, clientY: e.clientY };
+      const hasFolder = Array.from(transfer.items ?? []).some((item) => item.webkitGetAsEntry?.()?.isDirectory);
+      const top = Array.from(transfer.files ?? []).filter((f) => isDroppableMedia(f.name));
+      if (top.length === 0 && !hasFolder) return;
       e.preventDefault();
-      const images = await Promise.all(files.map(async (f) => ({ path: f.name, bytes: new Uint8Array(await f.arrayBuffer()) })));
-      addDroppedImages(images, { clientX: e.clientX, clientY: e.clientY });
+
+      // A model rarely comes alone: a .gltf has its .bin and textures beside it, which a browser can only read if they were
+      // dropped with it — the files, or the folder holding them. Everything in the drop is kept readable for the loaders.
+      const all = hasFolder || top.some((f) => droppedKind(f.name) === "model") ? await filesFromDrop(transfer) : [];
+      const models = all.filter(({ file }) => droppedKind(file.name) === "model");
+      if (models.length > 0) addBrowserFiles(all);
+
+      const chosen = models.length > 0 ? [...models, ...top.filter((f) => droppedKind(f.name) !== "model").map((file) => ({ path: file.name, file }))] : top.map((file) => ({ path: file.name, file }));
+      if (chosen.length === 0) return;
+      const images = await Promise.all(chosen.map(async ({ path, file }) => ({ path: path.split("/").pop() ?? file.name, bytes: new Uint8Array(await file.arrayBuffer()) })));
+      addDroppedImages(images, at);
     };
     window.addEventListener("dragover", onDragOver);
     window.addEventListener("drop", onDrop);
@@ -1842,6 +1856,11 @@ function MainEditor() {
           }),
           `separate:${nodeId}`,
         );
+        return;
+      }
+      if (action === GLTF_CHOOSE_FOLDER_ACTION) {
+        // From the button's own click: the folder picker needs that gesture.
+        requestProjectFolder({ needed: 0, pick: true });
         return;
       }
       if (action === EXPLODE_GLTF_ACTION) {

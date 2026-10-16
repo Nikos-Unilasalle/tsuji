@@ -8,6 +8,7 @@ import { composeNativeMatrixWithPivot } from "./transform";
 import { COMMON_PRIMITIVE_OUTPUTS, TextureParams, applyMaterialParams, extractMaterialParams, inheritSourceMaterial, primitiveOutputs } from "./object";
 import { isTauri } from "../../isTauri";
 import { describeMissingResources, directoryOf, externalResourceUris, resolveExternalResources } from "./gltfExternalResources";
+import { findBrowserFile, requestProjectFolder } from "../browserFiles";
 
 /**
  * The Draco decoder owns a worker pool, so it is created once and shared by
@@ -45,7 +46,8 @@ function readGltfJson(data: ArrayBuffer | string): unknown | null {
   try {
     if (typeof data === "string") return JSON.parse(data);
     if (data.byteLength < GLB_HEADER_LENGTH) return null;
-    if (new TextDecoder().decode(new Uint8Array(data, 0, 4)) !== GLB_MAGIC) return null;
+    // Not a GLB: a .gltf that arrived as bytes (a dropped file) is JSON text all the same.
+    if (new TextDecoder().decode(new Uint8Array(data, 0, 4)) !== GLB_MAGIC) return JSON.parse(new TextDecoder().decode(data));
     const view = new DataView(data);
     const declared = Math.min(view.getUint32(8, true), data.byteLength);
     let offset = GLB_HEADER_LENGTH;
@@ -65,13 +67,18 @@ function readGltfJson(data: ArrayBuffer | string): unknown | null {
   }
 }
 
+/** Action id of the "Choose model folder" button, sent up to App.tsx's onAction. */
+export const GLTF_CHOOSE_FOLDER_ACTION = "object/gltf-choose-folder";
+
 /**
  * Loads a model whose buffers/images live in separate files next to it, by
- * reading each one off disk and serving it to three under its original URI.
+ * reading each one and serving it to three under its original URI.
  *
- * Only possible with real filesystem access: a browser `<input type="file">`
- * yields one chosen file and no way to reach its neighbours, so there the
- * honest answer is to say which files are missing and why.
+ * On the desktop the files are read from beside the model. A browser file
+ * picker hands over only the one file chosen, so there they come from the
+ * folder the user chose for the project — asked for the same way a project
+ * with missing files asks (see browserFiles.requestProjectFolder), and the
+ * model loads once it has been given.
  */
 function loadWithExternalResources(
   gltfPath: string,
@@ -79,22 +86,31 @@ function loadWithExternalResources(
   uris: string[],
   onLoaded: (gltf: { scene: THREE.Group }) => void,
   onError: (err: unknown) => void,
-  onUnavailable: (message: string) => void,
+  onUnavailable: (message: string, needsFolder: boolean) => void,
 ): void {
-  if (!isTauri()) {
-    onUnavailable(
-      `This .gltf keeps its data in separate files (${uris.slice(0, 3).join(", ")}${uris.length > 3 ? ", …" : ""}), which a browser file picker can't reach — it only ever hands over the one file you chose. Open the model in the desktop app, or export it as a single self-contained .glb.`,
-    );
-    return;
-  }
-
+  const desktop = isTauri();
   void (async () => {
     try {
-      const { readFile } = await import("@tauri-apps/plugin-fs");
-      const resolved = await resolveExternalResources(gltfPath, uris, readFile);
+      const readBinaryFile = desktop
+        ? (await import("@tauri-apps/plugin-fs")).readFile
+        : async (path: string) => {
+            const file = findBrowserFile(path);
+            if (!file) throw new Error(`${path} is not in a folder the app can read`);
+            return new Uint8Array(await file.arrayBuffer());
+          };
+      const resolved = await resolveExternalResources(gltfPath, uris, readBinaryFile);
       if (resolved.missing.length > 0) {
         resolved.release();
-        onUnavailable(describeMissingResources(resolved.missing, gltfPath));
+        if (desktop) {
+          onUnavailable(describeMissingResources(resolved.missing, gltfPath), false);
+        } else {
+          const listed = resolved.missing.slice(0, 3).join(", ") + (resolved.missing.length > 3 ? ", …" : "");
+          requestProjectFolder({ needed: resolved.missing.length, pick: false });
+          onUnavailable(
+            `This .gltf keeps its data in separate files (${listed}), and a browser only reads the file you picked. Choose the folder that holds them — the button below, or "Choose project folder" at the top — and the model loads.`,
+            true,
+          );
+        }
         return;
       }
 
@@ -448,6 +464,8 @@ interface GltfState {
   lastPath?: string;
   /** Why the last pick failed, surfaced on the file field's own label. */
   loadError?: string;
+  /** The model needs files only a chosen folder can give (browser): the panel offers to choose it. */
+  needsFolder?: boolean;
   /** Real meshes in the last successfully loaded model — undefined until one loads, which is what gates the Explode button. */
   meshCount?: number;
   /** Each mesh's material as the file shipped it — what "Use Own Materials" puts back. */
@@ -558,6 +576,9 @@ export const OBJECT_GLTF_NODE: NodeDefinition = {
           },
         ]
       : []),
+    ...(gltfStateCache.get(instance.id)?.needsFolder
+      ? [{ id: "chooseFolderButton", label: "Choose model folder", kind: "button" as const, action: GLTF_CHOOSE_FOLDER_ACTION }]
+      : []),
     {
       id: "filePath",
       label: "3D Model (.gltf/.glb)",
@@ -567,6 +588,7 @@ export const OBJECT_GLTF_NODE: NodeDefinition = {
         const state = getOrCreateGltfState(nodeId);
         state.lastPath = path;
         state.loadError = undefined;
+        state.needsFolder = false;
         if (!path) {
           state.group.clear();
           state.meshCount = undefined;
@@ -615,8 +637,9 @@ export const OBJECT_GLTF_NODE: NodeDefinition = {
           // answers with instead — see gltfExternalResources.ts.
           const external = externalResourceUris(readGltfJson(data) ?? {});
           if (external.length > 0) {
-            loadWithExternalResources(path, data, external, adopt, fail, (message) => {
+            loadWithExternalResources(path, data, external, adopt, fail, (message, needsFolder) => {
               state.loadError = message;
+              state.needsFolder = needsFolder;
               console.error("Cannot load glTF:", message);
             });
             return;

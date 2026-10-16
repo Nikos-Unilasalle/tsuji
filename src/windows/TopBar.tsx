@@ -5,7 +5,7 @@ import {
   saveProjectAsWithFilePicker,
   saveProjectToPath,
 } from "../shared/graph/storage";
-import { pickProjectFolder } from "../shared/graph/browserFiles";
+import { onFolderRequest, pickProjectFolder } from "../shared/graph/browserFiles";
 import { countUnreadableFiles, rehydrateFileNodesFromDisk, setProjectDirectory } from "../shared/graph/rehydrateFiles";
 import { Project } from "../shared/graph/types";
 import {
@@ -208,6 +208,19 @@ export const TopBar: React.FC<TopBarProps> = ({
       showToast(`Folder error: ${(err as Error).message}`, true);
     }
   };
+
+  // Something that needs files a browser cannot reach (a .gltf with its .bin and textures) asks for the folder the same way.
+  // The picker has to open from the click that caused the request, so it runs synchronously from here.
+  const chooseFolderRef = useRef(handleChooseFolder);
+  chooseFolderRef.current = handleChooseFolder;
+  useEffect(
+    () =>
+      onFolderRequest((request) => {
+        if (request.needed > 0) setMissingFiles((n) => Math.max(n, request.needed));
+        if (request.pick) void chooseFolderRef.current();
+      }),
+    [],
+  );
 
   // Tracks the OS-level close (red X on the output window), not just our own button.
   useEffect(() => onOutputClosed(() => setIsOutputOpen(false)), []);

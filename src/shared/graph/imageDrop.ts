@@ -4,18 +4,20 @@ import { DEFAULT_REGISTRY } from "./nodes";
 import { cloneParams } from "./cloneGraph";
 import { Connection, NodeInstance } from "./types";
 
-/** What a dropped file can be: the formats Image Texture and Audio Player load. */
+/** What a dropped file can be: the formats Image Texture, Audio Player, OBJ Model and glTF Model load. */
 const IMAGE_EXTENSIONS = ["png", "jpg", "jpeg", "webp", "bmp", "svg"];
 const VIDEO_EXTENSIONS = ["mp4", "webm", "mov", "m4v"];
 const AUDIO_EXTENSIONS = ["mp3", "wav", "ogg", "flac", "m4a", "aac"];
+const MODEL_EXTENSIONS = ["obj", "gltf", "glb"];
 
-export type DroppedKind = "image" | "video" | "audio";
+export type DroppedKind = "image" | "video" | "audio" | "model";
 
 export function droppedKind(name: string): DroppedKind | null {
   const ext = name.split(".").pop()?.toLowerCase() ?? "";
   if (IMAGE_EXTENSIONS.includes(ext)) return "image";
   if (VIDEO_EXTENSIONS.includes(ext)) return "video";
   if (AUDIO_EXTENSIONS.includes(ext)) return "audio";
+  if (MODEL_EXTENSIONS.includes(ext)) return "model";
   return null;
 }
 
@@ -49,7 +51,7 @@ export interface DroppedImage {
 
 /**
  * What each dropped file becomes: an image is an Image Texture wired to a Texture to Plane; a video is the same, started with
- * the timeline; a sound is an Audio Player started with the timeline. Each file is fed through its node's own file loader
+ * the timeline; a sound is an Audio Player started with the timeline; a 3D model is an OBJ Model or a glTF Model. Each file is fed through its node's own file loader
  * (the path a manual pick takes), so it shows or sounds at once. Returns the nodes and wires to add to the graph.
  */
 export function buildDroppedNodes(
@@ -59,7 +61,9 @@ export function buildDroppedNodes(
   const imageDef = DEFAULT_REGISTRY.get("texture/image");
   const planeDef = DEFAULT_REGISTRY.get("texture/plane");
   const audioDef = DEFAULT_REGISTRY.get("sound/player");
-  if (!imageDef || !planeDef || !audioDef) return { nodes: [], connections: [] };
+  const objDef = DEFAULT_REGISTRY.get("object/obj");
+  const gltfDef = DEFAULT_REGISTRY.get("object/gltf");
+  if (!imageDef || !planeDef || !audioDef || !objDef || !gltfDef) return { nodes: [], connections: [] };
 
   const nodes: NodeInstance[] = [];
   const connections: Connection[] = [];
@@ -75,6 +79,22 @@ export function buildDroppedNodes(
     if (!kind) continue;
     const y = origin.y + row * 220;
     row++;
+
+    if (kind === "model") {
+      const isObj = file.path.toLowerCase().endsWith(".obj");
+      const def = isObj ? objDef : gltfDef;
+      const modelNode: NodeInstance = {
+        id: randomId(),
+        type: def.type,
+        params: { ...cloneParams(def.defaultParams), filePath: file.path },
+        position: { x: origin.x, y },
+      };
+      // An OBJ is text; a glTF/GLB goes in as the bytes it is (a .gltf's JSON is read from them just the same).
+      const field = def.dynamicParamFields?.(modelNode).find((f) => f.id === "filePath");
+      if (field && field.kind === "file") field.onLoaded?.(modelNode.id, file.path, isObj ? new TextDecoder().decode(file.bytes) : file.bytes);
+      nodes.push(modelNode);
+      continue;
+    }
 
     if (kind === "audio") {
       const audioNode: NodeInstance = {

@@ -19,6 +19,36 @@ export function clearBrowserFolder(): void {
   folderFiles.clear();
 }
 
+/** Makes more files readable without forgetting the ones already known: the companions of something just dropped. */
+export function addBrowserFiles(files: { path: string; file: File }[]): void {
+  for (const { path, file } of files) folderFiles.set(normalise(path), file);
+}
+
+/**
+ * Something that needs files a browser cannot reach (a .gltf with its .bin and textures beside it) asks for the folder
+ * the same way a project opened with missing files does: the top bar shows the "Choose project folder" prompt, and the
+ * files are read from the folder once it is chosen. `pick` asks the top bar to open the folder picker straight away —
+ * only valid from a click.
+ */
+export interface FolderRequest {
+  /** How many files are missing, for the prompt. */
+  needed: number;
+  pick: boolean;
+}
+
+const folderListeners = new Set<(request: FolderRequest) => void>();
+
+export function onFolderRequest(listener: (request: FolderRequest) => void): () => void {
+  folderListeners.add(listener);
+  return () => {
+    folderListeners.delete(listener);
+  };
+}
+
+export function requestProjectFolder(request: FolderRequest): void {
+  for (const listener of folderListeners) listener(request);
+}
+
 /**
  * The file a param path points at: an exact match first, then the chosen folder being a parent or a child of the
  * project's own (`assets/a.png` found as `proj/assets/a.png`), then — for an absolute path from another machine — the
@@ -99,4 +129,36 @@ export async function pickProjectFolder(): Promise<number> {
   if (!files || files.length === 0) return 0;
   setBrowserFolder(files);
   return files.length;
+}
+
+/**
+ * Everything in a drop, folders included, as relative path -> File. The entries are taken from the event up front: a
+ * DataTransfer is emptied as soon as the handler yields, and walking a dropped folder is asynchronous.
+ */
+export async function filesFromDrop(transfer: DataTransfer): Promise<{ path: string; file: File }[]> {
+  const entries = Array.from(transfer.items ?? [])
+    .map((item) => (item.kind === "file" ? (item as DataTransferItem & { webkitGetAsEntry?: () => FileSystemEntry | null }).webkitGetAsEntry?.() ?? null : null));
+  const loose = Array.from(transfer.files ?? []);
+  const out: { path: string; file: File }[] = [];
+
+  const readEntry = async (entry: FileSystemEntry, prefix: string, depth: number): Promise<void> => {
+    if (out.length >= MAX_FILES || depth > MAX_DEPTH) return;
+    if (entry.isFile) {
+      const file = await new Promise<File | null>((resolve) => (entry as FileSystemFileEntry).file(resolve, () => resolve(null)));
+      if (file) out.push({ path: `${prefix}${entry.name}`, file });
+    } else if (entry.isDirectory) {
+      const reader = (entry as FileSystemDirectoryEntry).createReader();
+      // readEntries hands back a batch at a time and signals the end with an empty one.
+      for (;;) {
+        const batch = await new Promise<FileSystemEntry[]>((resolve) => reader.readEntries(resolve, () => resolve([])));
+        if (batch.length === 0) break;
+        for (const child of batch) if (!child.name.startsWith(".")) await readEntry(child, `${prefix}${entry.name}/`, depth + 1);
+      }
+    }
+  };
+
+  const known = entries.filter((e): e is FileSystemEntry => e !== null);
+  if (known.length === 0) return loose.map((file) => ({ path: file.name, file }));
+  for (const entry of known) await readEntry(entry, "", 0);
+  return out;
 }
