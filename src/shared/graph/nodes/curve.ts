@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { DEFAULT_ROTATION_MODE, ROTATION_ORDER_FIELD, quaternionToRotation } from "../rotationMode";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { NodeDefinition, ParamFieldDef } from "../types";
 import { createNodeCache } from "../nodeCaches";
@@ -1326,10 +1327,12 @@ export const SAMPLE_CURVE_NODE: NodeDefinition = {
   defaultParams: {
     progress: 0.0,
     up: new THREE.Vector3(0, 1, 0),
+    rotationMode: DEFAULT_ROTATION_MODE,
   },
   dynamicParamFields: () => [
     { id: "progress", label: "Progress (0-1)", kind: "number", step: 0.01 },
     { id: "up", label: "Up Vector", kind: "vector" },
+    ROTATION_ORDER_FIELD,
   ],
   evaluate: (inputs, params, ctx) => {
 
@@ -1378,8 +1381,9 @@ export const SAMPLE_CURVE_NODE: NodeDefinition = {
     // Radians, the unit every `rotation` vector socket carries — this feeds a
     // Transform's Rotation directly, and composeTransform reads radians.
     // Emitting degrees made a sampled curve pose spin about 57x too far.
-    const euler = new THREE.Euler().setFromRotationMatrix(matrix);
-    const rotation = new THREE.Vector3(euler.x, euler.y, euler.z);
+    // In the reader's Euler order (Rotation Order), which for a new node is
+    // the objects' default.
+    const { rotation } = quaternionToRotation(new THREE.Quaternion().setFromRotationMatrix(matrix), params);
 
     return {
       position,

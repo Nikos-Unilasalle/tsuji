@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { resolveDefinition } from "./groups";
+import { applyBakedTransform, applyPoseSockets } from "./poseSockets";
 import { Connection, EasingType, EvalContext, Graph, Keyframe, KeyframeStore, NodeInstance, NodeRegistry } from "./types";
 
 export interface TopoResult {
@@ -680,7 +681,7 @@ export function evaluateGraph(graph: Graph, registry: NodeRegistry, ctx: EvalCon
     }
 
     const nodeConnections = connectionsByToNode.get(nodeId) ?? EMPTY_CONNECTIONS;
-    const socketDefs = def.dynamicInputs ? def.dynamicInputs(nodeConnections) : def.inputs;
+    const socketDefs = def.dynamicInputs ? def.dynamicInputs(nodeConnections, undefined, params) : def.inputs;
     const inputs: Record<string, unknown> = {};
 
     // The pooled Set/Map are reused across nodes to keep the 60 fps loop from
@@ -725,6 +726,8 @@ export function evaluateGraph(graph: Graph, registry: NodeRegistry, ctx: EvalCon
       }
     }
 
+    applyPoseSockets(def, inputs, params, connectedInputs);
+
     try {
       const outputs =
         def.evaluate(inputs, params, {
@@ -737,6 +740,7 @@ export function evaluateGraph(graph: Graph, registry: NodeRegistry, ctx: EvalCon
           connectedOutputs,
           markers: ctx.markers || graph.markers,
         }) || {};
+      applyBakedTransform(def, params, outputs, nodeId === ctx.liveEditNodeId);
       applyVisibility(outputs.geometry, inputs[VISIBILITY_SOCKET]);
       results.set(nodeId, {
         ...outputs,

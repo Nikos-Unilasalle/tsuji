@@ -81,7 +81,7 @@ input, textarea, [contenteditable="true"], .drag-number-editing, .param-text-inp
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.75);
 }
 
-/* Freeze / Reset under the node, on hover. The bar's top padding bridges the
+/* Reset / Apply / Freeze under the node, on hover. The bar's top padding bridges the
    gap, so the pointer keeps the node hovered on its way down to them. */
 .graph-node-actions {
   position: absolute;

@@ -349,6 +349,17 @@ export interface NodeDefinition {
    */
   reset?: { params: string[] } | { action: string };
   /**
+   * Set by addPoseSockets (poseSockets.ts) on a node that owns a native pose:
+   * its Location / Rotation / Scale sockets drive the params of the same name.
+   */
+  poseSockets?: boolean;
+  /**
+   * Kept so the files that use it still load and play, but no longer offered
+   * in the palette or the search: another node now does its job the way
+   * Blender does (see the node's own comment for which).
+   */
+  hidden?: boolean;
+  /**
    * When present, overrides `inputs` for a specific instance based on its
    * own current connections — for a node like Merge whose socket count
    * grows as wires are added or Logic Bridge whose inputs change socket type.

@@ -103,12 +103,23 @@ describe("angle units", () => {
       for (const input of def.inputs ?? []) {
         if (!degreeIds.has(input.id)) continue;
         const key = `${def.type}.${input.id}`;
+        // The pose sockets every object gets (poseSockets.ts) are covered as
+        // one rule by the test below, not listed node by node.
+        if (def.poseSockets && input.id === "rotation") continue;
         if (input.type === "value") scalars.push(key);
         else vectors.push(key);
       }
     }
     expect([...new Set(scalars)].sort()).toEqual(DEGREE_SCALAR_SOCKETS);
     expect([...new Set(vectors)].sort()).toEqual(RADIAN_VECTOR_SOCKETS);
+  });
+
+  it("an object's Rotation socket is a radians vector, like the param it drives", () => {
+    const posed = STARTER_NODES.filter((d) => d.poseSockets);
+    expect(posed.length).toBeGreaterThan(30);
+    for (const def of posed) {
+      expect(def.inputs.find((i) => i.id === "rotation")?.type).toBe("vector");
+    }
   });
 
   it("every rotation vector OUTPUT is in radians, so it can drive a rotation input", () => {

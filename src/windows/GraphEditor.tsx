@@ -42,7 +42,7 @@ import { Connection, ExposedParamRef, Graph, KeyframeStore, Marker, NodeInstance
 import { FRAME_TYPE, frameSize } from "../shared/graph/nodes/frame";
 import { parseColorToHex } from "./color-utils";
 import { FrameActions, FrameActionsContext, GraphNode, GraphNodeData, NodeActions, NodeActionsContext } from "./GraphNode";
-import { resetActionOf } from "../shared/graph/nodeActions";
+import { canApplyTransform, resetActionOf } from "../shared/graph/nodeActions";
 import { NodePalette } from "./NodePalette";
 import { QuickAddToolbar } from "./QuickAddToolbar";
 import { NodeSearchModal } from "./NodeSearchModal";
@@ -1325,7 +1325,7 @@ function GraphEditorContent({
         addNode("merge");
       } else if (isCmdOrCtrl && isShift && code === "KeyT") {
         e.preventDefault();
-        addNode("transform/matrix-transform");
+        addNode("structure/geometry-transform");
       } else if (isCmdOrCtrl && isShift && code === "KeyV") {
         e.preventDefault();
         addNode("value/constant");
@@ -1626,7 +1626,7 @@ function GraphEditorContent({
   // them — placing either by hand would produce a node with no interior and
   // no ports, so they stay out of the palette and the search.
   const paletteNodes = useMemo(
-    () => [...registry.values()].filter((def) => !GROUP_INTERNAL_TYPES.has(def.type)),
+    () => [...registry.values()].filter((def) => !GROUP_INTERNAL_TYPES.has(def.type) && !def.hidden),
     [registry],
   );
 
@@ -1894,7 +1894,11 @@ export function GraphEditor(props: GraphEditorProps) {
   const nodeActions = useMemo<NodeActions | null>(
     () =>
       onNodeAction
-        ? { resetAction: (nodeType) => (nodeType ? resetActionOf(registry.get(nodeType)) : null), run: onNodeAction }
+        ? {
+            resetAction: (nodeType) => (nodeType ? resetActionOf(registry.get(nodeType)) : null),
+            canApply: (nodeType) => (nodeType ? canApplyTransform(registry.get(nodeType)) : false),
+            run: onNodeAction,
+          }
         : null,
     [registry, onNodeAction],
   );

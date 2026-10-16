@@ -62,7 +62,7 @@ import {
   setGraphKeyBindings,
   setPlaybackActive,
 } from "./shared/graph/playbackKeys";
-import { collectAllNodeIds, findNodeDeep, nodeConnections, resolveDefinition, updateGraphHolding, updateNodeDeep } from "./shared/graph/groups";
+import { collectAllNodeIds, findNodeDeep, findNodeWithGraph, nodeConnections, resolveDefinition, updateGraphHolding, updateNodeDeep } from "./shared/graph/groups";
 import { disposeNodeCaches } from "./shared/graph/nodeCaches";
 import { AutosaveRecord, projectHasContent, readAutosave, writeAutosave } from "./shared/graph/autosave";
 import { rehydrateGraphParams } from "./shared/graph/rehydrateParams";
@@ -102,7 +102,8 @@ import { exportPngSequence, saveZipBlob } from "./shared/export/imageSequenceExp
 import { renderGraphToSvg, saveGraphSvg } from "./shared/export/graphSvg";
 import { TransformPatch, Viewport, ViewportExportHandle } from "./shared/three/Viewport";
 import { exportWornTextures, WORN_BAKE_ACTION } from "./shared/graph/nodes/materialWorn";
-import { NODE_FREEZE_ACTION, NODE_RESET_PARAMS_ACTION, nodeResetPatch } from "./shared/graph/nodeActions";
+import { NODE_APPLY_TRANSFORM_ACTION, NODE_FREEZE_ACTION, NODE_RESET_PARAMS_ACTION, nodeResetPatch } from "./shared/graph/nodeActions";
+import { applyRotationScalePatch } from "./shared/graph/poseSockets";
 import { SplitViewport } from "./shared/three/SplitViewport";
 import "./shared/three/viewport.css";
 import { GIZMO_SELECTABLE_TYPES, resolveGizmoTarget } from "./shared/graph/transformLookup";
@@ -125,6 +126,10 @@ export interface WorkspaceSpaces {
   timeline: boolean;
 }
 
+/** A node's params with its type's defaults under them — a saved file need not carry a param added since. */
+function withDefaultParams(node: { type: string; params: Record<string, unknown> }): Record<string, unknown> {
+  return { ...(DEFAULT_REGISTRY.get(node.type)?.defaultParams ?? {}), ...node.params };
+}
 
 /**
  * Keyframe values are stored in the graph and round-trip through the .tsuji as
@@ -1457,7 +1462,7 @@ function MainEditor() {
         if (deltaPiv.lengthSq() > 0) {
           const rot = asVector3(instance.params.rotation, new THREE.Vector3());
           const scl = asVector3(instance.params.scale, new THREE.Vector3(1, 1, 1));
-          const mRotScale = composeTransform(new THREE.Vector3(), rot, scl);
+          const mRotScale = composeTransform(new THREE.Vector3(), rot, scl, withDefaultParams(instance));
           const deltaPivRotScaled = deltaPiv.clone().applyMatrix4(mRotScale);
           const deltaLoc = new THREE.Vector3().subVectors(deltaPivRotScaled, deltaPiv);
           const oldLoc = asVector3(instance.params.location, new THREE.Vector3());
@@ -2044,10 +2049,38 @@ function MainEditor() {
     [evaluatedResults, setGraphWithHistory],
   );
 
-  /** The icons under a node on hover (see nodeActions.ts): Freeze, Reset, or a node's own reset action. */
+  /**
+   * Apply Rotation & Scale — Blender's Ctrl+A on the node's own pose (see
+   * applyRotationScalePatch). A turn or size that is wired or keyframed is
+   * not a fixed amount that could be set into the shape, so those are left
+   * as they are and nothing is applied.
+   */
+  const onApplyTransform = useCallback(
+    (nodeId: string) => {
+      setGraphWithHistory((prevGraph) => {
+        const found = findNodeWithGraph(prevGraph, nodeId);
+        if (!found) return prevGraph;
+        const driven = ["rotation", "rotationAngle", "scale"].filter(
+          (id) =>
+            found.graph.connections.some((c) => c.toNode === nodeId && c.toSocket === id) ||
+            (found.graph.keyframes?.[nodeId]?.[id]?.length ?? 0) > 0,
+        );
+        if (driven.length > 0) {
+          console.warn(`Apply: ${driven.join(", ")} is wired or keyframed on this node, so there is no fixed turn or size to apply.`);
+          return prevGraph;
+        }
+        const patch = applyRotationScalePatch(withDefaultParams(found.instance));
+        return updateNodeDeep(prevGraph, nodeId, (n) => ({ ...n, params: { ...n.params, ...patch } }));
+      }, `apply:${nodeId}`);
+    },
+    [setGraphWithHistory],
+  );
+
+  /** The icons under a node on hover (see nodeActions.ts): Freeze, Apply, Reset, or a node's own reset action. */
   const onNodeAction = useCallback(
     (nodeId: string, action: string) => {
       if (action === NODE_FREEZE_ACTION) return onFreezeNode(nodeId);
+      if (action === NODE_APPLY_TRANSFORM_ACTION) return onApplyTransform(nodeId);
       if (action === NODE_RESET_PARAMS_ACTION) {
         const node = findNodeDeep(graph, nodeId);
         const patch = node ? nodeResetPatch(resolveDefinition(node, DEFAULT_REGISTRY)) : null;
@@ -2056,7 +2089,7 @@ function MainEditor() {
       }
       onParamAction(nodeId, action);
     },
-    [graph, onFreezeNode, onParamAction, onParamChange],
+    [graph, onFreezeNode, onApplyTransform, onParamAction, onParamChange],
   );
 
   // Same functional-updater reasoning as onParamChange, but writing all
@@ -2111,7 +2144,7 @@ function MainEditor() {
           if (deltaPiv.lengthSq() > 0) {
             const rot = asVector3(node.params.rotation, new THREE.Vector3());
             const scl = asVector3(node.params.scale, new THREE.Vector3(1, 1, 1));
-            const mRotScale = composeTransform(new THREE.Vector3(), rot, scl);
+            const mRotScale = composeTransform(new THREE.Vector3(), rot, scl, withDefaultParams(node));
             const deltaPivRotScaled = deltaPiv.clone().applyMatrix4(mRotScale);
             const deltaLoc = new THREE.Vector3().subVectors(deltaPivRotScaled, deltaPiv);
             const oldLoc = asVector3(node.params.location, new THREE.Vector3());

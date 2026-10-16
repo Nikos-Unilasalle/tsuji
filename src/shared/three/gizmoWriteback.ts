@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { quaternionToRotation } from "../graph/rotationMode";
 import { GizmoTarget } from "../graph/transformLookup";
 
 export type TransformGizmoMode = "translate" | "rotate" | "scale";
@@ -13,6 +14,8 @@ export type TransformGizmoMode = "translate" | "rotate" | "scale";
 export interface TransformPatch {
   location?: THREE.Vector3;
   rotation?: THREE.Vector3;
+  /** The turn of an Axis Angle rotation, written with its axis (see rotationMode.ts). */
+  rotationAngle?: number;
   scale?: THREE.Vector3;
   pointsList?: unknown[];
   /** Pivot Transform's own pivot point — written directly by its dedicated viewport marker, not through computeGizmoWriteback (see Viewport.tsx). */
@@ -65,6 +68,8 @@ export interface GizmoWritebackInput {
   wiredSockets: ReadonlySet<string>;
   /** The object's own pivot offset, subtracted when solving for native location. */
   pivot?: THREE.Vector3;
+  /** The written node's params, defaults merged — its Rotation Mode decides how a turn is written back. */
+  params?: Record<string, unknown>;
 }
 
 /**
@@ -87,14 +92,14 @@ export interface GizmoWritebackInput {
  *    animation happened to be showing that frame.
  */
 export function computeGizmoWriteback(input: GizmoWritebackInput): TransformPatch {
-  const { target, mode, object, upstreamMatrix, wiredSockets, pivot } = input;
+  const { target, mode, object, upstreamMatrix, wiredSockets, pivot, params } = input;
   const patch: TransformPatch = {};
 
   if (target.kind === "absolute") {
     // A plain Transform node's location/rotation/scale directly compose the
     // object's final matrix — the gizmo's own dragged world pose IS what
     // belongs in its params.
-    assign(patch, mode, wiredSockets, object.position.clone(), object.quaternion, object.scale.clone());
+    assign(patch, mode, wiredSockets, object.position.clone(), object.quaternion, object.scale.clone(), params);
     return patch;
   }
 
@@ -123,7 +128,7 @@ export function computeGizmoWriteback(input: GizmoWritebackInput): TransformPatc
     location.sub(pivot);
   }
 
-  assign(patch, mode, wiredSockets, location, quaternion, scale);
+  assign(patch, mode, wiredSockets, location, quaternion, scale, params);
   return patch;
 }
 
@@ -134,13 +139,15 @@ function assign(
   location: THREE.Vector3,
   quaternion: THREE.Quaternion,
   scale: THREE.Vector3,
+  params?: Record<string, unknown>,
 ): void {
   if (mode === "translate" && !wiredSockets.has("location")) {
     patch.location = location;
   }
   if (mode === "rotate" && !wiredSockets.has("rotation")) {
-    const euler = new THREE.Euler().setFromQuaternion(quaternion);
-    patch.rotation = new THREE.Vector3(euler.x, euler.y, euler.z);
+    const turned = quaternionToRotation(quaternion, params);
+    patch.rotation = turned.rotation;
+    if (turned.rotationAngle !== undefined) patch.rotationAngle = turned.rotationAngle;
   }
   if (mode === "scale" && !wiredSockets.has("scale")) {
     patch.scale = scale;

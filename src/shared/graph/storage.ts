@@ -2,6 +2,7 @@ import { open as dialogOpen, save as dialogSave } from "@tauri-apps/plugin-dialo
 import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
 import { moveOpeningEasing } from "./evaluate";
 import { DEFAULT_REGISTRY } from "./nodes";
+import { LEGACY_ROTATION_MODE } from "./rotationMode";
 import { pruneDanglingConnections } from "./pruneConnections";
 import { CANVAS_COUNT, Graph, Marker, NodeRegistry, normalizeCanvases, Project } from "./types";
 import { isTauri } from "../isTauri";
@@ -91,8 +92,17 @@ function cleanGraph(graph: Graph): Graph {
  */
 const EASING_MODEL = "arrival";
 
+/**
+ * Marks files written since rotations have a Rotation Mode (rotationMode.ts).
+ * In an unmarked file every node that takes one is given the mode rotations
+ * were composed in before — so an old scene, its wired rotations and its
+ * keyframes included, renders exactly as it did. New nodes get the new
+ * default from their definition.
+ */
+const ROTATION_MODEL = "modes";
+
 export function serializeGraph(graph: Graph): string {
-  return JSON.stringify({ ...cleanGraph(graph), keyframeEasing: EASING_MODEL }, null, 2);
+  return JSON.stringify({ ...cleanGraph(graph), keyframeEasing: EASING_MODEL, rotationModel: ROTATION_MODEL }, null, 2);
 }
 
 /**
@@ -108,6 +118,7 @@ export function serializeProject(project: Project): string {
       canvases: normalizeCanvases(project.canvases).map(cleanGraph),
       activeCanvas: clampCanvasIndex(project.activeCanvas),
       keyframeEasing: EASING_MODEL,
+      rotationModel: ROTATION_MODEL,
     },
     null,
     2,
@@ -154,15 +165,25 @@ export function deserializeGraph(jsonString: string, registry: NodeRegistry = DE
   }
 
   validateGraphShape(data, "");
-  return adoptGraph(data, registry, data.keyframeEasing !== EASING_MODEL);
+  return adoptGraph(data, registry, data.keyframeEasing !== EASING_MODEL, data.rotationModel !== ROTATION_MODEL);
 }
 
-/** Brings every node's params, groups' interiors included, up to its type's current shape — see NodeDefinition.upgradeParams. */
-function upgradeNodes(nodes: Graph["nodes"], registry: NodeRegistry): Graph["nodes"] {
+/**
+ * Brings every node's params, groups' interiors included, up to its type's
+ * current shape — see NodeDefinition.upgradeParams. `legacyRotation`: the file
+ * predates Rotation Mode (see ROTATION_MODEL).
+ */
+function upgradeNodes(nodes: Graph["nodes"], registry: NodeRegistry, legacyRotation: boolean): Graph["nodes"] {
   return nodes.map((node) => {
-    const upgrade = registry.get(node.type)?.upgradeParams;
-    const params = upgrade ? upgrade({ ...(node.params ?? {}) }) : node.params;
-    const subgraph = node.subgraph ? { ...node.subgraph, nodes: upgradeNodes(node.subgraph.nodes, registry) } : node.subgraph;
+    const def = registry.get(node.type);
+    const upgrade = def?.upgradeParams;
+    let params = upgrade ? upgrade({ ...(node.params ?? {}) }) : node.params;
+    if (legacyRotation && def && "rotationMode" in def.defaultParams && !(params && "rotationMode" in params)) {
+      params = { ...(params ?? {}), rotationMode: LEGACY_ROTATION_MODE };
+    }
+    const subgraph = node.subgraph
+      ? { ...node.subgraph, nodes: upgradeNodes(node.subgraph.nodes, registry, legacyRotation) }
+      : node.subgraph;
     return params === node.params && subgraph === node.subgraph ? node : { ...node, params, subgraph };
   });
 }
@@ -171,6 +192,7 @@ function adoptGraph(
   data: { nodes: unknown[]; connections: unknown[]; keyframes?: unknown; markers?: unknown; exposedParams?: unknown },
   registry: NodeRegistry,
   migrateEasing: boolean,
+  legacyRotation: boolean,
 ): Graph {
   // Sockets are a public surface — every saved file references them by id —
   // so a file outlives any socket that gets retired (the Camera's unused
@@ -181,7 +203,7 @@ function adoptGraph(
   // anywhere.
   return pruneDanglingConnections(
     {
-      nodes: upgradeNodes(data.nodes as Graph["nodes"], registry),
+      nodes: upgradeNodes(data.nodes as Graph["nodes"], registry, legacyRotation),
       connections: data.connections as Graph["connections"],
       keyframes:
         data.keyframes && typeof data.keyframes === "object"
@@ -211,12 +233,22 @@ export function deserializeProject(jsonString: string, registry: NodeRegistry = 
 
   if (!Array.isArray(data.canvases)) {
     validateGraphShape(data, "");
-    return { canvases: normalizeCanvases([adoptGraph(data, registry, data.keyframeEasing !== EASING_MODEL)]), activeCanvas: 0 };
+    return {
+      canvases: normalizeCanvases([
+        adoptGraph(data, registry, data.keyframeEasing !== EASING_MODEL, data.rotationModel !== ROTATION_MODEL),
+      ]),
+      activeCanvas: 0,
+    };
   }
 
   const canvases = data.canvases.map((canvas: { nodes?: unknown; connections?: unknown }, i: number) => {
     validateGraphShape(canvas, ` (canvas ${i + 1})`);
-    return adoptGraph(canvas as { nodes: unknown[]; connections: unknown[] }, registry, data.keyframeEasing !== EASING_MODEL);
+    return adoptGraph(
+      canvas as { nodes: unknown[]; connections: unknown[] },
+      registry,
+      data.keyframeEasing !== EASING_MODEL,
+      data.rotationModel !== ROTATION_MODEL,
+    );
   });
 
   return { canvases: normalizeCanvases(canvases), activeCanvas: clampCanvasIndex(data.activeCanvas) };

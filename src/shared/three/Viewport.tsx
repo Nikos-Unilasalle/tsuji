@@ -10,6 +10,7 @@ import { CAMERA_FLY_TO_NODE, CAMERA_NODE } from "../graph/nodes/camera";
 import { TEXTURE_CAMERA_NODE } from "../graph/nodes/textureCamera";
 import { HubElement } from "../graph/nodes/hub";
 import { asVector3, composeNativeMatrixWithPivot, PIVOT_TRANSFORM_NODE } from "../graph/nodes/transform";
+import { quaternionToRotation, rotationToQuaternion } from "../graph/rotationMode";
 import { resetAllParticleSimulations } from "../graph/particleRuntime";
 import { getSimulationEpoch, onSimulationReset } from "../graph/simulationEpoch";
 import { isIkControlNode, resolveCurveEditTarget } from "../graph/curveLookup";
@@ -1124,6 +1125,11 @@ export function Viewport({
   // Edit Mesh transform settings, per viewport like Blender's header: the
   // gizmo's orientation, what it pivots about, and what a move snaps to.
   const [editOrientation, setEditOrientation] = useState<"global" | "local" | "normal">("global");
+  // Object mode's gizmo axes, as Blender's Transform Orientation: the world's,
+  // or the selected object's own (the way it is turned, not its applied shape).
+  const [objectOrientation, setObjectOrientation] = useState<"global" | "local">("global");
+  const objectOrientationRef = useRef(objectOrientation);
+  objectOrientationRef.current = objectOrientation;
   const editOrientationRef = useRef(editOrientation);
   editOrientationRef.current = editOrientation;
   const [editPivot, setEditPivot] = useState<"median" | "individual" | "origin">("median");
@@ -2722,10 +2728,11 @@ export function Viewport({
             // A node whose point is not called `location` (a sound's `position`) gets its own key; the patch is just a param write.
             onTransformChangeRef.current(poseProxyNodeId, { [poseProxyLocationParam]: object.position.clone() } as TransformPatch);
           } else {
-            const euler = new THREE.Euler().setFromQuaternion(object.quaternion);
+            const found = graphRef.current.nodes.find((n) => n.id === poseProxyNodeId);
+            const turned = quaternionToRotation(object.quaternion, found ? paramsWithDefaults(found) : undefined);
             onTransformChangeRef.current(poseProxyNodeId, {
               location: object.position.clone(),
-              rotation: new THREE.Vector3(euler.x, euler.y, euler.z),
+              ...turned,
               scale: new THREE.Vector3(Math.abs(object.scale.x), Math.abs(object.scale.y), Math.abs(object.scale.z)),
             });
           }
@@ -2790,8 +2797,10 @@ export function Viewport({
           parentMatrix.decompose(parentPos, parentQuat, parentScale);
 
           const solvedLocation = parentPos.clone().sub(piv);
-          const euler = new THREE.Euler().setFromQuaternion(parentQuat);
-          const solvedRotation = new THREE.Vector3(euler.x, euler.y, euler.z);
+          // In the node's own Rotation Mode, so a drag writes back the numbers
+          // that same mode composes into this orientation.
+          const nodeParams = paramsWithDefaults(node);
+          const solvedTurn = quaternionToRotation(parentQuat, nodeParams);
           const solvedScale = parentScale.clone();
 
           const wiredSockets = new Set(
@@ -2806,7 +2815,8 @@ export function Viewport({
             patch.location = solvedLocation;
           }
           if (transformModeRef.current === "rotate" && !wiredSockets.has("rotation")) {
-            patch.rotation = solvedRotation;
+            patch.rotation = solvedTurn.rotation;
+            if (solvedTurn.rotationAngle !== undefined) patch.rotationAngle = solvedTurn.rotationAngle;
           }
           if (transformModeRef.current === "scale" && !wiredSockets.has("scale")) {
             patch.scale = solvedScale;
@@ -2815,7 +2825,7 @@ export function Viewport({
           const loc = patch.location ?? asVector3(node.params.location, new THREE.Vector3());
           const rot = patch.rotation ?? asVector3(node.params.rotation, new THREE.Vector3());
           const scl = patch.scale ?? asVector3(node.params.scale, new THREE.Vector3(1, 1, 1));
-          const localMatrix = composeNativeMatrixWithPivot(undefined, loc, rot, scl, piv, node.params);
+          const localMatrix = composeNativeMatrixWithPivot(undefined, loc, rot, scl, piv, { ...nodeParams, ...patch });
           gizmoPivotProxyRealObject.matrix.multiplyMatrices(upstream, localMatrix);
           const poseOffset = gizmoPivotProxyRealObject.userData?.poseOffset;
           if (poseOffset instanceof THREE.Matrix4) gizmoPivotProxyRealObject.matrix.multiply(poseOffset);
@@ -2954,6 +2964,7 @@ export function Viewport({
             graphRef.current.connections.filter((c) => c.toNode === targetNodeId).map((c) => c.toSocket),
           ),
           pivot: nodeForPivot ? asVector3(nodeForPivot.params?.pivot, new THREE.Vector3()) : undefined,
+          params: nodeForPivot ? paramsWithDefaults(nodeForPivot) : undefined,
         });
 
         if (elevationView && snapElevation && patch.location) {
@@ -6418,7 +6429,7 @@ export function Viewport({
           if (poseProxyConfig.channels === "trs") {
             const rotation = asVector3(params.rotation, new THREE.Vector3());
             const scale = asVector3(params.scale, new THREE.Vector3(1, 1, 1));
-            poseProxy.quaternion.setFromEuler(new THREE.Euler(rotation.x, rotation.y, rotation.z));
+            poseProxy.quaternion.copy(rotationToQuaternion(rotation, params));
             poseProxy.scale.set(scale.x || 1e-3, scale.y || 1e-3, scale.z || 1e-3);
           } else {
             poseProxy.quaternion.identity();
@@ -6803,7 +6814,8 @@ export function Viewport({
       // Orientation and step snapping set for Edit Mesh's proxy don't carry
       // over to whatever the gizmo holds next.
       if (transformControls && !transformControls.dragging && transformControls.object !== editMeshCentroidProxy) {
-        if (transformControls.space !== "world") transformControls.setSpace("world");
+        const space = objectOrientationRef.current === "local" ? "local" : "world";
+        if (transformControls.space !== space) transformControls.setSpace(space);
         transformControls.rotationSnap = snapEnabled ? ROTATION_SNAP : null;
         transformControls.scaleSnap = currentScaleSnap();
       }
@@ -10195,6 +10207,30 @@ export function Viewport({
                     )}
                   </button>
                 ))}
+                <button
+                  type="button"
+                  className={"viewport-hud-button" + (objectOrientation === "local" ? " viewport-hud-button-active" : "")}
+                  onClick={() => setObjectOrientation((o) => (o === "global" ? "local" : "global"))}
+                  title={
+                    objectOrientation === "global"
+                      ? "Gizmo axes: Global (the world's). Click for Local, the object's own"
+                      : "Gizmo axes: Local (the object's own). Click for Global, the world's"
+                  }
+                >
+                  {objectOrientation === "global" ? (
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="12" r="9" />
+                      <path d="M3 12h18" />
+                      <path d="M12 3a14 14 0 0 1 0 18a14 14 0 0 1 0-18" />
+                    </svg>
+                  ) : (
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 3 20 7.5v9L12 21l-8-4.5v-9z" />
+                      <path d="M4 7.5 12 12l8-4.5" />
+                      <line x1="12" y1="12" x2="12" y2="21" />
+                    </svg>
+                  )}
+                </button>
               </div>
             )}
             <div className="viewport-hud-divider" />

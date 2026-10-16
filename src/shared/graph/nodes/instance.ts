@@ -1,7 +1,8 @@
 import * as THREE from "three";
 import { NodeDefinition } from "../types";
 import { createNodeCache, disposeObject3D } from "../nodeCaches";
-import { extractPositionFromInput } from "./transform";
+import { composeTransform, extractPositionFromInput } from "./transform";
+import { DEFAULT_ROTATION_MODE, ROTATION_MODE_FIELD } from "../rotationMode";
 
 const groupCache = createNodeCache<THREE.Group>(disposeObject3D);
 
@@ -609,11 +610,12 @@ export const GET_INSTANCE_NODE: NodeDefinition = {
 };
 
 /**
- * Geometry Transform node — applies matrix, location, rotation, scale transformations directly to an incoming geometry stream.
+ * Transform Geometry — moves, turns and grows an incoming object's shape in
+ * its own space, about its origin, as Blender's node of the same name.
  */
 export const GEOMETRY_TRANSFORM_NODE: NodeDefinition = {
   type: "structure/geometry-transform",
-  label: "Geometry Transform",
+  label: "Transform Geometry",
   category: "instance",
   inputs: [
     { id: "geometry", label: "Geometry", type: "geometry", owns: true },
@@ -646,9 +648,10 @@ export const GEOMETRY_TRANSFORM_NODE: NodeDefinition = {
     scaleX: 1,
     scaleY: 1,
     scaleZ: 1,
+    rotationMode: DEFAULT_ROTATION_MODE,
   },
   paramFields: [
-    { id: "mode", label: "Mode", kind: "select", options: ["relative", "absolute"] },
+    ROTATION_MODE_FIELD,
     { id: "posX", label: "Pos X", kind: "number", step: 0.1 },
     { id: "posY", label: "Pos Y", kind: "number", step: 0.1 },
     { id: "posZ", label: "Pos Z", kind: "number", step: 0.1 },
@@ -694,14 +697,14 @@ export const GEOMETRY_TRANSFORM_NODE: NodeDefinition = {
       const isWired = (id: string): boolean =>
         ctx.connectedInputs ? ctx.connectedInputs.has(id) : inputs[id] !== undefined;
 
-      const axis = (componentId: string, vectorId: string, base: number): number => {
+      const axis = (componentId: string, vectorId: string, base: number, unit = 1): number => {
         if (isWired(componentId)) {
           const wiredValue = Number(inputs[componentId]);
-          return Number.isFinite(wiredValue) ? wiredValue : base;
+          return Number.isFinite(wiredValue) ? wiredValue * unit : base;
         }
         if (isWired(vectorId)) return base;
         const param = Number(params[componentId]);
-        return params[componentId] !== undefined && Number.isFinite(param) ? param : base;
+        return params[componentId] !== undefined && Number.isFinite(param) ? param * unit : base;
       };
 
       const baseLoc = asVector(inputs.location, asVector(params.location, new THREE.Vector3(0, 0, 0)));
@@ -711,11 +714,17 @@ export const GEOMETRY_TRANSFORM_NODE: NodeDefinition = {
         axis("posZ", "location", baseLoc.z),
       );
 
+      // Units: the Rot X/Y/Z numbers are degrees, as labelled; the Rotation
+      // vector is radians, like every rotation vector that travels between
+      // nodes (Separate Transform's output, the panel's own stored fallback).
+      // Both used to go through one degrees-to-radians step, so a wired 90°
+      // vector (1.5708) turned the geometry by 1.57°.
+      const DEG = Math.PI / 180;
       const baseRot = asVector(inputs.rotation, asVector(params.rotation, new THREE.Vector3(0, 0, 0)));
       const rotation = new THREE.Vector3(
-        axis("rotX", "rotation", baseRot.x),
-        axis("rotY", "rotation", baseRot.y),
-        axis("rotZ", "rotation", baseRot.z),
+        axis("rotX", "rotation", baseRot.x, DEG),
+        axis("rotY", "rotation", baseRot.y, DEG),
+        axis("rotZ", "rotation", baseRot.z, DEG),
       );
 
       const baseScale = asVector(inputs.scale, asVector(params.scale, new THREE.Vector3(1, 1, 1)));
@@ -725,18 +734,26 @@ export const GEOMETRY_TRANSFORM_NODE: NodeDefinition = {
         axis("scaleZ", "scale", baseScale.z),
       );
 
-      const euler = new THREE.Euler(
-        (rotation.x * Math.PI) / 180,
-        (rotation.y * Math.PI) / 180,
-        (rotation.z * Math.PI) / 180,
-      );
-      transformMat = new THREE.Matrix4();
-      transformMat.compose(location, new THREE.Quaternion().setFromEuler(euler), scale);
+      transformMat = composeTransform(location, rotation, scale, params);
     }
+
+    // In the object's own space, as Blender's Transform Geometry: the
+    // geometry turns and grows about the object's origin and moves along its
+    // axes. The wrapper sits outside the clone, so the transform is
+    // conjugated by the clone's own pose (C·M·C⁻¹·C = C·M) — applied plainly
+    // it acted about the world origin, and an object standing anywhere else
+    // swung around 0,0,0. A collapsed object (zero scale) has no inverse and
+    // draws as nothing either way.
+    if (clone.matrixAutoUpdate) clone.updateMatrix();
+    const own = clone.matrix;
+    const local =
+      Math.abs(own.determinant()) > 1e-12
+        ? new THREE.Matrix4().multiplyMatrices(own, transformMat).multiply(own.clone().invert())
+        : transformMat;
 
     const wrapper = new THREE.Group();
     wrapper.matrixAutoUpdate = false;
-    wrapper.matrix.copy(transformMat);
+    wrapper.matrix.copy(local);
     wrapper.add(clone);
     group.add(wrapper);
 

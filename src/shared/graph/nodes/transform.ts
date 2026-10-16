@@ -2,7 +2,18 @@ import * as THREE from "three";
 import { createNodeCache, disposeObject3D } from "../nodeCaches";
 import { getUnusedAxes } from "./vector";
 import { acquireInstance, instancePoolCache } from "./instancePool";
-import { NodeDefinition } from "../types";
+import { SocketDef } from "../sockets";
+import { NodeDefinition, ParamFieldDef } from "../types";
+import {
+  DEFAULT_ROTATION_MODE,
+  ROTATION_MODE_FIELD,
+  applyWiredRotationAngle,
+  quaternionToRotation,
+  readRotationMode,
+  rotationToQuaternion,
+  withRotationAngleSocket,
+  withRotationModeFields,
+} from "../rotationMode";
 
 const ZERO = new THREE.Vector3(0, 0, 0);
 const ONE = new THREE.Vector3(1, 1, 1);
@@ -64,13 +75,35 @@ export function resolveScaleVector(v: THREE.Vector3): THREE.Vector3 {
   );
 }
 
-/** location/rotation(Euler, radians)/scale -> a single composed Matrix4 — the LSR-to-matrix convention every transform-producing node in this file shares. */
-export function composeTransform(location: THREE.Vector3, rotation: THREE.Vector3, scale: THREE.Vector3): THREE.Matrix4 {
+/**
+ * location/rotation/scale -> a single composed Matrix4 — the LSR-to-matrix
+ * convention every transform-producing node in this file shares. Rotation is
+ * read in the node's Rotation Mode (see rotationMode.ts) when `params` carries
+ * one; without it, the way rotations were always composed.
+ */
+export function composeTransform(
+  location: THREE.Vector3,
+  rotation: THREE.Vector3,
+  scale: THREE.Vector3,
+  params?: Record<string, unknown>,
+): THREE.Matrix4 {
   const loc = resolveLocationVector(location);
   const rot = resolveRotationVector(rotation);
   const scl = resolveScaleVector(scale);
-  const quaternion = new THREE.Quaternion().setFromEuler(new THREE.Euler(rot.x, rot.y, rot.z));
-  return new THREE.Matrix4().compose(loc, quaternion, scl);
+  return new THREE.Matrix4().compose(loc, rotationToQuaternion(rot, params), scl);
+}
+
+/**
+ * Rotation Mode on a node that composes a rotation: the panel fields, with
+ * the Axis Angle angle shown only in that mode, and its Angle socket.
+ */
+function rotationModeFields(fields: ParamFieldDef[], inputs: SocketDef[]) {
+  return {
+    inputs,
+    paramFields: withRotationModeFields(fields),
+    dynamicParamFields: (instance: { params: Record<string, unknown> }) => withRotationModeFields(fields, instance.params),
+    dynamicInputs: (_connections: unknown, _types: unknown, params?: Record<string, unknown>) => withRotationAngleSocket(inputs, params),
+  };
 }
 
 /**
@@ -202,7 +235,7 @@ export function composeNativeMatrixWithPivot(
   const piv = asVector3(pivot, ZERO);
 
   const mPivotInv = new THREE.Matrix4().makeTranslation(-piv.x, -piv.y, -piv.z);
-  const mRotScale = composeTransform(ZERO, rot, scl);
+  const mRotScale = composeTransform(ZERO, rot, scl, params);
   const mPivotLoc = new THREE.Matrix4().makeTranslation(piv.x + loc.x, piv.y + loc.y, piv.z + loc.z);
 
   const inherit = readInheritModes(params);
@@ -228,13 +261,9 @@ export function composeNativeMatrixWithPivot(
  */
 export const TRANSFORM_NODE: NodeDefinition = {
   type: "transform",
-  label: "Compose Matrix",
+  // Blender's name for the same node (Geometry Nodes, 4.2).
+  label: "Combine Transform",
   category: "compose",
-  inputs: [
-    { id: "location", label: "Location", type: "vector" },
-    { id: "rotation", label: "Rotation", type: "vector" },
-    { id: "scale", label: "Scale", type: "vector" },
-  ],
   outputs: [{ id: "matrix", label: "Matrix", type: "matrix" }],
   defaultParams: {
     location: ZERO.clone(),
@@ -243,13 +272,23 @@ export const TRANSFORM_NODE: NodeDefinition = {
     useLOCATION: true,
     useROTATION: true,
     useSCALE: true,
+    rotationMode: DEFAULT_ROTATION_MODE,
+    rotationAngle: 0,
   },
-  paramFields: [
-    { id: "location", label: "Location (fallback)", kind: "vector" },
-    { id: "rotation", label: "Rotation (°, fallback)", kind: "vector", step: 1, degrees: true },
-    { id: "scale", label: "Scale (fallback)", kind: "vector" },
-  ],
-  evaluate: (inputs, params) => {
+  ...rotationModeFields(
+    [
+      { id: "location", label: "Location (fallback)", kind: "vector" },
+      { id: "rotation", label: "Rotation (°, fallback)", kind: "vector", step: 1, degrees: true },
+      { id: "scale", label: "Scale (fallback)", kind: "vector" },
+    ],
+    [
+      { id: "location", label: "Location", type: "vector" },
+      { id: "rotation", label: "Rotation", type: "vector" },
+      { id: "scale", label: "Scale", type: "vector" },
+    ],
+  ),
+  evaluate: (inputs, params, ctx) => {
+    applyWiredRotationAngle(inputs, params, ctx.connectedInputs);
     // A channel unchecked here is dropped entirely — even a wired input is
     // ignored — so this node can output e.g. "rotation + scale only, no
     // location", to parent an object's orientation to something without
@@ -261,31 +300,40 @@ export const TRANSFORM_NODE: NodeDefinition = {
     const location = useLocation ? asVector3(inputs.location, ZERO) : ZERO.clone();
     const rotation = useRotation ? asVector3(inputs.rotation, ZERO) : ZERO.clone();
     const scale = useScale ? asVector3(inputs.scale, ONE) : ONE.clone();
-    return { matrix: composeTransform(location, rotation, scale) };
+    return { matrix: composeTransform(location, rotation, scale, params) };
   },
 };
 
-/** Matrix -> separate location/rotation(Euler)/scale vectors — the inverse of Transform. */
+const DECOMPOSE_OUTPUTS = [
+  { id: "location", label: "Location", type: "vector" as const },
+  { id: "rotation", label: "Rotation", type: "vector" as const },
+  { id: "scale", label: "Scale", type: "vector" as const },
+];
+
+/** Matrix -> separate location/rotation/scale vectors, rotation in the node's Rotation Mode — the inverse of Transform. */
 export const DECOMPOSE_MATRIX_NODE: NodeDefinition = {
   type: "matrix/decompose",
-  label: "Decompose Matrix",
+  label: "Separate Transform",
   category: "compose",
   inputs: [{ id: "matrix", label: "Matrix", type: "matrix" }],
-  outputs: [
-    { id: "location", label: "Location", type: "vector" },
-    { id: "rotation", label: "Rotation", type: "vector" },
-    { id: "scale", label: "Scale", type: "vector" },
-  ],
-  defaultParams: {},
-  evaluate: (inputs) => {
+  outputs: DECOMPOSE_OUTPUTS,
+  defaultParams: { rotationMode: DEFAULT_ROTATION_MODE },
+  paramFields: [ROTATION_MODE_FIELD],
+  // In Axis Angle the Rotation output is the axis, and the angle comes out on
+  // its own — in degrees, like every value-typed angle socket.
+  dynamicOutputs: (_connections, _types, params) =>
+    readRotationMode(params) === "AXIS_ANGLE"
+      ? [...DECOMPOSE_OUTPUTS, { id: "angle", label: "Angle (°)", type: "value" }]
+      : DECOMPOSE_OUTPUTS,
+  evaluate: (inputs, params) => {
     const matrix = inputs.matrix instanceof THREE.Matrix4 ? inputs.matrix : new THREE.Matrix4();
     const location = new THREE.Vector3();
     const quaternion = new THREE.Quaternion();
     const scale = new THREE.Vector3();
     matrix.decompose(location, quaternion, scale);
-    const euler = new THREE.Euler().setFromQuaternion(quaternion);
+    const { rotation, rotationAngle } = quaternionToRotation(quaternion, params);
 
-    return { location, rotation: new THREE.Vector3(euler.x, euler.y, euler.z), scale };
+    return { location, rotation, scale, angle: ((rotationAngle ?? 0) * 180) / Math.PI };
   },
 };
 
@@ -411,26 +459,32 @@ export const LOOK_AT_NODE: NodeDefinition = {
 export const MATRIX_TRANSFORM_NODE: NodeDefinition = {
   type: "transform/matrix-transform",
   label: "Matrix Transform",
+  // Superseded by an object's own Location / Rotation / Scale sockets (to
+  // move it) and Transform Geometry (to move its shape about its origin).
+  hidden: true,
   category: "transform",
-  inputs: [
-    { id: "matrix", label: "Matrix", type: "matrix" },
-    { id: "location", label: "Location", type: "vector" },
-    { id: "rotation", label: "Rotation", type: "vector" },
-    { id: "scale", label: "Scale", type: "vector" },
-  ],
   outputs: [{ id: "matrix", label: "Matrix", type: "matrix" }],
-  defaultParams: { location: ZERO.clone(), rotation: ZERO.clone(), scale: ONE.clone() },
-  paramFields: [
-    { id: "location", label: "Location Offset", kind: "vector" },
-    { id: "rotation", label: "Rotation Offset (°)", kind: "vector", step: 1, degrees: true },
-    { id: "scale", label: "Scale Multiplier", kind: "vector" },
-  ],
-  evaluate: (inputs) => {
+  defaultParams: { location: ZERO.clone(), rotation: ZERO.clone(), scale: ONE.clone(), rotationMode: DEFAULT_ROTATION_MODE, rotationAngle: 0 },
+  ...rotationModeFields(
+    [
+      { id: "location", label: "Location Offset", kind: "vector" },
+      { id: "rotation", label: "Rotation Offset (°)", kind: "vector", step: 1, degrees: true },
+      { id: "scale", label: "Scale Multiplier", kind: "vector" },
+    ],
+    [
+      { id: "matrix", label: "Matrix", type: "matrix" },
+      { id: "location", label: "Location", type: "vector" },
+      { id: "rotation", label: "Rotation", type: "vector" },
+      { id: "scale", label: "Scale", type: "vector" },
+    ],
+  ),
+  evaluate: (inputs, params, ctx) => {
+    applyWiredRotationAngle(inputs, params, ctx.connectedInputs);
     const baseMatrix = inputs.matrix instanceof THREE.Matrix4 ? inputs.matrix : new THREE.Matrix4();
     const location = asVector3(inputs.location, ZERO);
     const rotation = asVector3(inputs.rotation, ZERO);
     const scale = asVector3(inputs.scale, ONE);
-    const deltaMatrix = composeTransform(location, rotation, scale);
+    const deltaMatrix = composeTransform(location, rotation, scale, params);
 
     const matrix = new THREE.Matrix4().multiplyMatrices(baseMatrix, deltaMatrix);
     return { matrix };
@@ -442,7 +496,7 @@ export const MATRIX_TRANSFORM_NODE: NodeDefinition = {
  */
 export const TRANSFORM_VECTOR_NODE: NodeDefinition = {
   type: "transform/transform-vector",
-  label: "Transform Vector",
+  label: "Transform Point",
   category: "transform",
   inputs: [
     { id: "vector", label: "Vector", type: "vector" },
@@ -465,28 +519,36 @@ export const TRANSFORM_VECTOR_NODE: NodeDefinition = {
 export const PIVOT_TRANSFORM_NODE: NodeDefinition = {
   type: "transform/pivot",
   label: "Pivot Transform",
+  // Superseded by every object's own Pivot, which its Rotation and Scale
+  // already turn and grow about.
+  hidden: true,
   category: "transform",
-  inputs: [
-    { id: "matrix", label: "Matrix", type: "matrix" },
-    { id: "pivot", label: "Pivot", type: "vector" },
-    { id: "location", label: "Location", type: "vector" },
-    { id: "rotation", label: "Rotation", type: "vector" },
-    { id: "scale", label: "Scale", type: "vector" },
-  ],
   outputs: [{ id: "matrix", label: "Matrix", type: "matrix" }],
   defaultParams: {
     pivot: ZERO.clone(),
     location: ZERO.clone(),
     rotation: ZERO.clone(),
     scale: ONE.clone(),
+    rotationMode: DEFAULT_ROTATION_MODE,
+    rotationAngle: 0,
   },
-  paramFields: [
-    { id: "pivot", label: "Pivot Point", kind: "vector" },
-    { id: "location", label: "Location Offset", kind: "vector" },
-    { id: "rotation", label: "Rotation (°)", kind: "vector", step: 1, degrees: true },
-    { id: "scale", label: "Scale Multiplier", kind: "vector" },
-  ],
-  evaluate: (inputs) => {
+  ...rotationModeFields(
+    [
+      { id: "pivot", label: "Pivot Point", kind: "vector" },
+      { id: "location", label: "Location Offset", kind: "vector" },
+      { id: "rotation", label: "Rotation (°)", kind: "vector", step: 1, degrees: true },
+      { id: "scale", label: "Scale Multiplier", kind: "vector" },
+    ],
+    [
+      { id: "matrix", label: "Matrix", type: "matrix" },
+      { id: "pivot", label: "Pivot", type: "vector" },
+      { id: "location", label: "Location", type: "vector" },
+      { id: "rotation", label: "Rotation", type: "vector" },
+      { id: "scale", label: "Scale", type: "vector" },
+    ],
+  ),
+  evaluate: (inputs, params, ctx) => {
+    applyWiredRotationAngle(inputs, params, ctx.connectedInputs);
     const baseMatrix = inputs.matrix instanceof THREE.Matrix4 ? inputs.matrix : new THREE.Matrix4();
     const pivot = asVector3(inputs.pivot, ZERO);
     const location = asVector3(inputs.location, ZERO);
@@ -494,7 +556,7 @@ export const PIVOT_TRANSFORM_NODE: NodeDefinition = {
     const scale = asVector3(inputs.scale, ONE);
 
     const mPivotInv = new THREE.Matrix4().makeTranslation(-pivot.x, -pivot.y, -pivot.z);
-    const mRotScale = composeTransform(ZERO, rotation, scale);
+    const mRotScale = composeTransform(ZERO, rotation, scale, params);
     const mPivotLoc = new THREE.Matrix4().makeTranslation(pivot.x + location.x, pivot.y + location.y, pivot.z + location.z);
 
     const deltaMatrix = new THREE.Matrix4()

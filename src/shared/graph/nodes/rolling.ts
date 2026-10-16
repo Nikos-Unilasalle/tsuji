@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { DEFAULT_ROTATION_MODE, ROTATION_ORDER_FIELD, quaternionToRotation } from "../rotationMode";
 import { NodeDefinition } from "../types";
 import { createNodeCache } from "../nodeCaches";
 import { asVector3 } from "./transform";
@@ -114,9 +115,11 @@ export const ROLLING_NODE: NodeDefinition = {
     shape: "round",
     size: 1,
     axis: DEFAULT_AXIS.clone(),
+    rotationMode: DEFAULT_ROTATION_MODE,
   },
   paramFields: [
     { id: "shape", label: "Shape", kind: "select", options: [...ROLLING_SHAPES] },
+    ROTATION_ORDER_FIELD,
     { id: "size", label: "Size (diameter for round, side length for polygonal)", kind: "number", step: 0.05 },
     { id: "axis", label: "Rolling Plane Normal (Up)", kind: "vector" },
   ],
@@ -198,8 +201,8 @@ export const ROLLING_NODE: NodeDefinition = {
       bob = circum * Math.cos(Math.PI / sides - phase) - inscribed;
     }
 
-    const euler = new THREE.Euler().setFromQuaternion(state.quaternion);
+    const { rotation } = quaternionToRotation(state.quaternion, params);
     const correctedPosition = position.clone().addScaledVector(axis, bob);
-    return { rotation: new THREE.Vector3(euler.x, euler.y, euler.z), position: correctedPosition, bob };
+    return { rotation, position: correctedPosition, bob };
   },
 };

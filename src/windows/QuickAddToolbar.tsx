@@ -87,7 +87,7 @@ const QUICK_ADD_ITEMS: QuickAddItem[] = [
   },
   {
     type: "transform",
-    label: "Compose Matrix",
+    label: "Combine Transform",
     icon: (
       <svg {...ICON_PROPS}>
         <path d="M8 3H5a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h3M16 3h3a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1h-3" />

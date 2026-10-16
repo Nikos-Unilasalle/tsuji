@@ -1,4 +1,5 @@
 import { createRegistry } from "../types";
+import { addPoseSockets } from "../poseSockets";
 import { CAMERA_FLY_TO_NODE, CAMERA_NODE } from "./camera";
 import { GRID_NODE } from "./grid";
 import { ROOM_CORNER_NODE } from "./roomCorner";
@@ -574,6 +575,9 @@ export const STARTER_NODES = [
   MODIFIER_SUPER8_NODE,
   MODIFIER_OUTLINE_NODE,
 ];
+
+// Location / Rotation / Scale sockets on every node that owns a pose — see poseSockets.ts.
+for (const def of STARTER_NODES) addPoseSockets(def);
 
 export const DEFAULT_REGISTRY = createRegistry(STARTER_NODES);
 DEFAULT_REGISTRY.set("list/distance-gradient", DISTANCE_GRADIENT_LIST_NODE);

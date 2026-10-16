@@ -5,7 +5,7 @@ import { CATEGORY_COLOR, NodeCategory, UNKNOWN_CATEGORY_COLOR } from "../shared/
 import { NEW_PORT_SOCKET } from "../shared/graph/groups";
 import { getInspectorValue, subscribeInspector } from "../shared/graph/inspectorStore";
 import { SOCKET_COLOR, SocketDef } from "../shared/graph/sockets";
-import { NODE_FREEZE_ACTION } from "../shared/graph/nodeActions";
+import { NODE_APPLY_TRANSFORM_ACTION, NODE_FREEZE_ACTION } from "../shared/graph/nodeActions";
 import { FRAME_MIN_HEIGHT, FRAME_MIN_WIDTH, FRAME_TYPE } from "../shared/graph/nodes/frame";
 
 export interface GraphNodeData {
@@ -30,6 +30,8 @@ export interface GraphNodeData {
  */
 export interface NodeActions {
   resetAction: (nodeType: string | undefined) => string | null;
+  /** Whether the node type has a pose that Apply Rotation & Scale can fold into its geometry. */
+  canApply: (nodeType: string | undefined) => boolean;
   run: (nodeId: string, action: string) => void;
 }
 export const NodeActionsContext = createContext<NodeActions | null>(null);
@@ -124,6 +126,15 @@ const FreezeIcon = () => (
   </svg>
 );
 
+/** A cube with its axes squared up — the turn and stretch set into the shape. */
+const ApplyIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 3 20 7.5v9L12 21l-8-4.5v-9z" />
+    <path d="M4 7.5 12 12l8-4.5" />
+    <line x1="12" y1="12" x2="12" y2="21" />
+  </svg>
+);
+
 const ResetIcon = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M3 12a9 9 0 1 0 3-6.7" />
@@ -132,8 +143,9 @@ const ResetIcon = () => (
 );
 
 /**
- * Freeze (anything that outputs geometry) and Reset (a node that declares
- * one), under the node, shown while the pointer is over it. `nodrag` keeps a
+ * Freeze (anything that outputs geometry), Apply (a node with a pose of its
+ * own) and Reset (a node that declares one), under the node, shown while the
+ * pointer is over it. `nodrag` keeps a
  * click on them from starting a node drag.
  */
 function NodeHoverActions({ data }: { data: GraphNodeData }) {
@@ -141,7 +153,8 @@ function NodeHoverActions({ data }: { data: GraphNodeData }) {
   if (!actions || !data.nodeId) return null;
   const canFreeze = data.outputs.some((o) => o.id === "geometry" && o.type === "geometry");
   const reset = actions.resetAction(data.nodeType);
-  if (!canFreeze && !reset) return null;
+  const canApply = actions.canApply(data.nodeType);
+  if (!canFreeze && !reset && !canApply) return null;
   const nodeId = data.nodeId;
   const run = (action: string) => (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -152,6 +165,16 @@ function NodeHoverActions({ data }: { data: GraphNodeData }) {
       {reset && (
         <button type="button" className="graph-node-action" title="Reset: discard what was made in this node (Cmd/Ctrl+Z undoes)" onClick={run(reset)}>
           <ResetIcon />
+        </button>
+      )}
+      {canApply && (
+        <button
+          type="button"
+          className="graph-node-action"
+          title="Apply Rotation & Scale: set the object's turn and size into its shape, leaving Rotation 0 and Scale 1 — it stays exactly where it is (Cmd/Ctrl+Z undoes)"
+          onClick={run(NODE_APPLY_TRANSFORM_ACTION)}
+        >
+          <ApplyIcon />
         </button>
       )}
       {canFreeze && (

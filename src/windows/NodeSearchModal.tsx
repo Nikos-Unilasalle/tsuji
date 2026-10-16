@@ -24,7 +24,7 @@ export function NodeSearchModal({ registry, onSelectNodeType, onClose }: NodeSea
     // A group and its boundary nodes are made by Cmd+G, never placed by hand
     // — one dropped from here would have no interior and no ports.
     return Array.from(registry.values()).filter(
-      (def) => def.type !== GROUP_TYPE && def.type !== GROUP_INPUT_TYPE && def.type !== GROUP_OUTPUT_TYPE,
+      (def) => def.type !== GROUP_TYPE && def.type !== GROUP_INPUT_TYPE && def.type !== GROUP_OUTPUT_TYPE && !def.hidden,
     );
   }, [registry]);
 

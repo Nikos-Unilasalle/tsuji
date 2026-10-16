@@ -1,0 +1,533 @@
+{
+  "canvases": [
+    {
+      "nodes": [
+        {
+          "id": "setup_0",
+          "type": "object/plane",
+          "position": {
+            "x": 599,
+            "y": 160
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 0,
+              "y": -0.5,
+              "z": 0
+            },
+            "rotation": {
+              "x": 1.5707963267948966,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 10,
+              "y": 10,
+              "z": 1
+            },
+            "texturePath": "",
+            "normalMapPath": "",
+            "roughnessMapPath": "",
+            "uvScaleX": 1,
+            "uvScaleY": 1,
+            "uvOffsetX": 0,
+            "uvOffsetY": 0,
+            "color": 16777215,
+            "emissive": 0,
+            "emissiveIntensity": 1,
+            "shadeless": 0,
+            "roughness": 0.1,
+            "metalness": 0.1,
+            "wireframe": 0,
+            "opacity": 1,
+            "transmission": 0,
+            "thickness": 0.5
+          }
+        },
+        {
+          "id": "setup_1",
+          "type": "texture/procedural",
+          "position": {
+            "x": 375,
+            "y": 223
+          },
+          "params": {
+            "type": "checker",
+            "colorA": 16777215,
+            "colorB": 2236962,
+            "scale": 8,
+            "seed": 1,
+            "octaves": 3,
+            "resolution": 256,
+            "uvScaleX": 1,
+            "uvScaleY": 1,
+            "uvOffsetX": 0,
+            "uvOffsetY": 0
+          }
+        },
+        {
+          "id": "setup_2",
+          "type": "light/point",
+          "position": {
+            "x": 857,
+            "y": 193
+          },
+          "params": {
+            "location": {
+              "x": 0,
+              "y": 2.185514752224622,
+              "z": -4.5179526088705275
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "color": 16768110,
+            "intensity": 50,
+            "distance": 15,
+            "decay": 2,
+            "castShadow": 1
+          }
+        },
+        {
+          "id": "setup_3",
+          "type": "light/point",
+          "position": {
+            "x": 1043,
+            "y": 187
+          },
+          "params": {
+            "location": {
+              "x": 0,
+              "y": 2.185514752224622,
+              "z": 4.487400919453167
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "color": 440020,
+            "intensity": 50,
+            "distance": 15,
+            "decay": 2,
+            "castShadow": 1
+          }
+        },
+        {
+          "id": "setup_4",
+          "type": "render",
+          "position": {
+            "x": 610,
+            "y": 393
+          },
+          "params": {
+            "frameCount": 120,
+            "fps": 30,
+            "motionBlur": 0,
+            "resolutionPreset": "16:9 (1920x1080)",
+            "width": 1920,
+            "height": 1080,
+            "holdout": false
+          }
+        },
+        {
+          "id": "setup_5",
+          "type": "lighting/environment",
+          "position": {
+            "x": 340,
+            "y": 406
+          },
+          "params": {
+            "color": 4147542,
+            "intensity": 1,
+            "background": 1,
+            "blurriness": 0,
+            "filePath": "",
+            "backgroundImagePath": "",
+            "backgroundFit": "cover",
+            "backgroundScale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "backgroundOffset": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "backgroundRotation": 0,
+            "ambientIntensity": 0,
+            "sunIntensity": 0
+          }
+        },
+        {
+          "id": "setup_6",
+          "type": "light/point",
+          "position": {
+            "x": 860,
+            "y": 389
+          },
+          "params": {
+            "location": {
+              "x": 3.583607412619263,
+              "y": 2.185514752224622,
+              "z": -0.48624947478730096
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "color": 16777215,
+            "intensity": 50,
+            "distance": 15,
+            "decay": 2,
+            "castShadow": 1
+          }
+        },
+        {
+          "id": "clock",
+          "type": "time",
+          "position": {
+            "x": -1500,
+            "y": 300
+          },
+          "params": {}
+        },
+        {
+          "id": "spin",
+          "type": "value/math",
+          "position": {
+            "x": -1260,
+            "y": 300
+          },
+          "params": {
+            "op": "multiply",
+            "b": -3
+          }
+        },
+        {
+          "id": "steer",
+          "type": "animation/oscillator",
+          "position": {
+            "x": -1260,
+            "y": 520
+          },
+          "params": {
+            "type": "sine",
+            "frequency": 0.25,
+            "amplitude": 0.45,
+            "offset": 0
+          }
+        },
+        {
+          "id": "rearRot",
+          "type": "vector/compose",
+          "position": {
+            "x": -1000,
+            "y": 120
+          },
+          "params": {
+            "useY": false,
+            "useZ": false
+          }
+        },
+        {
+          "id": "frontRot",
+          "type": "vector/compose",
+          "position": {
+            "x": -1000,
+            "y": 460
+          },
+          "params": {
+            "useZ": false
+          }
+        },
+        {
+          "id": "rear",
+          "type": "object/cylinder",
+          "position": {
+            "x": -740,
+            "y": 120
+          },
+          "params": {
+            "location": {
+              "x": -1.4,
+              "y": 0.8,
+              "z": 0
+            },
+            "appliedTransform": [
+              0,
+              1.6,
+              0,
+              0,
+              -0.5,
+              0,
+              0,
+              0,
+              0,
+              0,
+              1.6,
+              0,
+              0,
+              0,
+              0,
+              1
+            ],
+            "rotationMode": "XZY",
+            "color": 9133302,
+            "roughness": 0.5,
+            "metalness": 0.1
+          }
+        },
+        {
+          "id": "front",
+          "type": "object/cylinder",
+          "position": {
+            "x": -740,
+            "y": 460
+          },
+          "params": {
+            "location": {
+              "x": 1.4,
+              "y": 0.8,
+              "z": 0
+            },
+            "appliedTransform": [
+              0,
+              1.6,
+              0,
+              0,
+              -0.5,
+              0,
+              0,
+              0,
+              0,
+              0,
+              1.6,
+              0,
+              0,
+              0,
+              0,
+              1
+            ],
+            "rotationMode": "XZY",
+            "color": 9133302,
+            "roughness": 0.5,
+            "metalness": 0.1
+          }
+        },
+        {
+          "id": "rearMark",
+          "type": "object/box",
+          "position": {
+            "x": -480,
+            "y": 200
+          },
+          "params": {
+            "location": {
+              "x": 0,
+              "y": 0.8,
+              "z": 0
+            },
+            "scale": {
+              "x": 0.12,
+              "y": 0.3,
+              "z": 0.3
+            },
+            "color": 15485081,
+            "rotationMode": "XZY"
+          }
+        },
+        {
+          "id": "frontMark",
+          "type": "object/box",
+          "position": {
+            "x": -480,
+            "y": 540
+          },
+          "params": {
+            "location": {
+              "x": 0,
+              "y": 0.8,
+              "z": 0
+            },
+            "scale": {
+              "x": 0.12,
+              "y": 0.3,
+              "z": 0.3
+            },
+            "color": 15485081,
+            "rotationMode": "XZY"
+          }
+        },
+        {
+          "id": "merge",
+          "type": "structure/merge",
+          "position": {
+            "x": -220,
+            "y": 300
+          },
+          "params": {}
+        }
+      ],
+      "connections": [
+        {
+          "id": "setup_c0",
+          "fromNode": "setup_1",
+          "fromSocket": "texture",
+          "toNode": "setup_0",
+          "toSocket": "texture"
+        },
+        {
+          "id": "setup_c1",
+          "fromNode": "setup_5",
+          "fromSocket": "environment",
+          "toNode": "setup_4",
+          "toSocket": "environment"
+        },
+        {
+          "id": "clock.seconds->spin.a",
+          "fromNode": "clock",
+          "fromSocket": "seconds",
+          "toNode": "spin",
+          "toSocket": "a"
+        },
+        {
+          "id": "spin.out->rearRot.x",
+          "fromNode": "spin",
+          "fromSocket": "out",
+          "toNode": "rearRot",
+          "toSocket": "x"
+        },
+        {
+          "id": "spin.out->frontRot.x",
+          "fromNode": "spin",
+          "fromSocket": "out",
+          "toNode": "frontRot",
+          "toSocket": "x"
+        },
+        {
+          "id": "steer.out->frontRot.y",
+          "fromNode": "steer",
+          "fromSocket": "out",
+          "toNode": "frontRot",
+          "toSocket": "y"
+        },
+        {
+          "id": "rearRot.out->rear.rotation",
+          "fromNode": "rearRot",
+          "fromSocket": "out",
+          "toNode": "rear",
+          "toSocket": "rotation"
+        },
+        {
+          "id": "frontRot.out->front.rotation",
+          "fromNode": "frontRot",
+          "fromSocket": "out",
+          "toNode": "front",
+          "toSocket": "rotation"
+        },
+        {
+          "id": "rear.matrix->rearMark.matrix",
+          "fromNode": "rear",
+          "fromSocket": "matrix",
+          "toNode": "rearMark",
+          "toSocket": "matrix"
+        },
+        {
+          "id": "front.matrix->frontMark.matrix",
+          "fromNode": "front",
+          "fromSocket": "matrix",
+          "toNode": "frontMark",
+          "toSocket": "matrix"
+        },
+        {
+          "id": "rear.geometry->merge.in0",
+          "fromNode": "rear",
+          "fromSocket": "geometry",
+          "toNode": "merge",
+          "toSocket": "in0"
+        },
+        {
+          "id": "front.geometry->merge.in1",
+          "fromNode": "front",
+          "fromSocket": "geometry",
+          "toNode": "merge",
+          "toSocket": "in1"
+        },
+        {
+          "id": "rearMark.geometry->merge.in2",
+          "fromNode": "rearMark",
+          "fromSocket": "geometry",
+          "toNode": "merge",
+          "toSocket": "in2"
+        },
+        {
+          "id": "frontMark.geometry->merge.in3",
+          "fromNode": "frontMark",
+          "fromSocket": "geometry",
+          "toNode": "merge",
+          "toSocket": "in3"
+        }
+      ],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    },
+    {
+      "nodes": [],
+      "connections": [],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    },
+    {
+      "nodes": [],
+      "connections": [],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    },
+    {
+      "nodes": [],
+      "connections": [],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    },
+    {
+      "nodes": [],
+      "connections": [],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    },
+    {
+      "nodes": [],
+      "connections": [],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    }
+  ],
+  "activeCanvas": 0
+}

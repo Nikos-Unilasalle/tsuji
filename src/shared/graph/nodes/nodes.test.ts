@@ -143,7 +143,7 @@ describe("TRANSFORM_NODE / DECOMPOSE_MATRIX_NODE round trip", () => {
     const scale = new THREE.Vector3(2, 0.5, 1);
 
     const { matrix } = TRANSFORM_NODE.evaluate({ location, rotation, scale }, TRANSFORM_NODE.defaultParams, CTX);
-    const decomposed = DECOMPOSE_MATRIX_NODE.evaluate({ matrix }, {}, CTX);
+    const decomposed = DECOMPOSE_MATRIX_NODE.evaluate({ matrix }, DECOMPOSE_MATRIX_NODE.defaultParams, CTX);
 
     expect((decomposed.location as THREE.Vector3).x).toBeCloseTo(location.x);
     expect((decomposed.location as THREE.Vector3).y).toBeCloseTo(location.y);

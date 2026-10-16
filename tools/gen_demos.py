@@ -1442,6 +1442,46 @@ def _():
     return n, c
 
 
+@demo("rotation_wheels")
+def _():
+    # The Blender way to spin a wheel. Each cylinder was tipped onto its side
+    # (Rotation Z 90°) and squashed into a tyre (Scale), then Apply Rotation &
+    # Scale set that into its shape: Rotation is back to 0 and the axle is the
+    # wheel's own X. Time then drives Rotation X, which spins it in place; the
+    # front wheel also steers on Rotation Y, and its axle follows the steering
+    # while it keeps spinning. A block parented to each wheel marks the rim.
+    applied = [0, 1.6, 0, 0, -0.5, 0, 0, 0, 0, 0, 1.6, 0, 0, 0, 0, 1]
+    tyre = dict(appliedTransform=applied, rotationMode="XZY", color=MID, roughness=0.5, metalness=0.1)
+    mark = dict(location=v3(0, 0.8, 0), scale=v3(0.12, 0.3, 0.3), color=PINK, rotationMode="XZY")
+    n = [
+        node("clock", "time", -1500, 300),
+        node("spin", "value/math", -1260, 300, op="multiply", b=-3),
+        node("steer", "animation/oscillator", -1260, 520, type="sine", frequency=0.25, amplitude=0.45, offset=0),
+        node("rearRot", "vector/compose", -1000, 120, useY=False, useZ=False),
+        node("frontRot", "vector/compose", -1000, 460, useZ=False),
+        node("rear", "object/cylinder", -740, 120, location=v3(-1.4, 0.8, 0), **tyre),
+        node("front", "object/cylinder", -740, 460, location=v3(1.4, 0.8, 0), **tyre),
+        node("rearMark", "object/box", -480, 200, **mark),
+        node("frontMark", "object/box", -480, 540, **mark),
+        node("merge", "structure/merge", -220, 300),
+    ]
+    c = [
+        wire("clock", "seconds", "spin", "a"),
+        wire("spin", "out", "rearRot", "x"),
+        wire("spin", "out", "frontRot", "x"),
+        wire("steer", "out", "frontRot", "y"),
+        wire("rearRot", "out", "rear", "rotation"),
+        wire("frontRot", "out", "front", "rotation"),
+        wire("rear", "matrix", "rearMark", "matrix"),
+        wire("front", "matrix", "frontMark", "matrix"),
+        wire("rear", "geometry", "merge", "in0"),
+        wire("front", "geometry", "merge", "in1"),
+        wire("rearMark", "geometry", "merge", "in2"),
+        wire("frontMark", "geometry", "merge", "in3"),
+    ]
+    return n, c
+
+
 def main(only=None):
     names = [only] if only else list(DEMOS_SPEC)
     for name in names:

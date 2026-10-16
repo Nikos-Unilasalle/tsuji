@@ -125,13 +125,18 @@ export const DEMO_CATALOG: DemoCategory[] = [
         description: "A moon inheriting a planet's orbit, blended with a tilted one.",
       },
       {
+        file: "demo_rotation_wheels.tsuji",
+        label: "Spinning Wheels",
+        description: "Two wheels made the Blender way: tipped, then Apply Rotation & Scale, then Time into Rotation X — they spin on their own axles, and the front one steers on Rotation Y (press Play).",
+      },
+      {
         file: "demo_math_vectors.tsuji",
         label: "Vector Math",
         description: "Compose, add and decompose a position vector.",
       },
       {
         file: "demo_transform_basics.tsuji",
-        label: "Geometry Transform",
+        label: "Transform Geometry",
         description: "Position, rotate and scale one object.",
       },
       {

@@ -172,3 +172,32 @@ describe("storage utilities", () => {
     });
   });
 });
+
+describe("Rotation Mode migration", () => {
+  const nodes = [
+    { id: "box", type: "object/box", position: { x: 0, y: 0 }, params: { rotation: { x: 0.3, y: 0.4, z: 0 } } },
+    { id: "set", type: "object/box", position: { x: 0, y: 0 }, params: { rotationMode: "YXZ" } },
+    { id: "tx", type: "transform", position: { x: 0, y: 0 }, params: {} },
+    { id: "val", type: "value/constant", position: { x: 0, y: 0 }, params: { value: 1 } },
+  ];
+
+  it("gives every rotating node in an older file the composition it was made with", () => {
+    const project = deserializeProject(JSON.stringify({ canvases: [{ nodes, connections: [] }], activeCanvas: 0 }));
+    const byId = new Map(project.canvases[0].nodes.map((n) => [n.id, n.params]));
+    expect(byId.get("box")?.rotationMode).toBe("ZYX");
+    expect(byId.get("tx")?.rotationMode).toBe("ZYX");
+    expect(byId.get("set")?.rotationMode).toBe("YXZ");
+    expect(byId.get("val")).not.toHaveProperty("rotationMode");
+  });
+
+  it("leaves a file saved since then alone", () => {
+    const saved = serializeProject({ canvases: [{ ...emptyGraph(), nodes: nodes as Graph["nodes"] }], activeCanvas: 0 });
+    const project = deserializeProject(saved);
+    expect(project.canvases[0].nodes.find((n) => n.id === "box")?.params).not.toHaveProperty("rotationMode");
+  });
+
+  it("migrates a single-graph file too", () => {
+    const graph = deserializeGraph(JSON.stringify({ nodes, connections: [] }));
+    expect(graph.nodes.find((n) => n.id === "box")?.params.rotationMode).toBe("ZYX");
+  });
+});
