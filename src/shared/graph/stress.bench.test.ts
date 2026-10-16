@@ -7,6 +7,8 @@ import { DEFAULT_REGISTRY } from "./nodes/index";
 import { disposeEvalSession, evaluateGraph, setEvalMemoEnabled } from "./evaluate";
 import { getEvalProfiler, startEvalProfiling, stopEvalProfiling } from "./evalProfiler";
 import { initBvhRaycast } from "../three/bvh";
+import { DeferredExecutor, setJobExecutor } from "./offthread/jobs";
+import { instantiateWasmKernelsSync } from "./offthread/wasmKernels";
 import { Connection, Graph, KeyframeStore, NodeInstance } from "./types";
 
 /**
@@ -22,6 +24,14 @@ import { Connection, Graph, KeyframeStore, NodeInstance } from "./types";
  *   TSUJI_STRESS_FILTER=shan_shui,rig npm run stress  # only matching demos
  *   TSUJI_STRESS_STATIC=1 npm run stress              # paused on one frame
  *   TSUJI_STRESS_NOMEMO=1 npm run stress              # pure-node memo off (baseline)
+ *   TSUJI_STRESS_OFFTHREAD=1 npm run stress           # worker-capable nodes (offthread/jobs.ts) as in the app
+ *   TSUJI_STRESS_OFFTHREAD=wasm npm run stress        # … with the Rust/WASM kernels the app's worker runs
+ *
+ * With OFFTHREAD, such nodes' kernels are queued as the app would post them
+ * to its geometry worker and run between frames, outside the timed
+ * evaluation — the frame times are then what the main thread pays, and the
+ * kernel time is reported on its own line (and as "worker: …" phases).
+ * Without it they run inline, as they do in Node and in the test suite.
  *
  * Measures evaluation only (CPU, main thread in the app): no WebGL, no scene
  * sync, no draw — the in-app overlay (Ctrl+Shift+P) covers those. Writes the
@@ -36,6 +46,9 @@ const FILTER = (process.env.TSUJI_STRESS_FILTER ?? "").split(",").map((s) => s.t
 const STATIC = process.env.TSUJI_STRESS_STATIC === "1";
 /** Every node every frame, as before the pure-node memo — the baseline to compare against. */
 const NO_MEMO = process.env.TSUJI_STRESS_NOMEMO === "1";
+/** Worker-capable nodes hand their kernels to a deferred executor, flushed between frames. */
+const OFFTHREAD = process.env.TSUJI_STRESS_OFFTHREAD === "1" || process.env.TSUJI_STRESS_OFFTHREAD === "wasm";
+const OFFTHREAD_WASM = process.env.TSUJI_STRESS_OFFTHREAD === "wasm";
 const FPS = 30;
 const DEMO_DIR = join(process.cwd(), "public/demos");
 
@@ -109,7 +122,7 @@ function buildStressGraph(): { graph: Graph; demos: string[] } {
 describe.skipIf(!ENABLED)("stress bench", () => {
   it(
     "evaluates the merged demo scene",
-    () => {
+    async () => {
       initBvhRaycast();
       const realRandom = Math.random;
       Math.random = seededRandom(0x75756a69);
@@ -170,6 +183,12 @@ describe.skipIf(!ENABLED)("stress bench", () => {
           } as never;
         };
 
+        const wasm = OFFTHREAD_WASM
+          ? instantiateWasmKernelsSync(readFileSync(join(process.cwd(), "src/shared/graph/offthread/tsuji_kernels.wasm")))
+          : null;
+        const deferred = OFFTHREAD ? new DeferredExecutor(wasm ? { metaballs: (job) => wasm.metaballs(job) } : {}) : null;
+        setJobExecutor(deferred);
+
         const coldStart = performance.now();
         evaluateGraph(graph, DEFAULT_REGISTRY, ctx(0));
         const coldMs = performance.now() - coldStart;
@@ -184,11 +203,14 @@ describe.skipIf(!ENABLED)("stress bench", () => {
         profiler.reset();
         profiler.counter = () => builtCount;
         tracking = true;
-        const wallStart = performance.now();
+        let wallMs = 0;
         for (let frame = 1; frame <= FRAMES; frame++) {
+          const start = performance.now();
           evaluateGraph(graph, DEFAULT_REGISTRY, ctx(frame));
+          wallMs += performance.now() - start;
+          // The worker's share: between frames, untimed, results delivered before the next one.
+          if (deferred) await deferred.flush();
         }
-        const wallMs = performance.now() - wallStart;
         tracking = false;
 
         (globalThis as { gc?: () => void }).gc?.();
@@ -205,9 +227,12 @@ describe.skipIf(!ENABLED)("stress bench", () => {
         profiler.setGauge("heap growth KB/frame", (heapAfter - heapBefore) / 1024 / FRAMES);
 
         const header = [
-          `stress bench${STATIC ? " (static)" : ""}${NO_MEMO ? " (memo off)" : ""} — ${demos.length} demos × ${COPIES} copies = ${graph.nodes.length} nodes, ${graph.connections.length} wires`,
+          `stress bench${STATIC ? " (static)" : ""}${NO_MEMO ? " (memo off)" : ""}${OFFTHREAD ? ` (off-thread, ${OFFTHREAD_WASM ? "WASM" : "JS"} kernels)` : ""} — ${demos.length} demos × ${COPIES} copies = ${graph.nodes.length} nodes, ${graph.connections.length} wires`,
           `cold first frame ${coldMs.toFixed(1)} ms · ${FRAMES} frames in ${(wallMs / 1000).toFixed(2)} s · ${(FRAMES / (wallMs / 1000)).toFixed(1)} eval/s (budget 16.7 ms at 60 fps)`,
           `node evaluate ${nodeSum.toFixed(2)} ms/frame · evaluator overhead ${(report.frames.meanMs - nodeSum).toFixed(2)} ms/frame`,
+          ...(deferred
+            ? [`off-thread kernels: ${deferred.jobs} jobs, ${(deferred.kernelMs / FRAMES).toFixed(2)} ms/frame — worker time, not in the frame times`]
+            : []),
           "(group nodes include their inner nodes' time)",
           "",
         ].join("\n");
@@ -244,6 +269,7 @@ describe.skipIf(!ENABLED)("stress bench", () => {
         );
       } finally {
         stopEvalProfiling();
+        setJobExecutor(null);
         disposeEvalSession(sessionId);
         setEvalMemoEnabled(true);
         THREE.BufferGeometry.prototype.dispose = realDispose;

@@ -1,8 +1,9 @@
 import * as THREE from "three";
-import { MarchingCubes } from "three/examples/jsm/objects/MarchingCubes.js";
-import { projectGeometryUVs } from "../mesh/geometryUV";
 import { NodeDefinition, ParamFieldDef } from "../types";
 import { createNodeCache, disposeObject3D } from "../nodeCaches";
+import { UV_DENSITY } from "../mesh/uv";
+import { BALL_STRIDE, MeshBuffers, MetaballsJob } from "../offthread/marchingCubes";
+import { requestJob } from "../offthread/jobs";
 import { worldMatrixOf } from "../objectPosition";
 import {
   applyMaterialParams,
@@ -26,27 +27,12 @@ import { composeNativeMatrix } from "./transform";
  */
 const ISOLATION = 20;
 
-interface FieldState {
-  field: MarchingCubes;
-  resolution: number;
-}
-
 const meshCache = createNodeCache<THREE.Mesh>(disposeObject3D);
-const fieldCache = createNodeCache<FieldState>((state) => state.field.geometry.dispose());
-const signatureCache = createNodeCache<string>();
+/** Signature of the result currently written into the node's geometry. */
+const appliedCache = createNodeCache<string>();
 
-function getField(nodeId: string, resolution: number): MarchingCubes {
-  const existing = fieldCache.get(nodeId);
-  if (existing && existing.resolution === resolution) return existing.field;
-  if (existing) existing.field.geometry.dispose();
-  // Not added to any scene — this instance is only ever the field sampler and
-  // the marching-cubes implementation, never the thing that gets drawn.
-  // UVs on: the node offers the common texture-map inputs, and without them a
-  // wired map would sample a single texel across the whole surface.
-  const field = new MarchingCubes(resolution, new THREE.MeshBasicMaterial(), false, false, 60000);
-  fieldCache.set(nodeId, { field, resolution });
-  return field;
-}
+/** Matches the 60000-polygon buffer the node used to give three's MarchingCubes. */
+const MAX_VERTICES = 180000;
 
 function getMesh(nodeId: string): THREE.Mesh {
   const existing = meshCache.get(nodeId);
@@ -143,45 +129,66 @@ function signatureOf(points: THREE.Vector3[], bounds: FieldBounds, radius: numbe
   return parts.join(";");
 }
 
+function jobFor(points: THREE.Vector3[], bounds: FieldBounds, radius: number, smooth: number, resolution: number): MetaballsJob {
+  const normalizedRadius = radius / bounds.size;
+  const subtract = ISOLATION / (smooth * smooth - 1);
+  const strength = (ISOLATION + subtract) * normalizedRadius * normalizedRadius;
+  const balls = new Float64Array(points.length * BALL_STRIDE);
+  points.forEach((point, i) => {
+    balls[i * BALL_STRIDE] = (point.x - bounds.center.x) / bounds.size + 0.5;
+    balls[i * BALL_STRIDE + 1] = (point.y - bounds.center.y) / bounds.size + 0.5;
+    balls[i * BALL_STRIDE + 2] = (point.z - bounds.center.z) / bounds.size + 0.5;
+    balls[i * BALL_STRIDE + 3] = strength;
+    balls[i * BALL_STRIDE + 4] = subtract;
+  });
+  return {
+    resolution,
+    isolation: ISOLATION,
+    balls,
+    centerX: bounds.center.x,
+    centerY: bounds.center.y,
+    centerZ: bounds.center.z,
+    size: bounds.size,
+    maxVertices: MAX_VERTICES,
+    uvDensity: UV_DENSITY,
+  };
+}
+
 /**
- * Writes the marching-cubes result into the node's own geometry, mapped out of
- * the field's [-1, 1] cube and into the node's local space.
+ * Attaches a finished kernel result to the node's own geometry — the arrays
+ * as they came back from the worker (transferred, so not copied), the bounds
+ * it already computed.
  *
- * Writing into one geometry rather than handing back the MarchingCubes mesh
- * keeps §9b's identity contract: the object downstream caches key on never
- * changes, and its draw range covers the whole buffer instead of a slice of a
- * 60k-poly scratch buffer that would otherwise have to travel with it.
+ * Writing into one geometry rather than handing back a new mesh keeps §9b's
+ * identity contract: the object downstream caches key on never changes.
+ * Same-size results are copied into the existing attributes, so the GPU
+ * buffers are updated in place rather than reallocated.
  */
-function writeFieldGeometry(geometry: THREE.BufferGeometry, field: MarchingCubes, bounds: FieldBounds): void {
-  const vertices = field.count;
+function applyMesh(geometry: THREE.BufferGeometry, mesh: MeshBuffers): void {
   const position = geometry.getAttribute("position") as THREE.BufferAttribute;
-  if (position.count !== vertices) {
-    geometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(vertices * 3), 3));
-    geometry.setAttribute("normal", new THREE.BufferAttribute(new Float32Array(vertices * 3), 3));
-    geometry.setAttribute("uv", new THREE.BufferAttribute(new Float32Array(vertices * 2), 2));
+  if (position.count === mesh.count) {
+    (position.array as Float32Array).set(mesh.position);
+    (geometry.getAttribute("normal").array as Float32Array).set(mesh.normal);
+    (geometry.getAttribute("uv").array as Float32Array).set(mesh.uv);
+    position.needsUpdate = true;
+    (geometry.getAttribute("normal") as THREE.BufferAttribute).needsUpdate = true;
+    (geometry.getAttribute("uv") as THREE.BufferAttribute).needsUpdate = true;
+  } else {
+    geometry.setAttribute("position", new THREE.BufferAttribute(mesh.position, 3));
+    geometry.setAttribute("normal", new THREE.BufferAttribute(mesh.normal, 3));
+    geometry.setAttribute("uv", new THREE.BufferAttribute(mesh.uv, 2));
   }
-  const dst = geometry.getAttribute("position") as THREE.BufferAttribute;
-  const dstNormal = geometry.getAttribute("normal") as THREE.BufferAttribute;
-  const dstUv = geometry.getAttribute("uv") as THREE.BufferAttribute;
-  const half = bounds.size / 2;
-  for (let i = 0; i < vertices * 3; i += 3) {
-    dst.array[i] = field.positionArray[i] * half + bounds.center.x;
-    dst.array[i + 1] = field.positionArray[i + 1] * half + bounds.center.y;
-    dst.array[i + 2] = field.positionArray[i + 2] * half + bounds.center.z;
-    dstNormal.array[i] = field.normalArray[i];
-    dstNormal.array[i + 1] = field.normalArray[i + 1];
-    dstNormal.array[i + 2] = field.normalArray[i + 2];
+  geometry.setDrawRange(0, mesh.count);
+  if (mesh.count === 0) {
+    geometry.computeBoundingBox();
+    geometry.computeBoundingSphere();
+    return;
   }
-  // Object space at the shared fixed density, not MarchingCubes' own UVs:
-  // those live in the field's box, which follows the balls — the texture slid
-  // and stretched every time one moved.
-  projectGeometryUVs(geometry, vertices);
-  dst.needsUpdate = true;
-  dstNormal.needsUpdate = true;
-  dstUv.needsUpdate = true;
-  geometry.setDrawRange(0, vertices);
-  geometry.computeBoundingSphere();
-  geometry.computeBoundingBox();
+  const b = mesh.bounds;
+  (geometry.boundingBox ??= new THREE.Box3()).min.set(b[0], b[1], b[2]);
+  geometry.boundingBox.max.set(b[3], b[4], b[5]);
+  (geometry.boundingSphere ??= new THREE.Sphere()).center.set(b[6], b[7], b[8]);
+  geometry.boundingSphere.radius = b[9];
 }
 
 const METABALL_PARAM_FIELDS: ParamFieldDef[] = [
@@ -231,25 +238,16 @@ export const METABALLS_NODE: NodeDefinition = {
     const bounds = fieldBounds(points, radius * smooth, params as Record<string, unknown>);
     const signature = signatureOf(points, bounds, radius, smooth, resolution);
 
-    if (signatureCache.get(ctx.nodeId) !== signature) {
-      const field = getField(ctx.nodeId, resolution);
-      field.isolation = ISOLATION;
-      field.reset();
-      const normalizedRadius = radius / bounds.size;
-      const subtract = ISOLATION / (smooth * smooth - 1);
-      const strength = (ISOLATION + subtract) * normalizedRadius * normalizedRadius;
-      for (const point of points) {
-        field.addBall(
-          (point.x - bounds.center.x) / bounds.size + 0.5,
-          (point.y - bounds.center.y) / bounds.size + 0.5,
-          (point.z - bounds.center.z) / bounds.size + 0.5,
-          strength,
-          subtract,
-        );
-      }
-      field.update();
-      writeFieldGeometry(mesh.geometry, field, bounds);
-      signatureCache.set(ctx.nodeId, signature);
+    // Marching cubes runs in the geometry worker (offthread/jobs.ts): this
+    // frame shows the newest finished surface, which trails the inputs by a
+    // frame or so while they move and is exact once they stop. Export capture
+    // asks for it synchronously, so every recorded frame is exact.
+    const job = requestJob(ctx.nodeId, "metaballs", signature, () => jobFor(points, bounds, radius, smooth, resolution), {
+      sync: ctx.capturing === true,
+    });
+    if (job.result && job.signature !== appliedCache.get(ctx.nodeId)) {
+      applyMesh(mesh.geometry, job.result);
+      appliedCache.set(ctx.nodeId, job.signature!);
     }
 
     if (ctx.nodeId !== ctx.liveEditNodeId) {

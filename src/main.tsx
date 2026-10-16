@@ -6,6 +6,7 @@ import { initBvhRaycast } from "./shared/three/bvh";
 import { initTheme } from "./shared/theme/themeStore";
 import { initInstantTooltips } from "./shared/instantTooltips";
 import { installProfilerOverlay } from "./shared/graph/profilerOverlay";
+import { installGeometryWorker } from "./shared/graph/offthread/workerExecutor";
 
 // Initialize saved or default theme CSS variables
 initTheme();
@@ -18,6 +19,10 @@ initBvhRaycast();
 
 // Ctrl/Cmd+Shift+P: live per-node profile panel (see profilerOverlay.ts).
 installProfilerOverlay();
+
+// Heavy geometry kernels (metaballs' marching cubes) run in a Web Worker,
+// Rust/WASM inside it — see docs/offthread-geometry.md.
+installGeometryWorker();
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>

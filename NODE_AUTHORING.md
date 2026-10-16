@@ -187,6 +187,13 @@ simulations, input devices), or finishes an async load (font, file, CSV) without
 a param changing. Wrongly marked, the node freezes. `evalMemo.test.ts` runs every
 demo with the memo on and off and must stay green.
 
+### Heavy one-shot computations — the geometry worker
+
+A node whose evaluate is one big self-contained computation (marching cubes, a
+sweep, a CSG) can run it in the geometry worker instead of the frame: see
+[docs/offthread-geometry.md](docs/offthread-geometry.md) and `object/metaballs`.
+Such a node collects finished results on later frames, so it must **not** be `pure`.
+
 ## 7. If your node needs a GPU resource (mesh, texture, render target)
 
 Most nodes don't need this section — skip it unless you're building
