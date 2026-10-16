@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { NodeDefinition } from "../types";
 import { createNodeCache, disposeObject3D } from "../nodeCaches";
+import { cloneSlots, syncedClone, trimSlots } from "./syncedClone";
 import { composeTransform, extractPositionFromInput } from "./transform";
 import { DEFAULT_ROTATION_MODE, ROTATION_MODE_FIELD } from "../rotationMode";
 
@@ -82,8 +83,8 @@ function getInstances(source: THREE.Object3D): THREE.Object3D[] {
  * Array node writes it directly), which a plain `clone()` would leave for the
  * next `updateMatrixWorld` to overwrite from position/quaternion/scale.
  */
-function cloneInstance(instance: THREE.Object3D): THREE.Object3D {
-  const clone = instance.clone(true);
+function cloneInstance(instance: THREE.Object3D, slots: THREE.Object3D[], index: number): THREE.Object3D {
+  const clone = syncedClone(slots, index, instance);
   clone.matrixAutoUpdate = instance.matrixAutoUpdate;
   clone.matrix.copy(instance.matrix);
   clone.matrixWorldNeedsUpdate = true;
@@ -211,8 +212,10 @@ export const SET_INSTANCE_COLOR_NODE: NodeDefinition = {
     const materialCache = getMaterialCache(ctx.nodeId);
     const liveMaterialKeys = new Set<string>();
 
+    const slots = cloneSlots(ctx.nodeId);
+    trimSlots(slots, instances.length);
     instances.forEach((instance, i) => {
-      const clone = cloneInstance(instance);
+      const clone = cloneInstance(instance, slots, i);
 
       if (!(targetIdSet ? targetIdSet.has(i) : isTargeted(i, targetIndex))) {
         group.add(clone);
@@ -423,8 +426,10 @@ export const SET_INSTANCE_TRANSFORM_NODE: NodeDefinition = {
     // scalar `index` gets.
     const listIndex = targetIdSet ? ALL_INSTANCES : targetIndex;
 
+    const slots = cloneSlots(ctx.nodeId);
+    trimSlots(slots, instances.length);
     instances.forEach((instance, i) => {
-      const clone = cloneInstance(instance);
+      const clone = cloneInstance(instance, slots, i);
 
       if (!(targetIdSet ? targetIdSet.has(i) : isTargeted(i, targetIndex))) {
         group.add(clone);
@@ -605,7 +610,7 @@ export const GET_INSTANCE_NODE: NodeDefinition = {
 
     const selectedInstance = instances[index];
     if (selectedInstance) {
-      group.add(cloneInstance(selectedInstance));
+      group.add(cloneInstance(selectedInstance, cloneSlots(ctx.nodeId), 0));
     }
 
     return { geometry: group, count };
@@ -676,7 +681,7 @@ export const GEOMETRY_TRANSFORM_NODE: NodeDefinition = {
     const source = inputs.geometry instanceof THREE.Object3D ? inputs.geometry : null;
     if (!source) return { geometry: group };
 
-    const clone = cloneInstance(source);
+    const clone = cloneInstance(source, cloneSlots(ctx.nodeId), 0);
 
     let transformMat: THREE.Matrix4;
 

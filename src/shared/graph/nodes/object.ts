@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { FONT_FILE_ACCEPT, parseFontFile } from "../../three/fonts/fontFile";
+import { buildTextGeometry } from "../../three/fonts/textGeometry";
 import { faceCamera } from "../billboard";
 import { Font } from "three/examples/jsm/loaders/FontLoader.js";
 import { NodeDefinition, ParamFieldDef } from "../types";
@@ -1932,16 +1933,19 @@ export const OBJECT_TEXT_NODE: NodeDefinition = {
       }
 
       const scale = fontSize * 0.015;
-      const shapes = font.generateShapes(textStr || " ", scale);
-
-      const geometry = new THREE.ExtrudeGeometry(shapes, {
+      const extrude = {
         depth: depth,
         bevelEnabled: true,
         bevelThickness: Math.min(0.02, depth * 0.2),
         bevelSize: Math.min(0.01, depth * 0.1),
         bevelSegments: 3,
         curveSegments: 12,
-      });
+      };
+      // Glyph-cached (textGeometry.ts): a text that changes every frame only
+      // re-extrudes the letters it has never drawn at this size.
+      const geometry =
+        buildTextGeometry(font, textStr || " ", scale, extrude) ??
+        new THREE.ExtrudeGeometry(font.generateShapes(textStr || " ", scale), extrude);
 
       geometry.center();
       mesh.geometry = geometry;

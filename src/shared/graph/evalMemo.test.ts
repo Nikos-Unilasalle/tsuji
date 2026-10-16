@@ -5,15 +5,19 @@ import { afterAll, describe, expect, it } from "vitest";
 import { deserializeProject } from "./storage";
 import { DEFAULT_REGISTRY } from "./nodes/index";
 import { EvalResult, disposeEvalSession, evaluateGraph, setEvalMemoEnabled } from "./evaluate";
-import { hashPositions } from "./geometrySignature";
 import { initBvhRaycast } from "../three/bvh";
+import { setSyncedCloneEnabled } from "./nodes/syncedClone";
+import { setGlyphCacheEnabled } from "../three/fonts/textGeometry";
 import { Graph, NodeDefinition, NodeInstance } from "./types";
 
 /**
- * The pure-node memo (NodeDefinition.pure) must be invisible: every demo,
- * run frame by frame with the memo on and with it off, has to produce the
- * same outputs — including after a param edit mid-run, which has to reach
- * the edited node and everything downstream of it.
+ * The evaluation shortcuts must be invisible: the pure-node memo
+ * (NodeDefinition.pure), the re-synced copies of the structure nodes
+ * (nodes/syncedClone.ts) and the Text node's glyph cache
+ * (three/fonts/textGeometry.ts). Every demo, run frame by frame with both on and
+ * with both off, has to produce the same outputs — including after a param
+ * edit mid-run, which has to reach the edited node and everything
+ * downstream of it.
  *
  * Node caches are keyed by node id, so the two runs use differently
  * prefixed copies of the graph and never share a cached mesh.
@@ -49,7 +53,58 @@ function prefixed(source: Graph, prefix: string): Graph {
   };
 }
 
-const round = (v: number) => Math.round(v * 1e4) / 1e4;
+
+
+/** Every `step`-th value, so a big mesh compares in bounded time. */
+function sample(array: ArrayLike<number> | undefined, max = 3000): number[] | null {
+  if (!array) return null;
+  const step = Math.max(1, Math.ceil(array.length / max));
+  const out: number[] = [];
+  for (let i = 0; i < array.length; i += step) out.push(array[i]);
+  return out;
+}
+
+function geometrySnapshot(geometry: THREE.BufferGeometry): unknown {
+  return {
+    vertices: geometry.getAttribute("position")?.count ?? 0,
+    groups: geometry.groups.map((g) => [g.start, g.count, g.materialIndex]),
+    position: sample(geometry.getAttribute("position")?.array),
+    uv: sample(geometry.getAttribute("uv")?.array),
+  };
+}
+
+/**
+ * The first difference between two snapshots, or null. Floats compare with
+ * a small tolerance: a shortcut may legitimately reach the same value by
+ * another order of operations, so the last bits can differ; anything visible
+ * cannot. One plain function rather than an expect() per number — the
+ * snapshots hold tens of thousands of them.
+ */
+function mismatch(actual: unknown, expected: unknown, path: string): string | null {
+  if (typeof expected === "number" && typeof actual === "number") {
+    if (Number.isNaN(expected) && Number.isNaN(actual)) return null;
+    return Math.abs(actual - expected) <= 1e-4 * Math.max(1, Math.abs(expected)) ? null : `${path}: ${actual} vs ${expected}`;
+  }
+  if (Array.isArray(expected)) {
+    if (!Array.isArray(actual) || actual.length !== expected.length) return `${path}: length ${(actual as unknown[])?.length} vs ${expected.length}`;
+    for (let i = 0; i < expected.length; i++) {
+      const m = mismatch(actual[i], expected[i], `${path}[${i}]`);
+      if (m) return m;
+    }
+    return null;
+  }
+  if (expected && typeof expected === "object") {
+    if (!actual || typeof actual !== "object") return `${path}: not an object`;
+    const keys = Object.keys(expected);
+    if (keys.length !== Object.keys(actual).length) return `${path}: keys ${Object.keys(actual)} vs ${keys}`;
+    for (const k of keys) {
+      const m = mismatch((actual as Record<string, unknown>)[k], (expected as Record<string, unknown>)[k], `${path}.${k}`);
+      if (m) return m;
+    }
+    return null;
+  }
+  return Object.is(actual, expected) ? null : `${path}: ${String(actual)} vs ${String(expected)}`;
+}
 
 function snapshotObject(root: THREE.Object3D): unknown[] {
   const out: unknown[] = [];
@@ -60,13 +115,13 @@ function snapshotObject(root: THREE.Object3D): unknown[] {
       o.type,
       o.visible,
       o.children.length,
-      o.matrix.elements.map(round),
-      o.position.toArray().map(round),
-      o.quaternion.toArray().map(round),
-      o.scale.toArray().map(round),
-      mesh.geometry ? hashPositions(mesh.geometry.getAttribute("position") as THREE.BufferAttribute) : null,
+      Array.from(o.matrix.elements),
+      o.position.toArray(),
+      o.quaternion.toArray(),
+      o.scale.toArray(),
+      mesh.geometry ? geometrySnapshot(mesh.geometry) : null,
       (material as THREE.MeshStandardMaterial | undefined)?.color?.getHex() ?? null,
-      (o as THREE.InstancedMesh).isInstancedMesh ? Array.from((o as THREE.InstancedMesh).instanceMatrix.array, round) : null,
+      (o as THREE.InstancedMesh).isInstancedMesh ? sample((o as THREE.InstancedMesh).instanceMatrix.array) : null,
     ]);
   });
   return out;
@@ -74,14 +129,14 @@ function snapshotObject(root: THREE.Object3D): unknown[] {
 
 function snapshotValue(v: unknown, depth = 0): unknown {
   if (v === null || v === undefined || typeof v === "number" || typeof v === "string" || typeof v === "boolean") {
-    return typeof v === "number" ? round(v) : v;
+    return v;
   }
   if (v instanceof THREE.Object3D) return snapshotObject(v);
   if (v instanceof THREE.Vector2 || v instanceof THREE.Vector3 || v instanceof THREE.Vector4 || v instanceof THREE.Quaternion) {
-    return v.toArray().map(round);
+    return v.toArray();
   }
   if (v instanceof THREE.Color) return v.getHex();
-  if (v instanceof THREE.Matrix4) return v.elements.map(round);
+  if (v instanceof THREE.Matrix4) return Array.from(v.elements);
   if (Array.isArray(v) && depth < 2) return v.slice(0, 64).map((x) => snapshotValue(x, depth + 1));
   // Textures, materials and the like carry fresh uuids per run — not comparable, and not what the memo changes.
   return typeof v;
@@ -111,6 +166,8 @@ function editTarget(graph: Graph): NodeInstance | undefined {
 
 function run(source: Graph, prefix: string, memo: boolean): Record<string, unknown>[] {
   setEvalMemoEnabled(memo);
+  setSyncedCloneEnabled(memo);
+  setGlyphCacheEnabled(memo);
   const realRandom = Math.random;
   Math.random = seededRandom(1234);
   let graph = prefixed(source, prefix);
@@ -151,6 +208,8 @@ function run(source: Graph, prefix: string, memo: boolean): Record<string, unkno
     Math.random = realRandom;
     disposeEvalSession(sessionId);
     setEvalMemoEnabled(true);
+    setSyncedCloneEnabled(true);
+    setGlyphCacheEnabled(true);
   }
   return frames;
 }
@@ -175,7 +234,7 @@ describe("pure-node memo", () => {
         for (const nodeId of Object.keys(b)) {
           const type = source.nodes.find((n) => n.id === nodeId)?.type;
           for (const socket of Object.keys(b[nodeId])) {
-            expect(a[nodeId]?.[socket], `${file}, frame ${frame}, ${nodeId} (${type}).${socket}`).toEqual(b[nodeId][socket]);
+            expect(mismatch(a[nodeId]?.[socket], b[nodeId][socket], `${file}, frame ${frame}, ${nodeId} (${type}).${socket}`)).toBeNull();
           }
         }
         expect(Object.keys(a).sort(), `${file}, frame ${frame}: node set`).toEqual(Object.keys(b).sort());
