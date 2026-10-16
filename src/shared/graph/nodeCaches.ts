@@ -1,3 +1,5 @@
+import * as THREE from "three";
+
 /**
  * Registry of every per-node cache, so deleting a node can actually drop the
  * state it owned.
@@ -57,4 +59,31 @@ export function disposeObject3D(object: { traverse: (cb: (o: any) => void) => vo
     if (Array.isArray(material)) material.forEach((m: any) => m?.dispose?.());
     else material?.dispose?.();
   });
+}
+
+/**
+ * Keeps a cached group's editor helper (camera body + frustum lines, …) and
+ * rebuilds it only when `key` — whatever its shape depends on, fov and the
+ * like — changes, disposing the one it replaces.
+ *
+ * Rebuilding every frame behind a bare `group.clear()` leaked: clear() only
+ * detaches, so each frame's geometries and materials were left behind, and
+ * once one had been drawn the renderer kept its GPU buffers for good. Every
+ * camera in a scene leaked 2–3 geometries per frame that way.
+ */
+export function syncHelperContent(
+  group: THREE.Group,
+  nodeId: string,
+  key: string,
+  build: () => THREE.Object3D,
+): void {
+  if (group.userData.helperKey === key && group.children.length === 1) return;
+  for (const child of group.children) disposeObject3D(child);
+  group.clear();
+  const helper = build();
+  helper.traverse((child) => {
+    child.userData.nodeId = nodeId;
+  });
+  group.add(helper);
+  group.userData.helperKey = key;
 }

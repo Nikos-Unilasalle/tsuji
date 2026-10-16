@@ -3,7 +3,7 @@ import { projectionMatrixFromCalibration, ProjectorCalibration } from "../calibr
 import { DEFAULT_PICKS, isCalibrationPicks, isReferencePointArray, solveFromPicks } from "../calibration/picks";
 import { NodeDefinition } from "../types";
 import { toBoolean } from "../sockets";
-import { createNodeCache, disposeObject3D } from "../nodeCaches";
+import { createNodeCache, disposeObject3D, syncHelperContent } from "../nodeCaches";
 import { requestCameraHandoff } from "../cameraHandoffStore";
 import { extractPositionFromInput } from "./transform";
 
@@ -251,7 +251,6 @@ export const CAMERA_NODE: NodeDefinition = {
     }
 
     const group = getGroup(ctx.nodeId);
-    group.clear();
     group.matrixAutoUpdate = false;
     // Skip the overwrite for the node the viewport gizmo is dragging right
     // now — the same guard every primitive in object.ts already has, and the
@@ -265,11 +264,7 @@ export const CAMERA_NODE: NodeDefinition = {
       group.matrix.copy(pose.matrix);
     }
     group.userData.nodeId = ctx.nodeId;
-    const helperContent = buildCameraHelperGeometry(pose.fov, isActive);
-    helperContent.traverse((child) => {
-      child.userData.nodeId = ctx.nodeId;
-    });
-    group.add(helperContent);
+    syncHelperContent(group, ctx.nodeId, `${pose.fov}|${isActive}`, () => buildCameraHelperGeometry(pose.fov, isActive));
 
     return {
       ...pose,
@@ -521,7 +516,6 @@ export const CAMERA_FLY_TO_NODE: NodeDefinition = {
     const matrix = new THREE.Matrix4().compose(pos, quat, ONE);
 
     const group = getGroup(ctx.nodeId);
-    group.clear();
     group.matrixAutoUpdate = false;
     group.matrix.copy(matrix);
     group.userData.nodeId = ctx.nodeId;
@@ -579,11 +573,7 @@ export const CAMERA_FLY_TO_NODE: NodeDefinition = {
       state.isFlying === true ||
       (state.landed ? !canHandOff || parked : rawProgress > 0);
 
-    const helper = buildCameraHelperGeometry(fov, isActive);
-    helper.traverse((child) => {
-      child.userData.nodeId = ctx.nodeId;
-    });
-    group.add(helper);
+    syncHelperContent(group, ctx.nodeId, `${fov}|${isActive}`, () => buildCameraHelperGeometry(fov, isActive));
 
     return {
       matrix,

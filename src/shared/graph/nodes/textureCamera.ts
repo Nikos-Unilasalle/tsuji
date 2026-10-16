@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { NodeDefinition } from "../types";
-import { createNodeCache, disposeObject3D } from "../nodeCaches";
+import { createNodeCache, disposeObject3D, syncHelperContent } from "../nodeCaches";
 import { manualPose } from "./camera";
 import { markGpuTextureRendered, registerGpuTexture } from "../gpuTexture";
 
@@ -212,17 +212,13 @@ export const TEXTURE_CAMERA_NODE: NodeDefinition = {
     // wired to its `texture` output yet. Only the actual scene render
     // (below) is gated on that wiring.
     const group = getGroup(ctx.nodeId);
-    group.clear();
     group.matrixAutoUpdate = false;
     if (ctx.nodeId !== ctx.liveEditNodeId) {
       group.matrix.copy(pose.matrix);
     }
     group.userData.nodeId = ctx.nodeId;
-    const helperContent = buildTextureCameraHelperGeometry(pose.fov, width / height);
-    helperContent.traverse((child) => {
-      child.userData.nodeId = ctx.nodeId;
-    });
-    group.add(helperContent);
+    const aspect = width / height;
+    syncHelperContent(group, ctx.nodeId, `${pose.fov}|${aspect}`, () => buildTextureCameraHelperGeometry(pose.fov, aspect));
 
     if (!ctx.connectedOutputs?.has("texture") || !ctx.renderer || !ctx.scene || typeof document === "undefined") {
       return { geometry: group, texture: null };
