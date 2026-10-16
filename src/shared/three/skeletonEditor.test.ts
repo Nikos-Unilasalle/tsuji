@@ -29,17 +29,12 @@ describe("skeleton palette operations", () => {
     expect(skeletonOp("delete", node(), [])).toBeNull();
   });
 
-  it("splits, mirrors and re-parents", () => {
+  it("splits and mirrors", () => {
     expect(readSkeleton(skeletonOp("subdivide", node(), [2])!.params!).points.length).toBe(4);
     expect(skeletonOp("subdivide", node(), [0])).toBeNull();
     const mirrored = skeletonOp("mirror", node({ pointsList: [v(0, 0), v(1, 1), v(2, 2)] }), [1, 2])!;
     expect(readSkeleton(mirrored.params!).points[3].x).toBe(-1);
     expect(mirrored.selection).toEqual([3, 4]);
-    // Pick 2 then 0: 2 now hangs from 0 (the last picked).
-    const parented = skeletonOp("parent", node(), [2, 0])!;
-    expect(readSkeleton(parented.params!).parents[2]).toBe(0);
-    expect(skeletonOp("parent", node(), [2])).toBeNull();
-    expect(skeletonOp("parent", node(), [0, 2])).toBeNull();
   });
 
   it("walks the hierarchy by selecting", () => {

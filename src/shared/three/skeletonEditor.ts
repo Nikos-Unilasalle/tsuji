@@ -4,7 +4,6 @@ import {
   mirrorJoints,
   readSkeleton,
   removeJoints,
-  setParent,
   skeletonParams,
   subdivideBone,
 } from "../graph/ik/skeletonEdit";
@@ -15,15 +14,13 @@ import {
  * selection out (null when the operation does not apply). The viewport only
  * carries the result to the graph, as one undo step.
  *
- * The last picked joint is the active one: a new joint hangs from it, a
- * Set Parent makes it the parent of the others.
+ * The last picked joint is the active one: a new joint hangs from it.
  */
 export type SkeletonOp =
   | "add"
   | "subdivide"
   | "delete"
   | "mirror"
-  | "parent"
   | "selectChildren"
   | "selectParent"
   | "selectAll"
@@ -84,11 +81,6 @@ export function skeletonOp(op: SkeletonOp, params: Record<string, unknown>, pick
   if (op === "mirror") {
     const mirrored = mirrorJoints(data, selection, 0, 0);
     return mirrored ? { params: skeletonParams(mirrored.data), selection: mirrored.added } : null;
-  }
-  if (op === "parent") {
-    if (selection.length < 2) return null;
-    const next = setParent(data, selection.slice(0, -1), active);
-    return next ? { params: skeletonParams(next), selection } : null;
   }
   return null;
 }

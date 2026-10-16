@@ -31,16 +31,6 @@ function toVector(v: unknown): THREE.Vector3 {
   return ZERO.clone();
 }
 
-/** Whether walking up from `joint` through `parents` reaches `ancestor` (or `joint` itself is it). */
-function hasAncestor(parents: number[], joint: number, ancestor: number): boolean {
-  let at = joint;
-  for (let guard = 0; at >= 0 && guard <= parents.length; guard++) {
-    if (at === ancestor) return true;
-    at = parents[at];
-  }
-  return false;
-}
-
 /** A skeleton out of raw params: lengths made to agree, parents that point nowhere or loop made roots. */
 export function readSkeleton(raw: { pointsList?: unknown; parents?: unknown; names?: unknown }): SkeletonData {
   const points = Array.isArray(raw.pointsList) ? raw.pointsList.map(toVector) : [];
@@ -179,21 +169,6 @@ export function mirrorJoints(data: SkeletonData, indices: number[], axis = 0, ce
     names.push(uniqueName(names, mirroredName(data.names[joint])));
   }
   return { data: { points, parents, names }, added: chosen.map((j) => copyOf.get(j)!) };
-}
-
-/** Hangs `children` from `parent`, unless that would make a joint its own ancestor. */
-export function setParent(data: SkeletonData, children: number[], parent: number): SkeletonData | null {
-  const n = data.points.length;
-  if (parent < -1 || parent >= n) return null;
-  const movers = [...new Set(children.filter((i) => i >= 0 && i < n && i !== parent))];
-  if (movers.length === 0) return null;
-  const parents = [...data.parents];
-  for (const child of movers) {
-    if (parent >= 0 && hasAncestor(parents, parent, child)) continue;
-    parents[child] = parent;
-  }
-  if (parents.every((p, i) => p === data.parents[i])) return null;
-  return { points: data.points.map((p) => p.clone()), parents, names: [...data.names] };
 }
 
 /** Joints below `joint`, children first level then deeper. */

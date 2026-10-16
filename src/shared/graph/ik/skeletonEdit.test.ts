@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import * as THREE from "three";
-import { addJoint, descendantsOf, mirrorJoints, moveWithDescendants, readSkeleton, removeJoints, setParent, skeletonParams, subdivideBone } from "./skeletonEdit";
+import { addJoint, descendantsOf, mirrorJoints, moveWithDescendants, readSkeleton, removeJoints, skeletonParams, subdivideBone } from "./skeletonEdit";
 
 const v = (x: number, y: number, z = 0) => new THREE.Vector3(x, y, z);
 // 0 root, 1 child of 0, 2 child of 1, 3 child of 0
@@ -65,13 +65,6 @@ describe("editing", () => {
     const both = mirrorJoints(chain(), [1, 2], 0, 0.5)!;
     expect(both.data.parents[both.added[1]]).toBe(both.added[0]);
     expect(both.data.points[both.added[0]].x).toBeCloseTo(1);
-  });
-
-  it("re-parents, but not into a loop", () => {
-    const s = setParent(chain(), [3], 2)!;
-    expect(s.parents[3]).toBe(2);
-    expect(setParent(chain(), [0], 2)).toBeNull();
-    expect(setParent(chain(), [3], 0)).toBeNull();
   });
 
   it("moves a joint with everything below it", () => {

@@ -71,19 +71,6 @@ const TOOLS: { op: SkeletonOp; title: string; edits: boolean; glyph: ReactNode }
     ),
   },
   {
-    op: "parent",
-    title: "Set Parent: the last selected joint becomes the parent of the other selected ones",
-    edits: true,
-    glyph: (
-      <>
-        <circle cx="12" cy="5" r="3" fill="currentColor" fillOpacity="0.4" />
-        <circle cx="5" cy="19" r="2.5" />
-        <circle cx="19" cy="19" r="2.5" />
-        <path d="M11 8l-5 8M13 8l5 8" />
-      </>
-    ),
-  },
-  {
     op: "selectParent",
     title: "Select the parent joint",
     edits: false,
