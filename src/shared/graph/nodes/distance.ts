@@ -21,6 +21,7 @@ export const DISTANCE_NODE: NodeDefinition = {
   type: "math/distance",
   label: "Distance",
   category: "math",
+  pure: true,
   // `any` rather than `vector`: a position is just as often an object, its
   // matrix, or a list of either, and the editor only lets a wire cross socket
   // types through `any`. extractPosition sorts out what actually arrived.
@@ -152,6 +153,7 @@ export const PROXIMITY_OBJECT_NODE: NodeDefinition = {
   type: "object/proximity",
   label: "Proximity Object",
   category: "math",
+  pure: true,
   inputs: [
     { id: "target", label: "Target (Object / Vector / Matrix)", type: "any" },
     { id: "candidates", label: "Candidates", type: "any" },
@@ -217,6 +219,7 @@ export const DISTANCES_NODE: NodeDefinition = {
   type: "math/distances",
   label: "Distances",
   category: "math",
+  pure: true,
   inputs: [
     { id: "instances", label: "Instances / Candidates (List or Group)", type: "any" },
     { id: "target", label: "Target (Vector / Object / Matrix)", type: "any" },

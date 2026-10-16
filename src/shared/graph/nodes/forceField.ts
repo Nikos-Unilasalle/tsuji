@@ -28,6 +28,7 @@ export const FORCE_FIELD_NODE: NodeDefinition = {
   type: "particles/force-field",
   label: "Force Field",
   category: "particles",
+  pure: true,
   inputs: [
     { id: "matrix", label: "Matrix", type: "matrix" },
     { id: "position", label: "Position", type: "vector" },

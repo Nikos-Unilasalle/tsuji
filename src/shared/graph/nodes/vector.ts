@@ -24,6 +24,7 @@ export const VECTOR_COMPOSE_NODE: NodeDefinition = {
   type: "vector/compose",
   label: "Compose Vector",
   category: "compose",
+  pure: true,
   inputs: [
     { id: "x", label: "X", type: "value" },
     { id: "y", label: "Y", type: "value" },
@@ -70,6 +71,7 @@ export const VECTOR_DECOMPOSE_NODE: NodeDefinition = {
   type: "vector/decompose",
   label: "Decompose Vector",
   category: "compose",
+  pure: true,
   inputs: [{ id: "vector", label: "Vector", type: "vector" }],
   outputs: [
     { id: "x", label: "X", type: "value" },
@@ -106,6 +108,7 @@ export const VECTOR_MATH_NODE: NodeDefinition = {
   type: "vector/math",
   label: "Vector Math",
   category: "math",
+  pure: true,
   inputs: [
     { id: "a", label: "A", type: "vector" },
     { id: "b", label: "B", type: "vector" },

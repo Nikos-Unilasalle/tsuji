@@ -26,6 +26,7 @@ export const GEOMETRY_TO_POINTS_NODE: NodeDefinition = {
   type: "list/points-from-geometry",
   label: "Vertices to Points",
   category: "list",
+  pure: true,
   inputs: [
     { id: "geometry", label: "Geometry", type: "geometry" },
     { id: "maxPoints", label: "Max Points", type: "value" },

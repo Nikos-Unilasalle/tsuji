@@ -1279,6 +1279,7 @@ export const MATERIAL_WORN_POINTS_NODE: NodeDefinition = {
   type: "material/worn-points",
   label: "Worn Points",
   category: "material",
+  pure: true,
   inputs: [
     { id: "geometry", label: "Geometry (Worn)", type: "geometry" },
     { id: "count", label: "Count", type: "value" },

@@ -9,6 +9,7 @@ export const COMPARE_NODE: NodeDefinition = {
   type: "logic/compare",
   label: "Compare",
   category: "logic",
+  pure: true,
   inputs: [
     { id: "a", label: "A", type: "value" },
     { id: "b", label: "B", type: "value" },
@@ -60,6 +61,7 @@ export const BOOLEAN_LOGIC_NODE: NodeDefinition = {
   type: "logic/boolean",
   label: "Boolean Logic",
   category: "logic",
+  pure: true,
   inputs: [
     { id: "a", label: "A", type: "value" },
     { id: "b", label: "B", type: "value" },
@@ -160,6 +162,7 @@ export const GATE_NODE: NodeDefinition = {
   type: "logic/gate",
   label: "Gate",
   category: "logic",
+  pure: true,
   inputs: [
     { id: "value", label: "Value", type: "value" },
     { id: "enable", label: "Enable", type: "value" },
@@ -189,6 +192,7 @@ export const LOGIC_BRIDGE_NODE: NodeDefinition = {
   type: "logic/bridge",
   label: "Logic Bridge",
   category: "logic",
+  pure: true,
   inputs: [
     { id: "condition", label: "Condition", type: "value" },
     { id: "ifTrue", label: "If True (A)", type: "any", owns: true },

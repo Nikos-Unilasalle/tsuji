@@ -991,6 +991,7 @@ export const CURVE_ARRAY_NODE: NodeDefinition = {
   type: "curve/array",
   label: "Curve Array",
   category: "curve",
+  pure: true,
   inputs: [
     { id: "curve", label: "Curve", type: "curve" },
     { id: "count", label: "Count", type: "value" },

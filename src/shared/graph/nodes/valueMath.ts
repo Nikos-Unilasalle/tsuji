@@ -26,6 +26,7 @@ export const VALUE_MATH_NODE: NodeDefinition = {
   type: "value/math",
   label: "Value Math",
   category: "math",
+  pure: true,
   inputs: [
     { id: "a", label: "A", type: "value" },
     { id: "b", label: "B", type: "value" },
@@ -50,6 +51,7 @@ export const CLAMP_NODE: NodeDefinition = {
   type: "value/clamp",
   label: "Clamp",
   category: "math",
+  pure: true,
   inputs: [
     { id: "value", label: "Value", type: "value" },
     { id: "min", label: "Min", type: "value" },
@@ -91,6 +93,7 @@ export const VALUE_CONSTANT_NODE: NodeDefinition = {
   type: "value/constant",
   label: "Value",
   category: "math",
+  pure: true,
   inputs: [],
   outputs: [{ id: "out", label: "Out", type: "value" }],
   defaultParams: { type: "float", value: 0 },
@@ -118,6 +121,7 @@ export const MAP_RANGE_NODE: NodeDefinition = {
   type: "value/map-range",
   label: "Map Range",
   category: "math",
+  pure: true,
   inputs: [{ id: "value", label: "Value", type: "value" }],
   outputs: [{ id: "out", label: "Out", type: "value" }],
   defaultParams: { inMin: 0, inMax: 1, outMin: 0, outMax: 1, clamp: 1 },

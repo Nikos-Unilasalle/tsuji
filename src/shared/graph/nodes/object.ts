@@ -1159,6 +1159,7 @@ export const OBJECT_BOX_NODE: NodeDefinition = {
   type: "object/box",
   label: "Box",
   category: "object",
+  pure: true,
   inputs: [...COMMON_PRIMITIVE_INPUTS],
   outputs: [...COMMON_PRIMITIVE_OUTPUTS],
   defaultParams: { ...COMMON_DEFAULT_PARAMS },
@@ -1314,6 +1315,7 @@ export const OBJECT_PLANE_NODE: NodeDefinition = {
   type: "object/plane",
   label: "Plane",
   category: "object",
+  pure: true,
   inputs: [
     ...COMMON_PRIMITIVE_INPUTS,
     { id: "innerRadius", label: "Inner (Hole)", type: "value" },
@@ -1424,6 +1426,7 @@ export const OBJECT_SPHERE_NODE: NodeDefinition = {
   type: "object/sphere",
   label: "Sphere",
   category: "object",
+  pure: true,
   inputs: [...COMMON_PRIMITIVE_INPUTS, { id: "segments", label: "Segments", type: "value" }],
   outputs: [...COMMON_PRIMITIVE_OUTPUTS],
   defaultParams: { ...COMMON_DEFAULT_PARAMS, sphereType: "uv", segments: 4, quadSphereMethod: "even_area" },
@@ -1481,6 +1484,7 @@ export const OBJECT_DISC_NODE: NodeDefinition = {
   type: "object/disc",
   label: "Disc",
   category: "object",
+  pure: true,
   inputs: [
     { id: "radius", label: "Radius", type: "value" },
     { id: "innerRadius", label: "Inner Radius", type: "value" },
@@ -1677,6 +1681,7 @@ export const OBJECT_POLYGON_NODE: NodeDefinition = {
   type: "object/polygon",
   label: "Polygon",
   category: "object",
+  pure: true,
   inputs: [
     { id: "sides", label: "Sides", type: "value" },
     { id: "radius", label: "Radius", type: "value" },
@@ -1777,6 +1782,7 @@ export const OBJECT_CYLINDER_NODE: NodeDefinition = {
   type: "object/cylinder",
   label: "Cylinder",
   category: "object",
+  pure: true,
   inputs: [...COMMON_PRIMITIVE_INPUTS, { id: "heightSegments", label: "Height Segments", type: "value" }],
   outputs: [...COMMON_PRIMITIVE_OUTPUTS],
   defaultParams: { ...COMMON_DEFAULT_PARAMS, heightSegments: 1 },
@@ -1826,6 +1832,7 @@ export const OBJECT_CONE_NODE: NodeDefinition = {
   type: "object/cone",
   label: "Cone",
   category: "object",
+  pure: true,
   inputs: [...COMMON_PRIMITIVE_INPUTS],
   outputs: [...COMMON_PRIMITIVE_OUTPUTS],
   defaultParams: { ...COMMON_DEFAULT_PARAMS },
@@ -2291,6 +2298,7 @@ export const OBJECT_EMPTY_NODE: NodeDefinition = {
   type: "object/empty",
   label: "Empty",
   category: "object",
+  pure: true,
   inputs: [
     { id: "matrix", label: "Matrix", type: "matrix" },
   ],

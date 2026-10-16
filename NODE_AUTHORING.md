@@ -173,6 +173,20 @@ interface EvalContext {
 }
 ```
 
+### `pure: true` — skip the node when nothing changed
+
+If your node's outputs depend on **nothing but its params and its inputs**, set
+`pure: true` on the definition. A pure node whose params, wiring and upstream are
+all unchanged since the last frame is not evaluated again: `evaluateGraph` hands
+back its previous outputs. That is what keeps a big, mostly still scene cheap.
+
+Do **not** set it if the node reads `ctx.time` / `ctx.step` / `ctx.currentFrame`
+/ `isPlaying` / `scene` / `renderer` / the camera, calls `Math.random()` or the
+wall clock, keeps state that changes from frame to frame (springs, triggers,
+simulations, input devices), or finishes an async load (font, file, CSV) without
+a param changing. Wrongly marked, the node freezes. `evalMemo.test.ts` runs every
+demo with the memo on and off and must stay green.
+
 ## 7. If your node needs a GPU resource (mesh, texture, render target)
 
 Most nodes don't need this section — skip it unless you're building

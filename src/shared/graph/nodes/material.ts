@@ -8,6 +8,7 @@ export const MATERIAL_NODE: NodeDefinition = {
   type: "material/standard",
   label: "Material",
   category: "material",
+  pure: true,
   inputs: [
     { id: "color", label: "Color", type: "color" },
     { id: "emissive", label: "Emissive Color", type: "color" },

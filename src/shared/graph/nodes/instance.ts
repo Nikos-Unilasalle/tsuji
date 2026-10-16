@@ -168,6 +168,7 @@ export const SET_INSTANCE_COLOR_NODE: NodeDefinition = {
   type: "structure/instance-color",
   label: "Set Instance Color",
   category: "instance",
+  pure: true,
   inputs: [
     { id: "geometry", label: "Geometry", type: "geometry", owns: true },
     { id: "colors", label: "Colors", type: "list" },
@@ -294,6 +295,7 @@ export const SET_INSTANCE_TRANSFORM_NODE: NodeDefinition = {
   type: "structure/instance-transform",
   label: "Instance Transform",
   category: "instance",
+  pure: true,
   inputs: [
     { id: "geometry", label: "Geometry", type: "geometry", owns: true },
     { id: "matrix", label: "Matrix", type: "matrix" },
@@ -577,6 +579,7 @@ export const GET_INSTANCE_NODE: NodeDefinition = {
   type: "structure/get-instance",
   label: "Get Instance",
   category: "instance",
+  pure: true,
   inputs: [
     { id: "geometry", label: "Geometry", type: "geometry", owns: true },
     { id: "index", label: "Index", type: "value" },
@@ -617,6 +620,7 @@ export const GEOMETRY_TRANSFORM_NODE: NodeDefinition = {
   type: "structure/geometry-transform",
   label: "Transform Geometry",
   category: "instance",
+  pure: true,
   inputs: [
     { id: "geometry", label: "Geometry", type: "geometry", owns: true },
     { id: "matrix", label: "Matrix", type: "matrix" },
@@ -768,6 +772,7 @@ export const INSTANCES_TO_LIST_NODE: NodeDefinition = {
   type: "structure/instances-to-list",
   label: "Instances to List",
   category: "converter",
+  pure: true,
   inputs: [{ id: "geometry", label: "Geometry", type: "geometry", owns: true }],
   outputs: [
     { id: "list", label: "List", type: "list" },

@@ -35,6 +35,7 @@ export const PARTICLE_CURL_NOISE_NODE: NodeDefinition = {
   type: "particles/curl-noise",
   label: "Curl Noise Field",
   category: "particles",
+  pure: true,
   inputs: [
     { id: "matrix", label: "Matrix", type: "matrix" },
     { id: "position", label: "Position", type: "vector" },

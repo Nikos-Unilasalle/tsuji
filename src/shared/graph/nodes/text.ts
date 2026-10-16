@@ -6,6 +6,7 @@ export const TEXT_CONSTANT_NODE: NodeDefinition = {
   type: "text/constant",
   label: "Text",
   category: "text",
+  pure: true,
   inputs: [],
   outputs: [{ id: "text", label: "Text", type: "text" }],
   defaultParams: { text: "Hello" },
@@ -20,6 +21,7 @@ export const TEXT_CONCAT_NODE: NodeDefinition = {
   type: "text/concat",
   label: "Text Concat",
   category: "text",
+  pure: true,
   inputs: [
     { id: "textA", label: "Text A", type: "text" },
     { id: "textB", label: "Text B", type: "text" },
@@ -46,6 +48,7 @@ export const TEXT_SUBSTRING_NODE: NodeDefinition = {
   type: "text/substring",
   label: "Text Substring",
   category: "text",
+  pure: true,
   inputs: [
     { id: "text", label: "Text", type: "text" },
     { id: "start", label: "Start Index", type: "value" },
@@ -73,6 +76,7 @@ export const TEXT_LENGTH_NODE: NodeDefinition = {
   type: "text/length",
   label: "Text Length",
   category: "text",
+  pure: true,
   inputs: [{ id: "text", label: "Text", type: "text" }],
   outputs: [{ id: "value", label: "Length", type: "value" }],
   defaultParams: { text: "" },
@@ -88,6 +92,7 @@ export const TEXT_CASE_NODE: NodeDefinition = {
   type: "text/case",
   label: "Text Case",
   category: "text",
+  pure: true,
   inputs: [{ id: "text", label: "Text", type: "text" }],
   outputs: [{ id: "text", label: "Text", type: "text" }],
   defaultParams: { text: "", mode: "uppercase" },
@@ -122,6 +127,7 @@ export const TEXT_REPLACE_NODE: NodeDefinition = {
   type: "text/replace",
   label: "Text Replace",
   category: "text",
+  pure: true,
   inputs: [
     { id: "text", label: "Text", type: "text" },
     { id: "search", label: "Search", type: "text" },
@@ -149,6 +155,7 @@ export const TEXT_SPLIT_NODE: NodeDefinition = {
   type: "text/split",
   label: "Text Split",
   category: "text",
+  pure: true,
   inputs: [
     { id: "text", label: "Text", type: "text" },
     { id: "delimiter", label: "Delimiter", type: "text" },
@@ -173,6 +180,7 @@ export const TEXT_TRIM_NODE: NodeDefinition = {
   type: "text/trim",
   label: "Text Trim",
   category: "text",
+  pure: true,
   inputs: [
     { id: "text", label: "Text", type: "text" },
     { id: "start", label: "Start (chars)", type: "value" },
@@ -203,6 +211,7 @@ export const TEXT_COMPARE_NODE: NodeDefinition = {
   type: "text/compare",
   label: "Text Compare",
   category: "text",
+  pure: true,
   inputs: [
     { id: "textA", label: "Text A", type: "text" },
     { id: "textB", label: "Text B", type: "text" },
@@ -265,6 +274,7 @@ export const TEXT_RANDOM_NODE: NodeDefinition = {
   type: "text/random",
   label: "Random Text",
   category: "text",
+  pure: true,
   inputs: [
     { id: "seed", label: "Seed", type: "value" },
     { id: "length", label: "Length", type: "value" },

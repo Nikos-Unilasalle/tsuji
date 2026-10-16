@@ -26,6 +26,7 @@ export const CURVE_SUBDIVIDE_NODE: NodeDefinition = {
   type: "curve/subdivide",
   label: "Curve Subdivide",
   category: "curve",
+  pure: true,
   inputs: [
     { id: "points", label: "Points", type: "list" },
     { id: "subdivisions", label: "Subdivisions", type: "value" },

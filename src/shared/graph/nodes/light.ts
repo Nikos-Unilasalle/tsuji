@@ -66,6 +66,7 @@ export const LIGHT_DIRECTIONAL_NODE: NodeDefinition = {
   type: "light/directional",
   label: "Directional Light",
   category: "lighting",
+  pure: true,
   inputs: [
     { id: "color", label: "Color", type: "color" },
     { id: "intensity", label: "Intensity", type: "value" },
@@ -151,6 +152,7 @@ export const LIGHT_POINT_NODE: NodeDefinition = {
   type: "light/point",
   label: "Point Light",
   category: "lighting",
+  pure: true,
   inputs: [
     { id: "color", label: "Color", type: "color" },
     { id: "intensity", label: "Intensity", type: "value" },
@@ -223,6 +225,7 @@ export const LIGHT_SPOT_NODE: NodeDefinition = {
   type: "light/spot",
   label: "Spot Light",
   category: "lighting",
+  pure: true,
   inputs: [
     { id: "color", label: "Color", type: "color" },
     { id: "intensity", label: "Intensity", type: "value" },
@@ -318,6 +321,7 @@ export const LIGHT_AMBIENT_NODE: NodeDefinition = {
   type: "light/ambient",
   label: "Ambient Light",
   category: "lighting",
+  pure: true,
   inputs: [
     { id: "color", label: "Color", type: "color" },
     { id: "intensity", label: "Intensity", type: "value" },

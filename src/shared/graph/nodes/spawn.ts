@@ -61,6 +61,7 @@ export const SPAWN_NODE: NodeDefinition = {
   type: "structure/spawn",
   label: "Spawner",
   category: "instance",
+  pure: true,
   inputs: [
     { id: "support", label: "Support (Surface)", type: "geometry" },
     { id: "items", label: "Items to Spawn", type: "any", owns: true },

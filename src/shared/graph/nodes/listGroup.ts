@@ -11,6 +11,7 @@ export const LIST_GROUP_NODE: NodeDefinition = {
   type: "list/group",
   label: "List Group",
   category: "list",
+  pure: true,
   inputs: [{ id: `${INPUT_PREFIX}0`, label: "In 1", type: "any" }],
   dynamicInputs: (connections) =>
     growingSockets(connections, INPUT_PREFIX, (i) => ({

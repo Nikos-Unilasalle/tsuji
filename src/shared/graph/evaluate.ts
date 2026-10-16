@@ -1,8 +1,9 @@
 import * as THREE from "three";
 import { getEvalProfiler } from "./evalProfiler";
 import { resolveDefinition } from "./groups";
+import { createNodeCache } from "./nodeCaches";
 import { applyBakedTransform, applyPoseSockets } from "./poseSockets";
-import { Connection, EasingType, EvalContext, Graph, Keyframe, KeyframeStore, NodeInstance, NodeRegistry } from "./types";
+import { Connection, EasingType, EvalContext, Graph, Keyframe, KeyframeStore, NodeDefinition, NodeInstance, NodeRegistry } from "./types";
 
 export interface TopoResult {
   /** Node ids in dependency order — safe to evaluate front to back. */
@@ -538,6 +539,60 @@ export function disposeEvalSession(sessionId: string): void {
   for (const key of previousFrameOutputsBySession.keys()) {
     if (key.startsWith(prefix)) previousFrameOutputsBySession.delete(key);
   }
+  for (const bySlot of memoByNode.values()) {
+    bySlot.delete(sessionId);
+    for (const key of bySlot.keys()) {
+      if (key.startsWith(prefix)) bySlot.delete(key);
+    }
+  }
+}
+
+/**
+ * Skipping unchanged pure nodes (NodeDefinition.pure). A pure node is not
+ * evaluated again when, since its previous evaluation in this slot:
+ *   - its definition and its params object are the same (edits replace the
+ *     params object, they never mutate it),
+ *   - its wiring is the same (which sockets are connected, from where, and
+ *     which outputs are used — nodes read connectedInputs/connectedOutputs),
+ *   - none of its upstream nodes was evaluated this frame — so a pure chain
+ *     fed by anything that runs every frame (a clock, a simulation, any
+ *     non-pure node) simply runs every frame, as before,
+ *   - it has no keyframes, isn't in a cycle (it would read last frame's
+ *     outputs) and isn't the one the gizmo is dragging.
+ * Only the outermost pass memoizes; a group's subgraph runs as before.
+ *
+ * Per node id (so deleting a node drops its entries, see nodeCaches.ts),
+ * then per frame slot (each viewport pane has its own).
+ */
+interface MemoEntry {
+  def: NodeDefinition;
+  params: Record<string, unknown>;
+  wiring: string;
+  /** Evaluated while it had keyframes: its params were not the instance's own. Never reused. */
+  keyed: boolean;
+  result: Record<string, unknown>;
+}
+
+const memoByNode = createNodeCache<Map<string, MemoEntry>>();
+let memoEnabled = true;
+
+/** Turns the pure-node memo off (every node runs every frame, the old behaviour) or back on. */
+export function setEvalMemoEnabled(enabled: boolean): void {
+  memoEnabled = enabled;
+  if (!enabled) memoByNode.clear();
+}
+
+function wiringSignature(incoming: Connection[], outgoing: Connection[] | undefined): string {
+  let sig = "";
+  for (let i = 0; i < incoming.length; i++) {
+    const c = incoming[i];
+    sig += `${c.toSocket}<${c.fromNode}.${c.fromSocket};`;
+  }
+  sig += "|";
+  if (outgoing) {
+    for (let i = 0; i < outgoing.length; i++) sig += `${outgoing[i].fromSocket};`;
+  }
+  return sig;
 }
 
 // Cache the topological order and structural lookups by graph reference: playback
@@ -642,6 +697,11 @@ export function evaluateGraph(graph: Graph, registry: NodeRegistry, ctx: EvalCon
   const results: EvalResult = new EvalResultMap();
   const profiler = getEvalProfiler();
   const frameStart = profiler ? performance.now() : 0;
+  const memo = memoEnabled && evalDepth === 0;
+  const cyclicSet = memo && cyclic.length > 0 ? new Set(cyclic) : null;
+  /** Every node whose evaluate ran this frame — what a downstream pure node checks before reusing its outputs. */
+  const ran = new Set<string>();
+  let skipped = 0;
   evalDepth++;
   try {
     for (const nodeId of [...order, ...cyclic]) {
@@ -655,6 +715,33 @@ export function evaluateGraph(graph: Graph, registry: NodeRegistry, ctx: EvalCon
         console.error(`unknown node type "${instance.type}" on node ${nodeId} — skipped`);
         continue;
       }
+
+      // Pure-node memo, see MemoEntry. Checked before anything is built for
+      // the node: a reused node costs a few lookups, not a params copy.
+      let wiring = "";
+      let keyed = false;
+      const memoizable = memo && def.pure === true && cyclicSet?.has(nodeId) !== true && nodeId !== ctx.liveEditNodeId;
+      if (memoizable) {
+        const incoming = connectionsByToNode.get(nodeId) ?? EMPTY_CONNECTIONS;
+        wiring = wiringSignature(incoming, connectionsByFromNode.get(nodeId));
+        const tracks = (ctx.keyframes || graph.keyframes)?.[nodeId];
+        keyed = tracks !== undefined && Object.keys(tracks).length > 0;
+        const entry = memoByNode.get(nodeId)?.get(slotKey);
+        if (
+          entry &&
+          !keyed &&
+          !entry.keyed &&
+          entry.def === def &&
+          entry.params === instance.params &&
+          entry.wiring === wiring &&
+          incoming.every((c) => !ran.has(c.fromNode) && results.has(c.fromNode))
+        ) {
+          results.set(nodeId, entry.result);
+          skipped++;
+          continue;
+        }
+      }
+      ran.add(nodeId);
 
       // Deep-clone the mutable values that live on the shared defaultParams (a
       // Vector3/Color instance is common to every node of this type). A plain
@@ -753,13 +840,24 @@ export function evaluateGraph(graph: Graph, registry: NodeRegistry, ctx: EvalCon
           }) || {};
         applyBakedTransform(def, params, outputs, nodeId === ctx.liveEditNodeId);
         applyVisibility(outputs.geometry, inputs[VISIBILITY_SOCKET]);
-        results.set(nodeId, {
+        const result = {
           ...outputs,
           __evaluatedInputs: inputs,
-        });
+        };
+        results.set(nodeId, result);
+        if (memoizable) {
+          let bySlot = memoByNode.get(nodeId);
+          if (!bySlot) {
+            bySlot = new Map();
+            memoByNode.set(nodeId, bySlot);
+          }
+          bySlot.set(slotKey, { def, params: instance.params, wiring, keyed, result });
+        }
       } catch (err) {
         console.error(`node ${nodeId} (${instance.type}) failed to evaluate`, err);
         results.set(nodeId, {});
+        // A failure is not reused: the next frame tries again.
+        if (memoizable) memoByNode.get(nodeId)?.delete(slotKey);
       }
       if (profiler) {
         const ms = performance.now() - nodeStart;
@@ -770,7 +868,11 @@ export function evaluateGraph(graph: Graph, registry: NodeRegistry, ctx: EvalCon
   } finally {
     evalDepth--;
   }
-  if (profiler && evalDepth === 0) profiler.recordFrame(performance.now() - frameStart);
+  if (profiler && evalDepth === 0) {
+    profiler.recordFrame(performance.now() - frameStart);
+    profiler.setGauge("nodes run", ran.size);
+    profiler.setGauge("nodes reused", skipped);
+  }
 
   previousFrameOutputsBySession.set(slotKey, results);
   return results;

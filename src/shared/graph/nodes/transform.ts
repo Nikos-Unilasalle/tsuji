@@ -264,6 +264,7 @@ export const TRANSFORM_NODE: NodeDefinition = {
   // Blender's name for the same node (Geometry Nodes, 4.2).
   label: "Combine Transform",
   category: "compose",
+  pure: true,
   outputs: [{ id: "matrix", label: "Matrix", type: "matrix" }],
   defaultParams: {
     location: ZERO.clone(),
@@ -315,6 +316,7 @@ export const DECOMPOSE_MATRIX_NODE: NodeDefinition = {
   type: "matrix/decompose",
   label: "Separate Transform",
   category: "compose",
+  pure: true,
   inputs: [{ id: "matrix", label: "Matrix", type: "matrix" }],
   outputs: DECOMPOSE_OUTPUTS,
   defaultParams: { rotationMode: DEFAULT_ROTATION_MODE },
@@ -342,6 +344,7 @@ export const PARENT_NODE: NodeDefinition = {
   type: "transform/parent",
   label: "Parent",
   category: "transform",
+  pure: true,
   inputs: [
     { id: "parent", label: "Parent", type: "matrix" },
     { id: "child", label: "Child", type: "matrix" },
@@ -498,6 +501,7 @@ export const TRANSFORM_VECTOR_NODE: NodeDefinition = {
   type: "transform/transform-vector",
   label: "Transform Point",
   category: "transform",
+  pure: true,
   inputs: [
     { id: "vector", label: "Vector", type: "vector" },
     { id: "matrix", label: "Matrix", type: "matrix" },

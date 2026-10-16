@@ -6,6 +6,7 @@ export const COLOR_CONSTANT_NODE: NodeDefinition = {
   type: "color/constant",
   label: "Color",
   category: "math",
+  pure: true,
   inputs: [],
   outputs: [{ id: "out", label: "Out", type: "color" }],
   defaultParams: { color: new THREE.Color(0xffffff) },
@@ -21,6 +22,7 @@ export const COLOR_COMPOSE_NODE: NodeDefinition = {
   type: "color/compose",
   label: "Compose Color",
   category: "compose",
+  pure: true,
   inputs: [
     { id: "r", label: "R", type: "value" },
     { id: "g", label: "G", type: "value" },
@@ -52,6 +54,7 @@ export const COLOR_DECOMPOSE_NODE: NodeDefinition = {
   type: "color/decompose",
   label: "Decompose Color",
   category: "compose",
+  pure: true,
   inputs: [{ id: "color", label: "Color", type: "color" }],
   outputs: [
     { id: "r", label: "R", type: "value" },
@@ -72,6 +75,7 @@ export const COLOR_MATH_NODE: NodeDefinition = {
   type: "color/math",
   label: "Color Math",
   category: "math",
+  pure: true,
   inputs: [
     { id: "a", label: "A", type: "color" },
     { id: "b", label: "B", type: "color" },

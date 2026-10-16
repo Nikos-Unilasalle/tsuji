@@ -80,6 +80,7 @@ export const ARRAY_NODE: NodeDefinition = {
   type: "structure/array",
   label: "Array",
   category: "instance",
+  pure: true,
   inputs: [
     { id: "visible", label: "Visible", type: "value" },
     { id: "geometry", label: "Geometry", type: "geometry", owns: true },

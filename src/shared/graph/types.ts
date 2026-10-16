@@ -354,6 +354,18 @@ export interface NodeDefinition {
    */
   poseSockets?: boolean;
   /**
+   * The node's outputs depend on nothing but its params and its inputs: no
+   * clock (ctx.time/step/frame), no camera or scene, no randomness that
+   * isn't seeded from params, no state that changes between frames, no
+   * asynchronous load that lands later without a param change.
+   *
+   * A pure node whose params, wiring and upstream are all unchanged since
+   * the previous frame is not evaluated again — evaluateGraph hands back its
+   * previous outputs (see the memo in evaluate.ts). Getting this wrong
+   * freezes the node, so only set it after checking every ctx read.
+   */
+  pure?: boolean;
+  /**
    * Kept so the files that use it still load and play, but no longer offered
    * in the palette or the search: another node now does its job the way
    * Blender does (see the node's own comment for which).

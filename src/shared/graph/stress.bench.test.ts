@@ -4,7 +4,7 @@ import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 import { deserializeProject } from "./storage";
 import { DEFAULT_REGISTRY } from "./nodes/index";
-import { disposeEvalSession, evaluateGraph } from "./evaluate";
+import { disposeEvalSession, evaluateGraph, setEvalMemoEnabled } from "./evaluate";
 import { getEvalProfiler, startEvalProfiling, stopEvalProfiling } from "./evalProfiler";
 import { initBvhRaycast } from "../three/bvh";
 import { Connection, Graph, KeyframeStore, NodeInstance } from "./types";
@@ -20,6 +20,8 @@ import { Connection, Graph, KeyframeStore, NodeInstance } from "./types";
  *   npm run stress                                    # 1 copy, 120 frames
  *   TSUJI_STRESS_COPIES=4 TSUJI_STRESS_FRAMES=60 npm run stress
  *   TSUJI_STRESS_FILTER=shan_shui,rig npm run stress  # only matching demos
+ *   TSUJI_STRESS_STATIC=1 npm run stress              # paused on one frame
+ *   TSUJI_STRESS_NOMEMO=1 npm run stress              # pure-node memo off (baseline)
  *
  * Measures evaluation only (CPU, main thread in the app): no WebGL, no scene
  * sync, no draw — the in-app overlay (Ctrl+Shift+P) covers those. Writes the
@@ -30,6 +32,10 @@ const ENABLED = process.env.TSUJI_STRESS === "1";
 const COPIES = Number(process.env.TSUJI_STRESS_COPIES ?? 1);
 const FRAMES = Number(process.env.TSUJI_STRESS_FRAMES ?? 120);
 const FILTER = (process.env.TSUJI_STRESS_FILTER ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+/** Paused on one frame: what an idle or orbiting viewport costs — the work a dirty check could skip. */
+const STATIC = process.env.TSUJI_STRESS_STATIC === "1";
+/** Every node every frame, as before the pure-node memo — the baseline to compare against. */
+const NO_MEMO = process.env.TSUJI_STRESS_NOMEMO === "1";
 const FPS = 30;
 const DEMO_DIR = join(process.cwd(), "public/demos");
 
@@ -142,13 +148,15 @@ describe.skipIf(!ENABLED)("stress bench", () => {
       const object3DId = () => new THREE.Object3D().id;
 
       const sessionId = "stress-bench";
+      setEvalMemoEnabled(!NO_MEMO);
       try {
         const { graph, demos } = buildStressGraph();
         expect(graph.nodes.length).toBeGreaterThan(0);
 
         // Frame 0 is the cold build (caches empty, BVHs built): timed on its own.
-        const ctx = (frame: number) =>
-          ({
+        const ctx = (rawFrame: number) => {
+          const frame = STATIC ? 1 : rawFrame;
+          return {
             time: frame / FPS,
             step: frame,
             nodeId: "",
@@ -157,9 +165,10 @@ describe.skipIf(!ENABLED)("stress bench", () => {
             currentFrame: frame,
             keyframes: graph.keyframes,
             sessionId,
-            isPlaying: true,
-            simulationRun: true,
-          }) as never;
+            isPlaying: !STATIC,
+            simulationRun: !STATIC,
+          } as never;
+        };
 
         const coldStart = performance.now();
         evaluateGraph(graph, DEFAULT_REGISTRY, ctx(0));
@@ -196,7 +205,7 @@ describe.skipIf(!ENABLED)("stress bench", () => {
         profiler.setGauge("heap growth KB/frame", (heapAfter - heapBefore) / 1024 / FRAMES);
 
         const header = [
-          `stress bench — ${demos.length} demos × ${COPIES} copies = ${graph.nodes.length} nodes, ${graph.connections.length} wires`,
+          `stress bench${STATIC ? " (static)" : ""}${NO_MEMO ? " (memo off)" : ""} — ${demos.length} demos × ${COPIES} copies = ${graph.nodes.length} nodes, ${graph.connections.length} wires`,
           `cold first frame ${coldMs.toFixed(1)} ms · ${FRAMES} frames in ${(wallMs / 1000).toFixed(2)} s · ${(FRAMES / (wallMs / 1000)).toFixed(1)} eval/s (budget 16.7 ms at 60 fps)`,
           `node evaluate ${nodeSum.toFixed(2)} ms/frame · evaluator overhead ${(report.frames.meanMs - nodeSum).toFixed(2)} ms/frame`,
           "(group nodes include their inner nodes' time)",
@@ -236,6 +245,7 @@ describe.skipIf(!ENABLED)("stress bench", () => {
       } finally {
         stopEvalProfiling();
         disposeEvalSession(sessionId);
+        setEvalMemoEnabled(true);
         THREE.BufferGeometry.prototype.dispose = realDispose;
         THREE.BufferGeometry.prototype.setAttribute = realSetAttribute;
         Math.random = realRandom;

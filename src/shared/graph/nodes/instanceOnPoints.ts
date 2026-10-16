@@ -194,6 +194,7 @@ export const INSTANCE_ON_POINTS_NODE: NodeDefinition = {
   type: "structure/instance-on-points",
   label: "Instance on Points",
   category: "instance",
+  pure: true,
   inputs: [
     { id: "geometry", label: "Geometry", type: "geometry", owns: true },
     { id: "points", label: "Points (Vector List)", type: "list" },

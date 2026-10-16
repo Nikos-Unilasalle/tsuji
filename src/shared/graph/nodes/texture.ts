@@ -721,6 +721,7 @@ export const TEXTURE_PROCEDURAL_NODE: NodeDefinition = {
   type: "texture/procedural",
   label: "Procedural Texture",
   category: "texture",
+  pure: true,
   inputs: [
     { id: "scale", label: "Scale", type: "value" },
     { id: "seed", label: "Seed", type: "value" },

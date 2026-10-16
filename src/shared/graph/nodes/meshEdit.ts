@@ -726,6 +726,7 @@ export const FACE_SELECTION_NODE: NodeDefinition = {
   type: "modifier/face-selection",
   label: "Face Selection",
   category: "transform",
+  pure: true,
   inputs: [
     // `owns`: this node re-emits the source object through its `geometry`
     // output, so the source renders via this node rather than on its own.

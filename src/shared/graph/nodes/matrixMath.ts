@@ -77,6 +77,7 @@ export const MATRIX_MATH_NODE: NodeDefinition = {
   type: "matrix/math",
   label: "Matrix Math",
   category: "math",
+  pure: true,
   inputs: [
     { id: "a", label: "A", type: "matrix" },
     { id: "b", label: "B", type: "matrix" },

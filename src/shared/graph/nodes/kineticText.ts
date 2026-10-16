@@ -516,6 +516,7 @@ export const TEXT_DECOMPOSE_NODE: NodeDefinition = {
   type: "text/decompose",
   label: "Text Decompose",
   category: "text",
+  pure: true,
   inputs: [
     { id: "text", label: "Text", type: "text" },
     { id: "fontSize", label: "Font Size", type: "value" },

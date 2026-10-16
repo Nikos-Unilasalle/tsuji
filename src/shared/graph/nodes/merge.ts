@@ -95,6 +95,7 @@ export const MERGE_NODE: NodeDefinition = {
   type: "structure/merge",
   label: "Merge",
   category: "structure",
+  pure: true,
   inputs: [
     { id: "visible", label: "Visible", type: "value" },
     { id: "matrix", label: "Matrix", type: "matrix" },

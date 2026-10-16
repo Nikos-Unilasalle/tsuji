@@ -30,6 +30,7 @@ export const GROUND_NODE: NodeDefinition = {
   type: "particles/ground",
   label: "Ground",
   category: "particles",
+  pure: true,
   inputs: [
     { id: "enabled", label: "Enabled", type: "value" },
     { id: "height", label: "Height (Y)", type: "value" },

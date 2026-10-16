@@ -31,6 +31,7 @@ export const INSTANCE_POSITIONS_NODE: NodeDefinition = {
   type: "structure/instance-positions",
   label: "Instance Positions",
   category: "converter",
+  pure: true,
   inputs: [
     { id: "geometry", label: "Geometry", type: "geometry", owns: true },
     { id: "heightOffset", label: "Height Offset", type: "value" },
