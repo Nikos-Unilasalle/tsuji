@@ -5,6 +5,7 @@ import "./theme.css";
 import { initBvhRaycast } from "./shared/three/bvh";
 import { initTheme } from "./shared/theme/themeStore";
 import { initInstantTooltips } from "./shared/instantTooltips";
+import { installProfilerOverlay } from "./shared/graph/profilerOverlay";
 
 // Initialize saved or default theme CSS variables
 initTheme();
@@ -14,6 +15,9 @@ initInstantTooltips();
 
 // Opt three's raycasting into the BVH-accelerated path globally (see bvh.ts).
 initBvhRaycast();
+
+// Ctrl/Cmd+Shift+P: live per-node profile panel (see profilerOverlay.ts).
+installProfilerOverlay();
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>

@@ -5,6 +5,7 @@ import { TransformControls } from "three/examples/jsm/controls/TransformControls
 import { installScaleGizmoTweaks } from "./gizmoScale";
 import { ClockState, createClock, STEP_SECONDS, tickClock } from "../graph/clock";
 import { EvalResult, disposeEvalSession, evaluateGraph } from "../graph/evaluate";
+import { getEvalProfiler } from "../graph/evalProfiler";
 import { copyTextureToCanvas, textureSize } from "../graph/gpuTexture";
 import { CAMERA_FLY_TO_NODE, CAMERA_NODE } from "../graph/nodes/camera";
 import { TEXTURE_CAMERA_NODE } from "../graph/nodes/textureCamera";
@@ -5484,7 +5485,24 @@ export function Viewport({
     function tick() {
       if (isDisposed) return;
       try {
-        tickInner();
+        const profiler = getEvalProfiler();
+        if (profiler) {
+          // Only ticks that evaluated count: a suspended pane ticks for free.
+          const framesBefore = profiler.frameTotal;
+          const tickStart = performance.now();
+          tickInner();
+          if (profiler.frameTotal !== framesBefore) {
+            profiler.recordPhase("viewport tick (all)", performance.now() - tickStart);
+            const mem = renderer.info.memory;
+            profiler.setGauge("gpu geometries", mem.geometries);
+            profiler.setGauge("gpu textures", mem.textures);
+            profiler.setGauge("gpu programs", renderer.info.programs?.length ?? 0);
+            const heap = (performance as { memory?: { usedJSHeapSize: number } }).memory;
+            if (heap) profiler.setGauge("js heap MB", heap.usedJSHeapSize / 1048576);
+          }
+        } else {
+          tickInner();
+        }
       } catch (err) {
         console.error("Viewport tick uncaught error:", err);
       } finally {
@@ -6847,6 +6865,7 @@ export function Viewport({
       });
 
       // 1. Render Main Scene (with Post-Processing pipeline if active)
+      const renderStart = getEvalProfiler() ? performance.now() : 0;
       const width = host.clientWidth;
       const height = host.clientHeight;
 
@@ -7213,6 +7232,9 @@ export function Viewport({
         renderer.render(gizmo.gizmoScene, gizmo.gizmoCamera);
         renderer.setScissorTest(false);
       }
+      // CPU side of the draw calls only — the GPU runs asynchronously, so a
+      // GPU-bound frame shows up as a long "viewport tick" with a short render.
+      if (renderStart) getEvalProfiler()?.recordPhase("render (cpu submit)", performance.now() - renderStart);
 
       if (capture) {
         // Hold the frame until every HUD image has decoded — the capture is

@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { getEvalProfiler } from "./evalProfiler";
 import { resolveDefinition } from "./groups";
 import { applyBakedTransform, applyPoseSockets } from "./poseSockets";
 import { Connection, EasingType, EvalContext, Graph, Keyframe, KeyframeStore, NodeInstance, NodeRegistry } from "./types";
@@ -630,127 +631,146 @@ const pooledInputSources = new Map<string, string>();
 const pooledConnectedOutputs = new Set<string>();
 const EMPTY_CONNECTIONS: Connection[] = [];
 
+/** >0 while a group's subgraph is being evaluated — only the outermost pass counts as a profiled frame. */
+let evalDepth = 0;
+
 export function evaluateGraph(graph: Graph, registry: NodeRegistry, ctx: EvalContext): EvalResult {
   const { topo, nodesById, connectionsByToNode, connectionByToNodeSocket, connectionsByFromNode } = getGraphStructuralCache(graph);
   const { order, cyclic } = topo;
   const slotKey = frameSlotKey(ctx);
   const previousFrameOutputs = previousFrameOutputsBySession.get(slotKey) ?? null;
   const results: EvalResult = new EvalResultMap();
+  const profiler = getEvalProfiler();
+  const frameStart = profiler ? performance.now() : 0;
+  evalDepth++;
+  try {
+    for (const nodeId of [...order, ...cyclic]) {
+      const instance = nodesById.get(nodeId);
+      if (!instance) continue;
 
-  for (const nodeId of [...order, ...cyclic]) {
-    const instance = nodesById.get(nodeId);
-    if (!instance) continue;
+      // Not registry.get: a group's sockets come from the subgraph it carries,
+      // not from its type — see groups.ts.
+      const def = resolveDefinition(instance, registry);
+      if (!def) {
+        console.error(`unknown node type "${instance.type}" on node ${nodeId} — skipped`);
+        continue;
+      }
 
-    // Not registry.get: a group's sockets come from the subgraph it carries,
-    // not from its type — see groups.ts.
-    const def = resolveDefinition(instance, registry);
-    if (!def) {
-      console.error(`unknown node type "${instance.type}" on node ${nodeId} — skipped`);
-      continue;
-    }
+      // Deep-clone the mutable values that live on the shared defaultParams (a
+      // Vector3/Color instance is common to every node of this type). A plain
+      // spread would hand each node the *same* object by reference, so any node
+      // mutating params.location in place would corrupt every other instance
+      // that didn't override it. Cloning here isolates them (keyframe
+      // interpolation below already clones its own Vector3/Color).
+      const params: Record<string, unknown> = { ...def.defaultParams, ...instance.params };
 
-    // Deep-clone the mutable values that live on the shared defaultParams (a
-    // Vector3/Color instance is common to every node of this type). A plain
-    // spread would hand each node the *same* object by reference, so any node
-    // mutating params.location in place would corrupt every other instance
-    // that didn't override it. Cloning here isolates them (keyframe
-    // interpolation below already clones its own Vector3/Color).
-    const params: Record<string, unknown> = { ...def.defaultParams, ...instance.params };
+      // Clone the shared mutable defaults one level deep, but only for the keys
+      // the instance did NOT override (using cached mutable keys list)
+      const mutableKeys = getMutableDefaultKeys(def.defaultParams);
+      for (let i = 0; i < mutableKeys.length; i++) {
+        const key = mutableKeys[i];
+        if (!(key in instance.params)) {
+          const v = def.defaultParams[key] as THREE.Vector3 | THREE.Color | THREE.Euler | THREE.Quaternion;
+          params[key] = v.clone();
+        }
+      }
 
-    // Clone the shared mutable defaults one level deep, but only for the keys
-    // the instance did NOT override (using cached mutable keys list)
-    const mutableKeys = getMutableDefaultKeys(def.defaultParams);
-    for (let i = 0; i < mutableKeys.length; i++) {
-      const key = mutableKeys[i];
-      if (!(key in instance.params)) {
-        const v = def.defaultParams[key] as THREE.Vector3 | THREE.Color | THREE.Euler | THREE.Quaternion;
-        params[key] = v.clone();
+      // Apply keyframe interpolation to params so that param-based properties
+      // (location, rotation, scale, color, etc.) reflect their animated values
+      // during evaluation — not just in the param panel.
+      const kfStore = ctx.keyframes || graph.keyframes;
+      const frame = ctx.currentFrame ?? -1;
+      if (kfStore && frame >= 0 && kfStore[nodeId]) {
+        for (const paramKey of Object.keys(params)) {
+          if ((def.type === "curve/grease-pencil" || def.type === "curve/paint-on-geometry") && paramKey === "frames") continue;
+          params[paramKey] = evaluateKeyframeValue(kfStore, nodeId, paramKey, frame, params[paramKey]);
+        }
+      }
+
+      const nodeConnections = connectionsByToNode.get(nodeId) ?? EMPTY_CONNECTIONS;
+      const socketDefs = def.dynamicInputs ? def.dynamicInputs(nodeConnections, undefined, params) : def.inputs;
+      const inputs: Record<string, unknown> = {};
+
+      // The pooled Set/Map are reused across nodes to keep the 60 fps loop from
+      // allocating — safe as long as a node's evaluate is done with them before
+      // the next node starts. A group breaks that: it re-enters evaluateGraph
+      // for its subgraph, whose own loop would clear the very objects the group
+      // is still holding. Groups are rare and already paying for a whole nested
+      // pass, so they get their own.
+      const nested = instance.subgraph !== undefined;
+      const connectedInputs = nested ? new Set<string>() : pooledConnectedInputs;
+      const inputSources = nested ? new Map<string, string>() : pooledInputSources;
+      const connectedOutputs = nested ? new Set<string>() : pooledConnectedOutputs;
+
+      connectedInputs.clear();
+      inputSources.clear();
+      connectedOutputs.clear();
+      const outgoing = connectionsByFromNode.get(nodeId);
+      if (outgoing) {
+        for (let i = 0; i < outgoing.length; i++) connectedOutputs.add(outgoing[i].fromSocket);
+      }
+
+      for (let i = 0; i < socketDefs.length; i++) {
+        const socket = socketDefs[i];
+        const conn = connectionByToNodeSocket.get(`${nodeId}:${socket.id}`);
+        if (conn) {
+          connectedInputs.add(socket.id);
+          inputSources.set(socket.id, conn.fromNode);
+          // Priority rule: Node connection l'emporte toujours sur les keyframes!
+          const fresh = results.get(conn.fromNode)?.[conn.fromSocket];
+          inputs[socket.id] =
+            fresh !== undefined ? fresh : previousFrameOutputs?.get(conn.fromNode)?.[conn.fromSocket];
+        } else {
+          // Unconnected socket: evaluate keyframe interpolation if keyframes exist
+          const fallback = params[socket.id];
+          inputs[socket.id] = evaluateKeyframeValue(
+            ctx.keyframes || graph.keyframes,
+            nodeId,
+            socket.id,
+            ctx.currentFrame ?? -1,
+            fallback,
+          );
+        }
+      }
+
+      applyPoseSockets(def, inputs, params, connectedInputs);
+
+      const allocStart = profiler?.counter ? profiler.counter() : 0;
+      const outerType = profiler ? profiler.currentType : null;
+      if (profiler) profiler.currentType = def.type;
+      const nodeStart = profiler ? performance.now() : 0;
+      try {
+        const outputs =
+          def.evaluate(inputs, params, {
+            ...ctx,
+            nodeId,
+            instance,
+            registry,
+            connectedInputs,
+            inputSources,
+            connectedOutputs,
+            markers: ctx.markers || graph.markers,
+          }) || {};
+        applyBakedTransform(def, params, outputs, nodeId === ctx.liveEditNodeId);
+        applyVisibility(outputs.geometry, inputs[VISIBILITY_SOCKET]);
+        results.set(nodeId, {
+          ...outputs,
+          __evaluatedInputs: inputs,
+        });
+      } catch (err) {
+        console.error(`node ${nodeId} (${instance.type}) failed to evaluate`, err);
+        results.set(nodeId, {});
+      }
+      if (profiler) {
+        const ms = performance.now() - nodeStart;
+        profiler.currentType = outerType;
+        profiler.recordNode(nodeId, def.type, ms, profiler.counter ? profiler.counter() - allocStart : 0);
       }
     }
-
-    // Apply keyframe interpolation to params so that param-based properties
-    // (location, rotation, scale, color, etc.) reflect their animated values
-    // during evaluation — not just in the param panel.
-    const kfStore = ctx.keyframes || graph.keyframes;
-    const frame = ctx.currentFrame ?? -1;
-    if (kfStore && frame >= 0 && kfStore[nodeId]) {
-      for (const paramKey of Object.keys(params)) {
-        if ((def.type === "curve/grease-pencil" || def.type === "curve/paint-on-geometry") && paramKey === "frames") continue;
-        params[paramKey] = evaluateKeyframeValue(kfStore, nodeId, paramKey, frame, params[paramKey]);
-      }
-    }
-
-    const nodeConnections = connectionsByToNode.get(nodeId) ?? EMPTY_CONNECTIONS;
-    const socketDefs = def.dynamicInputs ? def.dynamicInputs(nodeConnections, undefined, params) : def.inputs;
-    const inputs: Record<string, unknown> = {};
-
-    // The pooled Set/Map are reused across nodes to keep the 60 fps loop from
-    // allocating — safe as long as a node's evaluate is done with them before
-    // the next node starts. A group breaks that: it re-enters evaluateGraph
-    // for its subgraph, whose own loop would clear the very objects the group
-    // is still holding. Groups are rare and already paying for a whole nested
-    // pass, so they get their own.
-    const nested = instance.subgraph !== undefined;
-    const connectedInputs = nested ? new Set<string>() : pooledConnectedInputs;
-    const inputSources = nested ? new Map<string, string>() : pooledInputSources;
-    const connectedOutputs = nested ? new Set<string>() : pooledConnectedOutputs;
-
-    connectedInputs.clear();
-    inputSources.clear();
-    connectedOutputs.clear();
-    const outgoing = connectionsByFromNode.get(nodeId);
-    if (outgoing) {
-      for (let i = 0; i < outgoing.length; i++) connectedOutputs.add(outgoing[i].fromSocket);
-    }
-
-    for (let i = 0; i < socketDefs.length; i++) {
-      const socket = socketDefs[i];
-      const conn = connectionByToNodeSocket.get(`${nodeId}:${socket.id}`);
-      if (conn) {
-        connectedInputs.add(socket.id);
-        inputSources.set(socket.id, conn.fromNode);
-        // Priority rule: Node connection l'emporte toujours sur les keyframes!
-        const fresh = results.get(conn.fromNode)?.[conn.fromSocket];
-        inputs[socket.id] =
-          fresh !== undefined ? fresh : previousFrameOutputs?.get(conn.fromNode)?.[conn.fromSocket];
-      } else {
-        // Unconnected socket: evaluate keyframe interpolation if keyframes exist
-        const fallback = params[socket.id];
-        inputs[socket.id] = evaluateKeyframeValue(
-          ctx.keyframes || graph.keyframes,
-          nodeId,
-          socket.id,
-          ctx.currentFrame ?? -1,
-          fallback,
-        );
-      }
-    }
-
-    applyPoseSockets(def, inputs, params, connectedInputs);
-
-    try {
-      const outputs =
-        def.evaluate(inputs, params, {
-          ...ctx,
-          nodeId,
-          instance,
-          registry,
-          connectedInputs,
-          inputSources,
-          connectedOutputs,
-          markers: ctx.markers || graph.markers,
-        }) || {};
-      applyBakedTransform(def, params, outputs, nodeId === ctx.liveEditNodeId);
-      applyVisibility(outputs.geometry, inputs[VISIBILITY_SOCKET]);
-      results.set(nodeId, {
-        ...outputs,
-        __evaluatedInputs: inputs,
-      });
-    } catch (err) {
-      console.error(`node ${nodeId} (${instance.type}) failed to evaluate`, err);
-      results.set(nodeId, {});
-    }
+  } finally {
+    evalDepth--;
   }
+  if (profiler && evalDepth === 0) profiler.recordFrame(performance.now() - frameStart);
 
   previousFrameOutputsBySession.set(slotKey, results);
   return results;

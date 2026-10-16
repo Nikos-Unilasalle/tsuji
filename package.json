@@ -10,7 +10,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "tauri": "tauri",
-    "export:graph-svg": "node tools/run-export-graph-svg.mjs"
+    "export:graph-svg": "node tools/run-export-graph-svg.mjs",
+    "stress": "TSUJI_STRESS=1 NODE_OPTIONS=--expose-gc vitest run src/shared/graph/stress.bench.test.ts"
   },
   "dependencies": {
     "@dimforge/rapier3d-compat": "^0.20.0",
