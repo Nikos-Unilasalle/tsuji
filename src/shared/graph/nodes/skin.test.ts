@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import * as THREE from "three";
-import { SKIN_NODE } from "./skin";
+import { readJointInfluence, SKIN_NODE, withJointInfluence } from "./skin";
 import { RIG_HUMAN_NODE, RIG_POLYPEDE_NODE } from "./rig";
 import { EvalContext } from "../types";
 
@@ -134,5 +134,103 @@ describe("Skin on a T-posed mesh", () => {
     // The tip of the arm has swung down to where the rig's hand hangs.
     const tip = xs.indexOf(Math.max(...xs));
     expect(ys[tip]).toBeLessThan(data.rest[6].y - 0.3);
+  });
+});
+
+describe("Skin node: editing the influence of each joint", () => {
+  const rigAt = (nodeId: string, hand?: THREE.Vector3) => {
+    const controls = (RIG_HUMAN_NODE.evaluate({}, { ...RIG_HUMAN_NODE.defaultParams }, ctx(nodeId)).__controlPoints as THREE.Vector3[]).map((p) => p.clone());
+    if (hand) controls[2] = hand;
+    return RIG_HUMAN_NODE.evaluate({}, { ...RIG_HUMAN_NODE.defaultParams, ...(hand ? { pointsList: controls } : {}) }, ctx(nodeId)).geometry as THREE.Object3D;
+  };
+  const armMesh = () => {
+    const rest = RIG_HUMAN_NODE.evaluate({}, { ...RIG_HUMAN_NODE.defaultParams }, ctx("arm-rest")).geometry as THREE.Object3D;
+    const data = rest.userData.rig as { rest: THREE.Vector3[] };
+    const a = data.rest[7];
+    const b = data.rest[8];
+    const mid = a.clone().add(b).multiplyScalar(0.5);
+    // A short cylinder on the forearm, between elbow and hand.
+    const geometry = new THREE.CylinderGeometry(0.03, 0.03, a.distanceTo(b) * 0.5, 8, 4);
+    const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.clone().sub(a).normalize());
+    geometry.applyQuaternion(q).translate(mid.x, mid.y, mid.z);
+    return new THREE.Mesh(geometry, new THREE.MeshStandardMaterial());
+  };
+  const meanY = (mesh: unknown) => {
+    const ys = positionsOf(mesh).filter((_, i) => i % 3 === 1);
+    return ys.reduce((s, y) => s + y, 0) / ys.length;
+  };
+  const raised = new THREE.Vector3(0.9, 1.7, 0.2);
+
+  it("a joint switched off no longer pulls the mesh", () => {
+    const mesh = armMesh();
+    const base = meanY(mesh);
+    const moves = (extra: Record<string, unknown>, id: string) => {
+      SKIN_NODE.evaluate({ geometry: mesh, rig: rigAt("sw-rig") }, params({ mode: "CPU", ...extra }), ctx(id));
+      return meanY(SKIN_NODE.evaluate({ geometry: mesh, rig: rigAt("sw-rig", raised) }, params({ mode: "CPU", ...extra }), ctx(id)).geometry) - base;
+    };
+    expect(Math.abs(moves({}, "sw-on"))).toBeGreaterThan(0.05);
+    // Elbow and hand bones (joints 7 and 8) off, the shoulder's the only arm bone left: the forearm barely swings with the hand.
+    const strength = Array.from({ length: 18 }, (_, i) => (i === 7 || i === 8 ? 0 : 1));
+    expect(Math.abs(moves({ jointStrength: strength }, "sw-off"))).toBeLessThan(Math.abs(moves({}, "sw-on2")));
+  });
+
+  it("a wider radius makes a joint win more of the mesh", () => {
+    const mesh = armMesh();
+    const rig = rigAt("rad-rig");
+    const weightOf = (extra: Record<string, unknown>, id: string, joint: number) => {
+      const out = SKIN_NODE.evaluate({ geometry: mesh, rig }, params({ mode: "CPU", showWeights: true, selectedJoint: joint, influences: 8, smooth: 0, ...extra }), ctx(id)).geometry as THREE.Mesh;
+      const heat = out.children.find((c) => c.userData.skinHeat) as THREE.Mesh;
+      const colors = heat.geometry.attributes.color.array as Float32Array;
+      let red = 0;
+      for (let i = 0; i < colors.length; i += 3) red += 1 - colors[i + 2];
+      return red;
+    };
+    const normal = weightOf({}, "rad-a", 7);
+    const wide = weightOf({ jointRadius: Array.from({ length: 18 }, (_, i) => (i === 7 ? 6 : 1)) }, "rad-b", 7);
+    expect(wide).toBeGreaterThan(normal);
+  });
+
+  it("draws the weights of the selected joint as an overlay on the skinned mesh, and only while asked", () => {
+    const mesh = armMesh();
+    const rig = rigAt("heat-rig");
+    const off = SKIN_NODE.evaluate({ geometry: mesh, rig }, params({ mode: "CPU" }), ctx("heat")).geometry as THREE.Mesh;
+    expect(off.children.some((c) => c.userData.skinHeat)).toBe(false);
+    const on = SKIN_NODE.evaluate({ geometry: mesh, rig }, params({ mode: "CPU", showWeights: true, selectedJoint: 8 }), ctx("heat")).geometry as THREE.Mesh;
+    const heat = on.children.find((c) => c.userData.skinHeat) as THREE.Mesh;
+    expect(heat).toBeDefined();
+    expect(heat.geometry.attributes.position).toBe(on.geometry.attributes.position);
+    const gone = SKIN_NODE.evaluate({ geometry: mesh, rig }, params({ mode: "CPU", showWeights: false, selectedJoint: 8 }), ctx("heat")).geometry as THREE.Mesh;
+    expect(gone.children.some((c) => c.userData.skinHeat)).toBe(false);
+  });
+
+  it("publishes the joints for the viewport to pick, and hides the rig on request", () => {
+    const mesh = armMesh();
+    const rig = rigAt("pub-rig");
+    const out = SKIN_NODE.evaluate({ geometry: mesh, rig }, params({ mode: "CPU", selectedJoint: 3 }), ctx("pub")).geometry as THREE.Object3D;
+    const edit = out.userData.skinEdit as { joints: THREE.Vector3[]; names?: string[]; selected: number };
+    expect(edit.joints.length).toBe(18);
+    expect(edit.names?.[0]).toBe("Pelvis");
+    expect(edit.selected).toBe(3);
+
+    expect(rig.visible).toBe(true);
+    SKIN_NODE.evaluate({ geometry: mesh, rig }, params({ mode: "CPU", showRig: false }), ctx("pub"));
+    expect(rig.visible).toBe(false);
+    SKIN_NODE.evaluate({ geometry: mesh, rig }, params({ mode: "CPU", showRig: true }), ctx("pub"));
+    expect(rig.visible).toBe(true);
+  });
+});
+
+describe("editing one joint's influence", () => {
+  it("reads 1 and 1 until set, and stores only what differs from 1", () => {
+    expect(readJointInfluence({}, 4)).toEqual({ strength: 1, radius: 1 });
+    const set = withJointInfluence({}, 2, { strength: 0.5, radius: 2 });
+    expect(set.jointStrength).toEqual([null, null, 0.5]);
+    expect(readJointInfluence(set, 2)).toEqual({ strength: 0.5, radius: 2 });
+    expect(readJointInfluence(set, 1)).toEqual({ strength: 1, radius: 1 });
+    const other = withJointInfluence({ ...set }, 0, { strength: 0 });
+    expect(other.jointStrength).toEqual([0, null, 0.5]);
+    // Back to 1: nothing left to store.
+    expect(withJointInfluence(set, 2, { strength: 1 }).jointStrength).toEqual([]);
+    expect(withJointInfluence(set, 2, { strength: 1 }).jointRadius).toBeUndefined();
   });
 });

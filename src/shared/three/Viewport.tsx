@@ -22,6 +22,10 @@ import { DECAL_NODE } from "../graph/nodes/decal";
 import { POSE_PROXY_NODES } from "./poseProxyNodes";
 import { createCurvePointHandles } from "./curveHandles";
 import { createPointCloudHandles } from "./pointCloudHandles";
+import { SKELETON_NODE_TYPE } from "../graph/nodes/skeleton";
+import { SKIN_NODE } from "../graph/nodes/skin";
+import { SkeletonHud, SkinHud } from "./RigHuds";
+import { skeletonOp, SkeletonOp } from "./skeletonEditor";
 import { createSceneMembership, isSelfOrDescendantOf } from "./sceneMembership";
 import {
   LATTICE_DEFORM_NODE,
@@ -1154,6 +1158,10 @@ export function Viewport({
     extrude(): boolean;
     tool(tool: "bevel" | "spin" | "knife" | "bridge"): boolean;
   } | null>(null);
+  /** The Skeleton palette's operations, bound by the viewport effect (it owns the picked joints). */
+  const skeletonCommandsRef = useRef<{ run(op: SkeletonOp): boolean } | null>(null);
+  /** Joints picked on the selected Skeleton node, mirrored out of the effect for its palette. */
+  const [skeletonSelection, setSkeletonSelection] = useState<number[]>([]);
   const editMeshPaintDragRef = useRef<boolean>(false);
   const [editMeshPaintCursor, setEditMeshPaintCursor] = useState<{ x: number; y: number } | null>(null);
   const [editMeshLoopCuts, setEditMeshLoopCuts] = useState<number>(1);
@@ -1746,6 +1754,7 @@ export function Viewport({
     const curveHandles = createCurvePointHandles();
     let curvePointsNodeId: string | null = null;
     let selectedPointIndices = new Set<number>();
+    let lastSkeletonSelection = "";
     let isMarqueeDragging = false;
     let marqueeStartPos: { x: number; y: number } | null = null;
 
@@ -1768,6 +1777,8 @@ export function Viewport({
     // vertex buffer, which is a scale curve handles' one-Mesh-per-point
     // design cannot survive (see pointCloudHandles.ts).
     const pointsSelectionHandles = createPointCloudHandles();
+    // The selected Skin node's joints: dots to click, one at a time, to edit how that joint pulls on the mesh.
+    const skinJointHandles = createPointCloudHandles();
     let pointsSelectionNodeId: string | null = null;
     let selectedPointsSelectionIndices = new Set<number>();
 
@@ -2119,6 +2130,7 @@ export function Viewport({
     if (!outputMode) {
       editorUiScene.add(curveHandles.group);
       editorUiScene.add(pointsSelectionHandles.group);
+      editorUiScene.add(skinJointHandles.group);
       editorUiScene.add(pointsInfluenceHandles.group);
       editorUiScene.add(pivotHandle.group);
       editorUiScene.add(sliceProxy);
@@ -2208,6 +2220,22 @@ export function Viewport({
       return tagName === "input" || tagName === "textarea" || (el as HTMLElement).isContentEditable;
     }
 
+    /** A Skeleton palette operation (or its A / D key) on the joints picked now. One result, one undo step. */
+    function runSkeletonOp(op: SkeletonOp): boolean {
+      const node = graphRef.current.nodes.find((n) => n.id === curvePointsNodeId);
+      if (!node || node.type !== SKELETON_NODE_TYPE || !onTransformChangeRef.current) return false;
+      const result = skeletonOp(op, node.params, Array.from(selectedPointIndices));
+      if (!result) return false;
+      if (result.params) {
+        // One discrete edit, one undo step (a drag records its own on start).
+        onTransformStartRef.current?.();
+        onTransformChangeRef.current(node.id, result.params);
+      }
+      selectedPointIndices = new Set(result.selection);
+      return true;
+    }
+    skeletonCommandsRef.current = { run: runSkeletonOp };
+
     /**
      * Add or remove a control point on the curve whose handles are showing —
      * the only way to change how many points a curve has, since `pointsList`
@@ -2218,6 +2246,8 @@ export function Viewport({
       if (selectedPointIndices.size === 0 || !curvePointsNodeId) return false;
       const node = graphRef.current.nodes.find((n) => n.id === curvePointsNodeId);
       if (!node || !onTransformChangeRef.current) return false;
+      // A skeleton keeps parents with its joints: A adds a child, D deletes.
+      if (node.type === SKELETON_NODE_TYPE) return runSkeletonOp(operation === "insert" ? "add" : "delete");
       // Fixed topology: every pointsList entry has to keep lining up with the
       // source mesh's own vertex index for writePointsToMesh's write-back to
       // mean anything — unlike a curve, there is no legal insert/remove here.
@@ -5078,6 +5108,15 @@ export function Viewport({
         }
       }
 
+      // A Skin node's joints, same reason: they sit inside the mesh they weigh.
+      if (skinJointHandles.count() > 0) {
+        const pickedJoint = skinJointHandles.pick(ndc, camera, rect.width, rect.height);
+        const skinNodeId = selectedNodeIdRef.current;
+        if (pickedJoint !== null && skinNodeId && onTransformChangeRef.current) {
+          onTransformChangeRef.current(skinNodeId, { selectedJoint: pickedJoint, showWeights: true } as TransformPatch);
+          return;
+        }
+      }
       // Curve control points win over whatever is behind them — a handle sits
       // on (or inside) the very mesh it shapes, so a raycast against the scene
       // would swallow every click meant for one. tick() does the actual gizmo
@@ -5950,7 +5989,8 @@ export function Viewport({
         );
       }
 
-      if (curveTarget && curveNode && curveNode.type !== EDIT_MESH_POINTS_NODE.type && curvePoints.length >= 2 && !overMeshPointsCap) {
+      const isSkeletonNode = curveNode?.type === SKELETON_NODE_TYPE;
+      if (curveTarget && curveNode && curveNode.type !== EDIT_MESH_POINTS_NODE.type && curvePoints.length >= (isSkeletonNode ? 1 : 2) && !overMeshPointsCap) {
         if (curvePointsNodeId !== curveNode.id) {
           curvePointsNodeId = curveNode.id;
           selectedPointIndices.clear();
@@ -5979,12 +6019,45 @@ export function Viewport({
         // (see curve.ts), so skip the straight control-polygon line here. A
         // mesh's vertex-buffer order isn't a path either — a line through it
         // would zigzag across the mesh rather than trace anything meaningful.
-        const hideStraightLine = isLatticeNode || curveNode?.type === "curve/from_points" || isEditMeshPointsNode || isIkControlNode(curveNode);
+        const hideStraightLine = isLatticeNode || curveNode?.type === "curve/from_points" || isEditMeshPointsNode || isIkControlNode(curveNode) || isSkeletonNode;
         curveHandles.sync(curvePoints, spaceMatrix, selectedPointIndices, frozenIndices, !hideStraightLine, camera, host.clientHeight);
+        if (isSkeletonNode) {
+          // The palette follows what is picked.
+          const signature = Array.from(selectedPointIndices).join(",");
+          if (signature !== lastSkeletonSelection) {
+            lastSkeletonSelection = signature;
+            setSkeletonSelection(Array.from(selectedPointIndices));
+          }
+        }
       } else if (curveHandles.count() > 0) {
         curveHandles.clear();
         curvePointsNodeId = null;
         selectedPointIndices.clear();
+      }
+      if (!isSkeletonNode && lastSkeletonSelection !== "") {
+        lastSkeletonSelection = "";
+        setSkeletonSelection([]);
+      }
+
+      // A Skin node's joints, where its rig stands now: dots to click to pick
+      // the joint whose influence the Skin palette edits. The weight overlay
+      // belongs to that editing, so it shows only while the node is selected.
+      const skinSelected = !outputMode
+        ? graphRef.current.nodes.find((n) => n.id === selectedNodeIdRef.current && n.type === SKIN_NODE.type)
+        : undefined;
+      for (const node of graphRef.current.nodes) {
+        if (node.type !== SKIN_NODE.type) continue;
+        const skinned = results.get(node.id)?.geometry;
+        if (!(skinned instanceof THREE.Object3D)) continue;
+        skinned.traverse((child) => {
+          if (child.userData?.skinHeat) child.visible = node.id === skinSelected?.id;
+        });
+      }
+      const skinEdit = skinSelected ? (results.get(skinSelected.id)?.geometry as THREE.Object3D | undefined)?.userData?.skinEdit : undefined;
+      if (skinSelected && skinEdit && Array.isArray(skinEdit.joints) && skinEdit.joints.length > 0) {
+        skinJointHandles.sync(skinEdit.joints, new THREE.Matrix4(), skinEdit.selected >= 0 ? [skinEdit.selected] : null);
+      } else if (skinJointHandles.count() > 0) {
+        skinJointHandles.clear();
       }
 
       // Points Selection handles — same rendering/hit-testing machinery as
@@ -7178,6 +7251,8 @@ export function Viewport({
       elevationHUD.dispose();
       curveHandles.clear();
       pointsSelectionHandles.clear();
+      skinJointHandles.clear();
+      skeletonCommandsRef.current = null;
       pointsInfluenceHandles.clear();
       pivotHandle.clear();
       terrainBrushGizmo.removeFromParent();
@@ -8532,6 +8607,35 @@ export function Viewport({
             </>
           );
         })()}
+      {/* Rig palettes: building a Skeleton, and editing how each joint pulls on a Skin's mesh */}
+      {!outputMode &&
+        !elevationView &&
+        selectedNodeId &&
+        (() => {
+          const rigNode = graph.nodes.find((n) => n.id === selectedNodeId && (n.type === SKELETON_NODE_TYPE || n.type === SKIN_NODE.type));
+          if (!rigNode) return null;
+          if (rigNode.type === SKELETON_NODE_TYPE) {
+            return (
+              <SkeletonHud
+                node={rigNode}
+                selection={skeletonSelection}
+                maxRows={hudToolMaxRows}
+                left={hudToolColumnLeft}
+                onOp={(op) => skeletonCommandsRef.current?.run(op)}
+                onParams={(params, nodeId) => onParamChange?.(params, nodeId)}
+              />
+            );
+          }
+          const published = (latestResultsRef.current?.get(rigNode.id)?.geometry as THREE.Object3D | undefined)?.userData?.skinEdit;
+          return (
+            <SkinHud
+              node={rigNode}
+              joints={published ? { names: published.names, count: published.joints.length } : null}
+              onParams={(params, nodeId) => onParamChange?.(params, nodeId)}
+            />
+          );
+        })()}
+
       {/* Edit Mesh Floating Toolbar */}
       {!outputMode &&
         !elevationView &&

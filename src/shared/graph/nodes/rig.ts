@@ -22,7 +22,7 @@ import { createSkeletonView, SkeletonView } from "../ik/skeletonView";
 import { createGait, GAIT_DEFAULTS, GaitParams, GaitState, polypedeNeighbors, stepGait } from "../ik/polypedeGait";
 import { boneLengths, IkRig } from "../ik/fabrik";
 import { publishRig } from "../ik/skinning";
-import { bipedStyle, idleSwayOffset } from "../ik/bipedStyle";
+import { bipedStyle, idleSwayOffset, polypedeStyle } from "../ik/bipedStyle";
 
 /**
  * Rig nodes: FABRIK inverse kinematics on two ready-made skeletons — a human
@@ -49,7 +49,7 @@ function viewFor(nodeId: string): SkeletonView {
  * Matrix — except while the viewport gizmo is dragging it, when the group
  * already carries the dragged pose and the graph must not fight it.
  */
-function placeGroup(group: THREE.Group, inputs: Record<string, unknown>, params: Record<string, unknown>, nodeId: string, liveEditNodeId?: string | null) {
+export function placeGroup(group: THREE.Group, inputs: Record<string, unknown>, params: Record<string, unknown>, nodeId: string, liveEditNodeId?: string | null) {
   if (nodeId !== liveEditNodeId) {
     group.matrix.copy(composeNativeMatrix(inputs.matrix, params.location, params.rotation, params.scale, params));
   }
@@ -63,7 +63,7 @@ function bonesOf(rig: IkRig): [number, number][] {
 }
 
 /** World matrix per bone: at the parent joint, +Y down the bone, unit scale. */
-function boneMatrices(rig: IkRig, world: THREE.Vector3[]): THREE.Matrix4[] {
+export function boneMatrices(rig: IkRig, world: THREE.Vector3[]): THREE.Matrix4[] {
   const up = new THREE.Vector3(0, 1, 0);
   return bonesOf(rig).map(([a, b]) => {
     const dir = world[b].clone().sub(world[a]);
@@ -72,7 +72,7 @@ function boneMatrices(rig: IkRig, world: THREE.Vector3[]): THREE.Matrix4[] {
   });
 }
 
-const TRANSFORM_DEFAULTS = {
+export const TRANSFORM_DEFAULTS = {
   visible: 1,
   location: new THREE.Vector3(0, 0, 0),
   rotation: new THREE.Vector3(0, 0, 0),
@@ -83,7 +83,7 @@ const TRANSFORM_DEFAULTS = {
   inheritScale: "parent",
 };
 
-const DISPLAY_FIELDS: ParamFieldDef[] = [
+export const DISPLAY_FIELDS: ParamFieldDef[] = [
   { id: "boneThickness", label: "Bone Thickness", kind: "number", step: 0.005, group: "Display" },
   { id: "boneColor", label: "Bone Color", kind: "color", group: "Display" },
 ];
@@ -286,7 +286,7 @@ export const RIG_HUMAN_NODE: NodeDefinition = {
     if (bind) bindRests.set(ctx.nodeId, bind);
     else bindRests.delete(ctx.nodeId);
     rigData.bindRest = bind?.rest;
-    publishRig(group, parentsOf(skeleton.rig), bind?.rest ?? skeleton.rig.rest, positions, group.matrix);
+    publishRig(group, parentsOf(skeleton.rig), bind?.rest ?? skeleton.rig.rest, positions, group.matrix, skeleton.names);
 
     group.updateMatrixWorld(true);
     const world = positions.map((p) => p.clone().applyMatrix4(group.matrix));
@@ -409,7 +409,7 @@ export const RIG_POLYPEDE_NODE: NodeDefinition = {
     drawPolypede(view, skeleton, skeleton.rig.rest, thickness, color);
     const data: PolypedeRigData = { skeleton, key, thickness, color };
     view.group.userData.polypedeRig = data;
-    publishRig(view.group, parentsOf(skeleton.rig), skeleton.rig.rest, skeleton.rig.rest, view.group.matrix);
+    publishRig(view.group, parentsOf(skeleton.rig), skeleton.rig.rest, skeleton.rig.rest, view.group.matrix, skeleton.names);
     return { geometry: view.group, matrix: view.group.matrix.clone() };
   },
 };
@@ -455,6 +455,7 @@ export const RIG_POLYPEDE_MOTION_NODE: NodeDefinition = {
   inputs: [
     { id: "skeleton", label: "Skeleton", type: "geometry", owns: true },
     { id: "matrix", label: "Matrix", type: "matrix" },
+    { id: "speed", label: "Speed", type: "value" },
   ],
   outputs: [
     { id: "geometry", label: "Geometry", type: "geometry" },
@@ -466,12 +467,14 @@ export const RIG_POLYPEDE_MOTION_NODE: NodeDefinition = {
   defaultParams: {
     ...TRANSFORM_DEFAULTS,
     ...GAIT_DEFAULTS,
+    speed: 0.5,
     showCircles: false,
     iterations: 24,
     tolerance: 0.0001,
   },
   paramFields: [
     ...NATIVE_TRANSFORM_PARAM_FIELDS,
+    { id: "speed", label: "Speed (0 still · 0.5 walk · 1 run)", kind: "number", step: 0.05, group: "Gait" },
     { id: "stepRadius", label: "Step Radius", kind: "number", step: 0.02, group: "Gait" },
     { id: "stepDuration", label: "Step Duration (s)", kind: "number", step: 0.02, group: "Gait" },
     { id: "stepHeight", label: "Step Height", kind: "number", step: 0.02, group: "Gait" },
@@ -518,11 +521,14 @@ export const RIG_POLYPEDE_MOTION_NODE: NodeDefinition = {
     const dt = state.lastTime === null ? 0 : Math.max(0, Math.min(0.1, now - state.lastTime));
     state.lastTime = now;
 
+    // The parameters are the walk; Speed moves the gait from standing still (0) through it (0.5) to a scurry (1).
+    const style = polypedeStyle(numberInput(inputs.speed, params.speed, 0.5));
     const gaitParams: GaitParams = {
-      stepRadius: Math.max(0.001, numberInput(undefined, params.stepRadius, GAIT_DEFAULTS.stepRadius)),
-      stepDuration: Math.max(0.01, numberInput(undefined, params.stepDuration, GAIT_DEFAULTS.stepDuration)),
-      stepHeight: numberInput(undefined, params.stepHeight, GAIT_DEFAULTS.stepHeight),
+      stepRadius: Math.max(0.001, numberInput(undefined, params.stepRadius, GAIT_DEFAULTS.stepRadius) * style.stepRadius),
+      stepDuration: Math.max(0.01, numberInput(undefined, params.stepDuration, GAIT_DEFAULTS.stepDuration) * style.stepDuration),
+      stepHeight: numberInput(undefined, params.stepHeight, GAIT_DEFAULTS.stepHeight) * style.stepHeight,
       overshoot: numberInput(undefined, params.overshoot, GAIT_DEFAULTS.overshoot),
+      urgency: style.urgency,
     };
     const pairs = skeleton.legs.length / 2;
     const feetWorld = stepGait(state.gait, homes, up, polypedeNeighbors(pairs), gaitParams, dt);
@@ -537,7 +543,7 @@ export const RIG_POLYPEDE_MOTION_NODE: NodeDefinition = {
       ? skeleton.legs.map((leg) => ({ center: leg.restFoot, radius: localRadius }))
       : undefined;
     drawPolypede(view, skeleton, positions, data.thickness, data.color, circles);
-    publishRig(group, parentsOf(skeleton.rig), skeleton.rig.rest, positions, body);
+    publishRig(group, parentsOf(skeleton.rig), skeleton.rig.rest, positions, body, skeleton.names);
 
     group.updateMatrixWorld(true);
     const world = positions.map((p) => p.clone().applyMatrix4(body));
@@ -806,7 +812,7 @@ export const RIG_BIPED_MOTION_NODE: NodeDefinition = {
         : undefined,
     });
 
-    publishRig(group, parentsOf(skeleton.rig), data.bindRest ?? skeleton.rig.rest, positions, body);
+    publishRig(group, parentsOf(skeleton.rig), data.bindRest ?? skeleton.rig.rest, positions, body, skeleton.names);
     group.updateMatrixWorld(true);
     const world = positions.map((p) => p.clone().applyMatrix4(body));
     return { geometry: group, matrix: body, feet: feetWorld, joints: world, bones: boneMatrices(skeleton.rig, world) };

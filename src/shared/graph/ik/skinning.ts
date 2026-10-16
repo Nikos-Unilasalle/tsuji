@@ -25,10 +25,12 @@ export interface RigData {
   pose: THREE.Vector3[];
   /** Rig space -> world. */
   matrix: THREE.Matrix4;
+  /** A name per joint, for editing UIs. */
+  names?: string[];
 }
 
-export function publishRig(target: THREE.Object3D, parents: number[], rest: THREE.Vector3[], pose: THREE.Vector3[], matrix: THREE.Matrix4) {
-  const data: RigData = { parents, rest, pose, matrix: matrix.clone() };
+export function publishRig(target: THREE.Object3D, parents: number[], rest: THREE.Vector3[], pose: THREE.Vector3[], matrix: THREE.Matrix4, names?: string[]) {
+  const data: RigData = { parents, rest, pose, matrix: matrix.clone(), names };
   target.userData.rig = data;
 }
 
@@ -216,6 +218,12 @@ export interface WeightOptions {
   falloff: number;
   /** Passes of averaging a vertex's weights with its neighbours', softening the joints. */
   smooth: number;
+  /**
+   * Per bone (by joint index, missing = 1): how strongly it pulls, 0 switching it off, and how far it
+   * reaches, 2 meaning twice as far.
+   */
+  strength?: ArrayLike<number | undefined>;
+  radius?: ArrayLike<number | undefined>;
 }
 
 /** Bones kept per vertex while smoothing: enough to blend across a joint without a table of every bone. */
@@ -331,6 +339,15 @@ export function computeSkinWeights(positions: ArrayLike<number>, index: ArrayLik
     len[b] = bone.length;
   });
   const m = frame.elements;
+  const strengths = new Float64Array(boneCount);
+  const reach2 = new Float64Array(boneCount);
+  for (let b = 0; b < boneCount; b++) {
+    const strength = Number(options.strength?.[bones[b].joint]);
+    const radius = Number(options.radius?.[bones[b].joint]);
+    strengths[b] = Number.isFinite(strength) ? Math.max(0, strength) : 1;
+    // Distance is divided by the radius: squared, and inverted here once so the loop only multiplies.
+    reach2[b] = Number.isFinite(radius) && radius > 0 ? 1 / (radius * radius) : 1;
+  }
 
   const keep = Math.min(boneCount, Math.max(Math.min(WORKING_BONES, influences + 2), influences));
   let idx = new Uint16Array(welds * keep);
@@ -356,9 +373,10 @@ export function computeSkinWeights(positions: ArrayLike<number>, index: ArrayLik
       const cx = ox - dx[b] * t;
       const cy = oy - dy[b] * t;
       const cz = oz - dz[b] * t;
-      const d2 = cx * cx + cy * cy + cz * cz;
+      // A wider reach counts as being nearer; a bone switched off is never nearest.
+      const d2 = (cx * cx + cy * cy + cz * cz) * reach2[b];
       dist2[b] = d2;
-      if (d2 < nearest) nearest = d2;
+      if (strengths[b] > 0 && d2 < nearest) nearest = d2;
     }
     const near = nearest + eps2;
     const o = w * keep;
@@ -367,6 +385,7 @@ export function computeSkinWeights(positions: ArrayLike<number>, index: ArrayLik
     // A bone weighing under a thousandth of the nearest is pruned anyway: skip its power.
     const farthest = near / negligible;
     for (let b = 0; b < boneCount; b++) {
+      if (strengths[b] <= 0) continue;
       const d2 = dist2[b] + eps2;
       if (d2 > farthest) continue;
       const r = near / d2;
@@ -377,6 +396,7 @@ export function computeSkinWeights(positions: ArrayLike<number>, index: ArrayLik
       } else {
         value = Math.pow(r, half);
       }
+      value *= strengths[b];
       if (filled === keep && value <= wt[o + keep - 1]) continue;
       let slot = filled < keep ? filled++ : keep - 1;
       while (slot > 0 && wt[o + slot - 1] < value) {

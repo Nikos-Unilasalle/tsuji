@@ -589,6 +589,11 @@ export const DEMO_CATALOG: DemoCategory[] = [
         description: "A human walking an elliptical path: stepping feet, swinging arms, bobbing hips (press Play).",
       },
       {
+        file: "demo_rig_skeleton.tsuji",
+        label: "Build Your Own Rig",
+        description: "A Skeleton of four joints skinned to a tube: select the Skeleton and drag, add (A) or delete (D) joints; select the Skin and click a joint ball to tune its influence.",
+      },
+      {
         file: "demo_rig_skin.tsuji",
         label: "Skinned Biped",
         description: "A procedural body bound to the walking skeleton by Skin: the mesh bends at elbows and knees as the rig moves (press Play).",

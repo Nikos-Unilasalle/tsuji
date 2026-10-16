@@ -151,6 +151,7 @@ import { UV_UNWRAP_NODE } from "./uvUnwrap";
 import { VISUAL_SLICE_NODE, CLIP_BOX_NODE } from "./visualSlice";
 import { RIG_NODES } from "./rig";
 import { SKIN_NODE } from "./skin";
+import { RIG_SKELETON_NODE } from "./skeleton";
 import { WIGGLE_NODE, WIGGLE_NUMBER_NODE, WIGGLE_VECTOR_NODE } from "./wiggle";
 import { MATERIAL_NODE, MATERIAL_SHADOW_CATCHER_NODE } from "./material";
 import { MATERIAL_WORN_NODE, MATERIAL_WORN_POINTS_NODE } from "./materialWorn";
@@ -481,6 +482,7 @@ export const STARTER_NODES = [
   WIGGLE_NUMBER_NODE,
   WIGGLE_VECTOR_NODE,
   ...RIG_NODES,
+  RIG_SKELETON_NODE,
   SKIN_NODE,
   MATERIAL_NODE,
   MATERIAL_SHADOW_CATCHER_NODE,

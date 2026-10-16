@@ -56,6 +56,8 @@ interface BoundMesh {
   baseNormals?: Float32Array | null;
   // GPU skinning
   gpuBones?: THREE.Bone[];
+  /** Weight overlay for the selected joint, drawn on top of the skinned mesh while Show Weights is on. */
+  heat?: { mesh: THREE.Mesh; joint: number; version: string };
 }
 
 interface SkinState {
@@ -69,11 +71,27 @@ interface SkinState {
   /** Rest joints taken from the live pose, for rigs given as a plain Joints list. */
   snapshot?: THREE.Vector3[];
   snapshotKey?: string;
+  /** The rig object this node hid, to show it again when it is switched back or the node goes. */
+  hiddenRig?: THREE.Object3D;
+}
+
+function removeHeat(bound: BoundMesh) {
+  if (!bound.heat) return;
+  bound.heat.mesh.removeFromParent();
+  bound.heat.mesh.geometry.dispose();
+  (bound.heat.mesh.material as THREE.Material).dispose();
+  bound.heat = undefined;
+}
+
+function showRigAgain(state: SkinState) {
+  if (state.hiddenRig) state.hiddenRig.visible = true;
+  state.hiddenRig = undefined;
 }
 
 function disposeState(state: SkinState) {
   // Geometries are this node's own clones; materials belong to upstream nodes.
   state.meshes?.forEach((bound) => {
+    removeHeat(bound);
     bound.output.geometry.dispose();
     if (bound.output instanceof THREE.SkinnedMesh) bound.output.skeleton.dispose();
   });
@@ -82,7 +100,10 @@ function disposeState(state: SkinState) {
   state.key = undefined;
 }
 
-const skinStates = createNodeCache<SkinState>(disposeState);
+const skinStates = createNodeCache<SkinState>((state) => {
+  showRigAgain(state);
+  disposeState(state);
+});
 
 interface ResolvedRig {
   parents: number[];
@@ -92,6 +113,7 @@ interface ResolvedRig {
   matrix: THREE.Matrix4;
   /** What rest joints are in, for the cache key. */
   restKey: string;
+  names?: string[];
 }
 
 const flatten = (points: THREE.Vector3[]) => points.map((p) => `${Math.round(p.x * 1e6)},${Math.round(p.y * 1e6)},${Math.round(p.z * 1e6)}`).join(";");
@@ -107,7 +129,7 @@ function resolveRig(inputs: Record<string, unknown>, state: SkinState): Resolved
       restKey = flatten(data.rest);
       restKeys.set(data.rest, restKey);
     }
-    return { parents: data.parents, rest: data.rest, pose: data.pose, matrix: data.matrix, restKey };
+    return { parents: data.parents, rest: data.rest, pose: data.pose, matrix: data.matrix, restKey, names: data.names };
   }
 
   if (!Array.isArray(inputs.joints) || inputs.joints.length === 0) return null;
@@ -130,6 +152,83 @@ function resolveRig(inputs: Record<string, unknown>, state: SkinState): Resolved
     rest = state.snapshot;
   }
   return { parents, rest, pose, matrix: new THREE.Matrix4(), restKey: flatten(rest) };
+}
+
+/** Blue (none) through green to red (all): how much of a vertex follows the joint. */
+function heatColor(w: number, out: Float32Array, at: number) {
+  const t = Math.max(0, Math.min(1, w));
+  out[at] = Math.min(1, Math.max(0, (t - 0.5) * 3));
+  out[at + 1] = t < 0.5 ? t * 2 : Math.max(0, 1 - (t - 0.5) * 1.6);
+  out[at + 2] = Math.max(0, 1 - t * 2.4);
+}
+
+/**
+ * The weight overlay: the same skinned geometry (positions shared, so it deforms with the mesh,
+ * on the CPU or on the GPU's skeleton) painted by how much each vertex follows `joint`.
+ * `joint` -1 removes it.
+ */
+function syncHeat(meshes: BoundMesh[], joint: number, version: string) {
+  for (const bound of meshes) {
+    if (joint < 0) {
+      removeHeat(bound);
+      continue;
+    }
+    if (bound.heat && bound.heat.joint === joint && bound.heat.version === version) continue;
+    removeHeat(bound);
+    const source = bound.output.geometry;
+    const count = source.attributes.position.count;
+    const colors = new Float32Array(count * 3);
+    const { influences, indices, weights } = bound.skin;
+    for (let v = 0; v < count; v++) {
+      let w = 0;
+      for (let k = 0; k < influences; k++) if (indices[v * influences + k] === joint) w += weights[v * influences + k];
+      heatColor(w, colors, v * 3);
+    }
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute("position", source.attributes.position);
+    if (source.index) geometry.setIndex(source.index);
+    if (source.attributes.skinIndex) geometry.setAttribute("skinIndex", source.attributes.skinIndex);
+    if (source.attributes.skinWeight) geometry.setAttribute("skinWeight", source.attributes.skinWeight);
+    geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+    const material = new THREE.MeshBasicMaterial({ vertexColors: true, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+    const skinned = bound.output instanceof THREE.SkinnedMesh ? bound.output : null;
+    let mesh: THREE.Mesh;
+    if (skinned) {
+      const overlay = new THREE.SkinnedMesh(geometry, material);
+      overlay.bindMode = THREE.DetachedBindMode;
+      overlay.bind(skinned.skeleton, new THREE.Matrix4());
+      mesh = overlay;
+    } else {
+      mesh = new THREE.Mesh(geometry, material);
+    }
+    mesh.frustumCulled = false;
+    mesh.renderOrder = 2;
+    mesh.userData.skinHeat = true;
+    bound.output.add(mesh);
+    bound.heat = { mesh, joint, version };
+  }
+}
+
+/** A stored per-joint list: numbers where set, undefined where the joint has no setting of its own. */
+function numberList(raw: unknown): (number | undefined)[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.map((v) => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? undefined : Number(v)));
+}
+
+/**
+ * Show Rig off hides the rig object wired into Rig, and puts it back when the
+ * option is switched on again, another rig is wired, or this node goes.
+ */
+function hideRig(state: SkinState, rigObject: unknown, show: boolean) {
+  const target = rigObject instanceof THREE.Object3D ? rigObject : undefined;
+  if (state.hiddenRig && state.hiddenRig !== target) showRigAgain(state);
+  if (!target) return;
+  if (show) {
+    if (state.hiddenRig === target) showRigAgain(state);
+    return;
+  }
+  target.visible = false;
+  state.hiddenRig = target;
 }
 
 function frameOf(raw: THREE.Object3D, mesh: THREE.Mesh, matrix: unknown): THREE.Matrix4 {
@@ -213,12 +312,20 @@ export const SKIN_NODE: NodeDefinition = {
     smooth: 2,
     stretch: false,
     rebind: false,
+    showRig: true,
+    showWeights: false,
+    selectedJoint: -1,
+    // Per joint, by index, missing = 1: how strongly it pulls (0 switches it off) and how far it reaches.
+    jointStrength: [],
+    jointRadius: [],
   },
   paramFields: [
     { id: "amount", label: "Amount", kind: "number", step: 0.05, group: "Skin" },
     { id: "bindSpace", label: "Bind Space", kind: "select", options: ["Rig", "World"], group: "Skin" },
     { id: "mode", label: "Skinning", kind: "select", options: ["Auto", "CPU", "GPU"], group: "Skin" },
     { id: "stretch", label: "Stretch Bones", kind: "boolean", group: "Skin" },
+    { id: "showRig", label: "Show Rig", kind: "boolean", group: "Skin" },
+    { id: "showWeights", label: "Show Weights of Joint", kind: "boolean", group: "Weights" },
     { id: "influences", label: "Max Influences", kind: "number", step: 1, group: "Weights" },
     { id: "falloff", label: "Falloff", kind: "number", step: 0.5, group: "Weights" },
     { id: "smooth", label: "Smooth Weights", kind: "number", step: 1, group: "Weights" },
@@ -243,6 +350,7 @@ export const SKIN_NODE: NodeDefinition = {
       skinStates.set(ctx.nodeId, state);
     }
     const rig = resolveRig(inputs, state);
+    hideRig(state, inputs.rig, toBoolean(params.showRig ?? true));
     raw.updateMatrixWorld(true);
     const frames = sources.map((mesh) => frameOf(raw, mesh, inputs.matrix));
     if (!rig || rig.rest.length === 0) return { geometry: raw, matrix: frames[0] };
@@ -256,12 +364,15 @@ export const SKIN_NODE: NodeDefinition = {
     const influences = Math.max(1, Math.min(8, Math.round(numberInput(undefined, params.influences, 4))));
     const falloff = Math.max(0.1, numberInput(undefined, params.falloff, 4));
     const smooth = Math.max(0, Math.min(20, Math.round(numberInput(undefined, params.smooth, 2))));
+    const strength = numberList(params.jointStrength);
+    const radius = numberList(params.jointRadius);
 
     const key = [
       sources.map((m) => `${m.geometry.uuid}:${m.geometry.attributes.position?.count ?? 0}:${m.geometry.getIndex()?.count ?? -1}`).join("|"),
       rig.parents.join(","),
       rig.restKey,
       `${rigSpace}|${mode}|${influences}|${falloff}|${smooth}|${toBoolean(params.rebind)}`,
+      JSON.stringify([strength, radius]),
     ].join("#");
 
     if (state.key !== key || !state.meshes || !state.bones) {
@@ -274,7 +385,7 @@ export const SKIN_NODE: NodeDefinition = {
         const geometry = source.geometry.clone();
         const position = geometry.attributes.position as THREE.BufferAttribute;
         const normal = geometry.attributes.normal as THREE.BufferAttribute | undefined;
-        const skin = computeSkinWeights(position.array, source.geometry.getIndex()?.array ?? null, frames[i], bones, { influences, falloff, smooth });
+        const skin = computeSkinWeights(position.array, source.geometry.getIndex()?.array ?? null, frames[i], bones, { influences, falloff, smooth, strength, radius });
         const { output, gpuBones } = makeOutput(source, geometry, mode, skin, bones.length);
         output.castShadow = source.castShadow;
         output.receiveShadow = source.receiveShadow;
@@ -379,7 +490,40 @@ export const SKIN_NODE: NodeDefinition = {
       target.matrix.decompose(target.position, target.quaternion, target.scale);
       target.matrixWorldNeedsUpdate = true;
     });
-    state.object.userData = { ...raw.userData, nodeId: ctx.nodeId };
+
+    // Joints the viewport lets one pick to edit their influence, where the rig stands now.
+    const worldJoints = rig.pose.map((p) => p.clone().applyMatrix4(rig.matrix));
+    const selected = Math.round(numberInput(undefined, params.selectedJoint, -1));
+    syncHeat(meshes, toBoolean(params.showWeights) && !ctx.capturing && selected >= 0 && selected < rig.pose.length ? selected : -1, state.key!);
+    state.object.userData = {
+      ...raw.userData,
+      nodeId: ctx.nodeId,
+      skinEdit: { joints: worldJoints, names: rig.names, parents: rig.parents, selected },
+    };
     return { geometry: state.object, matrix: single ? meshes[0].output.matrix : place(frames[0]) };
   },
 };
+
+/** What a joint's influence is set to now (1 and 1 when untouched). */
+export function readJointInfluence(params: Record<string, unknown>, joint: number): { strength: number; radius: number } {
+  return { strength: numberList(params.jointStrength)[joint] ?? 1, radius: numberList(params.jointRadius)[joint] ?? 1 };
+}
+
+/**
+ * The params to write to change one joint's influence, the others left as
+ * they were. A value back at 1 is stored as unset, so an untouched joint
+ * leaves nothing in the saved file.
+ */
+export function withJointInfluence(params: Record<string, unknown>, joint: number, change: { strength?: number; radius?: number }): Record<string, unknown> {
+  const put = (raw: unknown, value: number | undefined) => {
+    const list: (number | null)[] = numberList(raw).map((v) => v ?? null);
+    while (list.length <= joint) list.push(null);
+    if (value !== undefined) list[joint] = Math.abs(value - 1) < 1e-9 ? null : value;
+    while (list.length > 0 && list[list.length - 1] === null) list.pop();
+    return list;
+  };
+  return {
+    ...(change.strength !== undefined ? { jointStrength: put(params.jointStrength, change.strength) } : {}),
+    ...(change.radius !== undefined ? { jointRadius: put(params.jointRadius, change.radius) } : {}),
+  };
+}

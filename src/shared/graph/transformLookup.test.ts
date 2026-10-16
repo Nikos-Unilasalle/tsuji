@@ -251,6 +251,7 @@ describe("GIZMO_SELECTABLE_TYPES", () => {
       "rig/polypede",
       "rig/polypede-motion",
       "rig/biped-motion",
+      "rig/skeleton",
       "structure/group",
     ]);
   });

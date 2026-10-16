@@ -82,6 +82,7 @@ export const GIZMO_SELECTABLE_TYPES = [
   "rig/polypede",
   "rig/polypede-motion",
   "rig/biped-motion",
+  "rig/skeleton",
   // A group, but only while it renders its own container — see the guard in
   // resolveGizmoTarget, which is the part a flat type list cannot express.
   GROUP_TYPE,

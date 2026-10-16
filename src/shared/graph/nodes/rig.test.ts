@@ -160,3 +160,63 @@ describe("Biped Motion speed", () => {
     expect(run.some((o) => (o.feet as THREE.Vector3[]).every(airborne))).toBe(true);
   });
 });
+
+describe("Polypede Motion speed", () => {
+  const skeleton = RIG_POLYPEDE_NODE.evaluate({}, { ...RIG_POLYPEDE_NODE.defaultParams }, ctx("pspeed-skel")).geometry;
+  const play = (params: Record<string, unknown>, metresPerSecond: number, frames: number, id: string) => {
+    const outs: Record<string, unknown>[] = [];
+    for (let frame = 0; frame <= frames; frame++) {
+      outs.push(
+        RIG_POLYPEDE_MOTION_NODE.evaluate(
+          { skeleton },
+          { ...params, location: new THREE.Vector3(0, 0, (frame / 60) * metresPerSecond) },
+          ctx(id, { time: frame / 60, capturing: true, sessionId: "test" }),
+        ),
+      );
+    }
+    return outs;
+  };
+  const lifted = (outs: Record<string, unknown>[]) => outs.reduce((n, o) => n + (o.feet as THREE.Vector3[]).filter((f) => f.y > 0.01).length, 0);
+
+  it("at 0.5 is the walk it always was", () => {
+    const { speed: _speed, ...legacy } = RIG_POLYPEDE_MOTION_NODE.defaultParams;
+    const a = play(legacy, 0.6, 150, "pspeed-legacy").pop()!;
+    const b = play({ ...legacy, speed: 0.5 }, 0.6, 150, "pspeed-half").pop()!;
+    (a.joints as THREE.Vector3[]).forEach((j, i) => expect(j.distanceTo((b.joints as THREE.Vector3[])[i])).toBeLessThan(1e-9));
+  });
+
+  it("at 0 keeps its feet planted where a walk would step", () => {
+    const base = { ...RIG_POLYPEDE_MOTION_NODE.defaultParams };
+    expect(lifted(play({ ...base, speed: 0.5 }, 0.12, 240, "pspeed-walk"))).toBeGreaterThan(0);
+    expect(lifted(play({ ...base, speed: 0 }, 0.12, 240, "pspeed-still"))).toBe(0);
+  });
+
+  it("at 1 takes quicker, longer steps than at 0.5", () => {
+    const base = { ...RIG_POLYPEDE_MOTION_NODE.defaultParams };
+    // Frames a foot stays in the air per step, and how far it lands from where it left.
+    const stats = (outs: Record<string, unknown>[]) => {
+      let airFrames = 0;
+      let steps = 0;
+      let reach = 0;
+      const was: boolean[] = [];
+      const from: THREE.Vector3[] = [];
+      for (const o of outs) {
+        (o.feet as THREE.Vector3[]).forEach((f, i) => {
+          const up = f.y > 0.01;
+          if (up) airFrames++;
+          if (up && !was[i]) {
+            steps++;
+            from[i] = f.clone();
+          }
+          if (!up && was[i] && from[i]) reach += f.distanceTo(from[i]);
+          was[i] = up;
+        });
+      }
+      return { air: airFrames / steps, reach: reach / steps };
+    };
+    const walk = stats(play({ ...base, speed: 0.5 }, 1.5, 300, "pspeed-walk2"));
+    const run = stats(play({ ...base, speed: 1 }, 1.5, 300, "pspeed-run"));
+    expect(run.air).toBeLessThan(walk.air);
+    expect(run.reach).toBeGreaterThan(walk.reach);
+  });
+});
