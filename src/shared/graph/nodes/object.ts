@@ -1766,18 +1766,33 @@ function cylinderMesh(nodeId: string): THREE.Mesh {
   return mesh;
 }
 
+/**
+ * Rings along the height. One is the plain cylinder; more give a bend, a twist
+ * or a rig's bones something between the two ends to move.
+ */
+const CYLINDER_HEIGHT_SEGMENTS_FIELD: ParamFieldDef = { id: "heightSegments", label: "Height Segments", kind: "number", step: 1 };
+
 /** 3D Cylinder geometry primitive with UV texture mapping and opacity. */
 export const OBJECT_CYLINDER_NODE: NodeDefinition = {
   type: "object/cylinder",
   label: "Cylinder",
   category: "object",
-  inputs: [...COMMON_PRIMITIVE_INPUTS],
+  inputs: [...COMMON_PRIMITIVE_INPUTS, { id: "heightSegments", label: "Height Segments", type: "value" }],
   outputs: [...COMMON_PRIMITIVE_OUTPUTS],
-  defaultParams: { ...COMMON_DEFAULT_PARAMS },
-  paramFields: buildPrimitiveDynamicParamFields()(),
-  dynamicParamFields: buildPrimitiveDynamicParamFields(),
+  defaultParams: { ...COMMON_DEFAULT_PARAMS, heightSegments: 1 },
+  paramFields: buildPrimitiveDynamicParamFields([CYLINDER_HEIGHT_SEGMENTS_FIELD])(),
+  dynamicParamFields: buildPrimitiveDynamicParamFields([CYLINDER_HEIGHT_SEGMENTS_FIELD]),
   evaluate: (inputs, params, ctx) => {
     const mesh = cylinderMesh(ctx.nodeId);
+
+    const heightSegments = Math.max(1, Math.min(200, Math.round(numberInput(inputs.heightSegments, params.heightSegments, 1))));
+    const cache = mesh as THREE.Mesh & { _lastHeightSegments?: number };
+    // A fresh mesh already holds the one-ring cylinder.
+    if ((cache._lastHeightSegments ?? 1) !== heightSegments) {
+      cache._lastHeightSegments = heightSegments;
+      mesh.geometry.dispose();
+      mesh.geometry = new THREE.CylinderGeometry(0.5, 0.5, 1, 32, heightSegments);
+    }
 
     if (ctx.nodeId !== ctx.liveEditNodeId) {
       mesh.matrixAutoUpdate = false;

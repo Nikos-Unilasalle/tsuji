@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import * as THREE from "three";
 import { RIG_SKELETON_NODE } from "./skeleton";
 import { SKIN_NODE } from "./skin";
+import { OBJECT_CYLINDER_NODE } from "./object";
 import { EvalContext } from "../types";
 
 const ctx = (nodeId: string): EvalContext => ({ time: 0, step: 0, nodeId });
@@ -59,5 +60,22 @@ describe("Skeleton node", () => {
     const bent = RIG_SKELETON_NODE.evaluate({}, params({ ...arm, pointsList: [v(0, 0), v(0, 1), v(-1, 1)], mode: "Pose", restPoints: rest }), ctx("sk-skin")).geometry;
     const xs = Array.from(skin(bent).geometry.attributes.position.array as Float32Array).filter((_, i) => i % 3 === 0);
     expect(Math.min(...xs)).toBeLessThan(-0.7);
+  });
+
+  it("bends the demo's tube only because it has rings to bend", () => {
+    const rest = arm.pointsList.map((p) => p.clone());
+    const tube = (heightSegments: number, id: string) =>
+      OBJECT_CYLINDER_NODE.evaluate({}, { ...OBJECT_CYLINDER_NODE.defaultParams, heightSegments, location: v(0, 1, 0), scale: v(0.2, 2, 0.2) }, ctx(id)).geometry as THREE.Mesh;
+    const bentWidth = (mesh: THREE.Mesh, id: string) => {
+      const restRig = RIG_SKELETON_NODE.evaluate({}, params({ ...arm, mode: "Pose", restPoints: rest }), ctx(`${id}-rig`)).geometry;
+      const skin = (rig: unknown) => SKIN_NODE.evaluate({ geometry: mesh, rig }, { ...SKIN_NODE.defaultParams, mode: "CPU", bindSpace: "World" }, ctx(id)).geometry as THREE.Mesh;
+      skin(restRig);
+      const bent = RIG_SKELETON_NODE.evaluate({}, params({ ...arm, pointsList: [v(0, 0), v(0, 1), v(-1, 1)], mode: "Pose", restPoints: rest }), ctx(`${id}-rig`)).geometry;
+      const xs = Array.from(skin(bent).geometry.attributes.position.array as Float32Array).filter((_, i) => i % 3 === 0);
+      return Math.min(...xs);
+    };
+    // Two rings: top and bottom each follow one bone's end, the middle is all there is to bend.
+    expect(bentWidth(tube(40, "ring-40"), "ring-40")).toBeLessThan(-0.6);
+    expect(bentWidth(tube(1, "ring-1"), "ring-1")).toBeGreaterThan(bentWidth(tube(40, "ring-40b"), "ring-40b"));
   });
 });

@@ -401,3 +401,16 @@ describe("primitive pivot", () => {
   });
 });
 
+
+describe("Cylinder height segments", () => {
+  it("is the plain cylinder until asked for rings, and gains them without losing its shape", () => {
+    const ctx = { time: 0, step: 0, nodeId: "cyl-rings" };
+    const rows = (mesh: THREE.Mesh) => new Set(Array.from(mesh.geometry.attributes.position.array as Float32Array).filter((_, i) => i % 3 === 1).map((y) => y.toFixed(4))).size;
+    const plain = OBJECT_CYLINDER_NODE.evaluate({}, { ...OBJECT_CYLINDER_NODE.defaultParams }, ctx).geometry as THREE.Mesh;
+    expect(rows(plain)).toBe(2);
+    const rings = OBJECT_CYLINDER_NODE.evaluate({}, { ...OBJECT_CYLINDER_NODE.defaultParams, heightSegments: 10 }, ctx).geometry as THREE.Mesh;
+    expect(rows(rings)).toBe(11);
+    const xs = Array.from(rings.geometry.attributes.position.array as Float32Array).filter((_, i) => i % 3 === 0);
+    expect(Math.max(...xs)).toBeCloseTo(0.5, 5);
+  });
+});

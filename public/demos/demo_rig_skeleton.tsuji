@@ -268,7 +268,8 @@
               "z": 0.28
             },
             "color": 3108767,
-            "roughness": 0.5
+            "roughness": 0.5,
+            "heightSegments": 40
           }
         },
         {
