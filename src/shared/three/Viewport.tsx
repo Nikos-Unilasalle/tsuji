@@ -2376,6 +2376,14 @@ export function Viewport({
           onParamChangeRef.current?.("xray", activeEditMeshNode.params.xray !== true, activeEditMeshNode.id);
           return;
         }
+        const activePointsSelNode = graphRef.current.nodes.find(
+          (n) => n.id === selectedNodeIdRef.current && n.type === POINTS_SELECTION_NODE.type,
+        );
+        if (activePointsSelNode) {
+          e.preventDefault();
+          onParamChangeRef.current?.("xray", activePointsSelNode.params.xray !== true, activePointsSelNode.id);
+          return;
+        }
       }
 
       // Escape leaves Loop Cut before it touches the selection: the gizmo is
@@ -6268,11 +6276,20 @@ export function Viewport({
             pointsSelectionHandles.sync(selPoints, selMatrix, selectedPointsSelectionIndices);
             pointsSelectionSynced = { points: rawPoints, matrix: selMatrix.clone(), revision: pointsSelectionRevision };
           }
+          // Same occlusion as Points Influence below: the input's first mesh
+          // hides the far side from clicks and the marquee, outside X-ray.
+          const selSource = nodeResult?.geometry instanceof THREE.Object3D ? findFirstMesh(nodeResult.geometry) : null;
+          const selOccluder = selSource && selSource.geometry.attributes.position?.count === rawPoints.length ? selSource.geometry : null;
+          pointsSelectionHandles.setOccluder(selOccluder, renderer);
+          pointsSelectionHandles.setXray(pointsSelNode.params.xray === true);
+          const selScene = pointsSelectionHandles.occludes() ? scene : editorUiScene;
+          if (pointsSelectionHandles.group.parent !== selScene) selScene.add(pointsSelectionHandles.group);
         } else if (pointsSelectionHandles.count() > 0) {
           pointsSelectionHandles.clear();
         }
       } else if (pointsSelectionHandles.count() > 0) {
         pointsSelectionHandles.clear();
+        pointsSelectionHandles.setOccluder(null, null);
         pointsSelectionNodeId = null;
         selectedPointsSelectionIndices.clear();
         pointsSelectionSynced = { points: null, matrix: new THREE.Matrix4(), revision: -1 };
@@ -8052,6 +8069,35 @@ export function Viewport({
                 />
               )}
             </>
+          );
+        })()}
+      {/* Points Selection palette — only the X-Ray toggle, in the same
+          column Edit Mesh and Points Influence keep theirs in. */}
+      {!outputMode &&
+        !elevationView &&
+        selectedNodeId &&
+        (() => {
+          const selNode = graph.nodes.find((n) => n.id === selectedNodeId && n.type === POINTS_SELECTION_NODE.type);
+          if (!selNode) return null;
+          const xray = selNode.params.xray === true;
+          return (
+            <HudToolColumn maxRows={hudToolMaxRows} left={hudToolColumnLeft}>
+              <button
+                type="button"
+                className={`viewport-hud-button ${xray ? "viewport-hud-button-active" : ""}`}
+                onClick={() => onParamChange?.("xray", !xray, selNode.id)}
+                title={
+                  xray
+                    ? "X-Ray ON — clicks and the marquee reach the points behind the surface too (Shortcut: Alt+Z)"
+                    : "X-Ray OFF — clicks and the marquee only reach the points the camera sees (Shortcut: Alt+Z)"
+                }
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                  <rect x="4" y="4" width="11" height="11" rx="1" />
+                  <rect x="9" y="9" width="11" height="11" rx="1" strokeDasharray="2 2" />
+                </svg>
+              </button>
+            </HudToolColumn>
           );
         })()}
       {/* Gradient mode's live drag preview — a straight line from the

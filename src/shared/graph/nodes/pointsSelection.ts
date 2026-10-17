@@ -46,7 +46,12 @@ export const POINTS_SELECTION_NODE: NodeDefinition = {
   // viewport (see Viewport.tsx). No paramFields entry: exposing a raw index
   // array as a manually-edited number field would invite hand-typed
   // out-of-range indices for no real benefit.
-  defaultParams: { selectedIndices: [] as number[] },
+  defaultParams: {
+    selectedIndices: [] as number[],
+    // Off: clicks and the marquee only reach the points the camera sees, not
+    // the ones behind the surface. On: every point, as Edit Mesh's X-ray.
+    xray: false,
+  },
   paramFields: [],
   // Reads nothing but its inputs and params (ctx.nodeId only names errors):
   // on a still mesh it hands back the same lists, which lets the viewport
