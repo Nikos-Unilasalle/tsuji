@@ -9,15 +9,15 @@ export const POINTS_INFLUENCE_DISCRETE_LEVELS = [0.2, 0.4, 0.6, 0.8, 1.0];
 /**
  * Points Influence — like Points Selection, but graded: every point gets its
  * own 0-1 influence instead of a binary in/out, painted in the viewport
- * (see Viewport.tsx's pointsInfluenceHandles), all three gestures gated
- * behind Cmd/Ctrl+drag like every other viewport pick tool in this codebase
- * (curve marquee, Points Selection marquee) — a plain drag always stays
- * camera orbit, never hijacked by the active node's editing mode:
- * - Brush: Cmd+drag a stroke, influence falls off with distance from the
+ * (see Viewport.tsx's pointsInfluenceHandles) with the tool armed in its
+ * palette (PointsInfluenceHud). A drag that starts on the points uses the
+ * tool, one that starts off them orbits; Cmd forces the tool from anywhere
+ * and Shift erases for one stroke, as shortcuts:
+ * - Brush: drag a stroke, influence falls off with distance from the
  *   cursor, capped at whichever of the 5 preset levels is armed.
- * - Discrete: the same 5 levels, but a flat assign — Cmd-click or
- *   Cmd-marquee writes the armed level exactly, no falloff.
- * - Gradient: Cmd-drag a single straight line once; every point's influence
+ * - Discrete ("Assign" in the palette): the same 5 levels, but a flat
+ *   assign — a click or box writes the armed level exactly, no falloff.
+ * - Gradient: drag a single straight line once; every point's influence
  *   becomes its own projection onto that line (1 at the start, 0 at the
  *   end, linear in between) — a full-object dégradé in one stroke, e.g.
  *   top-to-bottom, independent of the 5 preset levels.

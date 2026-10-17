@@ -27,6 +27,7 @@ import { createPointCloudHandles } from "./pointCloudHandles";
 import { SKELETON_NODE_TYPE } from "../graph/nodes/skeleton";
 import { SKIN_NODE } from "../graph/nodes/skin";
 import { SkeletonHud, SkinHud } from "./RigHuds";
+import { PointsInfluenceHud, readPointsInfluenceMode } from "./PointsInfluenceHud";
 import { isRigNodeType, setInFront } from "./inFront";
 import { skeletonOp, SkeletonOp } from "./skeletonEditor";
 import { createSceneMembership, isSelfOrDescendantOf } from "./sceneMembership";
@@ -545,7 +546,7 @@ function influenceColor(v: number): number {
 }
 
 /** The 5 discrete-mode level colors, in the same order as POINTS_INFLUENCE_DISCRETE_LEVELS. */
-const DISCRETE_LEVEL_COLORS = POINTS_INFLUENCE_DISCRETE_LEVELS.map((v) => influenceColor(v));
+const DISCRETE_LEVEL_HEX = POINTS_INFLUENCE_DISCRETE_LEVELS.map((v) => `#${influenceColor(v).toString(16).padStart(6, "0")}`);
 
 /** Hands each mounted viewport its own evaluator session id. */
 let nextSessionOrdinal = 0;
@@ -1220,6 +1221,12 @@ export function Viewport({
   const [sculptInvert, setSculptInvert] = useState(false);
   const sculptInvertRef = useRef(false);
   sculptInvertRef.current = sculptInvert;
+  /** Points Influence palette's Erase toggle: Brush and Assign strokes lower influence instead of adding it (Shift does the same for one stroke). */
+  const [influenceErase, setInfluenceErase] = useState(false);
+  const influenceEraseRef = useRef(false);
+  influenceEraseRef.current = influenceErase;
+  /** The Brush tool's hover ring — positioned straight on the DOM, so following the pointer never re-renders the viewport. */
+  const influenceCursorRef = useRef<HTMLDivElement>(null);
   const isSculptingRef = useRef(false);
   const sculptWorkingMeshRef = useRef<SculptMeshData | null>(null);
   const sculptWorkingAdjacencyRef = useRef<number[][]>([]);
@@ -1903,13 +1910,13 @@ export function Viewport({
     // Points Influence editing — same generic point-cloud handles again, this
     // time colored as a heatmap of a graded 0-1 influence instead of a
     // binary selected/unselected. Three gestures write into the same
-    // `influences` param map, every one of them gated behind Cmd/Ctrl (a
-    // plain drag always stays camera orbit, same convention as curve/Points
-    // Selection marquee):
-    // - Brush: Cmd+drag paints continuously, falloff from the cursor, capped
-    //   at whichever of the 5 HUD levels is armed — see isBrushPainting.
-    // - Discrete: Cmd-click/marquee assigns the armed level flat, no falloff.
-    // - Gradient: one Cmd-drag sets a straight-line projection over every
+    // `influences` param map, with the tool armed in the node's palette
+    // (PointsInfluenceHud): a drag that starts on the points uses it, one
+    // that starts off them orbits (Cmd forces the tool, Shift erases):
+    // - Brush: a drag paints continuously, falloff from the cursor, capped
+    //   at whichever of the 5 levels is armed — see isBrushPainting.
+    // - Discrete (Assign): a click/box assigns the armed level flat, no falloff.
+    // - Gradient: one drag sets a straight-line projection over every
     //   point at once (1 at the start, 0 at the end) — see isGradientDragging.
     // Mutually exclusive with curve/Points Selection editing by the same
     // "only one node selected at a time" construction.
@@ -1921,6 +1928,13 @@ export function Viewport({
     let pointsInfluenceRevision = 0;
     /** A brush stroke has painted since the last commit (see markPointsInfluencePainted). */
     let pointsInfluencePending = false;
+    /**
+     * The node's `influences` object pointsInfluenceMap last matched — loaded
+     * from it, or written to it by flushPointsInfluence. Any other object
+     * there came from outside the viewport (the palette's Clear, undo) and is
+     * reloaded.
+     */
+    let pointsInfluenceLoaded: unknown = null;
     /** What the cloud was last synced from — unchanged points, matrix and revision skip the per-point resync. */
     let pointsInfluenceSynced: { points: unknown[] | null; matrix: THREE.Matrix4; revision: number } = {
       points: null,
@@ -3047,7 +3061,9 @@ export function Viewport({
     function flushPointsInfluence() {
       pointsInfluencePending = false;
       if (pointsInfluenceNodeId && onTransformChangeRef.current) {
-        onTransformChangeRef.current(pointsInfluenceNodeId, { influences: Object.fromEntries(pointsInfluenceMap) });
+        const influences = Object.fromEntries(pointsInfluenceMap);
+        pointsInfluenceLoaded = influences;
+        onTransformChangeRef.current(pointsInfluenceNodeId, { influences });
       }
     }
 
@@ -3068,6 +3084,39 @@ export function Viewport({
       if (painted.length > 0) {
         pointsInfluenceHandles.updateColors(painted, (idx) => influenceColor(pointsInfluenceMap.get(idx) ?? 0));
       }
+    }
+
+    /** The palette's Erase toggle, or Shift for one stroke. */
+    function isInfluenceErase(e: { shiftKey: boolean }): boolean {
+      return e.shiftKey || influenceEraseRef.current;
+    }
+
+    /** Whether a press lands on the Points Influence cloud (within the point pick radius) — where the palette's tool takes over from orbit. */
+    function isOverInfluencePoints(e: { clientX: number; clientY: number }): boolean {
+      const rect = renderer.domElement.getBoundingClientRect();
+      const ndc = new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1);
+      return pointsInfluenceHandles.pick(ndc, camera, rect.width, rect.height) !== null;
+    }
+
+    /** Moves the Brush tool's hover ring to the pointer, or hides it off the canvas and outside Brush. */
+    function updateInfluenceCursor(e: { clientX: number; clientY: number }) {
+      const el = influenceCursorRef.current;
+      if (!el) return;
+      const rect = renderer.domElement.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      const show =
+        pointsInfluenceHandles.count() > 0 && pointsInfluenceMode === "brush" && x >= 0 && y >= 0 && x <= rect.width && y <= rect.height;
+      if (!show || !host) {
+        el.style.display = "none";
+        return;
+      }
+      const hostRect = host.getBoundingClientRect();
+      const radius = Number(graphRef.current.nodes.find((n) => n.id === pointsInfluenceNodeId)?.params.brushRadius) || 40;
+      el.style.display = "block";
+      el.style.left = `${e.clientX - hostRect.left - radius}px`;
+      el.style.top = `${e.clientY - hostRect.top - radius}px`;
+      el.style.width = el.style.height = `${radius * 2}px`;
     }
 
     function getActiveInfluenceLevel(): number {
@@ -3099,7 +3148,7 @@ export function Viewport({
     }
 
     /**
-     * Gradient tool: a single straight Cmd-drag sets every point's influence
+     * Gradient tool: a single straight drag sets every point's influence
      * to its own projection onto that line — 1 at the start, 0 at the end,
      * linear in between — a full-object dégradé (e.g. top-to-bottom) in one
      * stroke. Unlike Brush this REPLACES every point's value, including ones
@@ -3997,22 +4046,27 @@ export function Viewport({
         return;
       }
 
-      // Every Points Influence gesture is gated behind Cmd/Ctrl, same as
-      // curve marquee and Points Selection marquee — a plain drag always
-      // stays camera orbit, never hijacked by whichever tool is armed.
-      if (isMarqueeModifier && infActive && pointsInfluenceMode === "brush") {
+      // The Points Influence palette's armed tool takes a left drag that
+      // starts on the points, as Sculpt does on its mesh; one that starts
+      // off them still orbits. Cmd forces the tool from anywhere — a Gradient
+      // or a box wider than the object starts outside it.
+      // The tool as the palette has it now — the tick's copy can trail a click on the palette by a frame.
+      const infNodeNow = infActive ? graphRef.current.nodes.find((n) => n.id === pointsInfluenceNodeId) : undefined;
+      if (infNodeNow) pointsInfluenceMode = readPointsInfluenceMode(infNodeNow);
+      const infTool = infActive && e.button === 0 && (isMarqueeModifier || isOverInfluencePoints(e));
+      if (infTool && pointsInfluenceMode === "brush") {
         isBrushPainting = true;
         controls.enabled = false;
         const rect = renderer.domElement.getBoundingClientRect();
         const radius = Number(graphRef.current.nodes.find((n) => n.id === pointsInfluenceNodeId)?.params.brushRadius) || 40;
         markPointsInfluencePainted(
-          paintInfluenceAt({ x: e.clientX - rect.left, y: e.clientY - rect.top }, radius, getActiveInfluenceLevel(), e.shiftKey),
+          paintInfluenceAt({ x: e.clientX - rect.left, y: e.clientY - rect.top }, radius, getActiveInfluenceLevel(), isInfluenceErase(e)),
         );
         e.stopImmediatePropagation();
         return;
       }
 
-      if (isMarqueeModifier && infActive && pointsInfluenceMode === "gradient") {
+      if (infTool && pointsInfluenceMode === "gradient") {
         isGradientDragging = true;
         controls.enabled = false;
         const rect = renderer.domElement.getBoundingClientRect();
@@ -4022,7 +4076,7 @@ export function Viewport({
         return;
       }
 
-      if (isMarqueeModifier && (curveHandles.count() > 0 || pointsSelectionHandles.count() > 0 || (infActive && pointsInfluenceMode === "discrete")) && !outputMode) {
+      if (((isMarqueeModifier && (curveHandles.count() > 0 || pointsSelectionHandles.count() > 0)) || (infTool && pointsInfluenceMode === "discrete")) && !outputMode) {
         isMarqueeDragging = true;
         marqueeStartPos = { x: e.clientX, y: e.clientY };
         controls.enabled = false;
@@ -4036,6 +4090,7 @@ export function Viewport({
         updateEditModal(e.clientX, e.clientY, e);
         return;
       }
+      updateInfluenceCursor(e);
       const terrainNode = selectedNodeIdRef.current
         ? graphRef.current.nodes.find((n) => n.id === selectedNodeIdRef.current && isTerrainNode(n))
         : null;
@@ -4625,7 +4680,7 @@ export function Viewport({
         const rect = renderer.domElement.getBoundingClientRect();
         const radius = Number(graphRef.current.nodes.find((n) => n.id === pointsInfluenceNodeId)?.params.brushRadius) || 40;
         markPointsInfluencePainted(
-          paintInfluenceAt({ x: e.clientX - rect.left, y: e.clientY - rect.top }, radius, getActiveInfluenceLevel(), e.shiftKey),
+          paintInfluenceAt({ x: e.clientX - rect.left, y: e.clientY - rect.top }, radius, getActiveInfluenceLevel(), isInfluenceErase(e)),
         );
         return;
       }
@@ -4975,7 +5030,7 @@ export function Viewport({
           if (Math.hypot(e.clientX - marqueeStartPos.x, e.clientY - marqueeStartPos.y) > CLICK_MOVE_THRESHOLD_PX) {
             if (pointsInfluenceHandles.count() > 0 && pointsInfluenceMode === "discrete") {
               const picked = pointsInfluenceHandles.pickRect({ minX, minY, maxX, maxY }, camera, rect.width, rect.height);
-              const level = e.shiftKey ? 0 : getActiveInfluenceLevel();
+              const level = isInfluenceErase(e) ? 0 : getActiveInfluenceLevel();
               picked.forEach((idx) => {
                 if (level <= 0) pointsInfluenceMap.delete(idx);
                 else pointsInfluenceMap.set(idx, level);
@@ -5245,7 +5300,7 @@ export function Viewport({
       if (pointsInfluenceHandles.count() > 0 && pointsInfluenceMode === "discrete") {
         const pickedIdx = pointsInfluenceHandles.pick(ndc, camera, rect.width, rect.height);
         if (pickedIdx !== null) {
-          const level = e.shiftKey ? 0 : getActiveInfluenceLevel();
+          const level = isInfluenceErase(e) ? 0 : getActiveInfluenceLevel();
           if (level <= 0) pointsInfluenceMap.delete(pickedIdx);
           else pointsInfluenceMap.set(pickedIdx, level);
           commitPointsInfluence();
@@ -6230,12 +6285,15 @@ export function Viewport({
         ? graphRef.current.nodes.find((n) => n.id === selectedNodeIdRef.current && n.type === POINTS_INFLUENCE_NODE.type)
         : undefined;
       if (pointsInfNode) {
-        pointsInfluenceMode =
-          pointsInfNode.params.mode === "discrete" || pointsInfNode.params.mode === "gradient" ? pointsInfNode.params.mode : "brush";
-        if (pointsInfluenceNodeId !== pointsInfNode.id) {
-          if (pointsInfluencePending) flushPointsInfluence();
+        pointsInfluenceMode = readPointsInfluenceMode(pointsInfNode);
+        const switched = pointsInfluenceNodeId !== pointsInfNode.id;
+        if (switched && pointsInfluencePending) flushPointsInfluence();
+        const stored = pointsInfNode.params.influences;
+        // A new node, or its map replaced from outside mid-session (Clear,
+        // undo) — never while a stroke still holds unwritten paint.
+        if (switched || (stored !== pointsInfluenceLoaded && !pointsInfluencePending && !isBrushPainting)) {
           pointsInfluenceNodeId = pointsInfNode.id;
-          const stored = pointsInfNode.params.influences;
+          pointsInfluenceLoaded = stored;
           pointsInfluenceMap = new Map(
             stored && typeof stored === "object" ? Object.entries(stored as Record<string, number>).map(([k, v]) => [Number(k), v]) : [],
           );
@@ -6265,6 +6323,7 @@ export function Viewport({
         if (pointsInfluencePending) flushPointsInfluence();
         pointsInfluenceHandles.clear();
         pointsInfluenceNodeId = null;
+        pointsInfluenceLoaded = null;
         pointsInfluenceMap.clear();
         pointsInfluenceSynced = { points: null, matrix: new THREE.Matrix4(), revision: -1 };
       }
@@ -7952,38 +8011,34 @@ export function Viewport({
           }}
         />
       )}
-      {/* Points Influence — the 5 preset level buttons, shared by Brush
-          (caps each dab's strength) and Discrete (the flat value a
-          click/marquee assigns). Gradient mode has no use for a fixed
-          level — its whole point is a continuous 0-1 sweep — so no HUD
-          there; Brush Radius still lives in ParamPanel like any other
-          param. */}
+      {/* Points Influence palette — tools on the left, the armed tool's
+          options along the bottom (see PointsInfluenceHud), and the Brush
+          tool's hover ring, which the viewport effect moves directly. */}
       {!outputMode &&
+        !elevationView &&
         selectedNodeId &&
         (() => {
           const infNode = graph.nodes.find((n) => n.id === selectedNodeId && n.type === POINTS_INFLUENCE_NODE.type);
-          if (!infNode || (infNode.params.mode !== "discrete" && infNode.params.mode !== "brush")) return null;
-          const activeLevel = typeof infNode.params.activeLevel === "number" ? infNode.params.activeLevel : POINTS_INFLUENCE_DISCRETE_LEVELS[2];
+          if (!infNode) return null;
           return (
-            <div className="viewport-influence-hud">
-              <span className="viewport-influence-hud-label">Influence</span>
-              {POINTS_INFLUENCE_DISCRETE_LEVELS.map((level, i) => (
-                <button
-                  key={level}
-                  type="button"
-                  className={`viewport-influence-hud-level ${activeLevel === level ? "viewport-influence-hud-level-active" : ""}`}
-                  style={{ backgroundColor: `#${DISCRETE_LEVEL_COLORS[i].toString(16).padStart(6, "0")}` }}
-                  title={
-                    infNode.params.mode === "brush"
-                      ? `${Math.round(level * 100)}% — caps how strong Cmd+drag paints, Shift to erase`
-                      : `${Math.round(level * 100)}% — Cmd-click/marquee a point to assign, Shift to erase`
-                  }
-                  onClick={() => onTransformChange?.(infNode.id, { activeLevel: level })}
-                >
-                  {Math.round(level * 100)}
-                </button>
-              ))}
-            </div>
+            <>
+              <PointsInfluenceHud
+                node={infNode}
+                levelColors={DISCRETE_LEVEL_HEX}
+                erase={influenceErase}
+                onErase={setInfluenceErase}
+                maxRows={hudToolMaxRows}
+                left={hudToolColumnLeft}
+                onParams={(params, nodeId) => onParamChange?.(params, undefined, nodeId)}
+                onLevel={(level) => onTransformChange?.(infNode.id, { activeLevel: level })}
+              />
+              {readPointsInfluenceMode(infNode) === "brush" && (
+                <div
+                  ref={influenceCursorRef}
+                  className={`viewport-influence-cursor ${influenceErase ? "viewport-influence-cursor-erase" : ""}`}
+                />
+              )}
+            </>
           );
         })()}
       {/* Gradient mode's live drag preview — a straight line from the
