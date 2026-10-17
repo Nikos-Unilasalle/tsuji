@@ -527,11 +527,21 @@ import "./viewport.css";
  * "dégradé de couleur" the painted gradient needs to actually read as a
  * gradient rather than a binary on/off dot.
  */
-function influenceColor(v: number): number {
-  const t = Math.max(0, Math.min(1, v));
+/**
+ * The heatmap ramp in 256 steps, built once: the viewport recolors every
+ * point of a mesh-sized cloud through this, and building three Colors per
+ * point per frame cost ~25 ms at 66k points. The discrete levels (0.2 … 1)
+ * fall exactly on steps.
+ */
+const INFLUENCE_RAMP: number[] = (() => {
   const cold = new THREE.Color(0x2563eb);
   const hot = new THREE.Color(0xef4444);
-  return cold.clone().lerp(hot, t).getHex();
+  const mixed = new THREE.Color();
+  return Array.from({ length: 256 }, (_, i) => mixed.copy(cold).lerp(hot, i / 255).getHex());
+})();
+
+function influenceColor(v: number): number {
+  return INFLUENCE_RAMP[Math.round(Math.max(0, Math.min(1, v || 0)) * 255)];
 }
 
 /** The 5 discrete-mode level colors, in the same order as POINTS_INFLUENCE_DISCRETE_LEVELS. */
@@ -1899,6 +1909,14 @@ export function Viewport({
     let pointsInfluenceNodeId: string | null = null;
     let pointsInfluenceMode: PointsInfluenceMode = "brush";
     let pointsInfluenceMap = new Map<number, number>();
+    /** Bumped on every change to pointsInfluenceMap (each is followed by commitPointsInfluence): the cloud recolors only then. */
+    let pointsInfluenceRevision = 0;
+    /** What the cloud was last synced from — unchanged points, matrix and revision skip the per-point resync. */
+    let pointsInfluenceSynced: { points: unknown[] | null; matrix: THREE.Matrix4; revision: number } = {
+      points: null,
+      matrix: new THREE.Matrix4(),
+      revision: -1,
+    };
     let isBrushPainting = false;
     let isGradientDragging = false;
     let gradientStartPos: { x: number; y: number } | null = null;
@@ -3010,6 +3028,7 @@ export function Viewport({
     }
 
     function commitPointsInfluence() {
+      pointsInfluenceRevision++;
       if (pointsInfluenceNodeId && onTransformChangeRef.current) {
         onTransformChangeRef.current(pointsInfluenceNodeId, { influences: Object.fromEntries(pointsInfluenceMap) });
       }
@@ -6162,14 +6181,25 @@ export function Viewport({
           pointsInfluenceMap = new Map(
             stored && typeof stored === "object" ? Object.entries(stored as Record<string, number>).map(([k, v]) => [Number(k), v]) : [],
           );
+          pointsInfluenceRevision++;
         }
         const nodeResult = results.get(pointsInfNode.id);
         const rawPoints = Array.isArray(nodeResult?.points) ? (nodeResult.points as unknown[]) : [];
-        const infPoints = rawPoints.map((p) => asVector3(p, new THREE.Vector3()));
         const infMatrix = nodeResult?.matrix instanceof THREE.Matrix4 ? (nodeResult.matrix as THREE.Matrix4) : new THREE.Matrix4();
 
-        if (infPoints.length > 0) {
-          pointsInfluenceHandles.sync(infPoints, infMatrix, null, (idx) => influenceColor(pointsInfluenceMap.get(idx) ?? 0));
+        if (rawPoints.length > 0) {
+          // The node is pure: on a still mesh it hands back the same points array every frame.
+          const synced = pointsInfluenceSynced;
+          const stale =
+            synced.points !== rawPoints ||
+            synced.revision !== pointsInfluenceRevision ||
+            !synced.matrix.equals(infMatrix) ||
+            pointsInfluenceHandles.count() !== rawPoints.length;
+          if (stale) {
+            const infPoints = rawPoints.map((p) => (p instanceof THREE.Vector3 ? p : asVector3(p, new THREE.Vector3())));
+            pointsInfluenceHandles.sync(infPoints, infMatrix, null, (idx) => influenceColor(pointsInfluenceMap.get(idx) ?? 0));
+            pointsInfluenceSynced = { points: rawPoints, matrix: infMatrix.clone(), revision: pointsInfluenceRevision };
+          }
         } else if (pointsInfluenceHandles.count() > 0) {
           pointsInfluenceHandles.clear();
         }
@@ -6177,6 +6207,7 @@ export function Viewport({
         pointsInfluenceHandles.clear();
         pointsInfluenceNodeId = null;
         pointsInfluenceMap.clear();
+        pointsInfluenceSynced = { points: null, matrix: new THREE.Matrix4(), revision: -1 };
       }
 
       // Face Selection editing — the green highlight follows the selected

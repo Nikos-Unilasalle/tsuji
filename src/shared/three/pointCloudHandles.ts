@@ -89,6 +89,22 @@ export function createPointCloudHandles(): PointCloudHandles {
   // Reused across hit tests so picking never allocates.
   const combined = new THREE.Matrix4();
   const scratchColor = new THREE.Color();
+  /**
+   * hex → linear RGB, filled on first use. `setHex` converts sRGB → linear
+   * (three's color management) on every call, which was most of sync's cost
+   * at mesh vertex counts; the colors used are a handful (two, or the 256 of
+   * the influence heatmap), so each is converted once.
+   */
+  const rgbByHex = new Map<number, [number, number, number]>();
+  function rgbOf(hex: number): [number, number, number] {
+    let rgb = rgbByHex.get(hex);
+    if (!rgb) {
+      scratchColor.setHex(hex);
+      rgb = [scratchColor.r, scratchColor.g, scratchColor.b];
+      rgbByHex.set(hex, rgb);
+    }
+    return rgb;
+  }
 
   function clear() {
     if (cloud) {
@@ -181,10 +197,10 @@ export function createPointCloudHandles(): PointCloudHandles {
 
         const override = colorOverride?.(i);
         const hex = override !== null && override !== undefined ? override : selected?.has(i) ? HANDLE_SELECTED_COLOR : HANDLE_COLOR;
-        scratchColor.setHex(hex);
-        colors[b] = scratchColor.r;
-        colors[b + 1] = scratchColor.g;
-        colors[b + 2] = scratchColor.b;
+        const rgb = rgbOf(hex);
+        colors[b] = rgb[0];
+        colors[b + 1] = rgb[1];
+        colors[b + 2] = rgb[2];
       }
 
       geometry.attributes.position.needsUpdate = true;

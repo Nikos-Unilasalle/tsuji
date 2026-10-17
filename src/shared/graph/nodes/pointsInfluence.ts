@@ -63,6 +63,9 @@ export const POINTS_INFLUENCE_NODE: NodeDefinition = {
     { id: "mode", label: "Mode", kind: "select", options: ["brush", "discrete", "gradient"], group: "Points Influence" },
     { id: "brushRadius", label: "Brush Radius (px)", kind: "number", step: 5, group: "Points Influence" },
   ],
+  // Reads nothing but its inputs and params: on a still mesh it is skipped and
+  // hands back the same lists, which also lets the viewport skip recoloring.
+  pure: true,
   evaluate: (inputs, params, ctx) => {
     const { points, matrix, geometry } = resolvePointsInput(inputs, ctx.nodeId, "Points Influence");
 

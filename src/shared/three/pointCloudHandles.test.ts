@@ -65,6 +65,19 @@ describe("createPointCloudHandles", () => {
     expect(color.array[5]).toBeCloseTo(blue.b, 5);
   });
 
+  it("recolors on the next sync with the same linear values three would give (hex → RGB is cached)", () => {
+    const handles = createPointCloudHandles();
+    const pts = [new THREE.Vector3(0, 0, 0), new THREE.Vector3(1, 0, 0)];
+    handles.sync(pts, new THREE.Matrix4(), null, () => 0x2563eb);
+    handles.sync(pts, new THREE.Matrix4(), null, (i) => (i === 0 ? 0xef4444 : 0x2563eb));
+
+    const color = (handles.group.children[0] as THREE.Points).geometry.attributes.color as THREE.BufferAttribute;
+    const hot = new THREE.Color(0xef4444);
+    const cold = new THREE.Color(0x2563eb);
+    expect([color.array[0], color.array[1], color.array[2]]).toEqual([hot.r, hot.g, hot.b].map((v) => Math.fround(v)));
+    expect([color.array[3], color.array[4], color.array[5]]).toEqual([cold.r, cold.g, cold.b].map((v) => Math.fround(v)));
+  });
+
   it("picks the point nearest the pointer, and nothing when the pointer is far away", () => {
     const handles = createPointCloudHandles();
     const camera = makeCamera();
