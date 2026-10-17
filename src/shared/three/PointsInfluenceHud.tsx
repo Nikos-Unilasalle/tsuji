@@ -82,6 +82,7 @@ export function PointsInfluenceHud({ node, levelColors, erase, onErase, maxRows,
   const stored = node.params.influences;
   const painted = stored && typeof stored === "object" ? Object.keys(stored).length : 0;
   const usesLevel = mode !== "gradient";
+  const xray = node.params.xray === true;
 
   return (
     <>
@@ -117,6 +118,21 @@ export function PointsInfluenceHud({ node, levelColors, erase, onErase, maxRows,
               <path d="m9.5 10.5 5 5" />
             </>,
           )}
+        </button>
+        <button
+          type="button"
+          className={`viewport-hud-button ${xray ? "viewport-hud-button-active" : ""}`}
+          onClick={() => onParams({ xray: !xray }, node.id)}
+          title={
+            xray
+              ? "X-Ray ON — brushes and picks reach the points behind the surface too"
+              : "X-Ray OFF — brushes and picks only reach the points the camera sees"
+          }
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+            <rect x="4" y="4" width="11" height="11" rx="1" />
+            <rect x="9" y="9" width="11" height="11" rx="1" strokeDasharray="2 2" />
+          </svg>
         </button>
       </HudToolColumn>
       <HudBar>

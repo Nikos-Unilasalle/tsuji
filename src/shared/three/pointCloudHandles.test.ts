@@ -194,6 +194,26 @@ describe("createPointCloudHandles", () => {
     expect(color.updateRanges).toEqual([]);
   });
 
+  it("culls hidden points only with a surface, a renderer, and X-ray off", () => {
+    const handles = createPointCloudHandles();
+    handles.sync(grid(4), new THREE.Matrix4(), null);
+    const material = (handles.group.children[0] as THREE.Points).material as THREE.PointsMaterial;
+    expect(handles.occludes()).toBe(false);
+    expect(material.depthTest).toBe(false);
+
+    // A bare point list: nothing to hide behind.
+    handles.setOccluder(null, {} as THREE.WebGLRenderer);
+    expect(handles.occludes()).toBe(false);
+
+    handles.setOccluder(new THREE.BufferGeometry(), {} as THREE.WebGLRenderer);
+    expect(handles.occludes()).toBe(true);
+    expect(material.depthTest).toBe(true);
+
+    handles.setXray(true);
+    expect(handles.occludes()).toBe(false);
+    expect(material.depthTest).toBe(false);
+  });
+
   it("clear() tears the cloud down and reports an empty count", () => {
     const handles = createPointCloudHandles();
     handles.sync(grid(100), new THREE.Matrix4(), null);

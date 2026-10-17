@@ -58,6 +58,9 @@ export const POINTS_INFLUENCE_NODE: NodeDefinition = {
     // currently selected; persisted like any other param so it survives a
     // reload with the last tool the operator was using.
     activeLevel: POINTS_INFLUENCE_DISCRETE_LEVELS[2],
+    // Off: brushes and picks only reach the points the camera sees, not the
+    // ones behind the surface. On: every point, as Edit Mesh's X-ray.
+    xray: false,
   },
   paramFields: [
     { id: "mode", label: "Mode", kind: "select", options: ["brush", "discrete", "gradient"], group: "Points Influence" },

@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { computePointVisibility, createDepthProbe, type DepthProbe } from "./pointOcclusion";
 
 /**
  * Viewport markers for a *mesh-sized* point cloud — Points Selection and
@@ -30,6 +31,12 @@ const HANDLE_SELECTED_COLOR = 0x38bdf8;
 /** Screen-space pick radius. A world-space one would be unclickable zoomed out and grab half the scene zoomed in. */
 const PICK_RADIUS_PX = 12;
 const RENDER_ORDER = 999;
+/**
+ * How far each point is pulled toward the camera before the depth test, as a
+ * fraction of its distance — a vertex sits exactly on its own faces and would
+ * z-fight with them otherwise. Same value as Edit Mesh's handles.
+ */
+const DEPTH_PULL = 0.004;
 
 export interface PointCloudHandles {
   readonly group: THREE.Group;
@@ -53,16 +60,26 @@ export interface PointCloudHandles {
    */
   updateColors(indices: Iterable<number>, color: (idx: number) => number): void;
   clear(): void;
-  /** Index of the point nearest the pointer within PICK_RADIUS_PX, or null. */
+  /** Index of the visible point nearest the pointer within PICK_RADIUS_PX, or null. */
   pick(ndc: THREE.Vector2, camera: THREE.Camera, widthPx: number, heightPx: number): number | null;
-  /** All point indices inside the screen-space marquee box. */
+  /** All visible point indices inside the screen-space marquee box. */
   pickRect(
     rect: { minX: number; minY: number; maxX: number; maxY: number },
     camera: THREE.Camera,
     widthPx: number,
     heightPx: number
   ): number[];
-  /** All point indices within `radiusPx` of `centerPx`, with distance — the brush hit test. */
+  /**
+   * The surface the points sit on, in the points' own space (the mesh they
+   * were read from), or null for a bare point list. Outside X-ray, pick,
+   * pickRect and pickCircle skip the points it hides from the camera.
+   */
+  setOccluder(geometry: THREE.BufferGeometry | null, renderer: THREE.WebGLRenderer | null): void;
+  /** X-ray: hidden points are drawn and picked like the rest. */
+  setXray(xray: boolean): void;
+  /** Whether hidden points are being culled, i.e. the cloud must be drawn depth-tested in the main scene. */
+  occludes(): boolean;
+  /** All visible point indices within `radiusPx` of `centerPx`, with distance — the brush hit test. */
   pickCircle(
     centerPx: { x: number; y: number },
     radiusPx: number,
@@ -70,7 +87,7 @@ export interface PointCloudHandles {
     widthPx: number,
     heightPx: number
   ): { index: number; distance: number }[];
-  /** Every visible point's screen position — the Gradient tool's projection basis. */
+  /** Every on-screen point's screen position, hidden or not — the Gradient tool, which redefines the whole object, needs them all. */
   projectAll(camera: THREE.Camera, widthPx: number, heightPx: number): { index: number; x: number; y: number }[];
   count(): number;
 }
@@ -93,6 +110,52 @@ export function createPointCloudHandles(): PointCloudHandles {
   let colors: Float32Array = new Float32Array(0);
   let pointCount = 0;
   const spaceMatrix = new THREE.Matrix4();
+
+  let occluder: THREE.BufferGeometry | null = null;
+  let renderer: THREE.WebGLRenderer | null = null;
+  let xray = false;
+  let probe: DepthProbe | null = null;
+  /** Bumped when a sync actually moves a point — part of the visibility cache key. */
+  let positionsVersion = 0;
+  let visible: Uint8Array | null = null;
+  /** camera world (16) + projection (16) + space (16) + width, height, positionsVersion, occluder id, occluder version. */
+  const visibleKey = new Float64Array(53);
+  const keyScratch = new Float64Array(53);
+  const modelView = new THREE.Matrix4();
+
+  function occludes(): boolean {
+    return !xray && occluder !== null && renderer !== null;
+  }
+
+  /**
+   * The cached visibility mask, recomputed when the camera, the cloud, its
+   * placement, the surface or the viewport changed. Null when every point
+   * counts as visible. The camera is locked during a stroke, so a stroke
+   * pays for it at most once, on its first pick.
+   */
+  function visibility(camera: THREE.Camera, widthPx: number, heightPx: number): Uint8Array | null {
+    if (!occludes() || pointCount === 0) return null;
+    const occ = occluder!;
+    keyScratch.set(camera.matrixWorld.elements, 0);
+    keyScratch.set(camera.projectionMatrix.elements, 16);
+    keyScratch.set(spaceMatrix.elements, 32);
+    keyScratch[48] = widthPx;
+    keyScratch[49] = heightPx;
+    keyScratch[50] = positionsVersion;
+    keyScratch[51] = occ.id;
+    keyScratch[52] = (occ.attributes.position as THREE.BufferAttribute | undefined)?.version ?? 0;
+    let same = visible !== null && visible.length === pointCount;
+    for (let k = 0; same && k < 53; k++) same = keyScratch[k] === visibleKey[k];
+    if (same) return visible;
+
+    probe ??= createDepthProbe();
+    const { depth, width, height } = probe.render(renderer!, camera, occ, spaceMatrix, widthPx, heightPx);
+    if (!visible || visible.length !== pointCount) visible = new Uint8Array(pointCount);
+    modelView.multiplyMatrices(camera.matrixWorldInverse, spaceMatrix);
+    computePointVisibility(positions, pointCount, modelView, combined, depth, width, height, visible);
+    visibleKey.set(keyScratch);
+    return visible;
+  }
 
   // Reused across hit tests so picking never allocates.
   const combined = new THREE.Matrix4();
@@ -125,6 +188,8 @@ export function createPointCloudHandles(): PointCloudHandles {
     positions = new Float32Array(0);
     colors = new Float32Array(0);
     pointCount = 0;
+    visible = null;
+    positionsVersion++;
   }
 
   function build(count: number) {
@@ -137,15 +202,26 @@ export function createPointCloudHandles(): PointCloudHandles {
     // sizeAttenuation off makes `size` a constant pixel size, which is what
     // the per-handle billboard-and-counter-scale dance was hand-rolling
     // before — and it stays correct under a scaled space matrix for free.
-    // depthTest off so a point buried inside its own mesh is still visible
+    // depthTest only while hidden points are culled (see occludes): in
+    // X-ray, or with no surface to hide behind, every point stays visible
     // and clickable, matching the curve handles' convention.
     const material = new THREE.PointsMaterial({
       size: HANDLE_SIZE_PX,
       sizeAttenuation: false,
       vertexColors: true,
-      depthTest: false,
+      depthTest: occludes(),
+      depthWrite: false,
       transparent: true,
     });
+    material.onBeforeCompile = (shader) => {
+      shader.vertexShader = shader.vertexShader.replace(
+        "#include <project_vertex>",
+        `#include <project_vertex>
+        mvPosition.xyz *= ${(1 - DEPTH_PULL).toFixed(6)};
+        gl_Position = projectionMatrix * mvPosition;`,
+      );
+    };
+    material.customProgramCacheKey = () => "point-cloud-depth-pull";
     cloud = new THREE.Points(geometry, material);
     cloud.renderOrder = RENDER_ORDER;
     cloud.frustumCulled = false; // the cloud tracks a deforming mesh; a stale bounding sphere must never hide it
@@ -196,9 +272,11 @@ export function createPointCloudHandles(): PointCloudHandles {
 
       const selected = toSet(selectedIndices);
 
+      let moved = false;
       for (let i = 0; i < pointCount; i++) {
         const p = points[i];
         const b = i * 3;
+        if (positions[b] !== p.x || positions[b + 1] !== p.y || positions[b + 2] !== p.z) moved = true;
         positions[b] = p.x;
         positions[b + 1] = p.y;
         positions[b + 2] = p.z;
@@ -211,6 +289,7 @@ export function createPointCloudHandles(): PointCloudHandles {
         colors[b + 2] = rgb[2];
       }
 
+      if (moved) positionsVersion++;
       geometry.attributes.position.needsUpdate = true;
       // A pending updateColors range would otherwise limit this upload to it.
       (geometry.attributes.color as THREE.BufferAttribute).clearUpdateRanges();
@@ -243,6 +322,19 @@ export function createPointCloudHandles(): PointCloudHandles {
       attr.needsUpdate = true;
     },
 
+    setOccluder(geometry, nextRenderer) {
+      occluder = geometry;
+      renderer = nextRenderer;
+      if (cloud) (cloud.material as THREE.PointsMaterial).depthTest = occludes();
+    },
+
+    setXray(next) {
+      xray = next;
+      if (cloud) (cloud.material as THREE.PointsMaterial).depthTest = occludes();
+    },
+
+    occludes,
+
     clear,
 
     pick(ndc, camera, widthPx, heightPx) {
@@ -252,9 +344,11 @@ export function createPointCloudHandles(): PointCloudHandles {
       const px = ((ndc.x + 1) * widthPx) / 2;
       const py = ((-ndc.y + 1) * heightPx) / 2;
 
+      const seen = visibility(camera, widthPx, heightPx);
       let bestIndex: number | null = null;
       let bestDistance = PICK_RADIUS_PX;
       for (let i = 0; i < pointCount; i++) {
+        if (seen && seen[i] === 0) continue;
         if (!projectPoint(e, i, widthPx, heightPx, scratchScreen)) continue;
         const distance = Math.hypot(scratchScreen.x - px, scratchScreen.y - py);
         if (distance < bestDistance) {
@@ -273,8 +367,10 @@ export function createPointCloudHandles(): PointCloudHandles {
       const maxX = Math.max(rect.minX, rect.maxX);
       const minY = Math.min(rect.minY, rect.maxY);
       const maxY = Math.max(rect.minY, rect.maxY);
+      const seen = visibility(camera, widthPx, heightPx);
 
       for (let i = 0; i < pointCount; i++) {
+        if (seen && seen[i] === 0) continue;
         if (!projectPoint(e, i, widthPx, heightPx, scratchScreen)) continue;
         if (scratchScreen.x >= minX && scratchScreen.x <= maxX && scratchScreen.y >= minY && scratchScreen.y <= maxY) {
           matches.push(i);
@@ -287,8 +383,10 @@ export function createPointCloudHandles(): PointCloudHandles {
       const matches: { index: number; distance: number }[] = [];
       if (pointCount === 0) return matches;
       const e = updateCombined(camera);
+      const seen = visibility(camera, widthPx, heightPx);
 
       for (let i = 0; i < pointCount; i++) {
+        if (seen && seen[i] === 0) continue;
         if (!projectPoint(e, i, widthPx, heightPx, scratchScreen)) continue;
         const distance = Math.hypot(scratchScreen.x - centerPx.x, scratchScreen.y - centerPx.y);
         if (distance <= radiusPx) matches.push({ index: i, distance });

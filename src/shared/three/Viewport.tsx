@@ -6316,12 +6316,25 @@ export function Viewport({
             pointsInfluenceHandles.sync(infPoints, infMatrix, null, (idx) => influenceColor(pointsInfluenceMap.get(idx) ?? 0));
             pointsInfluenceSynced = { points: rawPoints, matrix: infMatrix.clone(), revision: pointsInfluenceRevision };
           }
+          // The points are the vertices of the input's first mesh, in its
+          // own space — so that mesh's geometry is what hides the far side
+          // from brushes and picks, outside X-ray. A bare point list has no
+          // surface and hides nothing.
+          const infSource = nodeResult?.geometry instanceof THREE.Object3D ? findFirstMesh(nodeResult.geometry) : null;
+          const infOccluder = infSource && infSource.geometry.attributes.position?.count === rawPoints.length ? infSource.geometry : null;
+          pointsInfluenceHandles.setOccluder(infOccluder, renderer);
+          pointsInfluenceHandles.setXray(pointsInfNode.params.xray === true);
+          // Culled points are drawn depth-tested against the mesh in the
+          // main scene, like Edit Mesh's handles; otherwise over everything.
+          const infScene = pointsInfluenceHandles.occludes() ? scene : editorUiScene;
+          if (pointsInfluenceHandles.group.parent !== infScene) infScene.add(pointsInfluenceHandles.group);
         } else if (pointsInfluenceHandles.count() > 0) {
           pointsInfluenceHandles.clear();
         }
       } else if (pointsInfluenceHandles.count() > 0) {
         if (pointsInfluencePending) flushPointsInfluence();
         pointsInfluenceHandles.clear();
+        pointsInfluenceHandles.setOccluder(null, null);
         pointsInfluenceNodeId = null;
         pointsInfluenceLoaded = null;
         pointsInfluenceMap.clear();
