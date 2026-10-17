@@ -1,4 +1,5 @@
 import { mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { availableParallelism } from "node:os";
 import { join } from "node:path";
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
@@ -7,7 +8,7 @@ import { DEFAULT_REGISTRY } from "./nodes/index";
 import { disposeEvalSession, evaluateGraph, setEvalMemoEnabled } from "./evaluate";
 import { getEvalProfiler, startEvalProfiling, stopEvalProfiling } from "./evalProfiler";
 import { initBvhRaycast } from "../three/bvh";
-import { DeferredExecutor, setJobExecutor } from "./offthread/jobs";
+import { DeferredExecutor, poolSize, setJobExecutor } from "./offthread/jobs";
 import { instantiateWasmKernelsSync } from "./offthread/wasmKernels";
 import { Connection, Graph, KeyframeStore, NodeInstance } from "./types";
 
@@ -26,11 +27,14 @@ import { Connection, Graph, KeyframeStore, NodeInstance } from "./types";
  *   TSUJI_STRESS_NOMEMO=1 npm run stress              # pure-node memo off (baseline)
  *   TSUJI_STRESS_OFFTHREAD=1 npm run stress           # worker-capable nodes (offthread/jobs.ts) as in the app
  *   TSUJI_STRESS_OFFTHREAD=wasm npm run stress        # … with the Rust/WASM kernels the app's worker runs
+ *   TSUJI_STRESS_OFFTHREAD=1 TSUJI_STRESS_WORKERS=1 npm run stress  # … routed over 1 worker instead of the app's pool size
  *
  * With OFFTHREAD, such nodes' kernels are queued as the app would post them
  * to its geometry worker and run between frames, outside the timed
  * evaluation — the frame times are then what the main thread pays, and the
- * kernel time is reported on its own line (and as "worker: …" phases).
+ * kernel time is reported on its own line (and as "worker: …" phases), split
+ * over the lanes of a pool sized as the app would size it on this machine:
+ * the busiest lane per frame is how long the pool needs to deliver a frame.
  * Without it they run inline, as they do in Node and in the test suite.
  *
  * Measures evaluation only (CPU, main thread in the app): no WebGL, no scene
@@ -49,6 +53,8 @@ const NO_MEMO = process.env.TSUJI_STRESS_NOMEMO === "1";
 /** Worker-capable nodes hand their kernels to a deferred executor, flushed between frames. */
 const OFFTHREAD = process.env.TSUJI_STRESS_OFFTHREAD === "1" || process.env.TSUJI_STRESS_OFFTHREAD === "wasm";
 const OFFTHREAD_WASM = process.env.TSUJI_STRESS_OFFTHREAD === "wasm";
+/** Worker pool size jobs are routed over; the app's `poolSize(hardwareConcurrency)` by default. */
+const WORKERS = Number(process.env.TSUJI_STRESS_WORKERS ?? poolSize(availableParallelism()));
 const FPS = 30;
 const DEMO_DIR = join(process.cwd(), "public/demos");
 
@@ -186,7 +192,7 @@ describe.skipIf(!ENABLED)("stress bench", () => {
         const wasm = OFFTHREAD_WASM
           ? instantiateWasmKernelsSync(readFileSync(join(process.cwd(), "src/shared/graph/offthread/tsuji_kernels.wasm")))
           : null;
-        const deferred = OFFTHREAD ? new DeferredExecutor(wasm ? { metaballs: (job) => wasm.metaballs(job) } : {}) : null;
+        const deferred = OFFTHREAD ? new DeferredExecutor(wasm ? { metaballs: (job) => wasm.metaballs(job) } : {}, WORKERS) : null;
         setJobExecutor(deferred);
 
         const coldStart = performance.now();
@@ -231,7 +237,10 @@ describe.skipIf(!ENABLED)("stress bench", () => {
           `cold first frame ${coldMs.toFixed(1)} ms · ${FRAMES} frames in ${(wallMs / 1000).toFixed(2)} s · ${(FRAMES / (wallMs / 1000)).toFixed(1)} eval/s (budget 16.7 ms at 60 fps)`,
           `node evaluate ${nodeSum.toFixed(2)} ms/frame · evaluator overhead ${(report.frames.meanMs - nodeSum).toFixed(2)} ms/frame`,
           ...(deferred
-            ? [`off-thread kernels: ${deferred.jobs} jobs, ${(deferred.kernelMs / FRAMES).toFixed(2)} ms/frame — worker time, not in the frame times`]
+            ? [
+                `off-thread kernels: ${deferred.jobs} jobs, ${(deferred.kernelMs / FRAMES).toFixed(2)} ms/frame — worker time, not in the frame times`,
+                `worker pool ×${WORKERS}: busiest lane ${(deferred.criticalMs / FRAMES).toFixed(2)} ms/frame (wall clock) · per lane ${deferred.laneMs.map((ms) => (ms / FRAMES).toFixed(2)).join(" / ")} ms/frame`,
+              ]
             : []),
           "(group nodes include their inner nodes' time)",
           "",

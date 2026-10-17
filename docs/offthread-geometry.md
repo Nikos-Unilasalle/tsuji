@@ -80,9 +80,18 @@ built, since nothing needs it yet.
 
 ## Worker protocol
 
-One dedicated module worker (`geometry.worker.ts`), started lazily on the
-first job (`installGeometryWorker()` in `main.tsx` only registers the factory).
-It holds no graph state and runs jobs one at a time in arrival order.
+A pool of dedicated module workers (`geometry.worker.ts`), `min(4,
+hardwareConcurrency - 1)` of them (`poolSize`, at least one). `WorkerPool`
+(`workerExecutor.ts`) routes each job by the asking node's id: `JobExecutor.run`
+takes the node id as `route`, and `LaneRouter` puts a node it has not seen on
+the worker with the fewest nodes and keeps it there. So one node's jobs always
+run on one worker, in order, and that worker's scratch (marching-cubes field,
+WASM memory) stays sized for that node. Each worker starts on the first job
+routed to it (`installGeometryWorker()` in `main.tsx` only registers the
+factory), so a project with one heavy node spawns one worker. A worker holds no
+graph state and runs its jobs one at a time in arrival order. Any worker
+failing rejects that job, and the scheduler drops the whole pool and goes
+inline. `__tsuji.offthread.use(...)` builds a fresh pool.
 
 ```
 main → worker   { type: "init", backend: "wasm" | "js" }
@@ -165,9 +174,10 @@ V8): open the demo in the app, Ctrl/Cmd+Shift+P, and compare the
 
 1. **The worker is what fixes the lag; WASM is what keeps the worker keeping up.**
    Moving the kernel off-thread takes the main thread from ~7 ms to ~0.04 ms per
-   metaballs node regardless of language. But one worker serves every node: four
-   metaballs at 22 ms of JS kernel per frame means the surfaces update at ~45 Hz
-   and trail further behind; at 8.5 ms in WASM they keep up with 60 fps. So: worker
+   metaballs node regardless of language. With one worker serving every node,
+   four metaballs at 22 ms of JS kernel per frame updated at ~45 Hz and trailed
+   further behind; at 8.5 ms in WASM they kept up with 60 fps. (There is now a
+   pool of workers, see "Worker pool"; WASM still means fewer cores busy.) So: worker
    for every heavy node, WASM *inside* the worker for kernels that are tight
    numeric loops over flat arrays.
 2. **Ship metaballs on WASM** (default `DEFAULT_BACKEND = "wasm"`, JS fallback
@@ -274,9 +284,39 @@ throwaway geometry per run (the kernel builds geometry, hands back its
 arrays). The worker bundle grew from the marching-cubes kernel to 268 KB
 (three + three-bvh-csg); it still loads only on the first job.
 
-**The single worker is now the limit.** At ×4 these demos queue 43.6 ms of
-kernel per 16.7 ms frame: the main thread is free, but tubes and CSGs land at
-~20 Hz and trail further while things move. The pool below is the next step.
+**A single worker was then the limit.** At ×4 these demos queue ~44–49 ms of
+kernel per 16.7 ms frame: the main thread is free, but with one worker tubes
+and CSGs land at ~20 Hz and trail further while things move. The worker pool
+(next section) fixes that.
+
+## Worker pool
+
+Same bench, same flags plus `TSUJI_STRESS_WORKERS=N`. The bench's
+`DeferredExecutor` routes jobs through the same `LaneRouter` as the app and
+times each lane's kernels on its own; "busiest lane" is the slowest worker's
+kernel time per frame, which is how long the pool needs to deliver a frame's
+results (kernels still run one after another in the bench process, so this is
+the ideal with no contention between cores). 8-core Apple M1, so the app
+would pick 4. 24 job-running nodes, 12 jobs/frame:
+
+| workers | kernels, all lanes ms/frame | busiest lane ms/frame | per lane ms/frame | results land at |
+|---|---|---|---|---|
+| 1 | 46.72 | 46.72 | 46.72 | ~21 Hz |
+| 2 | 48.26 | 25.87 | 24.35 / 23.91 | ~39 Hz |
+| 3 | 49.53 | 19.18 | 16.03 / 17.15 / 16.36 | ~52 Hz |
+| 4 (default here) | 49.26 | **14.94** | 12.50 / 12.05 / 12.57 / 12.14 | 60 Hz |
+
+Main-thread evaluate is unchanged by the pool (9.6–10.8 ms/frame mean across
+these runs, run-to-run noise). Counting nodes balances well here (lanes
+within 5% of each other) because the job-running nodes cost about the same
+(tube ~4.2 ms/job, CSG ~3.7 ms/job); `LaneRouter` does not know a node's cost.
+
+In the app (dev server, Chromium, background pane — throttled frames, per-job
+times valid): the profiler overlay has a `worker #N busy` row per worker next
+to the per-kind `worker: …` rows. On the Orbit Trails demo the two
+`curve/to_mesh` nodes ran on two workers (~5 ms/job each), evaluate 0.6–0.7 ms;
+`__tsuji.offthread.use("off")` → 8.3 ms evaluate, `use("js")`/`use("wasm")` →
+back to two workers. No console errors.
 
 ## Adding a node
 
@@ -292,12 +332,15 @@ kernel per 16.7 ms frame: the main thread is free, but tubes and CSGs land at
 
 ## Known limits / next steps
 
-- **One worker.** Jobs from all nodes queue behind each other — 43.6 ms of
-  kernel per frame on the ×4 curve/boolean bench above. A small pool
-  (`min(4, hardwareConcurrency - 1)`), routed by node id so each node's
-  scratch stays warm, is the next step.
+- **Pool of at most 4.** The ×4 curve/boolean bench needs 46.7 ms of kernel
+  per frame; four workers bring the busiest lane to 14.9 ms, just inside a
+  60 fps frame. More nodes, or a machine with fewer cores (a 4-core one gets 3
+  workers: 19.2 ms), trail again. Routing counts nodes, not their cost: one
+  expensive node and three cheap ones on a lane can lag while others idle.
+  Assignments are kept for the session, including for deleted nodes.
 - **One scratch field per worker**, sized to the last resolution: two metaballs
-  nodes at different resolutions reallocate per job.
+  nodes at different resolutions on the *same* worker reallocate per job
+  (on different workers, now the usual case with ≤4 such nodes, they do not).
 - **Allocation churn.** Every result is fresh arrays (~2 MB/job at 60k verts),
   garbage after being copied into same-size attributes. Return them to the
   worker for reuse (ping-pong pool) if GC shows up in the profile.

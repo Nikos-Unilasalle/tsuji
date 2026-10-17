@@ -26,8 +26,44 @@ import { JobKind, JobPayload, JobResult, JS_KERNELS } from "./kernels";
  */
 
 export interface JobExecutor {
-  run<K extends JobKind>(kind: K, payload: JobPayload<K>): Promise<{ result: JobResult<K>; ms: number }>;
+  /**
+   * `route` is the asking node's id: an executor with several workers sends
+   * one node's jobs to the same worker every time (its scratch stays warm,
+   * and its jobs stay in order). `lane` in the reply is which worker ran it.
+   */
+  run<K extends JobKind>(kind: K, payload: JobPayload<K>, route: string): Promise<{ result: JobResult<K>; ms: number; lane?: number }>;
   dispose?(): void;
+}
+
+/** Workers for a machine with `cores` logical cores: one is left for the main thread, at most 4. */
+export function poolSize(cores: number | undefined): number {
+  return Math.max(1, Math.min(4, (cores || 2) - 1));
+}
+
+/**
+ * Sticky node → lane assignment for a pool of `lanes` workers. A node seen for
+ * the first time goes to the lane with the fewest nodes on it and stays there.
+ * Assignments are never released: a deleted node's lane keeps counting it,
+ * which only skews balance in long sessions, never correctness.
+ */
+export class LaneRouter {
+  private readonly lanes = new Map<string, number>();
+  private readonly counts: number[];
+
+  constructor(readonly size: number) {
+    this.counts = new Array(size).fill(0);
+  }
+
+  lane(route: string): number {
+    let lane = this.lanes.get(route);
+    if (lane === undefined) {
+      lane = 0;
+      for (let i = 1; i < this.size; i++) if (this.counts[i] < this.counts[lane]) lane = i;
+      this.counts[lane]++;
+      this.lanes.set(route, lane);
+    }
+    return lane;
+  }
 }
 
 export interface JobView<K extends JobKind> {
@@ -97,11 +133,12 @@ function dispatch(nodeId: string, slot: Slot, signature: string, payload: unknow
   const version = slot.version;
   inFlight++;
   getEvalProfiler()?.setGauge("offthread jobs in flight", inFlight);
-  exec.run(slot.kind, payload as JobPayload<JobKind>).then(
-    ({ result, ms }) => {
+  exec.run(slot.kind, payload as JobPayload<JobKind>, nodeId).then(
+    ({ result, ms, lane }) => {
       inFlight--;
       const profiler = getEvalProfiler();
       profiler?.recordPhase(`worker: ${slot.kind}`, ms);
+      if (lane !== undefined) profiler?.recordPhase(`worker #${lane + 1} busy`, ms);
       profiler?.setGauge("offthread jobs in flight", inFlight);
       // Deleted (or deleted and re-added) while the job ran: the answer belongs to nobody.
       if (slots.get(nodeId) !== slot) return;
@@ -165,20 +202,35 @@ export function requestJob<K extends JobKind>(
 /**
  * Runs queued work by hand: the stress bench installs this in place of a
  * worker, so main-thread cost (what evaluate pays) and kernel cost (what the
- * worker would pay) are timed apart, in one process, deterministically.
+ * workers would pay) are timed apart, in one process, deterministically.
+ * With `lanes` > 1 jobs are routed like the app's pool and each flush's
+ * kernel time is also split per lane: the busiest lane is the wall-clock
+ * time a pool of that size would need for the frame's jobs.
  */
 export class DeferredExecutor implements JobExecutor {
-  private queue: { kind: JobKind; payload: unknown; resolve: (value: { result: unknown; ms: number }) => void }[] = [];
-  /** Kernel milliseconds run by flush() so far. */
+  private queue: { kind: JobKind; payload: unknown; lane: number; resolve: (value: { result: unknown; ms: number; lane: number }) => void }[] = [];
+  private readonly router: LaneRouter;
+  /** Kernel milliseconds run by flush() so far, all lanes together. */
   kernelMs = 0;
+  /** Kernel milliseconds per lane so far. */
+  readonly laneMs: number[];
+  /** Sum over flushes of the busiest lane's milliseconds: the pool's wall clock. */
+  criticalMs = 0;
   jobs = 0;
 
   /** `kernels` replaces some of the JS kernels — the bench passes the WASM ones to time those instead. */
-  constructor(private readonly kernels: Partial<typeof JS_KERNELS> = {}) {}
+  constructor(
+    private readonly kernels: Partial<typeof JS_KERNELS> = {},
+    lanes = 1,
+  ) {
+    this.router = new LaneRouter(lanes);
+    this.laneMs = new Array(lanes).fill(0);
+  }
 
-  run<K extends JobKind>(kind: K, payload: JobPayload<K>): Promise<{ result: JobResult<K>; ms: number }> {
+  run<K extends JobKind>(kind: K, payload: JobPayload<K>, route: string): Promise<{ result: JobResult<K>; ms: number; lane: number }> {
+    const lane = this.router.lane(route);
     return new Promise((resolve) => {
-      this.queue.push({ kind, payload, resolve: resolve as (value: { result: unknown; ms: number }) => void });
+      this.queue.push({ kind, payload, lane, resolve: resolve as (value: { result: unknown; ms: number; lane: number }) => void });
     });
   }
 
@@ -186,15 +238,19 @@ export class DeferredExecutor implements JobExecutor {
   async flush(): Promise<void> {
     const queue = this.queue;
     this.queue = [];
+    const flushLaneMs = new Array(this.laneMs.length).fill(0);
     for (const job of queue) {
       const start = performance.now();
       const kernel = (this.kernels[job.kind] ?? JS_KERNELS[job.kind]) as (payload: JobPayload<JobKind>) => unknown;
       const result = kernel(job.payload as JobPayload<JobKind>);
       const ms = performance.now() - start;
       this.kernelMs += ms;
+      this.laneMs[job.lane] += ms;
+      flushLaneMs[job.lane] += ms;
       this.jobs++;
-      job.resolve({ result, ms });
+      job.resolve({ result, ms, lane: job.lane });
     }
+    this.criticalMs += Math.max(0, ...flushLaneMs);
     // One macrotask: every .then above (and any dispatch they chain) has run by the time this resolves.
     await new Promise((resolve) => setTimeout(resolve, 0));
   }

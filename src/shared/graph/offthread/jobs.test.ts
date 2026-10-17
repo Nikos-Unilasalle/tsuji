@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { afterEach, describe, expect, it } from "vitest";
 import { disposeNodeCaches } from "../nodeCaches";
 import { METABALLS_NODE } from "../nodes/metaballs";
-import { DeferredExecutor, jobsInFlight, requestJob, setJobExecutor } from "./jobs";
+import { DeferredExecutor, JobExecutor, jobsInFlight, LaneRouter, poolSize, requestJob, setJobExecutor } from "./jobs";
 import { sampleJob } from "./marchingCubes.fixtures";
 import { JobPayload } from "./kernels";
 
@@ -115,6 +115,60 @@ describe("offthread jobs", () => {
     requestJob(id, "metaballs", "b", job(2));
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(requestJob(id, "metaballs", "c", job(3)).fresh).toBe(true);
+  });
+});
+
+describe("worker pool routing", () => {
+  it("sizes the pool at min(4, cores - 1), at least one", () => {
+    expect(poolSize(1)).toBe(1);
+    expect(poolSize(2)).toBe(1);
+    expect(poolSize(4)).toBe(3);
+    expect(poolSize(8)).toBe(4);
+    expect(poolSize(32)).toBe(4);
+    expect(poolSize(undefined)).toBe(1);
+  });
+
+  it("keeps a node on one lane and spreads new nodes over the least used", () => {
+    const router = new LaneRouter(3);
+    const lanes = ["a", "b", "c", "d", "e", "f"].map((id) => router.lane(id));
+    expect(lanes).toEqual([0, 1, 2, 0, 1, 2]);
+    expect(router.lane("b")).toBe(1);
+    expect(router.lane("f")).toBe(2);
+  });
+
+  it("routes by node id, so lanes run side by side", async () => {
+    const exec = new DeferredExecutor({}, 2);
+    setJobExecutor(exec);
+    const a = nodeId();
+    const b = nodeId();
+    for (const id of [a, b]) requestJob(id, "metaballs", "1", job(1));
+    for (const id of [a, b]) requestJob(id, "metaballs", "2", job(2));
+    await exec.flush();
+    expect(exec.jobs).toBe(2);
+    expect(exec.laneMs[0]).toBeGreaterThan(0);
+    expect(exec.laneMs[1]).toBeGreaterThan(0);
+    // The busiest lane, not the sum: what a two-worker pool waits for.
+    expect(exec.criticalMs).toBeLessThan(exec.kernelMs);
+    expect(requestJob(a, "metaballs", "2", job(2)).fresh).toBe(true);
+    expect(requestJob(b, "metaballs", "2", job(2)).fresh).toBe(true);
+  });
+
+  it("goes inline for every node when one lane fails", async () => {
+    const router = new LaneRouter(2);
+    const healthy = new DeferredExecutor();
+    const pool: JobExecutor = {
+      run: (kind, payload, route) =>
+        router.lane(route) === 1 ? Promise.reject(new Error("worker #2 crashed")) : healthy.run(kind, payload, route),
+    };
+    setJobExecutor(pool);
+    const a = nodeId();
+    const b = nodeId();
+    for (const id of [a, b]) requestJob(id, "metaballs", "1", job(1));
+    for (const id of [a, b]) requestJob(id, "metaballs", "2", job(2));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    // a's lane is fine, but the pool as a whole is no longer trusted.
+    expect(requestJob(a, "metaballs", "3", job(3)).fresh).toBe(true);
+    expect(requestJob(b, "metaballs", "3", job(3)).fresh).toBe(true);
   });
 });
 

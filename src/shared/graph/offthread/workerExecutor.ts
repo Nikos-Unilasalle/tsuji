@@ -1,10 +1,10 @@
 import type { Backend, WorkerReply, WorkerRequest } from "./geometry.worker";
-import { JobExecutor, setJobExecutorFactory } from "./jobs";
+import { JobExecutor, LaneRouter, poolSize, setJobExecutorFactory } from "./jobs";
 import { JobKind, JobPayload, JobResult, transferablesOf } from "./kernels";
 
 /**
  * The browser side of geometry.worker.ts: one dedicated worker, jobs matched
- * to replies by id. Payload buffers are transferred, not copied — the
+ * to replies by id. WorkerPool below runs several of these. Payload buffers are transferred, not copied — the
  * scheduler builds a fresh payload per job, so nothing on this side reads
  * them again.
  */
@@ -15,8 +15,8 @@ export class WorkerExecutor implements JobExecutor {
   /** What the worker actually runs once initialised ("wasm" can fall back to "js"). */
   backend: Backend | null = null;
 
-  constructor(requested: Backend) {
-    this.worker = new Worker(new URL("./geometry.worker.ts", import.meta.url), { type: "module", name: "tsuji-geometry" });
+  constructor(requested: Backend, name = "tsuji-geometry") {
+    this.worker = new Worker(new URL("./geometry.worker.ts", import.meta.url), { type: "module", name });
     this.worker.onmessage = (event: MessageEvent<WorkerReply>) => {
       const reply = event.data;
       if (reply.type === "ready") {
@@ -61,6 +61,55 @@ export class WorkerExecutor implements JobExecutor {
   }
 }
 
+/**
+ * Several geometry workers, `poolSize(hardwareConcurrency)` of them. Jobs are
+ * routed by node id (LaneRouter), so a node always lands on the same worker:
+ * its jobs stay in order and that worker's scratch (marching-cubes field,
+ * WASM memory) stays sized for it. Each worker starts on the first job routed
+ * to it, so a project with one heavy node spawns one. A failure on any worker
+ * rejects that job, and the scheduler then drops the whole pool (jobs.ts).
+ */
+export class WorkerPool implements JobExecutor {
+  private readonly workers: (WorkerExecutor | null)[];
+  private readonly router: LaneRouter;
+
+  constructor(
+    private readonly requested: Backend,
+    size: number,
+  ) {
+    this.router = new LaneRouter(size);
+    this.workers = new Array(size).fill(null);
+  }
+
+  get size(): number {
+    return this.workers.length;
+  }
+
+  /** Backend of the first started worker (they all get the same request). */
+  get backend(): Backend | null {
+    return this.workers.find((w) => w?.backend)?.backend ?? null;
+  }
+
+  run<K extends JobKind>(kind: K, payload: JobPayload<K>, route: string): Promise<{ result: JobResult<K>; ms: number; lane: number }> {
+    const lane = this.router.lane(route);
+    let worker = this.workers[lane];
+    if (!worker) {
+      try {
+        worker = this.workers[lane] = new WorkerExecutor(this.requested, `tsuji-geometry-${lane + 1}`);
+      } catch (err) {
+        // Same as a worker that fails to load: the job rejects and the scheduler goes inline.
+        return Promise.reject(err);
+      }
+    }
+    return worker.run(kind, payload).then((reply) => ({ ...reply, lane }));
+  }
+
+  dispose(): void {
+    for (const worker of this.workers) worker?.dispose();
+    this.workers.fill(null);
+  }
+}
+
 /** Unset = the default. `localStorage["tsuji.offthread"]` = "off" | "js" | "wasm" overrides it, for A/B in the profiler overlay. */
 export const DEFAULT_BACKEND: Backend = "wasm";
 
@@ -74,18 +123,20 @@ export function createWorkerExecutor(): JobExecutor | null {
   }
   if (choice === "off") return null;
   try {
-    return new WorkerExecutor(choice === "js" ? "js" : choice === "wasm" ? "wasm" : DEFAULT_BACKEND);
+    const backend = choice === "js" ? "js" : choice === "wasm" ? "wasm" : DEFAULT_BACKEND;
+    return new WorkerPool(backend, poolSize(globalThis.navigator?.hardwareConcurrency));
   } catch (err) {
-    console.warn("[offthread] could not start the geometry worker; running inline", err);
+    console.warn("[offthread] could not start the geometry workers; running inline", err);
     return null;
   }
 }
 
 /**
- * Called once at startup (main.tsx). The worker itself starts on the first
- * job, so a project without such nodes never spawns it.
+ * Called once at startup (main.tsx). Workers start on the first job routed to
+ * them, so a project without such nodes never spawns one.
  * `__tsuji.offthread.use("js" | "wasm" | "off")` switches backend live, for
- * A/B timing in the profiler overlay (Ctrl/Cmd+Shift+P, "worker: …" rows).
+ * A/B timing in the profiler overlay (Ctrl/Cmd+Shift+P, "worker: …" rows per
+ * job kind, "worker #N busy" per pool worker).
  */
 export function installGeometryWorker(): void {
   setJobExecutorFactory(createWorkerExecutor);
