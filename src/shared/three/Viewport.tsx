@@ -1801,6 +1801,14 @@ export function Viewport({
     const rigsInFront = new Set<string>();
     let pointsSelectionNodeId: string | null = null;
     let selectedPointsSelectionIndices = new Set<number>();
+    /** Bumped on every change to selectedPointsSelectionIndices (each is followed by commitPointsSelection): the cloud resyncs only then. */
+    let pointsSelectionRevision = 0;
+    /** What the cloud was last synced from — unchanged points, matrix and revision skip the per-point resync. */
+    let pointsSelectionSynced: { points: unknown[] | null; matrix: THREE.Matrix4; revision: number } = {
+      points: null,
+      matrix: new THREE.Matrix4(),
+      revision: -1,
+    };
 
     // Face Selection editing — Shift+left-click selects the face under the
     // cursor on the mesh feeding the selected Face Selection node, Shift+right
@@ -1909,8 +1917,10 @@ export function Viewport({
     let pointsInfluenceNodeId: string | null = null;
     let pointsInfluenceMode: PointsInfluenceMode = "brush";
     let pointsInfluenceMap = new Map<number, number>();
-    /** Bumped on every change to pointsInfluenceMap (each is followed by commitPointsInfluence): the cloud recolors only then. */
+    /** Bumped on every change to pointsInfluenceMap (commitPointsInfluence, or markPointsInfluencePainted mid-stroke): the cloud recolors only then. */
     let pointsInfluenceRevision = 0;
+    /** A brush stroke has painted since the last commit (see markPointsInfluencePainted). */
+    let pointsInfluencePending = false;
     /** What the cloud was last synced from — unchanged points, matrix and revision skip the per-point resync. */
     let pointsInfluenceSynced: { points: unknown[] | null; matrix: THREE.Matrix4; revision: number } = {
       points: null,
@@ -3007,6 +3017,7 @@ export function Viewport({
     // marquee release IS the commit, immediately, unlike curve points which
     // write back only when a drag ends.
     function commitPointsSelection() {
+      pointsSelectionRevision++;
       if (pointsSelectionNodeId && onTransformChangeRef.current) {
         onTransformChangeRef.current(pointsSelectionNodeId, { selectedIndices: Array.from(selectedPointsSelectionIndices) });
       }
@@ -3029,9 +3040,29 @@ export function Viewport({
 
     function commitPointsInfluence() {
       pointsInfluenceRevision++;
+      flushPointsInfluence();
+    }
+
+    /** Writes the painted map to the node. */
+    function flushPointsInfluence() {
+      pointsInfluencePending = false;
       if (pointsInfluenceNodeId && onTransformChangeRef.current) {
         onTransformChangeRef.current(pointsInfluenceNodeId, { influences: Object.fromEntries(pointsInfluenceMap) });
       }
+    }
+
+    /**
+     * A brush stroke paints on every pointermove but writes to the node once,
+     * on pointer-up: the heatmap recolors from the local map right away
+     * (revision), while each graph update costs a copy of the whole map, a
+     * re-render and a re-evaluation of the node and everything downstream —
+     * 15-20 ms at 25k points, which per move kept a stroke near 23 ms a frame.
+     * Committing once per animation frame instead did not help: pointer moves
+     * already arrive about once per frame.
+     */
+    function markPointsInfluencePainted() {
+      pointsInfluenceRevision++;
+      pointsInfluencePending = true;
     }
 
     function getActiveInfluenceLevel(): number {
@@ -3964,7 +3995,7 @@ export function Viewport({
         const rect = renderer.domElement.getBoundingClientRect();
         const radius = Number(graphRef.current.nodes.find((n) => n.id === pointsInfluenceNodeId)?.params.brushRadius) || 40;
         paintInfluenceAt({ x: e.clientX - rect.left, y: e.clientY - rect.top }, radius, getActiveInfluenceLevel(), e.shiftKey);
-        commitPointsInfluence();
+        markPointsInfluencePainted();
         e.stopImmediatePropagation();
         return;
       }
@@ -4582,7 +4613,7 @@ export function Viewport({
         const rect = renderer.domElement.getBoundingClientRect();
         const radius = Number(graphRef.current.nodes.find((n) => n.id === pointsInfluenceNodeId)?.params.brushRadius) || 40;
         paintInfluenceAt({ x: e.clientX - rect.left, y: e.clientY - rect.top }, radius, getActiveInfluenceLevel(), e.shiftKey);
-        commitPointsInfluence();
+        markPointsInfluencePainted();
         return;
       }
       if (isGradientDragging && gradientStartPos && host) {
@@ -4897,6 +4928,7 @@ export function Viewport({
       if (isBrushPainting) {
         isBrushPainting = false;
         controls.enabled = true;
+        if (pointsInfluencePending) flushPointsInfluence();
         return;
       }
       if (isGradientDragging) {
@@ -6149,14 +6181,25 @@ export function Viewport({
           selectedPointsSelectionIndices = new Set(
             Array.isArray(pointsSelNode.params.selectedIndices) ? (pointsSelNode.params.selectedIndices as number[]) : [],
           );
+          pointsSelectionRevision++;
         }
         const nodeResult = results.get(pointsSelNode.id);
         const rawPoints = Array.isArray(nodeResult?.points) ? (nodeResult.points as unknown[]) : [];
-        const selPoints = rawPoints.map((p) => asVector3(p, new THREE.Vector3()));
         const selMatrix = nodeResult?.matrix instanceof THREE.Matrix4 ? (nodeResult.matrix as THREE.Matrix4) : new THREE.Matrix4();
 
-        if (selPoints.length > 0) {
-          pointsSelectionHandles.sync(selPoints, selMatrix, selectedPointsSelectionIndices);
+        if (rawPoints.length > 0) {
+          // The node is pure: on a still mesh it hands back the same points array every frame.
+          const synced = pointsSelectionSynced;
+          const stale =
+            synced.points !== rawPoints ||
+            synced.revision !== pointsSelectionRevision ||
+            !synced.matrix.equals(selMatrix) ||
+            pointsSelectionHandles.count() !== rawPoints.length;
+          if (stale) {
+            const selPoints = rawPoints.map((p) => (p instanceof THREE.Vector3 ? p : asVector3(p, new THREE.Vector3())));
+            pointsSelectionHandles.sync(selPoints, selMatrix, selectedPointsSelectionIndices);
+            pointsSelectionSynced = { points: rawPoints, matrix: selMatrix.clone(), revision: pointsSelectionRevision };
+          }
         } else if (pointsSelectionHandles.count() > 0) {
           pointsSelectionHandles.clear();
         }
@@ -6164,6 +6207,7 @@ export function Viewport({
         pointsSelectionHandles.clear();
         pointsSelectionNodeId = null;
         selectedPointsSelectionIndices.clear();
+        pointsSelectionSynced = { points: null, matrix: new THREE.Matrix4(), revision: -1 };
       }
 
       // Points Influence handles — same live-evaluated point source as
@@ -6176,6 +6220,7 @@ export function Viewport({
         pointsInfluenceMode =
           pointsInfNode.params.mode === "discrete" || pointsInfNode.params.mode === "gradient" ? pointsInfNode.params.mode : "brush";
         if (pointsInfluenceNodeId !== pointsInfNode.id) {
+          if (pointsInfluencePending) flushPointsInfluence();
           pointsInfluenceNodeId = pointsInfNode.id;
           const stored = pointsInfNode.params.influences;
           pointsInfluenceMap = new Map(
@@ -6204,6 +6249,7 @@ export function Viewport({
           pointsInfluenceHandles.clear();
         }
       } else if (pointsInfluenceHandles.count() > 0) {
+        if (pointsInfluencePending) flushPointsInfluence();
         pointsInfluenceHandles.clear();
         pointsInfluenceNodeId = null;
         pointsInfluenceMap.clear();

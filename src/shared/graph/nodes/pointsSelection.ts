@@ -48,6 +48,10 @@ export const POINTS_SELECTION_NODE: NodeDefinition = {
   // out-of-range indices for no real benefit.
   defaultParams: { selectedIndices: [] as number[] },
   paramFields: [],
+  // Reads nothing but its inputs and params (ctx.nodeId only names errors):
+  // on a still mesh it hands back the same lists, which lets the viewport
+  // skip resyncing the cloud.
+  pure: true,
   evaluate: (inputs, params, ctx) => {
     const { points, matrix, geometry } = resolvePointsInput(inputs, ctx.nodeId, "Points Selection");
 
