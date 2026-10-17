@@ -188,7 +188,7 @@ export class DeferredExecutor implements JobExecutor {
     this.queue = [];
     for (const job of queue) {
       const start = performance.now();
-      const kernel = this.kernels[job.kind] ?? JS_KERNELS[job.kind];
+      const kernel = (this.kernels[job.kind] ?? JS_KERNELS[job.kind]) as (payload: JobPayload<JobKind>) => unknown;
       const result = kernel(job.payload as JobPayload<JobKind>);
       const ms = performance.now() - start;
       this.kernelMs += ms;

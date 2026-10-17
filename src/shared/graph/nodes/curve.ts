@@ -15,8 +15,14 @@ import {
   primitiveOutputs,
   recentreGeometry,
 } from "./object";
-import { DEFAULT_PROFILE_POINTS, evalProfileCurve, ProfilePoint } from "../profileCurve";
+import { DEFAULT_PROFILE_POINTS, ProfilePoint } from "../profileCurve";
 import { setCurveNodePose, getCurveNodePose } from "../curvePoseStore";
+import { canRebuildCurve, RadialOffsetCurve3, SaggedLineCurve3, WORLD_DOWN } from "../curveClasses";
+import { requestJob } from "../offthread/jobs";
+import { geometryFromTubeBuffers } from "../offthread/curveTube";
+import { createVariableThicknessTubeGeometry } from "../tubeGeometry";
+
+export { createVariableThicknessTubeGeometry };
 
 /**
  * `pointsList` has no editable ParamPanel row of its own — it's edited by
@@ -395,251 +401,9 @@ export function buildBezierPath(pts: THREE.Vector3[], closed = false): THREE.Cur
   return path;
 }
 
-/** Generates custom tube geometry with variable radius R(t) = baseRadius * evalProfile(t) and start/end trimming */
-/**
- * Fans a flat disc across one end ring of the tube, duplicating its vertices
- * so the cap gets its own flat normal instead of inheriting the tube side's
- * curved-around-the-tube one — sharing indices would light the cap like a
- * continuation of the tube wall instead of a flat plug. Winding is decided
- * per end (not assumed) by checking the first triangle against the desired
- * outward normal and flipping if that particular ring's vertex order came
- * out backwards, so it's correct regardless of which end (start or end,
- * opposite tangent directions) called it.
- */
-function addTubeCap(
-  positions: number[],
-  normalAttrs: number[],
-  uvs: number[],
-  indices: number[],
-  ringStartVertex: number,
-  radialSegments: number,
-  center: THREE.Vector3,
-  capNormal: THREE.Vector3,
-): void {
-  const duplicatedRingStart = positions.length / 3;
-  for (let j = 0; j <= radialSegments; j++) {
-    const src = ringStartVertex + j;
-    positions.push(positions[src * 3], positions[src * 3 + 1], positions[src * 3 + 2]);
-    normalAttrs.push(capNormal.x, capNormal.y, capNormal.z);
-    const theta = (j / radialSegments) * Math.PI * 2;
-    uvs.push(0.5 + 0.5 * Math.cos(theta), 0.5 + 0.5 * Math.sin(theta));
-  }
-  const centerIndex = positions.length / 3;
-  positions.push(center.x, center.y, center.z);
-  normalAttrs.push(capNormal.x, capNormal.y, capNormal.z);
-  uvs.push(0.5, 0.5);
-
-  const a = new THREE.Vector3();
-  const b = new THREE.Vector3();
-  for (let j = 0; j < radialSegments; j++) {
-    const p0 = duplicatedRingStart + j;
-    const p1 = duplicatedRingStart + j + 1;
-    a.set(positions[p0 * 3], positions[p0 * 3 + 1], positions[p0 * 3 + 2]).sub(center);
-    b.set(positions[p1 * 3], positions[p1 * 3 + 1], positions[p1 * 3 + 2]).sub(center);
-    const outward = a.clone().cross(b).dot(capNormal) >= 0;
-    if (outward) indices.push(centerIndex, p0, p1);
-    else indices.push(centerIndex, p1, p0);
-  }
-}
-
-export function createVariableThicknessTubeGeometry(
-  curve: THREE.Curve<THREE.Vector3>,
-  tubularSegments = 64,
-  radialSegments = 8,
-  baseRadius = 0.1,
-  profile: ProfilePoint[] = DEFAULT_PROFILE_POINTS,
-  _closed = false,
-  startProgress = 0.0,
-  endProgress = 1.0,
-  caps = false,
-): THREE.BufferGeometry {
-  const s = Math.max(0, Math.min(1, startProgress));
-  const e = Math.max(0, Math.min(1, endProgress));
-
-  // If start and end are virtually identical, produce empty geometry
-  if (Math.abs(e - s) < 1e-5) {
-    return new THREE.BufferGeometry();
-  }
-
-  // Sample points and tangents along the trimmed portion of the curve
-  const samplePoints: THREE.Vector3[] = [];
-  const tangents: THREE.Vector3[] = [];
-
-  for (let i = 0; i <= tubularSegments; i++) {
-    const t = i / tubularSegments;
-    const u = Math.max(0, Math.min(1, s + t * (e - s)));
-    samplePoints.push(curve.getPointAt(u));
-    const tan = curve.getTangentAt(u);
-    if (e < s) tan.negate();
-    tangents.push(tan.normalize());
-  }
-
-  // Compute parallel-transport Frenet frames along samplePoints
-  const normals: THREE.Vector3[] = [];
-  const binormals: THREE.Vector3[] = [];
-
-  let normal = new THREE.Vector3();
-  const initialTan = tangents[0];
-  if (Math.abs(initialTan.x) <= Math.abs(initialTan.y) && Math.abs(initialTan.x) <= Math.abs(initialTan.z)) {
-    normal.set(1, 0, 0);
-  } else if (Math.abs(initialTan.y) <= Math.abs(initialTan.x) && Math.abs(initialTan.y) <= Math.abs(initialTan.z)) {
-    normal.set(0, 1, 0);
-  } else {
-    normal.set(0, 0, 1);
-  }
-  const vec = new THREE.Vector3().crossVectors(initialTan, normal).normalize();
-  normal.crossVectors(initialTan, vec).normalize();
-
-  normals.push(normal.clone());
-  binormals.push(new THREE.Vector3().crossVectors(initialTan, normal).normalize());
-
-  for (let i = 1; i <= tubularSegments; i++) {
-    const prevT = tangents[i - 1];
-    const currT = tangents[i];
-    const prevN = normals[i - 1];
-
-    const axis = new THREE.Vector3().crossVectors(prevT, currT);
-    if (axis.lengthSq() > 1e-7) {
-      axis.normalize();
-      const angle = Math.acos(THREE.MathUtils.clamp(prevT.dot(currT), -1, 1));
-      normal = prevN.clone().applyAxisAngle(axis, angle);
-    } else {
-      normal = prevN.clone();
-    }
-    normals.push(normal);
-    binormals.push(new THREE.Vector3().crossVectors(currT, normal).normalize());
-  }
-
-  const positions: number[] = [];
-  const normalAttrs: number[] = [];
-  const uvs: number[] = [];
-  const indices: number[] = [];
-
-  const vertex = new THREE.Vector3();
-  const ringNormal = new THREE.Vector3();
-
-  for (let i = 0; i <= tubularSegments; i++) {
-    const t = i / tubularSegments; // 0 to 1 along the active visible trimmed mesh
-    const P = samplePoints[i];
-    const N = normals[i];
-    const B = binormals[i];
-
-    // Evaluate profile curve along the active trimmed mesh [0, 1]
-    const radiusMultiplier = evalProfileCurve(profile, t);
-    const currentRadius = Math.max(0.0001, baseRadius * radiusMultiplier);
-
-    for (let j = 0; j <= radialSegments; j++) {
-      const v = j / radialSegments;
-      const theta = v * Math.PI * 2;
-      const sin = Math.sin(theta);
-      const cos = -Math.cos(theta);
-
-      // Normal in circle plane
-      ringNormal.x = cos * N.x + sin * B.x;
-      ringNormal.y = cos * N.y + sin * B.y;
-      ringNormal.z = cos * N.z + sin * B.z;
-      ringNormal.normalize();
-
-      normalAttrs.push(ringNormal.x, ringNormal.y, ringNormal.z);
-
-      // Vertex position
-      vertex.x = P.x + currentRadius * ringNormal.x;
-      vertex.y = P.y + currentRadius * ringNormal.y;
-      vertex.z = P.z + currentRadius * ringNormal.z;
-
-      positions.push(vertex.x, vertex.y, vertex.z);
-      uvs.push(t, v);
-    }
-  }
-
-  // Face indices
-  for (let i = 0; i < tubularSegments; i++) {
-    for (let j = 0; j < radialSegments; j++) {
-      const a = (radialSegments + 1) * i + j;
-      const b = (radialSegments + 1) * (i + 1) + j;
-      const c = (radialSegments + 1) * (i + 1) + (j + 1);
-      const d = (radialSegments + 1) * i + (j + 1);
-
-      indices.push(a, b, d);
-      indices.push(b, c, d);
-    }
-  }
-
-  if (caps) {
-    const startRingVertex = 0;
-    const endRingVertex = (radialSegments + 1) * tubularSegments;
-    addTubeCap(positions, normalAttrs, uvs, indices, startRingVertex, radialSegments, samplePoints[0], tangents[0].clone().negate());
-    addTubeCap(
-      positions,
-      normalAttrs,
-      uvs,
-      indices,
-      endRingVertex,
-      radialSegments,
-      samplePoints[tubularSegments],
-      tangents[tubularSegments].clone(),
-    );
-  }
-
-  const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
-  geometry.setAttribute("normal", new THREE.Float32BufferAttribute(normalAttrs, 3));
-  geometry.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
-  geometry.setIndex(indices);
-
-  return geometry;
-}
 
 /** 1. Curve from Points Node */
 
-const WORLD_DOWN = new THREE.Vector3(0, -1, 0);
-
-/**
- * A straight segment between two points that droops under its own weight,
- * like a slack wire strung pole-to-pole — a parabolic approximation of a
- * catenary (exact enough at the sag depths this is used for, and far
- * cheaper than solving one). `sag` is a world-unit droop depth, peaking at
- * the segment's midpoint (t=0.5) and zero at both endpoints, so the two
- * points the segment was built from are exactly where the curve still meets
- * them — only the interior sags. Real gravity doesn't care which way a wire
- * happens to run, so this always droops toward world -Y, never a direction
- * derived from the segment itself — but the curve's own points are defined
- * in the node's LOCAL space, evaluated before its pose (location/rotation/
- * scale) is applied downstream. `down` is world -Y pre-rotated into that
- * local space (see the two curve-producing nodes' evaluate()), so the droop
- * still lands on world -Y once the node's own transform is applied — a web
- * tilted 90° sags sideways in its own local frame precisely so it sags
- * *down* once rendered, instead of drooping along whatever local axis -Y
- * happened to rotate onto.
- */
-class SaggedLineCurve3 extends THREE.Curve<THREE.Vector3> {
-  constructor(
-    private v1: THREE.Vector3,
-    private v2: THREE.Vector3,
-    private sag: number,
-    private down: THREE.Vector3 = WORLD_DOWN,
-  ) {
-    super();
-  }
-
-  getPoint(t: number, target: THREE.Vector3 = new THREE.Vector3()): THREE.Vector3 {
-    target.lerpVectors(this.v1, this.v2, t);
-    target.addScaledVector(this.down, this.sag * 4 * t * (1 - t));
-    return target;
-  }
-
-  // THREE.Curve's own toJSON() only ever serializes {metadata, arcLengthDivisions}
-  // — v1/v2/sag/down are unknown to it, since it has no idea a subclass exists.
-  // Curve to Mesh's rebuild guard is keyed on JSON.stringify(curve.toJSON())
-  // (see CURVE_TO_MESH_NODE's `signature`), so without this override every
-  // frame's sag value produced byte-identical JSON: the tube mesh never
-  // rebuilt while animating Sag (or Rotation, which now also feeds `down`),
-  // even though the curve itself (and its own preview line, which resamples
-  // fresh every frame instead of diffing a signature) visibly moved.
-  toJSON(): THREE.CurveJSON & { v1: number[]; v2: number[]; sag: number; down: number[] } {
-    return { ...super.toJSON(), v1: this.v1.toArray(), v2: this.v2.toArray(), sag: this.sag, down: this.down.toArray() };
-  }
-}
 
 /**
  * World -Y, expressed in a node's own local space, so a straight segment
@@ -930,47 +694,6 @@ export const CURVE_PRIMITIVE_NODE: NodeDefinition = {
   },
 };
 
-/**
- * Wraps a base curve, radially rescaling every sampled point around the
- * curve's own local origin: a point at distance d along direction u becomes
- * u * (d*scale + offset) — the curve-space equivalent of Instance
- * Transform's per-instance Scale/Position, but applied *before* a tube gets
- * built around it instead of after. Scaling/offsetting a curve keeps
- * whatever Thickness Curve to Mesh / Curves to Meshes gives it untouched,
- * since the tube is built fresh from the already-moved points; transforming
- * a finished tube MESH stretches its cross-section right along with its
- * radius — see CURVE_ARRAY_NODE, built precisely to avoid that coupling.
- * `offset` is a world-unit push along each point's own direction from the
- * origin, independent of the base curve's own size — unlike `scale`, it
- * doesn't need dividing by the base radius by hand to get an exact spacing.
- */
-class RadialOffsetCurve3 extends THREE.Curve<THREE.Vector3> {
-  constructor(
-    private base: THREE.Curve<THREE.Vector3>,
-    private scale: number,
-    private offset: number,
-  ) {
-    super();
-  }
-
-  getPoint(t: number, target: THREE.Vector3 = new THREE.Vector3()): THREE.Vector3 {
-    this.base.getPoint(t, target);
-    const d = target.length();
-    // A point sitting on the curve's own origin has no direction to push
-    // along — leave it there rather than dividing by zero.
-    if (d < 1e-9) return target;
-    target.multiplyScalar((d * this.scale + this.offset) / d);
-    return target;
-  }
-
-  // Same reasoning as SaggedLineCurve3's own override above: the rebuild
-  // guard downstream (Curves to Meshes' `signature`) is keyed on
-  // JSON.stringify(curve.toJSON()), and the default toJSON() has no idea
-  // `base`/`scale`/`offset` exist.
-  toJSON(): THREE.CurveJSON & { base: unknown; scale: number; offset: number } {
-    return { ...super.toJSON(), base: this.base.toJSON(), scale: this.scale, offset: this.offset };
-  }
-}
 
 /**
  * Curve Array — duplicates one input curve into a list of N concentric
@@ -1218,8 +941,11 @@ export const CURVE_TO_MESH_NODE: NodeDefinition = {
     // only the filled surface.
     mesh.visible = !surface || showCurve;
 
+    // Stringifying the curve costs ~0.03 ms per node; the sweep it guards is
+    // ~3 ms (docs/offthread-geometry.md), so the signature stays as it was.
+    const curveJSON = curve.toJSON();
     const signature = JSON.stringify([
-      curve.toJSON(),
+      curveJSON,
       tubularSegments,
       radialSegments,
       thickness,
@@ -1229,7 +955,34 @@ export const CURVE_TO_MESH_NODE: NodeDefinition = {
       endProgress,
       caps,
     ]);
-    if (signature !== state.geometrySignature) {
+    if (canRebuildCurve(curveJSON)) {
+      // The sweep runs in the geometry worker (offthread/jobs.ts): this frame
+      // shows the newest finished tube, which trails a moving curve by a frame
+      // or so and is exact once it stops. Export capture sweeps inline.
+      const job = requestJob(
+        ctx.nodeId,
+        "curveTube",
+        signature,
+        () => ({
+          curve: curveJSON,
+          tubularSegments,
+          radialSegments,
+          thickness,
+          profile: profile.map((p) => ({ ...p })),
+          closed,
+          startProgress,
+          endProgress,
+          caps,
+        }),
+        { sync: ctx.capturing === true },
+      );
+      if (job.result && job.signature !== state.geometrySignature) {
+        state.geometrySignature = job.signature!;
+        mesh.geometry.dispose();
+        mesh.geometry = geometryFromTubeBuffers(job.result);
+      }
+    } else if (signature !== state.geometrySignature) {
+      // A curve class curveFromJSON does not know: sweep the live curve here.
       state.geometrySignature = signature;
       mesh.geometry.dispose();
       mesh.geometry = createVariableThicknessTubeGeometry(

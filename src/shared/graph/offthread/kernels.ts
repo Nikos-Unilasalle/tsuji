@@ -1,3 +1,5 @@
+import { BooleanJob, BooleanResult, evaluateBoolean } from "./csg";
+import { CurveTubeJob, sweepCurveTube, TubeBuffers } from "./curveTube";
 import { MeshBuffers, MetaballsJob, polygonizeMetaballs } from "./marchingCubes";
 
 /**
@@ -11,6 +13,8 @@ import { MeshBuffers, MetaballsJob, polygonizeMetaballs } from "./marchingCubes"
  */
 export interface JobTypes {
   metaballs: { payload: MetaballsJob; result: MeshBuffers };
+  curveTube: { payload: CurveTubeJob; result: TubeBuffers };
+  boolean: { payload: BooleanJob; result: BooleanResult };
 }
 
 export type JobKind = keyof JobTypes;
@@ -19,14 +23,25 @@ export type JobResult<K extends JobKind> = JobTypes[K]["result"];
 
 export const JS_KERNELS: { [K in JobKind]: (payload: JobPayload<K>) => JobResult<K> } = {
   metaballs: polygonizeMetaballs,
+  curveTube: sweepCurveTube,
+  boolean: evaluateBoolean,
 };
 
-/** The typed-array buffers in a payload or result — what postMessage moves instead of copying. */
-export function transferablesOf(value: unknown): Transferable[] {
-  const out: Transferable[] = [];
+/**
+ * The typed-array buffers in a payload or result — what postMessage moves
+ * instead of copying. Looks into nested objects (a boolean's two sides, their
+ * attribute maps); arrays of plain values (a curve's JSON) are skipped.
+ */
+export function transferablesOf(value: unknown, out: Transferable[] = []): Transferable[] {
   if (!value || typeof value !== "object") return out;
-  for (const field of Object.values(value)) {
-    if (ArrayBuffer.isView(field) && field.buffer instanceof ArrayBuffer && !out.includes(field.buffer)) out.push(field.buffer);
+  if (ArrayBuffer.isView(value)) {
+    if (value.buffer instanceof ArrayBuffer && !out.includes(value.buffer)) out.push(value.buffer);
+    return out;
   }
+  if (Array.isArray(value)) {
+    if (value.length > 0 && typeof value[0] === "object") for (const item of value) transferablesOf(item, out);
+    return out;
+  }
+  for (const field of Object.values(value)) transferablesOf(field, out);
   return out;
 }

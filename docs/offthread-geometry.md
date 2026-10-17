@@ -1,6 +1,7 @@
 # Heavy geometry off the main thread
 
-Status: prototype, shipped on one node (`object/metaballs`). Code in
+Status: shipped on three nodes — `object/metaballs` (JS or Rust/WASM kernel),
+`curve/to_mesh` and `modifier/boolean` (JS kernels). Code in
 `src/shared/graph/offthread/`, Rust in `wasm/kernels/`.
 
 ## Why
@@ -97,7 +98,8 @@ kernel). Payloads and results are plain objects of numbers and typed arrays.
 ### Transferable buffers
 
 - **Payload** (metaballs: `Float64Array` of ball centres/strengths, 5 per ball)
-  is built fresh per job, so it is transferred, not copied.
+  is built fresh per job, so it is transferred, not copied. `transferablesOf`
+  looks into nested objects (a boolean's two sides and their attribute maps).
 - **Result** (`position`, `normal`, `uv` as `Float32Array` exactly vertex-count
   long, plus `bounds`) is transferred back. On the main thread the node either
   hands those arrays straight to new `BufferAttribute`s (vertex count changed)
@@ -108,9 +110,13 @@ kernel). Payloads and results are plain objects of numbers and typed arrays.
   transferred; `finishMesh` copies them out once (it has to produce the
   node-space positions, UVs and bounds anyway) into fresh arrays, which are
   then transferred.
-- **Inputs owned upstream** (a future boolean's two meshes) must be *copied*
+- **Inputs owned upstream** (boolean's two meshes) must be *copied*
   into the payload, never transferred: transferring detaches the upstream
-  node's live attribute arrays.
+  node's live attribute arrays. Boolean's bake (`bakeMeshesToGeometry`, which
+  clones every attribute and applies the world matrix) is that copy, so its
+  arrays are the node's own and *are* transferred. `offthread/testing.ts`'s
+  `CloningExecutor` runs jobs through `structuredClone` with transfer, so the
+  node tests fail if a node hands over an array it still uses.
 
 ## Rust/WASM: where it is worth it
 
@@ -171,19 +177,106 @@ V8): open the demo in the app, Ctrl/Cmd+Shift+P, and compare the
    `memory.buffer` (`wasmKernels.ts`). No `wasm-bindgen-cli` version to keep
    in lockstep with a crate, no generated JS. Revisit if a kernel needs strings,
    closures or structured errors.
-4. **`curve/to_mesh` — worker, JS.** The sweep is three's math (curves,
-   Frenet frames) emitting vertices; porting curve evaluation to Rust is a lot of
-   surface for ~2×. First split its 8 ms: the `JSON.stringify` of every curve for
-   the signature runs on the main thread every frame and has to stay there (it is
-   also the payload — `curve.toJSON()` rebuilt in the worker with
-   `ObjectLoader`-style parsing). If the signature turns out to dominate, hash the
-   control points instead of stringifying.
-5. **`modifier/boolean` — worker, JS (three-bvh-csg in the worker).** Copy both
-   input meshes' attributes into the payload, rebuild the brushes and BVHs in the
-   worker, send back attributes + groups. CSG in Rust means `manifold-3d` (C++→WASM,
-   needs watertight inputs, different output) — a behaviour change, not a port;
-   only if three-bvh-csg in a worker is still too slow.
+4. **`curve/to_mesh` — worker, JS. Done**, see below. The sweep is three's math
+   (curves, Frenet frames) emitting vertices; porting curve evaluation to Rust is
+   a lot of surface for ~2×.
+5. **`modifier/boolean` — worker, JS (three-bvh-csg in the worker). Done**, see
+   below. CSG in Rust means `manifold-3d` (C++→WASM, needs watertight inputs,
+   different output) — a behaviour change, not a port; only if three-bvh-csg in
+   a worker is still too slow.
 6. **Not the fire sim** — already on the GPU in the app.
+
+## `curve/to_mesh` and `modifier/boolean`
+
+### Where Curve to Mesh's time went
+
+Timers around the two halves of the node, curve demos (`curve_primitive`,
+`spiderweb`, `trail`) × 4, 121 frames, 16 nodes, 976 rebuilds:
+
+| part | total | per frame |
+|---|---|---|
+| `curve.toJSON()` | 3.5 ms | 0.03 ms |
+| `JSON.stringify` of the signature (8.4 MB in all) | 44 ms | 0.37 ms |
+| tube sweep (`createVariableThicknessTubeGeometry`) | 3 466 ms | 28.6 ms (3.6 ms per rebuild) |
+
+The signature is ~1.5% of it, so it stays a `JSON.stringify` (and the
+`curve.toJSON()` it is built from doubles as the payload); no control-point
+hash. Most of the sweep is `getPointAt`/`getTangentAt` on curves that are new
+objects every frame, so every rebuild also rebuilds the curve's arc-length
+table.
+
+### Curve to Mesh
+
+- **Kernel** `curveTube` (`offthread/curveTube.ts`): rebuilds the curve from
+  its `toJSON()` (`curveFromJSON`, `curveClasses.ts`) and runs the same
+  `createVariableThicknessTubeGeometry` (moved to `tubeGeometry.ts` so the
+  worker can load it without the node registry). Result: `position`, `normal`,
+  `uv`, `index`; the node swaps them into a fresh geometry on the same mesh, as
+  the inline rebuild always did.
+- **Curve classes.** `CurvePath.fromJSON` only knows three's own classes, and
+  a subclass's `toJSON()` says `type: "Curve"`. `SaggedLineCurve3` and
+  `RadialOffsetCurve3` (moved to `curveClasses.ts`) now set their own `type`;
+  `curveFromJSON` handles those, three's `LineCurve3`, `QuadraticBezierCurve3`,
+  `CubicBezierCurve3`, `CatmullRomCurve3`, and `CurvePath`s of them, nested.
+  Anything else (`canRebuildCurve` false) is swept inline on the main thread as
+  before.
+- **Parity** (`curveTube.test.ts`): every curve class the curve nodes build,
+  plain and trimmed/capped/profiled, rebuilt and swept bit for bit like the live
+  curve; the node through a cloning executor matches the old inline sweep.
+- **Not moved:** the Surface mode's fill (only when Surface is on) and
+  `curve/to_mesh_list` (same sweep, one per curve in a list) — same kernel
+  would serve the latter, as N jobs or one job with a list.
+
+### Boolean
+
+- **Kernel** `boolean` (`offthread/csg.ts`): the two sides arrive as the flat
+  arrays + groups of their baked world-space geometry; the worker rebuilds the
+  brushes (and their BVHs) and runs three-bvh-csg. Result: attributes, Uint32
+  index, groups, draw count.
+- **Materials** cannot cross, but three-bvh-csg only compares them by identity
+  (which slots merge, which get dropped). The node numbers its distinct
+  materials, each side lists the number per group, the worker stands one
+  placeholder `Material` in for each number, and the result lists the number
+  of each of its slots. Two meshes sharing a material keep sharing a number,
+  so groups merge exactly as before.
+- **Failures** come back as a result (`error`), not a rejected job — a CSG
+  that throws on bad input must not turn the worker off for the session. The
+  node passes its first input through, as before, and logs once per input
+  change instead of every frame.
+- The main thread still runs `sideSignature` every frame and, when a job is
+  started, the bake (clone + world matrix + merge).
+- **Parity** (`csg.test.ts`): the old inline evaluate, copied into the test,
+  against the node inline and through a cloning executor — subtract/add/
+  intersect × useGroups on/off × one mesh per side and several meshes per side
+  sharing materials: same attributes, index, groups, draw range, and the same
+  material objects slot for slot.
+
+### Numbers
+
+Stress bench, the demos with these nodes (`curve_primitive`, `spiderweb`,
+`trail`, `modifier_boolean`, `modifier_weld`; 6 files) × 4, 120 animated frames
+(`TSUJI_STRESS_FILTER=curve_primitive,spiderweb,trail,modifier_boolean,modifier_weld TSUJI_STRESS_COPIES=4`):
+
+| | evaluate mean ms/frame | `curve/to_mesh` (16) | `modifier/boolean` (8) | worker kernels ms/frame |
+|---|---|---|---|---|
+| before (ef0ca04), `npm run stress` | 50.11 | 28.95 | 13.48 | — |
+| before (ef0ca04), `TSUJI_STRESS_OFFTHREAD=1` | 52.51 | 30.57 | 13.85 | — (not off-thread yet) |
+| after, `npm run stress` (inline) | 50.74 | 29.44 | 13.63 | — |
+| after, `TSUJI_STRESS_OFFTHREAD=1` | **9.07** | **0.87** | **0.66** | 43.58 (12 jobs/frame) |
+
+Per job in the worker: tube 3.75 ms mean, CSG 3.39 ms mean. In the app
+(dev server, Chromium, background pane): `worker: boolean` ~4.7 ms/job and
+0.37 ms/call on the main thread on the boolean demo; `worker: curveTube`
+~4 ms/job on the trail demo; no console errors.
+
+Inline (headless, capture, first frame) costs what it did, plus one
+throwaway geometry per run (the kernel builds geometry, hands back its
+arrays). The worker bundle grew from the marching-cubes kernel to 268 KB
+(three + three-bvh-csg); it still loads only on the first job.
+
+**The single worker is now the limit.** At ×4 these demos queue 43.6 ms of
+kernel per 16.7 ms frame: the main thread is free, but tubes and CSGs land at
+~20 Hz and trail further while things move. The pool below is the next step.
 
 ## Adding a node
 
@@ -199,9 +292,10 @@ V8): open the demo in the app, Ctrl/Cmd+Shift+P, and compare the
 
 ## Known limits / next steps
 
-- **One worker.** Jobs from all nodes queue behind each other. A small pool
-  (`min(2, hardwareConcurrency - 1)`), routed by node id so each node's
-  scratch stays warm, is the next step once a second node moves over.
+- **One worker.** Jobs from all nodes queue behind each other — 43.6 ms of
+  kernel per frame on the ×4 curve/boolean bench above. A small pool
+  (`min(4, hardwareConcurrency - 1)`), routed by node id so each node's
+  scratch stays warm, is the next step.
 - **One scratch field per worker**, sized to the last resolution: two metaballs
   nodes at different resolutions reallocate per job.
 - **Allocation churn.** Every result is fresh arrays (~2 MB/job at 60k verts),
