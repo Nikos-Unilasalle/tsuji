@@ -1917,7 +1917,7 @@ export function Viewport({
     let pointsInfluenceNodeId: string | null = null;
     let pointsInfluenceMode: PointsInfluenceMode = "brush";
     let pointsInfluenceMap = new Map<number, number>();
-    /** Bumped on every change to pointsInfluenceMap (commitPointsInfluence, or markPointsInfluencePainted mid-stroke): the cloud recolors only then. */
+    /** Bumped when pointsInfluenceMap changes outside a brush stroke (commitPointsInfluence, node switch): the cloud fully recolors only then. Mid-stroke, markPointsInfluencePainted recolors just the brushed points. */
     let pointsInfluenceRevision = 0;
     /** A brush stroke has painted since the last commit (see markPointsInfluencePainted). */
     let pointsInfluencePending = false;
@@ -3053,16 +3053,21 @@ export function Viewport({
 
     /**
      * A brush stroke paints on every pointermove but writes to the node once,
-     * on pointer-up: the heatmap recolors from the local map right away
-     * (revision), while each graph update costs a copy of the whole map, a
-     * re-render and a re-evaluation of the node and everything downstream —
-     * 15-20 ms at 25k points, which per move kept a stroke near 23 ms a frame.
-     * Committing once per animation frame instead did not help: pointer moves
-     * already arrive about once per frame.
+     * on pointer-up: the heatmap recolors from the local map right away, while
+     * each graph update costs a copy of the whole map, a re-render and a
+     * re-evaluation of the node and everything downstream — 15-20 ms at 25k
+     * points, which per move kept a stroke near 23 ms a frame. Committing once
+     * per animation frame instead did not help: pointer moves already arrive
+     * about once per frame.
+     *
+     * Only the `painted` points are recolored — no revision bump, so the tick
+     * does not resync and recolor the whole cloud for a brush-sized change.
      */
-    function markPointsInfluencePainted() {
-      pointsInfluenceRevision++;
+    function markPointsInfluencePainted(painted: number[]) {
       pointsInfluencePending = true;
+      if (painted.length > 0) {
+        pointsInfluenceHandles.updateColors(painted, (idx) => influenceColor(pointsInfluenceMap.get(idx) ?? 0));
+      }
     }
 
     function getActiveInfluenceLevel(): number {
@@ -3070,11 +3075,16 @@ export function Viewport({
       return typeof raw === "number" ? raw : POINTS_INFLUENCE_DISCRETE_LEVELS[2];
     }
 
-    /** Falloff of a brush stroke centered at `centerPx`: `cap` (the armed preset level) at the center, 0 at the edge of brushRadius. */
-    function paintInfluenceAt(centerPx: { x: number; y: number }, radiusPx: number, cap: number, erase: boolean) {
+    /**
+     * Falloff of a brush stroke centered at `centerPx`: `cap` (the armed preset level) at the center, 0 at the edge of brushRadius.
+     * Returns the indices under the brush, for markPointsInfluencePainted.
+     */
+    function paintInfluenceAt(centerPx: { x: number; y: number }, radiusPx: number, cap: number, erase: boolean): number[] {
       const hits = pointsInfluenceHandles.pickCircle(centerPx, radiusPx, camera, renderer.domElement.clientWidth, renderer.domElement.clientHeight);
-      if (hits.length === 0) return;
-      for (const { index, distance } of hits) {
+      const painted: number[] = new Array(hits.length);
+      for (let h = 0; h < hits.length; h++) {
+        const { index, distance } = hits[h];
+        painted[h] = index;
         const falloff = (1 - distance / radiusPx) * cap;
         if (erase) {
           const next = Math.max(0, (pointsInfluenceMap.get(index) ?? 0) - falloff);
@@ -3085,6 +3095,7 @@ export function Viewport({
           pointsInfluenceMap.set(index, next);
         }
       }
+      return painted;
     }
 
     /**
@@ -3994,8 +4005,9 @@ export function Viewport({
         controls.enabled = false;
         const rect = renderer.domElement.getBoundingClientRect();
         const radius = Number(graphRef.current.nodes.find((n) => n.id === pointsInfluenceNodeId)?.params.brushRadius) || 40;
-        paintInfluenceAt({ x: e.clientX - rect.left, y: e.clientY - rect.top }, radius, getActiveInfluenceLevel(), e.shiftKey);
-        markPointsInfluencePainted();
+        markPointsInfluencePainted(
+          paintInfluenceAt({ x: e.clientX - rect.left, y: e.clientY - rect.top }, radius, getActiveInfluenceLevel(), e.shiftKey),
+        );
         e.stopImmediatePropagation();
         return;
       }
@@ -4612,8 +4624,9 @@ export function Viewport({
       if (isBrushPainting && host) {
         const rect = renderer.domElement.getBoundingClientRect();
         const radius = Number(graphRef.current.nodes.find((n) => n.id === pointsInfluenceNodeId)?.params.brushRadius) || 40;
-        paintInfluenceAt({ x: e.clientX - rect.left, y: e.clientY - rect.top }, radius, getActiveInfluenceLevel(), e.shiftKey);
-        markPointsInfluencePainted();
+        markPointsInfluencePainted(
+          paintInfluenceAt({ x: e.clientX - rect.left, y: e.clientY - rect.top }, radius, getActiveInfluenceLevel(), e.shiftKey),
+        );
         return;
       }
       if (isGradientDragging && gradientStartPos && host) {

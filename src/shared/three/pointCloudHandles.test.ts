@@ -136,6 +136,64 @@ describe("createPointCloudHandles", () => {
     expect(shifted.x).toBeGreaterThan(atOrigin.x);
   });
 
+  it("updateColors rewrites only the given indices and uploads just their span", () => {
+    const handles = createPointCloudHandles();
+    const pts = grid(10);
+    handles.sync(pts, new THREE.Matrix4(), null, () => 0x0000ff);
+
+    const cloud = handles.group.children[0] as THREE.Points;
+    const position = cloud.geometry.attributes.position as THREE.BufferAttribute;
+    const color = cloud.geometry.attributes.color as THREE.BufferAttribute;
+    const positionsBefore = Array.from(position.array);
+    const blue = Array.from(color.array.slice(0, 3));
+    const positionVersion = position.version;
+    const colorVersion = color.version;
+
+    // Out-of-range indices are ignored rather than writing past the buffer.
+    handles.updateColors([6, 3, 42, -1], () => 0xff0000);
+
+    const red = new THREE.Color(0xff0000);
+    for (let i = 0; i < 10; i++) {
+      const rgb = Array.from(color.array.slice(i * 3, i * 3 + 3));
+      if (i === 3 || i === 6) {
+        expect(rgb[0]).toBeCloseTo(red.r, 5);
+        expect(rgb[1]).toBeCloseTo(red.g, 5);
+        expect(rgb[2]).toBeCloseTo(red.b, 5);
+      } else {
+        expect(rgb).toEqual(blue);
+      }
+    }
+    expect(color.version).toBe(colorVersion + 1);
+    expect(color.updateRanges).toEqual([{ start: 9, count: 12 }]);
+    // Positions are untouched and not re-uploaded.
+    expect(position.version).toBe(positionVersion);
+    expect(Array.from(position.array)).toEqual(positionsBefore);
+  });
+
+  it("a full sync after updateColors uploads the whole color buffer again", () => {
+    const handles = createPointCloudHandles();
+    handles.sync(grid(10), new THREE.Matrix4(), null);
+    handles.updateColors([2], () => 0xff0000);
+
+    const color = (handles.group.children[0] as THREE.Points).geometry.attributes.color as THREE.BufferAttribute;
+    expect(color.updateRanges).toHaveLength(1);
+
+    handles.sync(grid(10), new THREE.Matrix4(), null);
+    expect(color.updateRanges).toEqual([]);
+  });
+
+  it("updateColors on an empty cloud, or with no indices, does nothing", () => {
+    const handles = createPointCloudHandles();
+    expect(() => handles.updateColors([0, 1], () => 0xff0000)).not.toThrow();
+
+    handles.sync(grid(4), new THREE.Matrix4(), null);
+    const color = (handles.group.children[0] as THREE.Points).geometry.attributes.color as THREE.BufferAttribute;
+    const version = color.version;
+    handles.updateColors([], () => 0xff0000);
+    expect(color.version).toBe(version);
+    expect(color.updateRanges).toEqual([]);
+  });
+
   it("clear() tears the cloud down and reports an empty count", () => {
     const handles = createPointCloudHandles();
     handles.sync(grid(100), new THREE.Matrix4(), null);

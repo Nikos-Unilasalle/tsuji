@@ -44,6 +44,14 @@ export interface PointCloudHandles {
     selectedIndices: Set<number> | number[] | number | null,
     colorOverride?: (idx: number) => number | null | undefined
   ): void;
+  /**
+   * Recolor only `indices`, leaving positions and every other color as the
+   * last sync left them — a brush stroke touches the points under the brush,
+   * and a full sync per pointermove recolored all of a mesh's vertices to
+   * change a few hundred. Only the span the indices cover is re-uploaded.
+   * Indices outside the current cloud are ignored.
+   */
+  updateColors(indices: Iterable<number>, color: (idx: number) => number): void;
   clear(): void;
   /** Index of the point nearest the pointer within PICK_RADIUS_PX, or null. */
   pick(ndc: THREE.Vector2, camera: THREE.Camera, widthPx: number, heightPx: number): number | null;
@@ -204,6 +212,8 @@ export function createPointCloudHandles(): PointCloudHandles {
       }
 
       geometry.attributes.position.needsUpdate = true;
+      // A pending updateColors range would otherwise limit this upload to it.
+      (geometry.attributes.color as THREE.BufferAttribute).clearUpdateRanges();
       geometry.attributes.color.needsUpdate = true;
 
       spaceMatrix.copy(matrix);
@@ -211,6 +221,26 @@ export function createPointCloudHandles(): PointCloudHandles {
       // Forced: nothing else recomputes matrixWorld for a group whose matrix
       // is assigned rather than derived.
       group.updateMatrixWorld(true);
+    },
+
+    updateColors(indices, color) {
+      if (!geometry || pointCount === 0) return;
+      let min = Infinity;
+      let max = -Infinity;
+      for (const i of indices) {
+        if (i < 0 || i >= pointCount) continue;
+        const rgb = rgbOf(color(i));
+        const b = i * 3;
+        colors[b] = rgb[0];
+        colors[b + 1] = rgb[1];
+        colors[b + 2] = rgb[2];
+        if (i < min) min = i;
+        if (i > max) max = i;
+      }
+      if (max < min) return;
+      const attr = geometry.attributes.color as THREE.BufferAttribute;
+      attr.addUpdateRange(min * 3, (max - min + 1) * 3);
+      attr.needsUpdate = true;
     },
 
     clear,
