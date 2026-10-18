@@ -228,23 +228,6 @@
   border-color: #ffffff;
 }
 
-/* The Brush tool's hover ring; the viewport effect sets its position and size. */
-.viewport-influence-cursor {
-  display: none;
-  position: absolute;
-  border-radius: 50%;
-  border: 1.5px solid #38bdf8;
-  background: rgba(56, 189, 248, 0.12);
-  pointer-events: none;
-  z-index: 40;
-}
-
-.viewport-influence-cursor-erase {
-  border-color: #f87171;
-  border-style: dashed;
-  background: rgba(248, 113, 113, 0.1);
-}
-
 /* 2D HUD overlay — rendered over the camera view from hub/* nodes. Kept below
    the floating panels (param panel z-index 5, node palette, top bar…) so a HUD
    element never paints on top of them, but above the 3D canvas. */

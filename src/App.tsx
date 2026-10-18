@@ -40,6 +40,7 @@ import { insetRegion } from "./shared/graph/mesh/tools";
 import { smartUnwrap } from "./shared/graph/mesh/unwrap";
 import { extractPointsFromMesh } from "./shared/graph/nodes/pointsGeometry";
 import { findFirstMesh } from "./shared/graph/meshRequired";
+import { computePointInfluences, POINTS_INFLUENCE_COMPUTE_ACTION } from "./shared/graph/nodes/pointsInfluence";
 import {
   freezeObjectToGeometryData,
   FROZEN_UNWRAP_UVS_ACTION,
@@ -1750,6 +1751,23 @@ function MainEditor() {
         const meshData: QuadMesh = resolveEditMeshData(node, evaluatedResults);
         const unwrapped = boxProjectUVs(meshData);
         onParamChange("meshData", unwrapped, nodeId);
+        return;
+      }
+      if (action === POINTS_INFLUENCE_COMPUTE_ACTION) {
+        // The painted map read under each vertex of the node's first mesh —
+        // the points are those vertices, index for index.
+        const geomObj = evaluatedResults?.get(nodeId)?.geometry;
+        const mesh = geomObj instanceof THREE.Object3D ? findFirstMesh(geomObj) : null;
+        if (!mesh) {
+          console.warn("Points Influence: Compute needs a mesh wired into Geometry — a bare point list has no surface to paint.");
+          return;
+        }
+        const influences = computePointInfluences(nodeId, mesh.geometry);
+        if (!influences) {
+          console.warn("Points Influence: this mesh has no UVs, so the painted map cannot be read back onto its points.");
+          return;
+        }
+        onParamChange("influences", influences, nodeId);
         return;
       }
       if (action === FROZEN_UNWRAP_UVS_ACTION) {

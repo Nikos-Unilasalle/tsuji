@@ -17,6 +17,7 @@ import { getSimulationEpoch, onSimulationReset } from "../graph/simulationEpoch"
 import { isIkControlNode, resolveCurveEditTarget } from "../graph/curveLookup";
 import { resolveSceneRoots } from "../graph/sceneRoots";
 import { findFirstMesh } from "../graph/meshRequired";
+import { getBoundsTree } from "./bvh";
 import { insertCurvePointAfter, removeCurvePoint } from "../graph/curvePoints";
 import { GizmoTarget, resolveGizmoTarget } from "../graph/transformLookup";
 import { CLIP_BOX_NODE, VISUAL_SLICE_NODE } from "../graph/nodes/visualSlice";
@@ -27,7 +28,7 @@ import { createPointCloudHandles } from "./pointCloudHandles";
 import { SKELETON_NODE_TYPE } from "../graph/nodes/skeleton";
 import { SKIN_NODE } from "../graph/nodes/skin";
 import { SkeletonHud, SkinHud } from "./RigHuds";
-import { PointsInfluenceHud, readPointsInfluenceMode } from "./PointsInfluenceHud";
+import { PointsInfluenceHud } from "./PointsInfluenceHud";
 import { isRigNodeType, setInFront } from "./inFront";
 import { skeletonOp, SkeletonOp } from "./skeletonEditor";
 import { createSceneMembership, isSelfOrDescendantOf } from "./sceneMembership";
@@ -39,7 +40,7 @@ import {
 import { POINTS_SELECTION_NODE } from "../graph/nodes/pointsSelection";
 import { applyWeldedPointMoves, EDIT_MESH_POINTS_NODE, RESEED_MESH_POINTS_ACTION } from "../graph/nodes/editMeshPoints";
 import { extractPointsFromMesh } from "../graph/nodes/pointsGeometry";
-import { POINTS_INFLUENCE_NODE, POINTS_INFLUENCE_DISCRETE_LEVELS, PointsInfluenceMode } from "../graph/nodes/pointsInfluence";
+import { POINTS_INFLUENCE_NODE, POINTS_INFLUENCE_BASE, POINTS_INFLUENCE_LEVELS, influenceStroke } from "../graph/nodes/pointsInfluence";
 import { FACE_SELECTION_NODE } from "../graph/nodes/meshEdit";
 import { createFaceSelectionHandles } from "./faceSelectionHandles";
 import {
@@ -341,8 +342,41 @@ import { getTexturePaintState, texturePaintP5Style } from "../graph/nodes/textur
 import { endBrushPaint } from "./brushPaintSession";
 import { getTextureMixPaintState } from "../graph/nodes/textureMixPaint";
 
+/** Nodes painted through Texture Paint's canvas, strokes and save path — Points Influence paints its influence map the same way. */
 function isTexturePaintNode(node: { type: string } | null | undefined): boolean {
-  return node?.type === "texture/paint";
+  return node?.type === "texture/paint" || node?.type === POINTS_INFLUENCE_NODE.type;
+}
+
+/** The tool and colour a Texture Paint stroke of this node uses. */
+function texturePaintStroke(node: NodeInstance): { tool: TexturePaintTool; color: string } {
+  if (node.type === POINTS_INFLUENCE_NODE.type) return influenceStroke(node.params);
+  return {
+    tool: (node.params.brushTool as TexturePaintTool) || "paint",
+    color: String(node.params.brushColor || "#38bdf8"),
+  };
+}
+
+/**
+ * Points Influence's painted map drawn on its mesh: the gray as a cold-to-hot
+ * heatmap, lit like any surface. Only in this viewport's render, swapped in
+ * around it (see influenceMeshes in tick()).
+ */
+function createInfluenceHeatmapMaterial(): THREE.MeshStandardMaterial {
+  const material = new THREE.MeshStandardMaterial({ roughness: 0.7, metalness: 0 });
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.influenceCold = { value: INFLUENCE_COLD };
+    shader.uniforms.influenceHot = { value: INFLUENCE_HOT };
+    shader.fragmentShader = shader.fragmentShader
+      .replace("void main() {", "uniform vec3 influenceCold;\nuniform vec3 influenceHot;\nvoid main() {")
+      .replace(
+        "#include <map_fragment>",
+        `#ifdef USE_MAP
+  vec4 influenceTexel = texture2D( map, vMapUv );
+  diffuseColor.rgb *= mix( influenceCold, influenceHot, clamp( influenceTexel.r * influenceTexel.a, 0.0, 1.0 ) );
+#endif`,
+      );
+  };
+  return material;
 }
 
 function isTextureMixNode(node: { type: string } | null | undefined): boolean {
@@ -356,6 +390,14 @@ function getTexturePaintMeshesForNode(
 ): THREE.Mesh[] {
   const meshes: THREE.Mesh[] = [];
   const res = latestResults?.get(nodeId);
+  // Points Influence's points are its first mesh's vertices: that mesh is
+  // the whole surface, and a BVH keeps its per-move raycast cheap.
+  if (graph.nodes.find((n) => n.id === nodeId)?.type === POINTS_INFLUENCE_NODE.type) {
+    const mesh = res?.geometry instanceof THREE.Object3D ? findFirstMesh(res.geometry) : null;
+    if (!mesh) return [];
+    getBoundsTree(mesh.geometry);
+    return [mesh];
+  }
   if (res?.geometry instanceof THREE.Object3D) {
     res.geometry.traverse((child) => {
       if ((child as THREE.Mesh).isMesh) {
@@ -524,19 +566,15 @@ import "./viewport.css";
 // WebGL canvas) would otherwise omit. These helpers redraw each element onto a
 // 2D canvas so the export includes the HUD.
 /**
- * Cold-blue (0) to hot-red (1) heatmap for Points Influence handles — the
- * "dégradé de couleur" the painted gradient needs to actually read as a
- * gradient rather than a binary on/off dot.
+ * Cold-blue (0) to hot-red (1) heatmap for Points Influence — the palette's
+ * swatches here, the painted surface in influenceHeatmapMaterial. Both mix
+ * the same two colours in linear space.
  */
-/**
- * The heatmap ramp in 256 steps, built once: the viewport recolors every
- * point of a mesh-sized cloud through this, and building three Colors per
- * point per frame cost ~25 ms at 66k points. The discrete levels (0.2 … 1)
- * fall exactly on steps.
- */
+const INFLUENCE_COLD = new THREE.Color(0x2563eb);
+const INFLUENCE_HOT = new THREE.Color(0xef4444);
 const INFLUENCE_RAMP: number[] = (() => {
-  const cold = new THREE.Color(0x2563eb);
-  const hot = new THREE.Color(0xef4444);
+  const cold = INFLUENCE_COLD;
+  const hot = INFLUENCE_HOT;
   const mixed = new THREE.Color();
   return Array.from({ length: 256 }, (_, i) => mixed.copy(cold).lerp(hot, i / 255).getHex());
 })();
@@ -545,8 +583,8 @@ function influenceColor(v: number): number {
   return INFLUENCE_RAMP[Math.round(Math.max(0, Math.min(1, v || 0)) * 255)];
 }
 
-/** The 5 discrete-mode level colors, in the same order as POINTS_INFLUENCE_DISCRETE_LEVELS. */
-const DISCRETE_LEVEL_HEX = POINTS_INFLUENCE_DISCRETE_LEVELS.map((v) => `#${influenceColor(v).toString(16).padStart(6, "0")}`);
+/** The palette's 5 level colors, in the same order as POINTS_INFLUENCE_LEVELS. */
+const DISCRETE_LEVEL_HEX = POINTS_INFLUENCE_LEVELS.map((v) => `#${influenceColor(v).toString(16).padStart(6, "0")}`);
 
 /** Hands each mounted viewport its own evaluator session id. */
 let nextSessionOrdinal = 0;
@@ -1054,7 +1092,6 @@ export function Viewport({
   const hubDragMovedRef = useRef(false);
 
   const [marqueeBox, setMarqueeBox] = useState<{ left: number; top: number; width: number; height: number } | null>(null);
-  const [gradientLine, setGradientLine] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
 
   // Grease Pencil drawing state
   const onParamChangeRef = useRef(onParamChange);
@@ -1221,12 +1258,6 @@ export function Viewport({
   const [sculptInvert, setSculptInvert] = useState(false);
   const sculptInvertRef = useRef(false);
   sculptInvertRef.current = sculptInvert;
-  /** Points Influence palette's Erase toggle: Brush and Assign strokes lower influence instead of adding it (Shift does the same for one stroke). */
-  const [influenceErase, setInfluenceErase] = useState(false);
-  const influenceEraseRef = useRef(false);
-  influenceEraseRef.current = influenceErase;
-  /** The Brush tool's hover ring — positioned straight on the DOM, so following the pointer never re-renders the viewport. */
-  const influenceCursorRef = useRef<HTMLDivElement>(null);
   const isSculptingRef = useRef(false);
   const sculptWorkingMeshRef = useRef<SculptMeshData | null>(null);
   const sculptWorkingAdjacencyRef = useRef<number[][]>([]);
@@ -1907,43 +1938,9 @@ export function Viewport({
     } = editCtl;
 
 
-    // Points Influence editing — same generic point-cloud handles again, this
-    // time colored as a heatmap of a graded 0-1 influence instead of a
-    // binary selected/unselected. Three gestures write into the same
-    // `influences` param map, with the tool armed in the node's palette
-    // (PointsInfluenceHud): a drag that starts on the points uses it, one
-    // that starts off them orbits (Cmd forces the tool, Shift erases):
-    // - Brush: a drag paints continuously, falloff from the cursor, capped
-    //   at whichever of the 5 levels is armed — see isBrushPainting.
-    // - Discrete (Assign): a click/box assigns the armed level flat, no falloff.
-    // - Gradient: one drag sets a straight-line projection over every
-    //   point at once (1 at the start, 0 at the end) — see isGradientDragging.
-    // Mutually exclusive with curve/Points Selection editing by the same
-    // "only one node selected at a time" construction.
-    const pointsInfluenceHandles = createPointCloudHandles();
-    let pointsInfluenceNodeId: string | null = null;
-    let pointsInfluenceMode: PointsInfluenceMode = "brush";
-    let pointsInfluenceMap = new Map<number, number>();
-    /** Bumped when pointsInfluenceMap changes outside a brush stroke (commitPointsInfluence, node switch): the cloud fully recolors only then. Mid-stroke, markPointsInfluencePainted recolors just the brushed points. */
-    let pointsInfluenceRevision = 0;
-    /** A brush stroke has painted since the last commit (see markPointsInfluencePainted). */
-    let pointsInfluencePending = false;
-    /**
-     * The node's `influences` object pointsInfluenceMap last matched — loaded
-     * from it, or written to it by flushPointsInfluence. Any other object
-     * there came from outside the viewport (the palette's Clear, undo) and is
-     * reloaded.
-     */
-    let pointsInfluenceLoaded: unknown = null;
-    /** What the cloud was last synced from — unchanged points, matrix and revision skip the per-point resync. */
-    let pointsInfluenceSynced: { points: unknown[] | null; matrix: THREE.Matrix4; revision: number } = {
-      points: null,
-      matrix: new THREE.Matrix4(),
-      revision: -1,
-    };
-    let isBrushPainting = false;
-    let isGradientDragging = false;
-    let gradientStartPos: { x: number; y: number } | null = null;
+    // Points Influence paints a map on its mesh (isTexturePaintNode); the
+    // viewport only swaps in a heatmap to show it, for its own render.
+    const influenceHeatmapMaterial = createInfluenceHeatmapMaterial();
 
     // A Pivot Transform node's `pivot` isn't a pose you can drag through the
     // usual translate/rotate/scale gizmo math (see gizmoWriteback.ts): with
@@ -2183,7 +2180,6 @@ export function Viewport({
       editorUiScene.add(curveHandles.group);
       editorUiScene.add(pointsSelectionHandles.group);
       editorUiScene.add(skinJointHandles.group);
-      editorUiScene.add(pointsInfluenceHandles.group);
       editorUiScene.add(pivotHandle.group);
       editorUiScene.add(sliceProxy);
       editorUiScene.add(clipBoxProxy);
@@ -3060,123 +3056,6 @@ export function Viewport({
       }
     }
 
-    function commitPointsInfluence() {
-      pointsInfluenceRevision++;
-      flushPointsInfluence();
-    }
-
-    /** Writes the painted map to the node. */
-    function flushPointsInfluence() {
-      pointsInfluencePending = false;
-      if (pointsInfluenceNodeId && onTransformChangeRef.current) {
-        const influences = Object.fromEntries(pointsInfluenceMap);
-        pointsInfluenceLoaded = influences;
-        onTransformChangeRef.current(pointsInfluenceNodeId, { influences });
-      }
-    }
-
-    /**
-     * A brush stroke paints on every pointermove but writes to the node once,
-     * on pointer-up: the heatmap recolors from the local map right away, while
-     * each graph update costs a copy of the whole map, a re-render and a
-     * re-evaluation of the node and everything downstream — 15-20 ms at 25k
-     * points, which per move kept a stroke near 23 ms a frame. Committing once
-     * per animation frame instead did not help: pointer moves already arrive
-     * about once per frame.
-     *
-     * Only the `painted` points are recolored — no revision bump, so the tick
-     * does not resync and recolor the whole cloud for a brush-sized change.
-     */
-    function markPointsInfluencePainted(painted: number[]) {
-      pointsInfluencePending = true;
-      if (painted.length > 0) {
-        pointsInfluenceHandles.updateColors(painted, (idx) => influenceColor(pointsInfluenceMap.get(idx) ?? 0));
-      }
-    }
-
-    /** The palette's Erase toggle, or Shift for one stroke. */
-    function isInfluenceErase(e: { shiftKey: boolean }): boolean {
-      return e.shiftKey || influenceEraseRef.current;
-    }
-
-    /** Whether a press lands on the Points Influence cloud (within the point pick radius) — where the palette's tool takes over from orbit. */
-    function isOverInfluencePoints(e: { clientX: number; clientY: number }): boolean {
-      const rect = renderer.domElement.getBoundingClientRect();
-      const ndc = new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1);
-      return pointsInfluenceHandles.pick(ndc, camera, rect.width, rect.height) !== null;
-    }
-
-    /** Moves the Brush tool's hover ring to the pointer, or hides it off the canvas and outside Brush. */
-    function updateInfluenceCursor(e: { clientX: number; clientY: number }) {
-      const el = influenceCursorRef.current;
-      if (!el) return;
-      const rect = renderer.domElement.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
-      const show =
-        pointsInfluenceHandles.count() > 0 && pointsInfluenceMode === "brush" && x >= 0 && y >= 0 && x <= rect.width && y <= rect.height;
-      if (!show || !host) {
-        el.style.display = "none";
-        return;
-      }
-      const hostRect = host.getBoundingClientRect();
-      const radius = Number(graphRef.current.nodes.find((n) => n.id === pointsInfluenceNodeId)?.params.brushRadius) || 40;
-      el.style.display = "block";
-      el.style.left = `${e.clientX - hostRect.left - radius}px`;
-      el.style.top = `${e.clientY - hostRect.top - radius}px`;
-      el.style.width = el.style.height = `${radius * 2}px`;
-    }
-
-    function getActiveInfluenceLevel(): number {
-      const raw = graphRef.current.nodes.find((n) => n.id === pointsInfluenceNodeId)?.params.activeLevel;
-      return typeof raw === "number" ? raw : POINTS_INFLUENCE_DISCRETE_LEVELS[2];
-    }
-
-    /**
-     * Falloff of a brush stroke centered at `centerPx`: `cap` (the armed preset level) at the center, 0 at the edge of brushRadius.
-     * Returns the indices under the brush, for markPointsInfluencePainted.
-     */
-    function paintInfluenceAt(centerPx: { x: number; y: number }, radiusPx: number, cap: number, erase: boolean): number[] {
-      const hits = pointsInfluenceHandles.pickCircle(centerPx, radiusPx, camera, renderer.domElement.clientWidth, renderer.domElement.clientHeight);
-      const painted: number[] = new Array(hits.length);
-      for (let h = 0; h < hits.length; h++) {
-        const { index, distance } = hits[h];
-        painted[h] = index;
-        const falloff = (1 - distance / radiusPx) * cap;
-        if (erase) {
-          const next = Math.max(0, (pointsInfluenceMap.get(index) ?? 0) - falloff);
-          if (next <= 0) pointsInfluenceMap.delete(index);
-          else pointsInfluenceMap.set(index, next);
-        } else {
-          const next = Math.max(pointsInfluenceMap.get(index) ?? 0, falloff);
-          pointsInfluenceMap.set(index, next);
-        }
-      }
-      return painted;
-    }
-
-    /**
-     * Gradient tool: a single straight drag sets every point's influence
-     * to its own projection onto that line — 1 at the start, 0 at the end,
-     * linear in between — a full-object dégradé (e.g. top-to-bottom) in one
-     * stroke. Unlike Brush this REPLACES every point's value, including ones
-     * the drag never came near (they resolve to 0 and drop out of the sparse
-     * map), since a gradient is meant to redefine the whole field at once.
-     */
-    function applyGradientInfluence(start: { x: number; y: number }, end: { x: number; y: number }) {
-      const rect = renderer.domElement.getBoundingClientRect();
-      const projected = pointsInfluenceHandles.projectAll(camera, rect.width, rect.height);
-      const dx = end.x - start.x;
-      const dy = end.y - start.y;
-      const lenSq = dx * dx + dy * dy || 1;
-      for (const { index, x, y } of projected) {
-        const t = ((x - start.x) * dx + (y - start.y) * dy) / lenSq;
-        const value = 1 - Math.max(0, Math.min(1, t));
-        if (value <= 0) pointsInfluenceMap.delete(index);
-        else pointsInfluenceMap.set(index, value);
-      }
-    }
-
     /**
      * Reads the drawing settings off the Grease Pencil node, with defaults that
      * match the node definition so older files keep working.
@@ -3609,7 +3488,6 @@ export function Viewport({
       }
 
       const isMarqueeModifier = e.metaKey;
-      const infActive = pointsInfluenceHandles.count() > 0 && !outputMode;
 
       const gpNode = selectedNodeIdRef.current
         ? graphRef.current.nodes.find((n) => n.id === selectedNodeIdRef.current && isPaintOrGreaseNode(n))
@@ -3818,8 +3696,7 @@ export function Viewport({
               if (isTexturePaintNode(texPaintNode)) {
                 const state = getTexturePaintState(texPaintNode.id);
                 if (state.canvas) {
-                  const brushTool = (texPaintNode.params.brushTool as TexturePaintTool) || "paint";
-                  const brushColor = String(texPaintNode.params.brushColor || "#38bdf8");
+                  const { tool: brushTool, color: brushColor } = texturePaintStroke(texPaintNode);
                   const brushSize = Number(texPaintNode.params.brushSize) || 24;
                   const brushOpacity = Number(texPaintNode.params.brushOpacity ?? 1.0);
                   const brushHardness = Number(texPaintNode.params.brushHardness ?? 0.5);
@@ -4054,37 +3931,7 @@ export function Viewport({
         return;
       }
 
-      // The Points Influence palette's armed tool takes a left drag that
-      // starts on the points, as Sculpt does on its mesh; one that starts
-      // off them still orbits. Cmd forces the tool from anywhere — a Gradient
-      // or a box wider than the object starts outside it.
-      // The tool as the palette has it now — the tick's copy can trail a click on the palette by a frame.
-      const infNodeNow = infActive ? graphRef.current.nodes.find((n) => n.id === pointsInfluenceNodeId) : undefined;
-      if (infNodeNow) pointsInfluenceMode = readPointsInfluenceMode(infNodeNow);
-      const infTool = infActive && e.button === 0 && (isMarqueeModifier || isOverInfluencePoints(e));
-      if (infTool && pointsInfluenceMode === "brush") {
-        isBrushPainting = true;
-        controls.enabled = false;
-        const rect = renderer.domElement.getBoundingClientRect();
-        const radius = Number(graphRef.current.nodes.find((n) => n.id === pointsInfluenceNodeId)?.params.brushRadius) || 40;
-        markPointsInfluencePainted(
-          paintInfluenceAt({ x: e.clientX - rect.left, y: e.clientY - rect.top }, radius, getActiveInfluenceLevel(), isInfluenceErase(e)),
-        );
-        e.stopImmediatePropagation();
-        return;
-      }
-
-      if (infTool && pointsInfluenceMode === "gradient") {
-        isGradientDragging = true;
-        controls.enabled = false;
-        const rect = renderer.domElement.getBoundingClientRect();
-        gradientStartPos = { x: e.clientX - rect.left, y: e.clientY - rect.top };
-        setGradientLine({ x1: gradientStartPos.x, y1: gradientStartPos.y, x2: gradientStartPos.x, y2: gradientStartPos.y });
-        e.stopImmediatePropagation();
-        return;
-      }
-
-      if (((isMarqueeModifier && (curveHandles.count() > 0 || pointsSelectionHandles.count() > 0)) || (infTool && pointsInfluenceMode === "discrete")) && !outputMode) {
+      if (isMarqueeModifier && (curveHandles.count() > 0 || pointsSelectionHandles.count() > 0) && !outputMode) {
         isMarqueeDragging = true;
         marqueeStartPos = { x: e.clientX, y: e.clientY };
         controls.enabled = false;
@@ -4098,7 +3945,6 @@ export function Viewport({
         updateEditModal(e.clientX, e.clientY, e);
         return;
       }
-      updateInfluenceCursor(e);
       const terrainNode = selectedNodeIdRef.current
         ? graphRef.current.nodes.find((n) => n.id === selectedNodeIdRef.current && isTerrainNode(n))
         : null;
@@ -4330,7 +4176,7 @@ export function Viewport({
               textureBrushGizmo.scale.set(scaleRadius, scaleRadius, scaleRadius);
               if (isTexturePaintNode(texPaintNode)) {
                 (textureBrushGizmo.material as THREE.LineBasicMaterial).color.set(
-                  String(texPaintNode.params.brushColor || "#38bdf8"),
+                  texturePaintStroke(texPaintNode).color,
                 );
               } else {
                 (textureBrushGizmo.material as THREE.LineBasicMaterial).color.set(0xf59e0b);
@@ -4344,8 +4190,7 @@ export function Viewport({
               if (isTexturePaintNode(texPaintNode)) {
                 const state = getTexturePaintState(texPaintNode.id);
                 if (state.canvas) {
-                  const brushTool = (texPaintNode.params.brushTool as TexturePaintTool) || "paint";
-                  const brushColor = String(texPaintNode.params.brushColor || "#38bdf8");
+                  const { tool: brushTool, color: brushColor } = texturePaintStroke(texPaintNode);
                   const brushSize = Number(texPaintNode.params.brushSize) || 24;
                   const brushOpacity = Number(texPaintNode.params.brushOpacity ?? 1.0);
                   const brushHardness = Number(texPaintNode.params.brushHardness ?? 0.5);
@@ -4684,21 +4529,6 @@ export function Viewport({
         return;
       }
 
-      if (isBrushPainting && host) {
-        const rect = renderer.domElement.getBoundingClientRect();
-        const radius = Number(graphRef.current.nodes.find((n) => n.id === pointsInfluenceNodeId)?.params.brushRadius) || 40;
-        markPointsInfluencePainted(
-          paintInfluenceAt({ x: e.clientX - rect.left, y: e.clientY - rect.top }, radius, getActiveInfluenceLevel(), isInfluenceErase(e)),
-        );
-        return;
-      }
-      if (isGradientDragging && gradientStartPos && host) {
-        const rect = renderer.domElement.getBoundingClientRect();
-        const x2 = e.clientX - rect.left;
-        const y2 = e.clientY - rect.top;
-        setGradientLine({ x1: gradientStartPos.x, y1: gradientStartPos.y, x2, y2 });
-        return;
-      }
       if (isMarqueeDragging && marqueeStartPos && host) {
         const rect = host.getBoundingClientRect();
         const x1 = Math.min(marqueeStartPos.x, e.clientX) - rect.left;
@@ -5001,28 +4831,6 @@ export function Viewport({
         gpWorkingFramesRef.current = null;
         return;
       }
-      if (isBrushPainting) {
-        isBrushPainting = false;
-        controls.enabled = true;
-        if (pointsInfluencePending) flushPointsInfluence();
-        return;
-      }
-      if (isGradientDragging) {
-        isGradientDragging = false;
-        controls.enabled = true;
-        setGradientLine(null);
-        if (gradientStartPos) {
-          const rect = renderer.domElement.getBoundingClientRect();
-          const end = { x: e.clientX - rect.left, y: e.clientY - rect.top };
-          if (Math.hypot(end.x - gradientStartPos.x, end.y - gradientStartPos.y) > CLICK_MOVE_THRESHOLD_PX) {
-            applyGradientInfluence(gradientStartPos, end);
-            commitPointsInfluence();
-          }
-        }
-        gradientStartPos = null;
-        pointerDownAt = null;
-        return;
-      }
       if (isMarqueeDragging) {
         isMarqueeDragging = false;
         setMarqueeBox(null);
@@ -5036,15 +4844,7 @@ export function Viewport({
           const maxY = Math.max(marqueeStartPos.y, e.clientY) - rect.top;
 
           if (Math.hypot(e.clientX - marqueeStartPos.x, e.clientY - marqueeStartPos.y) > CLICK_MOVE_THRESHOLD_PX) {
-            if (pointsInfluenceHandles.count() > 0 && pointsInfluenceMode === "discrete") {
-              const picked = pointsInfluenceHandles.pickRect({ minX, minY, maxX, maxY }, camera, rect.width, rect.height);
-              const level = isInfluenceErase(e) ? 0 : getActiveInfluenceLevel();
-              picked.forEach((idx) => {
-                if (level <= 0) pointsInfluenceMap.delete(idx);
-                else pointsInfluenceMap.set(idx, level);
-              });
-              commitPointsInfluence();
-            } else if (pointsSelectionHandles.count() > 0) {
+            if (pointsSelectionHandles.count() > 0) {
               const picked = pointsSelectionHandles.pickRect({ minX, minY, maxX, maxY }, camera, rect.width, rect.height);
               if (e.shiftKey) {
                 picked.forEach((idx) => selectedPointsSelectionIndices.add(idx));
@@ -5300,19 +5100,6 @@ export function Viewport({
         if (selectedPointsSelectionIndices.size > 0) {
           selectedPointsSelectionIndices.clear();
           commitPointsSelection();
-        }
-      }
-      // Discrete-mode Points Influence: a plain click assigns (or, with
-      // Shift, erases) the currently armed level to the single nearest
-      // point, same missed-click fallthrough as Points Selection above.
-      if (pointsInfluenceHandles.count() > 0 && pointsInfluenceMode === "discrete") {
-        const pickedIdx = pointsInfluenceHandles.pick(ndc, camera, rect.width, rect.height);
-        if (pickedIdx !== null) {
-          const level = isInfluenceErase(e) ? 0 : getActiveInfluenceLevel();
-          if (level <= 0) pointsInfluenceMap.delete(pickedIdx);
-          else pointsInfluenceMap.set(pickedIdx, level);
-          commitPointsInfluence();
-          return;
         }
       }
       // Clicking anywhere else drops the point and hands the gizmo back to
@@ -6295,67 +6082,24 @@ export function Viewport({
         pointsSelectionSynced = { points: null, matrix: new THREE.Matrix4(), revision: -1 };
       }
 
-      // Points Influence handles — same live-evaluated point source as
-      // Points Selection above, colored as a heatmap of the painted
-      // influence instead of plain selected/unselected.
+      // Points Influence: its mesh shows the painted map as a heatmap while
+      // the node is selected, swapped in around this viewport's render only
+      // — the node's output keeps the mesh's own material.
+      let influenceMesh: THREE.Mesh | null = null;
       const pointsInfNode = !outputMode
         ? graphRef.current.nodes.find((n) => n.id === selectedNodeIdRef.current && n.type === POINTS_INFLUENCE_NODE.type)
         : undefined;
       if (pointsInfNode) {
-        pointsInfluenceMode = readPointsInfluenceMode(pointsInfNode);
-        const switched = pointsInfluenceNodeId !== pointsInfNode.id;
-        if (switched && pointsInfluencePending) flushPointsInfluence();
-        const stored = pointsInfNode.params.influences;
-        // A new node, or its map replaced from outside mid-session (Clear,
-        // undo) — never while a stroke still holds unwritten paint.
-        if (switched || (stored !== pointsInfluenceLoaded && !pointsInfluencePending && !isBrushPainting)) {
-          pointsInfluenceNodeId = pointsInfNode.id;
-          pointsInfluenceLoaded = stored;
-          pointsInfluenceMap = new Map(
-            stored && typeof stored === "object" ? Object.entries(stored as Record<string, number>).map(([k, v]) => [Number(k), v]) : [],
-          );
-          pointsInfluenceRevision++;
-        }
+        const infTexture = getTexturePaintState(pointsInfNode.id).texture ?? null;
         const nodeResult = results.get(pointsInfNode.id);
-        const rawPoints = Array.isArray(nodeResult?.points) ? (nodeResult.points as unknown[]) : [];
-        const infMatrix = nodeResult?.matrix instanceof THREE.Matrix4 ? (nodeResult.matrix as THREE.Matrix4) : new THREE.Matrix4();
-
-        if (rawPoints.length > 0) {
-          // The node is pure: on a still mesh it hands back the same points array every frame.
-          const synced = pointsInfluenceSynced;
-          const stale =
-            synced.points !== rawPoints ||
-            synced.revision !== pointsInfluenceRevision ||
-            !synced.matrix.equals(infMatrix) ||
-            pointsInfluenceHandles.count() !== rawPoints.length;
-          if (stale) {
-            const infPoints = rawPoints.map((p) => (p instanceof THREE.Vector3 ? p : asVector3(p, new THREE.Vector3())));
-            pointsInfluenceHandles.sync(infPoints, infMatrix, null, (idx) => influenceColor(pointsInfluenceMap.get(idx) ?? 0));
-            pointsInfluenceSynced = { points: rawPoints, matrix: infMatrix.clone(), revision: pointsInfluenceRevision };
+        const mesh = nodeResult?.geometry instanceof THREE.Object3D ? findFirstMesh(nodeResult.geometry) : null;
+        if (mesh && infTexture && mesh.geometry.attributes.uv) {
+          if (influenceHeatmapMaterial.map !== infTexture) {
+            influenceHeatmapMaterial.map = infTexture;
+            influenceHeatmapMaterial.needsUpdate = true;
           }
-          // The points are the vertices of the input's first mesh, in its
-          // own space — so that mesh's geometry is what hides the far side
-          // from brushes and picks, outside X-ray. A bare point list has no
-          // surface and hides nothing.
-          const infSource = nodeResult?.geometry instanceof THREE.Object3D ? findFirstMesh(nodeResult.geometry) : null;
-          const infOccluder = infSource && infSource.geometry.attributes.position?.count === rawPoints.length ? infSource.geometry : null;
-          pointsInfluenceHandles.setOccluder(infOccluder, renderer);
-          pointsInfluenceHandles.setXray(pointsInfNode.params.xray === true);
-          // Culled points are drawn depth-tested against the mesh in the
-          // main scene, like Edit Mesh's handles; otherwise over everything.
-          const infScene = pointsInfluenceHandles.occludes() ? scene : editorUiScene;
-          if (pointsInfluenceHandles.group.parent !== infScene) infScene.add(pointsInfluenceHandles.group);
-        } else if (pointsInfluenceHandles.count() > 0) {
-          pointsInfluenceHandles.clear();
+          influenceMesh = mesh;
         }
-      } else if (pointsInfluenceHandles.count() > 0) {
-        if (pointsInfluencePending) flushPointsInfluence();
-        pointsInfluenceHandles.clear();
-        pointsInfluenceHandles.setOccluder(null, null);
-        pointsInfluenceNodeId = null;
-        pointsInfluenceLoaded = null;
-        pointsInfluenceMap.clear();
-        pointsInfluenceSynced = { points: null, matrix: new THREE.Matrix4(), revision: -1 };
       }
 
       // Face Selection editing — the green highlight follows the selected
@@ -7355,6 +7099,8 @@ export function Viewport({
       const restoreUVChecker = !outputMode && uvCheckerRef.current ? swapInUVChecker(uvMeshes) : () => {};
       const xrayOriginalMaterial = xrayMesh ? xrayMesh.material : null;
       if (xrayMesh) xrayMesh.material = editMeshXrayMaterial;
+      const influenceOriginalMaterial = influenceMesh ? influenceMesh.material : null;
+      if (influenceMesh) influenceMesh.material = influenceHeatmapMaterial;
       try {
         if (postChain.isActive(effectivePostConfigs, motionBlur, volumetric)) {
           postChainWasActive = true;
@@ -7390,6 +7136,7 @@ export function Viewport({
           renderer.render(scene, camera);
         }
       } finally {
+        if (influenceMesh && influenceOriginalMaterial) influenceMesh.material = influenceOriginalMaterial;
         if (xrayMesh && xrayOriginalMaterial) xrayMesh.material = xrayOriginalMaterial;
         restoreUVChecker();
       }
@@ -7491,7 +7238,7 @@ export function Viewport({
       pointsSelectionHandles.clear();
       skinJointHandles.clear();
       skeletonCommandsRef.current = null;
-      pointsInfluenceHandles.clear();
+      influenceHeatmapMaterial.dispose();
       pivotHandle.clear();
       terrainBrushGizmo.removeFromParent();
       sculptBrushGizmo.removeFromParent();
@@ -8042,8 +7789,7 @@ export function Viewport({
         />
       )}
       {/* Points Influence palette — tools on the left, the armed tool's
-          options along the bottom (see PointsInfluenceHud), and the Brush
-          tool's hover ring, which the viewport effect moves directly. */}
+          options along the bottom (see PointsInfluenceHud). */}
       {!outputMode &&
         !elevationView &&
         selectedNodeId &&
@@ -8051,24 +7797,19 @@ export function Viewport({
           const infNode = graph.nodes.find((n) => n.id === selectedNodeId && n.type === POINTS_INFLUENCE_NODE.type);
           if (!infNode) return null;
           return (
-            <>
-              <PointsInfluenceHud
-                node={infNode}
-                levelColors={DISCRETE_LEVEL_HEX}
-                erase={influenceErase}
-                onErase={setInfluenceErase}
-                maxRows={hudToolMaxRows}
-                left={hudToolColumnLeft}
-                onParams={(params, nodeId) => onParamChange?.(params, undefined, nodeId)}
-                onLevel={(level) => onTransformChange?.(infNode.id, { activeLevel: level })}
-              />
-              {readPointsInfluenceMode(infNode) === "brush" && (
-                <div
-                  ref={influenceCursorRef}
-                  className={`viewport-influence-cursor ${influenceErase ? "viewport-influence-cursor-erase" : ""}`}
-                />
-              )}
-            </>
+            <PointsInfluenceHud
+              node={infNode}
+              levelColors={DISCRETE_LEVEL_HEX}
+              maxRows={hudToolMaxRows}
+              left={hudToolColumnLeft}
+              onParams={(params, nodeId) => onParamChange?.(params, undefined, nodeId)}
+              onClear={() => {
+                const state = getTexturePaintState(infNode.id);
+                if (state.canvas) clearPaintCanvas(state.canvas, POINTS_INFLUENCE_BASE);
+                if (state.texture) state.texture.needsUpdate = true;
+                onParamChange?.("textureData", "", infNode.id);
+              }}
+            />
           );
         })()}
       {/* Points Selection palette — only the X-Ray toggle, in the same
@@ -8100,28 +7841,6 @@ export function Viewport({
             </HudToolColumn>
           );
         })()}
-      {/* Gradient mode's live drag preview — a straight line from the
-          Cmd-drag's start to the current cursor, matching the marquee
-          overlay's z-index/pointer-events convention. */}
-      {!outputMode && gradientLine && (
-        <svg
-          style={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: 40 }}
-          width="100%"
-          height="100%"
-        >
-          <line
-            x1={gradientLine.x1}
-            y1={gradientLine.y1}
-            x2={gradientLine.x2}
-            y2={gradientLine.y2}
-            stroke="#38bdf8"
-            strokeWidth={2}
-            strokeDasharray="6 4"
-          />
-          <circle cx={gradientLine.x1} cy={gradientLine.y1} r={4} fill="#2563eb" />
-          <circle cx={gradientLine.x2} cy={gradientLine.y2} r={4} fill="#ef4444" />
-        </svg>
-      )}
       {/* Grease Pencil live stroke drag preview */}
       {!outputMode && isGpDrawing && gpLivePreview.length > 1 && (
         <svg
@@ -9677,7 +9396,7 @@ export function Viewport({
         selectedNodeId &&
         (() => {
           const tpNode = graph.nodes.find(
-            (n) => n.id === selectedNodeId && isTexturePaintNode(n),
+            (n) => n.id === selectedNodeId && n.type === "texture/paint",
           );
           if (!tpNode) return null;
           const currentTool = (tpNode.params.brushTool as TexturePaintTool) || "paint";
