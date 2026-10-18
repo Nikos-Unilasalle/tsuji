@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 import { PARTICLES_TO_POINTS_NODE } from "./particlesToPoints";
 import { PARTICLE_RENDER_INSTANCES_NODE } from "./particleInstances";
+import { OBJECT_BOX_NODE, OBJECT_DISC_NODE } from "./object";
 import { EvalContext } from "../types";
 
 const CTX = (nodeId: string): EvalContext => ({ time: 0, step: 0, nodeId });
@@ -80,5 +81,54 @@ describe("PARTICLE_RENDER_INSTANCES_NODE", () => {
     const mat = (res.geometry as THREE.InstancedMesh).material as THREE.MeshStandardMaterial;
     expect(mat.color.getHex()).toBe(0xff0000);
     expect(mat.roughness).toBeCloseTo(0.8);
+  });
+
+  it("instances a flat Disc lying down and double-sided, like the Disc itself", () => {
+    // Disc is XY geometry laid flat only by its node's default -90° X
+    // rotation and drawn DoubleSide — instancing the raw geometry with a
+    // FrontSide material gave upright discs culled from behind: nothing.
+    const disc = OBJECT_DISC_NODE.evaluate({}, OBJECT_DISC_NODE.defaultParams, CTX("pri-disc-src")).geometry as THREE.Mesh;
+    const res = PARTICLE_RENDER_INSTANCES_NODE.evaluate(
+      { shape: disc, count: 8 },
+      PARTICLE_RENDER_INSTANCES_NODE.defaultParams,
+      CTX("pri-disc"),
+    );
+    const mesh = res.geometry as THREE.InstancedMesh;
+    expect((mesh.material as THREE.Material).side).toBe(THREE.DoubleSide);
+    mesh.geometry.computeBoundingBox();
+    const size = mesh.geometry.boundingBox!.getSize(new THREE.Vector3());
+    // Lies in XZ (normal up), not XY.
+    expect(size.x).toBeCloseTo(1);
+    expect(size.z).toBeCloseTo(1);
+    expect(size.y).toBeCloseTo(0);
+    const normal = mesh.geometry.getAttribute("normal");
+    expect(Math.abs(normal.getY(0))).toBeCloseTo(1);
+  });
+
+  it("bakes the Shape's rotation and scale but not its location, and rebuilds when they change", () => {
+    const shape = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshStandardMaterial());
+    shape.position.set(5, 5, 5);
+    shape.scale.set(2, 3, 1);
+    const run = () =>
+      PARTICLE_RENDER_INSTANCES_NODE.evaluate({ shape, count: 4 }, PARTICLE_RENDER_INSTANCES_NODE.defaultParams, CTX("pri-basis"))
+        .geometry as THREE.InstancedMesh;
+    const first = run();
+    first.geometry.computeBoundingBox();
+    const box = first.geometry.boundingBox!;
+    expect(box.getCenter(new THREE.Vector3()).length()).toBeCloseTo(0);
+    expect(box.getSize(new THREE.Vector3()).toArray().map((v) => +v.toFixed(4))).toEqual([2, 3, 0]);
+    shape.rotation.set(Math.PI / 2, 0, 0);
+    const second = run();
+    expect(second).not.toBe(first);
+    second.geometry.computeBoundingBox();
+    const size = second.geometry.boundingBox!.getSize(new THREE.Vector3());
+    expect(size.y).toBeCloseTo(0);
+    expect(size.z).toBeCloseTo(3);
+  });
+
+  it("keeps a closed Shape (Box) front-sided", () => {
+    const box = OBJECT_BOX_NODE.evaluate({}, OBJECT_BOX_NODE.defaultParams, CTX("pri-box-src")).geometry as THREE.Mesh;
+    const res = PARTICLE_RENDER_INSTANCES_NODE.evaluate({ shape: box, count: 4 }, PARTICLE_RENDER_INSTANCES_NODE.defaultParams, CTX("pri-box"));
+    expect(((res.geometry as THREE.InstancedMesh).material as THREE.Material).side).toBe(THREE.FrontSide);
   });
 });
