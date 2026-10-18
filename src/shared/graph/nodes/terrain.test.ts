@@ -319,4 +319,20 @@ describe("Terrain Maker & Engine", () => {
     expect(colliderData!.vertices.length).toBe(33 * 33 * 3);
     expect(colliderData!.indices.length).toBe(32 * 32 * 2 * 3);
   });
+
+  test("rebuilds the relief when a heightmap's pixels arrive after the texture (an image file loading)", () => {
+    const ctx = { nodeId: "terrain_late_pixels" };
+    // Merged over the defaults as the evaluator does, so the unchanged maskWeights/sculptOffsets keep their identity.
+    const params = { ...TERRAIN_NODE.defaultParams, width: 4, depth: 4, resolution: "32x32", heightScale: 3, heightOffset: 0 };
+    const texture = new THREE.Texture(); // what TextureLoader.load hands back before the image is decoded
+    const first = TERRAIN_NODE.evaluate({ heightmap: texture }, params, ctx as any);
+    const positions = (first.geometry as THREE.Mesh).geometry.attributes.position;
+    expect(positions.getY(0)).toBeCloseTo(0, 4);
+
+    const data = new Uint8Array(2 * 2 * 4).fill(255);
+    texture.image = { data, width: 2, height: 2 };
+    texture.needsUpdate = true; // same texture, same uuid, newer version
+    const second = TERRAIN_NODE.evaluate({ heightmap: texture }, params, ctx as any);
+    expect((second.geometry as THREE.Mesh).geometry.attributes.position.getY(0)).toBeCloseTo(3, 4);
+  });
 });

@@ -101,6 +101,13 @@ describe("bakeGroundHeight", () => {
     expect(groundSignature(mesh, 64)).not.toBe(before);
   });
 
+  it("changes its signature when the mesh is reshaped in place", () => {
+    const mesh = plate(1);
+    const before = groundSignature(mesh, 64);
+    mesh.geometry.attributes.position.needsUpdate = true; // a Terrain rebuilding its heights
+    expect(groundSignature(mesh, 64)).not.toBe(before);
+  });
+
   it("reuses the previous texture when the resolution is unchanged", () => {
     const mesh = plate(1);
     const first = bakeGroundHeight(mesh, 16)!;

@@ -250,8 +250,11 @@ export const TERRAIN_NODE: NodeDefinition = {
         state.mesh.geometry = state.geometry;
       }
 
-      // Check if heightmap pixels need refresh
-      if (state.heightmapTexture !== inputHeightmap || state.textureVersion !== currentTexVersion) {
+      // Check if heightmap pixels need refresh. An image file's texture exists
+      // before its pixels do: they arrive later in the same texture (same uuid,
+      // higher version), and the heights have to be rebuilt from them then.
+      const pixelsChanged = state.heightmapTexture !== inputHeightmap || state.textureVersion !== currentTexVersion;
+      if (pixelsChanged) {
         state.heightmapTexture = inputHeightmap;
         state.textureVersion = currentTexVersion;
         state.heightmapPixels = inputHeightmap ? getTexturePixels(inputHeightmap) : null;
@@ -264,7 +267,7 @@ export const TERRAIN_NODE: NodeDefinition = {
       // Update heights and normals if config, pixels, offsets or mask changed
       if (
         state.configSignature !== configSignature ||
-        state.textureVersion !== currentTexVersion ||
+        pixelsChanged ||
         prevMaskWeights !== maskWeights
       ) {
         state.configSignature = configSignature;

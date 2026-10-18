@@ -28,7 +28,9 @@ export function groundSignature(object: THREE.Object3D, resolution: number): str
     const mesh = child as THREE.Mesh;
     if (!mesh.isMesh || !mesh.visible) return;
     worldMatrixOf(mesh, matrix);
-    parts.push(`${mesh.geometry.uuid}:${matrix.elements.map((n) => Math.round(n * 1000)).join(",")}`);
+    // The position version too: a Terrain reshapes its geometry in place (same uuid) once its heightmap's pixels arrive.
+    const positions = mesh.geometry.getAttribute("position") as THREE.BufferAttribute | undefined;
+    parts.push(`${mesh.geometry.uuid}@${positions?.version ?? 0}:${matrix.elements.map((n) => Math.round(n * 1000)).join(",")}`);
   });
 
   return parts.join("|");
