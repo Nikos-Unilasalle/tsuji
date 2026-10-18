@@ -67,6 +67,34 @@ function withInstanceAlpha(shader: THREE.WebGLProgramParametersWithUniforms) {
     .replace("#include <color_fragment>", "#include <color_fragment>\ndiffuseColor.a *= vInstanceAlpha;");
 }
 
+/**
+ * The Shape mesh's rotation and scale, as seen from the Shape node's output
+ * root — every matrix from the mesh up to and including `root` composed, then
+ * stripped of translation. Translation stays out on purpose: each instance
+ * sits on its particle, and a Shape node merely moved aside in the scene
+ * shouldn't push every copy off its particle by the same offset.
+ */
+function shapeBasisMatrix(mesh: THREE.Object3D, root: THREE.Object3D): THREE.Matrix4 {
+  const basis = new THREE.Matrix4();
+  for (let node: THREE.Object3D | null = mesh; node; node = node.parent) {
+    if (node.matrixAutoUpdate) node.updateMatrix();
+    basis.premultiply(node.matrix);
+    if (node === root) break;
+  }
+  return basis.setPosition(0, 0, 0);
+}
+
+/**
+ * The side the instance material should render — the Shape's own material's,
+ * so a flat Disc or Plane (DoubleSide on its node) stays visible from below
+ * instead of vanishing whenever its back faces the camera. A closed solid
+ * keeps FrontSide; with no Shape, the default box is closed too.
+ */
+function shapeSide(mesh: THREE.Mesh | null): THREE.Side {
+  const material = mesh ? (Array.isArray(mesh.material) ? mesh.material[0] : mesh.material) : null;
+  return material?.side ?? THREE.FrontSide;
+}
+
 function getState(nodeId: string): InstanceState {
   let state = instanceCache.get(nodeId);
   if (!state) {
@@ -218,7 +246,12 @@ export const PARTICLE_RENDER_INSTANCES_NODE: NodeDefinition = {
     const shapeObject = inputs.shape instanceof THREE.Object3D ? inputs.shape : null;
     const shapeMesh = shapeObject ? findFirstMesh(shapeObject) : null;
     const sourceGeometry = shapeMesh?.geometry ?? null;
-    const sourceGeometryId = sourceGeometry?.uuid ?? "__default_box__";
+    const shapeBasis = shapeMesh && shapeObject ? shapeBasisMatrix(shapeMesh, shapeObject) : null;
+    // The basis is part of the key: re-orienting or re-scaling the Shape node
+    // has to rebuild, exactly like swapping its geometry does.
+    const sourceGeometryId = sourceGeometry
+      ? `${sourceGeometry.uuid}:${shapeBasis!.elements.map((e) => e.toFixed(6)).join(",")}`
+      : "__default_box__";
 
     // Rebuilding allocates a fresh InstancedMesh, which would discard the
     // very matrices freezing exists to preserve — so once frozen, never
@@ -228,7 +261,10 @@ export const PARTICLE_RENDER_INSTANCES_NODE: NodeDefinition = {
       if (state.mesh) disposeObject3D(state.mesh);
       // Cloned, not shared: InstancedMesh takes ownership of its geometry for
       // disposal, and the Shape node still owns and draws the original.
-      const geometry = sourceGeometry ? sourceGeometry.clone() : new THREE.BoxGeometry(1, 1, 1);
+      // The Shape's own rotation/scale is baked in so a flat primitive (Disc,
+      // Plane — XY geometry laid down only by its node's default rotation)
+      // instances the way it looks, not edge-on and upright.
+      const geometry = sourceGeometry ? sourceGeometry.clone().applyMatrix4(shapeBasis!) : new THREE.BoxGeometry(1, 1, 1);
       // See withInstanceAlpha — always present so toggling Fade Opacity never
       // needs a shader recompile, just different values in this attribute.
       geometry.setAttribute("instanceAlpha", new THREE.InstancedBufferAttribute(new Float32Array(Math.max(1, capacity)).fill(1), 1));
@@ -307,7 +343,7 @@ export const PARTICLE_RENDER_INSTANCES_NODE: NodeDefinition = {
     const matParams = extractMaterialParams(inputs, params);
     const texParams = extractTextureParams(inputs, params, ctx.nodeId);
 
-    applyMaterialParams(mesh as unknown as THREE.Mesh, matParams, THREE.FrontSide, texParams);
+    applyMaterialParams(mesh as unknown as THREE.Mesh, matParams, shapeSide(shapeMesh), texParams);
     // applyMaterialParams swaps in a brand-new material when Shadeless or
     // Transmission changes class (MeshBasicMaterial / MeshPhysicalMaterial),
     // which would silently drop the per-instance alpha chunk — reattach
