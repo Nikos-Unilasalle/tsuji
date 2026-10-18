@@ -165,6 +165,11 @@ export const DEMO_CATALOG: DemoCategory[] = [
         description: "A square wave damped into overshoot and settle.",
       },
       {
+        file: "demo_points_influence_spring.tsuji",
+        label: "Raccoon Spring (Points Influence)",
+        description: "Ears and tail painted in Points Influence trail behind a wiggling raccoon through Spring Vector.",
+      },
+      {
         file: "demo_time_remap.tsuji",
         label: "Time Remap",
         description: "A looping remap of the clock driving rotation.",

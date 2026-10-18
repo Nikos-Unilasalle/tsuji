@@ -359,10 +359,17 @@ function texturePaintStroke(node: NodeInstance): { tool: TexturePaintTool; color
 /**
  * Points Influence's painted map drawn on its mesh: the gray as a cold-to-hot
  * heatmap, lit like any surface. Only in this viewport's render, swapped in
- * around it (see influenceMeshes in tick()).
+ * around it (see influenceMesh in tick()). Pulled toward the camera so that,
+ * drawn as an overlay, it wins over the same surface shown downstream.
  */
 function createInfluenceHeatmapMaterial(): THREE.MeshStandardMaterial {
-  const material = new THREE.MeshStandardMaterial({ roughness: 0.7, metalness: 0 });
+  const material = new THREE.MeshStandardMaterial({
+    roughness: 0.7,
+    metalness: 0,
+    polygonOffset: true,
+    polygonOffsetFactor: -1,
+    polygonOffsetUnits: -4,
+  });
   material.onBeforeCompile = (shader) => {
     shader.uniforms.influenceCold = { value: INFLUENCE_COLD };
     shader.uniforms.influenceHot = { value: INFLUENCE_HOT };
@@ -1941,6 +1948,14 @@ export function Viewport({
     // Points Influence paints a map on its mesh (isTexturePaintNode); the
     // viewport only swaps in a heatmap to show it, for its own render.
     const influenceHeatmapMaterial = createInfluenceHeatmapMaterial();
+    /**
+     * Stands in for the influence mesh when that mesh is not itself in the
+     * scene — the usual case, since what is drawn is a downstream node's
+     * output (Spring Vector's sprung copy, say), not Points Influence's
+     * passthrough. Shares its geometry, placed at its world transform.
+     */
+    const influenceOverlay = new THREE.Mesh(new THREE.BufferGeometry(), influenceHeatmapMaterial);
+    influenceOverlay.matrixAutoUpdate = false;
 
     // A Pivot Transform node's `pivot` isn't a pose you can drag through the
     // usual translate/rotate/scale gizmo math (see gizmoWriteback.ts): with
@@ -7099,8 +7114,17 @@ export function Viewport({
       const restoreUVChecker = !outputMode && uvCheckerRef.current ? swapInUVChecker(uvMeshes) : () => {};
       const xrayOriginalMaterial = xrayMesh ? xrayMesh.material : null;
       if (xrayMesh) xrayMesh.material = editMeshXrayMaterial;
-      const influenceOriginalMaterial = influenceMesh ? influenceMesh.material : null;
-      if (influenceMesh) influenceMesh.material = influenceHeatmapMaterial;
+      let influenceInScene = false;
+      for (let o: THREE.Object3D | null = influenceMesh; o; o = o.parent) if (o === scene) influenceInScene = true;
+      const influenceSwapped = influenceMesh && influenceInScene ? influenceMesh : null;
+      const influenceOriginalMaterial = influenceSwapped ? influenceSwapped.material : null;
+      if (influenceSwapped) influenceSwapped.material = influenceHeatmapMaterial;
+      else if (influenceMesh) {
+        influenceOverlay.geometry = influenceMesh.geometry;
+        influenceOverlay.matrix.copy(influenceMesh.matrixWorld);
+        influenceOverlay.matrixWorld.copy(influenceMesh.matrixWorld);
+        scene.add(influenceOverlay);
+      }
       try {
         if (postChain.isActive(effectivePostConfigs, motionBlur, volumetric)) {
           postChainWasActive = true;
@@ -7136,7 +7160,8 @@ export function Viewport({
           renderer.render(scene, camera);
         }
       } finally {
-        if (influenceMesh && influenceOriginalMaterial) influenceMesh.material = influenceOriginalMaterial;
+        if (influenceSwapped && influenceOriginalMaterial) influenceSwapped.material = influenceOriginalMaterial;
+        if (influenceOverlay.parent) influenceOverlay.removeFromParent();
         if (xrayMesh && xrayOriginalMaterial) xrayMesh.material = xrayOriginalMaterial;
         restoreUVChecker();
       }
