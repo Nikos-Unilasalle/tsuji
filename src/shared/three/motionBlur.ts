@@ -61,6 +61,9 @@ const SHUTTER_SCALE = 4.0;
  * matrix parked on the object therefore died with it, every mesh reported
  * "previous == current", and object motion blurred nothing at all. Only the
  * camera term survived, because that one is per-frame rather than per-object.
+ * (The structure nodes now keep and re-sync their copies — nodes/syncedClone.ts
+ * — so most objects do survive; a reloaded graph, a source whose shape
+ * changed or a pane's own clones still don't, so the key stays.)
  *
  * The owning node id rides along in userData (object.ts stamps it, and
  * Object3D.clone copies userData), and traversal order is deterministic for a

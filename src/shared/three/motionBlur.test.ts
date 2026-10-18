@@ -35,29 +35,31 @@ function keysOf(meshes: THREE.Mesh[]): string[] {
 const WAVE = "public/demos/demo_stagger_wave.tsuji";
 
 describe.skipIf(!existsSync(WAVE))("velocity keys (stagger wave demo)", () => {
-  it("instanced geometry is a fresh set of objects every frame", () => {
-    // The premise the keying exists for. If this ever stops being true, the
-    // per-object matrix the keys replaced would have worked all along.
+  it("instanced geometry keeps its objects from one frame to the next", () => {
+    // The structure nodes used to hand out a fresh set of clones every frame,
+    // which is what the keying was built for; they now re-sync the copies they
+    // keep (nodes/syncedClone.ts). Keys still matter — a graph reloaded, a
+    // shape that changed, a pane's own clones — but the objects are stable.
     const a = evaluateMeshes(WAVE, "tint", 1.0);
-    const b = evaluateMeshes(WAVE, "tint", 1.0 + 1 / 60);
     const uuids = new Set(a.map((m) => m.uuid));
+    const b = evaluateMeshes(WAVE, "tint", 1.0 + 1 / 60);
     expect(a.length).toBe(144);
-    expect(b.filter((m) => uuids.has(m.uuid))).toHaveLength(0);
+    expect(b.filter((m) => uuids.has(m.uuid))).toHaveLength(144);
   });
 
   it("names the same instances on consecutive frames", () => {
+    // Read each frame before evaluating the next: the meshes are the same objects.
     const a = evaluateMeshes(WAVE, "tint", 1.0);
+    const keysA = keysOf(a);
     const b = evaluateMeshes(WAVE, "tint", 1.0 + 1 / 60);
-    expect(keysOf(b)).toEqual(keysOf(a));
-    expect(new Set(keysOf(a)).size).toBe(a.length);
+    expect(keysOf(b)).toEqual(keysA);
+    expect(new Set(keysA).size).toBe(a.length);
   });
 
   it("follows an instance rather than a slot — the key's whole point", () => {
     // Only Y animates in this graph, so an instance's XZ is its identity: if a
     // key pointed at a different cube from one frame to the next, the previous
     // matrix would report a sideways jump that never happened.
-    const a = evaluateMeshes(WAVE, "tint", 1.0);
-    const b = evaluateMeshes(WAVE, "tint", 1.0 + 1 / 60);
     const groundPlan = (meshes: THREE.Mesh[]) => {
       const ordinals = new Map<string, number>();
       return new Map(
@@ -67,15 +69,15 @@ describe.skipIf(!existsSync(WAVE))("velocity keys (stagger wave demo)", () => {
         }),
       );
     };
-    expect(groundPlan(b)).toEqual(groundPlan(a));
+    const before = groundPlan(evaluateMeshes(WAVE, "tint", 1.0));
+    const after = groundPlan(evaluateMeshes(WAVE, "tint", 1.0 + 1 / 60));
+    expect(after).toEqual(before);
   });
 
   it("reports real movement between the frames it keys", () => {
     // The end result the whole pass is after: a non-zero per-instance delta,
     // which is exactly what the old per-object storage could never produce for
     // cloned geometry.
-    const a = evaluateMeshes(WAVE, "tint", 1.0);
-    const b = evaluateMeshes(WAVE, "tint", 1.0 + 1 / 60);
     const heights = (meshes: THREE.Mesh[]) => {
       const ordinals = new Map<string, number>();
       return new Map(
@@ -85,8 +87,8 @@ describe.skipIf(!existsSync(WAVE))("velocity keys (stagger wave demo)", () => {
         ]),
       );
     };
-    const before = heights(a);
-    const after = heights(b);
+    const before = heights(evaluateMeshes(WAVE, "tint", 1.0));
+    const after = heights(evaluateMeshes(WAVE, "tint", 1.0 + 1 / 60));
     const deltas = [...after].map(([key, y]) => Math.abs(y - before.get(key)!));
     expect(Math.max(...deltas)).toBeGreaterThan(0.01);
   });

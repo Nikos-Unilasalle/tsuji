@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { createNodeCache, disposeObject3D } from "../nodeCaches";
+import { cloneSlots, syncedClone, trimSlots } from "./syncedClone";
 import { NodeDefinition } from "../types";
 import { clearMeshWarning, warnMeshRequired } from "../meshRequired";
 import { sampleSurfacePoints } from "../../three/bvh";
@@ -162,6 +163,8 @@ export const SPAWN_NODE: NodeDefinition = {
       clearMeshWarning(ctx.nodeId);
     }
 
+    const slots = cloneSlots(ctx.nodeId);
+    let copies = 0;
     for (let i = 0; i < count; i++) {
       const worldPos = sampledPositions[i];
       const worldNorm = sampledNormals[i];
@@ -239,7 +242,7 @@ export const SPAWN_NODE: NodeDefinition = {
         continue;
       }
 
-      const instance = sourceItem.clone(true);
+      const instance = syncedClone(slots, copies++, sourceItem);
       instance.matrixAutoUpdate = false;
       instance.matrix.copy(finalMatrix);
       if (hasPivot) instance.userData.pivot = sourcePivot.clone();
@@ -248,6 +251,7 @@ export const SPAWN_NODE: NodeDefinition = {
       group.add(instance);
     }
 
+    trimSlots(slots, copies);
     if (gpuInstancing) renderInstanced(ctx.nodeId, group, instancedItems);
     return { geometry: group };
   },
