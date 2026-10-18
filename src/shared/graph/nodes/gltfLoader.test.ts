@@ -342,6 +342,40 @@ describe("explode into nodes", () => {
     expect(explodeGltfToMeshData(nodeId)[0].shadeless).toBe(true);
   });
 
+  it("lights a KHR_materials_unlit model by default, and leaves it unlit under Respect Unlit", async () => {
+    const nodeId = "gltf-unlit-lit";
+    const field = OBJECT_GLTF_NODE.dynamicParamFields?.({ ...DUMMY, id: nodeId }) ?? [];
+    const fileField = field.find((f) => f.id === "filePath") as any;
+    fileField.onLoaded(
+      nodeId,
+      "triangle.glb",
+      buildTriangleGlbWithMaterial(
+        false,
+        { extensions: { KHR_materials_unlit: {} } },
+        { extensionsUsed: ["KHR_materials_unlit"] },
+      ),
+    );
+    await vi.waitFor(() => {
+      expect(explodeGltfToMeshData(nodeId)[0]?.positions.length).toBe(9);
+    });
+    const ctx = { time: 0, step: 0, nodeId };
+    const firstMesh = (group: THREE.Object3D) => {
+      let found: THREE.Mesh | undefined;
+      group.traverse((c) => { if (!found && c instanceof THREE.Mesh) found = c; });
+      return found!;
+    };
+
+    const lit = OBJECT_GLTF_NODE.evaluate({}, OBJECT_GLTF_NODE.defaultParams, ctx).geometry as THREE.Object3D;
+    const litMaterial = firstMesh(lit).material;
+    expect(litMaterial).toBeInstanceOf(THREE.MeshStandardMaterial);
+    // Stable across frames: no new material (and shader) per evaluate.
+    OBJECT_GLTF_NODE.evaluate({}, OBJECT_GLTF_NODE.defaultParams, ctx);
+    expect(firstMesh(lit).material).toBe(litMaterial);
+
+    OBJECT_GLTF_NODE.evaluate({}, { ...OBJECT_GLTF_NODE.defaultParams, respectUnlit: 1 }, ctx);
+    expect(firstMesh(lit).material).toBeInstanceOf(THREE.MeshBasicMaterial);
+  });
+
   it("flips the V component of baked UVs to match the ordinary (non-glTF) texture loader's flipY=true convention", async () => {
     const nodeId = "gltf-explode-uvflip";
     const field = OBJECT_GLTF_NODE.dynamicParamFields?.({ ...DUMMY, id: nodeId }) ?? [];

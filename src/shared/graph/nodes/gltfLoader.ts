@@ -472,6 +472,51 @@ interface GltfState {
   originalMaterials: WeakMap<THREE.Mesh, THREE.Material | THREE.Material[]>;
   /** Owner of the override material while "Use Own Materials" is off — see evaluate. */
   overrideHolder?: THREE.Mesh;
+  /** A lit stand-in for each of the file's unlit materials — see litVersion. */
+  litMaterials: Map<THREE.Material, THREE.MeshStandardMaterial>;
+}
+
+/**
+ * KHR_materials_unlit is what Sketchfab stamps on most photogrammetry scans
+ * (the lighting is baked into the texture), and GLTFLoader honours it with a
+ * MeshBasicMaterial — so the model ignores every light in the scene and reads
+ * as shadeless. Unless "Respect Unlit" asks for that, each such material is
+ * shown through a MeshStandardMaterial carrying the same color, texture and
+ * transparency instead; the file's own one stays untouched for when it's on.
+ */
+/** One stable lit array per multi-material mesh, rather than a new one every frame. */
+const litArrays = new WeakMap<THREE.Material[], THREE.Material[]>();
+function litArray(state: GltfState, materials: THREE.Material[]): THREE.Material[] {
+  let lit = litArrays.get(materials);
+  if (!lit) {
+    lit = materials.map((m) => litVersion(state, m));
+    litArrays.set(materials, lit);
+  }
+  return lit;
+}
+
+function litVersion(state: GltfState, material: THREE.Material): THREE.Material {
+  if (!(material instanceof THREE.MeshBasicMaterial)) return material;
+  let lit = state.litMaterials.get(material);
+  if (!lit) {
+    lit = new THREE.MeshStandardMaterial({
+      name: material.name,
+      color: material.color,
+      map: material.map,
+      alphaMap: material.alphaMap,
+      aoMap: material.aoMap,
+      vertexColors: material.vertexColors,
+      side: material.side,
+      transparent: material.transparent,
+      opacity: material.opacity,
+      alphaTest: material.alphaTest,
+      wireframe: material.wireframe,
+      roughness: 1,
+      metalness: 0,
+    });
+    state.litMaterials.set(material, lit);
+  }
+  return lit;
 }
 
 function recordOriginalMaterials(state: GltfState, root: THREE.Object3D): void {
@@ -491,6 +536,7 @@ const gltfStateCache = createNodeCache<GltfState>((s) => {
   });
   disposeObject3D(s.group);
   if (s.overrideHolder) disposeObject3D(s.overrideHolder);
+  s.litMaterials.forEach((m) => m.dispose());
 });
 
 function getOrCreateGltfState(nodeId: string): GltfState {
@@ -510,7 +556,7 @@ function getOrCreateGltfState(nodeId: string): GltfState {
   const group = new THREE.Group();
   group.add(defaultMesh);
 
-  const state: GltfState = { group, originalMaterials: new WeakMap() };
+  const state: GltfState = { group, originalMaterials: new WeakMap(), litMaterials: new Map() };
   recordOriginalMaterials(state, group);
   gltfStateCache.set(nodeId, state);
   return state;
@@ -560,6 +606,7 @@ export const OBJECT_GLTF_NODE: NodeDefinition = {
     transmission: 0,
     thickness: 0.5,
     useOwnMaterials: 1,
+    respectUnlit: 0,
   },
   dynamicParamFields: (instance) => [
     // A failed import used to look identical to no import at all — the
@@ -675,6 +722,7 @@ export const OBJECT_GLTF_NODE: NodeDefinition = {
       kind: "boolean",
       group: "Material",
     },
+    { id: "respectUnlit", label: "Respect Unlit (ignore scene lights)", kind: "boolean", group: "Material" },
     { id: "color", label: "Color (fallback)", kind: "color", group: "Material" },
     { id: "emissive", label: "Emissive (Glow)", kind: "color", group: "Material" },
     { id: "emissiveIntensity", label: "Emissive Intensity", kind: "number", step: 0.1, group: "Material" },
@@ -717,10 +765,18 @@ export const OBJECT_GLTF_NODE: NodeDefinition = {
       override = state.overrideHolder.material;
     }
     recordOriginalMaterials(state, group);
+    const respectUnlit = Boolean(params.respectUnlit);
     group.traverse((child) => {
       if (!(child instanceof THREE.Mesh)) return;
-      if (override) inheritSourceMaterial(child, override);
-      else child.material = state.originalMaterials.get(child) ?? child.material;
+      if (override) {
+        inheritSourceMaterial(child, override);
+        return;
+      }
+      const original = state.originalMaterials.get(child) ?? child.material;
+      child.material =
+        respectUnlit ? original
+        : Array.isArray(original) ? litArray(state, original)
+        : litVersion(state, original);
     });
 
     return primitiveOutputs(group, params);

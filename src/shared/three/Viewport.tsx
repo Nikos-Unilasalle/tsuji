@@ -1580,6 +1580,13 @@ export function Viewport({
     liveCameraRef.current = () => camera;
 
     const composer = new EffectComposer(renderer);
+    // The renderer's own stencil (see `stencil: true` above) only covers the
+    // canvas; once a post-process is on, the scene draws into the composer's
+    // targets instead, which three.js makes without one. Clip caps are pure
+    // stencil, so every cap quad then paints its whole face. Set before the
+    // targets' first use, so they're allocated with it (and keep it on resize).
+    composer.renderTarget1.stencilBuffer = true;
+    composer.renderTarget2.stencilBuffer = true;
     const renderPass = new RenderPass(scene, activeCamera);
     const outputPass = new OutputPass();
     composer.addPass(renderPass);
@@ -6333,7 +6340,12 @@ export function Viewport({
 
       // Clip Box's volume proxy — same contract as the slice plane above,
       // plus scale, since Box Size is part of the pose being dragged.
-      if (!outputMode && selectedNodeForPivot?.type === CLIP_BOX_NODE.type) {
+      // A wired Box input owns the volume then, and has its own gizmo.
+      if (
+        !outputMode &&
+        selectedNodeForPivot?.type === CLIP_BOX_NODE.type &&
+        !graphRef.current.connections.some((c) => c.toNode === selectedNodeForPivot.id && c.toSocket === "box")
+      ) {
         clipBoxProxyNodeId = selectedNodeForPivot.id;
         clipBoxProxy.visible = true;
         if (!transformControls?.dragging || transformControls.object !== clipBoxProxy) {

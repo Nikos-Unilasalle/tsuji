@@ -192,6 +192,35 @@ describe("CLIP_BOX_NODE", () => {
     expect(planes.some((p) => p.distanceToPoint(new THREE.Vector3(5, 0, 0)) < 0)).toBe(true);
   });
 
+  it("outputs the box's own matrix, Box Size included, not the clipped object's", () => {
+    const out = CLIP_BOX_NODE.evaluate(
+      { geometry: boxMesh(), location: new THREE.Vector3(1, 2, 3), size: new THREE.Vector3(2, 4, 6) },
+      params,
+      CTX,
+    );
+    const corner = new THREE.Vector3(0.5, 0.5, 0.5).applyMatrix4(out.matrix as THREE.Matrix4);
+    expect(corner.toArray()).toEqual([2, 4, 6]);
+  });
+
+  it("a wired Box takes over the volume, read off its bounds in its own frame", () => {
+    const limits = new THREE.Mesh(new THREE.BoxGeometry(2, 4, 6));
+    limits.position.set(1, 0, 0);
+    limits.rotation.set(0, Math.PI / 2, 0);
+    const mesh = boxMesh();
+    const out = CLIP_BOX_NODE.evaluate(
+      { geometry: mesh, box: limits, size: new THREE.Vector3(100, 100, 100) },
+      params,
+      CTX,
+    );
+
+    const expected = limits.matrix.clone().scale(new THREE.Vector3(2, 4, 6));
+    (out.matrix as THREE.Matrix4).elements.forEach((v, i) => expect(v).toBeCloseTo(expected.elements[i]));
+    // Rotated a quarter turn about Y, the 6-deep box spans x ∈ [-2, 4].
+    const planes = mesh.material.clippingPlanes!;
+    expect(planes.every((p) => p.distanceToPoint(new THREE.Vector3(3.9, 0, 0)) > 0)).toBe(true);
+    expect(planes.some((p) => p.distanceToPoint(new THREE.Vector3(4.1, 0, 0)) < 0)).toBe(true);
+  });
+
   it("cavity mode flips the normals outward and unions the half-spaces", () => {
     const mesh = boxMesh();
     CLIP_BOX_NODE.evaluate(

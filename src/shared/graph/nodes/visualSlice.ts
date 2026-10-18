@@ -175,6 +175,30 @@ function syncClipToSubtree(
 }
 
 /**
+ * The matrix taking the unit cube onto `object`'s bounds, measured in the
+ * object's own frame — so a rotated Box gives a rotated volume, not the
+ * axis-aligned box around it. Null when there is nothing with a size inside.
+ */
+function boundsMatrix(object: THREE.Object3D): THREE.Matrix4 | null {
+  object.updateWorldMatrix(true, true);
+  const toLocal = object.matrixWorld.clone().invert();
+  const bounds = new THREE.Box3();
+  const meshBounds = new THREE.Box3();
+  const relative = new THREE.Matrix4();
+  object.traverse((child) => {
+    if (!(child instanceof THREE.Mesh) || child.userData?.__clipCapHelper || !child.geometry) return;
+    if (!child.geometry.boundingBox) child.geometry.computeBoundingBox();
+    if (!child.geometry.boundingBox || child.geometry.boundingBox.isEmpty()) return;
+    relative.multiplyMatrices(toLocal, child.matrixWorld);
+    bounds.union(meshBounds.copy(child.geometry.boundingBox).applyMatrix4(relative));
+  });
+  if (bounds.isEmpty()) return null;
+  const center = bounds.getCenter(new THREE.Vector3());
+  const size = bounds.getSize(new THREE.Vector3()).max(new THREE.Vector3(1e-6, 1e-6, 1e-6));
+  return object.matrixWorld.clone().multiply(new THREE.Matrix4().compose(center, new THREE.Quaternion(), size));
+}
+
+/**
  * Clip Box — the "advanced clipping" case a single Visual Slice plane can't
  * do: six planes at once (an oriented box) instead of one flat cut across the
  * whole scene.
@@ -199,10 +223,17 @@ export const CLIP_BOX_NODE: NodeDefinition = {
     { id: "location", label: "Box Center", type: "vector" },
     { id: "rotation", label: "Box Rotation (°)", type: "vector" },
     { id: "size", label: "Box Size", type: "vector" },
+    // Any object (a Box primitive, typically) whose bounds become the clip
+    // volume — center, rotation and size all read off it, overriding the
+    // three above, so the limits can be shaped and animated like any object.
+    { id: "box", label: "Box", type: "geometry" },
   ],
   outputs: [
     { id: "geometry", label: "Geometry", type: "geometry" },
-    { id: "matrix", label: "Matrix", type: "matrix" },
+    // The box itself (unit cube → clip volume, Box Size included), not the
+    // clipped object's pose: wired into a 1×1×1 Box's Matrix, that Box sits
+    // exactly on the clip volume.
+    { id: "matrix", label: "Box Matrix", type: "matrix" },
   ],
   defaultParams: {
     location: DEFAULT_POINT.clone(),
@@ -229,10 +260,15 @@ export const CLIP_BOX_NODE: NodeDefinition = {
 
     if (ctx.renderer) ctx.renderer.localClippingEnabled = true;
 
-    const location = asVector3(inputs.location, asVector3(params.location, DEFAULT_POINT));
-    const rotation = asVector3(inputs.rotation, asVector3(params.rotation, DEFAULT_ROTATION));
-    const size = asVector3(inputs.size, asVector3(params.size, DEFAULT_BOX_SIZE));
-    const boxMatrix = composeNativeMatrix(new THREE.Matrix4(), location, rotation, size);
+    const boxObj = inputs.box instanceof THREE.Object3D ? inputs.box : null;
+    const boxMatrix =
+      (boxObj && boundsMatrix(boxObj)) ||
+      composeNativeMatrix(
+        new THREE.Matrix4(),
+        asVector3(inputs.location, asVector3(params.location, DEFAULT_POINT)),
+        asVector3(inputs.rotation, asVector3(params.rotation, DEFAULT_ROTATION)),
+        asVector3(inputs.size, asVector3(params.size, DEFAULT_BOX_SIZE)),
+      );
     const normalMatrix = new THREE.Matrix3().getNormalMatrix(boxMatrix);
 
     const cavity = String(params.clipMode || "inside") === "cavity";
@@ -272,7 +308,7 @@ export const CLIP_BOX_NODE: NodeDefinition = {
       removeClipCaps(ctx.nodeId);
     }
 
-    return primitiveOutputs(inputObj);
+    return { geometry: inputObj, matrix: boxMatrix };
   },
 };
 
