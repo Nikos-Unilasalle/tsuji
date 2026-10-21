@@ -29,7 +29,7 @@ import { Graph } from "./types";
 const BINARY_EXTENSIONS = new Set([
   "png", "jpg", "jpeg", "webp", "bmp", "hdr", "exr", "tif", "tiff",
   "mp3", "wav", "ogg", "flac", "m4a", "aac",
-  "glb", "ply", "mp4", "webm", "mov", "m4v", "ttf", "otf", "woff",
+  "glb", "fbx", "ply", "mp4", "webm", "mov", "m4v", "ttf", "otf", "woff",
 ]);
 
 /**

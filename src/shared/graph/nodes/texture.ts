@@ -39,6 +39,9 @@ export function replaceCanvasTexture(
 interface TextureNodeState {
   texture?: THREE.Texture;
   mesh?: THREE.Mesh;
+  /** The plane's lit material while Shadeless swaps it for the unlit one below; kept so toggling back is free. */
+  litMaterial?: THREE.MeshStandardMaterial;
+  unlitMaterial?: THREE.MeshBasicMaterial;
   aspectRatio: number;
   lastPath?: string;
   /** Last wrap/repeat/offset signature — avoid re-uploading the texture every frame. */
@@ -51,6 +54,7 @@ const VIDEO_EXTENSIONS = new Set(["mp4", "webm", "mov", "m4v"]);
 
 const textureCache = createNodeCache<TextureNodeState>((s) => {
   s.texture?.dispose();
+  s.unlitMaterial?.dispose();
   if (s.videoEl) {
     s.videoEl.pause();
     s.videoEl.removeAttribute("src");
@@ -305,6 +309,7 @@ export const TEXTURE_PLANE_NODE: NodeDefinition = {
     alphaCutoff: 0.001,
     doubleSided: true,
     keepAspect: true,
+    shadeless: false,
     roughness: 0.5,
     metalness: 0.1,
     loop: true,
@@ -339,6 +344,7 @@ export const TEXTURE_PLANE_NODE: NodeDefinition = {
     { id: "alphaCutoff", label: "Alpha Cutoff", kind: "number", step: 0.01 },
     { id: "doubleSided", label: "Double Sided", kind: "boolean" },
     { id: "keepAspect", label: "Keep Aspect Ratio", kind: "boolean" },
+    { id: "shadeless", label: "Shadeless (Unlit)", kind: "boolean" },
     { id: "roughness", label: "Roughness", kind: "number", step: 0.05 },
     { id: "metalness", label: "Metalness", kind: "number", step: 0.05 },
     { id: "loop", label: "Loop (video)", kind: "boolean" },
@@ -391,18 +397,33 @@ export const TEXTURE_PLANE_NODE: NodeDefinition = {
       aspect = state.aspectRatio;
     }
 
-    // Apply Matrix transformation
+    // The aspect stretch belongs to the plane's own shape, so it goes on after
+    // the whole pose (final = pose × stretch), not into the wired matrix ahead
+    // of it: there it scaled Location along with the image, and the gizmo —
+    // which solves Location/Scale from the final matrix — wrote the stretch
+    // back into them on every drag. Published as the pose offset, the viewport
+    // takes it back out the same way it does for the fire volume's anchor.
+    const stretch = keepAspect && aspect !== 1.0 ? new THREE.Matrix4().makeScale(aspect, 1.0, 1.0) : null;
+    if (stretch) mesh.userData.poseOffset = stretch;
+    else delete mesh.userData.poseOffset;
     if (ctx.nodeId !== ctx.liveEditNodeId) {
-      const wiredMatrix = inputs.matrix instanceof THREE.Matrix4 ? inputs.matrix.clone() : new THREE.Matrix4();
-      if (keepAspect && aspect !== 1.0) {
-        wiredMatrix.multiply(new THREE.Matrix4().makeScale(aspect, 1.0, 1.0));
-      }
       mesh.matrixAutoUpdate = false;
-      mesh.matrix.copy(composeNativeMatrix(wiredMatrix, params.location, params.rotation, params.scale, params));
+      mesh.matrix.copy(composeNativeMatrix(inputs.matrix, params.location, params.rotation, params.scale, params));
+      if (stretch) mesh.matrix.multiply(stretch);
     }
 
-    // Update material properties
-    const mat = mesh.material as THREE.MeshStandardMaterial;
+    // Shadeless: an unlit material that ignores every light (and shadows), so the image shows exactly as it is.
+    const shadeless = toBoolean(params.shadeless ?? 0);
+    state.litMaterial ??= mesh.material as THREE.MeshStandardMaterial;
+    if (shadeless) state.unlitMaterial ??= new THREE.MeshBasicMaterial();
+    const wanted = shadeless ? state.unlitMaterial! : state.litMaterial;
+    if (mesh.material !== wanted) {
+      mesh.material = wanted;
+      state.lastSig = undefined; // the other material has never been given the current settings
+    }
+    mesh.castShadow = !shadeless;
+    mesh.receiveShadow = !shadeless;
+    const mat = wanted as THREE.MeshStandardMaterial;
     const color = asColor(inputs.color, asColor(params.color, new THREE.Color(0xffffff)));
 
     let scaleX = 1;
@@ -423,6 +444,7 @@ export const TEXTURE_PLANE_NODE: NodeDefinition = {
     const planeSig = [
       color.getHex(),
       Boolean(params.doubleSided ?? true),
+      shadeless,
       Number(params.roughness) ?? 0.5,
       Number(params.metalness) ?? 0.1,
       Boolean(params.transparent ?? true),
@@ -438,8 +460,10 @@ export const TEXTURE_PLANE_NODE: NodeDefinition = {
       state.lastSig = planeSig;
       mat.color.copy(color);
       mat.side = Boolean(params.doubleSided ?? true) ? THREE.DoubleSide : THREE.FrontSide;
-      mat.roughness = Math.max(0, Math.min(1, Number(params.roughness) ?? 0.5));
-      mat.metalness = Math.max(0, Math.min(1, Number(params.metalness) ?? 0.1));
+      if (!shadeless) {
+        mat.roughness = Math.max(0, Math.min(1, Number(params.roughness) ?? 0.5));
+        mat.metalness = Math.max(0, Math.min(1, Number(params.metalness) ?? 0.1));
+      }
 
       const isTransparent = Boolean(params.transparent ?? true);
       mat.transparent = isTransparent;

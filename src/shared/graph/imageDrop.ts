@@ -8,7 +8,7 @@ import { Connection, NodeInstance } from "./types";
 const IMAGE_EXTENSIONS = ["png", "jpg", "jpeg", "webp", "bmp", "svg"];
 const VIDEO_EXTENSIONS = ["mp4", "webm", "mov", "m4v"];
 const AUDIO_EXTENSIONS = ["mp3", "wav", "ogg", "flac", "m4a", "aac"];
-const MODEL_EXTENSIONS = ["obj", "gltf", "glb"];
+const MODEL_EXTENSIONS = ["obj", "gltf", "glb", "fbx"];
 
 export type DroppedKind = "image" | "video" | "audio" | "model";
 
@@ -63,7 +63,8 @@ export function buildDroppedNodes(
   const audioDef = DEFAULT_REGISTRY.get("sound/player");
   const objDef = DEFAULT_REGISTRY.get("object/obj");
   const gltfDef = DEFAULT_REGISTRY.get("object/gltf");
-  if (!imageDef || !planeDef || !audioDef || !objDef || !gltfDef) return { nodes: [], connections: [] };
+  const fbxDef = DEFAULT_REGISTRY.get("object/fbx");
+  if (!imageDef || !planeDef || !audioDef || !objDef || !gltfDef || !fbxDef) return { nodes: [], connections: [] };
 
   const nodes: NodeInstance[] = [];
   const connections: Connection[] = [];
@@ -82,14 +83,14 @@ export function buildDroppedNodes(
 
     if (kind === "model") {
       const isObj = file.path.toLowerCase().endsWith(".obj");
-      const def = isObj ? objDef : gltfDef;
+      const def = isObj ? objDef : file.path.toLowerCase().endsWith(".fbx") ? fbxDef : gltfDef;
       const modelNode: NodeInstance = {
         id: randomId(),
         type: def.type,
         params: { ...cloneParams(def.defaultParams), filePath: file.path },
         position: { x: origin.x, y },
       };
-      // An OBJ is text; a glTF/GLB goes in as the bytes it is (a .gltf's JSON is read from them just the same).
+      // An OBJ is text; a glTF/GLB/FBX goes in as the bytes it is (a .gltf's JSON is read from them just the same).
       const field = def.dynamicParamFields?.(modelNode).find((f) => f.id === "filePath");
       if (field && field.kind === "file") field.onLoaded?.(modelNode.id, file.path, isObj ? new TextDecoder().decode(file.bytes) : file.bytes);
       nodes.push(modelNode);

@@ -24,6 +24,7 @@ export const GIZMO_SELECTABLE_TYPES = [
   "object/point_cloud",
   "object/obj",
   "object/gltf",
+  "object/fbx",
   "object/frozen",
   "object/text",
   "curve/to_mesh",

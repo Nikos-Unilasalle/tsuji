@@ -44,6 +44,7 @@ import { LIGHT_AMBIENT_NODE, LIGHT_DIRECTIONAL_NODE, LIGHT_POINT_NODE, LIGHT_SPO
 import { ENVIRONMENT_NODE } from "./environment";
 import { OBJECT_OBJ_NODE } from "./objLoader";
 import { OBJECT_GLTF_NODE } from "./gltfLoader";
+import { OBJECT_FBX_NODE } from "./fbxLoader";
 import { OBJECT_PLY_NODE } from "./plyLoader";
 import { OBJECT_FROZEN_NODE } from "./frozenGeometry";
 import { OBJECT_RACCOON_NODE } from "./raccoon";
@@ -309,6 +310,7 @@ export const STARTER_NODES = [
   POINT_CLOUD_NODE,
   OBJECT_OBJ_NODE,
   OBJECT_GLTF_NODE,
+  OBJECT_FBX_NODE,
   OBJECT_PLY_NODE,
   OBJECT_FROZEN_NODE,
   OBJECT_RACCOON_NODE,
@@ -612,6 +614,7 @@ export * from "./roomCorner";
 export * from "./light";
 export * from "./objLoader";
 export * from "./gltfLoader";
+export * from "./fbxLoader";
 export * from "./plyLoader";
 export * from "./frozenGeometry";
 export * from "./texture";
