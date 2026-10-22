@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { PLYLoader } from "three/examples/jsm/loaders/PLYLoader.js";
 import { NodeDefinition } from "../types";
 import { createNodeCache } from "../nodeCaches";
+import { toBoolean } from "../sockets";
 import { composeNativeMatrix } from "./transform";
 import { COMMON_PRIMITIVE_OUTPUTS, primitiveOutputs } from "./object";
 
@@ -183,6 +184,9 @@ export const OBJECT_PLY_NODE: NodeDefinition = {
   ],
   evaluate: (inputs, params, ctx) => {
     const state = getOrCreatePlyState(ctx.nodeId);
+    // The Visible field existed but nothing read it: hiding the cloud lets it
+    // stay a pure source (Vertices to Points) while something else draws it.
+    state.points.visible = inputs.visible !== undefined ? toBoolean(inputs.visible) : toBoolean(params.visible ?? 1);
 
     if (ctx.nodeId !== ctx.liveEditNodeId) {
       state.points.matrixAutoUpdate = false;
