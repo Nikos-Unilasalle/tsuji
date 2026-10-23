@@ -41,6 +41,10 @@ export interface MeshBuffers {
   uv: Float32Array;
   /** min xyz, max xyz, then bounding-sphere centre xyz and radius — what Box3/Sphere would compute from `position`. */
   bounds: Float64Array;
+  /** Triangles as vertex triples — set by the Surface Nets kernel, whose vertices are shared; absent means a triangle soup. */
+  index?: Uint32Array;
+  /** Per-vertex RGB, when the job asked for blended element colours. */
+  color?: Float32Array;
 }
 
 interface Scratch {
@@ -247,15 +251,24 @@ export function polygonizeMetaballs(job: MetaballsJob): MeshBuffers {
 export function finishMesh(fieldPosition: Float32Array, fieldNormal: Float32Array, count: number, job: MetaballsJob): MeshBuffers {
   const halfSize = job.size / 2;
   const position = new Float32Array(count * 3);
-  const normal = fieldNormal.slice(0, count * 3);
-  const uv = new Float32Array(count * 2);
-  const d = job.uvDensity;
-  let minX = Infinity, minY = Infinity, minZ = Infinity;
-  let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
-  for (let v = 0, i = 0; v < count; v++, i += 3) {
+  for (let i = 0; i < count * 3; i += 3) {
     position[i] = fieldPosition[i] * halfSize + job.centerX;
     position[i + 1] = fieldPosition[i + 1] * halfSize + job.centerY;
     position[i + 2] = fieldPosition[i + 2] * halfSize + job.centerZ;
+  }
+  return uvAndBounds(position, fieldNormal.slice(0, count * 3), count, job.uvDensity);
+}
+
+/**
+ * Object-space UVs (projectGeometryUVs' dominant-axis projection) and bounds
+ * for a finished surface already in node-local space. Takes ownership of the
+ * two arrays.
+ */
+export function uvAndBounds(position: Float32Array, normal: Float32Array, count: number, d: number): MeshBuffers {
+  const uv = new Float32Array(count * 2);
+  let minX = Infinity, minY = Infinity, minZ = Infinity;
+  let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
+  for (let v = 0, i = 0; v < count; v++, i += 3) {
     // Read back as stored: the bounds and UVs see the Float32 values, as Box3 and projectGeometryUVs did.
     const px = position[i], py = position[i + 1], pz = position[i + 2];
     if (px < minX) minX = px;

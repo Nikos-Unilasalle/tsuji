@@ -1,0 +1,592 @@
+{
+ "canvases": [
+  {
+   "nodes": [
+    {
+     "id": "setup_0",
+     "type": "object/plane",
+     "position": {
+      "x": 599,
+      "y": 160
+     },
+     "params": {
+      "visible": 1,
+      "location": {
+       "x": 0,
+       "y": -0.5,
+       "z": 0
+      },
+      "rotation": {
+       "x": 1.5707963267948966,
+       "y": 0,
+       "z": 0
+      },
+      "scale": {
+       "x": 10,
+       "y": 10,
+       "z": 1
+      },
+      "texturePath": "",
+      "normalMapPath": "",
+      "roughnessMapPath": "",
+      "uvScaleX": 1,
+      "uvScaleY": 1,
+      "uvOffsetX": 0,
+      "uvOffsetY": 0,
+      "color": 16777215,
+      "emissive": 0,
+      "emissiveIntensity": 1,
+      "shadeless": 0,
+      "roughness": 0.1,
+      "metalness": 0.1,
+      "wireframe": 0,
+      "opacity": 1,
+      "transmission": 0,
+      "thickness": 0.5
+     }
+    },
+    {
+     "id": "setup_1",
+     "type": "texture/procedural",
+     "position": {
+      "x": 375,
+      "y": 223
+     },
+     "params": {
+      "type": "checker",
+      "colorA": 16777215,
+      "colorB": 2236962,
+      "scale": 8,
+      "seed": 1,
+      "octaves": 3,
+      "resolution": 256,
+      "uvScaleX": 1,
+      "uvScaleY": 1,
+      "uvOffsetX": 0,
+      "uvOffsetY": 0
+     }
+    },
+    {
+     "id": "setup_2",
+     "type": "light/point",
+     "position": {
+      "x": 857,
+      "y": 193
+     },
+     "params": {
+      "location": {
+       "x": 0,
+       "y": 2.185514752224622,
+       "z": -4.5179526088705275
+      },
+      "rotation": {
+       "x": 0,
+       "y": 0,
+       "z": 0
+      },
+      "scale": {
+       "x": 1,
+       "y": 1,
+       "z": 1
+      },
+      "color": 16768110,
+      "intensity": 50,
+      "distance": 15,
+      "decay": 2,
+      "castShadow": 1
+     }
+    },
+    {
+     "id": "setup_3",
+     "type": "light/point",
+     "position": {
+      "x": 1043,
+      "y": 187
+     },
+     "params": {
+      "location": {
+       "x": 0,
+       "y": 2.185514752224622,
+       "z": 4.487400919453167
+      },
+      "rotation": {
+       "x": 0,
+       "y": 0,
+       "z": 0
+      },
+      "scale": {
+       "x": 1,
+       "y": 1,
+       "z": 1
+      },
+      "color": 440020,
+      "intensity": 50,
+      "distance": 15,
+      "decay": 2,
+      "castShadow": 1
+     }
+    },
+    {
+     "id": "setup_4",
+     "type": "render",
+     "position": {
+      "x": 610,
+      "y": 393
+     },
+     "params": {
+      "frameCount": 120,
+      "fps": 30,
+      "motionBlur": 0,
+      "resolutionPreset": "16:9 (1920x1080)",
+      "width": 1920,
+      "height": 1080,
+      "holdout": false
+     }
+    },
+    {
+     "id": "setup_5",
+     "type": "lighting/environment",
+     "position": {
+      "x": 340,
+      "y": 406
+     },
+     "params": {
+      "color": 4147542,
+      "intensity": 1,
+      "background": 1,
+      "blurriness": 0,
+      "filePath": "",
+      "backgroundImagePath": "",
+      "backgroundFit": "cover",
+      "backgroundScale": {
+       "x": 1,
+       "y": 1,
+       "z": 1
+      },
+      "backgroundOffset": {
+       "x": 0,
+       "y": 0,
+       "z": 0
+      },
+      "backgroundRotation": 0,
+      "ambientIntensity": 0,
+      "sunIntensity": 0
+     }
+    },
+    {
+     "id": "setup_6",
+     "type": "light/point",
+     "position": {
+      "x": 860,
+      "y": 389
+     },
+     "params": {
+      "location": {
+       "x": 3.583607412619263,
+       "y": 2.185514752224622,
+       "z": -0.48624947478730096
+      },
+      "rotation": {
+       "x": 0,
+       "y": 0,
+       "z": 0
+      },
+      "scale": {
+       "x": 1,
+       "y": 1,
+       "z": 1
+      },
+      "color": 16777215,
+      "intensity": 50,
+      "distance": 15,
+      "decay": 2,
+      "castShadow": 1
+     }
+    },
+    {
+     "id": "glow",
+     "type": "postprocess/bloom",
+     "position": {
+      "x": 1250,
+      "y": 620
+     },
+     "params": {
+      "strength": 0.35,
+      "radius": 0.4,
+      "threshold": 1.5
+     }
+    },
+    {
+     "id": "wig_peb_a",
+     "type": "animation/wiggle",
+     "position": {
+      "x": 200,
+      "y": 560
+     },
+     "params": {
+      "speed": 0.25,
+      "amplitude": 1.0,
+      "seed": 1,
+      "amplitudeVector": {
+       "x": 0.35,
+       "y": 0.25,
+       "z": 0.35
+      },
+      "rotationAmplitude": {
+       "x": 35,
+       "y": 35,
+       "z": 35
+      },
+      "scaleAmplitude": {
+       "x": 0,
+       "y": 0,
+       "z": 0
+      }
+     }
+    },
+    {
+     "id": "peb_a",
+     "type": "object/sphere",
+     "position": {
+      "x": 470,
+      "y": 560
+     },
+     "params": {
+      "location": {
+       "x": -1.5999999999999999,
+       "y": 1.2,
+       "z": 0
+      },
+      "rotation": {
+       "x": 0,
+       "y": 0,
+       "z": 0.5235987755982988
+      },
+      "scale": {
+       "x": 1.6,
+       "y": 0.55,
+       "z": 0.7
+      },
+      "color": 16734774
+     }
+    },
+    {
+     "id": "wig_peb_b",
+     "type": "animation/wiggle",
+     "position": {
+      "x": 200,
+      "y": 710
+     },
+     "params": {
+      "speed": 0.25,
+      "amplitude": 1.0,
+      "seed": 2,
+      "amplitudeVector": {
+       "x": 0.35,
+       "y": 0.25,
+       "z": 0.35
+      },
+      "rotationAmplitude": {
+       "x": 35,
+       "y": 35,
+       "z": 35
+      },
+      "scaleAmplitude": {
+       "x": 0,
+       "y": 0,
+       "z": 0
+      }
+     }
+    },
+    {
+     "id": "peb_b",
+     "type": "object/sphere",
+     "position": {
+      "x": 470,
+      "y": 710
+     },
+     "params": {
+      "location": {
+       "x": -0.30000000000000004,
+       "y": 1.5,
+       "z": 0.2
+      },
+      "rotation": {
+       "x": 0.3490658503988659,
+       "y": 0,
+       "z": -0.8726646259971648
+      },
+      "scale": {
+       "x": 0.5,
+       "y": 1.4,
+       "z": 0.6
+      },
+      "color": 16761402
+     }
+    },
+    {
+     "id": "wig_peb_c",
+     "type": "animation/wiggle",
+     "position": {
+      "x": 200,
+      "y": 860
+     },
+     "params": {
+      "speed": 0.25,
+      "amplitude": 1.0,
+      "seed": 3,
+      "amplitudeVector": {
+       "x": 0.35,
+       "y": 0.25,
+       "z": 0.35
+      },
+      "rotationAmplitude": {
+       "x": 35,
+       "y": 35,
+       "z": 35
+      },
+      "scaleAmplitude": {
+       "x": 0,
+       "y": 0,
+       "z": 0
+      }
+     }
+    },
+    {
+     "id": "peb_c",
+     "type": "object/sphere",
+     "position": {
+      "x": 470,
+      "y": 860
+     },
+     "params": {
+      "location": {
+       "x": -0.9000000000000001,
+       "y": 0.8,
+       "z": -0.6
+      },
+      "rotation": {
+       "x": 0,
+       "y": 0.6981317007977318,
+       "z": 0
+      },
+      "scale": {
+       "x": 0.6,
+       "y": 0.5,
+       "z": 1.5
+      },
+      "color": 3842303
+     }
+    },
+    {
+     "id": "pebbles",
+     "type": "structure/merge",
+     "position": {
+      "x": 760,
+      "y": 700
+     },
+     "params": {}
+    },
+    {
+     "id": "ellipsoids",
+     "type": "object/metaballs",
+     "position": {
+      "x": 990,
+      "y": 700
+     },
+     "params": {
+      "radius": 0.5,
+      "smooth": 1.6,
+      "resolution": 72,
+      "location": {
+       "x": 0,
+       "y": 0,
+       "z": 0
+      },
+      "rotation": {
+       "x": 0,
+       "y": 0,
+       "z": 0
+      },
+      "scale": {
+       "x": 1,
+       "y": 1,
+       "z": 1
+      },
+      "color": 16777215,
+      "emissive": 0,
+      "emissiveIntensity": 0,
+      "roughness": 0.3,
+      "metalness": 0.1,
+      "opacity": 1,
+      "shadeless": 0,
+      "wireframe": 0,
+      "mesher": "surfaceNets",
+      "instanceShape": true,
+      "inheritColors": true
+     }
+    },
+    {
+     "id": "helix",
+     "type": "curve/primitive",
+     "position": {
+      "x": 200,
+      "y": 1100
+     },
+     "params": {
+      "primitiveType": "helix",
+      "radius": 0.7,
+      "height": 2.2,
+      "turns": 2.2,
+      "sag": 0,
+      "location": {
+       "x": 1.5,
+       "y": 0.35,
+       "z": 0
+      }
+     }
+    },
+    {
+     "id": "helix_pts",
+     "type": "curve/to_points",
+     "position": {
+      "x": 470,
+      "y": 1100
+     },
+     "params": {
+      "maxPoints": 28
+     }
+    },
+    {
+     "id": "capsules",
+     "type": "object/metaballs",
+     "position": {
+      "x": 990,
+      "y": 1100
+     },
+     "params": {
+      "radius": 0.2,
+      "smooth": 1.6,
+      "resolution": 96,
+      "location": {
+       "x": 0,
+       "y": 0,
+       "z": 0
+      },
+      "rotation": {
+       "x": 0,
+       "y": 0,
+       "z": 0
+      },
+      "scale": {
+       "x": 1,
+       "y": 1,
+       "z": 1
+      },
+      "color": 3065014,
+      "emissive": 0,
+      "emissiveIntensity": 0,
+      "roughness": 0.25,
+      "metalness": 0.1,
+      "opacity": 1,
+      "shadeless": 0,
+      "wireframe": 0,
+      "mesher": "surfaceNets",
+      "instanceShape": false,
+      "inheritColors": false
+     }
+    }
+   ],
+   "connections": [
+    {
+     "id": "setup_c0",
+     "fromNode": "setup_1",
+     "fromSocket": "texture",
+     "toNode": "setup_0",
+     "toSocket": "texture"
+    },
+    {
+     "id": "setup_c1",
+     "fromNode": "setup_5",
+     "fromSocket": "environment",
+     "toNode": "setup_4",
+     "toSocket": "environment"
+    },
+    {
+     "id": "c_glow",
+     "fromNode": "glow",
+     "fromSocket": "effect",
+     "toNode": "setup_4",
+     "toSocket": "postprocess"
+    },
+    {
+     "id": "c_w_peb_a",
+     "fromNode": "wig_peb_a",
+     "fromSocket": "matrix",
+     "toNode": "peb_a",
+     "toSocket": "matrix"
+    },
+    {
+     "id": "c_m_peb_a",
+     "fromNode": "peb_a",
+     "fromSocket": "geometry",
+     "toNode": "pebbles",
+     "toSocket": "in0"
+    },
+    {
+     "id": "c_w_peb_b",
+     "fromNode": "wig_peb_b",
+     "fromSocket": "matrix",
+     "toNode": "peb_b",
+     "toSocket": "matrix"
+    },
+    {
+     "id": "c_m_peb_b",
+     "fromNode": "peb_b",
+     "fromSocket": "geometry",
+     "toNode": "pebbles",
+     "toSocket": "in1"
+    },
+    {
+     "id": "c_w_peb_c",
+     "fromNode": "wig_peb_c",
+     "fromSocket": "matrix",
+     "toNode": "peb_c",
+     "toSocket": "matrix"
+    },
+    {
+     "id": "c_m_peb_c",
+     "fromNode": "peb_c",
+     "fromSocket": "geometry",
+     "toNode": "pebbles",
+     "toSocket": "in2"
+    },
+    {
+     "id": "c_peb",
+     "fromNode": "pebbles",
+     "fromSocket": "geometry",
+     "toNode": "ellipsoids",
+     "toSocket": "geometry"
+    },
+    {
+     "id": "c_hx",
+     "fromNode": "helix",
+     "fromSocket": "curve",
+     "toNode": "helix_pts",
+     "toSocket": "curve"
+    },
+    {
+     "id": "c_hp",
+     "fromNode": "helix_pts",
+     "fromSocket": "points",
+     "toNode": "capsules",
+     "toSocket": "segments"
+    }
+   ],
+   "keyframes": {},
+   "markers": [],
+   "exposedParams": []
+  }
+ ],
+ "activeCanvas": 0
+}

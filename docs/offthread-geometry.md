@@ -1,6 +1,7 @@
 # Heavy geometry off the main thread
 
-Status: shipped on three nodes — `object/metaballs` (JS or Rust/WASM kernel),
+Status: shipped on three nodes — `object/metaballs` (Surface Nets or legacy
+marching cubes, each JS or Rust/WASM),
 `curve/to_mesh` and `modifier/boolean` (JS kernels). Code in
 `src/shared/graph/offthread/`, Rust in `wasm/kernels/`.
 
@@ -195,6 +196,60 @@ V8): open the demo in the app, Ctrl/Cmd+Shift+P, and compare the
    different output) — a behaviour change, not a port; only if three-bvh-csg in
    a worker is still too slow.
 6. **Not the fire sim** — already on the GPU in the app.
+
+## Metaballs: Surface Nets (`blobs` job)
+
+`object/metaballs` has two meshers, picked by its `mesher` param:
+
+- **`surfaceNets`** (default) — job kind `blobs`, `surfaceNets.ts` /
+  `wasm/kernels/src/surface_nets.rs`, bit-identical (`surfaceNets.test.ts`).
+- **`marchingCubes`** — job kind `metaballs`, the original three port above,
+  unchanged, so an old scene can be matched exactly.
+
+What `blobs` changes:
+
+- **Field**: a sum of compact bumps `w·(1 − d²/R²)³`, R = radius × smooth,
+  zero past R; iso = `(1 − 1/smooth²)³`, so a lone element's surface is
+  exactly at its radius (same meaning of Radius/Smooth as before).
+- **Elements**: spheres, ellipsoids (an instance's or child's rotation ×
+  scale, `instanceShape`, off by default so scaled marker objects don't shrink old scenes), capsules (`segments` input: a point list is a polyline, e.g. Curve → To Points; a list of point lists is several). A polyline's capsules share a chain id: inside a chain the nearest segment wins instead of their bumps adding up, so tubes don't bulge at joints. Per element: radius
+  (`radii`), signed weight (`weights`, < 0 carves), colour (`colors`, or the
+  instance/material colour with `inheritColors`). Element layout: 28 f64,
+  `BLOB_STRIDE` in `surfaceNets.ts`; `writeBlobElement` fills one.
+- **Grid**: fitted to the positive elements' boxes (not a cube), `resolution`
+  cells along the longest side (8–256), 2 empty cells of padding. Only
+  8³-cell bricks some positive element reaches are sampled; each element
+  splats just the samples inside its own box. The grid is laid out on the JS
+  side (`blobGrid`) and handed to Rust, so both sample the same points.
+- **Mesh**: naive Surface Nets — a vertex per crossed cell (mean of its edge
+  crossings), a quad per crossed edge. Indexed, closed, outward-wound;
+  normals are the analytic gradient; colours blended by bump weight.
+  `MeshBuffers` gained optional `index` and `color`.
+
+Kernel times (Node 24 / V8, median ms,
+`TSUJI_KERNEL_BENCH=1 npx vitest run src/shared/graph/offthread/surfaceNets.bench.test.ts`).
+Like for like — marching cubes' bench scene as elements, same cell size:
+
+| MC res | balls | MC verts / tris | MC WASM | SN res | SN verts / tris | SN WASM |
+|---|---|---|---|---|---|---|
+| 32 | 8 | 5 268 / 1 756 | 0.25 | 26 | 888 / 1 760 | 0.21 |
+| 48 | 24 | 35 208 / 11 736 | 1.44 | 40 | 5 737 / 11 448 | 1.41 |
+| 64 | 24 | 62 496 / 20 832 | 2.80 | 54 | 10 419 / 20 804 | 2.63 |
+| 64 | 128 | 108 852 / 36 284 | 4.94 | 55 | 19 139 / 38 324 | 8.25 |
+| 96 | 64 | 180 000 (capped) / 60 000 | 8.96 | 83 | 39 876 / 79 764 | 12.88 |
+
+Same speed at equal cell size for ordinary scenes, ~6× fewer vertices (shared,
+smooth-shaded), and no 180k cap truncating the surface (SN caps at 600k
+vertices). Dense overlaps (128 balls) cost ~1.7×: samples on brick faces are
+computed twice ((9/8)³ ≈ 1.4×) and every element's bump is f64. Mixed scene
+(spheres, ellipsoids, capsules, carving), WASM: res 64 / 128 elements 9 ms,
+res 128 / 64 elements 33 ms, res 256 / 256 elements 400 ms — high
+resolutions are for stills and export (capture runs the job synchronously),
+not for dragging.
+
+Not done yet: remeshing only the bricks an element moved through (the worker
+keeps a node on the same lane, so a per-node brick cache is possible), and
+sharing brick-face samples between neighbours.
 
 ## `curve/to_mesh` and `modifier/boolean`
 

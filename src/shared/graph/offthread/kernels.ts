@@ -1,6 +1,7 @@
 import { BooleanJob, BooleanResult, evaluateBoolean } from "./csg";
 import { CurveTubeJob, sweepCurveTube, TubeBuffers } from "./curveTube";
 import { MeshBuffers, MetaballsJob, polygonizeMetaballs } from "./marchingCubes";
+import { BlobsJob, polygonizeBlobs } from "./surfaceNets";
 
 /**
  * Every job the geometry worker knows how to run: its payload, its result,
@@ -13,6 +14,7 @@ import { MeshBuffers, MetaballsJob, polygonizeMetaballs } from "./marchingCubes"
  */
 export interface JobTypes {
   metaballs: { payload: MetaballsJob; result: MeshBuffers };
+  blobs: { payload: BlobsJob; result: MeshBuffers };
   curveTube: { payload: CurveTubeJob; result: TubeBuffers };
   boolean: { payload: BooleanJob; result: BooleanResult };
 }
@@ -23,6 +25,7 @@ export type JobResult<K extends JobKind> = JobTypes[K]["result"];
 
 export const JS_KERNELS: { [K in JobKind]: (payload: JobPayload<K>) => JobResult<K> } = {
   metaballs: polygonizeMetaballs,
+  blobs: polygonizeBlobs,
   curveTube: sweepCurveTube,
   boolean: evaluateBoolean,
 };

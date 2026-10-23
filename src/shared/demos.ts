@@ -55,6 +55,11 @@ export const DEMO_CATALOG: DemoCategory[] = [
         description: "Five wandering centres meshed as one gooey surface that fuses and splits.",
       },
       {
+        file: "demo_object_metaballs_shapes.tsuji",
+        label: "Metaballs — Ellipsoids & Capsules",
+        description: "Stretched spheres fused as coloured ellipsoids (Instance Shape), and a helix turned into a chain of capsules (Curve → To Points → Segments).",
+      },
+      {
         file: "demo_object_empty_lookat.tsuji",
         label: "Empty & Look At",
         description: "A cone aiming at an orbiting Empty.",

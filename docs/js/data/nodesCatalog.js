@@ -9198,6 +9198,26 @@ export const FULL_NODES_CATALOG = [
         "id": "points"
       },
       {
+        "name": "Segments (Capsules)",
+        "type": "list",
+        "id": "segments"
+      },
+      {
+        "name": "Radii (per element)",
+        "type": "list",
+        "id": "radii"
+      },
+      {
+        "name": "Weights (per element, <0 carves)",
+        "type": "list",
+        "id": "weights"
+      },
+      {
+        "name": "Colors (per element)",
+        "type": "list",
+        "id": "colors"
+      },
+      {
         "name": "Radius",
         "type": "value",
         "id": "radius"

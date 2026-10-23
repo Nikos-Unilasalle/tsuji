@@ -35,6 +35,7 @@ function backend(): Backend {
 
 function run(kind: JobKind, payload: JobPayload<JobKind>): JobResult<JobKind> {
   if (wasm && kind === "metaballs") return wasm.metaballs(payload as JobPayload<"metaballs">);
+  if (wasm && kind === "blobs") return wasm.blobs(payload as JobPayload<"blobs">);
   return (JS_KERNELS[kind] as (p: JobPayload<JobKind>) => JobResult<JobKind>)(payload);
 }
 
