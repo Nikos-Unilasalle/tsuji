@@ -60,6 +60,11 @@ export const DEMO_CATALOG: DemoCategory[] = [
         description: "Stretched spheres fused as coloured ellipsoids (Instance Shape), bitten by a wandering sphere on Carve (Geometry), and a helix turned into a chain of capsules (Curve → To Points → Segments).",
       },
       {
+        file: "demo_object_metaballs_particles.tsuji",
+        label: "Metaballs — Particle Liquid",
+        description: "A particle fountain meshed as one liquid surface: Particle Simulate → Particles to Points → Metaballs.",
+      },
+      {
         file: "demo_object_empty_lookat.tsuji",
         label: "Empty & Look At",
         description: "A cone aiming at an orbiting Empty.",
