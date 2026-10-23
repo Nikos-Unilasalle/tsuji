@@ -102,8 +102,9 @@ function materialColor(object: THREE.Object3D): [number, number, number] | undef
  * by default, since scenes often scale their marker objects without meaning
  * the blobs to follow) and colour.
  */
-function centresFromObject(object: THREE.Object3D, out: Centre[]): void {
-  const rootInverse = worldMatrixOf(object, tmpMatrix).clone().invert();
+function centresFromObject(object: THREE.Object3D, out: Centre[], frame?: THREE.Matrix4): void {
+  // `frame` (world → the space to express centres in) defaults to the object's own space.
+  const rootInverse = frame ?? worldMatrixOf(object, tmpMatrix).clone().invert();
   object.traverse((child) => {
     const instanced = child as THREE.InstancedMesh;
     if (instanced.isInstancedMesh) {
@@ -127,15 +128,16 @@ function centresFromObject(object: THREE.Object3D, out: Centre[]): void {
   });
 }
 
-function collectCentres(inputs: Record<string, unknown>): Centre[] {
+/** Centres from a point list and a geometry wire, in that order. */
+function collectCentres(points: unknown, geometry: unknown, frame?: THREE.Matrix4): Centre[] {
   const centres: Centre[] = [];
-  if (Array.isArray(inputs.points)) {
-    for (const entry of inputs.points) {
+  if (Array.isArray(points)) {
+    for (const entry of points) {
       const point = asPoint(entry);
       if (point) centres.push({ point });
     }
   }
-  if (inputs.geometry instanceof THREE.Object3D) centresFromObject(inputs.geometry, centres);
+  if (geometry instanceof THREE.Object3D) centresFromObject(geometry, centres, frame);
   return centres;
 }
 
@@ -271,6 +273,10 @@ function jobFor(points: THREE.Vector3[], bounds: FieldBounds, radius: number, sm
 
 interface BlobSettings {
   radius: number;
+  /** Radius of the Carve inputs' elements. */
+  carveRadius: number;
+  /** How hard they carve: their weight is −carveStrength. */
+  carveStrength: number;
   smooth: number;
   resolution: number;
   instanceShape: boolean;
@@ -284,9 +290,15 @@ interface BlobSettings {
  */
 function blobsJobFor(inputs: Record<string, unknown>, centres: Centre[], settings: BlobSettings): { job: BlobsJob; count: number } {
   const segments = collectSegments(inputs.segments);
+  // Carvers come last, so they never shift the Radii / Weights / Colors indices.
+  // They are placed where they are in the scene, in the same space as the
+  // centres (the centres wire's root, or the world without one) — not in
+  // their own root's space, which would pin a lone carver object to the origin.
+  const frame = inputs.geometry instanceof THREE.Object3D ? worldMatrixOf(inputs.geometry, new THREE.Matrix4()).invert() : new THREE.Matrix4();
+  const carvers = collectCentres(inputs.carvePoints, inputs.carveGeometry, frame);
   const explicitColors = Array.isArray(inputs.colors) && inputs.colors.length > 0;
   const colors = explicitColors || (settings.inheritColors && centres.some((c) => c.color));
-  const elements = new Float64Array((centres.length + segments.length) * BLOB_STRIDE);
+  const elements = new Float64Array((centres.length + segments.length + carvers.length) * BLOB_STRIDE);
   let n = 0;
   centres.forEach((centre, i) => {
     const radius = finiteAt(inputs.radii, i, settings.radius);
@@ -317,6 +329,19 @@ function blobsJobFor(inputs: Record<string, unknown>, centres: Centre[], setting
     });
     if (ok) n++;
   });
+  if (settings.carveStrength > 0 && settings.carveRadius > 0) {
+    for (const carver of carvers) {
+      const ok = writeBlobElement(elements, n, {
+        kind: BLOB_POINT,
+        a: [carver.point.x, carver.point.y, carver.point.z],
+        radius: settings.carveRadius,
+        smooth: settings.smooth,
+        weight: -settings.carveStrength,
+        shape: settings.instanceShape ? carver.shape : undefined,
+      });
+      if (ok) n++;
+    }
+  }
   return {
     count: n,
     job: {
@@ -423,7 +448,7 @@ function metaballParamFields(mesher: Mesher): ParamFieldDef[] {
       { id: "fieldSize", label: "Field Size (manual)", kind: "number", step: 0.5, group: "Metaballs" },
       {
         id: "legacyNote",
-        label: "Legacy mesher: one radius for every ball; Radii, Weights, Colors and Segments are ignored.",
+        label: "Legacy mesher: one radius for every ball; Radii, Weights, Colors, Segments and Carve are ignored.",
         kind: "note",
         group: "Metaballs",
       },
@@ -432,6 +457,8 @@ function metaballParamFields(mesher: Mesher): ParamFieldDef[] {
     fields.push(
       { id: "instanceShape", label: "Instance Shape (ellipsoids)", kind: "boolean", group: "Metaballs" },
       { id: "inheritColors", label: "Inherit Source Colors", kind: "boolean", group: "Metaballs" },
+      { id: "carveStrength", label: "Carve Strength", kind: "number", step: 0.1, group: "Metaballs" },
+      { id: "carveRadius", label: "Carve Radius (0 = Radius)", kind: "number", step: 0.05, group: "Metaballs" },
     );
   }
   return fields;
@@ -444,7 +471,7 @@ function mesherOf(params: Record<string, unknown>): Mesher {
 /** Marching cubes, exactly as the node meshed before Surface Nets: one radius, a cubic field, three's field function. */
 function evaluateLegacy(nodeId: string, inputs: Record<string, unknown>, params: Record<string, unknown>, radius: number, smooth: number, capturing: boolean) {
   const resolution = Math.min(96, Math.max(8, Math.round(numberInput(undefined, params.resolution, 32))));
-  const points = collectCentres(inputs).map((c) => c.point);
+  const points = collectCentres(inputs.points, inputs.geometry).map((c) => c.point);
   const bounds = fieldBounds(points, radius * smooth, params);
   const signature = signatureOf(points, bounds, radius, smooth, resolution);
   // Marching cubes runs in the geometry worker (offthread/jobs.ts): this
@@ -457,8 +484,12 @@ function evaluateLegacy(nodeId: string, inputs: Record<string, unknown>, params:
 
 function evaluateSurfaceNets(nodeId: string, inputs: Record<string, unknown>, params: Record<string, unknown>, radius: number, smooth: number, capturing: boolean) {
   const resolution = Math.min(256, Math.max(8, Math.round(numberInput(undefined, params.resolution, 64))));
-  const { job: payload, count } = blobsJobFor(inputs, collectCentres(inputs), {
+  const carveRadius = numberInput(inputs.carveRadius, params.carveRadius, 0);
+  const { job: payload, count } = blobsJobFor(inputs, collectCentres(inputs.points, inputs.geometry), {
     radius,
+    // 0 (the default) means "same as Radius".
+    carveRadius: carveRadius > 0 ? carveRadius : radius,
+    carveStrength: Math.min(10, Math.max(0, numberInput(inputs.carveStrength, params.carveStrength, 1))),
     smooth,
     resolution,
     instanceShape: params.instanceShape === true,
@@ -474,7 +505,9 @@ function evaluateSurfaceNets(nodeId: string, inputs: Record<string, unknown>, pa
  * children or instances are the centres, and/or a list of segments
  * (capsules). Per-element Radii, Weights (negative carves) and Colors are
  * lists indexed like the elements: point list first, then the geometry
- * wire's centres, then the segments.
+ * wire's centres, then the segments. Whatever is wired to Carve (Geometry /
+ * Points) becomes negative elements of Carve Radius and Strength — holes and
+ * dents without lining up a Weights list.
  *
  * Surface Nets (default): compact field, sparse grid fitted to the elements,
  * indexed smooth-shaded mesh. Marching Cubes: the original mesher, kept so a
@@ -488,11 +521,15 @@ export const METABALLS_NODE: NodeDefinition = {
     { id: "geometry", label: "Centres (Geometry)", type: "geometry", owns: true },
     { id: "points", label: "Centres (Points)", type: "list" },
     { id: "segments", label: "Segments / Polyline (Capsules)", type: "list" },
+    { id: "carveGeometry", label: "Carve (Geometry)", type: "geometry", owns: true },
+    { id: "carvePoints", label: "Carve (Points)", type: "list" },
     { id: "radii", label: "Radii (per element)", type: "list" },
     { id: "weights", label: "Weights (per element, <0 carves)", type: "list" },
     { id: "colors", label: "Colors (per element)", type: "list" },
     { id: "radius", label: "Radius", type: "value" },
     { id: "smooth", label: "Smooth", type: "value" },
+    { id: "carveStrength", label: "Carve Strength", type: "value" },
+    { id: "carveRadius", label: "Carve Radius", type: "value" },
     ...COMMON_PRIMITIVE_INPUTS,
   ],
   outputs: [...COMMON_PRIMITIVE_OUTPUTS, { id: "count", label: "Ball Count", type: "value" }],
@@ -506,6 +543,8 @@ export const METABALLS_NODE: NodeDefinition = {
     fieldSize: 8,
     instanceShape: false,
     inheritColors: false,
+    carveStrength: 1,
+    carveRadius: 0,
   },
   paramFields: buildPrimitiveDynamicParamFields(metaballParamFields("surfaceNets"))(),
   dynamicParamFields: (instance) => buildPrimitiveDynamicParamFields(metaballParamFields(mesherOf(instance.params)))(),

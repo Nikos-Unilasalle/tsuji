@@ -423,7 +423,9 @@
       "wireframe": 0,
       "mesher": "surfaceNets",
       "instanceShape": true,
-      "inheritColors": true
+      "inheritColors": true,
+      "carveStrength": 1.5,
+      "carveRadius": 0.6
      }
     },
     {
@@ -431,7 +433,7 @@
      "type": "curve/primitive",
      "position": {
       "x": 200,
-      "y": 1100
+      "y": 1250
      },
      "params": {
       "primitiveType": "helix",
@@ -451,7 +453,7 @@
      "type": "curve/to_points",
      "position": {
       "x": 470,
-      "y": 1100
+      "y": 1250
      },
      "params": {
       "maxPoints": 28
@@ -462,7 +464,7 @@
      "type": "object/metaballs",
      "position": {
       "x": 990,
-      "y": 1100
+      "y": 1250
      },
      "params": {
       "radius": 0.2,
@@ -493,7 +495,58 @@
       "wireframe": 0,
       "mesher": "surfaceNets",
       "instanceShape": false,
-      "inheritColors": false
+      "inheritColors": false,
+      "carveStrength": 1,
+      "carveRadius": 0
+     }
+    },
+    {
+     "id": "wig_biter",
+     "type": "animation/wiggle",
+     "position": {
+      "x": 200,
+      "y": 1010
+     },
+     "params": {
+      "speed": 0.4,
+      "amplitude": 1.0,
+      "seed": 9,
+      "amplitudeVector": {
+       "x": 0.7,
+       "y": 0.15,
+       "z": 0.5
+      },
+      "rotationAmplitude": {
+       "x": 0,
+       "y": 0,
+       "z": 0
+      },
+      "scaleAmplitude": {
+       "x": 0,
+       "y": 0,
+       "z": 0
+      }
+     }
+    },
+    {
+     "id": "biter",
+     "type": "object/sphere",
+     "position": {
+      "x": 470,
+      "y": 1010
+     },
+     "params": {
+      "location": {
+       "x": -0.6,
+       "y": 1.85,
+       "z": 0.1
+      },
+      "scale": {
+       "x": 1,
+       "y": 1,
+       "z": 1
+      },
+      "color": 16777215
      }
     }
    ],
@@ -581,6 +634,20 @@
      "fromSocket": "points",
      "toNode": "capsules",
      "toSocket": "segments"
+    },
+    {
+     "id": "c_w_biter",
+     "fromNode": "wig_biter",
+     "fromSocket": "matrix",
+     "toNode": "biter",
+     "toSocket": "matrix"
+    },
+    {
+     "id": "c_biter",
+     "fromNode": "biter",
+     "fromSocket": "geometry",
+     "toNode": "ellipsoids",
+     "toSocket": "carveGeometry"
     }
    ],
    "keyframes": {},

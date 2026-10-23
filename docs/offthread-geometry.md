@@ -214,7 +214,7 @@ What `blobs` changes:
 - **Elements**: spheres, ellipsoids (an instance's or child's rotation ×
   scale, `instanceShape`, off by default so scaled marker objects don't shrink old scenes), capsules (`segments` input: a point list is a polyline, e.g. Curve → To Points; a list of point lists is several). A polyline's capsules share a chain id: inside a chain the nearest segment wins instead of their bumps adding up, so tubes don't bulge at joints. Per element: radius
   (`radii`), signed weight (`weights`, < 0 carves), colour (`colors`, or the
-  instance/material colour with `inheritColors`). Element layout: 28 f64,
+  instance/material colour with `inheritColors`). `carveGeometry` / `carvePoints`: everything wired there becomes a negative element of `carveRadius` (0 = Radius) and weight −`carveStrength`, appended after the other elements so the per-element lists keep their indices, and placed where they stand in the scene (in the centres wire's space), so a lone object wired straight in carves at its own position. Element layout: 28 f64,
   `BLOB_STRIDE` in `surfaceNets.ts`; `writeBlobElement` fills one.
 - **Grid**: fitted to the positive elements' boxes (not a cube), `resolution`
   cells along the longest side (8–256), 2 empty cells of padding. Only

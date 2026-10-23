@@ -57,7 +57,7 @@ export const DEMO_CATALOG: DemoCategory[] = [
       {
         file: "demo_object_metaballs_shapes.tsuji",
         label: "Metaballs — Ellipsoids & Capsules",
-        description: "Stretched spheres fused as coloured ellipsoids (Instance Shape), and a helix turned into a chain of capsules (Curve → To Points → Segments).",
+        description: "Stretched spheres fused as coloured ellipsoids (Instance Shape), bitten by a wandering sphere on Carve (Geometry), and a helix turned into a chain of capsules (Curve → To Points → Segments).",
       },
       {
         file: "demo_object_empty_lookat.tsuji",

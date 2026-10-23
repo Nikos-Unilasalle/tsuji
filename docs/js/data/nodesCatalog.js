@@ -9198,7 +9198,7 @@ export const FULL_NODES_CATALOG = [
         "id": "points"
       },
       {
-        "name": "Segments (Capsules)",
+        "name": "Segments / Polyline (Capsules)",
         "type": "list",
         "id": "segments"
       },
@@ -9218,6 +9218,16 @@ export const FULL_NODES_CATALOG = [
         "id": "colors"
       },
       {
+        "name": "Carve (Geometry)",
+        "type": "geometry",
+        "id": "carveGeometry"
+      },
+      {
+        "name": "Carve (Points)",
+        "type": "list",
+        "id": "carvePoints"
+      },
+      {
         "name": "Radius",
         "type": "value",
         "id": "radius"
@@ -9226,6 +9236,16 @@ export const FULL_NODES_CATALOG = [
         "name": "Smooth",
         "type": "value",
         "id": "smooth"
+      },
+      {
+        "name": "Carve Strength",
+        "type": "value",
+        "id": "carveStrength"
+      },
+      {
+        "name": "Carve Radius",
+        "type": "value",
+        "id": "carveRadius"
       },
       {
         "name": "Visible",

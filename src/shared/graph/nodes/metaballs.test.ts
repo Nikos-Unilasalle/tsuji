@@ -209,6 +209,59 @@ describe("METABALLS_NODE", () => {
     expect(bounds(round).getSize(new THREE.Vector3()).x).toBeCloseTo(1, 1);
   });
 
+  test("Carve (Points) cuts into the blob without touching the Weights indexing", () => {
+    const points = [new THREE.Vector3(0, 0, 0)];
+    const whole = run({ points }, "mb-carve-none", { radius: 1 });
+    const carved = run({ points, carvePoints: [new THREE.Vector3(1, 0, 0)] }, "mb-carve-pts", { radius: 1, carveRadius: 0.6 });
+    expect(bounds(whole).max.x).toBeCloseTo(1, 1);
+    expect(bounds(carved).max.x).toBeLessThan(0.8);
+    expect(bounds(carved).min.x).toBeCloseTo(-1, 1);
+    expect(carved.count).toBe(2);
+    // Radii still index the centres, not the carvers.
+    const sized = run({ points, radii: [1.5], carvePoints: [new THREE.Vector3(5, 0, 0)] }, "mb-carve-index", { radius: 1 });
+    expect(bounds(sized).max.x).toBeCloseTo(1.5, 1);
+  });
+
+  test("Carve (Geometry) uses its children (and instances) as carvers", () => {
+    const carver = new THREE.Group();
+    const hole = new THREE.Mesh(new THREE.SphereGeometry(0.1), new THREE.MeshStandardMaterial());
+    hole.position.set(0, 1, 0);
+    carver.add(hole);
+    carver.updateMatrixWorld(true);
+    const out = run({ points: [new THREE.Vector3(0, 0, 0)], carveGeometry: carver }, "mb-carve-geom", { radius: 1, carveRadius: 0.6 });
+    expect(bounds(out).max.y).toBeLessThan(0.8);
+    expect(bounds(out).max.x).toBeCloseTo(1, 1);
+  });
+
+  test("a lone object on Carve (Geometry) carves where it stands, not at the origin", () => {
+    const hole = new THREE.Mesh(new THREE.SphereGeometry(0.1), new THREE.MeshStandardMaterial());
+    hole.position.set(3, 1, 0);
+    hole.updateMatrixWorld(true);
+    const centres = new THREE.Group();
+    const ball = new THREE.Mesh(new THREE.SphereGeometry(0.1), new THREE.MeshStandardMaterial());
+    ball.position.set(3, 0, 0);
+    centres.add(ball);
+    centres.updateMatrixWorld(true);
+    const out = run({ geometry: centres, carveGeometry: hole }, "mb-carve-lone", { radius: 1, carveRadius: 0.6 });
+    const box = bounds(out);
+    expect(box.max.y).toBeLessThan(0.8);
+    expect(box.min.y).toBeCloseTo(-1, 1);
+  });
+
+  test("Carve Strength scales the cut, 0 turns it off", () => {
+    const points = [new THREE.Vector3(0, 0, 0)];
+    const carvePoints = [new THREE.Vector3(1.2, 0, 0)];
+    const reach = (strength: number) => bounds(run({ points, carvePoints }, `mb-carve-s${strength}`, { radius: 1, carveRadius: 0.5, carveStrength: strength })).max.x;
+    expect(reach(0)).toBeCloseTo(1, 1);
+    expect(reach(0.3)).toBeLessThan(reach(0) - 0.01);
+    expect(reach(3)).toBeLessThan(reach(0.3));
+  });
+
+  test("carvers alone mesh nothing", () => {
+    const out = run({ carvePoints: [new THREE.Vector3(0, 0, 0)] }, "mb-carve-alone");
+    expect(vertexCount(out)).toBe(0);
+  });
+
   test("extreme params stay finite", () => {
     const points = [new THREE.Vector3(0, 0, 0)];
     for (const overrides of [
@@ -221,9 +274,11 @@ describe("METABALLS_NODE", () => {
       { resolution: 10000 },
       { autoFit: false, fieldSize: 0 },
       { mesher: "marchingCubes", resolution: 10000 },
+      { carveStrength: -5, carveRadius: -1 },
+      { carveStrength: 1e9, carveRadius: 1e9 },
       { mesher: "marchingCubes", autoFit: false, fieldSize: 0 },
     ]) {
-      const out = run({ points }, `mb-extreme-${JSON.stringify(overrides)}`, overrides);
+      const out = run({ points, carvePoints: [new THREE.Vector3(0.5, 0, 0)] }, `mb-extreme-${JSON.stringify(overrides)}`, overrides);
       const position = meshOf(out).geometry.getAttribute("position") as THREE.BufferAttribute;
       // One assertion for the whole buffer: a per-float expect() on a 96³
       // field is hundreds of thousands of them, which is seconds of runtime.

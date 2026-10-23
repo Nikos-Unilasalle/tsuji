@@ -11287,7 +11287,7 @@
         "type": "list"
       },
       {
-        "name": "Segments (Capsules)",
+        "name": "Segments / Polyline (Capsules)",
         "type": "list",
         "id": "segments"
       },
@@ -11307,6 +11307,16 @@
         "id": "colors"
       },
       {
+        "name": "Carve (Geometry)",
+        "type": "geometry",
+        "id": "carveGeometry"
+      },
+      {
+        "name": "Carve (Points)",
+        "type": "list",
+        "id": "carvePoints"
+      },
+      {
         "id": "radius",
         "label": "Radius",
         "type": "value"
@@ -11315,6 +11325,16 @@
         "id": "smooth",
         "label": "Smooth",
         "type": "value"
+      },
+      {
+        "name": "Carve Strength",
+        "type": "value",
+        "id": "carveStrength"
+      },
+      {
+        "name": "Carve Radius",
+        "type": "value",
+        "id": "carveRadius"
       },
       {
         "id": "visible",
