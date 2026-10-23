@@ -156,6 +156,22 @@ export function latticeBasePoints(params: Record<string, unknown>): THREE.Vector
     : defaultLatticePoints(c.sizeX, c.sizeY, c.sizeZ, c.subdivU, c.subdivV, c.subdivW);
 }
 
+/**
+ * A triangle index with each triangle's second and third corners swapped —
+ * the same triangles, wound the other way. With no source index, the
+ * non-indexed triangle list 0,1,2 / 3,4,5 / … is reversed instead.
+ */
+function reversedWinding(index: THREE.BufferAttribute | null, vertexCount: number): THREE.BufferAttribute {
+  const count = index ? index.count : vertexCount - (vertexCount % 3);
+  const out = vertexCount > 65535 ? new Uint32Array(count) : new Uint16Array(count);
+  for (let t = 0; t + 2 < count; t += 3) {
+    out[t] = index ? index.getX(t) : t;
+    out[t + 1] = index ? index.getX(t + 2) : t + 2;
+    out[t + 2] = index ? index.getX(t + 1) : t + 1;
+  }
+  return new THREE.BufferAttribute(out, 1);
+}
+
 /** Normalized grid coordinates of point `index`, in the same i→j→k order pointsList uses. */
 function normalizedGridCoords(c: LatticeGridConfig, index: number): [number, number, number] {
   const nv = c.subdivV;
@@ -933,13 +949,23 @@ export const LATTICE_DEFORM_NODE: NodeDefinition = {
     // BufferGeometry per evaluate is a full GPU re-upload sixty times a second
     // even while nothing moves, and it breaks every downstream cache that keys
     // on geometry identity.
-    const sourceSignature = `${srcGeom.uuid}:${vertexCount}:${srcGeom.getIndex()?.count ?? -1}`;
+    //
+    // A mirrored srcToLattice (source and cage disagree on handedness — one of
+    // them has an odd number of negative scale axes) turns every triangle
+    // inside out in lattice space. three only compensates for a mirrored
+    // matrixWorld, and the source's mirror is baked into the vertices here,
+    // so the winding has to be reversed by hand or the normals computed below
+    // point inward and the outside faces get culled. Vertex order stays put,
+    // only the index changes, so `points` stays aligned with the source.
+    const flipWinding = srcToLattice.determinant() < 0;
+    const sourceSignature = `${srcGeom.uuid}:${vertexCount}:${srcGeom.getIndex()?.count ?? -1}:${flipWinding}`;
     if (!state.deformedGeometry || state.deformedFrom !== sourceSignature) {
       state.deformedGeometry?.dispose();
       const built = new THREE.BufferGeometry();
       built.setAttribute("position", new THREE.BufferAttribute(new Float32Array(vertexCount * 3), 3));
       if (srcGeom.attributes.uv) built.setAttribute("uv", srcGeom.attributes.uv.clone());
-      if (srcGeom.index) built.setIndex(srcGeom.index.clone());
+      if (srcGeom.index) built.setIndex(flipWinding ? reversedWinding(srcGeom.index, vertexCount) : srcGeom.index.clone());
+      else if (flipWinding) built.setIndex(reversedWinding(null, vertexCount));
       state.deformedGeometry = built;
       state.deformedFrom = sourceSignature;
     }

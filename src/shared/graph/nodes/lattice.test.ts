@@ -523,3 +523,117 @@ describe("lattice handle positions under modulators", () => {
     });
   });
 });
+
+describe("LATTICE_DEFORM_NODE keeps faces and normals pointing outward", () => {
+  /** The deformed mesh, with matrixWorld refreshed from the lattice group down. */
+  function deformedMesh(res: Record<string, unknown>): THREE.Mesh {
+    const group = res.geometry as THREE.Group;
+    group.updateMatrixWorld(true);
+    return group.children.find((c): c is THREE.Mesh => (c as THREE.Mesh).isMesh === true)!;
+  }
+
+  /**
+   * Signed volume of the closed mesh as the renderer sees it: world-space
+   * positions, index winding, times the sign of det(matrixWorld) — three
+   * swaps its front face to clockwise for a mirrored matrix, so a winding
+   * that is inverted in world space still draws front-facing there.
+   */
+  function renderedSignedVolume(mesh: THREE.Mesh): number {
+    const g = mesh.geometry;
+    const pos = g.getAttribute("position");
+    const idx = g.getIndex();
+    const triCount = idx ? idx.count / 3 : pos.count / 3;
+    const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
+    let vol = 0;
+    for (let t = 0; t < triCount; t++) {
+      const i0 = idx ? idx.getX(t * 3) : t * 3;
+      const i1 = idx ? idx.getX(t * 3 + 1) : t * 3 + 1;
+      const i2 = idx ? idx.getX(t * 3 + 2) : t * 3 + 2;
+      a.fromBufferAttribute(pos, i0).applyMatrix4(mesh.matrixWorld);
+      b.fromBufferAttribute(pos, i1).applyMatrix4(mesh.matrixWorld);
+      c.fromBufferAttribute(pos, i2).applyMatrix4(mesh.matrixWorld);
+      vol += a.dot(b.clone().cross(c)) / 6;
+    }
+    return vol * Math.sign(mesh.matrixWorld.determinant());
+  }
+
+  /** Fraction of vertices whose world-space normal points away from the world-space centre. */
+  function outwardNormalFraction(mesh: THREE.Mesh): number {
+    const g = mesh.geometry;
+    const pos = g.getAttribute("position");
+    const nrm = g.getAttribute("normal");
+    const normalMatrix = new THREE.Matrix3().getNormalMatrix(mesh.matrixWorld);
+    const centre = new THREE.Vector3();
+    const p = new THREE.Vector3();
+    for (let i = 0; i < pos.count; i++) centre.add(p.fromBufferAttribute(pos, i).applyMatrix4(mesh.matrixWorld));
+    centre.divideScalar(pos.count);
+    const n = new THREE.Vector3();
+    let outward = 0;
+    for (let i = 0; i < pos.count; i++) {
+      p.fromBufferAttribute(pos, i).applyMatrix4(mesh.matrixWorld).sub(centre);
+      n.fromBufferAttribute(nrm, i).applyMatrix3(normalMatrix);
+      if (n.dot(p) > 0) outward++;
+    }
+    return outward / pos.count;
+  }
+
+  const roomy = {
+    ...LATTICE_DEFORM_NODE.defaultParams,
+    sizeX: 4,
+    sizeY: 4,
+    sizeZ: 4,
+    pointsList: defaultLatticePoints(4, 4, 4, 2, 2, 2),
+  };
+
+  function sphere(scale = new THREE.Vector3(1, 1, 1)): THREE.Mesh {
+    const mesh = new THREE.Mesh(new THREE.SphereGeometry(1, 24, 16), new THREE.MeshStandardMaterial());
+    mesh.scale.copy(scale);
+    return mesh;
+  }
+
+  function box(scale = new THREE.Vector3(1, 1, 1)): THREE.Mesh {
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1, 3, 3, 3), new THREE.MeshStandardMaterial());
+    mesh.scale.copy(scale);
+    return mesh;
+  }
+
+  const cases: Array<[string, () => THREE.Mesh, Record<string, unknown>]> = [
+    ["identity lattice, sphere", () => sphere(), roomy],
+    ["identity lattice, box", () => box(), roomy],
+    ["deformed lattice, sphere", () => sphere(), { ...roomy, twist: 60, bulge: 0.4, taper: -0.3 }],
+    ["deformed lattice, box", () => box(), { ...roomy, twist: 60, bend: 0.5, shearX: 0.3 }],
+    ["mirrored source (scale -1 on X)", () => sphere(new THREE.Vector3(-1, 1, 1)), roomy],
+    ["mirrored source, deformed lattice", () => box(new THREE.Vector3(1, -1, 1)), { ...roomy, twist: 45 }],
+    ["mirrored lattice (scale -1 on X)", () => sphere(), { ...roomy, scale: new THREE.Vector3(-1, 1, 1) }],
+    ["mirrored lattice, deformed", () => box(), { ...roomy, scale: new THREE.Vector3(1, 1, -1), bulge: 0.3 }],
+    ["mirrored lattice and mirrored source", () => sphere(new THREE.Vector3(1, -1, 1)), { ...roomy, scale: new THREE.Vector3(-1, 1, 1) }],
+    ["mirrored lattice, non-indexed source", () => {
+      const mesh = sphere();
+      mesh.geometry = mesh.geometry.toNonIndexed();
+      return mesh;
+    }, { ...roomy, scale: new THREE.Vector3(-1, 1, 1), twist: 30 }],
+    ["lattice with two negative axes (a rotation, not a mirror)", () => sphere(), { ...roomy, scale: new THREE.Vector3(-1, -1, 1) }],
+  ];
+
+  for (const [name, makeSource, params] of cases) {
+    it(`${name}: positive signed volume and outward normals`, () => {
+      const mesh = deformedMesh(
+        LATTICE_DEFORM_NODE.evaluate({ geometry: makeSource() }, params, { nodeId: `lat-normals-${name}` } as any),
+      );
+      expect(renderedSignedVolume(mesh)).toBeGreaterThan(0);
+      expect(outwardNormalFraction(mesh)).toBeGreaterThan(0.99);
+    });
+  }
+
+  it("unmirroring the lattice on the same node rebuilds the index rather than keeping the flipped one", () => {
+    const source = box();
+    const ctx = { nodeId: "lat-normals-toggle" } as any;
+    const mirrored = deformedMesh(
+      LATTICE_DEFORM_NODE.evaluate({ geometry: source }, { ...roomy, scale: new THREE.Vector3(-1, 1, 1) }, ctx),
+    );
+    expect(renderedSignedVolume(mirrored)).toBeGreaterThan(0);
+    const plain = deformedMesh(LATTICE_DEFORM_NODE.evaluate({ geometry: source }, roomy, ctx));
+    expect(renderedSignedVolume(plain)).toBeGreaterThan(0);
+    expect(outwardNormalFraction(plain)).toBeGreaterThan(0.99);
+  });
+});
