@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import * as THREE from "three";
 import { readJointInfluence, SKIN_NODE, withJointInfluence } from "./skin";
 import { RIG_HUMAN_NODE, RIG_POLYPEDE_NODE } from "./rig";
+import { OBJECT_SPHERE_NODE } from "./object";
 import { EvalContext } from "../types";
 
 const ctx = (nodeId: string): EvalContext => ({ time: 0, step: 0, nodeId });
@@ -247,5 +248,31 @@ describe("editing one joint's influence", () => {
     // Back to 1: nothing left to store.
     expect(withJointInfluence(set, 2, { strength: 1 }).jointStrength).toEqual([]);
     expect(withJointInfluence(set, 2, { strength: 1 }).jointRadius).toBeUndefined();
+  });
+});
+
+describe("Skin node: the mesh keeps its material", () => {
+  it("shows whatever material the source mesh carries now, even one swapped after binding", () => {
+    const rig = RIG_HUMAN_NODE.evaluate({}, { ...RIG_HUMAN_NODE.defaultParams }, ctx("mat-rig")).geometry;
+    const sphere = (extra: Record<string, unknown>, inputs: Record<string, unknown> = {}) =>
+      OBJECT_SPHERE_NODE.evaluate(inputs, { ...OBJECT_SPHERE_NODE.defaultParams, color: new THREE.Color(0x44aa66), ...extra }, ctx("mat-sphere")).geometry as THREE.Mesh;
+    const skinned = (mesh: THREE.Mesh, mode: string) => SKIN_NODE.evaluate({ geometry: mesh, rig }, params({ mode }), ctx(`mat-skin-${mode}`)).geometry as THREE.Mesh;
+
+    for (const mode of ["CPU", "GPU"]) {
+      const lit = sphere({});
+      expect(skinned(lit, mode).material).toBe(lit.material);
+      expect((skinned(lit, mode).material as THREE.MeshStandardMaterial).color.getHex()).toBe(0x44aa66);
+
+      // Shadeless swaps the sphere's material for a MeshBasicMaterial: the skinned mesh follows.
+      const flat = sphere({ shadeless: 1 });
+      expect(flat.material).toBeInstanceOf(THREE.MeshBasicMaterial);
+      expect(skinned(flat, mode).material).toBe(flat.material);
+
+      // A Material node wired in replaces it again.
+      const custom = new THREE.MeshStandardMaterial({ color: 0xff0000 });
+      const wired = sphere({}, { material: custom });
+      expect(skinned(wired, mode).material).toBe(custom);
+      expect(skinned(wired, mode).castShadow).toBe(wired.castShadow);
+    }
   });
 });

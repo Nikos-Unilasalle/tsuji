@@ -386,10 +386,8 @@ export const SKIN_NODE: NodeDefinition = {
         const position = geometry.attributes.position as THREE.BufferAttribute;
         const normal = geometry.attributes.normal as THREE.BufferAttribute | undefined;
         const skin = computeSkinWeights(position.array, source.geometry.getIndex()?.array ?? null, frames[i], bones, { influences, falloff, smooth, strength, radius });
+        // Material and shadow flags are taken from the source every frame, below.
         const { output, gpuBones } = makeOutput(source, geometry, mode, skin, bones.length);
-        output.castShadow = source.castShadow;
-        output.receiveShadow = source.receiveShadow;
-        output.renderOrder = source.renderOrder;
         const bound: BoundMesh = {
           source,
           output,
@@ -420,6 +418,14 @@ export const SKIN_NODE: NodeDefinition = {
       const sourceNormal = bound.source.geometry.attributes.normal as THREE.BufferAttribute | undefined;
       const outPosition = bound.output.geometry.attributes.position as THREE.BufferAttribute;
       const outNormal = bound.output.geometry.attributes.normal as THREE.BufferAttribute | undefined;
+
+      // The source's node may swap its material (Shadeless, a wired Material,
+      // Transmission) and dispose the old one: show the one it carries now.
+      const { output, source } = bound;
+      output.material = source.material;
+      output.castShadow = source.castShadow;
+      output.receiveShadow = source.receiveShadow;
+      output.renderOrder = source.renderOrder;
 
       // The source may be another deformer's output, rewritten in place every
       // frame: follow it when (and only when) it says it changed.
