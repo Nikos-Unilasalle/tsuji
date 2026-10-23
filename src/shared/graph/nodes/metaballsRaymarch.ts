@@ -26,6 +26,8 @@ import { BLOB_AABB, BLOB_STRIDE, BLOB_WEIGHT } from "../offthread/surfaceNets";
 
 /** Elements a single ray considers; more crossing one ray are dropped from that ray. */
 export const MAX_CANDIDATES = 32;
+/** The same for the shadow passes, which run the march once per cube face per point light. */
+export const MAX_SHADOW_CANDIDATES = 12;
 /** Elements uploaded; past this the rest are ignored (the texture is one element per row). */
 export const MAX_RAYMARCH_ELEMENTS = 4096;
 const TEXELS = BLOB_STRIDE / 4;
@@ -70,7 +72,7 @@ export function createRaymarchState(): RaymarchState {
   const distanceMaterial = new THREE.MeshDistanceMaterial();
   for (const material of [depthMaterial, distanceMaterial]) {
     material.side = THREE.BackSide;
-    material.onBeforeCompile = (shader) => patchShader(shader, uniforms);
+    material.onBeforeCompile = (shader) => patchShader(shader, uniforms, true);
     material.customProgramCacheKey = () => `tsuji-blob-raymarch#${id}`;
   }
   return { id, uniforms, depthMaterial, distanceMaterial };
@@ -190,7 +192,8 @@ export function isRaymarchEnabled(material: THREE.Material): boolean {
 const RECOMPUTED = ["vViewPosition", "vNormal", "vWorldPosition", "vHighPrecisionZW", "vTriPos", "vTriNormal"];
 const SHADOW_COORDS = ["vDirectionalShadowCoord", "vSpotLightCoord", "vPointShadowCoord"];
 
-function patchShader(shader: THREE.WebGLProgramParametersWithUniforms, uniforms: RaymarchState["uniforms"]): void {
+/** `shadowPass`: depth / distance materials only need where the ray hits — no normal, no colour, coarser steps. */
+function patchShader(shader: THREE.WebGLProgramParametersWithUniforms, uniforms: RaymarchState["uniforms"], shadowPass = false): void {
   Object.assign(shader.uniforms, uniforms);
   shader.vertexShader = shader.vertexShader
     .replace("#include <common>", "#include <common>\nvarying vec3 vBlobWorld;")
@@ -220,7 +223,7 @@ function patchShader(shader: THREE.WebGLProgramParametersWithUniforms, uniforms:
   if (has("vSpotLightCoord")) assign.push(SPOT_SHADOW_COORDS);
   if (has("vPointShadowCoord")) assign.push(POINT_SHADOW_COORDS);
 
-  fragment = fragment.replace("#include <common>", `#include <common>\n${has("vDirectionalShadowCoord") || has("vSpotLightCoord") || has("vPointShadowCoord") ? SHADOW_UNIFORMS : ""}\n${RAYMARCH_GLSL}`);
+  fragment = fragment.replace("#include <common>", `#include <common>\n${shadowPass ? "#define BLOB_SHADOW_PASS\n" : ""}${has("vDirectionalShadowCoord") || has("vSpotLightCoord") || has("vPointShadowCoord") ? SHADOW_UNIFORMS : ""}\n${RAYMARCH_GLSL}`);
   fragment = fragment.replace(
     /void\s+main\s*\(\s*\)\s*\{/,
     `void main() {
@@ -290,13 +293,29 @@ uniform bool uBlobColors;
 uniform vec3 uBlobMin;
 uniform vec3 uBlobMax;
 
-#define BLOB_MAX_CANDIDATES ${MAX_CANDIDATES}
+#ifdef BLOB_SHADOW_PASS
+	#define BLOB_MAX_CANDIDATES ${MAX_SHADOW_CANDIDATES}
+#else
+	#define BLOB_MAX_CANDIDATES ${MAX_CANDIDATES}
+#endif
+// March step, as a fraction of the smallest reach on the ray, and bisection
+// iterations. The shadow passes (a cube map per point light: six renders of
+// the whole march) settle for a coarser hit.
+#ifdef BLOB_SHADOW_PASS
+	#define BLOB_STEP 0.5
+	#define BLOB_BISECT 5
+#else
+	#define BLOB_STEP 0.25
+	#define BLOB_BISECT 10
+#endif
 
+// Per candidate only its id and its span on the ray: every other datum is
+// re-read from the texture when needed. Wide per-pixel arrays cost registers,
+// and on Apple GPUs that collapses occupancy for every fragment of the box —
+// 13 floats per candidate made the shadow passes 10× slower than these 3.
 int blobN;
 int blobId[ BLOB_MAX_CANDIDATES ];
-vec4 blobA[ BLOB_MAX_CANDIDATES ];   // a.xyz, kind
-vec4 blobB[ BLOB_MAX_CANDIDATES ];   // b.xyz, reach
-vec2 blobW[ BLOB_MAX_CANDIDATES ];   // weight, chain
+vec2 blobT[ BLOB_MAX_CANDIDATES ];   // the ray's [t in, t out] of the element's box
 
 vec4 blobTexel( int id, int t ) { return texelFetch( uBlobTex, ivec2( t, id ), 0 ); }
 
@@ -304,50 +323,65 @@ mat3 blobMatrix( int id ) {
 	vec4 t1 = blobTexel( id, 1 );
 	vec4 t2 = blobTexel( id, 2 );
 	vec4 t3 = blobTexel( id, 3 );
-	// Row-major in the texture; GLSL mat3 takes columns.
 	// M0 = t1.w, M1..M4 = t2, M5..M8 = t3; columns are (M0 M3 M6), (M1 M4 M7), (M2 M5 M8).
 	return mat3( t1.w, t2.z, t3.y,  t2.x, t2.w, t3.z,  t2.y, t3.x, t3.w );
 }
 
-// Offset from the element's core, through its matrix when it is an ellipsoid.
-vec3 blobLocal( int c, vec3 p ) {
-	vec3 d = p - blobA[ c ].xyz;
-	float kind = blobA[ c ].w;
-	if ( kind == 1.0 ) {
-		vec3 s = blobB[ c ].xyz - blobA[ c ].xyz;
+// Offset from element id's core, through its matrix when it is an ellipsoid.
+vec3 blobLocal( int id, vec3 p ) {
+	vec4 t0 = blobTexel( id, 0 );
+	vec3 a = t0.yzw;
+	vec3 d = p - a;
+	if ( t0.x == 1.0 ) {
+		vec3 s = blobTexel( id, 1 ).xyz - a;
 		float len2 = dot( s, s );
 		if ( len2 > 0.0 ) d -= clamp( dot( d, s ) / len2, 0.0, 1.0 ) * s;
-	} else if ( kind == 2.0 ) {
-		d = blobMatrix( blobId[ c ] ) * d;
+	} else if ( t0.x == 2.0 ) {
+		d = blobMatrix( id ) * d;
 	}
 	return d;
 }
 
-float blobQ( int c, vec3 p ) {
-	vec3 u = blobLocal( c, p );
-	float r2 = blobB[ c ].w * blobB[ c ].w;
+// reach, weight, chain of element id.
+vec3 blobRWC( int id ) {
+	vec4 t5 = blobTexel( id, 5 );
+	return vec3( t5.z, t5.w, blobTexel( id, 6 ).w );
+}
+
+float blobQ( int id, float reach, vec3 p ) {
+	vec3 u = blobLocal( id, p );
+	float r2 = reach * reach;
 	float d2 = dot( u, u );
 	return d2 < r2 ? 1.0 - d2 / r2 : 0.0;
 }
 
-// Field minus iso; a chain counts once, through its best segment.
-float blobField( vec3 p ) {
+// Field minus iso at ray parameter t; a chain counts once, through its best
+// segment. Elements whose box the ray is not inside at t are skipped (their
+// bump is 0 there anyway). \`covered\`: some positive element's box holds t.
+float blobField( vec3 p, float t, out bool covered ) {
 	float sum = 0.0;
 	float chain = 0.0;
 	float bestQ = 0.0;
 	float bestW = 0.0;
+	covered = false;
 	for ( int c = 0; c < blobN; c ++ ) {
-		float ch = blobW[ c ].y;
-		if ( ch != chain ) {
+		if ( t < blobT[ c ].x || t > blobT[ c ].y ) {
+			// Outside this box its bump is 0; a chain still has to be closed when it ends.
+			continue;
+		}
+		int id = blobId[ c ];
+		vec3 rwc = blobRWC( id );
+		if ( rwc.z != chain ) {
 			if ( chain > 0.0 && bestQ > 0.0 ) sum += bestW * bestQ * bestQ * bestQ;
-			chain = ch;
+			chain = rwc.z;
 			bestQ = 0.0;
 		}
-		float q = blobQ( c, p );
-		if ( ch > 0.0 ) {
-			if ( q > bestQ ) { bestQ = q; bestW = blobW[ c ].x; }
+		if ( rwc.y > 0.0 ) covered = true;
+		float q = blobQ( id, rwc.x, p );
+		if ( rwc.z > 0.0 ) {
+			if ( q > bestQ ) { bestQ = q; bestW = rwc.y; }
 		} else if ( q > 0.0 ) {
-			sum += blobW[ c ].x * q * q * q;
+			sum += rwc.y * q * q * q;
 		}
 	}
 	if ( chain > 0.0 && bestQ > 0.0 ) sum += bestW * bestQ * bestQ * bestQ;
@@ -355,44 +389,49 @@ float blobField( vec3 p ) {
 }
 
 // One element's gradient contribution and colour weight.
-void blobGradientOf( int c, vec3 p, inout vec3 grad, inout vec4 color ) {
-	vec3 u = blobLocal( c, p );
-	float r2 = blobB[ c ].w * blobB[ c ].w;
+void blobGradientOf( int id, vec3 p, inout vec3 grad, inout vec4 color ) {
+	vec3 rwc = blobRWC( id );
+	vec3 u = blobLocal( id, p );
+	float r2 = rwc.x * rwc.x;
 	float d2 = dot( u, u );
 	if ( ! ( d2 < r2 ) ) return;
 	float q = 1.0 - d2 / r2;
-	float w = blobW[ c ].x;
+	float w = rwc.y;
 	float coef = w * 3.0 * q * q * - 2.0 / r2;
 	vec3 g = u;
-	if ( blobA[ c ].w == 2.0 ) g = transpose( blobMatrix( blobId[ c ] ) ) * u;
+	if ( blobTexel( id, 0 ).x == 2.0 ) g = transpose( blobMatrix( id ) ) * u;
 	grad += coef * g;
 	if ( w > 0.0 ) {
 		float f = w * q * q * q;
-		vec3 rgb = blobTexel( blobId[ c ], 6 ).rgb;
-		color += vec4( rgb * f, f );
+		color += vec4( blobTexel( id, 6 ).rgb * f, f );
 	}
 }
 
-void blobShade( vec3 p, out vec3 normal, out vec3 rgb ) {
+void blobShade( vec3 p, float t, out vec3 normal, out vec3 rgb ) {
 	vec3 grad = vec3( 0.0 );
 	vec4 color = vec4( 0.0 );
-	for ( int c = 0; c < blobN; ) {
-		float ch = blobW[ c ].y;
-		int end = c + 1;
-		if ( ch > 0.0 ) {
-			while ( end < blobN && blobW[ end ].y == ch ) end ++;
-			int best = c;
-			float bestQ = 0.0;
-			for ( int k = c; k < end; k ++ ) {
-				float q = blobQ( k, p );
-				if ( q > bestQ ) { bestQ = q; best = k; }
-			}
-			blobGradientOf( best, p, grad, color );
-		} else {
-			blobGradientOf( c, p, grad, color );
+	// Chains contribute through their best segment only.
+	float chain = 0.0;
+	int best = -1;
+	float bestQ = 0.0;
+	for ( int c = 0; c < blobN; c ++ ) {
+		if ( t < blobT[ c ].x || t > blobT[ c ].y ) continue;
+		int id = blobId[ c ];
+		vec3 rwc = blobRWC( id );
+		if ( rwc.z != chain ) {
+			if ( best >= 0 ) blobGradientOf( best, p, grad, color );
+			chain = rwc.z;
+			best = -1;
+			bestQ = 0.0;
 		}
-		c = end;
+		if ( rwc.z > 0.0 ) {
+			float q = blobQ( id, rwc.x, p );
+			if ( q > bestQ ) { bestQ = q; best = id; }
+		} else {
+			blobGradientOf( id, p, grad, color );
+		}
 	}
+	if ( best >= 0 ) blobGradientOf( best, p, grad, color );
 	float len = length( grad );
 	normal = len > 0.0 ? - grad / len : vec3( 0.0, 1.0, 0.0 );
 	rgb = color.w > 0.0 ? color.rgb / color.w : vec3( 1.0 );
@@ -443,12 +482,8 @@ bool blobTrace( out vec3 hit, out vec3 normal, out vec3 rgb ) {
 		s.y = min( s.y, span.y );
 		if ( s.x > s.y ) continue;
 		if ( blobN == BLOB_MAX_CANDIDATES ) break;
-		vec4 t0x = blobTexel( id, 0 );
-		vec4 t1x = blobTexel( id, 1 );
 		blobId[ blobN ] = id;
-		blobA[ blobN ] = vec4( t0x.yzw, t0x.x );
-		blobB[ blobN ] = vec4( t1x.xyz, box1.z );
-		blobW[ blobN ] = vec2( box1.w, blobTexel( id, 6 ).w );
+		blobT[ blobN ] = s;
 		blobN ++;
 		if ( box1.w > 0.0 ) {
 			t0 = min( t0, s.x );
@@ -458,35 +493,44 @@ bool blobTrace( out vec3 hit, out vec3 normal, out vec3 rgb ) {
 	}
 	if ( t0 >= t1 ) return false;
 
-	// March, then bisect the first crossing.
-	int steps = int( clamp( ceil( ( t1 - t0 ) / ( minReach * 0.25 ) ), 1.0, 256.0 ) );
-	float dt = ( t1 - t0 ) / float( steps );
+	// March, skipping the gaps no positive element covers, then bisect the first crossing.
+	float dt = max( minReach * BLOB_STEP, ( t1 - t0 ) / 256.0 );
+	float t = t0;
 	float tPrev = t0;
-	float fPrev = blobField( ro + rd * t0 );
-	if ( fPrev > 0.0 ) {
-		hit = ro + rd * t0;
-	} else {
-		bool found = false;
-		for ( int i = 1; i <= 256; i ++ ) {
-			if ( i > steps ) break;
-			float t = t0 + dt * float( i );
-			float f = blobField( ro + rd * t );
-			if ( f > 0.0 ) {
-				float lo = tPrev;
-				float hi = t;
-				for ( int k = 0; k < 10; k ++ ) {
-					float mid = 0.5 * ( lo + hi );
-					if ( blobField( ro + rd * mid ) > 0.0 ) hi = mid; else lo = mid;
-				}
-				hit = ro + rd * hi;
-				found = true;
-				break;
+	bool found = false;
+	for ( int i = 0; i < 256; i ++ ) {
+		if ( t > t1 ) break;
+		bool covered;
+		float f = blobField( ro + rd * t, t, covered );
+		if ( f > 0.0 ) {
+			float lo = tPrev;
+			float hi = t;
+			for ( int k = 0; k < BLOB_BISECT; k ++ ) {
+				float mid = 0.5 * ( lo + hi );
+				bool unused;
+				if ( blobField( ro + rd * mid, mid, unused ) > 0.0 ) hi = mid; else lo = mid;
 			}
-			tPrev = t;
+			hit = ro + rd * hi;
+			found = true;
+			break;
 		}
-		if ( ! found ) return false;
+		tPrev = t;
+		if ( covered ) {
+			t += dt;
+		} else {
+			// Nothing positive here: jump to where the next positive box starts.
+			float next = 1e30;
+			for ( int c = 0; c < blobN; c ++ ) {
+				if ( blobT[ c ].x > t && blobTexel( blobId[ c ], 5 ).w > 0.0 ) next = min( next, blobT[ c ].x );
+			}
+			if ( next > t1 ) break;
+			t = next;
+		}
 	}
-	blobShade( hit, normal, rgb );
+	if ( ! found ) return false;
+#ifndef BLOB_SHADOW_PASS
+	blobShade( hit, dot( hit - ro, rd ), normal, rgb );
+#endif
 	return true;
 }
 `;

@@ -458,7 +458,7 @@ function metaballParamFields(mesher: Mesher): ParamFieldDef[] {
       },
       {
         id: "displayNote",
-        label: "Raymarched (experimental) draws the field on the GPU: no mesh, no resolution. Can be very slow on integrated / Apple GPUs. Falls back to the mesh when the Geometry output is wired or a custom Material is used.",
+        label: "Raymarched (experimental) draws the field on the GPU: no mesh, no resolution, no worker. Costs more GPU than the mesh (point-light shadows especially). Falls back to the mesh when the Geometry output is wired or a custom Material is used.",
         kind: "note",
         group: "Metaballs",
       },

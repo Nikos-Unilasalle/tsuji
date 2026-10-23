@@ -289,12 +289,27 @@ or varying it relies on.
 
 Limits: a ray crossing more than 32 element boxes ignores the rest (dense
 clusters seen end-on); raycasting/selection hits the proxy box; cost is per
-covered pixel × steps × candidates. **Experimental**: on an Apple-silicon Mac
-it was reported unusably slow on the Ellipsoids & Capsules demo, so the demo
-and the default stay on the worker mesh. Likely costs to attack first: one
-inverse(modelMatrix) per fragment, 7 texel fetches per candidate per step,
-up to 256 steps + 10 bisections, all at full resolution over the whole proxy
-box.
+covered pixel × steps × candidates. **Experimental.**
+
+Measured on an Apple-silicon Mac (in-app browser, Ellipsoids & Capsules demo,
+511×729 @1.5, 3 point lights with 1024² cube shadows; GPU ms per frame,
+`render` + 1-pixel `readPixels` to force completion — `gl.finish` alone
+returns early on Metal):
+
+| | all | without the blobs' shadows | without the blobs |
+|---|---|---|---|
+| Mesh (worker) | 11.8 | 13.1 | 9.3 |
+| Raymarch, first version | 80.8 | 12.1 | 9.9 |
+| Raymarch, now | 18.0 | 12.1 | 10.1 |
+
+The first version was slow even with zero elements (72 ms): per-candidate
+arrays of 13 floats × 32 cost so many registers that every fragment of the
+proxy box ran at low occupancy — and point-light shadows render the box six
+times per light. Now a candidate keeps only its id and its ray span, the rest
+is re-read from the texture; each candidate is only evaluated inside its own
+span (exact: its bump is 0 outside its box); the march jumps over gaps no
+positive element covers; and the shadow passes skip the gradient and colour,
+step twice as far, bisect 5 times instead of 10 and keep 12 candidates.
 
 ## `curve/to_mesh` and `modifier/boolean`
 
