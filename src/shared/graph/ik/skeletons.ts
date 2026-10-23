@@ -52,7 +52,7 @@ export const HUMAN_DEFAULTS: HumanParams = {
   legs: 1,
   shoulderWidth: 1,
   hipWidth: 1,
-  armAngle: 22,
+  armAngle: 90,
   spineSegments: 3,
   jointLimits: 1,
   kneeBend: 150,
@@ -93,12 +93,17 @@ export interface HumanSkeleton extends Skeleton {
   };
   /** Control points of the rest pose, in HUMAN_CONTROLS order. */
   restControls: THREE.Vector3[];
+  /** The rest controls with the arms hanging (HANGING_ARM_ANGLE) whatever the rest arm angle: where a walk puts the hands and elbow poles. */
+  relaxedControls: THREE.Vector3[];
 }
+
+/** Arms hanging loose, in degrees out from straight down: the A-pose a walk swings its arms from. */
+export const HANGING_ARM_ANGLE = 22;
 
 /**
  * Proportions are fractions of the height (roughly anthropometric), each
- * scaled by its own multiplier. The rest pose is an A-pose (or, with Arm Angle,
- * any other: 90 is a T-pose) with the elbows bent slightly back and the knees slightly forward — toward their poles — so
+ * scaled by its own multiplier. The rest pose is a T-pose (or, with Arm Angle,
+ * any other: 22 is an A-pose) with the elbows bent slightly back and the knees slightly forward — toward their poles — so
  * the solver starts with a bend to work from.
  */
 export function buildHumanSkeleton(input: Partial<HumanParams> = {}): HumanSkeleton {
@@ -186,6 +191,7 @@ export function buildHumanSkeleton(input: Partial<HumanParams> = {}): HumanSkele
     names,
     joint: { pelvis, chest, head, hand, elbow, foot, knee, hip },
     restControls,
+    relaxedControls: Math.abs(p.armAngle - HANGING_ARM_ANGLE) < 1e-6 ? restControls : buildHumanSkeleton({ ...p, armAngle: HANGING_ARM_ANGLE }).restControls,
   };
 }
 

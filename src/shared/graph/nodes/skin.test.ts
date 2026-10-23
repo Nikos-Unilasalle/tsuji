@@ -117,11 +117,13 @@ describe("Skin node: modes and binding", () => {
 });
 
 describe("Skin on a T-posed mesh", () => {
-  it("binds to a T-pose while the rig stands in its own neutral pose", () => {
-    const rig = RIG_HUMAN_NODE.evaluate({}, { ...RIG_HUMAN_NODE.defaultParams, bindArmAngle: 90 }, ctx("t-rig")).geometry as THREE.Object3D;
+  it("binds to the rig's default T-pose while the rig stands with its arms hanging", () => {
+    const standing = RIG_HUMAN_NODE.evaluate({}, { ...RIG_HUMAN_NODE.defaultParams }, ctx("t-rig")).geometry as THREE.Object3D;
+    const hanging = (standing.userData.humanRig.skeleton.relaxedControls as THREE.Vector3[]).map((p) => p.clone());
+    const rig = RIG_HUMAN_NODE.evaluate({}, { ...RIG_HUMAN_NODE.defaultParams, pointsList: hanging }, ctx("t-rig")).geometry as THREE.Object3D;
     const data = rig.userData.rig as { rest: THREE.Vector3[]; pose: THREE.Vector3[] };
     const hand = 8;
-    // Bind: arm straight out. Pose: still hanging at the A-pose.
+    // Bind: arm straight out. Pose: hanging at the A-pose.
     expect(data.rest[hand].y).toBeCloseTo(data.rest[6].y, 1);
     expect(data.pose[hand].y).toBeLessThan(data.rest[6].y - 0.4);
 
@@ -134,6 +136,19 @@ describe("Skin on a T-posed mesh", () => {
     // The tip of the arm has swung down to where the rig's hand hangs.
     const tip = xs.indexOf(Math.max(...xs));
     expect(ys[tip]).toBeLessThan(data.rest[6].y - 0.3);
+  });
+
+  it("does not deform the mesh at all when bound, whatever the rest arm angle, until a bone moves", () => {
+    for (const bindArmAngle of [90, 22, 45]) {
+      const rig = RIG_HUMAN_NODE.evaluate({}, { ...RIG_HUMAN_NODE.defaultParams, bindArmAngle }, ctx(`still-rig-${bindArmAngle}`)).geometry as THREE.Object3D;
+      const data = rig.userData.rig as { rest: THREE.Vector3[]; pose: THREE.Vector3[] };
+      // The rig stands in the very pose the mesh is bound to.
+      data.rest.forEach((r, i) => expect(r.distanceTo(data.pose[i])).toBeLessThan(1e-9));
+      const mesh = body();
+      const base = positionsOf(mesh);
+      const out = SKIN_NODE.evaluate({ geometry: mesh, rig }, params({ mode: "CPU" }), ctx(`still-${bindArmAngle}`)).geometry;
+      positionsOf(out).forEach((value, i) => expect(Math.abs(value - base[i])).toBeLessThan(1e-6));
+    }
   });
 });
 

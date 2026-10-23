@@ -115,21 +115,6 @@ const HUMAN_CONTROL_SOCKETS = [
   "rightKneePole",
 ];
 
-/**
- * The joints Skin binds a mesh to: this skeleton's proportions with the arms
- * at the angle the mesh was modelled in (90 for a T-pose), however the rig
- * itself stands and walks. Only the rest positions are used, so the rig's
- * neutral pose does not have to be the mesh's.
- */
-function bindRestOf(hp: HumanParams, params: Record<string, unknown>, cache: { key: string; rest: THREE.Vector3[] } | undefined): { key: string; rest: THREE.Vector3[] } | undefined {
-  const angle = numberInput(undefined, params.bindArmAngle, hp.armAngle);
-  if (Math.abs(angle - hp.armAngle) < 1e-6) return undefined;
-  const key = JSON.stringify({ ...hp, armAngle: angle });
-  return cache?.key === key ? cache : { key, rest: buildHumanSkeleton({ ...hp, armAngle: angle }).rig.rest };
-}
-
-const bindRests = createNodeCache<{ key: string; rest: THREE.Vector3[] }>();
-
 const humanSkeletons = createNodeCache<{ key: string; skeleton: HumanSkeleton }>();
 
 function humanParams(params: Record<string, unknown>): HumanParams {
@@ -141,7 +126,9 @@ function humanParams(params: Record<string, unknown>): HumanParams {
     legs: Math.max(0.05, n("legs")),
     shoulderWidth: Math.max(0, n("shoulderWidth")),
     hipWidth: Math.max(0, n("hipWidth")),
-    armAngle: HUMAN_DEFAULTS.armAngle,
+    // The arms' rest angle is also the pose Skin binds to: one angle, so a mesh
+    // skinned to a skeleton at rest is never deformed until a bone moves.
+    armAngle: Math.max(0, Math.min(150, numberInput(undefined, params.bindArmAngle, HUMAN_DEFAULTS.armAngle))),
     spineSegments: Math.max(1, Math.min(8, Math.round(n("spineSegments")))),
     jointLimits: params.jointLimits === undefined ? 1 : toBoolean(params.jointLimits) ? 1 : 0,
     kneeBend: n("kneeBend"),
@@ -219,7 +206,7 @@ export const RIG_HUMAN_NODE: NodeDefinition = {
     { id: "spineSegments", label: "Spine Segments", kind: "number", step: 1, group: "Proportions" },
     ...HUMAN_LIMIT_FIELDS,
     { id: "armPull", label: "Arm Pull on Torso", kind: "number", step: 0.05, group: "Solver" },
-    { id: "bindArmAngle", label: "Bind Arm Angle (°)", kind: "number", step: 5, group: "Skin" },
+    { id: "bindArmAngle", label: "Arm Angle (°, 90 = T-pose)", kind: "number", step: 5, group: "Proportions" },
     ...SOLVER_FIELDS,
     { id: "showControls", label: "Show Controls", kind: "boolean", group: "Display" },
     ...DISPLAY_FIELDS,
@@ -282,11 +269,7 @@ export const RIG_HUMAN_NODE: NodeDefinition = {
       solver: solverOptions(params),
     };
     group.userData.humanRig = rigData;
-    const bind = bindRestOf(hp, params, bindRests.get(ctx.nodeId));
-    if (bind) bindRests.set(ctx.nodeId, bind);
-    else bindRests.delete(ctx.nodeId);
-    rigData.bindRest = bind?.rest;
-    publishRig(group, parentsOf(skeleton.rig), bind?.rest ?? skeleton.rig.rest, positions, group.matrix, skeleton.names);
+    publishRig(group, parentsOf(skeleton.rig), skeleton.rig.rest, positions, group.matrix, skeleton.names);
 
     group.updateMatrixWorld(true);
     const world = positions.map((p) => p.clone().applyMatrix4(group.matrix));
@@ -309,8 +292,6 @@ export interface HumanRigData {
   thickness: number;
   color: THREE.Color;
   armPull: number;
-  /** Rest joints for Skin when they differ from the skeleton's own (a T-pose bind). */
-  bindRest?: THREE.Vector3[];
   solver: { maxIterations: number; tolerance: number };
 }
 
@@ -775,15 +756,17 @@ export const RIG_BIPED_MOTION_NODE: NodeDefinition = {
     const drift = (hand: 0 | 1) => idleSwayOffset(now, hand, 0.045 * (height / 1.7) * style.idleSway);
     const handLift = new THREE.Vector3(0, style.armLift * height, 0);
 
+    // The arms swing from hanging, not from the skeleton's rest pose (a T-pose by default).
+    const hang = skeleton.relaxedControls;
     const controls = [
       rc[0].clone().add(delta),
       rc[1].clone().add(delta).add(new THREE.Vector3(0, 0, lean)),
-      rc[2].clone().add(delta).add(handLift).add(new THREE.Vector3(0, 0, armSwing * stride(1) + lean * 0.5 + drift(0))),
-      rc[3].clone().add(delta).add(handLift).add(new THREE.Vector3(0, 0, armSwing * stride(0) + lean * 0.5 + drift(1))),
+      hang[2].clone().add(delta).add(handLift).add(new THREE.Vector3(0, 0, armSwing * stride(1) + lean * 0.5 + drift(0))),
+      hang[3].clone().add(delta).add(handLift).add(new THREE.Vector3(0, 0, armSwing * stride(0) + lean * 0.5 + drift(1))),
       feet[0],
       feet[1],
-      rc[6].clone().add(delta),
-      rc[7].clone().add(delta),
+      hang[6].clone().add(delta),
+      hang[7].clone().add(delta),
       rc[8].clone().add(delta).add(new THREE.Vector3(feet[0].x - restFeet[0].x, 0, stride(0))),
       rc[9].clone().add(delta).add(new THREE.Vector3(feet[1].x - restFeet[1].x, 0, stride(1))),
     ];
@@ -812,7 +795,7 @@ export const RIG_BIPED_MOTION_NODE: NodeDefinition = {
         : undefined,
     });
 
-    publishRig(group, parentsOf(skeleton.rig), data.bindRest ?? skeleton.rig.rest, positions, body, skeleton.names);
+    publishRig(group, parentsOf(skeleton.rig), skeleton.rig.rest, positions, body, skeleton.names);
     group.updateMatrixWorld(true);
     const world = positions.map((p) => p.clone().applyMatrix4(body));
     return { geometry: group, matrix: body, feet: feetWorld, joints: world, bones: boneMatrices(skeleton.rig, world) };

@@ -253,7 +253,9 @@
             "x": -1000,
             "y": -120
           },
-          "params": {}
+          "params": {
+            "bindArmAngle": 22
+          }
         },
         {
           "id": "walk",
