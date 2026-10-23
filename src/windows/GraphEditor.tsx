@@ -21,7 +21,7 @@ import {
 import "@xyflow/react/dist/style.css";
 import { DEFAULT_PICKS } from "../shared/graph/calibration/picks";
 import { getGraphClipboard, setGraphClipboard } from "../shared/graph/clipboard";
-import { cloneKeyframes, cloneParams, cloneParamValue } from "../shared/graph/cloneGraph";
+import { cloneKeyframes, cloneParams, cloneParamValue, newNodeParams } from "../shared/graph/cloneGraph";
 import { groupSelection, materializeNewPort, ungroupNode } from "../shared/graph/groupSelection";
 import {
   boundaryNodes,
@@ -938,7 +938,7 @@ function GraphEditorContent({
       const instance: NodeInstance = {
         id,
         type,
-        params: cloneParams(def.defaultParams || {}),
+        params: newNodeParams(def),
         position,
       };
 

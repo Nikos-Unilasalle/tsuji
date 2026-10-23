@@ -40,6 +40,8 @@ export const BLOB_REACH = 22;
 /** Signed: below zero carves. */
 export const BLOB_WEIGHT = 23;
 export const BLOB_COLOR = 24;
+/** Colour of a carving element that has none: it then leaves the colours around it alone. */
+export const BLOB_NO_COLOR = -1;
 /**
  * Chain id, 0 for none. Consecutive elements sharing one (a polyline's
  * capsules) count as a single element: at each point the segment reaching
@@ -407,7 +409,7 @@ function runBlobs(job: BlobsJob, g: BlobGrid): { vertices: number; indices: numb
               const vx = g.originX + (cx + ox / crossings) * h;
               const vy = g.originY + (cy + oy / crossings) * h;
               const vz = g.originZ + (cz + oz / crossings) * h;
-              writeVertex(e, list, from, to, segLen2, vx, vy, vz, vertices, colors);
+              writeVertex(e, list, from, to, segLen2, vx, vy, vz, vertices, colors, iso);
               vertexOf[cellIndex] = vertices++;
             }
           }
@@ -485,9 +487,11 @@ function writeVertex(
   pz: number,
   v: number,
   colors: boolean,
+  iso: number,
 ): void {
   let gx = 0, gy = 0, gz = 0;
   let cw = 0, cr = 0, cg = 0, cb = 0;
+  let nw = 0, nr = 0, ng = 0, nb = 0;
   for (let k = from; k < to; ) {
     let id = list[k];
     const chain = e[id * BLOB_STRIDE + BLOB_CHAIN];
@@ -556,6 +560,13 @@ function writeVertex(
       cr += f * e[o + BLOB_COLOR];
       cg += f * e[o + BLOB_COLOR + 1];
       cb += f * e[o + BLOB_COLOR + 2];
+    } else if (colors && e[o + BLOB_COLOR] >= 0) {
+      // A carving element with a colour (BLOB_NO_COLOR otherwise) tints the surface it cuts.
+      const f = -w * q * q * q;
+      nw += f;
+      nr += f * e[o + BLOB_COLOR];
+      ng += f * e[o + BLOB_COLOR + 1];
+      nb += f * e[o + BLOB_COLOR + 2];
     }
   }
   const s = scratch;
@@ -579,15 +590,24 @@ function writeVertex(
     s.normal[i + 2] = 0;
   }
   if (colors) {
+    let r = 1, g = 1, b = 1;
     if (cw > 0) {
-      s.color[i] = cr / cw;
-      s.color[i + 1] = cg / cw;
-      s.color[i + 2] = cb / cw;
-    } else {
-      s.color[i] = 1;
-      s.color[i + 1] = 1;
-      s.color[i + 2] = 1;
+      r = cr / cw;
+      g = cg / cw;
+      b = cb / cw;
     }
+    if (nw > 0) {
+      // How much was carved here, against the iso level: 0 on an intact
+      // surface, 1 once the carvers alone would have reached it — the rim of
+      // a cut fades into its own colour, the bottom takes it fully.
+      const t = nw / iso < 1 ? nw / iso : 1;
+      r = r + (nr / nw - r) * t;
+      g = g + (ng / nw - g) * t;
+      b = b + (nb / nw - b) * t;
+    }
+    s.color[i] = r;
+    s.color[i + 1] = g;
+    s.color[i + 2] = b;
   }
 }
 
@@ -657,7 +677,7 @@ export function writeBlobElement(out: Float64Array, i: number, spec: BlobElement
   out[a + 5] = Math.max(az, bz) + ez;
   out[o + BLOB_REACH] = reach;
   out[o + BLOB_WEIGHT] = spec.weight;
-  const c = spec.color ?? [1, 1, 1];
+  const c = spec.color ?? (spec.weight > 0 ? [1, 1, 1] : [BLOB_NO_COLOR, BLOB_NO_COLOR, BLOB_NO_COLOR]);
   out[o + BLOB_COLOR] = c[0];
   out[o + BLOB_COLOR + 1] = c[1];
   out[o + BLOB_COLOR + 2] = c[2];

@@ -11287,34 +11287,39 @@
         "type": "list"
       },
       {
-        "name": "Segments / Polyline (Capsules)",
-        "type": "list",
-        "id": "segments"
+        "id": "segments",
+        "label": "Segments / Polyline (Capsules)",
+        "type": "list"
       },
       {
-        "name": "Radii (per element)",
-        "type": "list",
-        "id": "radii"
+        "id": "field",
+        "label": "Blob Field",
+        "type": "blobfield"
       },
       {
-        "name": "Weights (per element, <0 carves)",
-        "type": "list",
-        "id": "weights"
+        "id": "carveGeometry",
+        "label": "Carve (Geometry)",
+        "type": "geometry"
       },
       {
-        "name": "Colors (per element)",
-        "type": "list",
-        "id": "colors"
+        "id": "carvePoints",
+        "label": "Carve (Points)",
+        "type": "list"
       },
       {
-        "name": "Carve (Geometry)",
-        "type": "geometry",
-        "id": "carveGeometry"
+        "id": "radii",
+        "label": "Radii (per element)",
+        "type": "list"
       },
       {
-        "name": "Carve (Points)",
-        "type": "list",
-        "id": "carvePoints"
+        "id": "weights",
+        "label": "Weights (per element, <0 carves)",
+        "type": "list"
+      },
+      {
+        "id": "colors",
+        "label": "Colors (per element)",
+        "type": "list"
       },
       {
         "id": "radius",
@@ -11327,14 +11332,19 @@
         "type": "value"
       },
       {
-        "name": "Carve Strength",
-        "type": "value",
-        "id": "carveStrength"
+        "id": "carveStrength",
+        "label": "Carve Strength",
+        "type": "value"
       },
       {
-        "name": "Carve Radius",
-        "type": "value",
-        "id": "carveRadius"
+        "id": "carveRadius",
+        "label": "Carve Radius",
+        "type": "value"
+      },
+      {
+        "id": "carveColor",
+        "label": "Carve Color",
+        "type": "color"
       },
       {
         "id": "visible",
@@ -11358,8 +11368,23 @@
       },
       {
         "id": "matrix",
-        "label": "Matrix",
+        "label": "Parent",
         "type": "matrix"
+      },
+      {
+        "id": "location",
+        "label": "Location",
+        "type": "vector"
+      },
+      {
+        "id": "rotation",
+        "label": "Rotation",
+        "type": "vector"
+      },
+      {
+        "id": "scale",
+        "label": "Scale",
+        "type": "vector"
       },
       {
         "id": "material",
@@ -11426,6 +11451,8 @@
       "uvScaleY": 1,
       "uvOffsetX": 0,
       "uvOffsetY": 0,
+      "triplanar": 0,
+      "triplanarBlend": 4,
       "color": 16777215,
       "emissive": 0,
       "emissiveIntensity": 1,
@@ -11436,11 +11463,160 @@
       "opacity": 1,
       "transmission": 0,
       "thickness": 0.5,
+      "mesher": "surfaceNets",
+      "display": "mesh",
       "radius": 0.5,
       "smooth": 1.6,
-      "resolution": 32,
+      "resolution": 64,
       "autoFit": true,
-      "fieldSize": 8
+      "fieldSize": 8,
+      "instanceShape": false,
+      "inheritColors": false,
+      "carveStrength": 1,
+      "carveRadius": 0,
+      "rotationMode": "XZY",
+      "rotationAngle": 0
+    }
+  },
+  {
+    "type": "field/blob-points",
+    "label": "Blob Field: Points",
+    "category": "object",
+    "inputs": [
+      {
+        "id": "points",
+        "label": "Points",
+        "type": "list"
+      },
+      {
+        "id": "geometry",
+        "label": "Geometry (children / instances)",
+        "type": "geometry"
+      },
+      {
+        "id": "radius",
+        "label": "Radius",
+        "type": "value"
+      },
+      {
+        "id": "weight",
+        "label": "Weight (<0 carves)",
+        "type": "value"
+      },
+      {
+        "id": "radii",
+        "label": "Radii (per point)",
+        "type": "list"
+      },
+      {
+        "id": "weights",
+        "label": "Weights (per point)",
+        "type": "list"
+      },
+      {
+        "id": "colors",
+        "label": "Colors (per point)",
+        "type": "list"
+      }
+    ],
+    "outputs": [
+      {
+        "id": "field",
+        "label": "Blob Field",
+        "type": "blobfield"
+      },
+      {
+        "id": "count",
+        "label": "Count",
+        "type": "value"
+      }
+    ],
+    "defaultParams": {
+      "radius": 0.5,
+      "weight": 1,
+      "instanceShape": false,
+      "inheritColors": false
+    }
+  },
+  {
+    "type": "field/blob-polyline",
+    "label": "Blob Field: Polyline",
+    "category": "object",
+    "inputs": [
+      {
+        "id": "curve",
+        "label": "Curve",
+        "type": "curve"
+      },
+      {
+        "id": "points",
+        "label": "Points / Polylines",
+        "type": "list"
+      },
+      {
+        "id": "radius",
+        "label": "Radius",
+        "type": "value"
+      },
+      {
+        "id": "weight",
+        "label": "Weight (<0 carves)",
+        "type": "value"
+      },
+      {
+        "id": "radii",
+        "label": "Radii (per segment)",
+        "type": "list"
+      }
+    ],
+    "outputs": [
+      {
+        "id": "field",
+        "label": "Blob Field",
+        "type": "blobfield"
+      },
+      {
+        "id": "count",
+        "label": "Segments",
+        "type": "value"
+      }
+    ],
+    "defaultParams": {
+      "radius": 0.25,
+      "weight": 1,
+      "samples": 32
+    }
+  },
+  {
+    "type": "field/blob-combine",
+    "label": "Blob Field: Combine",
+    "category": "object",
+    "inputs": [
+      {
+        "id": "in0",
+        "label": "Add 1",
+        "type": "blobfield"
+      },
+      {
+        "id": "subtract",
+        "label": "Subtract",
+        "type": "blobfield"
+      }
+    ],
+    "outputs": [
+      {
+        "id": "field",
+        "label": "Blob Field",
+        "type": "blobfield"
+      },
+      {
+        "id": "count",
+        "label": "Count",
+        "type": "value"
+      }
+    ],
+    "defaultParams": {
+      "subtractStrength": 1
     }
   },
   {

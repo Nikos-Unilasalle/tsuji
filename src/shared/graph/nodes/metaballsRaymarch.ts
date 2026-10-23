@@ -389,7 +389,7 @@ float blobField( vec3 p, float t, out bool covered ) {
 }
 
 // One element's gradient contribution and colour weight.
-void blobGradientOf( int id, vec3 p, inout vec3 grad, inout vec4 color ) {
+void blobGradientOf( int id, vec3 p, inout vec3 grad, inout vec4 color, inout vec4 carved ) {
 	vec3 rwc = blobRWC( id );
 	vec3 u = blobLocal( id, p );
 	float r2 = rwc.x * rwc.x;
@@ -401,15 +401,17 @@ void blobGradientOf( int id, vec3 p, inout vec3 grad, inout vec4 color ) {
 	vec3 g = u;
 	if ( blobTexel( id, 0 ).x == 2.0 ) g = transpose( blobMatrix( id ) ) * u;
 	grad += coef * g;
-	if ( w > 0.0 ) {
-		float f = w * q * q * q;
-		color += vec4( blobTexel( id, 6 ).rgb * f, f );
-	}
+	vec3 rgb = blobTexel( id, 6 ).rgb;
+	float f = abs( w ) * q * q * q;
+	if ( w > 0.0 ) color += vec4( rgb * f, f );
+	// A carving element with a colour (negative = none) tints the surface it cuts.
+	else if ( rgb.r >= 0.0 ) carved += vec4( rgb * f, f );
 }
 
 void blobShade( vec3 p, float t, out vec3 normal, out vec3 rgb ) {
 	vec3 grad = vec3( 0.0 );
 	vec4 color = vec4( 0.0 );
+	vec4 carved = vec4( 0.0 );
 	// Chains contribute through their best segment only.
 	float chain = 0.0;
 	int best = -1;
@@ -419,7 +421,7 @@ void blobShade( vec3 p, float t, out vec3 normal, out vec3 rgb ) {
 		int id = blobId[ c ];
 		vec3 rwc = blobRWC( id );
 		if ( rwc.z != chain ) {
-			if ( best >= 0 ) blobGradientOf( best, p, grad, color );
+			if ( best >= 0 ) blobGradientOf( best, p, grad, color, carved );
 			chain = rwc.z;
 			best = -1;
 			bestQ = 0.0;
@@ -428,13 +430,15 @@ void blobShade( vec3 p, float t, out vec3 normal, out vec3 rgb ) {
 			float q = blobQ( id, rwc.x, p );
 			if ( q > bestQ ) { bestQ = q; best = id; }
 		} else {
-			blobGradientOf( id, p, grad, color );
+			blobGradientOf( id, p, grad, color, carved );
 		}
 	}
-	if ( best >= 0 ) blobGradientOf( best, p, grad, color );
+	if ( best >= 0 ) blobGradientOf( best, p, grad, color, carved );
 	float len = length( grad );
 	normal = len > 0.0 ? - grad / len : vec3( 0.0, 1.0, 0.0 );
 	rgb = color.w > 0.0 ? color.rgb / color.w : vec3( 1.0 );
+	// 0 on an intact surface, 1 once the carvers alone would have reached the iso level.
+	if ( carved.w > 0.0 ) rgb = mix( rgb, carved.rgb / carved.w, min( carved.w / uBlobIso, 1.0 ) );
 }
 
 // Ray / box slab test: (tNear, tFar), tNear > tFar on a miss.

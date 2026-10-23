@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import type { BlobFieldValue } from "./nodes/blobElements";
 
 /**
  * The type system BIBLE.md settled on: seven socket kinds, no dedicated
@@ -23,6 +24,7 @@ export type SocketType =
   | "list"
   | "text"
   | "postprocess"
+  | "blobfield"
   | "any";
 
 /**
@@ -61,6 +63,8 @@ export interface SocketValueMap {
   list: unknown[];
   text: string;
   postprocess: unknown[];
+  /** Metaball elements to compose (Blob Field nodes) and mesh (Metaballs). */
+  blobfield: BlobFieldValue;
   any: unknown;
 }
 
@@ -101,6 +105,7 @@ export const SOCKET_COLOR: Record<SocketType, string> = {
   list: "#94a3b8",
   text: "#f97316",
   postprocess: "#c084fc",
+  blobfield: "#fb7185",
   any: "#e2e8f0",
 };
 

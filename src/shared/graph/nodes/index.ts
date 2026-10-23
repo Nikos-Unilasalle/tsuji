@@ -138,6 +138,7 @@ import { NOISE_PEAKS_NODE, SCATTER_AROUND_NODE } from "./noisePeaks";
 import { CURVE_SHAPE_KEY_NODE, MESH_SHAPE_KEY_NODE } from "./shapeKey";
 import { LATTICE_DEFORM_NODE } from "./lattice";
 import { METABALLS_NODE } from "./metaballs";
+import { BLOB_FIELD_COMBINE_NODE, BLOB_FIELD_POINTS_NODE, BLOB_FIELD_POLYLINE_NODE } from "./blobField";
 import { BOOLEAN_NODE } from "./boolean";
 import { FRACTURE_NODE } from "./fracture";
 import { COLLISION_NODE } from "./collision";
@@ -465,6 +466,9 @@ export const STARTER_NODES = [
   SCATTER_AROUND_NODE,
   LATTICE_DEFORM_NODE,
   METABALLS_NODE,
+  BLOB_FIELD_POINTS_NODE,
+  BLOB_FIELD_POLYLINE_NODE,
+  BLOB_FIELD_COMBINE_NODE,
   BOOLEAN_NODE,
   FRACTURE_NODE,
   COLLISION_NODE,
@@ -634,6 +638,7 @@ export * from "./shapeKey";
 export * from "./curveFromPointLists";
 export * from "./lattice";
 export * from "./metaballs";
+export * from "./blobField";
 export * from "./weld";
 export * from "./contourScan";
 export * from "./subdivide";

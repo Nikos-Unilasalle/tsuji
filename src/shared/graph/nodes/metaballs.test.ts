@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { describe, expect, test } from "vitest";
 import { METABALLS_NODE } from "./metaballs";
+import { newNodeParams } from "../cloneGraph";
 import { EvalContext } from "../types";
 
 function ctx(nodeId: string): EvalContext {
@@ -260,6 +261,72 @@ describe("METABALLS_NODE", () => {
   test("carvers alone mesh nothing", () => {
     const out = run({ carvePoints: [new THREE.Vector3(0, 0, 0)] }, "mb-carve-alone");
     expect(vertexCount(out)).toBe(0);
+  });
+
+  test("a Metaballs node made now inherits shapes and colours; an old saved one keeps them off", () => {
+    expect(newNodeParams(METABALLS_NODE)).toMatchObject({ instanceShape: true, inheritColors: true });
+    expect(METABALLS_NODE.defaultParams).toMatchObject({ instanceShape: false, inheritColors: false });
+  });
+
+  test("a lone mesh wired straight in counts with its own location, scale and colour", () => {
+    const sphere = new THREE.Mesh(new THREE.SphereGeometry(0.1), new THREE.MeshStandardMaterial({ color: 0xff0000 }));
+    sphere.position.set(3, 1, 0);
+    sphere.scale.set(2, 0.5, 0.5);
+    sphere.updateMatrixWorld(true);
+    const out = run({ geometry: sphere }, "mb-lone", { ...newNodeParams(METABALLS_NODE), radius: 0.5 });
+    const box = bounds(out);
+    expect(box.getCenter(new THREE.Vector3()).x).toBeCloseTo(3, 1);
+    expect(box.getSize(new THREE.Vector3()).x).toBeCloseTo(2, 1);
+    expect(box.getSize(new THREE.Vector3()).y).toBeCloseTo(0.5, 1);
+    const color = meshOf(out).geometry.getAttribute("color") as THREE.BufferAttribute;
+    expect(color.getX(0)).toBeCloseTo(1, 4);
+    expect(color.getY(0)).toBeCloseTo(0, 4);
+  });
+
+  test("Tint Carved Surface colours the hole a carver cuts, and only there", () => {
+    const points = [new THREE.Vector3(0, 0, 0)];
+    const carvePoints = [new THREE.Vector3(1, 0, 0)];
+    const plain = run({ points, carvePoints }, "mb-tint-off", { radius: 1, carveRadius: 0.6 });
+    expect(meshOf(plain).geometry.getAttribute("color")).toBeUndefined();
+
+    const out = run({ points, carvePoints }, "mb-tint", { radius: 1, carveRadius: 0.6, carveTint: true, carveColor: new THREE.Color(1, 0, 0) });
+    const geometry = meshOf(out).geometry;
+    const color = geometry.getAttribute("color") as THREE.BufferAttribute;
+    const position = geometry.getAttribute("position") as THREE.BufferAttribute;
+    let holeGreen = 1;
+    let farGreen = 0;
+    for (let i = 0; i < color.count; i++) {
+      const x = position.getX(i);
+      if (x > 0.6) holeGreen = Math.min(holeGreen, color.getY(i));
+      if (x < -0.8) farGreen = Math.max(farGreen, color.getY(i));
+    }
+    expect(holeGreen).toBeLessThan(0.6); // reddened inside the cut
+    expect(farGreen).toBeCloseTo(1, 3); // untouched on the far side
+  });
+
+  test("Carve Color wins over the carver object's own colour, Inherit Source Colors or not", () => {
+    // A fresh sphere is white: inheriting it used to make the hole white whatever Carve Color said.
+    const hole = new THREE.Mesh(new THREE.SphereGeometry(0.1), new THREE.MeshStandardMaterial({ color: 0xffffff }));
+    hole.position.set(1, 0, 0);
+    hole.updateMatrixWorld(true);
+    const out = run({ points: [new THREE.Vector3(0, 0, 0)], carveGeometry: hole }, "mb-tint-inherit", {
+      radius: 1,
+      carveRadius: 0.6,
+      carveTint: true,
+      inheritColors: true,
+      carveColor: new THREE.Color(1, 0, 0),
+    });
+    const geometry = meshOf(out).geometry;
+    const color = geometry.getAttribute("color") as THREE.BufferAttribute;
+    const position = geometry.getAttribute("position") as THREE.BufferAttribute;
+    let minGreen = 1;
+    for (let i = 0; i < color.count; i++) if (position.getX(i) > 0.6) minGreen = Math.min(minGreen, color.getY(i));
+    expect(minGreen).toBeLessThan(0.6);
+  });
+
+  test("new nodes tint carved surfaces", () => {
+    expect(newNodeParams(METABALLS_NODE)).toMatchObject({ carveTint: true });
+    expect(METABALLS_NODE.defaultParams).toMatchObject({ carveTint: false });
   });
 
   test("extreme params stay finite", () => {

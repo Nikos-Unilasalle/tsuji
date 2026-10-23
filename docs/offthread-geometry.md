@@ -212,9 +212,9 @@ What `blobs` changes:
   zero past R; iso = `(1 − 1/smooth²)³`, so a lone element's surface is
   exactly at its radius (same meaning of Radius/Smooth as before).
 - **Elements**: spheres, ellipsoids (an instance's or child's rotation ×
-  scale, `instanceShape`, off by default so scaled marker objects don't shrink old scenes), capsules (`segments` input: a point list is a polyline, e.g. Curve → To Points; a list of point lists is several). A polyline's capsules share a chain id: inside a chain the nearest segment wins instead of their bumps adding up, so tubes don't bulge at joints. Per element: radius
+  scale, `instanceShape`; off in defaultParams so scaled marker objects don't shrink old scenes, on for a node created now via `newNodeParams` — same for `inheritColors`; a lone mesh wired straight in counts with its own transform), capsules (`segments` input: a point list is a polyline, e.g. Curve → To Points; a list of point lists is several). A polyline's capsules share a chain id: inside a chain the nearest segment wins instead of their bumps adding up, so tubes don't bulge at joints. Per element: radius
   (`radii`), signed weight (`weights`, < 0 carves), colour (`colors`, or the
-  instance/material colour with `inheritColors`). `carveGeometry` / `carvePoints`: everything wired there becomes a negative element of `carveRadius` (0 = Radius) and weight −`carveStrength`, appended after the other elements so the per-element lists keep their indices, and placed where they stand in the scene (in the centres wire's space), so a lone object wired straight in carves at its own position. Element layout: 28 f64,
+  instance/material colour with `inheritColors`). `carveGeometry` / `carvePoints`: everything wired there becomes a negative element of `carveRadius` (0 = Radius) and weight −`carveStrength`, appended after the other elements so the per-element lists keep their indices (with Tint Carved Surface they carry Carve Color — always, not their object's colour, which for a fresh white sphere silently overrode it — and the surface they cut blends towards it by min(1, carved amount / iso): 0 on an intact surface, full at the bottom of a cut; a carving element without colour leaves colours alone), and placed where they stand in the scene (in the centres wire's space), so a lone object wired straight in carves at its own position. Element layout: 28 f64,
   `BLOB_STRIDE` in `surfaceNets.ts`; `writeBlobElement` fills one.
 - **Grid**: fitted to the positive elements' boxes (not a cube), `resolution`
   cells along the longest side (8–256), 2 empty cells of padding. Only
@@ -250,6 +250,31 @@ not for dragging.
 Not done yet: remeshing only the bricks an element moved through (the worker
 keeps a node on the same lane, so a per-node brick cache is possible), and
 sharing brick-face samples between neighbours.
+
+## Metaballs: Blob Fields (`blobfield` socket)
+
+Metaball elements as a value on a wire (`blobElements.ts`: `BlobFieldValue`,
+`BlobFieldElement`), so a field is built in parts before a Metaballs node
+meshes it:
+
+- **Blob Field: Points** — one element per point / child / instance, with its
+  own Radius and Weight (negative carves), per-point Radii / Weights / Colors,
+  optional Instance Shape and inherited colours. Geometry is read in world
+  space (Metaballs' own Centres (Geometry) is relative to the wired root; a
+  field mixes sources, so they need one space).
+- **Blob Field: Polyline** — chained capsules from a point list, a list of
+  point lists, and/or a Curve sampled into Samples points (the curve socket
+  carries the curve in its own local space: a Curve Primitive's Location only
+  moves its preview).
+- **Blob Field: Combine** — Add 1…N, plus Subtract (weights × −Subtract
+  Strength). Chain ids are renumbered past the ones already there, so two
+  polylines never fuse into one chain.
+
+An element carries its radius, not its reach: the consuming Metaballs node
+applies its own Smooth, so a lone element's surface stays exactly at its
+radius. Field elements are appended after the node's own centres and
+segments (they don't shift the Radii / Weights / Colors indices) and before
+its carvers. Ignored by the legacy mesher. Demo: "Metaballs — Blob Fields".
 
 ## Metaballs: Raymarched display (GPU)
 

@@ -65,6 +65,11 @@ export const DEMO_CATALOG: DemoCategory[] = [
         description: "A particle fountain meshed as one liquid surface: Particle Simulate → Particles to Points → Metaballs.",
       },
       {
+        file: "demo_object_metaballs_fields.tsuji",
+        label: "Metaballs — Blob Fields",
+        description: "A figure composed from Blob Fields: a body (Points), a ring around it (Polyline from a circle) and eyes subtracted from the head (Combine → Subtract).",
+      },
+      {
         file: "demo_object_empty_lookat.tsuji",
         label: "Empty & Look At",
         description: "A cone aiming at an orbiting Empty.",

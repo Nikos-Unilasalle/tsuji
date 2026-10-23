@@ -125,6 +125,16 @@ describe("surface nets kernel", () => {
     expect(openEdges(carved)).toBe(0);
   });
 
+  it("a carving element with a colour tints the surface it cuts; one without leaves colours alone", () => {
+    const body = { ...sphere(0, 0, 0, 1), color: [1, 1, 1] as const };
+    const tinted = polygonizeBlobs(blobsJob([body, { ...sphere(0.9, 0, 0, 0.6, -1), color: [1, 0, 0] as const }], 48, 1.6, true));
+    const plain = polygonizeBlobs(blobsJob([body, sphere(0.9, 0, 0, 0.6, -1)], 48, 1.6, true));
+    let minGreen = 1;
+    for (let i = 0; i < tinted.count; i++) if (tinted.position[i * 3] > 0.5) minGreen = Math.min(minGreen, tinted.color![i * 3 + 1]);
+    expect(minGreen).toBeLessThan(0.6);
+    expect(plain.color!.every((c) => Math.abs(c - 1) < 1e-6)).toBe(true);
+  });
+
   it("a negative element alone meshes nothing", () => {
     const mesh = polygonizeBlobs(blobsJob([sphere(0, 0, 0, 1, -1)], 32));
     expect(mesh.count).toBe(0);

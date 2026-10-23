@@ -1,5 +1,5 @@
 /**
- * CATALOGUE OFFICIEL DES 305 NODES TSUJI (v0.6.3)
+ * CATALOGUE OFFICIEL DES 308 NODES TSUJI (v0.6.3)
  * Exporté directement depuis DEFAULT_REGISTRY
  */
 
@@ -9183,8 +9183,8 @@ export const FULL_NODES_CATALOG = [
     "name": "Metaballs",
     "category": "object",
     "summary": {
-      "fr": "Metaballs — Module nodal object pour composition 3D et flux de signaux.",
-      "en": "Metaballs — object node module for real-time 3D composition and signal flow."
+      "fr": "Metaballs — surface implicite (Surface Nets ou Marching Cubes) sur des sphères, ellipsoïdes, capsules et Blob Fields.",
+      "en": "Metaballs — implicit surface (Surface Nets or Marching Cubes) over spheres, ellipsoids, capsules and Blob Fields."
     },
     "inputs": [
       {
@@ -9203,6 +9203,21 @@ export const FULL_NODES_CATALOG = [
         "id": "segments"
       },
       {
+        "name": "Blob Field",
+        "type": "blobfield",
+        "id": "field"
+      },
+      {
+        "name": "Carve (Geometry)",
+        "type": "geometry",
+        "id": "carveGeometry"
+      },
+      {
+        "name": "Carve (Points)",
+        "type": "list",
+        "id": "carvePoints"
+      },
+      {
         "name": "Radii (per element)",
         "type": "list",
         "id": "radii"
@@ -9216,16 +9231,6 @@ export const FULL_NODES_CATALOG = [
         "name": "Colors (per element)",
         "type": "list",
         "id": "colors"
-      },
-      {
-        "name": "Carve (Geometry)",
-        "type": "geometry",
-        "id": "carveGeometry"
-      },
-      {
-        "name": "Carve (Points)",
-        "type": "list",
-        "id": "carvePoints"
       },
       {
         "name": "Radius",
@@ -9248,6 +9253,11 @@ export const FULL_NODES_CATALOG = [
         "id": "carveRadius"
       },
       {
+        "name": "Carve Color",
+        "type": "color",
+        "id": "carveColor"
+      },
+      {
         "name": "Visible",
         "type": "value",
         "id": "visible"
@@ -9268,9 +9278,24 @@ export const FULL_NODES_CATALOG = [
         "id": "roughnessMap"
       },
       {
-        "name": "Matrix",
+        "name": "Parent",
         "type": "matrix",
         "id": "matrix"
+      },
+      {
+        "name": "Location",
+        "type": "vector",
+        "id": "location"
+      },
+      {
+        "name": "Rotation",
+        "type": "vector",
+        "id": "rotation"
+      },
+      {
+        "name": "Scale",
+        "type": "vector",
+        "id": "scale"
       },
       {
         "name": "Material",
@@ -9301,6 +9326,145 @@ export const FULL_NODES_CATALOG = [
       },
       {
         "name": "Ball Count",
+        "type": "value",
+        "id": "count"
+      }
+    ]
+  },
+  {
+    "id": "field/blob-points",
+    "name": "Blob Field: Points",
+    "category": "object",
+    "summary": {
+      "fr": "Blob Field: Points — un élément de champ par point ou objet, avec rayon, poids (négatif = creuse) et couleur.",
+      "en": "Blob Field: Points — one field element per point or object, with radius, weight (negative carves) and colour."
+    },
+    "inputs": [
+      {
+        "name": "Points",
+        "type": "list",
+        "id": "points"
+      },
+      {
+        "name": "Geometry (children / instances)",
+        "type": "geometry",
+        "id": "geometry"
+      },
+      {
+        "name": "Radius",
+        "type": "value",
+        "id": "radius"
+      },
+      {
+        "name": "Weight (<0 carves)",
+        "type": "value",
+        "id": "weight"
+      },
+      {
+        "name": "Radii (per point)",
+        "type": "list",
+        "id": "radii"
+      },
+      {
+        "name": "Weights (per point)",
+        "type": "list",
+        "id": "weights"
+      },
+      {
+        "name": "Colors (per point)",
+        "type": "list",
+        "id": "colors"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "Blob Field",
+        "type": "blobfield",
+        "id": "field"
+      },
+      {
+        "name": "Count",
+        "type": "value",
+        "id": "count"
+      }
+    ]
+  },
+  {
+    "id": "field/blob-polyline",
+    "name": "Blob Field: Polyline",
+    "category": "object",
+    "summary": {
+      "fr": "Blob Field: Polyline — capsules chaînées le long d'une courbe ou d'une polyligne, sans bosse aux jointures.",
+      "en": "Blob Field: Polyline — chained capsules along a curve or polyline, no bulge at the joints."
+    },
+    "inputs": [
+      {
+        "name": "Curve",
+        "type": "curve",
+        "id": "curve"
+      },
+      {
+        "name": "Points / Polylines",
+        "type": "list",
+        "id": "points"
+      },
+      {
+        "name": "Radius",
+        "type": "value",
+        "id": "radius"
+      },
+      {
+        "name": "Weight (<0 carves)",
+        "type": "value",
+        "id": "weight"
+      },
+      {
+        "name": "Radii (per segment)",
+        "type": "list",
+        "id": "radii"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "Blob Field",
+        "type": "blobfield",
+        "id": "field"
+      },
+      {
+        "name": "Segments",
+        "type": "value",
+        "id": "count"
+      }
+    ]
+  },
+  {
+    "id": "field/blob-combine",
+    "name": "Blob Field: Combine",
+    "category": "object",
+    "summary": {
+      "fr": "Blob Field: Combine — additionne des champs et en soustrait un.",
+      "en": "Blob Field: Combine — adds fields together and subtracts one."
+    },
+    "inputs": [
+      {
+        "name": "Add 1",
+        "type": "blobfield",
+        "id": "in0"
+      },
+      {
+        "name": "Subtract",
+        "type": "blobfield",
+        "id": "subtract"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "Blob Field",
+        "type": "blobfield",
+        "id": "field"
+      },
+      {
+        "name": "Count",
         "type": "value",
         "id": "count"
       }

@@ -101,3 +101,8 @@ export function cloneGraph(graph: Graph): Graph {
     exposedParams: graph.exposedParams ? graph.exposedParams.map((e) => ({ ...e })) : undefined,
   };
 }
+
+/** Params for a node instance being created now: defaultParams, then the definition's newNodeParams on top. */
+export function newNodeParams(def: { defaultParams?: Record<string, unknown>; newNodeParams?: Record<string, unknown> }): Record<string, unknown> {
+  return { ...cloneParams(def.defaultParams || {}), ...cloneParams(def.newNodeParams || {}) };
+}

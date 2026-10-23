@@ -316,6 +316,14 @@ export interface NodeDefinition {
   outputs: SocketDef[];
   /** Per-instance knobs — also supplies the fallback value for an input socket left unconnected. */
   defaultParams: Record<string, unknown>;
+  /**
+   * Overrides of defaultParams for a node *created now* (palette, wire drop) —
+   * never applied to a saved one. For an option that should be on in new
+   * scenes but whose default has to stay off, because evaluation fills a key
+   * missing from an older file with defaultParams and turning it on there
+   * would change how that file renders.
+   */
+  newNodeParams?: Record<string, unknown>;
   /** See ParamFieldDef — omit for a node with nothing worth exposing in the panel. */
   paramFields?: ParamFieldDef[];
   /**

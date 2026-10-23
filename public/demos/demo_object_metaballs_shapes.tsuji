@@ -426,7 +426,9 @@
       "inheritColors": true,
       "carveStrength": 1.5,
       "carveRadius": 0.6,
-      "display": "mesh"
+      "display": "mesh",
+      "carveTint": true,
+      "carveColor": 7999520
      }
     },
     {
@@ -548,7 +550,7 @@
        "y": 1,
        "z": 1
       },
-      "color": 16777215
+      "color": 7999520
      }
     }
    ],

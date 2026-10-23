@@ -333,7 +333,7 @@ impl Blobs {
                                 let vx = g.origin[0] + (cx as f64 + ox / n) * h;
                                 let vy = g.origin[1] + (cy as f64 + oy / n) * h;
                                 let vz = g.origin[2] + (cz as f64 + oz / n) * h;
-                                write_vertex(e, bricklist, &seg_len2, vx, vy, vz, colors, &mut self.position, &mut self.normal, &mut self.color);
+                                write_vertex(e, bricklist, &seg_len2, vx, vy, vz, colors, iso, &mut self.position, &mut self.normal, &mut self.color);
                                 self.vertex_of[sb][cell_index] = vertices as i32;
                                 vertices += 1;
                             }
@@ -412,12 +412,14 @@ fn write_vertex(
     py: f64,
     pz: f64,
     colors: bool,
+    iso: f64,
     position: &mut Vec<f32>,
     normal: &mut Vec<f32>,
     color: &mut Vec<f32>,
 ) {
     let (mut gx, mut gy, mut gz) = (0f64, 0f64, 0f64);
     let (mut cw, mut cr, mut cg, mut cb) = (0f64, 0f64, 0f64, 0f64);
+    let (mut nw, mut nr, mut ng, mut nb) = (0f64, 0f64, 0f64, 0f64);
     let mut k = 0;
     while k < list.len() {
         let mut id = list[k];
@@ -467,6 +469,13 @@ fn write_vertex(
             cr += f * o[COLOR];
             cg += f * o[COLOR + 1];
             cb += f * o[COLOR + 2];
+        } else if colors && o[COLOR] >= 0.0 {
+            // A carving element with a colour (negative = none) tints the surface it cuts.
+            let f = -w * q * q * q;
+            nw += f;
+            nr += f * o[COLOR];
+            ng += f * o[COLOR + 1];
+            nb += f * o[COLOR + 2];
         }
     }
     position.extend_from_slice(&[px as f32, py as f32, pz as f32]);
@@ -477,10 +486,19 @@ fn write_vertex(
         normal.extend_from_slice(&[0.0, 1.0, 0.0]);
     }
     if colors {
+        let (mut r, mut g, mut b) = (1f64, 1f64, 1f64);
         if cw > 0.0 {
-            color.extend_from_slice(&[(cr / cw) as f32, (cg / cw) as f32, (cb / cw) as f32]);
-        } else {
-            color.extend_from_slice(&[1.0, 1.0, 1.0]);
+            r = cr / cw;
+            g = cg / cw;
+            b = cb / cw;
         }
+        if nw > 0.0 {
+            // 0 on an intact surface, 1 once the carvers alone would have reached the iso level.
+            let t = if nw / iso < 1.0 { nw / iso } else { 1.0 };
+            r = r + (nr / nw - r) * t;
+            g = g + (ng / nw - g) * t;
+            b = b + (nb / nw - b) * t;
+        }
+        color.extend_from_slice(&[r as f32, g as f32, b as f32]);
     }
 }
