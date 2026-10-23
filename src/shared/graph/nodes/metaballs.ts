@@ -18,6 +18,7 @@ import {
   primitiveOutputs,
 } from "./object";
 import { composeNativeMatrix } from "./transform";
+import { bindRaymarch, createRaymarchState, disposeRaymarchState, RaymarchState, unbindRaymarch, uploadElements } from "./metaballsRaymarch";
 
 /**
  * The iso level the field is polygonized at. Fixed rather than exposed: on its
@@ -31,6 +32,8 @@ const ISOLATION = 20;
 const meshCache = createNodeCache<THREE.Mesh>(disposeObject3D);
 /** Signature of the result currently written into the node's geometry. */
 const appliedCache = createNodeCache<string>();
+/** GPU raymarch state (element texture, shadow materials) of nodes in Raymarched display. */
+const raymarchCache = createNodeCache<RaymarchState>(disposeRaymarchState);
 
 /** Matches the 60000-polygon buffer the node used to give three's MarchingCubes. */
 const MAX_VERTICES = 180000;
@@ -40,6 +43,7 @@ const SN_MAX_INDICES = SN_MAX_VERTICES * 6;
 
 export const MESHERS = ["surfaceNets", "marchingCubes"] as const;
 type Mesher = (typeof MESHERS)[number];
+export const DISPLAYS = ["mesh", "raymarch"] as const;
 
 function getMesh(nodeId: string): THREE.Mesh {
   const existing = meshCache.get(nodeId);
@@ -442,6 +446,24 @@ function metaballParamFields(mesher: Mesher): ParamFieldDef[] {
     { id: "smooth", label: "Smooth (blend reach)", kind: "number", step: 0.05, group: "Metaballs" },
     { id: "resolution", label: "Resolution", kind: "number", step: 1, group: "Metaballs" },
   ];
+  if (mesher === "surfaceNets") {
+    fields.push(
+      {
+        id: "display",
+        label: "Display",
+        kind: "select",
+        options: [...DISPLAYS],
+        optionLabels: ["Mesh (worker)", "Raymarched (GPU, experimental)"],
+        group: "Metaballs",
+      },
+      {
+        id: "displayNote",
+        label: "Raymarched (experimental) draws the field on the GPU: no mesh, no resolution. Can be very slow on integrated / Apple GPUs. Falls back to the mesh when the Geometry output is wired or a custom Material is used.",
+        kind: "note",
+        group: "Metaballs",
+      },
+    );
+  }
   if (mesher === "marchingCubes") {
     fields.push(
       { id: "autoFit", label: "Auto Fit Field", kind: "boolean", group: "Metaballs" },
@@ -482,10 +504,10 @@ function evaluateLegacy(nodeId: string, inputs: Record<string, unknown>, params:
   return { job, count: points.length };
 }
 
-function evaluateSurfaceNets(nodeId: string, inputs: Record<string, unknown>, params: Record<string, unknown>, radius: number, smooth: number, capturing: boolean) {
+function blobsPayload(inputs: Record<string, unknown>, params: Record<string, unknown>, radius: number, smooth: number) {
   const resolution = Math.min(256, Math.max(8, Math.round(numberInput(undefined, params.resolution, 64))));
   const carveRadius = numberInput(inputs.carveRadius, params.carveRadius, 0);
-  const { job: payload, count } = blobsJobFor(inputs, collectCentres(inputs.points, inputs.geometry), {
+  return blobsJobFor(inputs, collectCentres(inputs.points, inputs.geometry), {
     radius,
     // 0 (the default) means "same as Radius".
     carveRadius: carveRadius > 0 ? carveRadius : radius,
@@ -495,8 +517,67 @@ function evaluateSurfaceNets(nodeId: string, inputs: Record<string, unknown>, pa
     instanceShape: params.instanceShape === true,
     inheritColors: params.inheritColors === true,
   });
+}
+
+function evaluateSurfaceNets(nodeId: string, inputs: Record<string, unknown>, params: Record<string, unknown>, radius: number, smooth: number, capturing: boolean) {
+  const { job: payload, count } = blobsPayload(inputs, params, radius, smooth);
   const job = requestJob(nodeId, "blobs", blobsSignature(payload), () => payload, { sync: capturing });
   return { job, count };
+}
+
+const proxyBox = new THREE.BoxGeometry(1, 1, 1);
+
+/**
+ * Raymarched display: no mesh at all, the node's geometry is a box around the
+ * elements and its material traces the field (metaballsRaymarch.ts). Only
+ * re-uploads when the elements changed.
+ */
+function evaluateRaymarch(nodeId: string, mesh: THREE.Mesh, inputs: Record<string, unknown>, params: Record<string, unknown>, radius: number, smooth: number): number {
+  const { job: payload, count } = blobsPayload(inputs, params, radius, smooth);
+  let state = raymarchCache.get(nodeId);
+  if (!state) {
+    state = createRaymarchState();
+    raymarchCache.set(nodeId, state);
+  }
+  const signature = `rm|${blobsSignature(payload)}`;
+  if (appliedCache.get(nodeId) !== signature) {
+    const box = uploadElements(state, payload.elements, payload.iso, payload.colors);
+    const geometry = mesh.geometry;
+    geometry.dispose();
+    if (box) {
+      const size = box.getSize(new THREE.Vector3());
+      const center = box.getCenter(new THREE.Vector3());
+      const position = (proxyBox.getAttribute("position").array as Float32Array).slice();
+      for (let i = 0; i < position.length; i += 3) {
+        position[i] = position[i] * size.x + center.x;
+        position[i + 1] = position[i + 1] * size.y + center.y;
+        position[i + 2] = position[i + 2] * size.z + center.z;
+      }
+      geometry.setAttribute("position", new THREE.BufferAttribute(position, 3));
+      geometry.setAttribute("normal", new THREE.BufferAttribute((proxyBox.getAttribute("normal").array as Float32Array).slice(), 3));
+      geometry.setAttribute("uv", new THREE.BufferAttribute((proxyBox.getAttribute("uv").array as Float32Array).slice(), 2));
+      geometry.setIndex(new THREE.BufferAttribute(new Uint32Array(proxyBox.getIndex()!.array), 1));
+      geometry.setDrawRange(0, proxyBox.getIndex()!.count);
+      (geometry.boundingBox ??= new THREE.Box3()).copy(box);
+      box.getBoundingSphere((geometry.boundingSphere ??= new THREE.Sphere()));
+    } else {
+      geometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(0), 3));
+      geometry.setAttribute("normal", new THREE.BufferAttribute(new Float32Array(0), 3));
+      geometry.setAttribute("uv", new THREE.BufferAttribute(new Float32Array(0), 2));
+      geometry.setIndex(null);
+      geometry.setDrawRange(0, 0);
+      geometry.computeBoundingBox();
+      geometry.computeBoundingSphere();
+    }
+    geometry.deleteAttribute("color");
+    appliedCache.set(nodeId, signature);
+  }
+  return count;
+}
+
+/** Raymarched only where it can stand in for the mesh: Surface Nets, nothing reading the geometry downstream, no custom material. */
+function wantsRaymarch(params: Record<string, unknown>, ctx: { connectedOutputs?: ReadonlySet<string> }, customMaterial: unknown): boolean {
+  return params.display === "raymarch" && mesherOf(params) === "surfaceNets" && !ctx.connectedOutputs?.has("geometry") && !customMaterial;
 }
 
 /**
@@ -536,6 +617,7 @@ export const METABALLS_NODE: NodeDefinition = {
   defaultParams: {
     ...COMMON_DEFAULT_PARAMS,
     mesher: "surfaceNets",
+    display: "mesh",
     radius: 0.5,
     smooth: 1.6,
     resolution: 64,
@@ -556,13 +638,22 @@ export const METABALLS_NODE: NodeDefinition = {
     // makes `subtract` negative and the field never fall off.
     const smooth = Math.min(4, Math.max(1.05, numberInput(inputs.smooth, params.smooth, 1.6)));
     const capturing = ctx.capturing === true;
-    const { job, count } =
-      mesherOf(p) === "marchingCubes"
-        ? evaluateLegacy(ctx.nodeId, inputs, p, radius, smooth, capturing)
-        : evaluateSurfaceNets(ctx.nodeId, inputs, p, radius, smooth, capturing);
-    if (job.result && job.signature !== appliedCache.get(ctx.nodeId)) {
-      applyMesh(mesh.geometry, job.result);
-      appliedCache.set(ctx.nodeId, job.signature!);
+    const matParams = extractMaterialParams(inputs, params);
+    const raymarch = wantsRaymarch(p, ctx, matParams.customMaterial);
+    let count: number;
+    if (raymarch) {
+      count = evaluateRaymarch(ctx.nodeId, mesh, inputs, p, radius, smooth);
+    } else {
+      const evaluated =
+        mesherOf(p) === "marchingCubes"
+          ? evaluateLegacy(ctx.nodeId, inputs, p, radius, smooth, capturing)
+          : evaluateSurfaceNets(ctx.nodeId, inputs, p, radius, smooth, capturing);
+      count = evaluated.count;
+      const job = evaluated.job;
+      if (job.result && job.signature !== appliedCache.get(ctx.nodeId)) {
+        applyMesh(mesh.geometry, job.result);
+        appliedCache.set(ctx.nodeId, job.signature!);
+      }
     }
 
     if (ctx.nodeId !== ctx.liveEditNodeId) {
@@ -570,9 +661,18 @@ export const METABALLS_NODE: NodeDefinition = {
       mesh.matrix.copy(composeNativeMatrix(inputs.matrix, params.location, params.rotation, params.scale, params));
     }
 
-    const matParams = extractMaterialParams(inputs, params);
     const texParams = extractTextureParams(inputs, params, ctx.nodeId);
-    applyMaterialParams(mesh, matParams, THREE.FrontSide, texParams);
+    // The proxy box is drawn from inside out, so the camera can sit inside it.
+    applyMaterialParams(mesh, matParams, raymarch ? THREE.BackSide : THREE.FrontSide, texParams);
+    const ownMaterial = !matParams.customMaterial && !Array.isArray(mesh.material) ? (mesh.material as THREE.Material) : null;
+    // Once a node has raymarched, its state stays (and stays bound, carrying
+    // its uniforms) while it shows the mesh — see bindRaymarch for why.
+    const state = raymarchCache.get(ctx.nodeId);
+    if (ownMaterial && state) bindRaymarch(ownMaterial, state, raymarch);
+    else if (ownMaterial) unbindRaymarch(ownMaterial);
+    if (ownMaterial) ownMaterial.shadowSide = raymarch && state ? THREE.BackSide : null;
+    mesh.customDepthMaterial = raymarch && state ? state.depthMaterial : undefined;
+    mesh.customDistanceMaterial = raymarch && state ? state.distanceMaterial : undefined;
     // Blended element colours ride in a vertex attribute; the material's own colour tints them.
     const wantsVertexColors = mesh.geometry.getAttribute("color") !== undefined;
     const material = mesh.material as THREE.MeshStandardMaterial;

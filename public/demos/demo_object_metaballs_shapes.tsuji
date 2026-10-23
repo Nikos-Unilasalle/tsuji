@@ -425,7 +425,8 @@
       "instanceShape": true,
       "inheritColors": true,
       "carveStrength": 1.5,
-      "carveRadius": 0.6
+      "carveRadius": 0.6,
+      "display": "mesh"
      }
     },
     {
@@ -497,7 +498,8 @@
       "instanceShape": false,
       "inheritColors": false,
       "carveStrength": 1,
-      "carveRadius": 0
+      "carveRadius": 0,
+      "display": "mesh"
      }
     },
     {

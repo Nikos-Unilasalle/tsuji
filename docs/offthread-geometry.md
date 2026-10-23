@@ -251,6 +251,51 @@ Not done yet: remeshing only the bricks an element moved through (the worker
 keeps a node on the same lane, so a per-node brick cache is possible), and
 sharing brick-face samples between neighbours.
 
+## Metaballs: Raymarched display (GPU)
+
+`display: "raymarch"` (Surface Nets mesher only) skips the worker entirely:
+`metaballsRaymarch.ts` uploads the job's elements as a float texture (7 RGBA
+texels per element — the kernel's 28-float layout unchanged), the node's mesh
+becomes a box around the positive elements, and the node's own material
+(standard / physical / basic, whatever `applyMaterialParams` made) is patched
+through `onBeforeCompile`, chained after triplanar's hook:
+
+- each fragment of the box (drawn BackSide, so the camera may be inside it)
+  marches its ray through the same field — `qAt`, chains, ellipsoid matrices,
+  negative weights — over only the elements whose box the ray crosses (≤ 32,
+  in element order), then bisects the first crossing; misses `discard`, hits
+  write `gl_FragDepth`;
+- the varyings the lighting code reads (`vViewPosition`, `vNormal`,
+  `vWorldPosition`, shadow coordinates, triplanar's `vTriPos`/`vTriNormal`)
+  become plain globals recomputed from the hit, so PBR, environment and
+  received shadows see the real surface; normals and colours are the
+  kernel's analytic gradient and weighted blend;
+- `customDepthMaterial` / `customDistanceMaterial` march the same field, so
+  it casts the right shadow from directional, spot and point lights.
+
+Pitfall handled in `bindRaymarch`: three keeps every program a material has
+used, and switching back to one already compiled skips onBeforeCompile and
+reuses the uniforms of whichever program was compiled *last*. Raymarch → mesh
+→ raymarch drew with the mesh program's uniforms (no element texture, count 0:
+everything discarded, only the shadows left). So once a node has raymarched,
+its material stays bound while showing the mesh, carrying the raymarch
+uniforms into every program, and the program key carries the state's id.
+
+Falls back to the mesh when something reads the geometry
+(`connectedOutputs` has `geometry`) or a custom Material is wired. The
+patch is checked against three's actual shader sources in
+`metaballsRaymarch.test.ts`, which breaks if a three upgrade renames a chunk
+or varying it relies on.
+
+Limits: a ray crossing more than 32 element boxes ignores the rest (dense
+clusters seen end-on); raycasting/selection hits the proxy box; cost is per
+covered pixel × steps × candidates. **Experimental**: on an Apple-silicon Mac
+it was reported unusably slow on the Ellipsoids & Capsules demo, so the demo
+and the default stay on the worker mesh. Likely costs to attack first: one
+inverse(modelMatrix) per fragment, 7 texel fetches per candidate per step,
+up to 256 steps + 10 bisections, all at full resolution over the whole proxy
+box.
+
 ## `curve/to_mesh` and `modifier/boolean`
 
 ### Where Curve to Mesh's time went
