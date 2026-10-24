@@ -10,6 +10,7 @@ import { boneMatrices, bonesOf, drawEmpty, HumanRigData, motionClock, parentsOf,
 import { armWave, BodyMetrics, bodyMetrics, GaitSolution, GaitStyle, GRAVITY, NATURAL_STYLE, pelvisMotion, preferredSpeed, solveGait, strideSink, wantsToRun } from "../ik/gaitModel";
 import { GAIT_PRESET_KEYS, GAIT_PRESETS, GaitMode, GaitPresetKey, presetStyle } from "../ik/gaitPresets";
 import { BipedGaitState, createBipedGait, stepBipedGait } from "../ik/bipedGait";
+import { blendPose, HumanPose, readHumanPose } from "../ik/humanPose";
 import { armPose, buildGaitGuides, GAIT_HANDLE_AXES, HANDLE_COLORS, GaitHandleContext, gaitHandlePatch, handleContextFor } from "./bipedHandles";
 
 /**
@@ -133,6 +134,7 @@ export const RIG_BIPED_MOTION_NODE: NodeDefinition = {
     { id: "matrix", label: "Matrix", type: "matrix" },
     { id: "speed", label: "Speed (m/s)", type: "value" },
     { id: "turnRate", label: "Turn Rate (°/s)", type: "value" },
+    { id: "influence", label: "Influence", type: "value" },
   ],
   outputs: [
     { id: "geometry", label: "Geometry", type: "geometry" },
@@ -146,6 +148,7 @@ export const RIG_BIPED_MOTION_NODE: NodeDefinition = {
   defaultParams: {
     ...TRANSFORM_DEFAULTS,
     preset: "natural",
+    influence: 1,
     locomotion: "follow",
     speed: 1.3,
     turnRate: 0,
@@ -167,6 +170,7 @@ export const RIG_BIPED_MOTION_NODE: NodeDefinition = {
       presets: presetParams,
       group: "Gait",
     },
+    { id: "influence", label: "Influence (over the pose wired in)", kind: "number", step: 0.05, percent: true, group: "Gait" },
     {
       id: "locomotion",
       label: "Locomotion",
@@ -310,7 +314,11 @@ export const RIG_BIPED_MOTION_NODE: NodeDefinition = {
     const feet = stepped.feet.map((f) => f.position.clone().applyMatrix4(toLocal));
     const phase = state.gait.phase;
 
-    const pose = composePose({ skeleton: data, metrics, style, sol: active, state, feet, phase, now, dt, speedSk, unit });
+    const gaitPose = composePose({ skeleton: data, metrics, style, sol: active, state, feet, phase, now, dt, speedSk, unit });
+    // Influence: how much of the walk goes over the pose wired in (a Human Skeleton's, or a Biped Pose's).
+    const influence = Math.max(0, Math.min(1, numberInput(inputs.influence, params.influence, 1)));
+    const upstream = readHumanPose(source) ?? { controls: skeleton.relaxedControls, pelvisRotation: new THREE.Quaternion() };
+    const pose = influence >= 1 ? gaitPose : blendPose(upstream, gaitPose, () => influence, influence);
     const positions = solveHuman(skeleton, pose.controls, { armPull: data.armPull, ...data.solver, pelvisRotation: pose.pelvisRotation });
 
     // Handles and guides at a reference speed: the walk as it is now, or the one it would be at its usual pace.
@@ -350,12 +358,14 @@ export const RIG_BIPED_MOTION_NODE: NodeDefinition = {
     });
 
     publishRig(group, parentsOf(skeleton.rig), skeleton.rig.rest, positions, display, skeleton.names);
+    group.userData.humanRig = data;
+    group.userData.humanPose = { controls: pose.controls, pelvisRotation: pose.pelvisRotation, matrix: display.clone() } satisfies HumanPose;
     group.updateMatrixWorld(true);
     const world = positions.map((p) => p.clone().applyMatrix4(display));
     return {
       geometry: group,
       matrix: display.clone(),
-      feet: feet.map((f) => f.clone().applyMatrix4(display)),
+      feet: [pose.controls[4], pose.controls[5]].map((f) => f.clone().applyMatrix4(display)),
       joints: world,
       bones: boneMatrices(skeleton.rig, world),
       phase,

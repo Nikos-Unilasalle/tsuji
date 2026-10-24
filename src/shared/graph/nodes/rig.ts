@@ -19,6 +19,7 @@ import {
   solvePolypede,
 } from "../ik/skeletons";
 import { createSkeletonView, SkeletonView } from "../ik/skeletonView";
+import { editPoseList, readPoseList, type HumanPose } from "../ik/humanPose";
 import { createGait, GAIT_DEFAULTS, GaitParams, GaitState, polypedeNeighbors, stepGait } from "../ik/polypedeGait";
 import { IkRig } from "../ik/fabrik";
 import { publishRig } from "../ik/skinning";
@@ -116,6 +117,8 @@ const HUMAN_CONTROL_SOCKETS = [
 ];
 
 const humanSkeletons = createNodeCache<{ key: string; skeleton: HumanSkeleton }>();
+/** The last pose solved per Human Skeleton: what its handles edit, and the joints a limb swings about. */
+const humanPoseContexts = createNodeCache<{ skeleton: HumanSkeleton; joints: THREE.Vector3[]; controls: THREE.Vector3[] }>();
 
 function humanParams(params: Record<string, unknown>): HumanParams {
   const n = (id: keyof HumanParams) => numberInput(undefined, params[id], HUMAN_DEFAULTS[id]);
@@ -216,6 +219,13 @@ export const RIG_HUMAN_NODE: NodeDefinition = {
     { id: "pointsKeyframeButton", label: "Keyframe controls at frame", kind: "button", action: TOGGLE_POINTS_KEYFRAME_ACTION, group: "Animation" },
   ],
   reset: { params: ["pointsList"] },
+  paramHandleRotates: (index) => index !== 0,
+  paramHandles: (index, position, params, nodeId, rotation) => {
+    const context = humanPoseContexts.get(nodeId);
+    if (!context) return null;
+    const { controls } = readPoseList(params.pointsList, context.controls);
+    return { pointsList: editPoseList(context.skeleton, context.joints, controls, new THREE.Vector3(), index, position, rotation, false) };
+  },
   evaluate: (inputs, params, ctx) => {
     const hp = humanParams(params);
     const key = JSON.stringify(hp);
@@ -241,6 +251,7 @@ export const RIG_HUMAN_NODE: NodeDefinition = {
     });
 
     const positions = solveHuman(skeleton, controls, { armPull: numberInput(undefined, params.armPull, 0.3), ...solverOptions(params) });
+    humanPoseContexts.set(ctx.nodeId, { skeleton, joints: positions, controls });
 
     const H = hp.height;
     const thickness = Math.max(0, numberInput(undefined, params.boneThickness, 0.022));
@@ -272,6 +283,7 @@ export const RIG_HUMAN_NODE: NodeDefinition = {
       solver: solverOptions(params),
     };
     group.userData.humanRig = rigData;
+    group.userData.humanPose = { controls, pelvisRotation: new THREE.Quaternion(), matrix: group.matrix.clone() } satisfies HumanPose;
     publishRig(group, parentsOf(skeleton.rig), skeleton.rig.rest, positions, group.matrix, skeleton.names);
 
     group.updateMatrixWorld(true);

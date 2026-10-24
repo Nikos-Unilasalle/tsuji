@@ -361,8 +361,20 @@ export interface NodeDefinition {
    * outputs `__controlPoints` (in its own geometry's space) for the viewport
    * to draw, and a drag of handle `index` to `position` asks this for the
    * params that put it there. Null leaves the params alone.
+   *
+   * `params` are the node's params as the drag began, so a patch is always
+   * worked out from the same start. A rotate drag (see paramHandleRotates)
+   * passes the gizmo's turn since then as `rotation`, the position unchanged.
    */
-  paramHandles?: (index: number, position: THREE.Vector3, params: Record<string, unknown>, nodeId: string) => Record<string, unknown> | null;
+  paramHandles?: (
+    index: number,
+    position: THREE.Vector3,
+    params: Record<string, unknown>,
+    nodeId: string,
+    rotation?: THREE.Quaternion,
+  ) => Record<string, unknown> | null;
+  /** Handles that may also be turned with the rotate gizmo (all three axes); the rest stay translate-only. */
+  paramHandleRotates?: (index: number) => boolean;
   /**
    * The directions handle `index` can be dragged along, in the node's own
    * space: the gizmo shows only those arrows (translate only, local axes).

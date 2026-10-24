@@ -29,6 +29,9 @@ import { SKELETON_NODE_TYPE } from "../graph/nodes/skeleton";
 import { SKIN_NODE } from "../graph/nodes/skin";
 import { SkeletonHud, SkinHud } from "./RigHuds";
 import { BipedHud } from "./BipedHud";
+import { PoseHud } from "./PoseHud";
+import { RIG_BIPED_POSE_NODE } from "../graph/nodes/bipedPose";
+import { RIG_HUMAN_NODE } from "../graph/nodes/rig";
 import { RIG_BIPED_MOTION_NODE, type BipedGaitInfo } from "../graph/nodes/bipedMotion";
 import { PointsInfluenceHud } from "./PointsInfluenceHud";
 import { isRigNodeType, setInFront } from "./inFront";
@@ -1827,6 +1830,8 @@ export function Viewport({
     // the picked handle or multi-point centroid when non-empty.
     const curveHandles = createCurvePointHandles();
     let curvePointsNodeId: string | null = null;
+    /** Params of the param-handle node as the current handle drag began (NodeDefinition.paramHandles). */
+    let paramHandleDragStart: Record<string, unknown> | null = null;
     let selectedPointIndices = new Set<number>();
     let lastSkeletonSelection = "";
     let isMarqueeDragging = false;
@@ -2320,8 +2325,15 @@ export function Viewport({
     function paramHandleAxesFor(object: THREE.Object3D): ("x" | "y" | "z")[] | null {
       if (!object.userData?.isCurvePointHandle || !curvePointsNodeId) return null;
       const node = graphRef.current.nodes.find((n) => n.id === curvePointsNodeId);
-      const axesOf = node ? registryRef.current.get(node.type)?.paramHandleAxes : undefined;
-      return axesOf ? axesOf(object.userData.pointIndex as number) : null;
+      const def = node ? registryRef.current.get(node.type) : undefined;
+      if (!def?.paramHandles) return null;
+      return def.paramHandleAxes ? def.paramHandleAxes(object.userData.pointIndex as number) : ["x", "y", "z"];
+    }
+
+    function paramHandleRotatesFor(object: THREE.Object3D): boolean {
+      const node = graphRef.current.nodes.find((n) => n.id === curvePointsNodeId);
+      const rotates = node ? registryRef.current.get(node.type)?.paramHandleRotates : undefined;
+      return Boolean(rotates?.(object.userData.pointIndex as number));
     }
 
     function editPickedCurvePoint(operation: "insert" | "remove"): boolean {
@@ -2682,6 +2694,9 @@ export function Viewport({
         controls.enabled = !event.value;
         if (event.value) {
           onTransformStartRef.current?.();
+          // A param handle works every patch out from the params the drag started on.
+          const startNode = transformControls.object?.userData?.isCurvePointHandle ? graphRef.current.nodes.find((n) => n.id === curvePointsNodeId) : undefined;
+          paramHandleDragStart = startNode && hasParamHandles(startNode) ? { ...startNode.params } : null;
           if (transformControls.object?.userData?.isCurveCentroidHandle) {
             const centroid = transformControls.object;
             dragStartCentroidPos.copy(centroid.position);
@@ -2929,7 +2944,8 @@ export function Viewport({
           // A param handle: the node says which params put it where it was dropped.
           const toParams = registryRef.current.get(node.type)?.paramHandles;
           if (toParams) {
-            const patch = toParams(pointIdx, object.position.clone(), node.params, node.id);
+            const rotation = transformControls.mode === "rotate" ? object.quaternion.clone() : undefined;
+            const patch = toParams(pointIdx, object.position.clone(), paramHandleDragStart ?? node.params, node.id, rotation);
             if (patch) onTransformChangeRef.current(node.id, patch);
             return;
           }
@@ -6604,11 +6620,13 @@ export function Viewport({
         // A param handle moves only along what it edits: just those arrows, in the node's own axes.
         const axes = paramHandleAxesFor(pickedCurveHandle);
         if (axes) {
-          transformControls.setMode("translate");
+          // Turning is offered only by handles that mean something by it (a limb swinging about its joint).
+          const rotates = paramHandleRotatesFor(pickedCurveHandle) && transformModeRef.current === "rotate";
+          transformControls.setMode(rotates ? "rotate" : "translate");
           if (transformControls.space !== "local") transformControls.setSpace("local");
-          transformControls.showX = axes.includes("x");
-          transformControls.showY = axes.includes("y");
-          transformControls.showZ = axes.includes("z");
+          transformControls.showX = rotates || axes.includes("x");
+          transformControls.showY = rotates || axes.includes("y");
+          transformControls.showZ = rotates || axes.includes("z");
         }
         transformControls.getHelper().visible = true;
         attachedObjectNodeId = null;
@@ -8673,9 +8691,30 @@ export function Viewport({
         selectedNodeId &&
         (() => {
           const rigNode = graph.nodes.find(
-            (n) => n.id === selectedNodeId && (n.type === SKELETON_NODE_TYPE || n.type === SKIN_NODE.type || n.type === RIG_BIPED_MOTION_NODE.type),
+            (n) =>
+              n.id === selectedNodeId &&
+              (n.type === SKELETON_NODE_TYPE ||
+                n.type === SKIN_NODE.type ||
+                n.type === RIG_BIPED_MOTION_NODE.type ||
+                n.type === RIG_BIPED_POSE_NODE.type ||
+                n.type === RIG_HUMAN_NODE.type),
           );
           if (!rigNode) return null;
+          if (rigNode.type === RIG_BIPED_POSE_NODE.type || rigNode.type === RIG_HUMAN_NODE.type) {
+            const result = latestResultsRef.current?.get(rigNode.id);
+            const geometry = result?.geometry as THREE.Object3D | undefined;
+            const controls = Array.isArray(result?.__controlPoints) ? (result.__controlPoints as THREE.Vector3[]) : [];
+            return (
+              <PoseHud
+                node={rigNode}
+                skeleton={geometry?.userData?.humanRig?.skeleton ?? null}
+                controls={controls}
+                influence={rigNode.type === RIG_BIPED_POSE_NODE.type}
+                onParams={(params, nodeId) => onParamChange?.(params, nodeId)}
+                onAction={(nodeId, action) => onParamAction?.(nodeId, action)}
+              />
+            );
+          }
           if (rigNode.type === RIG_BIPED_MOTION_NODE.type) {
             return (
               <BipedHud

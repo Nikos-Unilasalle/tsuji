@@ -21,7 +21,7 @@ export const CURVE_POINTS_NODE_TYPES = [
  * means the rest pose; the handles then come from the node's evaluated
  * `__controlPoints`, and the first drag stores the whole list.
  */
-export const IK_CONTROL_NODE_TYPES = ["rig/human"];
+export const IK_CONTROL_NODE_TYPES = ["rig/human", "rig/biped-pose"];
 
 export function isIkControlNode(node: { type: string } | null | undefined): boolean {
   return Boolean(node && IK_CONTROL_NODE_TYPES.includes(node.type));
