@@ -156,3 +156,20 @@ describe("poses wired into Biped Motion", () => {
     expect(held.joints[skeleton.joint.hand[0]].y).toBeGreaterThan(held.joints[skeleton.joint.head].y);
   });
 });
+
+describe("rig objects in the output pane", () => {
+  it("clone, as the camera / output view does with everything it draws", () => {
+    const walk = RIG_BIPED_MOTION_NODE.evaluate(
+      { skeleton: humanGeometry },
+      { ...RIG_BIPED_MOTION_NODE.defaultParams },
+      ctx("clone-walk", { time: 0, currentFrame: 0, fps: 30 }),
+    ).geometry as THREE.Object3D;
+    const posed = pose("clone-pose", { pointsList: cheer }, walk).geometry;
+    for (const object of [humanGeometry, walk, posed]) {
+      const copy = object.clone(true);
+      expect(copy.children.length).toBe(object.children.length);
+    }
+    // The guides are still found on the original.
+    expect(walk.userData.selectionGuides).toBeInstanceOf(THREE.Group);
+  });
+});

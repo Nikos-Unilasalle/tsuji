@@ -114,7 +114,9 @@ export function createSkeletonView(nodeId: string): SkeletonView {
   paths.userData.isHelper = true;
   paths.userData.nodeId = nodeId;
   group.add(guides);
-  group.userData.selectionGuides = guides;
+  // Not enumerable: Object3D.clone() copies userData through JSON, and an Object3D in it
+  // breaks that (the output pane clones every object it draws).
+  Object.defineProperty(group.userData, "selectionGuides", { value: guides, enumerable: false, configurable: true });
   for (const helper of [targets, poles, links, circles]) helper.userData.isHelper = true;
   for (const obj of [bones, joints, body, targets, poles, links, circles]) {
     obj.castShadow = obj === bones || obj === joints || obj === body;
