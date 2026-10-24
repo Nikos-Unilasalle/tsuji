@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { NodeDefinition } from "../types";
 import { createNodeCache } from "../nodeCaches";
 import { numberInput } from "./object";
+import { asVector3 } from "./transform";
 import { toBoolean } from "../sockets";
 import { TOGGLE_POINTS_KEYFRAME_ACTION } from "./curve";
 import { HumanSkeleton, solveHuman } from "../ik/skeletons";
@@ -52,6 +53,7 @@ export const RIG_BIPED_POSE_NODE: NodeDefinition = {
     { id: "matrix", label: "Body Matrix", type: "matrix" },
     { id: "joints", label: "Joints", type: "list" },
     { id: "bones", label: "Bone Matrices", type: "list" },
+    { id: "pose", label: "Pose", type: "list" },
   ],
   defaultParams: {
     influence: 1,
@@ -59,6 +61,7 @@ export const RIG_BIPED_POSE_NODE: NodeDefinition = {
     arms: 1,
     legs: 1,
     solo: false,
+    previewAt: new THREE.Vector3(-1.2, 0, 0),
     showControls: true,
     pointsList: [],
   },
@@ -69,6 +72,7 @@ export const RIG_BIPED_POSE_NODE: NodeDefinition = {
     { id: "legs", label: "Legs", kind: "number", step: 0.05, percent: true, group: "Pose" },
     { id: "solo", label: "Preview at 100 % while editing", kind: "boolean", group: "Pose" },
     { id: "showControls", label: "Show Pose Handles", kind: "boolean", group: "Display" },
+    { id: "previewAt", label: "Shown at, as a pose source (beside the skeleton)", kind: "vector", step: 0.1, group: "Display" },
     { id: "pointsKeyframeButton", label: "Keyframe pose at frame", kind: "button", action: TOGGLE_POINTS_KEYFRAME_ACTION, group: "Animation" },
   ],
   reset: { params: ["pointsList"] },
@@ -87,12 +91,16 @@ export const RIG_BIPED_POSE_NODE: NodeDefinition = {
     if (!data) {
       drawEmpty(view);
       contexts.delete(ctx.nodeId);
-      return { geometry: group, matrix: new THREE.Matrix4(), joints: [], bones: [] };
+      return { geometry: group, matrix: new THREE.Matrix4(), joints: [], bones: [], pose: [] };
     }
     const { skeleton } = data;
     const upstream = readHumanPose(source) ?? { controls: skeleton.relaxedControls, pelvisRotation: new THREE.Quaternion(), matrix: source!.matrix.clone() };
-    // The body is wherever the pose wired in has it: this node only poses it.
+    // The body is wherever the pose wired in has it: this node only poses it. Used only as a
+    // pose source (its Pose output wired into a Biped Motion, its body nowhere), it stands
+    // aside as an editing preview, kept out of the render.
+    const sourceOnly = ctx.connectedOutputs !== undefined && !ctx.connectedOutputs.has("geometry") && ctx.connectedOutputs.has("pose");
     group.matrix.copy(upstream.matrix);
+    if (sourceOnly) group.matrix.premultiply(new THREE.Matrix4().makeTranslation(asVector3(params.previewAt, new THREE.Vector3(-1.2, 0, 0))));
     group.matrixWorldNeedsUpdate = true;
 
     const stored = readPoseList(params.pointsList, skeleton.relaxedControls);
@@ -123,6 +131,12 @@ export const RIG_BIPED_POSE_NODE: NodeDefinition = {
       paths: showControls ? own.controls.slice(6).map((at, k) => ({ points: [at, ownJoints[poleJoint[k]]], color: 0x8a7a2a })) : [],
     });
 
+    group.traverse((child) => {
+      if (child === group || child === view.guides || child.parent !== group) return;
+      // Controls and circles are helpers anyway; the bones become one only while previewing.
+      child.userData.helperOwn ??= Boolean(child.userData.isHelper);
+      child.userData.isHelper = child.userData.helperOwn || sourceOnly;
+    });
     publishRig(group, parentsOf(skeleton.rig), skeleton.rig.rest, positions, group.matrix, skeleton.names);
     group.userData.humanRig = data;
     group.userData.humanPose = { controls: pose.controls, pelvisRotation: pose.pelvisRotation, matrix: group.matrix.clone() } satisfies HumanPose;
@@ -133,6 +147,8 @@ export const RIG_BIPED_POSE_NODE: NodeDefinition = {
       matrix: group.matrix.clone(),
       joints: world,
       bones: boneMatrices(skeleton.rig, world),
+      // The pose itself — its own, not blended — for a Biped Motion to hold at a route stop.
+      pose: [...own.controls.map((c) => c.clone()), stored.turn.clone()],
       // Not a socket: the pose's handles, in the body's space (see Viewport.tsx's param handles).
       __controlPoints: showControls ? own.controls : [],
     };

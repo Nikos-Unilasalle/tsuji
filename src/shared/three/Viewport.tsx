@@ -8719,6 +8719,13 @@ export function Viewport({
             return (
               <BipedHud
                 node={rigNode}
+                poseNames={graph.connections
+                  .filter((c) => c.toNode === rigNode.id && /^pose\d+$/.test(c.toSocket))
+                  .reduce<string[]>((names, c) => {
+                    const from = graph.nodes.find((n) => n.id === c.fromNode);
+                    names[Number(c.toSocket.slice(4))] = String(from?.params.name || from?.type.replace("rig/", "") || "pose");
+                    return names;
+                  }, [])}
                 readInfo={() => (latestResultsRef.current?.get(rigNode.id)?.__gaitInfo as BipedGaitInfo | undefined) ?? null}
                 onParams={(params, nodeId) => onParamChange?.(params, nodeId)}
               />

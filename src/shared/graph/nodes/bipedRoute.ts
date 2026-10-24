@@ -59,12 +59,15 @@ export function holdRoutePose(
   skeletonKey: string,
   walk: { controls: THREE.Vector3[]; pelvisRotation: THREE.Quaternion },
   wired: { controls: THREE.Vector3[]; pelvisRotation: THREE.Quaternion } | null,
+  /** The poses wired into the node's Pose 1, Pose 2… inputs: a stop's "input:N". */
+  inputs: ({ controls: THREE.Vector3[]; pelvisRotation: THREE.Quaternion } | null)[],
   mark: RouteMark | undefined,
   weight: number,
 ) {
   if (!mark?.pose || weight <= 0) return walk;
   let target: { controls: THREE.Vector3[]; pelvisRotation: THREE.Quaternion } | null = null;
   if (mark.pose === "wired") target = wired;
+  else if (mark.pose.startsWith("input:")) target = inputs[Number(mark.pose.slice(6))] ?? null;
   else if (mark.pose in POSE_PRESETS) {
     let cache = presetPoses.get(nodeId);
     if (!cache) {

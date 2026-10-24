@@ -337,3 +337,17 @@ describe("Biped Motion on a route", () => {
     expect(RIG_BIPED_MOTION_NODE.paramHandleAxes!(0, params)).toEqual(["x", "z"]);
   });
 });
+
+describe("Biped Motion handles in Route", () => {
+  it("shows the gait's handles instead of the route's when asked", () => {
+    const run = (handleSet: string) =>
+      RIG_BIPED_MOTION_NODE.evaluate(
+        { skeleton: adult.geometry },
+        { ...RIG_BIPED_MOTION_NODE.defaultParams, locomotion: "route", handleSet },
+        ctx(`route-hs-${handleSet}`, { time: 0, currentFrame: 0, fps: 30, sessionId: "hs" }),
+      ).__controlPoints as THREE.Vector3[];
+    expect(run("gait").length).toBe(6);
+    expect(run("auto").length).toBe(4);
+    expect(RIG_BIPED_MOTION_NODE.paramHandleAxes!(0, { locomotion: "route", handleSet: "gait" })).toEqual(["z"]);
+  });
+});

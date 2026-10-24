@@ -25,7 +25,7 @@ export interface RouteMark {
   speed?: number;
   /** Stop: seconds held. */
   hold?: number;
-  /** Stop: pose held — "" none, "wired" the pose wired into the node, or a pose preset key. */
+  /** Stop: pose held — "" none, "input:N" the pose wired into Pose N+1, "wired" the pose the skeleton comes with, or a pose preset key. */
   pose?: string;
   /** Stop: the pose takes the legs too (they will slide into it); otherwise only the upper body. */
   whole?: boolean;

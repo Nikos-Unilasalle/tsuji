@@ -33,17 +33,53 @@ function useLiveInfo(read: () => BipedGaitInfo | null): BipedGaitInfo | null {
   return info;
 }
 
-export function BipedHud({ node, readInfo, onParams }: { node: NodeInstance; readInfo: () => BipedGaitInfo | null; onParams: OnParams }) {
+const selectStyle = { background: "rgba(0,0,0,0.35)", color: "#fff", border: "1px solid rgba(255,255,255,0.2)", borderRadius: 4, padding: "3px 6px", fontSize: 12 } as const;
+
+/** A labelled dropdown in the bar: the choice shown, the alternatives a click away, one line whatever their number. */
+function Choice<T extends string>({ value, options, onChange, title }: { value: T; options: readonly (readonly [T, string, string])[]; onChange: (v: T) => void; title: string }) {
+  const current = options.find(([v]) => v === value);
+  return (
+    <select value={value} onChange={(e) => onChange(e.target.value as T)} title={current ? `${title}: ${current[2]}` : title} style={selectStyle}>
+      {options.map(([v, label, hint]) => (
+        <option key={v} value={v} title={hint}>
+          {label}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+const LOCOMOTIONS = [
+  ["follow", "Follow", "The body goes where the node's pose (or a path) puts it; the gait reads its speed and turns"],
+  ["drive", "Drive", "The body walks itself forward at Speed, turning at Turn Rate"],
+  ["inPlace", "In Place", "A treadmill: the body stays, the feet cycle under it (loops, game cycles)"],
+  ["route", "Route", "Walk a route drawn in the viewport, with stops, runs and poses along it"],
+] as const;
+
+const GAITS = [
+  ["auto", "Auto gait", "Walk, and run past the Froude transition (≈ 0.5)"],
+  ["walk", "Walk", "Always walk, however fast"],
+  ["run", "Run", "Always run, both feet leaving the ground"],
+] as const;
+
+export function BipedHud({ node, readInfo, onParams, poseNames = [] }: { node: NodeInstance; readInfo: () => BipedGaitInfo | null; onParams: OnParams; poseNames?: string[] }) {
   const info = useLiveInfo(readInfo);
   const p = node.params;
-  const locomotion = String(p.locomotion ?? "follow");
-  const gait = String(p.gait ?? "auto");
+  const locomotion = (LOCOMOTIONS.some(([v]) => v === p.locomotion) ? p.locomotion : "follow") as (typeof LOCOMOTIONS)[number][0];
+  const gait = (GAITS.some(([v]) => v === p.gait) ? p.gait : "auto") as (typeof GAITS)[number][0];
   const preset = String(p.preset ?? "natural");
   const clock = p.clock === "live" ? "live" : "timeline";
-  const driven = locomotion !== "follow";
   const showGuides = p.showGuides === undefined ? true : Boolean(p.showGuides);
+  // Which handles are on the body: the gait's (designing the walk) or, in Route, the route's (staging it).
+  const handleSet = p.handleSet === "gait" || p.handleSet === "route" ? p.handleSet : locomotion === "route" ? "route" : "gait";
+  const handles = !showGuides ? "off" : handleSet;
   const set = (params: Record<string, unknown>) => onParams(params, node.id);
   const applyPreset = (key: GaitPresetKey) => set(bipedPresetParams(key, info?.hipHeight));
+  const handleOptions = [
+    ["gait", "Gait handles", "Design the walk itself: stride, foot lift, width, pelvis, lean, arms"],
+    ...(locomotion === "route" ? ([["route", "Route handles", "Stage it: drag the route's points and slide its marks"]] as const) : []),
+    ["off", "No handles", "Hide the handles and guides"],
+  ] as const;
 
   return (
     <>
@@ -52,7 +88,7 @@ export function BipedHud({ node, readInfo, onParams }: { node: NodeInstance; rea
           value={GAIT_PRESET_KEYS.includes(preset as GaitPresetKey) ? preset : "custom"}
           onChange={(e) => e.target.value !== "custom" && applyPreset(e.target.value as GaitPresetKey)}
           title={GAIT_PRESETS[preset as GaitPresetKey]?.hint ?? "Tuned by hand — pick a preset to start over from one"}
-          style={{ background: "rgba(0,0,0,0.35)", color: "#fff", border: "1px solid rgba(255,255,255,0.2)", borderRadius: 4, padding: "3px 6px", fontSize: 12 }}
+          style={selectStyle}
         >
           {GAIT_PRESET_KEYS.map((key) => (
             <option key={key} value={key}>
@@ -63,53 +99,23 @@ export function BipedHud({ node, readInfo, onParams }: { node: NodeInstance; rea
             Custom
           </option>
         </select>
-        <HudSeparator />
-        {(
-          [
-            ["follow", "Follow", "The body goes where the node's pose (or a path) puts it; the gait reads its speed and turns"],
-            ["drive", "Drive", "The body walks itself forward at Speed, turning at Turn Rate"],
-            ["inPlace", "In Place", "A treadmill: the body stays, the feet cycle under it (loops, game cycles)"],
-            ["route", "Route", "Walk a route drawn in the viewport, with stops, runs and poses along it"],
-          ] as const
-        ).map(([value, label, title]) => (
-          <button key={value} type="button" className={segment(locomotion === value)} style={wide} onClick={() => set({ locomotion: value })} title={title}>
-            {label}
-          </button>
-        ))}
-        <HudSeparator />
-        {(
-          [
-            ["auto", "Auto", "Walk, and run past the Froude transition (≈ 0.5)"],
-            ["walk", "Walk", "Always walk, however fast"],
-            ["run", "Run", "Always run, both feet leaving the ground"],
-          ] as const
-        ).map(([value, label, title]) => (
-          <button key={value} type="button" className={segment(gait === value)} style={wide} onClick={() => set({ gait: value })} title={title}>
-            {label}
-          </button>
-        ))}
-        <HudSeparator />
-        <div style={{ opacity: driven ? 1 : 0.4, pointerEvents: driven ? "auto" : "none", display: "flex", gap: 10, alignItems: "center" }}>
+        <Choice value={locomotion} options={LOCOMOTIONS} onChange={(v) => set({ locomotion: v })} title="How the body moves" />
+        <Choice value={gait} options={GAITS} onChange={(v) => set({ gait: v })} title="Walk or run" />
+        {locomotion !== "follow" && (
           <CommitSlider
             label="m/s"
             value={Number(p.speed ?? 1.3)}
             min={0}
             max={8}
             step={0.05}
-            title="Walking speed in Drive and In Place. Stride, cadence and walk or run all follow from it"
+            title={locomotion === "route" ? "Walking speed on the route, where no mark says otherwise" : "Walking speed. Stride, cadence and walk or run all follow from it"}
             onCommit={(speed) => set({ speed })}
           />
-          <CommitSlider
-            label="°/s"
-            value={Number(p.turnRate ?? 0)}
-            min={-180}
-            max={180}
-            step={5}
-            title="Turn rate in Drive: positive turns left. The body leans into the turn"
-            onCommit={(turnRate) => set({ turnRate })}
-          />
-        </div>
-        {info && !driven && (
+        )}
+        {locomotion === "drive" && (
+          <CommitSlider label="°/s" value={Number(p.turnRate ?? 0)} min={-180} max={180} step={5} title="Turn rate: positive turns left. The body leans into the turn" onCommit={(turnRate) => set({ turnRate })} />
+        )}
+        {info && locomotion === "follow" && (
           <button
             type="button"
             className="viewport-hud-button"
@@ -121,22 +127,31 @@ export function BipedHud({ node, readInfo, onParams }: { node: NodeInstance; rea
           </button>
         )}
         <HudSeparator />
-        {(
-          [
-            ["timeline", "Timeline", "The walk follows the timeline: replayed from frame 0, so scrubbing, looping and export give the same walk"],
-            ["live", "Live", "Real time: keeps walking while paused, for dragging the body around by hand"],
-          ] as const
-        ).map(([value, label, title]) => (
-          <button key={value} type="button" className={segment(clock === value)} style={wide} onClick={() => set({ clock: value })} title={title}>
-            {label}
-          </button>
-        ))}
-        <HudSeparator />
-        <button type="button" className={segment(showGuides)} style={wide} onClick={() => set({ showGuides: !showGuides })} title="Show the gait handles and the guides they shape">
-          Handles
+        <button
+          type="button"
+          className={segment(clock === "timeline")}
+          style={wide}
+          onClick={() => set({ clock: clock === "timeline" ? "live" : "timeline" })}
+          title={
+            clock === "timeline"
+              ? "Timeline: the walk is replayed from frame 0, so scrubbing, looping and export give the same walk. Click for Live"
+              : "Live: real time, keeps walking while paused (drag the body around by hand). Click for Timeline"
+          }
+        >
+          {clock === "timeline" ? "⏱ Timeline" : "● Live"}
         </button>
+        <Choice
+          value={handles}
+          options={handleOptions}
+          onChange={(v) => set(v === "off" ? { showGuides: false } : { showGuides: true, handleSet: v })}
+          title="Handles on the body"
+        />
       </HudBar>
-      {locomotion === "route" ? <RouteHud node={node} info={info} onParams={onParams} /> : <GaitReadout info={info} showGuides={showGuides} />}
+      {locomotion === "route" && handles === "route" ? (
+        <RouteHud node={node} info={info} onParams={onParams} poseNames={poseNames} />
+      ) : (
+        <GaitReadout info={info} showGuides={showGuides} />
+      )}
     </>
   );
 }

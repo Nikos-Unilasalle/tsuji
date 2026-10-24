@@ -1,5 +1,8 @@
 import * as THREE from "three";
 import { EvalContext, NodeDefinition, ParamFieldDef } from "../types";
+import { SocketDef } from "../sockets";
+import { growingSockets } from "../dynamicInputs";
+import type { HumanSkeleton } from "../ik/skeletons";
 import { evaluateKeyframeValue } from "../evaluate";
 import { createNodeCache } from "../nodeCaches";
 import { NATIVE_TRANSFORM_PARAM_FIELDS, numberInput } from "./object";
@@ -11,7 +14,7 @@ import { boneMatrices, bonesOf, drawEmpty, HumanRigData, motionClock, parentsOf,
 import { armWave, BodyMetrics, bodyMetrics, GaitSolution, GaitStyle, GRAVITY, NATURAL_STYLE, pelvisMotion, preferredSpeed, solveGait, strideSink, wantsToRun } from "../ik/gaitModel";
 import { GAIT_PRESET_KEYS, GAIT_PRESETS, GaitMode, GaitPresetKey, presetStyle } from "../ik/gaitPresets";
 import { BipedGaitState, createBipedGait, stepBipedGait } from "../ik/bipedGait";
-import { blendPose, HumanPose, readHumanPose } from "../ik/humanPose";
+import { blendPose, HumanPose, readHumanPose, readPoseList, turnQuaternion } from "../ik/humanPose";
 import { readRouteMarks } from "../ik/route";
 import { holdRoutePose, readRoutePoints, routeBodyAt, RouteHandleContext, routeGuides, routeHandleContext, routeHandlePatch, routePlanFor } from "./bipedRoute";
 import { armPose, buildGaitGuides, GAIT_HANDLE_AXES, HANDLE_COLORS, GaitHandleContext, gaitHandlePatch, handleContextFor } from "./bipedHandles";
@@ -43,6 +46,15 @@ import { armPose, buildGaitGuides, GAIT_HANDLE_AXES, HANDLE_COLORS, GaitHandleCo
  */
 
 const STYLE_KEYS = Object.keys(NATURAL_STYLE) as (keyof GaitStyle)[];
+
+const FIXED_INPUTS: SocketDef[] = [
+  { id: "skeleton", label: "Skeleton", type: "geometry", owns: true },
+  { id: "matrix", label: "Matrix", type: "matrix" },
+  { id: "speed", label: "Speed (m/s)", type: "value" },
+  { id: "turnRate", label: "Turn Rate (°/s)", type: "value" },
+  { id: "influence", label: "Influence", type: "value" },
+];
+const poseSocket = (i: number): SocketDef => ({ id: `pose${i}`, label: `Pose ${i + 1}`, type: "list" });
 const LOCOMOTION = ["follow", "drive", "inPlace", "route"] as const;
 type Locomotion = (typeof LOCOMOTION)[number];
 
@@ -142,13 +154,9 @@ export const RIG_BIPED_MOTION_NODE: NodeDefinition = {
   type: "rig/biped-motion",
   label: "Biped Motion",
   category: "rig",
-  inputs: [
-    { id: "skeleton", label: "Skeleton", type: "geometry", owns: true },
-    { id: "matrix", label: "Matrix", type: "matrix" },
-    { id: "speed", label: "Speed (m/s)", type: "value" },
-    { id: "turnRate", label: "Turn Rate (°/s)", type: "value" },
-    { id: "influence", label: "Influence", type: "value" },
-  ],
+  inputs: [...FIXED_INPUTS, poseSocket(0)],
+  // As many poses as are wired: each a Biped Pose's Pose output, for a route stop to hold.
+  dynamicInputs: (connections) => [...FIXED_INPUTS, ...growingSockets(connections, "pose", poseSocket)],
   outputs: [
     { id: "geometry", label: "Geometry", type: "geometry" },
     { id: "matrix", label: "Body Matrix", type: "matrix" },
@@ -336,7 +344,7 @@ export const RIG_BIPED_MOTION_NODE: NodeDefinition = {
     // A stop on the route holding a pose eases into it and out again.
     const pose =
       routeNow && routeNow.holding >= 0
-        ? holdRoutePose(ctx.nodeId, skeleton, data.key, walked, readHumanPose(source), routeMarks[routeNow.holding], routeNow.poseWeight)
+        ? holdRoutePose(ctx.nodeId, skeleton, data.key, walked, readHumanPose(source), wiredPoses(inputs, skeleton), routeMarks[routeNow.holding], routeNow.poseWeight)
         : walked;
     const positions = solveHuman(skeleton, pose.controls, { armPull: data.armPull, ...data.solver, pelvisRotation: pose.pelvisRotation });
 
@@ -399,6 +407,7 @@ export const RIG_BIPED_MOTION_NODE: NodeDefinition = {
       __controlPoints: !showGuides ? [] : routeContext ? routeContext.handles : handleContext.handles,
       __gaitInfo: {
         ...gaitInfo(active, sol.froude, stepped.standing, state, metrics, unit, locomotion),
+        poseInputs: wiredPoses(inputs, skeleton).map((p) => p !== null),
         route: plan
           ? {
               at: plan.curve.length > 0 ? (routeNow?.s ?? 0) / plan.curve.length : 0,
@@ -664,6 +673,22 @@ function lerpMatrix(a: THREE.Matrix4, b: THREE.Matrix4, t: number): THREE.Matrix
   return new THREE.Matrix4().compose(pa.lerp(pb, t), qa.slerp(qb, t), sa.lerp(sb, t));
 }
 
+/** The poses wired into Pose 1, Pose 2…, by index (null where nothing usable is wired). */
+function wiredPoses(inputs: Record<string, unknown>, skeleton: HumanSkeleton) {
+  const out: ({ controls: THREE.Vector3[]; pelvisRotation: THREE.Quaternion } | null)[] = [];
+  for (const [key, value] of Object.entries(inputs)) {
+    const m = /^pose(\d+)$/.exec(key);
+    if (!m) continue;
+    if (!Array.isArray(value) || value.length < 10) {
+      out[Number(m[1])] = null;
+      continue;
+    }
+    const { controls, turn } = readPoseList(value, skeleton.relaxedControls);
+    out[Number(m[1])] = { controls, pelvisRotation: turnQuaternion(turn) };
+  }
+  return Array.from(out, (p) => p ?? null);
+}
+
 /** Smoothed velocity, turn rate and forward acceleration of the body, or exactly the driven ones. */
 function measureMotion(
   state: BipedState,
@@ -855,7 +880,7 @@ export interface BipedRouteInfo {
   time: number;
 }
 
-export type BipedGaitInfo = ReturnType<typeof gaitInfo> & { route?: BipedRouteInfo | null };
+export type BipedGaitInfo = ReturnType<typeof gaitInfo> & { route?: BipedRouteInfo | null; poseInputs?: boolean[] };
 
 /** Params a preset writes, at the speed matching this body's hip height (m). */
 export function bipedPresetParams(key: GaitPresetKey, hipHeight?: number): Record<string, unknown> {

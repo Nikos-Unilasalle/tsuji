@@ -122,3 +122,37 @@ describe("Biped Motion influence", () => {
     readHumanPose(humanGeometry)!.controls.forEach((c, i) => expect(controls[i].distanceTo(c)).toBeLessThan(1e-9));
   });
 });
+
+describe("poses wired into Biped Motion", () => {
+  it("grows a Pose input for every pose wired", () => {
+    const sockets = (n: number) =>
+      RIG_BIPED_MOTION_NODE.dynamicInputs!(Array.from({ length: n }, (_, i) => ({ id: `c${i}`, fromNode: `p${i}`, fromSocket: "pose", toNode: "m", toSocket: `pose${i}` })))
+        .filter((s) => s.id.startsWith("pose"))
+        .map((s) => s.label);
+    expect(sockets(0)).toEqual(["Pose 1"]);
+    expect(sockets(2)).toEqual(["Pose 1", "Pose 2", "Pose 3"]);
+  });
+
+  it("holds the pose wired into Pose 2 at a route stop", () => {
+    const own = pose("bp-source", { pointsList: cheer }, humanGeometry, { connectedOutputs: new Set(["pose"]) });
+    const list = own.pose as THREE.Vector3[];
+    expect(list.length).toBe(11);
+    // Used only as a source, it stands aside and out of the render.
+    expect(own.geometry.matrix.elements[12]).toBeCloseTo(-1.2, 6);
+    const route = [new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, 6)];
+    const marks = [{ kind: "stop", at: 0.5, hold: 2, pose: "input:1" }];
+    const holding: Out[] = [];
+    for (let f = 0; f <= 150; f++) {
+      const out = RIG_BIPED_MOTION_NODE.evaluate(
+        { skeleton: humanGeometry, pose1: list },
+        { ...RIG_BIPED_MOTION_NODE.defaultParams, locomotion: "route", route, routeMarks: marks },
+        ctx("bp-route-input", { time: f / 30, currentFrame: f, fps: 30, sessionId: "pi" }),
+      ) as Out & { __gaitInfo: { route: { holding: number }; poseInputs: boolean[] } };
+      if (out.__gaitInfo.route.holding === 0) holding.push(out);
+      expect(out.__gaitInfo.poseInputs).toEqual([false, true]);
+    }
+    const held = holding[Math.floor(holding.length / 2)];
+    expect(held).toBeDefined();
+    expect(held.joints[skeleton.joint.hand[0]].y).toBeGreaterThan(held.joints[skeleton.joint.head].y);
+  });
+});

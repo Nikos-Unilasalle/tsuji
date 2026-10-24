@@ -23,7 +23,7 @@ const markColor = (m: RouteMark) => hex(m.kind === "run" ? ROUTE_COLORS.run : m.
 const button = { width: "auto", padding: "0 8px", height: 24 } as const;
 const select = { background: "rgba(0,0,0,0.35)", color: "#fff", border: "1px solid rgba(255,255,255,0.2)", borderRadius: 4, padding: "2px 4px", fontSize: 11 } as const;
 
-export function RouteHud({ node, info, onParams }: { node: NodeInstance; info: BipedGaitInfo | null; onParams: OnParams }) {
+export function RouteHud({ node, info, onParams, poseNames = [] }: { node: NodeInstance; info: BipedGaitInfo | null; onParams: OnParams; poseNames?: string[] }) {
   const [picked, setPicked] = useState(-1);
   const points = readRoutePoints(node.params.route);
   const marks = readRouteMarks(node.params.routeMarks);
@@ -43,6 +43,14 @@ export function RouteHud({ node, info, onParams }: { node: NodeInstance; info: B
     set({ route: [...points, last.clone().add(dir.lengthSq() > 1e-9 ? dir.setLength(2) : new THREE.Vector3(0, 0, 2))] });
   };
   const current = picked >= 0 && picked < marks.length ? marks[picked] : null;
+  // The node's Pose inputs, named after what is wired into them.
+  const wired = poseNames.map((name, i) => (name ? { value: `input:${i}`, label: `Pose ${i + 1} · ${name}` } : null)).filter((x): x is { value: string; label: string } => x !== null);
+  const poseLabel = (pose: string) =>
+    pose === "wired"
+      ? "pose of the skeleton"
+      : pose.startsWith("input:")
+        ? (wired.find((w) => w.value === pose)?.label ?? `Pose ${Number(pose.slice(6)) + 1} (not wired)`)
+        : (POSE_PRESETS[pose as keyof typeof POSE_PRESETS]?.label ?? pose);
 
   return (
     <div className="viewport-gp-hud" style={{ ...HUD_PANEL_STYLE, position: "absolute", top: 60, right: 12, padding: "8px 10px", width: 250, display: "flex", flexDirection: "column", gap: 6, fontSize: 11 }}>
@@ -75,7 +83,13 @@ export function RouteHud({ node, info, onParams }: { node: NodeInstance; info: B
         <button type="button" className="viewport-hud-button" style={button} onClick={() => addMark({ kind: "stop", at: here, hold: 1.5, pose: "" })} title="Stop here: slow down into it, stand, then set off again">
           ■ Stop
         </button>
-        <button type="button" className="viewport-hud-button" style={button} onClick={() => addMark({ kind: "stop", at: here, hold: 2.5, pose: "wave" })} title="Stop here and hold a pose">
+        <button
+          type="button"
+          className="viewport-hud-button"
+          style={button}
+          onClick={() => addMark({ kind: "stop", at: here, hold: 2.5, pose: wired[0]?.value ?? "wave" })}
+          title="Stop here and hold a pose: the first pose wired into Pose 1, 2… or else Wave"
+        >
           ✋ Pose
         </button>
         <button type="button" className="viewport-hud-button" style={button} onClick={() => addMark({ kind: "run", at: here, speed: 0 })} title="Break into a run from here">
@@ -110,7 +124,7 @@ export function RouteHud({ node, info, onParams }: { node: NodeInstance; info: B
               <span style={{ width: 8, height: 8, borderRadius: 4, background: markColor(m), flex: "none" }} />
               <span style={{ flex: 1 }}>
                 {KIND_LABEL[m.kind]}
-                {m.kind === "stop" && m.pose ? ` · ${m.pose === "wired" ? "wired pose" : POSE_PRESETS[m.pose as keyof typeof POSE_PRESETS]?.label ?? m.pose}` : ""}
+                {m.kind === "stop" && m.pose ? ` · ${poseLabel(m.pose)}` : ""}
               </span>
               <span style={{ color: "#94a3b8", fontVariantNumeric: "tabular-nums" }}>{route ? `${route.markTimes[i]?.toFixed(1) ?? "—"} s` : ""}</span>
             </button>
@@ -125,12 +139,23 @@ export function RouteHud({ node, info, onParams }: { node: NodeInstance; info: B
               <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                 <select value={current.pose ?? ""} onChange={(e) => editMark(picked, { pose: e.target.value })} style={select} title="The pose held while standing here">
                   <option value="">No pose</option>
-                  <option value="wired">Pose wired in (Biped Pose)</option>
-                  {POSE_PRESET_KEYS.map((key) => (
-                    <option key={key} value={key}>
-                      {POSE_PRESETS[key].label}
-                    </option>
-                  ))}
+                  {wired.length > 0 && (
+                    <optgroup label="Wired into Pose inputs">
+                      {wired.map((w) => (
+                        <option key={w.value} value={w.value}>
+                          {w.label}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+                  <optgroup label="Ready-made">
+                    {POSE_PRESET_KEYS.map((key) => (
+                      <option key={key} value={key}>
+                        {POSE_PRESETS[key].label}
+                      </option>
+                    ))}
+                  </optgroup>
+                  <option value="wired">The skeleton's own pose (wired into Skeleton)</option>
                 </select>
                 <label style={{ display: "flex", gap: 4, alignItems: "center" }} title="The pose takes the legs too (they slide into it); otherwise the feet stay planted">
                   <input type="checkbox" checked={Boolean(current.whole)} onChange={(e) => editMark(picked, { whole: e.target.checked })} />
