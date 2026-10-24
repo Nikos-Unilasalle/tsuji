@@ -55,9 +55,10 @@ export interface BodyMetrics {
 
 export function bodyMetrics(skeleton: HumanSkeleton): BodyMetrics {
   const { rig, joint } = skeleton;
-  const rest = rig.rest;
+  // The natural stance, whatever angles the skeleton rests (and binds) at.
+  const rest = skeleton.relaxedRest;
   const lengths = boneLengths(rig);
-  const height = Math.max(0.05, skeleton.restControls[1].y);
+  const height = Math.max(0.05, skeleton.relaxedControls[1].y);
   const elbowL = joint.elbow[0];
   const legLength = lengths[joint.knee[0]] + lengths[joint.foot[0]];
   return {

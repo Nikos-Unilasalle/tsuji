@@ -40,6 +40,36 @@ describe("human skeleton", () => {
   });
 });
 
+describe("human leg angle", () => {
+  const straight = buildHumanSkeleton({ height: 1.8 });
+  const spread = buildHumanSkeleton({ height: 1.8, legAngle: 30 });
+
+  it("spreads the legs out to their own side, feet still on the ground, bones unchanged", () => {
+    const { foot, hip } = spread.joint;
+    for (const s of [0, 1]) {
+      const side = s === 0 ? 1 : -1;
+      const leg = spread.rig.rest[foot[s]].clone().sub(spread.rig.rest[hip[s]]);
+      expect(side * leg.x).toBeGreaterThan(0);
+      expect(spread.rig.rest[foot[s]].y).toBeCloseTo(straight.rig.rest[foot[s]].y, 6);
+    }
+    // The hips come down, so the whole body is lower.
+    expect(spread.rig.rest[hip[0]].y).toBeLessThan(straight.rig.rest[hip[0]].y);
+    boneLengths(spread.rig).forEach((l, i) => expect(l).toBeCloseTo(boneLengths(straight.rig)[i], 6));
+  });
+
+  it("holds its spread rest pose within its own joint limits", () => {
+    const posed = solveHuman(spread, spread.restControls);
+    posed.forEach((p, i) => expect(p.distanceTo(spread.rig.rest[i])).toBeLessThan(1e-3));
+  });
+
+  it("stands naturally for a walk whatever the rest angles", () => {
+    const tPose = buildHumanSkeleton({ height: 1.8, legAngle: 30, armAngle: 90 });
+    const natural = buildHumanSkeleton({ height: 1.8, legAngle: 0, armAngle: 22 });
+    tPose.relaxedRest.forEach((p, i) => expect(p.distanceTo(natural.rig.rest[i])).toBeLessThan(1e-9));
+    tPose.relaxedControls.forEach((p, i) => expect(p.distanceTo(natural.restControls[i])).toBeLessThan(1e-9));
+  });
+});
+
 describe("human joint limits", () => {
   const bend = (positions: THREE.Vector3[], a: number, b: number, c: number) =>
     (positions[b].clone().sub(positions[a]).angleTo(positions[c].clone().sub(positions[b])) * 180) / Math.PI;

@@ -27,6 +27,8 @@ export interface HumanParams {
   hipWidth: number;
   /** Rest pose of the arms, in degrees out from hanging straight down: 22 is an A-pose, 90 a T-pose. */
   armAngle: number;
+  /** Rest pose of the legs, in degrees out to the side from straight down: what Skin binds to, like armAngle. */
+  legAngle: number;
   spineSegments: number;
   /** Joint limits on (1) or off (0). The angles below are in degrees. */
   jointLimits: number;
@@ -53,6 +55,7 @@ export const HUMAN_DEFAULTS: HumanParams = {
   shoulderWidth: 1,
   hipWidth: 1,
   armAngle: 90,
+  legAngle: 0,
   spineSegments: 3,
   jointLimits: 1,
   kneeBend: 150,
@@ -93,8 +96,14 @@ export interface HumanSkeleton extends Skeleton {
   };
   /** Control points of the rest pose, in HUMAN_CONTROLS order. */
   restControls: THREE.Vector3[];
-  /** The rest controls with the arms hanging (HANGING_ARM_ANGLE) whatever the rest arm angle: where a walk puts the hands and elbow poles. */
+  /**
+   * The rest controls standing naturally — arms hanging (HANGING_ARM_ANGLE),
+   * legs straight down — whatever the rest arm and leg angles: what a walk
+   * is built from.
+   */
   relaxedControls: THREE.Vector3[];
+  /** The joints of that same natural stance. */
+  relaxedRest: THREE.Vector3[];
 }
 
 /** Arms hanging loose, in degrees out from straight down: the A-pose a walk swings its arms from. */
@@ -127,7 +136,9 @@ export function buildHumanSkeleton(input: Partial<HumanParams> = {}): HumanSkele
   // Knees bent forward by this much at rest, thigh and shin at the same angle,
   // so the ankle lands straight below the hip.
   const kneeBend = 6 * DEG;
-  const hipY = ankleY + (thigh + shin) * Math.cos(kneeBend);
+  // Legs spread by the rest leg angle, feet still on the ground: the hips come down.
+  const legAngle = Math.max(0, Math.min(60, p.legAngle)) * DEG;
+  const hipY = ankleY + (thigh + shin) * Math.cos(kneeBend) * Math.cos(legAngle);
   const pelvisY = hipY + 0.03 * H;
   const spineLength = 0.26 * H * p.torso;
   const chestY = pelvisY + spineLength;
@@ -167,9 +178,11 @@ export function buildHumanSkeleton(input: Partial<HumanParams> = {}): HumanSkele
     const label = s === 0 ? "Left" : "Right";
     const hipAt = new THREE.Vector3(side * 0.09 * H * p.hipWidth, hipY, 0);
     hip[s] = add(`${label} Hip`, pelvis, hipAt, true);
-    const kneeAt = hipAt.clone().add(new THREE.Vector3(0, -Math.cos(kneeBend) * thigh, Math.sin(kneeBend) * thigh));
+    // Swung out about the forward axis, toward its own side.
+    const out = (v: THREE.Vector3) => v.applyAxisAngle(new THREE.Vector3(0, 0, 1), side * legAngle);
+    const kneeAt = hipAt.clone().add(out(new THREE.Vector3(0, -Math.cos(kneeBend) * thigh, Math.sin(kneeBend) * thigh)));
     knee[s] = add(`${label} Knee`, hip[s], kneeAt);
-    foot[s] = add(`${label} Foot`, knee[s], kneeAt.clone().add(new THREE.Vector3(0, -Math.cos(kneeBend) * shin, -Math.sin(kneeBend) * shin)));
+    foot[s] = add(`${label} Foot`, knee[s], kneeAt.clone().add(out(new THREE.Vector3(0, -Math.cos(kneeBend) * shin, -Math.sin(kneeBend) * shin))));
   }
 
   const poleReach = 0.3 * H;
@@ -191,8 +204,14 @@ export function buildHumanSkeleton(input: Partial<HumanParams> = {}): HumanSkele
     names,
     joint: { pelvis, chest, head, hand, elbow, foot, knee, hip },
     restControls,
-    relaxedControls: Math.abs(p.armAngle - HANGING_ARM_ANGLE) < 1e-6 ? restControls : buildHumanSkeleton({ ...p, armAngle: HANGING_ARM_ANGLE }).restControls,
+    ...relaxedStance(p, restControls, rest),
   };
+}
+
+function relaxedStance(p: HumanParams, restControls: THREE.Vector3[], rest: THREE.Vector3[]) {
+  if (Math.abs(p.armAngle - HANGING_ARM_ANGLE) < 1e-6 && p.legAngle <= 1e-6) return { relaxedControls: restControls, relaxedRest: rest };
+  const relaxed = buildHumanSkeleton({ ...p, armAngle: HANGING_ARM_ANGLE, legAngle: 0 });
+  return { relaxedControls: relaxed.restControls, relaxedRest: relaxed.rig.rest };
 }
 
 /**
@@ -237,7 +256,8 @@ function humanLimits(
       joint: j.knee[s],
       axis: new THREE.Vector3(0, -Math.cos(tilt), Math.sin(tilt)),
       maxAngle: (deg(p.hipForward) + deg(p.hipBack)) / 2,
-      side: { axis: new THREE.Vector3(1, 0, 0), maxAngle: deg(p.hipSide) },
+      // Never tighter than the rest pose's own spread, or a skeleton would start outside its limits.
+      side: { axis: new THREE.Vector3(1, 0, 0), maxAngle: deg(Math.max(p.hipSide, Math.min(60, p.legAngle) + 5)) },
     });
     limits.push({ joint: j.elbow[s], axis: new THREE.Vector3(side, 0, 0.35).normalize(), maxAngle: deg(p.shoulderRange) });
   }

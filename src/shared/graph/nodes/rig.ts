@@ -126,9 +126,10 @@ function humanParams(params: Record<string, unknown>): HumanParams {
     legs: Math.max(0.05, n("legs")),
     shoulderWidth: Math.max(0, n("shoulderWidth")),
     hipWidth: Math.max(0, n("hipWidth")),
-    // The arms' rest angle is also the pose Skin binds to: one angle, so a mesh
-    // skinned to a skeleton at rest is never deformed until a bone moves.
+    // The arms' and legs' rest angles are also the pose Skin binds to: one pose,
+    // so a mesh skinned to a skeleton at rest is never deformed until a bone moves.
     armAngle: Math.max(0, Math.min(150, numberInput(undefined, params.bindArmAngle, HUMAN_DEFAULTS.armAngle))),
+    legAngle: Math.max(0, Math.min(60, numberInput(undefined, params.bindLegAngle, HUMAN_DEFAULTS.legAngle))),
     spineSegments: Math.max(1, Math.min(8, Math.round(n("spineSegments")))),
     jointLimits: params.jointLimits === undefined ? 1 : toBoolean(params.jointLimits) ? 1 : 0,
     kneeBend: n("kneeBend"),
@@ -188,6 +189,7 @@ export const RIG_HUMAN_NODE: NodeDefinition = {
     ...HUMAN_DEFAULTS,
     armPull: 0.3,
     bindArmAngle: HUMAN_DEFAULTS.armAngle,
+    bindLegAngle: HUMAN_DEFAULTS.legAngle,
     iterations: 24,
     tolerance: 0.0001,
     boneThickness: 0.022,
@@ -207,6 +209,7 @@ export const RIG_HUMAN_NODE: NodeDefinition = {
     ...HUMAN_LIMIT_FIELDS,
     { id: "armPull", label: "Arm Pull on Torso", kind: "number", step: 0.05, group: "Solver" },
     { id: "bindArmAngle", label: "Arm Angle (°, 90 = T-pose)", kind: "number", step: 5, group: "Proportions" },
+    { id: "bindLegAngle", label: "Leg Angle (°, 0 = straight)", kind: "number", step: 5, group: "Proportions" },
     ...SOLVER_FIELDS,
     { id: "showControls", label: "Show Controls", kind: "boolean", group: "Display" },
     ...DISPLAY_FIELDS,

@@ -216,7 +216,7 @@ export const RIG_BIPED_MOTION_NODE: NodeDefinition = {
       return { geometry: group, matrix: base, feet: [], joints: [], bones: [], phase: 0, gaitSpeed: 0 };
     }
     const { skeleton } = data;
-    const rc = skeleton.restControls;
+    const rc = skeleton.relaxedControls;
     const metrics = bodyMetrics(skeleton);
     const style = readGaitStyle(params);
     const ankleY = rc[4].y;
@@ -439,7 +439,7 @@ interface PoseInput {
 function composePose({ skeleton: data, metrics, style, sol, state, feet, phase, now, dt, speedSk, unit }: PoseInput) {
   const skeleton = data.skeleton;
   const { joint, rig } = skeleton;
-  const rc = skeleton.restControls;
+  const rc = skeleton.relaxedControls;
   const h = metrics.hipHeight;
   const motion = state.motion;
   const g = GRAVITY / unit;
@@ -452,7 +452,7 @@ function composePose({ skeleton: data, metrics, style, sol, state, feet, phase, 
 
   // Pelvis drop: the crouch, and just enough for both feet to stay within the hips' reach.
   const reach = metrics.legLength * 0.985;
-  const hips = [0, 1].map((s) => rig.rest[joint.hip[s]]);
+  const hips = [0, 1].map((s) => skeleton.relaxedRest[joint.hip[s]]);
   const shortfall = (s: number, hipY: number) => {
     const flat = Math.hypot(hips[s].x - feet[s].x, hips[s].z - feet[s].z);
     const vertical = flat >= reach ? 0 : Math.sqrt(reach ** 2 - flat ** 2);
@@ -489,8 +489,8 @@ function composePose({ skeleton: data, metrics, style, sol, state, feet, phase, 
   for (const s of [0, 1] as const) {
     const side = s === 0 ? 1 : -1;
     const elbow = joint.elbow[s];
-    const shoulderRest = rig.rest[rig.joints[elbow].parent];
-    const lift = (shoulderRest.y - rig.rest[joint.pelvis].y) / trunk;
+    const shoulderRest = skeleton.relaxedRest[rig.joints[elbow].parent];
+    const lift = (shoulderRest.y - skeleton.relaxedRest[joint.pelvis].y) / trunk;
     const shoulder = shoulderRest
       .clone()
       .add(pelvisDelta)
@@ -507,7 +507,7 @@ function composePose({ skeleton: data, metrics, style, sol, state, feet, phase, 
 
   const kneePoles = [0, 1].map((s) => {
     const side = s === 0 ? 1 : -1;
-    const hip = rig.rest[joint.hip[s]].clone().add(pelvisDelta);
+    const hip = skeleton.relaxedRest[joint.hip[s]].clone().add(pelvisDelta);
     const out = new THREE.Vector3(0, 0, 0.3 * metrics.height).applyAxisAngle(new THREE.Vector3(0, 1, 0), (side * style.kneeOut * Math.PI) / 180 + pm.yaw * motion);
     return hip.add(feet[s]).multiplyScalar(0.5).add(out);
   });

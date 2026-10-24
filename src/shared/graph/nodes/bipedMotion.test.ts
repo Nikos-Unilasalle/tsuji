@@ -159,6 +159,15 @@ describe("Biped Motion node", () => {
     expect(Math.max(...outs.slice(120).map((o) => ikError(o, small.skeleton)))).toBeLessThan(0.04);
   });
 
+  it("walks a skeleton bound with its legs spread as it walks one with them straight", () => {
+    const spread = human("bm-spread", { bindLegAngle: 30 });
+    const a = play("bm-spread-walk", 180, () => ({ locomotion: "drive" }), spread.geometry)[180];
+    const b = play("bm-straight-walk", 180, () => ({ locomotion: "drive" }))[180];
+    expect(a.__gaitInfo.cadence).toBeCloseTo(b.__gaitInfo.cadence, 6);
+    a.feet.forEach((f, i) => expect(f.distanceTo(b.feet[i])).toBeLessThan(1e-6));
+    expect(ikError(a, spread.skeleton)).toBeLessThan(0.04);
+  });
+
   it("stands empty without a skeleton", () => {
     const out = RIG_BIPED_MOTION_NODE.evaluate({}, { ...RIG_BIPED_MOTION_NODE.defaultParams }, ctx("bm-empty"));
     expect(out.feet).toEqual([]);

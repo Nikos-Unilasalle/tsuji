@@ -92,10 +92,10 @@ function invertArm(metrics: BodyMetrics, shoulder: THREE.Vector3, abduct: number
 
 export function handleContextFor(skeleton: HumanSkeleton, metrics: BodyMetrics, style: GaitStyle, sol: GaitSolution, _unit: number): GaitHandleContext {
   const { rig, joint } = skeleton;
-  const ankleY = skeleton.restControls[4].y;
-  const pelvisRest = rig.rest[joint.pelvis].clone();
-  const headRest = skeleton.restControls[1].clone();
-  const shoulderRest = rig.rest[rig.joints[joint.elbow[0]].parent].clone();
+  const ankleY = skeleton.relaxedControls[4].y;
+  const pelvisRest = skeleton.relaxedRest[joint.pelvis].clone();
+  const headRest = skeleton.relaxedControls[1].clone();
+  const shoulderRest = skeleton.relaxedRest[rig.joints[joint.elbow[0]].parent].clone();
   const h = metrics.hipHeight;
   const auto = {
     stride: ratio(sol.stride, style.stride, sol.stride),
