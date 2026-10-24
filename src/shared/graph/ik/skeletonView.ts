@@ -1,5 +1,8 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
+import { LineSegments2 } from "three/examples/jsm/lines/LineSegments2.js";
+import { LineSegmentsGeometry } from "three/examples/jsm/lines/LineSegmentsGeometry.js";
+import { LineMaterial } from "three/examples/jsm/lines/LineMaterial.js";
 
 /**
  * How a Rig node draws its skeleton: each bone an arrow from parent joint to
@@ -25,10 +28,20 @@ export interface SkeletonViewInput {
   poles?: { at: THREE.Vector3; joint: THREE.Vector3 }[];
   markerSize?: number;
   circles?: { center: THREE.Vector3; radius: number }[];
+  /**
+   * Coloured polylines drawn only while the node is selected (the viewport
+   * shows `guides` then): a walk's foot arc, pelvis path, hand arc.
+   */
+  paths?: { points: THREE.Vector3[]; color: THREE.ColorRepresentation; closed?: boolean }[];
+  /** Coloured balls marking draggable handles, shown with the guides. */
+  knobs?: { at: THREE.Vector3; color: THREE.ColorRepresentation }[];
+  knobRadius?: number;
 }
 
 export interface SkeletonView {
   group: THREE.Group;
+  /** Hidden every update; a viewport showing this node's handles makes it visible (see `userData.selectionGuides`). */
+  guides: THREE.Group;
   update(input: SkeletonViewInput): void;
   dispose(): void;
 }
@@ -81,6 +94,27 @@ export function createSkeletonView(nodeId: string): SkeletonView {
   body.userData.nodeId = nodeId;
   const links = new THREE.LineSegments(new THREE.BufferGeometry(), linkMaterial);
   const circles = new THREE.LineSegments(new THREE.BufferGeometry(), circleMaterial);
+  // Fat lines: a 1 px guide is lost against a checker floor.
+  const pathMaterial = new LineMaterial({ vertexColors: true, linewidth: 3, transparent: true, opacity: 0.95, depthTest: false });
+  const paths = new LineSegments2(new LineSegmentsGeometry(), pathMaterial);
+  paths.renderOrder = 997;
+  paths.frustumCulled = false;
+  const viewSize = new THREE.Vector2();
+  paths.onBeforeRender = (renderer) => {
+    renderer.getSize(viewSize);
+    pathMaterial.resolution.copy(viewSize);
+  };
+  const knobMaterial = new THREE.MeshBasicMaterial({ depthTest: false, depthWrite: false, transparent: true, opacity: 0.95 });
+  let knobs = instanced(ballGeo, knobMaterial, 8, nodeId);
+  knobs.renderOrder = 999;
+  knobs.userData.isHelper = true;
+  const guides = new THREE.Group();
+  guides.add(paths, knobs);
+  guides.visible = false;
+  paths.userData.isHelper = true;
+  paths.userData.nodeId = nodeId;
+  group.add(guides);
+  group.userData.selectionGuides = guides;
   for (const helper of [targets, poles, links, circles]) helper.userData.isHelper = true;
   for (const obj of [bones, joints, body, targets, poles, links, circles]) {
     obj.castShadow = obj === bones || obj === joints || obj === body;
@@ -167,17 +201,59 @@ export function createSkeletonView(nodeId: string): SkeletonView {
     }
     circles.geometry.dispose();
     circles.geometry = new THREE.BufferGeometry().setFromPoints(circlePoints);
+
+    guides.visible = false;
+    const pathPoints: number[] = [];
+    const pathColors: number[] = [];
+    const color = new THREE.Color();
+    for (const path of input.paths ?? []) {
+      color.set(path.color);
+      const pts = path.points;
+      const segments = path.closed ? pts.length : pts.length - 1;
+      for (let k = 0; k < segments; k++) {
+        for (const p of [pts[k], pts[(k + 1) % pts.length]]) {
+          pathPoints.push(p.x, p.y, p.z);
+          pathColors.push(color.r, color.g, color.b);
+        }
+      }
+    }
+    paths.geometry.dispose();
+    const pathGeometry = new LineSegmentsGeometry();
+    // Never empty: a fat line with no instance attributes cannot be drawn, and one of zero length shows nothing.
+    pathGeometry.setPositions(pathPoints.length > 0 ? pathPoints : [0, 0, 0, 0, 0, 0]);
+    pathGeometry.setColors(pathColors.length > 0 ? pathColors : [0, 0, 0, 0, 0, 0]);
+    paths.geometry = pathGeometry;
+
+    const knobList = input.knobs ?? [];
+    if (knobList.length > knobs.instanceMatrix.count) {
+      const next = instanced(ballGeo, knobMaterial, knobList.length, nodeId);
+      next.renderOrder = knobs.renderOrder;
+      next.userData = { ...knobs.userData };
+      guides.add(next);
+      guides.remove(knobs);
+      knobs.dispose();
+      knobs = next;
+    }
+    knobs.count = knobList.length;
+    scale.setScalar(Math.max(0, input.knobRadius ?? 0.03));
+    knobList.forEach((k, i) => {
+      knobs.setMatrixAt(i, matrix.compose(k.at, quat.identity(), scale));
+      knobs.setColorAt(i, color.set(k.color));
+    });
+    knobs.instanceMatrix.needsUpdate = true;
+    if (knobs.instanceColor) knobs.instanceColor.needsUpdate = true;
   }
 
   function dispose() {
-    for (const mesh of [bones, joints, targets, poles]) mesh.dispose();
+    for (const mesh of [bones, joints, targets, poles, knobs]) mesh.dispose();
     boneGeo.dispose();
     ballGeo.dispose();
     poleGeo.dispose();
     links.geometry.dispose();
     circles.geometry.dispose();
-    for (const m of [boneMaterial, targetMaterial, poleMaterial, linkMaterial, circleMaterial]) m.dispose();
+    paths.geometry.dispose();
+    for (const m of [boneMaterial, targetMaterial, poleMaterial, linkMaterial, circleMaterial, pathMaterial, knobMaterial]) m.dispose();
   }
 
-  return { group, update, dispose };
+  return { group, guides, update, dispose };
 }

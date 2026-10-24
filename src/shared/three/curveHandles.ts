@@ -31,7 +31,13 @@ export interface CurvePointHandles {
     frozenIndices: Set<number> | number[] | number | null,
     showLine?: boolean,
     camera?: THREE.PerspectiveCamera | THREE.OrthographicCamera,
-    viewportHeightPx?: number
+    viewportHeightPx?: number,
+    /**
+     * Keep each handle square to the space's own axes instead of facing the
+     * camera, and draw no quad: for handles whose node draws its own markers
+     * and whose gizmo must point along the space's axes (param handles).
+     */
+    alignToSpace?: boolean
   ): void;
   /** Remove and dispose every handle. */
   clear(): void;
@@ -122,7 +128,7 @@ export function createCurvePointHandles(): CurvePointHandles {
   return {
     group,
 
-    sync(points, spaceMatrix, selectedIndices, frozenIndices, showLine = true, camera, viewportHeightPx = 0) {
+    sync(points, spaceMatrix, selectedIndices, frozenIndices, showLine = true, camera, viewportHeightPx = 0, alignToSpace = false) {
       if (points.length !== handles.length) build(points.length);
 
       const selectedSet = toSet(selectedIndices);
@@ -168,14 +174,16 @@ export function createCurvePointHandles(): CurvePointHandles {
                 ? (orthoFrustumHeight * HANDLE_SIZE_PX) / viewportHeightPx
                 : HANDLE_SIZE_PX / 50;
           }
-          handle.lookAt(camera.position);
+          if (alignToSpace) handle.quaternion.identity();
+          else handle.lookAt(camera.position);
           handle.scale.set(sizeWorld * counterScale.x, sizeWorld * counterScale.y, counterScale.z);
         } else {
           handle.scale.copy(counterScale);
         }
-        (handle.material as THREE.MeshBasicMaterial).color.setHex(
-          selectedSet.has(idx) ? HANDLE_SELECTED_COLOR : HANDLE_COLOR,
-        );
+        const material = handle.material as THREE.MeshBasicMaterial;
+        material.color.setHex(selectedSet.has(idx) ? HANDLE_SELECTED_COLOR : HANDLE_COLOR);
+        material.colorWrite = !alignToSpace;
+        material.depthWrite = !alignToSpace;
       });
 
       if (line) {

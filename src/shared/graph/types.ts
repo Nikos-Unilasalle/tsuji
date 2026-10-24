@@ -357,6 +357,19 @@ export interface NodeDefinition {
    */
   reset?: { params: string[] } | { action: string };
   /**
+   * Viewport handles that edit params rather than store points: the node
+   * outputs `__controlPoints` (in its own geometry's space) for the viewport
+   * to draw, and a drag of handle `index` to `position` asks this for the
+   * params that put it there. Null leaves the params alone.
+   */
+  paramHandles?: (index: number, position: THREE.Vector3, params: Record<string, unknown>, nodeId: string) => Record<string, unknown> | null;
+  /**
+   * The directions handle `index` can be dragged along, in the node's own
+   * space: the gizmo shows only those arrows (translate only, local axes).
+   * Omitted: all three.
+   */
+  paramHandleAxes?: (index: number) => ("x" | "y" | "z")[];
+  /**
    * Set by addPoseSockets (poseSockets.ts) on a node that owns a native pose:
    * its Location / Rotation / Scale sockets drive the params of the same name.
    */

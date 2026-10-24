@@ -1,7 +1,7 @@
 import { type ReactNode, useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 
 /** Shared look of the floating editing HUDs (Grease Pencil, Edit Mesh). */
-const HUD_PANEL_STYLE = {
+export const HUD_PANEL_STYLE = {
   boxSizing: "border-box",
   background: "var(--chrome-surface-raised)",
   backdropFilter: "blur(12px)",

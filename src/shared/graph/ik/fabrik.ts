@@ -132,13 +132,13 @@ function prepare(rig: IkRig): Prepared {
  * one. A rigid joint's bone does not define a frame of its own (it would just
  * reproduce its parent's), so it inherits its parent's frame.
  */
-function frames(rig: IkRig, prep: Prepared, positions: THREE.Vector3[]): THREE.Quaternion[] {
+function frames(rig: IkRig, prep: Prepared, positions: THREE.Vector3[], rootRotation: THREE.Quaternion): THREE.Quaternion[] {
   const out: THREE.Quaternion[] = [];
   const dir = new THREE.Vector3();
   rig.joints.forEach((joint, i) => {
     const restDir = prep.restDirs[i];
     if (joint.parent < 0) {
-      out.push(new THREE.Quaternion());
+      out.push(rootRotation.clone());
     } else if (joint.rigid || !restDir) {
       out.push(out[joint.parent].clone());
     } else {
@@ -237,7 +237,7 @@ export function applyPoles(rig: IkRig, positions: THREE.Vector3[], poles: IkPole
 export function solveFabrik(
   rig: IkRig,
   effectors: IkEffector[],
-  options: FabrikOptions & { start?: THREE.Vector3[]; poles?: IkPole[] } = {},
+  options: FabrikOptions & { start?: THREE.Vector3[]; poles?: IkPole[]; rootRotation?: THREE.Quaternion } = {},
 ): FabrikResult {
   const prep = prepare(rig);
   const n = rig.joints.length;
@@ -246,6 +246,9 @@ export function solveFabrik(
   const poles = options.poles ?? [];
   const positions = (options.start ?? rig.rest).map((p) => p.clone());
   const root = positions[0].clone();
+  // The root's frame: what its rigid children (a pelvis's hips) and the limits
+  // hanging off it turn with. Identity unless the caller turns the root itself.
+  const rootRotation = options.rootRotation ?? new THREE.Quaternion();
 
   // Which joints have an effector somewhere below them, and with what weight
   // (a branch weighs what its effectors weigh together).
@@ -281,7 +284,7 @@ export function solveFabrik(
     // Backward: leaves first, every joint pulled toward where its targeted
     // children want it. The rigid frames are read once from the pose the
     // pass starts on — they depend on the bones this pass is moving.
-    const rot = frames(rig, prep, positions);
+    const rot = frames(rig, prep, positions, rootRotation);
     for (let i = n - 1; i > 0; i--) {
       if (!active[i]) continue;
       const target = targetOf.get(i);
@@ -313,7 +316,7 @@ export function solveFabrik(
     // Forward: root pinned, every joint put back at its length (or rigid
     // offset) from its now-final parent, inside its limit.
     positions[0].copy(root);
-    const forwardRot: THREE.Quaternion[] = [new THREE.Quaternion()];
+    const forwardRot: THREE.Quaternion[] = [rootRotation.clone()];
     const dir = new THREE.Vector3();
     for (let i = 1; i < n; i++) {
       const joint = rig.joints[i];

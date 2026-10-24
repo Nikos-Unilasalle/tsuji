@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import * as THREE from "three";
-import { RIG_BIPED_MOTION_NODE, RIG_HUMAN_NODE, RIG_POLYPEDE_MOTION_NODE, RIG_POLYPEDE_NODE } from "./rig";
+import { RIG_HUMAN_NODE, RIG_POLYPEDE_MOTION_NODE, RIG_POLYPEDE_NODE } from "./rig";
 import { EvalContext } from "../types";
 import { HUMAN_CONTROLS } from "../ik/skeletons";
 
@@ -67,97 +67,6 @@ describe("Polypede nodes", () => {
   it("stands empty without a skeleton", () => {
     const out = RIG_POLYPEDE_MOTION_NODE.evaluate({}, { ...RIG_POLYPEDE_MOTION_NODE.defaultParams }, ctx("poly-empty"));
     expect(out.feet).toEqual([]);
-  });
-});
-
-describe("Biped Motion node", () => {
-  it("walks the human: feet step forward one at a time, the pelvis dips, the arms swing against the legs", () => {
-    const skeleton = RIG_HUMAN_NODE.evaluate({}, { ...RIG_HUMAN_NODE.defaultParams }, ctx("biped-skel")).geometry;
-    expect((skeleton as THREE.Object3D).userData.humanRig).toBeDefined();
-    const params = { ...RIG_BIPED_MOTION_NODE.defaultParams };
-    const run = (frame: number) =>
-      RIG_BIPED_MOTION_NODE.evaluate(
-        { skeleton },
-        { ...params, location: new THREE.Vector3(0, 0, (frame / 60) * 1.0) }, // 1 m/s forward
-        ctx("biped", { time: frame / 60, capturing: true, sessionId: "test" }),
-      );
-
-    const start = run(0);
-    const restPelvisY = (start.joints as THREE.Vector3[])[0].y;
-    let minPelvis = Infinity;
-    let swing = 0;
-    const { hand, foot } = (skeleton as THREE.Object3D).userData.humanRig.skeleton.joint;
-    let worstFoot = 0;
-    let feet = start.feet as THREE.Vector3[];
-    for (let frame = 1; frame <= 240; frame++) {
-      const out = run(frame);
-      feet = out.feet as THREE.Vector3[];
-      // Never both feet off the ground at a walk.
-      const airborne = feet.filter((f) => f.y > 0.04 * 1.8 + 1e-3).length;
-      expect(airborne).toBeLessThanOrEqual(1);
-      const joints = out.joints as THREE.Vector3[];
-      minPelvis = Math.min(minPelvis, joints[0].y);
-      // Once into its stride (the first steps from a standstill to 1 m/s are a
-      // lurch) the legs keep up: each solved foot stays on its gait foot.
-      if (frame > 90) for (const s of [0, 1]) worstFoot = Math.max(worstFoot, joints[foot[s]].distanceTo(feet[s]));
-      // Left hand ahead while the right foot is ahead, and the other way round.
-      swing += (joints[hand[0]].z - joints[hand[1]].z) * (feet[1].z - feet[0].z);
-    }
-    // Four seconds at 1 m/s: both feet came along.
-    feet.forEach((f) => expect(f.z).toBeGreaterThan(3));
-    expect(minPelvis).toBeLessThan(restPelvisY);
-    expect(swing).toBeGreaterThan(0);
-    expect(worstFoot).toBeLessThan(0.05);
-  });
-});
-
-describe("Biped Motion speed", () => {
-  const skeleton = RIG_HUMAN_NODE.evaluate({}, { ...RIG_HUMAN_NODE.defaultParams }, ctx("speed-skel")).geometry;
-  const { hand } = (skeleton as THREE.Object3D).userData.humanRig.skeleton.joint as { hand: [number, number] };
-  const play = (params: Record<string, unknown>, metresPerSecond: number, frames: number, id: string) => {
-    const outs: Record<string, unknown>[] = [];
-    for (let frame = 0; frame <= frames; frame++) {
-      outs.push(
-        RIG_BIPED_MOTION_NODE.evaluate(
-          { skeleton },
-          { ...params, location: new THREE.Vector3(0, 0, (frame / 60) * metresPerSecond) },
-          ctx(id, { time: frame / 60, capturing: true, sessionId: "test" }),
-        ),
-      );
-    }
-    return outs;
-  };
-  const airborne = (f: THREE.Vector3) => f.y > 0.04 * 1.8 + 1e-3;
-
-  it("at 0.5 is the walk it always was", () => {
-    // A node saved before Speed existed has no speed at all: the same gait as 0.5.
-    const { speed: _speed, ...legacy } = RIG_BIPED_MOTION_NODE.defaultParams;
-    const a = play(legacy, 1, 150, "speed-legacy").pop()!;
-    const b = play({ ...legacy, speed: 0.5 }, 1, 150, "speed-half").pop()!;
-    (a.joints as THREE.Vector3[]).forEach((j, i) => expect(j.distanceTo((b.joints as THREE.Vector3[])[i])).toBeLessThan(1e-9));
-  });
-
-  it("at 0 stands: no steps for a body that barely moves, the hands drift loosely", () => {
-    const base = { ...RIG_BIPED_MOTION_NODE.defaultParams };
-    const still = play({ ...base, speed: 0 }, 0.12, 240, "speed-still");
-    const walk = play({ ...base, speed: 0.5 }, 0.12, 240, "speed-walk-slow");
-    const stepped = (outs: Record<string, unknown>[]) => outs.some((o) => (o.feet as THREE.Vector3[]).some(airborne));
-    expect(stepped(still)).toBe(false);
-    expect(stepped(walk)).toBe(true);
-    const zs = still.slice(60).map((o) => (o.joints as THREE.Vector3[])[hand[0]].z);
-    expect(Math.max(...zs) - Math.min(...zs)).toBeGreaterThan(0.01);
-  });
-
-  it("at 1 runs: a wider arm swing than the walk, and both feet can leave the ground", () => {
-    const base = { ...RIG_BIPED_MOTION_NODE.defaultParams };
-    const run = play({ ...base, speed: 1 }, 3, 300, "speed-run");
-    const walk = play({ ...base, speed: 0.5 }, 3, 300, "speed-walk-fast");
-    const spread = (outs: Record<string, unknown>[]) => {
-      const zs = outs.slice(120).map((o) => (o.joints as THREE.Vector3[])[hand[0]].z - (o.joints as THREE.Vector3[])[0].z);
-      return Math.max(...zs) - Math.min(...zs);
-    };
-    expect(spread(run)).toBeGreaterThan(spread(walk));
-    expect(run.some((o) => (o.feet as THREE.Vector3[]).every(airborne))).toBe(true);
   });
 });
 

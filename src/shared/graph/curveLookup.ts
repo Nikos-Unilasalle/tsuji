@@ -61,10 +61,16 @@ function hasEditablePoints(node: NodeInstance | undefined): boolean {
   return CURVE_POINTS_NODE_TYPES.includes(node.type) || Array.isArray(node.params.pointsList);
 }
 
-export function resolveCurveEditTarget(graph: Graph, selectedNodeId: string | null): CurveEditTarget | null {
+export function resolveCurveEditTarget(
+  graph: Graph,
+  selectedNodeId: string | null,
+  /** A node whose handles edit its params (NodeDefinition.paramHandles): drawn in its own space, nothing to resolve. */
+  hasParamHandles?: (node: NodeInstance) => boolean,
+): CurveEditTarget | null {
   if (!selectedNodeId) return null;
   const selected = graph.nodes.find((n) => n.id === selectedNodeId);
   if (!selected) return null;
+  if (hasParamHandles?.(selected)) return { pointsNodeId: selected.id, spaceNodeId: selected.id };
 
   // Selected node consumes a curve (Curve to Mesh, Curve Deform): the points
   // belong to whatever produces it, the space is the consumer's own.

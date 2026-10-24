@@ -28,6 +28,8 @@ import { createPointCloudHandles } from "./pointCloudHandles";
 import { SKELETON_NODE_TYPE } from "../graph/nodes/skeleton";
 import { SKIN_NODE } from "../graph/nodes/skin";
 import { SkeletonHud, SkinHud } from "./RigHuds";
+import { BipedHud } from "./BipedHud";
+import { RIG_BIPED_MOTION_NODE, type BipedGaitInfo } from "../graph/nodes/bipedMotion";
 import { PointsInfluenceHud } from "./PointsInfluenceHud";
 import { isRigNodeType, setInFront } from "./inFront";
 import { skeletonOp, SkeletonOp } from "./skeletonEditor";
@@ -1382,6 +1384,8 @@ export function Viewport({
   graphRef.current = graph;
   const registryRef = useRef(registry);
   registryRef.current = registry;
+  /** Reads the ref, so the closures the effects keep from the first render stay current. */
+  const hasParamHandles = (node: { type: string }) => Boolean(registryRef.current.get(node.type)?.paramHandles);
   const renderNodeIdRef = useRef(renderNodeId);
   renderNodeIdRef.current = renderNodeId;
   const view2DNodeIdRef = useRef(view2DNodeId);
@@ -2312,6 +2316,14 @@ export function Viewport({
      * has no param-panel field of its own. A no-op unless a handle is
      * actually picked, so A and D stay free for everything else.
      */
+    /** The axes a picked param handle may move along, or null for any other gizmo target. */
+    function paramHandleAxesFor(object: THREE.Object3D): ("x" | "y" | "z")[] | null {
+      if (!object.userData?.isCurvePointHandle || !curvePointsNodeId) return null;
+      const node = graphRef.current.nodes.find((n) => n.id === curvePointsNodeId);
+      const axesOf = node ? registryRef.current.get(node.type)?.paramHandleAxes : undefined;
+      return axesOf ? axesOf(object.userData.pointIndex as number) : null;
+    }
+
     function editPickedCurvePoint(operation: "insert" | "remove"): boolean {
       if (selectedPointIndices.size === 0 || !curvePointsNodeId) return false;
       const node = graphRef.current.nodes.find((n) => n.id === curvePointsNodeId);
@@ -2321,7 +2333,7 @@ export function Viewport({
       // Fixed topology: every pointsList entry has to keep lining up with the
       // source mesh's own vertex index for writePointsToMesh's write-back to
       // mean anything — unlike a curve, there is no legal insert/remove here.
-      if (node.type === EDIT_MESH_POINTS_NODE.type || isIkControlNode(node)) return false;
+      if (node.type === EDIT_MESH_POINTS_NODE.type || isIkControlNode(node) || hasParamHandles(node)) return false;
 
       const index = Array.from(selectedPointIndices)[0];
       const nextPoints =
@@ -2914,6 +2926,13 @@ export function Viewport({
           const pointIdx = object.userData.pointIndex as number;
           const node = graphRef.current.nodes.find((n) => n.id === curvePointsNodeId);
           if (!node || !onTransformChangeRef.current) return;
+          // A param handle: the node says which params put it where it was dropped.
+          const toParams = registryRef.current.get(node.type)?.paramHandles;
+          if (toParams) {
+            const patch = toParams(pointIdx, object.position.clone(), node.params, node.id);
+            if (patch) onTransformChangeRef.current(node.id, patch);
+            return;
+          }
           let rawList = Array.isArray(node.params.pointsList) ? [...node.params.pointsList] : [];
           if (rawList.length === 0 && (node.type === EDIT_MESH_POINTS_NODE.type || isIkControlNode(node))) {
             rawList = [];
@@ -2949,6 +2968,8 @@ export function Viewport({
         if (object.userData?.isCurveCentroidHandle) {
           const node = graphRef.current.nodes.find((n) => n.id === curvePointsNodeId);
           if (!node || !onTransformChangeRef.current) return;
+          // Param handles each mean something different: there is no moving several at once.
+          if (hasParamHandles(node)) return;
           let rawList = Array.isArray(node.params.pointsList) ? [...node.params.pointsList] : [];
           if (rawList.length === 0 && (node.type === EDIT_MESH_POINTS_NODE.type || isIkControlNode(node))) {
             rawList = [];
@@ -5923,8 +5944,10 @@ export function Viewport({
       // Curve control-point handles for the selected curve, drawn through the
       // world matrix of whatever object draws that curve so they track the
       // tube when it is moved, rotated or scaled.
-      const curveTarget = outputMode ? null : resolveCurveEditTarget(graphRef.current, selectedNodeIdRef.current);
+      const curveTarget = outputMode ? null : resolveCurveEditTarget(graphRef.current, selectedNodeIdRef.current, hasParamHandles);
       const curveNode = curveTarget ? graphRef.current.nodes.find((n) => n.id === curveTarget.pointsNodeId) : undefined;
+      // Handles that edit a node's params (Biped Motion's gait): placed by the node, every frame.
+      const isParamHandleNode = curveNode ? hasParamHandles(curveNode) : false;
       // A lattice's handles go on its *deformed* cage, not on the raw stored
       // grid: the stored points are the grid before taper/twist/bend are
       // applied, so with any of those dialled in, handles drawn there float
@@ -5942,7 +5965,7 @@ export function Viewport({
         const mesh = spaceObj instanceof THREE.Object3D ? findFirstMesh(spaceObj) : null;
         const extracted = mesh ? extractPointsFromMesh(spaceObj as THREE.Object3D, curveNode!.id, "Edit Mesh Points") : null;
         curvePoints = extracted?.points ?? [];
-      } else if (isIkControlNode(curveNode) && rawStoredPoints.length === 0) {
+      } else if (isParamHandleNode || (isIkControlNode(curveNode) && rawStoredPoints.length === 0)) {
         // Rest pose: nothing stored yet, the node reports where its controls are.
         const derived = results.get(curveNode!.id)?.__controlPoints;
         curvePoints = Array.isArray(derived) ? derived.map((p) => asVector3(p, new THREE.Vector3())) : [];
@@ -5987,8 +6010,12 @@ export function Viewport({
         // (see curve.ts), so skip the straight control-polygon line here. A
         // mesh's vertex-buffer order isn't a path either — a line through it
         // would zigzag across the mesh rather than trace anything meaningful.
-        const hideStraightLine = isLatticeNode || curveNode?.type === "curve/from_points" || isEditMeshPointsNode || isIkControlNode(curveNode) || isSkeletonNode;
-        curveHandles.sync(curvePoints, spaceMatrix, selectedPointIndices, frozenIndices, !hideStraightLine, camera, host.clientHeight);
+        const hideStraightLine =
+          isLatticeNode || curveNode?.type === "curve/from_points" || isEditMeshPointsNode || isIkControlNode(curveNode) || isSkeletonNode || isParamHandleNode;
+        curveHandles.sync(curvePoints, spaceMatrix, selectedPointIndices, frozenIndices, !hideStraightLine, camera, host.clientHeight, isParamHandleNode);
+        // The node's guides (the walk its handles shape) show only while it is being edited.
+        const guides = spaceObject instanceof THREE.Object3D ? spaceObject.userData.selectionGuides : undefined;
+        if (isParamHandleNode && guides instanceof THREE.Object3D) guides.visible = true;
         if (isSkeletonNode) {
           // The palette follows what is picked.
           const signature = Array.from(selectedPointIndices).join(",");
@@ -6574,6 +6601,15 @@ export function Viewport({
         transformControls.showX = true;
         transformControls.showY = true;
         transformControls.showZ = true;
+        // A param handle moves only along what it edits: just those arrows, in the node's own axes.
+        const axes = paramHandleAxesFor(pickedCurveHandle);
+        if (axes) {
+          transformControls.setMode("translate");
+          if (transformControls.space !== "local") transformControls.setSpace("local");
+          transformControls.showX = axes.includes("x");
+          transformControls.showY = axes.includes("y");
+          transformControls.showZ = axes.includes("z");
+        }
         transformControls.getHelper().visible = true;
         attachedObjectNodeId = null;
         attachedGizmoTarget = null;
@@ -6781,7 +6817,12 @@ export function Viewport({
 
       // Orientation and step snapping set for Edit Mesh's proxy don't carry
       // over to whatever the gizmo holds next.
-      if (transformControls && !transformControls.dragging && transformControls.object !== editMeshCentroidProxy) {
+      if (
+        transformControls &&
+        !transformControls.dragging &&
+        transformControls.object !== editMeshCentroidProxy &&
+        !(transformControls.object && paramHandleAxesFor(transformControls.object))
+      ) {
         const space = objectOrientationRef.current === "local" ? "local" : "world";
         if (transformControls.space !== space) transformControls.setSpace(space);
         transformControls.rotationSnap = snapEnabled ? ROTATION_SNAP : null;
@@ -8631,8 +8672,19 @@ export function Viewport({
         !elevationView &&
         selectedNodeId &&
         (() => {
-          const rigNode = graph.nodes.find((n) => n.id === selectedNodeId && (n.type === SKELETON_NODE_TYPE || n.type === SKIN_NODE.type));
+          const rigNode = graph.nodes.find(
+            (n) => n.id === selectedNodeId && (n.type === SKELETON_NODE_TYPE || n.type === SKIN_NODE.type || n.type === RIG_BIPED_MOTION_NODE.type),
+          );
           if (!rigNode) return null;
+          if (rigNode.type === RIG_BIPED_MOTION_NODE.type) {
+            return (
+              <BipedHud
+                node={rigNode}
+                readInfo={() => (latestResultsRef.current?.get(rigNode.id)?.__gaitInfo as BipedGaitInfo | undefined) ?? null}
+                onParams={(params, nodeId) => onParamChange?.(params, nodeId)}
+              />
+            );
+          }
           if (rigNode.type === SKELETON_NODE_TYPE) {
             return (
               <SkeletonHud

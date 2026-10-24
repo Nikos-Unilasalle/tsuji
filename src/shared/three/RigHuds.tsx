@@ -185,7 +185,7 @@ export function SkeletonHud({
 }
 
 /** A slider that applies on release: a Skin node weighs its mesh again with every change, so not on every pixel of the drag. */
-function CommitSlider({ label, value, min, max, step, title, onCommit }: { label: string; value: number; min: number; max: number; step: number; title: string; onCommit: (v: number) => void }) {
+export function CommitSlider({ label, value, min, max, step, title, onCommit }: { label: string; value: number; min: number; max: number; step: number; title: string; onCommit: (v: number) => void }) {
   const [draft, setDraft] = useState<number | null>(null);
   useEffect(() => setDraft(null), [value]);
   const shown = draft ?? value;

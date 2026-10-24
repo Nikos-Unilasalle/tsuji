@@ -249,6 +249,8 @@ export interface SolveOptions {
   armPull?: number;
   tolerance?: number;
   maxIterations?: number;
+  /** Turns the pelvis — and the hips riding on it — about itself: a walk's pelvic rotation, list and tilt. */
+  pelvisRotation?: THREE.Quaternion;
 }
 
 /**
@@ -258,8 +260,13 @@ export interface SolveOptions {
  */
 export function solveHuman(skeleton: HumanSkeleton, controls: THREE.Vector3[], options: SolveOptions = {}): THREE.Vector3[] {
   const c = skeleton.restControls.map((rest, i) => controls[i] ?? rest);
-  const shift = c[0].clone().sub(skeleton.rig.rest[skeleton.joint.pelvis]);
-  const start = skeleton.rig.rest.map((p) => p.clone().add(shift));
+  const restPelvis = skeleton.rig.rest[skeleton.joint.pelvis];
+  const turn = options.pelvisRotation;
+  const start = skeleton.rig.rest.map((p) => {
+    const offset = p.clone().sub(restPelvis);
+    if (turn) offset.applyQuaternion(turn);
+    return offset.add(c[0]);
+  });
   const { joint } = skeleton;
   const armPull = Math.max(0, options.armPull ?? 0.3);
   const effectors: IkEffector[] = [
@@ -280,6 +287,7 @@ export function solveHuman(skeleton: HumanSkeleton, controls: THREE.Vector3[], o
     poles,
     tolerance: options.tolerance ?? 1e-4,
     maxIterations: options.maxIterations ?? 24,
+    rootRotation: turn,
   }).positions;
 }
 
