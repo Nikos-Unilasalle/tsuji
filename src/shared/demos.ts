@@ -614,6 +614,12 @@ export const DEMO_CATALOG: DemoCategory[] = [
         description: "A human walking an elliptical path: stepping feet, swinging arms, bobbing hips (press Play).",
       },
       {
+        file: "demo_rig_biped_route.tsuji",
+        label: "Biped Route",
+        description:
+          "A walker on a route drawn in the viewport: it sets off, breaks into a run, slows into a stop to wave, walks on and ends cheering — the timing worked out from the route (press Play, or scrub). Select Biped Motion: drag the white balls to reshape the route, the coloured ones to slide a mark; the Route panel adds marks where the walker is at the current frame.",
+      },
+      {
         file: "demo_rig_skeleton.tsuji",
         label: "Build Your Own Rig",
         description: "A Skeleton of four joints skinned to a tube: select the Skeleton and drag, add (A) or delete (D) joints; select the Skin and click a joint ball to tune its influence.",

@@ -380,7 +380,7 @@ export interface NodeDefinition {
    * space: the gizmo shows only those arrows (translate only, local axes).
    * Omitted: all three.
    */
-  paramHandleAxes?: (index: number) => ("x" | "y" | "z")[];
+  paramHandleAxes?: (index: number, params: Record<string, unknown>) => ("x" | "y" | "z")[];
   /**
    * Set by addPoseSockets (poseSockets.ts) on a node that owns a native pose:
    * its Location / Rotation / Scale sockets drive the params of the same name.

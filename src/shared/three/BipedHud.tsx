@@ -5,6 +5,7 @@ import { bipedPresetParams, type BipedGaitInfo } from "../graph/nodes/bipedMotio
 import { GAIT_HANDLES, HANDLE_COLORS } from "../graph/nodes/bipedHandles";
 import { GAIT_PRESET_KEYS, GAIT_PRESETS, type GaitPresetKey } from "../graph/ik/gaitPresets";
 import type { NodeInstance } from "../graph/types";
+import { RouteHud } from "./RouteHud";
 
 /**
  * Biped Motion's palette: presets, how the body is moved, walk or run, and
@@ -68,6 +69,7 @@ export function BipedHud({ node, readInfo, onParams }: { node: NodeInstance; rea
             ["follow", "Follow", "The body goes where the node's pose (or a path) puts it; the gait reads its speed and turns"],
             ["drive", "Drive", "The body walks itself forward at Speed, turning at Turn Rate"],
             ["inPlace", "In Place", "A treadmill: the body stays, the feet cycle under it (loops, game cycles)"],
+            ["route", "Route", "Walk a route drawn in the viewport, with stops, runs and poses along it"],
           ] as const
         ).map(([value, label, title]) => (
           <button key={value} type="button" className={segment(locomotion === value)} style={wide} onClick={() => set({ locomotion: value })} title={title}>
@@ -134,7 +136,7 @@ export function BipedHud({ node, readInfo, onParams }: { node: NodeInstance; rea
           Handles
         </button>
       </HudBar>
-      <GaitReadout info={info} showGuides={showGuides} />
+      {locomotion === "route" ? <RouteHud node={node} info={info} onParams={onParams} /> : <GaitReadout info={info} showGuides={showGuides} />}
     </>
   );
 }

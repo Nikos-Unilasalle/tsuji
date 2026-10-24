@@ -12,6 +12,8 @@ import { armWave, BodyMetrics, bodyMetrics, GaitSolution, GaitStyle, GRAVITY, NA
 import { GAIT_PRESET_KEYS, GAIT_PRESETS, GaitMode, GaitPresetKey, presetStyle } from "../ik/gaitPresets";
 import { BipedGaitState, createBipedGait, stepBipedGait } from "../ik/bipedGait";
 import { blendPose, HumanPose, readHumanPose } from "../ik/humanPose";
+import { readRouteMarks } from "../ik/route";
+import { holdRoutePose, readRoutePoints, routeBodyAt, RouteHandleContext, routeGuides, routeHandleContext, routeHandlePatch, routePlanFor } from "./bipedRoute";
 import { armPose, buildGaitGuides, GAIT_HANDLE_AXES, HANDLE_COLORS, GaitHandleContext, gaitHandlePatch, handleContextFor } from "./bipedHandles";
 
 /**
@@ -41,7 +43,7 @@ import { armPose, buildGaitGuides, GAIT_HANDLE_AXES, HANDLE_COLORS, GaitHandleCo
  */
 
 const STYLE_KEYS = Object.keys(NATURAL_STYLE) as (keyof GaitStyle)[];
-const LOCOMOTION = ["follow", "drive", "inPlace"] as const;
+const LOCOMOTION = ["follow", "drive", "inPlace", "route"] as const;
 type Locomotion = (typeof LOCOMOTION)[number];
 
 interface BipedState {
@@ -72,6 +74,13 @@ const bipedStates = createNodeCache<Map<string, BipedState>>();
 
 /** What the viewport reads to place the handles and fill the HUD. */
 const handleContexts = createNodeCache<GaitHandleContext>();
+const routeContexts = createNodeCache<RouteHandleContext>();
+
+/** Which handles the viewport shows: the route's, or the gait's. */
+function handleSetOf(params: Record<string, unknown>): "gait" | "route" {
+  if (params.handleSet === "gait" || params.handleSet === "route") return params.handleSet;
+  return params.locomotion === "route" ? "route" : "gait";
+}
 
 export function readGaitStyle(params: Record<string, unknown>): GaitStyle {
   const style = { ...NATURAL_STYLE };
@@ -155,6 +164,10 @@ export const RIG_BIPED_MOTION_NODE: NodeDefinition = {
     influence: 1,
     clock: "timeline",
     locomotion: "follow",
+    route: [],
+    routeMarks: [],
+    runSpeed: 2.8,
+    handleSet: "auto",
     speed: 1.3,
     turnRate: 0,
     gait: "auto",
@@ -181,7 +194,7 @@ export const RIG_BIPED_MOTION_NODE: NodeDefinition = {
       label: "Locomotion",
       kind: "select",
       options: [...LOCOMOTION],
-      optionLabels: ["Follow the body's motion", "Drive: walk forward on its own", "In Place (treadmill)"],
+      optionLabels: ["Follow the body's motion", "Drive: walk forward on its own", "In Place (treadmill)", "Route: walk the route drawn in the viewport"],
       group: "Gait",
     },
     {
@@ -194,6 +207,15 @@ export const RIG_BIPED_MOTION_NODE: NodeDefinition = {
     },
     { id: "speed", label: "Speed (m/s, Drive · In Place)", kind: "number", step: 0.1, group: "Gait" },
     { id: "turnRate", label: "Turn Rate (°/s, Drive)", kind: "number", step: 5, group: "Gait" },
+    { id: "runSpeed", label: "Run Speed (m/s, Route)", kind: "number", step: 0.1, group: "Gait" },
+    {
+      id: "handleSet",
+      label: "Handles",
+      kind: "select",
+      options: ["auto", "gait", "route"],
+      optionLabels: ["Auto (the route's in Route, else the gait's)", "Gait", "Route"],
+      group: "Display",
+    },
     { id: "gait", label: "Gait", kind: "select", options: ["auto", "walk", "run"], optionLabels: ["Auto (walk, run past the transition)", "Always walk", "Always run"], group: "Gait" },
     { id: "transitionFroude", label: "Walk → Run at Froude", kind: "number", step: 0.05, group: "Gait" },
     ...STYLE_FIELDS,
@@ -202,8 +224,12 @@ export const RIG_BIPED_MOTION_NODE: NodeDefinition = {
     { id: "showControls", label: "Show IK Controls", kind: "boolean", group: "Display" },
   ],
   upgradeParams,
-  paramHandleAxes: (index) => GAIT_HANDLE_AXES[index] ?? ["x", "y", "z"],
+  paramHandleAxes: (index, params) => (handleSetOf(params) === "route" ? ["x", "z"] : (GAIT_HANDLE_AXES[index] ?? ["x", "y", "z"])),
   paramHandles: (index, position, params, nodeId) => {
+    if (handleSetOf(params) === "route") {
+      const route = routeContexts.get(nodeId);
+      return route ? routeHandlePatch(route, index, position) : null;
+    }
     const context = handleContexts.get(nodeId);
     return context ? gaitHandlePatch(context, index, position, readGaitStyle(params)) : null;
   },
@@ -223,7 +249,7 @@ export const RIG_BIPED_MOTION_NODE: NodeDefinition = {
     // While the gizmo drags a driven body, the group carries base × root: take the root back off.
     const dragging = ctx.nodeId === ctx.liveEditNodeId;
     placeGroup(group, inputs, params, ctx.nodeId, ctx.liveEditNodeId);
-    const base = dragging && driven && previous && locomotion === "drive" ? group.matrix.clone().multiply(previous.rootMatrix.clone().invert()) : group.matrix.clone();
+    const base = dragging && previous && (locomotion === "drive" || locomotion === "route") ? group.matrix.clone().multiply(previous.rootMatrix.clone().invert()) : group.matrix.clone();
 
     const source = inputs.skeleton instanceof THREE.Object3D ? inputs.skeleton : null;
     const data = source?.userData.humanRig as HumanRigData | undefined;
@@ -249,17 +275,34 @@ export const RIG_BIPED_MOTION_NODE: NodeDefinition = {
     };
     const driveSpeed = numberInput(inputs.speed, params.speed, 1.3);
     const turnRate = (numberInput(inputs.turnRate, params.turnRate, 0) * Math.PI) / 180;
-    const input: FrameInput = { base, speed: driveSpeed, turnRate };
-
     const frame = ctx.currentFrame ?? -1;
     const fps = Number(ctx.fps) > 0 ? Number(ctx.fps) : 0;
     const onTimeline = params.clock !== "live" && frame >= 0 && fps > 0;
+
+    // Route: the body is wherever the planned route has it at this time — a pure function of it.
+    const baseScale = new THREE.Vector3().setFromMatrixScale(base);
+    const baseUnit = Math.max(1e-6, (baseScale.x + baseScale.y + baseScale.z) / 3);
+    const routePoints = readRoutePoints(params.route);
+    const routeMarks = readRouteMarks(params.routeMarks);
+    const plan =
+      locomotion === "route"
+        ? routePlanFor(ctx.nodeId, routePoints, routeMarks, Math.abs(driveSpeed) / baseUnit, Math.abs(numberInput(undefined, params.runSpeed, 2.8)) / baseUnit)
+        : null;
+    const routeInput = (time: number): FrameInput => {
+      const at = routeBodyAt(plan!, time);
+      return { base, speed: at.sample.speed * baseUnit, turnRate: at.yawRate, root: at.matrix };
+    };
+    const routeTime = onTimeline ? frame / fps : ctx.time;
+    const input: FrameInput = plan ? routeInput(routeTime) : { base, speed: driveSpeed, turnRate };
+    const routeNow = plan ? plan.sample(routeTime) : null;
     let out: AdvanceOut;
     let state: BipedState;
     let now: number;
     if (onTimeline) {
-      const simKey = `${data.key}|${locomotion}|${fps}|${JSON.stringify(style)}|${cfg.mode}|${cfg.transitionFroude}|${epoch}`;
-      const run = runTimeline(ctx.nodeId, `${ctx.sessionId ?? ""}|${ctx.evalScope ?? ""}`, simKey, frame, fps, input, cfg, estimateInput(ctx, params, input));
+      const routeKey = plan ? JSON.stringify([routePoints.map((p) => [p.x, p.z]), routeMarks, driveSpeed, params.runSpeed]) : "";
+      const simKey = `${data.key}|${locomotion}|${fps}|${JSON.stringify(style)}|${cfg.mode}|${cfg.transitionFroude}|${epoch}|${routeKey}`;
+      const estimate = plan ? (j: number) => routeInput(j / fps) : estimateInput(ctx, params, input);
+      const run = runTimeline(ctx.nodeId, `${ctx.sessionId ?? ""}|${ctx.evalScope ?? ""}`, simKey, frame, fps, input, cfg, estimate);
       out = run.out;
       state = run.state;
       now = frame / fps;
@@ -289,7 +332,12 @@ export const RIG_BIPED_MOTION_NODE: NodeDefinition = {
     // Influence: how much of the walk goes over the pose wired in (a Human Skeleton's, or a Biped Pose's).
     const influence = Math.max(0, Math.min(1, numberInput(inputs.influence, params.influence, 1)));
     const upstream = readHumanPose(source) ?? { controls: skeleton.relaxedControls, pelvisRotation: new THREE.Quaternion() };
-    const pose = influence >= 1 ? gaitPose : blendPose(upstream, gaitPose, () => influence, influence);
+    const walked = influence >= 1 ? gaitPose : blendPose(upstream, gaitPose, () => influence, influence);
+    // A stop on the route holding a pose eases into it and out again.
+    const pose =
+      routeNow && routeNow.holding >= 0
+        ? holdRoutePose(ctx.nodeId, skeleton, data.key, walked, readHumanPose(source), routeMarks[routeNow.holding], routeNow.poseWeight)
+        : walked;
     const positions = solveHuman(skeleton, pose.controls, { armPull: data.armPull, ...data.solver, pelvisRotation: pose.pelvisRotation });
 
     // Handles and guides at a reference speed: the walk as it is now, or the one it would be at its usual pace.
@@ -298,6 +346,11 @@ export const RIG_BIPED_MOTION_NODE: NodeDefinition = {
     const handleContext = handleContextFor(skeleton, metrics, style, refSol, unit);
     handleContexts.set(ctx.nodeId, handleContext);
     const showGuides = params.showGuides === undefined ? true : toBoolean(params.showGuides);
+    const routeHandles = handleSetOf(params) === "route";
+    const routeContext = routeHandles ? routeHandleContext(routePoints, routeMarks, plan ?? routePlanFor(ctx.nodeId, routePoints, routeMarks, 1, 1), base, display) : null;
+    if (routeContext) routeContexts.set(ctx.nodeId, routeContext);
+    else routeContexts.delete(ctx.nodeId);
+    const routeDrawn = routeContext && showGuides ? routeGuides(routeContext, routeNow?.s ?? 0) : null;
 
     const showControls = toBoolean(params.showControls);
     const { joint } = skeleton;
@@ -323,9 +376,10 @@ export const RIG_BIPED_MOTION_NODE: NodeDefinition = {
             return { center: new THREE.Vector3(at.x, 0.002, at.z), radius: 0.045 * metrics.height };
           })
         : undefined,
-      paths: showGuides ? buildGaitGuides(handleContext, positions[joint.pelvis], positions[joint.head]) : [],
-      knobs: showGuides ? handleContext.handles.map((at, i) => ({ at, color: HANDLE_COLORS[i] })) : [],
-      knobRadius: 0.022 * metrics.height,
+      paths: routeDrawn ? routeDrawn.paths : showGuides ? buildGaitGuides(handleContext, positions[joint.pelvis], positions[joint.head]) : [],
+      knobs: routeDrawn ? routeDrawn.knobs : showGuides ? handleContext.handles.map((at, i) => ({ at, color: HANDLE_COLORS[i] })) : [],
+      // Route balls are seen across the whole route, not up close on the body: sized to it.
+      knobRadius: routeDrawn && routeContext?.plan ? Math.max(0.022 * metrics.height, routeContext.plan.curve.length * 0.008) : 0.022 * metrics.height,
     });
 
     publishRig(group, parentsOf(skeleton.rig), skeleton.rig.rest, positions, display, skeleton.names);
@@ -342,8 +396,20 @@ export const RIG_BIPED_MOTION_NODE: NodeDefinition = {
       phase,
       gaitSpeed: speedSk * unit,
       // Not sockets: the viewport's gait handles (positions in the body's space) and the HUD readout.
-      __controlPoints: showGuides ? handleContext.handles : [],
-      __gaitInfo: gaitInfo(active, sol.froude, stepped.standing, state, metrics, unit, locomotion),
+      __controlPoints: !showGuides ? [] : routeContext ? routeContext.handles : handleContext.handles,
+      __gaitInfo: {
+        ...gaitInfo(active, sol.froude, stepped.standing, state, metrics, unit, locomotion),
+        route: plan
+          ? {
+              at: plan.curve.length > 0 ? (routeNow?.s ?? 0) / plan.curve.length : 0,
+              length: plan.curve.length * baseUnit,
+              duration: plan.duration,
+              markTimes: plan.markTimes,
+              holding: routeNow?.holding ?? -1,
+              time: routeTime,
+            }
+          : null,
+      },
     };
   },
 };
@@ -358,6 +424,8 @@ interface FrameInput {
   speed: number;
   /** Radians per second. */
   turnRate: number;
+  /** Route: the body's place in the node's space, given rather than integrated. */
+  root?: THREE.Matrix4;
 }
 
 interface AdvanceConfig {
@@ -437,11 +505,13 @@ function advance(state: BipedState, input: FrameInput, cfg: AdvanceConfig, dt: n
   const unit = Math.max(1e-6, (baseScale.x + baseScale.y + baseScale.z) / 3);
 
   // The body the gait walks: the node's pose, or that pose carried along by the walk itself.
-  if (driven && dt > 0) {
+  if (input.root) {
+    state.rootMatrix.copy(input.root);
+  } else if (driven && dt > 0) {
     state.rootYaw += input.turnRate * dt;
     state.rootPos.add(new THREE.Vector3(Math.sin(state.rootYaw), 0, Math.cos(state.rootYaw)).multiplyScalar((input.speed / unit) * dt));
   }
-  state.rootMatrix.makeRotationY(state.rootYaw).setPosition(state.rootPos);
+  if (!input.root) state.rootMatrix.makeRotationY(state.rootYaw).setPosition(state.rootPos);
   const body = driven ? base.clone().multiply(state.rootMatrix) : base.clone();
   const display = locomotion === "inPlace" ? base.clone() : body;
 
@@ -505,6 +575,7 @@ const MAX_REPLAY = 6000;
 
 function sameInput(a: FrameInput, b: FrameInput): boolean {
   if (Math.abs(a.speed - b.speed) > 1e-9 || Math.abs(a.turnRate - b.turnRate) > 1e-9) return false;
+  if (Boolean(a.root) !== Boolean(b.root) || (a.root && !a.root.equals(b.root!))) return false;
   const x = a.base.elements;
   const y = b.base.elements;
   for (let i = 0; i < 16; i++) if (Math.abs(x[i] - y[i]) > 1e-7) return false;
@@ -531,7 +602,7 @@ function runTimeline(
     sim = { key, states: new Map(), seen: new Map() };
     sims.set(session, sim);
   }
-  sim.seen.set(frame, { base: input.base.clone(), speed: input.speed, turnRate: input.turnRate });
+  sim.seen.set(frame, { ...input, base: input.base.clone() });
   // Everything worked out from an estimate of this frame that turned out wrong goes.
   const kept = sim.states.get(frame);
   if (kept && !sameInput(kept.input, input)) {
@@ -553,7 +624,7 @@ function runTimeline(
   for (let j = from + 1; j <= frame; j++) {
     const at = j === frame ? input : sim.seen.get(j) ?? estimate(j, sim.seen);
     out = advance(state, at, cfg, j === from + 1 && from < 0 ? 0 : 1 / fps, j / fps, 0);
-    sim.states.set(j, { state: cloneState(state), input: { base: at.base.clone(), speed: at.speed, turnRate: at.turnRate } });
+    sim.states.set(j, { state: cloneState(state), input: { ...at, base: at.base.clone() } });
   }
   return { out: out!, state };
 }
@@ -774,7 +845,17 @@ function gaitInfo(sol: GaitSolution, froude: number, standing: boolean, state: B
   };
 }
 
-export type BipedGaitInfo = ReturnType<typeof gaitInfo>;
+/** The route's progress, for the HUD: where along it (0..1), its length (m) and duration, when each mark is reached (s). */
+export interface BipedRouteInfo {
+  at: number;
+  length: number;
+  duration: number;
+  markTimes: number[];
+  holding: number;
+  time: number;
+}
+
+export type BipedGaitInfo = ReturnType<typeof gaitInfo> & { route?: BipedRouteInfo | null };
 
 /** Params a preset writes, at the speed matching this body's hip height (m). */
 export function bipedPresetParams(key: GaitPresetKey, hipHeight?: number): Record<string, unknown> {

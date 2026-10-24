@@ -2327,7 +2327,7 @@ export function Viewport({
       const node = graphRef.current.nodes.find((n) => n.id === curvePointsNodeId);
       const def = node ? registryRef.current.get(node.type) : undefined;
       if (!def?.paramHandles) return null;
-      return def.paramHandleAxes ? def.paramHandleAxes(object.userData.pointIndex as number) : ["x", "y", "z"];
+      return def.paramHandleAxes && node ? def.paramHandleAxes(object.userData.pointIndex as number, node.params) : ["x", "y", "z"];
     }
 
     function paramHandleRotatesFor(object: THREE.Object3D): boolean {

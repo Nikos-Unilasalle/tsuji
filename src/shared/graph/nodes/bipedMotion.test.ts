@@ -277,3 +277,63 @@ describe("Biped Motion on the timeline", () => {
     expect(new THREE.Vector3().setFromMatrixPosition(outs[3].matrix).z).toBeGreaterThan(0.2);
   });
 });
+
+describe("Biped Motion on a route", () => {
+  const fps = 30;
+  const route = [new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, 6)];
+  const play = (id: string, frames: number, extra: Record<string, unknown> = {}) => {
+    const outs: Out[] = [];
+    for (let f = 0; f <= frames; f++) {
+      outs.push(
+        RIG_BIPED_MOTION_NODE.evaluate(
+          { skeleton: adult.geometry },
+          { ...RIG_BIPED_MOTION_NODE.defaultParams, locomotion: "route", route, ...extra },
+          ctx(id, { time: f / fps, currentFrame: f, fps, sessionId: "route" }),
+        ) as Out,
+      );
+    }
+    return outs;
+  };
+
+  it("walks the route, stops at its marks, holds the pose, and stands at the end", () => {
+    const marks = [{ kind: "stop", at: 0.5, hold: 2, pose: "cheer" }];
+    const outs = play("route-walk", 330, { routeMarks: marks });
+    const info = outs[outs.length - 1].__gaitInfo as BipedGaitInfo & { route: { markTimes: number[]; duration: number } };
+    const stopFrame = Math.round((info.route.markTimes[0] + 1) * fps);
+    const held = outs[stopFrame];
+    const z = new THREE.Vector3().setFromMatrixPosition(held.matrix).z;
+    expect(z).toBeCloseTo(3, 1);
+    // Mid-hold the cheer's hands are up.
+    const { hand } = adult.skeleton.joint;
+    expect(held.joints[hand[0]].y).toBeGreaterThan(held.joints[adult.skeleton.joint.head].y);
+    // At the end: standing at 6 m, feet down.
+    const end = outs[outs.length - 1];
+    expect(new THREE.Vector3().setFromMatrixPosition(end.matrix).z).toBeCloseTo(6, 1);
+    expect(end.__gaitInfo.state).toBe("Standing");
+    expect(Math.max(...outs.slice(30).map((o) => ikError(o)))).toBeLessThan(0.06);
+  });
+
+  it("is exact when scrubbed: a jump to a frame gives the frame played through", () => {
+    const marks = [{ kind: "run", at: 0.3 }];
+    const played = play("route-played", 120, { routeMarks: marks });
+    const jumped = RIG_BIPED_MOTION_NODE.evaluate(
+      { skeleton: adult.geometry },
+      { ...RIG_BIPED_MOTION_NODE.defaultParams, locomotion: "route", route, routeMarks: marks },
+      ctx("route-jumped", { time: 4, currentFrame: 120, fps, sessionId: "route" }),
+    ) as Out;
+    played[120].joints.forEach((j, i) => expect(j.distanceTo(jumped.joints[i])).toBeLessThan(1e-9));
+  });
+
+  it("moves a route point and a mark from their handles", () => {
+    const marks = [{ kind: "stop", at: 0.5, hold: 1 }];
+    const out = play("route-handles", 0, { routeMarks: marks })[0];
+    const handles = out.__controlPoints as THREE.Vector3[];
+    expect(handles.length).toBe(3);
+    const params = { ...RIG_BIPED_MOTION_NODE.defaultParams, locomotion: "route", route, routeMarks: marks };
+    const moved = RIG_BIPED_MOTION_NODE.paramHandles!(1, handles[1].clone().add(new THREE.Vector3(1, 0, 0)), params, "route-handles")!;
+    expect((moved.route as THREE.Vector3[])[1].x).toBeCloseTo(1, 6);
+    const slid = RIG_BIPED_MOTION_NODE.paramHandles!(2, handles[0].clone().lerp(handles[1], 0.8), params, "route-handles")!;
+    expect((slid.routeMarks as { at: number }[])[0].at).toBeCloseTo(0.8, 1);
+    expect(RIG_BIPED_MOTION_NODE.paramHandleAxes!(0, params)).toEqual(["x", "z"]);
+  });
+});
