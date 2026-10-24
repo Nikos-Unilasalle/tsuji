@@ -38,6 +38,7 @@ export function BipedHud({ node, readInfo, onParams }: { node: NodeInstance; rea
   const locomotion = String(p.locomotion ?? "follow");
   const gait = String(p.gait ?? "auto");
   const preset = String(p.preset ?? "natural");
+  const clock = p.clock === "live" ? "live" : "timeline";
   const driven = locomotion !== "follow";
   const showGuides = p.showGuides === undefined ? true : Boolean(p.showGuides);
   const set = (params: Record<string, unknown>) => onParams(params, node.id);
@@ -117,6 +118,17 @@ export function BipedHud({ node, readInfo, onParams }: { node: NodeInstance; rea
             Walk it
           </button>
         )}
+        <HudSeparator />
+        {(
+          [
+            ["timeline", "Timeline", "The walk follows the timeline: replayed from frame 0, so scrubbing, looping and export give the same walk"],
+            ["live", "Live", "Real time: keeps walking while paused, for dragging the body around by hand"],
+          ] as const
+        ).map(([value, label, title]) => (
+          <button key={value} type="button" className={segment(clock === value)} style={wide} onClick={() => set({ clock: value })} title={title}>
+            {label}
+          </button>
+        ))}
         <HudSeparator />
         <button type="button" className={segment(showGuides)} style={wide} onClick={() => set({ showGuides: !showGuides })} title="Show the gait handles and the guides they shape">
           Handles

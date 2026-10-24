@@ -3,6 +3,7 @@ import * as THREE from "three";
 import { RIG_HUMAN_NODE } from "./rig";
 import { bipedPresetParams, BipedGaitInfo, readGaitStyle, RIG_BIPED_MOTION_NODE } from "./bipedMotion";
 import { EvalContext } from "../types";
+import { evaluateKeyframeValue } from "../evaluate";
 import { bodyMetrics, NATURAL_STYLE, solveGait, wantsToRun } from "../ik/gaitModel";
 import { GAIT_PRESET_KEYS } from "../ik/gaitPresets";
 import { HumanSkeleton } from "../ik/skeletons";
@@ -207,5 +208,72 @@ describe("Biped Motion files from before the gait model", () => {
     expect("stepRadius" in up).toBe(false);
     const current = { stride: 1.2, armSwing: 0.8 };
     expect(RIG_BIPED_MOTION_NODE.upgradeParams!(current)).toBe(current);
+  });
+});
+
+describe("Biped Motion on the timeline", () => {
+  const fps = 30;
+  const frameCtx = (id: string, frame: number, extra: Partial<EvalContext> = {}) =>
+    ctx(id, { time: frame / fps, currentFrame: frame, fps, sessionId: "timeline", ...extra });
+  const at = (id: string, frame: number, params: Record<string, unknown>, extra: Partial<EvalContext> = {}) =>
+    RIG_BIPED_MOTION_NODE.evaluate({ skeleton: adult.geometry }, { ...RIG_BIPED_MOTION_NODE.defaultParams, ...params }, frameCtx(id, frame, extra)) as Out;
+  const same = (a: Out, b: Out) => a.joints.forEach((j, i) => expect(j.distanceTo(b.joints[i])).toBeLessThan(1e-9));
+
+  it("gives a frame the same pose however it is reached: played through, scrubbed back, jumped to", () => {
+    const drive = { locomotion: "drive", speed: 1.6, turnRate: 20 };
+    const played: Out[] = [];
+    for (let f = 0; f <= 150; f++) played.push(at("tl-play", f, drive));
+    expect(played[150].__gaitInfo.state).toBe("Walking");
+    // Back to frame 60 and forward again.
+    same(at("tl-play", 60, drive), played[60]);
+    same(at("tl-play", 150, drive), played[150]);
+    // A fresh node sent straight to frame 150.
+    same(at("tl-jump", 150, drive), played[150]);
+  });
+
+  it("holds still while paused: the same frame twice is the same pose", () => {
+    const drive = { locomotion: "drive", speed: 1.3 };
+    for (let f = 0; f <= 40; f++) at("tl-pause", f, drive);
+    const a = at("tl-pause", 40, drive);
+    const b = at("tl-pause", 40, drive, { time: 99 });
+    same(a, b);
+  });
+
+  it("loops: frame 0 after the end is frame 0 again", () => {
+    const drive = { locomotion: "inPlace", speed: 1.3 };
+    const first = at("tl-loop", 0, drive);
+    for (let f = 1; f <= 90; f++) at("tl-loop", f, drive);
+    same(at("tl-loop", 0, drive), first);
+  });
+
+  it("replays keyed Drive speed exactly when jumping ahead", () => {
+    const keyframes = { "tl-key": { speed: [{ frame: 0, value: 0 }, { frame: 60, value: 3 }] } };
+    const keyedSpeed = (f: number) => Number(evaluateKeyframeValue(keyframes, "tl-key", "speed", f, 0));
+    let played: Out | null = null;
+    for (let f = 0; f <= 90; f++) played = at("tl-key", f, { locomotion: "drive", speed: keyedSpeed(f) }, { keyframes });
+    const jumped = RIG_BIPED_MOTION_NODE.evaluate(
+      { skeleton: adult.geometry },
+      { ...RIG_BIPED_MOTION_NODE.defaultParams, locomotion: "drive", speed: keyedSpeed(90) },
+      { ...frameCtx("tl-key-jump", 90), keyframes: { "tl-key-jump": keyframes["tl-key"] } },
+    ) as Out;
+    same(jumped, played!);
+  });
+
+  it("follows a body moved upstream: once played, scrubbing back is exact, and a guess made ahead is corrected", () => {
+    const moved = (f: number) => ({ location: new THREE.Vector3(Math.sin(f / 40), 0, (f / fps) * 1.2) });
+    // Jumped to frame 120 first: frames 0..119 not seen yet, so only guessed.
+    at("tl-follow", 120, moved(120));
+    const played: Out[] = [];
+    for (let f = 0; f <= 120; f++) played.push(at("tl-follow", f, moved(f)));
+    const reference: Out[] = [];
+    for (let f = 0; f <= 120; f++) reference.push(at("tl-follow-ref", f, moved(f)));
+    same(played[120], reference[120]);
+    same(at("tl-follow", 45, moved(45)), reference[45]);
+  });
+
+  it("runs on the wall clock instead when set to Live", () => {
+    const outs: Out[] = [];
+    for (let f = 0; f <= 3; f++) outs.push(at("tl-live", 10, { clock: "live", locomotion: "drive", speed: 1.3 }, { capturing: true, time: f }));
+    expect(new THREE.Vector3().setFromMatrixPosition(outs[3].matrix).z).toBeGreaterThan(0.2);
   });
 });

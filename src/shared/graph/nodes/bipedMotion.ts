@@ -1,5 +1,6 @@
 import * as THREE from "three";
-import { NodeDefinition, ParamFieldDef } from "../types";
+import { EvalContext, NodeDefinition, ParamFieldDef } from "../types";
+import { evaluateKeyframeValue } from "../evaluate";
 import { createNodeCache } from "../nodeCaches";
 import { NATIVE_TRANSFORM_PARAM_FIELDS, numberInput } from "./object";
 import { toBoolean } from "../sockets";
@@ -32,8 +33,11 @@ import { armPose, buildGaitGuides, GAIT_HANDLE_AXES, HANDLE_COLORS, GaitHandleCo
  * - **In Place** — the same, on a treadmill: the body stays put, the feet
  *   slide back under it (loops, game cycles).
  *
- * Real time like Polypede Motion: the feet are state, per viewport, reset by
- * Reset Simulations or when the skeleton changes.
+ * Clock: on the Timeline (the default) the walk is a function of the frame —
+ * replayed in fixed steps from frame 0 and kept frame by frame, so scrubbing,
+ * looping and exporting all give the same walk (see runTimeline). Live runs on
+ * the wall clock instead, like Polypede Motion, and keeps walking while paused:
+ * for dragging the body around by hand. Either resets with Reset Simulations.
  */
 
 const STYLE_KEYS = Object.keys(NATURAL_STYLE) as (keyof GaitStyle)[];
@@ -149,6 +153,7 @@ export const RIG_BIPED_MOTION_NODE: NodeDefinition = {
     ...TRANSFORM_DEFAULTS,
     preset: "natural",
     influence: 1,
+    clock: "timeline",
     locomotion: "follow",
     speed: 1.3,
     turnRate: 0,
@@ -177,6 +182,14 @@ export const RIG_BIPED_MOTION_NODE: NodeDefinition = {
       kind: "select",
       options: [...LOCOMOTION],
       optionLabels: ["Follow the body's motion", "Drive: walk forward on its own", "In Place (treadmill)"],
+      group: "Gait",
+    },
+    {
+      id: "clock",
+      label: "Clock",
+      kind: "select",
+      options: ["timeline", "live"],
+      optionLabels: ["Timeline: replayed from frame 0, scrub and export exactly", "Live: real time, walks while paused (drag the body around)"],
       group: "Gait",
     },
     { id: "speed", label: "Speed (m/s, Drive · In Place)", kind: "number", step: 0.1, group: "Gait" },
@@ -226,95 +239,53 @@ export const RIG_BIPED_MOTION_NODE: NodeDefinition = {
     const ankleY = rc[4].y;
 
     const epoch = ctx.simulationEpoch ?? 0;
-    const { now, clock } = motionClock(ctx);
-    const stateKey = `${data.key}|${locomotion}`;
-    let state = previous;
-    if (!state || state.key !== stateKey || state.epoch !== epoch) {
-      state = {
-        key: stateKey,
-        epoch,
-        gait: createBipedGait([0, 1].map((s) => new THREE.Vector3(rc[4 + s].x, ankleY, 0).applyMatrix4(base))),
-        lastTime: null,
-        clock,
-        prevPos: null,
-        prevForward: null,
-        prevTime: now,
-        velocity: new THREE.Vector3(),
-        yawRate: 0,
-        forwardSpeed: 0,
-        accel: 0,
-        running: false,
-        runBlend: params.gait === "run" ? 1 : 0,
-        motion: 0,
-        drop: -1,
-        rootPos: new THREE.Vector3(),
-        rootYaw: 0,
-        rootMatrix: new THREE.Matrix4(),
-      };
-      sessions.set(sessionKey, state);
-    }
-    if (state.clock !== clock) {
-      state.clock = clock;
-      state.lastTime = null;
-    }
-    // Clamped: a tab in the background or a stalled frame must not take a whole stride at once.
-    const dt = state.lastTime === null ? 0 : Math.max(0, Math.min(0.1, now - state.lastTime));
-    state.lastTime = now;
-
-    const baseScale = new THREE.Vector3().setFromMatrixScale(base);
-    const unit = Math.max(1e-6, (baseScale.x + baseScale.y + baseScale.z) / 3);
+    const cfg: AdvanceConfig = {
+      data,
+      metrics,
+      style,
+      locomotion,
+      mode: params.gait === "walk" || params.gait === "run" ? params.gait : "auto",
+      transitionFroude: numberInput(undefined, params.transitionFroude, 0.5),
+    };
     const driveSpeed = numberInput(inputs.speed, params.speed, 1.3);
     const turnRate = (numberInput(inputs.turnRate, params.turnRate, 0) * Math.PI) / 180;
+    const input: FrameInput = { base, speed: driveSpeed, turnRate };
 
-    // The body the gait walks: the node's pose, or that pose carried along by the walk itself.
-    if (driven && dt > 0) {
-      state.rootYaw += turnRate * dt;
-      state.rootPos.add(new THREE.Vector3(Math.sin(state.rootYaw), 0, Math.cos(state.rootYaw)).multiplyScalar((driveSpeed / unit) * dt));
+    const frame = ctx.currentFrame ?? -1;
+    const fps = Number(ctx.fps) > 0 ? Number(ctx.fps) : 0;
+    const onTimeline = params.clock !== "live" && frame >= 0 && fps > 0;
+    let out: AdvanceOut;
+    let state: BipedState;
+    let now: number;
+    if (onTimeline) {
+      const simKey = `${data.key}|${locomotion}|${fps}|${JSON.stringify(style)}|${cfg.mode}|${cfg.transitionFroude}|${epoch}`;
+      const run = runTimeline(ctx.nodeId, `${ctx.sessionId ?? ""}|${ctx.evalScope ?? ""}`, simKey, frame, fps, input, cfg, estimateInput(ctx, params, input));
+      out = run.out;
+      state = run.state;
+      now = frame / fps;
+    } else {
+      const live = motionClock(ctx);
+      now = live.now;
+      const stateKey = `${data.key}|${locomotion}`;
+      state = previous && previous.key === stateKey && previous.epoch === epoch ? previous : createState(stateKey, epoch, base, rc, ankleY, now, live.clock, params.gait === "run");
+      sessions.set(sessionKey, state);
+      if (state.clock !== live.clock) {
+        state.clock = live.clock;
+        state.lastTime = null;
+      }
+      // Clamped: a tab in the background or a stalled frame must not take a whole stride at once.
+      const dt = state.lastTime === null ? 0 : Math.max(0, Math.min(0.1, now - state.lastTime));
+      state.lastTime = now;
+      out = advance(state, input, cfg, dt, now, 1 / 30);
     }
-    state.rootMatrix.makeRotationY(state.rootYaw).setPosition(state.rootPos);
-    const body = driven ? base.clone().multiply(state.rootMatrix) : base.clone();
-    const display = locomotion === "inPlace" ? base.clone() : body;
+    const { body, display, sol, stepped, speedSk, unit } = out;
+    const active = stepped.active;
+    const phase = state.gait.phase;
     group.matrix.copy(display);
     group.matrixWorldNeedsUpdate = true;
-
-    const up = new THREE.Vector3(0, 1, 0).transformDirection(body);
-    const forward = new THREE.Vector3(0, 0, 1).transformDirection(body);
-    const bodyPos = new THREE.Vector3().setFromMatrixPosition(body);
-    measureMotion(state, bodyPos, forward, up, now, unit, driven ? { speed: driveSpeed, yawRate: turnRate } : null);
-
-    // Walk or run, eased over a few tenths of a second.
-    const mode: GaitMode = params.gait === "walk" || params.gait === "run" ? params.gait : "auto";
-    const speedSk = state.velocity.length() / unit;
-    const froude = (speedSk * speedSk * unit) / (GRAVITY * metrics.hipHeight);
-    state.running = mode === "auto" ? wantsToRun(froude, numberInput(undefined, params.transitionFroude, 0.5), state.running) : mode === "run";
-    state.runBlend += ((state.running ? 1 : 0) - state.runBlend) * Math.min(1, dt * 5);
-
-    const sol = solveGait(metrics, style, speedSk, state.runBlend, unit);
-    const settle = solveGait(metrics, style, Math.sqrt((0.05 * GRAVITY * metrics.hipHeight) / unit), 0, unit);
-
-    const homesLocal = [0, 1].map((s) => new THREE.Vector3((s === 0 ? 1 : -1) * (sol.stepWidth / 2), ankleY, 0));
-    const homes = homesLocal.map((h) => h.clone().applyMatrix4(body)) as [THREE.Vector3, THREE.Vector3];
-    const stepped = stepBipedGait(state.gait, {
-      homes,
-      pivot: new THREE.Vector3(0, ankleY, 0).applyMatrix4(body),
-      up,
-      velocity: state.velocity,
-      yawRate: state.yawRate,
-      sol,
-      settle,
-      unit,
-      legLength: metrics.legLength,
-      limp: style.limp,
-      dt,
-    });
-    state.motion += ((stepped.standing ? 0 : 1) - state.motion) * Math.min(1, dt * (stepped.standing ? 2.5 : 4));
-    const active = stepped.active;
-
     const toLocal = body.clone().invert();
-    const feet = stepped.feet.map((f) => f.position.clone().applyMatrix4(toLocal));
-    const phase = state.gait.phase;
 
-    const gaitPose = composePose({ skeleton: data, metrics, style, sol: active, state, feet, phase, now, dt, speedSk, unit });
+    const gaitPose = out.gaitPose;
     // Influence: how much of the walk goes over the pose wired in (a Human Skeleton's, or a Biped Pose's).
     const influence = Math.max(0, Math.min(1, numberInput(inputs.influence, params.influence, 1)));
     const upstream = readHumanPose(source) ?? { controls: skeleton.relaxedControls, pelvisRotation: new THREE.Quaternion() };
@@ -377,6 +348,251 @@ export const RIG_BIPED_MOTION_NODE: NodeDefinition = {
   },
 };
 
+
+// ---------------------------------------------------------------------------
+// One step of the walk, and the timeline that replays it
+
+/** What drives the body at one frame: the node's own pose (the body in Follow), and the Drive speed and turn. */
+interface FrameInput {
+  base: THREE.Matrix4;
+  speed: number;
+  /** Radians per second. */
+  turnRate: number;
+}
+
+interface AdvanceConfig {
+  data: HumanRigData;
+  metrics: BodyMetrics;
+  style: GaitStyle;
+  locomotion: Locomotion;
+  mode: GaitMode;
+  transitionFroude: number;
+}
+
+interface AdvanceOut {
+  body: THREE.Matrix4;
+  display: THREE.Matrix4;
+  sol: GaitSolution;
+  stepped: ReturnType<typeof stepBipedGait>;
+  feet: THREE.Vector3[];
+  gaitPose: { controls: THREE.Vector3[]; pelvisRotation: THREE.Quaternion };
+  speedSk: number;
+  unit: number;
+}
+
+function createState(key: string, epoch: number, base: THREE.Matrix4, rc: THREE.Vector3[], ankleY: number, now: number, clock: "wall" | "graph", running: boolean): BipedState {
+  return {
+    key,
+    epoch,
+    gait: createBipedGait([0, 1].map((s) => new THREE.Vector3(rc[4 + s].x, ankleY, 0).applyMatrix4(base))),
+    lastTime: null,
+    clock,
+    prevPos: null,
+    prevForward: null,
+    prevTime: now,
+    velocity: new THREE.Vector3(),
+    yawRate: 0,
+    forwardSpeed: 0,
+    accel: 0,
+    running,
+    runBlend: running ? 1 : 0,
+    motion: 0,
+    drop: -1,
+    rootPos: new THREE.Vector3(),
+    rootYaw: 0,
+    rootMatrix: new THREE.Matrix4(),
+  };
+}
+
+function cloneState(s: BipedState): BipedState {
+  return {
+    ...s,
+    gait: {
+      phase: s.gait.phase,
+      standing: s.gait.standing,
+      feet: s.gait.feet.map((f) => ({ ...f, planted: f.planted.clone(), liftOff: f.liftOff.clone(), target: f.target.clone() })) as BipedGaitState["feet"],
+    },
+    prevPos: s.prevPos?.clone() ?? null,
+    prevForward: s.prevForward?.clone() ?? null,
+    velocity: s.velocity.clone(),
+    rootPos: s.rootPos.clone(),
+    rootMatrix: s.rootMatrix.clone(),
+  };
+}
+
+/**
+ * Moves the walk on by `dt` seconds for this frame's input: the body (carried
+ * by the walk itself in Drive / In Place), its measured motion, walk or run,
+ * the feet, and the pose they give. `minSample` is the shortest gap motion is
+ * measured over (live, the graph can run twice in one displayed frame).
+ */
+function advance(state: BipedState, input: FrameInput, cfg: AdvanceConfig, dt: number, now: number, minSample: number): AdvanceOut {
+  const { data, metrics, style, locomotion } = cfg;
+  const { skeleton } = data;
+  const rc = skeleton.relaxedControls;
+  const ankleY = rc[4].y;
+  const driven = locomotion !== "follow";
+  const base = input.base;
+  const baseScale = new THREE.Vector3().setFromMatrixScale(base);
+  const unit = Math.max(1e-6, (baseScale.x + baseScale.y + baseScale.z) / 3);
+
+  // The body the gait walks: the node's pose, or that pose carried along by the walk itself.
+  if (driven && dt > 0) {
+    state.rootYaw += input.turnRate * dt;
+    state.rootPos.add(new THREE.Vector3(Math.sin(state.rootYaw), 0, Math.cos(state.rootYaw)).multiplyScalar((input.speed / unit) * dt));
+  }
+  state.rootMatrix.makeRotationY(state.rootYaw).setPosition(state.rootPos);
+  const body = driven ? base.clone().multiply(state.rootMatrix) : base.clone();
+  const display = locomotion === "inPlace" ? base.clone() : body;
+
+  const up = new THREE.Vector3(0, 1, 0).transformDirection(body);
+  const forward = new THREE.Vector3(0, 0, 1).transformDirection(body);
+  const bodyPos = new THREE.Vector3().setFromMatrixPosition(body);
+  measureMotion(state, bodyPos, forward, up, now, unit, driven ? { speed: input.speed, yawRate: input.turnRate } : null, minSample);
+
+  // Walk or run, eased over a few tenths of a second.
+  const speedSk = state.velocity.length() / unit;
+  const froude = (speedSk * speedSk * unit) / (GRAVITY * metrics.hipHeight);
+  state.running = cfg.mode === "auto" ? wantsToRun(froude, cfg.transitionFroude, state.running) : cfg.mode === "run";
+  state.runBlend += ((state.running ? 1 : 0) - state.runBlend) * Math.min(1, dt * 5);
+
+  const sol = solveGait(metrics, style, speedSk, state.runBlend, unit);
+  const settle = solveGait(metrics, style, Math.sqrt((0.05 * GRAVITY * metrics.hipHeight) / unit), 0, unit);
+
+  const homes = [0, 1].map((s) => new THREE.Vector3((s === 0 ? 1 : -1) * (sol.stepWidth / 2), ankleY, 0).applyMatrix4(body)) as [THREE.Vector3, THREE.Vector3];
+  const stepped = stepBipedGait(state.gait, {
+    homes,
+    pivot: new THREE.Vector3(0, ankleY, 0).applyMatrix4(body),
+    up,
+    velocity: state.velocity,
+    yawRate: state.yawRate,
+    sol,
+    settle,
+    unit,
+    legLength: metrics.legLength,
+    limp: style.limp,
+    dt,
+  });
+  state.motion += ((stepped.standing ? 0 : 1) - state.motion) * Math.min(1, dt * (stepped.standing ? 2.5 : 4));
+
+  const toLocal = body.clone().invert();
+  const feet = stepped.feet.map((f) => f.position.clone().applyMatrix4(toLocal));
+  const gaitPose = composePose({ skeleton: data, metrics, style, sol: stepped.active, state, feet, phase: state.gait.phase, now, dt, speedSk, unit });
+  return { body, display, sol, stepped, feet, gaitPose, speedSk, unit };
+}
+
+/**
+ * The walk on the timeline: a function of the frame, not of when it was
+ * looked at. Simulated in steps of one frame from frame 0, the state after
+ * each frame kept, so going back, looping or exporting replays exactly the
+ * same walk; a frame is worked out from the one before it.
+ *
+ * What drives each frame is recorded as frames are seen. A frame not seen yet
+ * is estimated (`estimate`) — exactly for Drive and In Place, whose speed and
+ * turn come from the node's own params and keys, by interpolation for a body
+ * moved upstream. When a frame is seen and was estimated differently,
+ * everything after it is worked out again.
+ */
+interface TimelineSim {
+  key: string;
+  states: Map<number, { state: BipedState; input: FrameInput }>;
+  seen: Map<number, FrameInput>;
+}
+
+const timelineSims = createNodeCache<Map<string, TimelineSim>>();
+/** More than this many frames worked out at once (a jump far ahead) starts the walk over from the jump instead. */
+const MAX_REPLAY = 6000;
+
+function sameInput(a: FrameInput, b: FrameInput): boolean {
+  if (Math.abs(a.speed - b.speed) > 1e-9 || Math.abs(a.turnRate - b.turnRate) > 1e-9) return false;
+  const x = a.base.elements;
+  const y = b.base.elements;
+  for (let i = 0; i < 16; i++) if (Math.abs(x[i] - y[i]) > 1e-7) return false;
+  return true;
+}
+
+function runTimeline(
+  nodeId: string,
+  session: string,
+  key: string,
+  frame: number,
+  fps: number,
+  input: FrameInput,
+  cfg: AdvanceConfig,
+  estimate: (frame: number, seen: Map<number, FrameInput>) => FrameInput,
+): { out: AdvanceOut; state: BipedState } {
+  let sims = timelineSims.get(nodeId);
+  if (!sims) {
+    sims = new Map();
+    timelineSims.set(nodeId, sims);
+  }
+  let sim = sims.get(session);
+  if (!sim || sim.key !== key) {
+    sim = { key, states: new Map(), seen: new Map() };
+    sims.set(session, sim);
+  }
+  sim.seen.set(frame, { base: input.base.clone(), speed: input.speed, turnRate: input.turnRate });
+  // Everything worked out from an estimate of this frame that turned out wrong goes.
+  const kept = sim.states.get(frame);
+  if (kept && !sameInput(kept.input, input)) {
+    for (const f of [...sim.states.keys()]) if (f >= frame) sim.states.delete(f);
+  }
+
+  let from = frame - 1;
+  while (from >= 0 && !sim.states.has(from)) from--;
+  const rc = cfg.data.skeleton.relaxedControls;
+  let state: BipedState;
+  if (from < 0 || frame - from > MAX_REPLAY) {
+    from = frame - 1 > MAX_REPLAY ? frame - 1 : -1;
+    const start = from < 0 ? (frame === 0 ? input : estimate(0, sim.seen)) : input;
+    state = createState(key, 0, start.base, rc, rc[4].y, (from + 1) / fps, "graph", cfg.mode === "run");
+  } else {
+    state = cloneState(sim.states.get(from)!.state);
+  }
+  let out: AdvanceOut | null = null;
+  for (let j = from + 1; j <= frame; j++) {
+    const at = j === frame ? input : sim.seen.get(j) ?? estimate(j, sim.seen);
+    out = advance(state, at, cfg, j === from + 1 && from < 0 ? 0 : 1 / fps, j / fps, 0);
+    sim.states.set(j, { state: cloneState(state), input: { base: at.base.clone(), speed: at.speed, turnRate: at.turnRate } });
+  }
+  return { out: out!, state };
+}
+
+/**
+ * This node's input at a frame it has not been shown: speed and turn from its
+ * own keys (a wired socket's value is only known where it was seen), the body
+ * interpolated between the nearest frames seen.
+ */
+function estimateInput(ctx: EvalContext, params: Record<string, unknown>, current: FrameInput) {
+  return (j: number, seen: Map<number, FrameInput>): FrameInput => {
+    let before: number | null = null;
+    let after: number | null = null;
+    for (const f of seen.keys()) {
+      if (f <= j && (before === null || f > before)) before = f;
+      if (f >= j && (after === null || f < after)) after = f;
+    }
+    const a = before !== null ? seen.get(before)! : null;
+    const b = after !== null ? seen.get(after)! : null;
+    let base = current.base.clone();
+    if (a && b && before !== after) base = lerpMatrix(a.base, b.base, (j - before!) / (after! - before!));
+    else if (a ?? b) base = (a ?? b)!.base.clone();
+    const keyed = (id: string, fallback: number) =>
+      ctx.connectedInputs?.has(id) ? ((a ?? b)?.[id === "speed" ? "speed" : "turnRate"] ?? fallback) : Number(evaluateKeyframeValue(ctx.keyframes, ctx.nodeId, id, j, fallback));
+    const speed = keyed("speed", numberInput(undefined, params.speed, 1.3));
+    const turnDeg = ctx.connectedInputs?.has("turnRate") ? undefined : Number(evaluateKeyframeValue(ctx.keyframes, ctx.nodeId, "turnRate", j, numberInput(undefined, params.turnRate, 0)));
+    const turnRate = turnDeg === undefined ? ((a ?? b)?.turnRate ?? current.turnRate) : (turnDeg * Math.PI) / 180;
+    return { base, speed: Number.isFinite(speed) ? speed : current.speed, turnRate: Number.isFinite(turnRate) ? turnRate : current.turnRate };
+  };
+}
+
+function lerpMatrix(a: THREE.Matrix4, b: THREE.Matrix4, t: number): THREE.Matrix4 {
+  const pa = new THREE.Vector3(), qa = new THREE.Quaternion(), sa = new THREE.Vector3();
+  const pb = new THREE.Vector3(), qb = new THREE.Quaternion(), sb = new THREE.Vector3();
+  a.decompose(pa, qa, sa);
+  b.decompose(pb, qb, sb);
+  return new THREE.Matrix4().compose(pa.lerp(pb, t), qa.slerp(qb, t), sa.lerp(sb, t));
+}
+
 /** Smoothed velocity, turn rate and forward acceleration of the body, or exactly the driven ones. */
 function measureMotion(
   state: BipedState,
@@ -386,6 +602,7 @@ function measureMotion(
   now: number,
   unit: number,
   driven: { speed: number; yawRate: number } | null,
+  minSample: number,
 ) {
   const flatForward = forward.clone().addScaledVector(up, -forward.dot(up)).normalize();
   const elapsed = now - state.prevTime;
@@ -409,7 +626,7 @@ function measureMotion(
     state.prevTime = now;
     return;
   }
-  if (elapsed < 1 / 30) return;
+  if (elapsed < minSample) return;
   const v = pos.clone().sub(state.prevPos).divideScalar(elapsed);
   v.addScaledVector(up, -v.dot(up));
   const k = Math.min(1, elapsed * 6);
