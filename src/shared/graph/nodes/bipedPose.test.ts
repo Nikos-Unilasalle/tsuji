@@ -173,3 +173,64 @@ describe("rig objects in the output pane", () => {
     expect(walk.userData.selectionGuides).toBeInstanceOf(THREE.Group);
   });
 });
+
+describe("Biped Pose wiggle", () => {
+  const at = (id: string, frame: number, params: Record<string, unknown>) =>
+    readHumanPose(pose(id, { pointsList: cheer, ...params }, humanGeometry, { currentFrame: frame, fps: 30, time: 99 }).geometry)!.controls;
+
+  it("is still at 0 and alive at 1: the upper body drifts, the feet stay planted", () => {
+    const still = [0, 45, 90].map((f) => at("wg-still", f, { wiggle: 0 }));
+    still.forEach((c) => c.forEach((v, i) => expect(v.distanceTo(cheer[i])).toBeLessThan(1e-9)));
+    const alive = Array.from({ length: 120 }, (_, f) => at("wg-alive", f, { wiggle: 1 }));
+    const travel = (i: number) => Math.max(...alive.map((c) => c[i].distanceTo(cheer[i])));
+    expect(travel(CONTROL.head)).toBeGreaterThan(0.005);
+    expect(travel(CONTROL.hand[0])).toBeGreaterThan(0.005);
+    expect(travel(CONTROL.pelvis)).toBeGreaterThan(0.003);
+    // Subtle: a few centimetres at most.
+    for (const i of [CONTROL.head, CONTROL.pelvis, CONTROL.hand[0], CONTROL.hand[1]]) expect(travel(i)).toBeLessThan(0.06);
+    for (const i of [...CONTROL.foot, ...CONTROL.kneePole]) expect(travel(i)).toBeLessThan(1e-9);
+  });
+
+  it("follows the timeline: the same frame gives the same pose, a different seed another drift", () => {
+    const a = at("wg-a", 37, { wiggle: 1 });
+    const b = at("wg-b", 37, { wiggle: 1 });
+    a.forEach((v, i) => expect(v.distanceTo(b[i])).toBeLessThan(1e-12));
+    const other = at("wg-c", 37, { wiggle: 1, wiggleSeed: 5 });
+    expect(other[CONTROL.head].distanceTo(a[CONTROL.head])).toBeGreaterThan(1e-4);
+  });
+
+  it("moves smoothly: no jump from one frame to the next", () => {
+    let worst = 0;
+    let last = at("wg-smooth", 0, { wiggle: 2, wiggleSpeed: 2 });
+    for (let f = 1; f < 90; f++) {
+      const now = at("wg-smooth", f, { wiggle: 2, wiggleSpeed: 2 });
+      worst = Math.max(worst, ...now.map((v, i) => v.distanceTo(last[i])));
+      last = now;
+    }
+    expect(worst).toBeLessThan(0.01);
+  });
+
+  it("carries into the Pose output a Biped Motion holds", () => {
+    const out = pose("wg-out", { pointsList: cheer, wiggle: 1 }, humanGeometry, { currentFrame: 20, fps: 30, connectedOutputs: new Set(["pose"]) });
+    const list = out.pose as THREE.Vector3[];
+    expect(list[CONTROL.head].distanceTo(cheer[CONTROL.head])).toBeGreaterThan(1e-4);
+    expect(list[CONTROL.foot[0]].distanceTo(cheer[CONTROL.foot[0]])).toBeLessThan(1e-9);
+  });
+});
+
+describe("a Biped Pose previewed beside the skeleton", () => {
+  it("keeps its bones out of the render and its unused body sphere hidden", () => {
+    const out = pose("preview-flags", { pointsList: cheer }, humanGeometry, { connectedOutputs: new Set(["pose"]) });
+    const group = out.geometry;
+    const meshes = group.children.filter((c) => c instanceof THREE.Mesh);
+    const instanced = meshes.filter((c) => c instanceof THREE.InstancedMesh);
+    const plain = meshes.filter((c) => !(c instanceof THREE.InstancedMesh));
+    expect(instanced.every((c) => c.userData.isHelper)).toBe(true);
+    // The body sphere is not a helper (the viewport would force every helper visible) and stays hidden.
+    expect(plain.length).toBeGreaterThan(0);
+    plain.forEach((c) => {
+      expect(c.userData.isHelper).toBeFalsy();
+      expect(c.visible).toBe(false);
+    });
+  });
+});

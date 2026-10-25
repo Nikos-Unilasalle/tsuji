@@ -304,3 +304,62 @@ export function editPoseList(
   }
   return withTurn ? [...next, nextTurn] : next;
 }
+
+// ---------------------------------------------------------------------------
+// Wiggle: a held pose that still lives
+
+export interface WiggleSettings {
+  /** 0 frozen, 1 natural, above that restless. */
+  amount: number;
+  /** × the natural rates: 0.5 calm, 2 out of breath. */
+  speed: number;
+  /** × the breathing on its own. */
+  breathing: number;
+  /** Different seeds drift out of step with each other. */
+  seed: number;
+}
+
+/** A slow, never-repeating wander in −1..1: three sines at rates that share no rhythm, phased by seed and channel. */
+function drift(t: number, rate: number, seed: number, channel: number): number {
+  const phase = (k: number) => {
+    const x = Math.sin((seed + 1) * 12.9898 + channel * 78.233 + k * 37.719) * 43758.5453;
+    return (x - Math.floor(x)) * Math.PI * 2;
+  };
+  const tau = Math.PI * 2 * rate * t;
+  return (Math.sin(tau + phase(1)) + 0.5 * Math.sin(tau * 2.17 + phase(2)) + 0.25 * Math.sin(tau * 3.71 + phase(3))) / 1.75;
+}
+
+/**
+ * The pose at `time` with the small movements of a body holding still: it
+ * breathes (chest, head and hands rising ~15 times a minute), shifts its
+ * weight (the pelvis wandering sideways), balances its head, and its hands
+ * drift. The feet and knee poles do not move — nothing slides on the ground.
+ * Amplitudes are for a 1.8 m body, scaled by the skeleton's height.
+ */
+export function wigglePose(controls: THREE.Vector3[], height: number, time: number, w: WiggleSettings): THREE.Vector3[] {
+  const amount = Number.isFinite(w.amount) ? Math.max(0, w.amount) : 0;
+  if (amount <= 0) return controls.map((c) => c.clone());
+  const k = (Math.max(0.05, height) / 1.8) * amount;
+  const t = time * (Number.isFinite(w.speed) ? Math.max(0, w.speed) : 1);
+  const seed = Number.isFinite(w.seed) ? w.seed : 0;
+  const breathing = Number.isFinite(w.breathing) ? Math.max(0, w.breathing) : 1;
+  const out = controls.map((c) => c.clone());
+
+  // Breathing: a rise and fall a little uneven from one breath to the next.
+  const breath = 0.01 * k * breathing * (Math.sin(Math.PI * 2 * 0.25 * t + seed) + 0.25 * drift(t, 0.07, seed, 0));
+  // Weight shifting from one leg to the other, slowly; the head follows the pelvis part of the way.
+  const shift = 0.015 * k * drift(t, 0.1, seed, 1);
+  out[CONTROL.pelvis].x += shift;
+  out[CONTROL.pelvis].y += 0.2 * breath - 0.15 * Math.abs(shift);
+  out[CONTROL.head].x += 0.4 * shift + 0.008 * k * drift(t, 0.3, seed, 2);
+  out[CONTROL.head].y += breath;
+  out[CONTROL.head].z += 0.008 * k * drift(t, 0.27, seed, 3);
+  for (const s of [0, 1] as const) {
+    const hand = out[CONTROL.hand[s]];
+    hand.x += 0.4 * shift + 0.012 * k * drift(t, 0.18, seed, 4 + s * 3);
+    hand.y += 0.6 * breath + 0.012 * k * drift(t, 0.15, seed, 5 + s * 3);
+    hand.z += 0.012 * k * drift(t, 0.21, seed, 6 + s * 3);
+    out[CONTROL.elbowPole[s]].y += 0.6 * breath;
+  }
+  return out;
+}

@@ -96,6 +96,15 @@ export function PoseHud({
               title="How much of this pose goes over the one wired in: keyframe it 0 → 1 → 0 to stop, hold the pose and walk on"
               onCommit={(value) => set({ influence: value })}
             />
+            <CommitSlider
+              label="Wiggle"
+              value={Number(node.params.wiggle ?? 0)}
+              min={0}
+              max={2}
+              step={0.05}
+              title="Keep the held pose alive: breathing, weight shifting, head and hands drifting (0 still, 1 natural, more restless). Feet stay planted"
+              onCommit={(value) => set({ wiggle: value })}
+            />
             <button
               type="button"
               className={`viewport-hud-button ${solo ? "viewport-hud-button-active" : ""}`}

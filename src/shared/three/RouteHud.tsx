@@ -47,7 +47,7 @@ export function RouteHud({ node, info, onParams, poseNames = [] }: { node: NodeI
   const wired = poseNames.map((name, i) => (name ? { value: `input:${i}`, label: `Pose ${i + 1} · ${name}` } : null)).filter((x): x is { value: string; label: string } => x !== null);
   const poseLabel = (pose: string) =>
     pose === "wired"
-      ? "pose of the skeleton"
+      ? "skeleton's own pose"
       : pose.startsWith("input:")
         ? (wired.find((w) => w.value === pose)?.label ?? `Pose ${Number(pose.slice(6)) + 1} (not wired)`)
         : (POSE_PRESETS[pose as keyof typeof POSE_PRESETS]?.label ?? pose);
@@ -99,6 +99,7 @@ export function RouteHud({ node, info, onParams, poseNames = [] }: { node: NodeI
           › Walk
         </button>
       </div>
+      {marks.length > 0 && !current && <span style={{ color: "#94a3b8" }}>Click a mark to edit it: hold, pose, whole body, speed.</span>}
       {marks.length > 0 && (
         <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
           {marks.map((m, i) => (
@@ -136,8 +137,13 @@ export function RouteHud({ node, info, onParams, poseNames = [] }: { node: NodeI
           {current.kind === "stop" ? (
             <>
               <CommitSlider label="Hold s" value={current.hold ?? 1.5} min={0} max={10} step={0.1} title="How long it stands here" onCommit={(hold) => editMark(picked, { hold })} />
-              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                <select value={current.pose ?? ""} onChange={(e) => editMark(picked, { pose: e.target.value })} style={select} title="The pose held while standing here">
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                <select
+                  value={current.pose ?? ""}
+                  onChange={(e) => editMark(picked, { pose: e.target.value })}
+                  style={{ ...select, width: "100%", minWidth: 0 }}
+                  title="The pose held while standing here"
+                >
                   <option value="">No pose</option>
                   {wired.length > 0 && (
                     <optgroup label="Wired into Pose inputs">
@@ -155,9 +161,9 @@ export function RouteHud({ node, info, onParams, poseNames = [] }: { node: NodeI
                       </option>
                     ))}
                   </optgroup>
-                  <option value="wired">The skeleton's own pose (wired into Skeleton)</option>
+                  <option value="wired" title="The pose of whatever is wired into Skeleton">Skeleton's own pose</option>
                 </select>
-                <label style={{ display: "flex", gap: 4, alignItems: "center" }} title="The pose takes the legs too (they slide into it); otherwise the feet stay planted">
+                <label style={{ display: "flex", gap: 4, alignItems: "center", opacity: current.pose ? 1 : 0.4 }} title="The pose takes the legs too (they slide into it); otherwise the feet stay planted">
                   <input type="checkbox" checked={Boolean(current.whole)} onChange={(e) => editMark(picked, { whole: e.target.checked })} />
                   Whole body
                 </label>

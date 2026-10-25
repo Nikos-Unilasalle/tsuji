@@ -8,7 +8,7 @@ import { TOGGLE_POINTS_KEYFRAME_ACTION } from "./curve";
 import { HumanSkeleton, solveHuman } from "../ik/skeletons";
 import { publishRig } from "../ik/skinning";
 import { boneMatrices, bonesOf, drawEmpty, HumanRigData, parentsOf, viewFor } from "./rig";
-import { blendPose, CONTROL, editPoseList, HumanPose, POSE_REGIONS, readHumanPose, readPoseList, turnQuaternion } from "../ik/humanPose";
+import { blendPose, CONTROL, editPoseList, wigglePose, HumanPose, POSE_REGIONS, readHumanPose, readPoseList, turnQuaternion } from "../ik/humanPose";
 
 /**
  * Biped Pose: a hand-made pose laid over whatever human is wired in — a Human
@@ -17,6 +17,8 @@ import { blendPose, CONTROL, editPoseList, HumanPose, POSE_REGIONS, readHumanPos
  * the pose and walks on; keep it partial and the pose only leans on the walk.
  * Body, Arms and Legs scale the influence per region, so a pose can take the
  * arms alone (hands in pockets while walking) and leave the walking legs be.
+ * Wiggle keeps a held pose alive — breathing, shifting its weight, its head
+ * and hands drifting — with the feet left planted (see wigglePose).
  *
  * The pose is edited with handles on the body while the node is selected —
  * dragged to move a control, turned with the rotate gizmo to swing a limb
@@ -47,6 +49,7 @@ export const RIG_BIPED_POSE_NODE: NodeDefinition = {
   inputs: [
     { id: "skeleton", label: "Skeleton", type: "geometry", owns: true },
     { id: "influence", label: "Influence", type: "value" },
+    { id: "wiggle", label: "Wiggle", type: "value" },
   ],
   outputs: [
     { id: "geometry", label: "Geometry", type: "geometry" },
@@ -61,6 +64,10 @@ export const RIG_BIPED_POSE_NODE: NodeDefinition = {
     arms: 1,
     legs: 1,
     solo: false,
+    wiggle: 0,
+    wiggleSpeed: 1,
+    breathing: 1,
+    wiggleSeed: 0,
     previewAt: new THREE.Vector3(-1.2, 0, 0),
     showControls: true,
     pointsList: [],
@@ -71,6 +78,10 @@ export const RIG_BIPED_POSE_NODE: NodeDefinition = {
     { id: "arms", label: "Arms", kind: "number", step: 0.05, percent: true, group: "Pose" },
     { id: "legs", label: "Legs", kind: "number", step: 0.05, percent: true, group: "Pose" },
     { id: "solo", label: "Preview at 100 % while editing", kind: "boolean", group: "Pose" },
+    { id: "wiggle", label: "Wiggle (0 still · 1 natural · more restless)", kind: "number", step: 0.1, group: "Wiggle" },
+    { id: "wiggleSpeed", label: "Speed × (0.5 calm · 2 out of breath)", kind: "number", step: 0.1, group: "Wiggle" },
+    { id: "breathing", label: "Breathing ×", kind: "number", step: 0.1, group: "Wiggle" },
+    { id: "wiggleSeed", label: "Seed", kind: "number", step: 1, group: "Wiggle" },
     { id: "showControls", label: "Show Pose Handles", kind: "boolean", group: "Display" },
     { id: "previewAt", label: "Shown at, as a pose source (beside the skeleton)", kind: "vector", step: 0.1, group: "Display" },
     { id: "pointsKeyframeButton", label: "Keyframe pose at frame", kind: "button", action: TOGGLE_POINTS_KEYFRAME_ACTION, group: "Animation" },
@@ -105,18 +116,28 @@ export const RIG_BIPED_POSE_NODE: NodeDefinition = {
 
     const stored = readPoseList(params.pointsList, skeleton.relaxedControls);
     const own = { controls: stored.controls, pelvisRotation: turnQuaternion(stored.turn) };
+    // Wiggle: the held pose breathing and shifting its weight, on the timeline's clock so it scrubs and exports the same.
+    const H = Math.max(0.05, skeleton.relaxedControls[CONTROL.head].y);
+    const wiggle = {
+      amount: numberInput(inputs.wiggle, params.wiggle, 0),
+      speed: numberInput(undefined, params.wiggleSpeed, 1),
+      breathing: numberInput(undefined, params.breathing, 1),
+      seed: numberInput(undefined, params.wiggleSeed, 0),
+    };
+    const time = (ctx.currentFrame ?? -1) >= 0 && Number(ctx.fps) > 0 ? (ctx.currentFrame as number) / Number(ctx.fps) : ctx.time;
+    const wiggling = wiggle.amount > 0;
+    const living = wiggling ? { controls: wigglePose(own.controls, H, time, wiggle), pelvisRotation: own.pelvisRotation } : own;
     const influence = toBoolean(params.solo) ? 1 : Math.max(0, Math.min(1, numberInput(inputs.influence, params.influence, 1)));
     const region = { body: numberInput(undefined, params.body, 1), arms: numberInput(undefined, params.arms, 1), legs: numberInput(undefined, params.legs, 1) };
-    const pose = blendPose(upstream, own, (i) => influence * region[regionOf(i)], influence * region.body);
+    const pose = blendPose(upstream, living, (i) => influence * region[regionOf(i)], influence * region.body);
 
     const solver = { armPull: data.armPull, ...data.solver };
     const positions = solveHuman(skeleton, pose.controls, { ...solver, pelvisRotation: pose.pelvisRotation });
     // Limbs swing about the joints of the pose being edited, not of the blend.
-    const ownJoints = influence >= 1 ? positions : solveHuman(skeleton, own.controls, { ...solver, pelvisRotation: own.pelvisRotation });
+    const ownJoints = influence >= 1 && !wiggling ? positions : solveHuman(skeleton, own.controls, { ...solver, pelvisRotation: own.pelvisRotation });
     contexts.set(ctx.nodeId, { skeleton, joints: ownJoints, controls: own.controls });
 
     const showControls = params.showControls === undefined ? true : toBoolean(params.showControls);
-    const H = Math.max(0.05, skeleton.relaxedControls[CONTROL.head].y);
     const { joint } = skeleton;
     const poleJoint = [joint.elbow[0], joint.elbow[1], joint.knee[0], joint.knee[1]];
     view.update({
@@ -131,12 +152,18 @@ export const RIG_BIPED_POSE_NODE: NodeDefinition = {
       paths: showControls ? own.controls.slice(6).map((at, k) => ({ points: [at, ownJoints[poleJoint[k]]], color: 0x8a7a2a })) : [],
     });
 
-    group.traverse((child) => {
-      if (child === group || child === view.guides || child.parent !== group) return;
-      // Controls and circles are helpers anyway; the bones become one only while previewing.
+    // Previewing, the bones and joint balls become helpers: drawn in the editor, left out of the
+    // render. Only those — the viewport shows every helper, and the view also holds meshes it keeps
+    // hidden (a polypede's body sphere), which flagging would bring up.
+    for (const child of group.children) {
+      if (!(child instanceof THREE.InstancedMesh)) {
+        // Undo a flag an earlier version put on everything.
+        if ("helperOwn" in child.userData) child.userData.isHelper = child.userData.helperOwn;
+        continue;
+      }
       child.userData.helperOwn ??= Boolean(child.userData.isHelper);
       child.userData.isHelper = child.userData.helperOwn || sourceOnly;
-    });
+    }
     publishRig(group, parentsOf(skeleton.rig), skeleton.rig.rest, positions, group.matrix, skeleton.names);
     group.userData.humanRig = data;
     group.userData.humanPose = { controls: pose.controls, pelvisRotation: pose.pelvisRotation, matrix: group.matrix.clone() } satisfies HumanPose;
@@ -148,7 +175,7 @@ export const RIG_BIPED_POSE_NODE: NodeDefinition = {
       joints: world,
       bones: boneMatrices(skeleton.rig, world),
       // The pose itself — its own, not blended — for a Biped Motion to hold at a route stop.
-      pose: [...own.controls.map((c) => c.clone()), stored.turn.clone()],
+      pose: [...living.controls.map((c) => c.clone()), stored.turn.clone()],
       // Not a socket: the pose's handles, in the body's space (see Viewport.tsx's param handles).
       __controlPoints: showControls ? own.controls : [],
     };
