@@ -96,7 +96,7 @@ import {
 } from "./shared/graph/nodes/textureHeightSlopeMix";
 import { TEXTURE_MIX_PAINT_NODE } from "./shared/graph/nodes/textureMixPaint";
 import { serializeSplatToPng } from "./shared/three/splatSerialization";
-import { broadcastGraph, maximizeMainWindow, PreviewCameraPose, startBroadcasting } from "./shared/ipc";
+import { broadcastCamera, broadcastGraph, maximizeMainWindow, PreviewCameraPose, startBroadcasting } from "./shared/ipc";
 import { createCanvasTour, type CanvasTour } from "./shared/export/canvasTour";
 import { exportVideo, mimeToExtension, saveVideoBlob } from "./shared/export/videoExport";
 import { exportPngSequence, saveZipBlob } from "./shared/export/imageSequenceExport";
@@ -1087,7 +1087,7 @@ function MainEditor() {
   // knows whether a Camera node exists — this just keeps it fed either way.
   const onPreviewCameraChange = (pose: PreviewCameraPose) => {
     previewCameraRef.current = pose;
-    broadcastGraph({ graph: graphRef.current, epochMs, calibratingNodeId, previewCamera: pose });
+    broadcastCamera(pose);
   };
 
   interface HistoryEntry {

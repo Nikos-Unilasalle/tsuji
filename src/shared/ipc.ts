@@ -101,6 +101,7 @@ export async function closeView2DWindow(): Promise<void> {
 }
 
 const GRAPH_UPDATE_EVENT = "graph:update";
+const CAMERA_UPDATE_EVENT = "camera:update";
 const OUTPUT_READY_EVENT = "output:ready";
 const OUTPUT_CLOSED_EVENT = "output:closed";
 const VIEW2D_CLOSED_EVENT = "view2d:closed";
@@ -145,24 +146,52 @@ export function broadcastGraph(payload: GraphPayload): void {
   void emit(GRAPH_UPDATE_EVENT, payload);
 }
 
+/**
+ * Sends only the editor's orbit-camera pose — what changes at drag frequency.
+ * The full graph goes out with broadcastGraph on structural changes only:
+ * sending it per orbit tick serialized the whole project dozens of times a
+ * second, and had every receiving window rebuild its graph (a new object, so
+ * a full re-evaluation) just to move the camera.
+ */
+export function broadcastCamera(pose: PreviewCameraPose): void {
+  if (!isTauri()) {
+    const ch = getBrowserChannel();
+    ch?.postMessage({ event: CAMERA_UPDATE_EVENT, pose });
+    return;
+  }
+  void emit(CAMERA_UPDATE_EVENT, pose);
+}
+
 export function startReceiving(onUpdate: (payload: GraphPayload) => void): () => void {
+  // A camera update reuses the last graph as is — same object — so the
+  // receiving Viewport only moves its camera instead of re-evaluating.
+  let last: GraphPayload | null = null;
+  const onGraph = (payload: GraphPayload) => {
+    last = { ...payload, graph: rehydrateGraphParams(payload.graph, DEFAULT_REGISTRY) };
+    onUpdate(last);
+  };
+  const onCamera = (pose: PreviewCameraPose) => {
+    if (!last) return;
+    last = { ...last, previewCamera: pose };
+    onUpdate(last);
+  };
   if (!isTauri()) {
     const ch = getBrowserChannel();
     const handler = (ev: MessageEvent) => {
-      if (ev.data?.event === GRAPH_UPDATE_EVENT && ev.data?.payload) {
-        onUpdate({ ...ev.data.payload, graph: rehydrateGraphParams(ev.data.payload.graph, DEFAULT_REGISTRY) });
-      }
+      if (ev.data?.event === GRAPH_UPDATE_EVENT && ev.data?.payload) onGraph(ev.data.payload);
+      else if (ev.data?.event === CAMERA_UPDATE_EVENT && ev.data?.pose) onCamera(ev.data.pose);
     };
     ch?.addEventListener("message", handler);
     ch?.postMessage({ event: OUTPUT_READY_EVENT });
     return () => ch?.removeEventListener("message", handler);
   }
-  const listenPromise = listen<GraphPayload>(GRAPH_UPDATE_EVENT, (event) => {
-    onUpdate({ ...event.payload, graph: rehydrateGraphParams(event.payload.graph, DEFAULT_REGISTRY) });
-  });
+  const listenPromises = [
+    listen<GraphPayload>(GRAPH_UPDATE_EVENT, (event) => onGraph(event.payload)),
+    listen<PreviewCameraPose>(CAMERA_UPDATE_EVENT, (event) => onCamera(event.payload)),
+  ];
   void emit(OUTPUT_READY_EVENT);
   return () => {
-    void listenPromise.then((unlisten) => unlisten());
+    for (const p of listenPromises) void p.then((unlisten) => unlisten());
   };
 }
 

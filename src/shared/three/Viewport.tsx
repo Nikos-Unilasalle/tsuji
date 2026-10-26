@@ -561,6 +561,7 @@ import {
 import { getCurrentColors, ThemeColors } from "../theme/themeStore";
 import { disposeObject3D } from "../graph/nodeCaches";
 import { registerPointerViewport } from "../graph/pointerStore";
+import { ShadowUpdateTracker } from "./shadowUpdateTracker";
 import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
@@ -1507,6 +1508,10 @@ export function Viewport({
     // renderer construction) — asking for it directly gets the exact same
     // shadows with no warning.
     renderer.shadowMap.type = THREE.PCFShadowMap;
+    // Shadow maps are re-rendered only on frames where something they depend
+    // on changed — see shadowUpdateTracker.ts and the render step in tick().
+    renderer.shadowMap.autoUpdate = false;
+    const shadowTracker = new ShadowUpdateTracker();
     host.appendChild(renderer.domElement);
 
     // Composite canvas for video export: the WebGL frame + the 2D HUD overlay,
@@ -7196,6 +7201,7 @@ export function Viewport({
         influenceOverlay.matrixWorld.copy(influenceMesh.matrixWorld);
         scene.add(influenceOverlay);
       }
+      if (shadowTracker.check(scene, renderer)) renderer.shadowMap.needsUpdate = true;
       try {
         if (postChain.isActive(effectivePostConfigs, motionBlur, volumetric)) {
           postChainWasActive = true;
