@@ -1501,7 +1501,7 @@ export function Viewport({
     // display (4x pixels → 2.25x at 1.5) for a barely perceptible softness.
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, isTauri() ? 2 : 1.5));
     renderer.autoClear = false;
-    enableSmoothShadows(32);
+    enableSmoothShadows();
     renderer.shadowMap.enabled = true;
     // PCFSoftShadowMap is deprecated as of three r180 and three itself
     // silently falls back to PCFShadowMap (with a console warning every
