@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, memo, useContext, useEffect, useState } from "react";
 import { Handle, NodeResizeControl, Position, useUpdateNodeInternals } from "@xyflow/react";
 import * as THREE from "three";
 import { CATEGORY_COLOR, NodeCategory, UNKNOWN_CATEGORY_COLOR } from "../shared/graph/categories";
@@ -264,8 +264,12 @@ function renderValuePreview(val: unknown) {
  * Generic node renderer — every node type looks the same shape (title,
  * inputs down the left, outputs down the right), driven entirely by the
  * NodeDefinition's socket list.
+ *
+ * Memoized: React Flow re-renders its node wrappers for reasons that don't
+ * touch what a node draws (a neighbour dragged, the selection moving), and
+ * with a large graph re-rendering every node body each time adds up.
  */
-export function GraphNode({ data, selected }: { data: GraphNodeData; selected?: boolean }) {
+export const GraphNode = memo(function GraphNode({ data, selected }: { data: GraphNodeData; selected?: boolean }) {
   // Hook must be called unconditionally (Rules of Hooks): this component renders
   // both reroute nodes and every other node type, and the count of hooks a render
   // invokes may not depend on `data.nodeType`. For a reroute the value is always
@@ -384,4 +388,4 @@ export function GraphNode({ data, selected }: { data: GraphNodeData; selected?: 
       <NodeHoverActions data={data} />
     </div>
   );
-}
+});

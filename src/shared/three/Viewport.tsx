@@ -935,7 +935,6 @@ interface ViewportProps {
   /** Editor-only: the pinned viewport param HUD — see ViewportParamHUD. Not shown in outputMode. */
   keyframes?: KeyframeStore;
   keyframesEnabled?: boolean;
-  evaluatedResults?: EvalResult | null;
   onParamChange?: (
     paramId: string | Record<string, unknown>,
     value?: unknown,
@@ -993,7 +992,6 @@ export function Viewport({
   onHubChange,
   keyframes,
   keyframesEnabled = true,
-  evaluatedResults = null,
   onParamChange,
   onParamAction,
   onUnpinParam,
@@ -10357,7 +10355,6 @@ export function Viewport({
         <ViewportParamHUD
           graph={graph}
           registry={registry}
-          evaluatedResults={evaluatedResults}
           keyframes={keyframes}
           currentFrame={currentFrame}
           keyframesEnabled={keyframesEnabled}

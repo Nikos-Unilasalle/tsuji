@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { setDropProjector } from "../shared/graph/imageDrop";
+import { useStableHandler } from "../shared/useStableHandler";
 import {
   Background,
   Connection as FlowConnection,
@@ -79,6 +80,12 @@ function SpawnCursorMarker({ position }: { position: { x: number; y: number } })
 }
 
 const NODE_TYPES = { graphNode: GraphNode };
+// Module-level so their identity never changes: React Flow syncs every prop
+// into its store by reference, and a fresh array/object each render is an
+// update every subscriber re-renders for.
+const MULTI_SELECTION_KEYS = ["Shift", "Meta", "Control"];
+const PAN_ON_DRAG = [1, 2];
+const FIT_VIEW_OPTIONS = { padding: 0.25 };
 
 /**
  * Well below every real node (0) even after React Flow adds its +1000 for a
@@ -1633,15 +1640,40 @@ function GraphEditorContent({
   // A Frame writes its own title/colour/size back through here. Goes via
   // toGraph so positions the user has dragged since the last commit (a resize
   // from the top/left edge moves the frame too) are kept.
-  const frameActions = useMemo<FrameActions>(
-    () => ({
-      updateParams: (nodeId, patch) => {
-        const baseNodes = graph.nodes.map((n) => (n.id === nodeId ? { ...n, params: { ...n.params, ...patch } } : n));
-        onGraphChange?.(toGraph(baseNodes, nodes, edges, graph.keyframes, graph.markers, graph.exposedParams));
-      },
-    }),
-    [edges, graph.exposedParams, graph.keyframes, graph.markers, graph.nodes, nodes, onGraphChange],
-  );
+  // Stable for the canvas's lifetime: every Frame node reads this context, so
+  // a new value on each drag or selection would re-render them all.
+  const updateFrameParams = useStableHandler((nodeId: string, patch: Record<string, unknown>) => {
+    const baseNodes = graph.nodes.map((n) => (n.id === nodeId ? { ...n, params: { ...n.params, ...patch } } : n));
+    onGraphChange?.(toGraph(baseNodes, nodes, edges, graph.keyframes, graph.markers, graph.exposedParams));
+  });
+  const frameActions = useMemo<FrameActions>(() => ({ updateParams: updateFrameParams }), [updateFrameParams]);
+
+  // React Flow hands these to every node and edge; stable identities keep a
+  // drag, a selection or a graph edit from re-rendering the whole canvas.
+  const stableOnNodesChange = useStableHandler(onNodesChange);
+  const stableOnEdgesChange = useStableHandler(onEdgesChange);
+  const stableOnNodesDelete = useStableHandler(onNodesDelete);
+  const stableOnEdgesDelete = useStableHandler(onEdgesDelete);
+  const stableOnReconnect = useStableHandler(onReconnect);
+  const stableOnReconnectEnd = useStableHandler(onReconnectEnd);
+  const stableOnConnect = useStableHandler(onConnect);
+  const stableIsValidConnection = useStableHandler(isValidConnection);
+  const stableOnEdgeContextMenu = useStableHandler(onEdgeContextMenu);
+  const stableOnEdgeClick = useStableHandler(onEdgeClick);
+  const stableOnNodeDragStop = useStableHandler(onNodeDragStop);
+  const stableOnNodeDoubleClick = useStableHandler(onNodeDoubleClick);
+  const onNodeContextMenu = useStableHandler((event: React.MouseEvent, node: Node<GraphNodeData>) => {
+    event.preventDefault();
+    clearLongPress();
+    onSelectNode(node.id);
+    onSelectNodes?.([node.id]);
+    setContextMenu({ x: event.clientX, y: event.clientY, type: "node", nodeId: node.id });
+  });
+  const onPaneContextMenu = useStableHandler((event: React.MouseEvent | MouseEvent) => {
+    event.preventDefault();
+    clearLongPress();
+    setContextMenu({ x: event.clientX, y: event.clientY, type: "canvas" });
+  });
 
   return (
     <FrameActionsContext.Provider value={frameActions}>
@@ -1694,47 +1726,37 @@ function GraphEditorContent({
           nodes={nodes}
           edges={edges}
           nodeTypes={NODE_TYPES}
-          onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
-          onNodesDelete={onNodesDelete}
-          onEdgesDelete={onEdgesDelete}
+          onNodesChange={stableOnNodesChange}
+          onEdgesChange={stableOnEdgesChange}
+          onNodesDelete={stableOnNodesDelete}
+          onEdgesDelete={stableOnEdgesDelete}
           onReconnectStart={onReconnectStart}
-          onReconnect={onReconnect}
-          onReconnectEnd={onReconnectEnd}
+          onReconnect={stableOnReconnect}
+          onReconnectEnd={stableOnReconnectEnd}
           onConnectStart={onConnectStart}
           onConnectEnd={onConnectEnd}
-          onConnect={onConnect}
-          isValidConnection={isValidConnection}
-          onEdgeContextMenu={onEdgeContextMenu}
-          onEdgeClick={onEdgeClick}
-          onNodeContextMenu={(event, node) => {
-            event.preventDefault();
-            clearLongPress();
-            onSelectNode(node.id);
-            onSelectNodes?.([node.id]);
-            setContextMenu({ x: event.clientX, y: event.clientY, type: "node", nodeId: node.id });
-          }}
-          onPaneContextMenu={(event) => {
-            event.preventDefault();
-            clearLongPress();
-            setContextMenu({ x: event.clientX, y: event.clientY, type: "canvas" });
-          }}
-          onNodeDragStop={onNodeDragStop}
+          onConnect={stableOnConnect}
+          isValidConnection={stableIsValidConnection}
+          onEdgeContextMenu={stableOnEdgeContextMenu}
+          onEdgeClick={stableOnEdgeClick}
+          onNodeContextMenu={onNodeContextMenu}
+          onPaneContextMenu={onPaneContextMenu}
+          onNodeDragStop={stableOnNodeDragStop}
           onNodeClick={onNodeClick}
-          onNodeDoubleClick={onNodeDoubleClick}
+          onNodeDoubleClick={stableOnNodeDoubleClick}
           onPaneClick={onPaneClick}
           onSelectionChange={onSelectionChange}
           selectionOnDrag
           selectionMode={SelectionMode.Partial}
-          multiSelectionKeyCode={["Shift", "Meta", "Control"]}
+          multiSelectionKeyCode={MULTI_SELECTION_KEYS}
           selectionKeyCode={null}
           deleteKeyCode={null}
-          panOnDrag={[1, 2]}
+          panOnDrag={PAN_ON_DRAG}
           panOnScroll={false}
           minZoom={0.05}
           maxZoom={2}
           fitView
-          fitViewOptions={{ padding: 0.25 }}
+          fitViewOptions={FIT_VIEW_OPTIONS}
           colorMode="dark"
         >
           <Background color="#5b6572" gap={20} />
@@ -1889,18 +1911,27 @@ function GraphEditorContent({
   );
 }
 
-export function GraphEditor(props: GraphEditorProps) {
+/**
+ * Memoized: the editor re-renders App on every selection, panel toggle and
+ * param edit, and this whole canvas — every node, every edge — has no reason
+ * to follow unless its own props changed.
+ */
+export const GraphEditor = memo(function GraphEditor(props: GraphEditorProps) {
   const { registry, onNodeAction } = props;
+  // Every node's hover actions read this context; `run` goes through a stable
+  // handler so a new onNodeAction from App doesn't re-render all of them.
+  const runNodeAction = useStableHandler((...args: Parameters<NodeActions["run"]>) => onNodeAction?.(...args));
+  const hasNodeAction = !!onNodeAction;
   const nodeActions = useMemo<NodeActions | null>(
     () =>
-      onNodeAction
+      hasNodeAction
         ? {
             resetAction: (nodeType) => (nodeType ? resetActionOf(registry.get(nodeType)) : null),
             canApply: (nodeType) => (nodeType ? canApplyTransform(registry.get(nodeType)) : false),
-            run: onNodeAction,
+            run: runNodeAction,
           }
         : null,
-    [registry, onNodeAction],
+    [registry, hasNodeAction, runNodeAction],
   );
   return (
     <ReactFlowProvider>
@@ -1909,4 +1940,4 @@ export function GraphEditor(props: GraphEditorProps) {
       </NodeActionsContext.Provider>
     </ReactFlowProvider>
   );
-}
+});

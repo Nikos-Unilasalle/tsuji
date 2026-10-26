@@ -1,6 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect } from "react";
 import { GpToolMode, TransformGizmoMode, TransformPatch, Viewport } from "./Viewport";
-import { EvalResult } from "../graph/evaluate";
 import { Graph, KeyframeStore, NodeRegistry } from "../graph/types";
 import type { PreviewCameraPose } from "../ipc";
 import "./viewport.css";
@@ -52,7 +51,6 @@ interface SplitViewportProps {
   /** Editor pane's pinned param HUD — see ViewportParamHUD. Not passed to the output/camera-preview pane. */
   keyframes?: KeyframeStore;
   keyframesEnabled?: boolean;
-  evaluatedResults?: EvalResult | null;
   onParamChange?: (
     paramId: string | Record<string, unknown>,
     value?: unknown,
@@ -97,7 +95,6 @@ export function SplitViewport({
   view2DNodeId,
   keyframes,
   keyframesEnabled,
-  evaluatedResults,
   onParamChange,
   onParamAction,
   onUnpinParam,
@@ -386,8 +383,7 @@ export function SplitViewport({
           onHubChange={onHubChange}
           keyframes={keyframes}
           keyframesEnabled={keyframesEnabled}
-          evaluatedResults={evaluatedResults}
-          onParamChange={onParamChange}
+                    onParamChange={onParamChange}
           onParamAction={onParamAction}
           onUnpinParam={onUnpinParam}
           onRenameExposedParam={onRenameExposedParam}
@@ -456,8 +452,7 @@ export function SplitViewport({
             onHubChange={onHubChange}
             keyframes={keyframes}
             keyframesEnabled={keyframesEnabled}
-            evaluatedResults={evaluatedResults}
-            onParamChange={onParamChange}
+                        onParamChange={onParamChange}
             onUnpinParam={onUnpinParam}
             gpTool={gpTool}
             onGpToolChange={handleGpToolChange}

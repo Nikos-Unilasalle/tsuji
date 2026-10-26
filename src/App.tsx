@@ -117,6 +117,17 @@ import { TimelineBar } from "./windows/TimelineBar";
 import { TimelineDrawer } from "./windows/TimelineDrawer";
 import { KeyframeClipboardItem } from "./windows/timelineUtils";
 import { TopBar } from "./windows/TopBar";
+import {
+  getEvaluatedResults,
+  getPlayheadFrame,
+  resetPlayheadFrames,
+  setEvaluatedResults,
+  setPlayheadFrame,
+  usePlayheadFrame,
+  usePlayheadStore,
+} from "./shared/graph/playheadStore";
+import { useShallow } from "zustand/react/shallow";
+import { useStableHandler } from "./shared/useStableHandler";
 import type { ExportSource } from "./windows/ShareMenu";
 
 export interface WorkspaceSpaces {
@@ -227,6 +238,100 @@ const AUTOSAVE_DEBOUNCE_MS = 800;
 
 const MIN_PANE_PERCENT = 15;
 const MAX_PANE_PERCENT = 85;
+
+/**
+ * Hands `children` one canvas's playhead, subscribing only this subtree to
+ * it: App itself doesn't re-render when the frame advances (see
+ * playheadStore).
+ */
+function WithPlayhead({ canvas, children }: { canvas: number; children: (frame: number) => React.ReactNode }) {
+  return <>{children(usePlayheadFrame(canvas))}</>;
+}
+
+/**
+ * Hands `children` the playhead and whatever `select` derives from it and the
+ * latest evaluation results. Results arrive every evaluated frame; a shallow
+ * compare of the selection keeps this subtree from re-rendering unless what
+ * it shows actually changed.
+ */
+function WithEvaluation<T extends object>({
+  canvas,
+  select,
+  children,
+}: {
+  canvas: number;
+  select: (frame: number, results: Map<string, Record<string, unknown>> | null) => T;
+  children: (frame: number, selected: T) => React.ReactNode;
+}) {
+  const frame = usePlayheadFrame(canvas);
+  const selected = usePlayheadStore(useShallow((state) => select(state.frames[canvas] ?? 0, state.evaluatedResults)));
+  return <>{children(frame, selected)}</>;
+}
+
+/**
+ * The first Sound Player's clip, as the timeline's waveform strip draws it
+ * (music sync).
+ *
+ * Read from the evaluation results, not from the audio store: the store is a
+ * module cache filled asynchronously once the file has decoded, and nothing
+ * about that write reaches React. `url` is a socket, so it arrives with every
+ * frame's results like any other value. Flat primitives so a shallow compare
+ * can tell an unchanged clip apart from a new frame's results.
+ */
+function waveformClipOf(nodes: NodeInstance[], evaluatedResults: Map<string, Record<string, unknown>> | null) {
+  if (!evaluatedResults) return undefined;
+  for (const node of nodes) {
+    if (node.type !== "sound/player") continue;
+    const res = evaluatedResults.get(node.id);
+    const url = res?.url;
+    if (typeof url !== "string" || !url) continue;
+    // A trigger-driven clip (startFrame -1) has no knowable position on the
+    // timeline, so it is drawn from frame 0 rather than not at all.
+    const start = Number(res?.startFrame);
+    const anchored = Number.isFinite(start) && start >= 0;
+    // The strip is drawn where the file's first second would sit: a start point pushes it before the start frame.
+    const fileStart = anchored ? start - (Number(res?.clipOffsetFrames) || 0) : 0;
+    const endFrames = Number(res?.clipEndFrames) || 0;
+    return {
+      url,
+      startFrame: fileStart,
+      duration: Number(res?.duration) || 0,
+      // Only this part of the file will sound: from the start frame to the stop point, or on to the end of the
+      // timeline when the region loops.
+      activeFrom: anchored ? start : -Infinity,
+      activeTo: anchored ? (Number(res?.loop) > 0 || endFrames <= 0 ? Infinity : fileStart + endFrames) : Infinity,
+    };
+  }
+  return undefined;
+}
+
+/**
+ * The bottom timeline bar, subscribed to the playhead and to the waveform
+ * clip — the clip only re-renders it when one of its values actually
+ * changes, not on every frame's fresh results map.
+ */
+function LiveTimelineBar({
+  canvas,
+  nodes,
+  ...props
+}: Omit<
+  React.ComponentProps<typeof TimelineBar>,
+  "currentFrame" | "waveformUrl" | "waveformStartFrame" | "waveformDuration" | "waveformActive"
+> & { canvas: number; nodes: NodeInstance[] }) {
+  const currentFrame = usePlayheadFrame(canvas);
+  const clip = usePlayheadStore(useShallow((state) => waveformClipOf(nodes, state.evaluatedResults)));
+  const active = useMemo(() => (clip ? { from: clip.activeFrom, to: clip.activeTo } : undefined), [clip]);
+  return (
+    <TimelineBar
+      {...props}
+      currentFrame={currentFrame}
+      waveformUrl={clip?.url}
+      waveformStartFrame={clip?.startFrame}
+      waveformDuration={clip?.duration}
+      waveformActive={active}
+    />
+  );
+}
 
 /**
  * Three windows, one bundle: the Rust side (`output_window.rs`,
@@ -581,20 +686,15 @@ function MainEditor() {
   // Per canvas: each has its own Render node and so its own frame count, and
   // coming back to a canvas should find it where you left it rather than
   // wherever another canvas's playhead happens to be.
-  const [currentFrames, setCurrentFrames] = useState<number[]>(() => new Array(CANVAS_COUNT).fill(0));
-  const currentFrame = currentFrames[activeCanvas] ?? 0;
+  //
+  // Kept in playheadStore, outside React state, together with the latest
+  // evaluation results: both change every frame, and as App state they
+  // re-rendered the whole editor — node canvas included — on every one.
+  // Callbacks read them when they run; only the panels that display them
+  // subscribe.
   const setCurrentFrame = useCallback((nextOrUpdater: number | ((prev: number) => number)) => {
-    setCurrentFrames((prev) =>
-      prev.map((frame, i) =>
-        i === activeCanvasRef.current
-          ? typeof nextOrUpdater === "function"
-            ? nextOrUpdater(frame)
-            : nextOrUpdater
-          : frame,
-      ),
-    );
+    setPlayheadFrame(activeCanvasRef.current, nextOrUpdater);
   }, []);
-  const [evaluatedResults, setEvaluatedResults] = useState<Map<string, Record<string, unknown>> | null>(null);
 
   /**
    * Runs after every evaluation the viewport does. A Go To Canvas node can't
@@ -1266,7 +1366,7 @@ function MainEditor() {
     setCanvases(rehydrated);
     setActiveCanvas(newProject.activeCanvas);
     activeCanvasRef.current = newProject.activeCanvas;
-    setCurrentFrames(new Array(CANVAS_COUNT).fill(0));
+    resetPlayheadFrames();
     setSelectedNodeId(null);
     setSelectedNodeIds([]);
     setEditorKey((k) => k + 1);
@@ -1371,6 +1471,7 @@ function MainEditor() {
     targetNodeId?: string,
     options?: { coalesce?: boolean },
   ) => {
+    const currentFrame = getPlayheadFrame(activeCanvasRef.current);
     if (typeof paramId === "object" && paramId !== null) {
       const updates = paramId as Record<string, unknown>;
       const nodeIdToUpdate = (value as string | undefined) ?? selectedNodeId;
@@ -1579,6 +1680,8 @@ function MainEditor() {
   /** Handles a "button" ParamFieldDef click (see ParamPanel's onAction). */
   const onParamAction = useCallback(
     (nodeId: string, action: string) => {
+      const currentFrame = getPlayheadFrame(activeCanvasRef.current);
+      const evaluatedResults = getEvaluatedResults();
       if (action === TOGGLE_POINTS_KEYFRAME_ACTION) {
         const node = findNodeDeep(graph, nodeId);
         if (!node || currentFrame < 0) return;
@@ -2021,7 +2124,7 @@ function MainEditor() {
         return { ...prevGraph, nodes: [...prevGraph.nodes, newNode] };
       }, `bake:${nodeId}`);
     },
-    [setGraphWithHistory, graph.nodes, currentFrame, onToggleKeyframe, evaluatedResults, onParamChange],
+    [setGraphWithHistory, graph.nodes, onToggleKeyframe, onParamChange],
   );
 
   /**
@@ -2039,7 +2142,7 @@ function MainEditor() {
    */
   const onFreezeNode = useCallback(
     (nodeId: string) => {
-      const output = evaluatedResults?.get(nodeId)?.geometry;
+      const output = getEvaluatedResults()?.get(nodeId)?.geometry;
       if (!(output instanceof THREE.Object3D)) {
         console.warn("Freeze: this node has not produced any geometry yet.");
         return;
@@ -2064,7 +2167,7 @@ function MainEditor() {
         return { ...prevGraph, nodes: [...prevGraph.nodes, newNode] };
       }, `freeze:${nodeId}`);
     },
-    [evaluatedResults, setGraphWithHistory],
+    [setGraphWithHistory],
   );
 
   /**
@@ -2095,20 +2198,19 @@ function MainEditor() {
   );
 
   /** The icons under a node on hover (see nodeActions.ts): Freeze, Apply, Reset, or a node's own reset action. */
-  const onNodeAction = useCallback(
-    (nodeId: string, action: string) => {
-      if (action === NODE_FREEZE_ACTION) return onFreezeNode(nodeId);
-      if (action === NODE_APPLY_TRANSFORM_ACTION) return onApplyTransform(nodeId);
-      if (action === NODE_RESET_PARAMS_ACTION) {
-        const node = findNodeDeep(graph, nodeId);
-        const patch = node ? nodeResetPatch(resolveDefinition(node, DEFAULT_REGISTRY)) : null;
-        if (patch) onParamChange(patch, nodeId);
-        return;
-      }
-      onParamAction(nodeId, action);
-    },
-    [graph, onFreezeNode, onApplyTransform, onParamAction, onParamChange],
-  );
+  // Stable, so the memoized GraphEditor doesn't re-render on its account.
+  const onNodeAction = useStableHandler((nodeId: string, action: string) => {
+    if (action === NODE_FREEZE_ACTION) return onFreezeNode(nodeId);
+    if (action === NODE_APPLY_TRANSFORM_ACTION) return onApplyTransform(nodeId);
+    if (action === NODE_RESET_PARAMS_ACTION) {
+      const node = findNodeDeep(graph, nodeId);
+      const patch = node ? nodeResetPatch(resolveDefinition(node, DEFAULT_REGISTRY)) : null;
+      if (patch) onParamChange(patch, nodeId);
+      return;
+    }
+    onParamAction(nodeId, action);
+  });
+  const emptyCanvases = useMemo(() => canvases.map(isCanvasEmpty), [canvases]);
 
   // Same functional-updater reasoning as onParamChange, but writing all
   // three fields in one setGraph call rather than three separate
@@ -2151,6 +2253,7 @@ function MainEditor() {
   const onTransformStart = useCallback(() => pushHistory(), [pushHistory]);
 
   const onTransformChange = (transformNodeId: string, patch: TransformPatch) => {
+    const currentFrame = getPlayheadFrame(activeCanvasRef.current);
     setGraph((prevGraph) => {
       let fullPatch = { ...patch };
       if (fullPatch.pivot && !fullPatch.location) {
@@ -2295,16 +2398,6 @@ function MainEditor() {
     };
   }, []);
 
-  const selectedParamValues =
-    selectedInstance && selectedDef
-      ? paramPanelValues(
-          graph,
-          selectedInstance,
-          selectedDef,
-          evaluatedResults,
-          keyframesEnabled ? currentFrame : undefined
-        )
-      : {};
 
   const selectedKeyframesRecord = useMemo(() => {
     const map: Record<
@@ -2354,43 +2447,6 @@ function MainEditor() {
     }
     return map;
   }, [selectedNodeId, graph.keyframes, graph.nodes]);
-
-  // The first sound/player node with a loaded file drives the timeline
-  // waveform strip (music sync).
-  //
-  // Read from the evaluation results, not from the audio store: the store is a
-  // module cache filled asynchronously once the file has decoded, and nothing
-  // about that write reaches React. Keyed on graph.nodes, this memo never
-  // recomputed after a project was reopened — the file loaded, the waveform
-  // never appeared. `url` is a socket now, so it arrives with every frame's
-  // results like any other value.
-  const waveformClip = useMemo(() => {
-    if (!evaluatedResults) return undefined;
-    for (const node of graph.nodes) {
-      if (node.type !== "sound/player") continue;
-      const res = evaluatedResults.get(node.id);
-      const url = res?.url;
-      if (typeof url !== "string" || !url) continue;
-      // A trigger-driven clip (startFrame -1) has no knowable position on the
-      // timeline, so it is drawn from frame 0 rather than not at all.
-      const start = Number(res?.startFrame);
-      const anchored = Number.isFinite(start) && start >= 0;
-      // The strip is drawn where the file's first second would sit: a start point pushes it before the start frame.
-      const fileStart = anchored ? start - (Number(res?.clipOffsetFrames) || 0) : 0;
-      const endFrames = Number(res?.clipEndFrames) || 0;
-      return {
-        url,
-        startFrame: fileStart,
-        duration: Number(res?.duration) || 0,
-        // Only this part of the file will sound: from the start frame to the stop point, or on to the end of the
-        // timeline when the region loops.
-        active: anchored
-          ? { from: start, to: Number(res?.loop) > 0 || endFrames <= 0 ? Infinity : fileStart + endFrames }
-          : { from: -Infinity, to: Infinity },
-      };
-    }
-    return undefined;
-  }, [graph.nodes, evaluatedResults]);
 
   const onMoveKeyframe = useCallback(
     (oldFrame: number, newFrame: number) => {
@@ -2948,6 +3004,8 @@ function MainEditor() {
         }}
       >
         <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
+          <WithPlayhead canvas={activeCanvas}>
+            {(currentFrame) => (
           <SplitViewport
             graph={graph}
             registry={DEFAULT_REGISTRY}
@@ -2972,7 +3030,6 @@ function MainEditor() {
             onCycleViewMode={() => toggleSpace("camera")}
             keyframes={graph.keyframes}
             keyframesEnabled={keyframesEnabled}
-            evaluatedResults={evaluatedResults}
             onParamChange={onParamChange}
             onParamAction={onParamAction}
             onUnpinParam={onToggleExposed}
@@ -2981,6 +3038,8 @@ function MainEditor() {
             snapElevation={snapElevation}
             onToggleSnapElevation={toggleSnapElevation}
           />
+            )}
+          </WithPlayhead>
           {needsTransformHint && (
             <div className="viewport-hint">Wire a Transform node into this object's Matrix to move it</div>
           )}
@@ -2997,17 +3056,14 @@ function MainEditor() {
             )}
         </div>
         {keyframesEnabled && (
-          <TimelineBar
-            currentFrame={currentFrame}
+          <LiveTimelineBar
+            canvas={activeCanvas}
+            nodes={graph.nodes}
             totalFrames={totalFrames}
             isPlaying={isPlaying}
             keyframesEnabled={keyframesEnabled}
             selectedKeyframes={selectedKeyframesRecord}
             markers={graph.markers ?? []}
-            waveformUrl={waveformClip?.url}
-            waveformStartFrame={waveformClip?.startFrame}
-            waveformDuration={waveformClip?.duration}
-            waveformActive={waveformClip?.active}
             fps={exportFps}
             onToggleMarker={onToggleMarker}
             onMoveMarker={onMoveMarker}
@@ -3058,6 +3114,13 @@ function MainEditor() {
           so it stays reachable in every Shift+Tab view state, full-canvas
           Graph included, where that pane collapses to 0 height. */}
       {selectedInstance && selectedDef && (
+        <WithEvaluation
+          canvas={activeCanvas}
+          select={(frame, evaluatedResults) =>
+            paramPanelValues(graph, selectedInstance, selectedDef, evaluatedResults, keyframesEnabled ? frame : undefined)
+          }
+        >
+          {(currentFrame, paramValues) => (
         <ParamPanel
           nodeId={selectedInstance.id}
           label={selectedDef.label}
@@ -3067,7 +3130,7 @@ function MainEditor() {
               ? selectedDef.dynamicParamFields(selectedInstance, nodeConnections(graph, selectedInstance.id))
               : (selectedDef.paramFields ?? [])
           }
-          params={selectedParamValues}
+          params={paramValues}
           keyframes={graph.keyframes}
           currentFrame={keyframesEnabled ? currentFrame : -1}
           keyframesEnabled={keyframesEnabled}
@@ -3080,6 +3143,8 @@ function MainEditor() {
           }
           onToggleExposed={onToggleExposed}
         />
+          )}
+        </WithEvaluation>
       )}
       <div
         style={{
@@ -3090,6 +3155,8 @@ function MainEditor() {
         }}
       >
         {spaces.timeline && (
+          <WithPlayhead canvas={activeCanvas}>
+            {(currentFrame) => (
           <TimelineDrawer
             isOpen={spaces.timeline}
             onClose={() => toggleSpace("timeline")}
@@ -3126,7 +3193,8 @@ function MainEditor() {
             isFullHeight={!spaces.canvas}
             isDraggingDrawer={isDraggingDrawer}
           />
-
+            )}
+          </WithPlayhead>
         )}
         {/* Secondary Split Divider with left & right resize handle buttons between Timeline and Canvas */}
         {spaces.timeline && spaces.canvas && (
@@ -3165,7 +3233,7 @@ function MainEditor() {
               selectedNodeIds={selectedNodeIds}
               canvasCount={CANVAS_COUNT}
               activeCanvas={activeCanvas}
-              emptyCanvases={canvases.map(isCanvasEmpty)}
+              emptyCanvases={emptyCanvases}
               onSelectCanvas={switchCanvas}
               onNodeAction={onNodeAction}
             />

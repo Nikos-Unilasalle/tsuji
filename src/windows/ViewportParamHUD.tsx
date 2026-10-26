@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { EvalResult } from "../shared/graph/evaluate";
+import { useEvaluatedResults } from "../shared/graph/playheadStore";
 import { findNodeWithGraph, resolveDefinition } from "../shared/graph/groups";
 import { paramPanelValues } from "../shared/graph/paramPanelValues";
 import { Graph, KeyframeStore, NodeRegistry, ParamFieldDef } from "../shared/graph/types";
@@ -18,7 +18,6 @@ import "./viewport-param-hud.css";
 interface ViewportParamHUDProps {
   graph: Graph;
   registry: NodeRegistry;
-  evaluatedResults: EvalResult | null;
   keyframes?: KeyframeStore;
   currentFrame: number;
   keyframesEnabled: boolean;
@@ -40,7 +39,6 @@ interface ViewportParamHUDProps {
 export function ViewportParamHUD({
   graph,
   registry,
-  evaluatedResults,
   keyframes,
   currentFrame,
   keyframesEnabled,
@@ -48,6 +46,10 @@ export function ViewportParamHUD({
   onUnpin,
   onRename,
 }: ViewportParamHUDProps) {
+  // Subscribed here, not passed down: the viewport above re-rendering on
+  // every evaluated frame just to forward these would cost far more than
+  // this small panel re-rendering on its own.
+  const evaluatedResults = useEvaluatedResults();
   const [collapsed, setCollapsed] = useState(false);
   // Which row's label is mid-edit — at most one at a time, keyed by
   // "nodeId:paramId" since paramId alone collides across pinned nodes.
