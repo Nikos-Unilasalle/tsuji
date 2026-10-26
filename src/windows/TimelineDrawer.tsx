@@ -120,6 +120,89 @@ function renderKeyframeGlyph(easeIn: EasingType = "smooth", isSummary = false) {
   );
 }
 
+/**
+ * The ruler's ticks and the grid's frame lines: one element every 5 / 10
+ * frames across the whole timeline. Memoized on what they depend on — a long
+ * timeline is hundreds of elements, and they used to re-render with every
+ * frame of playback and every edit to the graph.
+ */
+const RulerTicks = React.memo(function RulerTicks({
+  totalFrames,
+  pixelsPerFrame,
+  totalContentWidth,
+}: {
+  totalFrames: number;
+  pixelsPerFrame: number;
+  totalContentWidth: number;
+}) {
+  return (
+    <>
+      {Array.from({ length: Math.ceil(totalFrames / 5) + 1 }).map((_, idx) => {
+        const f = idx * 5;
+        const isMajor = f % 30 === 0 || f % 10 === 0;
+        const leftPx = f * pixelsPerFrame;
+        if (leftPx > totalContentWidth) return null;
+
+        return (
+          <div
+            key={f}
+            style={{
+              position: "absolute",
+              left: `${leftPx}px`,
+              bottom: 0,
+              height: isMajor ? "16px" : "8px",
+              width: "1px",
+              background: isMajor ? "#94a3b8" : "#475569",
+              pointerEvents: "none",
+            }}
+          >
+            {isMajor && (
+              <span
+                style={{
+                  position: "absolute",
+                  left: "3px",
+                  top: "-12px",
+                  fontSize: "9px",
+                  fontFamily: "monospace",
+                  color: "#94a3b8",
+                  userSelect: "none",
+                }}
+              >
+                {f}
+              </span>
+            )}
+          </div>
+        );
+      })}
+    </>
+  );
+});
+
+const GridLines = React.memo(function GridLines({ totalFrames, pixelsPerFrame }: { totalFrames: number; pixelsPerFrame: number }) {
+  return (
+    <>
+      {Array.from({ length: Math.ceil(totalFrames / 10) + 1 }).map((_, idx) => {
+        const f = idx * 10;
+        const leftPx = f * pixelsPerFrame;
+        return (
+          <div
+            key={f}
+            style={{
+              position: "absolute",
+              left: `${leftPx}px`,
+              top: 0,
+              bottom: 0,
+              width: "1px",
+              background: f % 30 === 0 ? "rgba(255, 255, 255, 0.08)" : "rgba(255, 255, 255, 0.03)",
+              pointerEvents: "none",
+            }}
+          />
+        );
+      })}
+    </>
+  );
+});
+
 export const TimelineDrawer: React.FC<TimelineDrawerProps> = ({
   isOpen,
   onClose,
@@ -1052,43 +1135,7 @@ export const TimelineDrawer: React.FC<TimelineDrawerProps> = ({
           >
             <div style={{ width: `${totalContentWidth}px`, height: "100%", position: "relative" }}>
               {/* Ruler Tick marks & Labels */}
-              {Array.from({ length: Math.ceil(totalFrames / 5) + 1 }).map((_, idx) => {
-                const f = idx * 5;
-                const isMajor = f % 30 === 0 || f % 10 === 0;
-                const leftPx = f * pixelsPerFrame;
-                if (leftPx > totalContentWidth) return null;
-
-                return (
-                  <div
-                    key={f}
-                    style={{
-                      position: "absolute",
-                      left: `${leftPx}px`,
-                      bottom: 0,
-                      height: isMajor ? "16px" : "8px",
-                      width: "1px",
-                      background: isMajor ? "#94a3b8" : "#475569",
-                      pointerEvents: "none",
-                    }}
-                  >
-                    {isMajor && (
-                      <span
-                        style={{
-                          position: "absolute",
-                          left: "3px",
-                          top: "-12px",
-                          fontSize: "9px",
-                          fontFamily: "monospace",
-                          color: "#94a3b8",
-                          userSelect: "none",
-                        }}
-                      >
-                        {f}
-                      </span>
-                    )}
-                  </div>
-                );
-              })}
+              <RulerTicks totalFrames={totalFrames} pixelsPerFrame={pixelsPerFrame} totalContentWidth={totalContentWidth} />
 
               {/* Project Markers */}
               {markers.map((marker) => (
@@ -1147,24 +1194,7 @@ export const TimelineDrawer: React.FC<TimelineDrawerProps> = ({
               style={{ width: `${totalContentWidth}px`, minHeight: "100%", position: "relative" }}
             >
               {/* Vertical Frame Grid Lines */}
-              {Array.from({ length: Math.ceil(totalFrames / 10) + 1 }).map((_, idx) => {
-                const f = idx * 10;
-                const leftPx = f * pixelsPerFrame;
-                return (
-                  <div
-                    key={f}
-                    style={{
-                      position: "absolute",
-                      left: `${leftPx}px`,
-                      top: 0,
-                      bottom: 0,
-                      width: "1px",
-                      background: f % 30 === 0 ? "rgba(255, 255, 255, 0.08)" : "rgba(255, 255, 255, 0.03)",
-                      pointerEvents: "none",
-                    }}
-                  />
-                );
-              })}
+              <GridLines totalFrames={totalFrames} pixelsPerFrame={pixelsPerFrame} />
 
               {/* Red Playhead Vertical Line */}
               <div

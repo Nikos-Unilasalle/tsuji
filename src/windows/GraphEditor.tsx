@@ -38,7 +38,7 @@ import { findCompatibleSocket, segmentIntersectsRect } from "../shared/graph/ins
 import { getInputZone, isGraphZone, isTimelineZone, isViewportZone, setInputZone } from "../shared/graph/inputZoneStore";
 import { isKeyReservedForPlayback } from "../shared/graph/playbackKeys";
 import { randomId } from "../shared/randomId";
-import { SOCKET_COLOR } from "../shared/graph/sockets";
+import { SOCKET_COLOR, SocketDef } from "../shared/graph/sockets";
 import { Connection, ExposedParamRef, Graph, KeyframeStore, Marker, NodeInstance, NodeRegistry } from "../shared/graph/types";
 import { FRAME_TYPE, frameSize } from "../shared/graph/nodes/frame";
 import { parseColorToHex } from "./color-utils";
@@ -226,6 +226,52 @@ function refreshDynamicSockets(
   });
 }
 
+/** Shallow, with socket lists compared socket by socket (dynamic sockets are rebuilt on every sync). */
+function sameNodeData(a: GraphNodeData, b: GraphNodeData): boolean {
+  const keys = Object.keys(b);
+  if (Object.keys(a).length !== keys.length) return false;
+  for (const key of keys) {
+    const x = a[key];
+    const y = b[key];
+    if (x === y) continue;
+    if ((key === "inputs" || key === "outputs") && Array.isArray(x) && Array.isArray(y) && sameSockets(x, y)) continue;
+    return false;
+  }
+  return true;
+}
+
+function sameSockets(a: SocketDef[], b: SocketDef[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    const x = a[i] as unknown as Record<string, unknown>;
+    const y = b[i] as unknown as Record<string, unknown>;
+    if (x === y) continue;
+    const keys = Object.keys(y);
+    if (Object.keys(x).length !== keys.length || keys.some((k) => x[k] !== y[k])) return false;
+  }
+  return true;
+}
+
+/**
+ * True when a rebuilt flow node draws exactly like the one React Flow already
+ * holds. Keeping the old object then keeps its identity, and the memoized
+ * node skips its render — a param edit re-renders the node it touched, not
+ * all of them.
+ */
+function sameFlowNode(a: Node<GraphNodeData>, b: Node<GraphNodeData>): boolean {
+  return (
+    a.selected === b.selected &&
+    a.position.x === b.position.x &&
+    a.position.y === b.position.y &&
+    a.width === b.width &&
+    a.height === b.height &&
+    a.zIndex === b.zIndex &&
+    a.dragHandle === b.dragHandle &&
+    a.className === b.className &&
+    sameNodeData(a.data, b.data)
+  );
+}
+
 function toGraph(
   baseNodes: NodeInstance[],
   flowNodes: Node<GraphNodeData>[],
@@ -406,11 +452,12 @@ function GraphEditorContent({
       if (prevIds !== nextIds) {
         return nextNodes.map((n) => ({ ...n, selected: selectedIdsRef.current.has(n.id) }));
       }
-      return prevNodes.map((fn) => {
+      let changed = false;
+      const merged = prevNodes.map((fn) => {
         const graphNode = graph.nodes.find((gn) => gn.id === fn.id);
         if (!graphNode) return fn;
         const nextNode = nextNodes.find((n) => n.id === fn.id);
-        return {
+        const rebuilt: Node<GraphNodeData> = {
           ...fn,
           // Sourced from the ref, not `fn.selected` off `prevNodes`: this
           // effect's own setNodes call can run — twice, under StrictMode's
@@ -430,7 +477,11 @@ function GraphEditorContent({
             customName: typeof graphNode.params?.name === "string" ? graphNode.params.name : "",
           },
         };
+        if (sameFlowNode(fn, rebuilt)) return fn;
+        changed = true;
+        return rebuilt;
       });
+      return changed ? merged : prevNodes;
     });
 
     setEdges((prevEdges) => {
@@ -1650,6 +1701,7 @@ function GraphEditorContent({
 
   // React Flow hands these to every node and edge; stable identities keep a
   // drag, a selection or a graph edit from re-rendering the whole canvas.
+  const stableAddNode = useStableHandler(addNode);
   const stableOnNodesChange = useStableHandler(onNodesChange);
   const stableOnEdgesChange = useStableHandler(onEdgesChange);
   const stableOnNodesDelete = useStableHandler(onNodesDelete);
@@ -1690,7 +1742,7 @@ function GraphEditorContent({
         if (getInputZone() === "graph") setInputZone(null);
       }}
     >
-      <NodePalette nodes={paletteNodes} onAddNode={addNode} />
+      <NodePalette nodes={paletteNodes} onAddNode={stableAddNode} />
       <div
         className="graph-editor-canvas"
         ref={canvasPaneRef}

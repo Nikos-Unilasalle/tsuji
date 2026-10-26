@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { memo, useState } from "react";
 import { CATEGORY_COLOR, CATEGORY_LABEL, CATEGORY_ORDER } from "../shared/graph/categories";
 import { NodeDefinition } from "../shared/graph/types";
 import "./node-palette.css";
@@ -9,7 +9,8 @@ interface NodePaletteProps {
 }
 
 /** Grouped by category, in BIBLE.md's catalog order; a category with nothing registered in it yet just doesn't render a section. Every category starts collapsed — click a header to expand it. */
-export function NodePalette({ nodes, onAddNode }: NodePaletteProps) {
+/** Memoized: it re-rendered with every edit to the graph beside it, and has nothing to do with any of them. */
+export const NodePalette = memo(function NodePalette({ nodes, onAddNode }: NodePaletteProps) {
   const [openCategories, setOpenCategories] = useState<Set<string>>(() => new Set());
 
   const toggleCategory = (category: string) => {
@@ -59,4 +60,4 @@ export function NodePalette({ nodes, onAddNode }: NodePaletteProps) {
       })}
     </div>
   );
-}
+});
