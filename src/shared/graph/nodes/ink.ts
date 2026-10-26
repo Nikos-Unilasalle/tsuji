@@ -5,6 +5,7 @@ import { getCurveNodePose } from "../curvePoseStore";
 import { createPRNG } from "../../math/random";
 import { valueNoise3 } from "../../math/valueNoise";
 import { Curve3, curvePlane, curvesSignature, flattenCurves, fromPlane, strokeSamples, toPlane } from "../curveLists";
+import type { DrawingPlane } from "../../three/brushScene";
 import { asColor, COMMON_DEFAULT_PARAMS, extractMaterialParams, NATIVE_TRANSFORM_PARAM_FIELDS, primitiveOutputs } from "./object";
 import { composeNativeMatrix } from "./transform";
 import { DEFAULT_PROFILE_POINTS, evalProfileCurve, ProfilePoint } from "../profileCurve";
@@ -150,24 +151,65 @@ interface StrokeOptions {
  * Curve Fill of the same curve sits in front of it.
  */
 export function buildStrokeGeometry(curves: Curve3[], o: StrokeOptions): THREE.BufferGeometry {
-  const positions: number[] = [];
-  const colors: number[] = [];
-  const indices: number[] = [];
-  const rng = createPRNG(o.seed * 7919 + 11);
+  // Sampled up front so every buffer is allocated once at its final size:
+  // this runs on every tick of a slider drag upstream, over thousands of
+  // vertices, and growing JS arrays then copying them was most of its cost.
+  const sampled: THREE.Vector3[][] = [];
+  let vertexCount = 0;
   for (const curve of curves) {
     const pts = strokeSamples(curve);
+    if (pts.length < 2) continue;
+    sampled.push(pts);
+    vertexCount += pts.length * 2;
+  }
+  let indexCount = 0;
+  for (const pts of sampled) indexCount += (pts.length - 1) * 6;
+
+  const positions = new Float32Array(vertexCount * 3);
+  const colors = new Float32Array(vertexCount * 4);
+  // Same index width three.js would pick from a plain array (see setIndex).
+  const indices = vertexCount - 1 >= 65535 ? new Uint32Array(indexCount) : new Uint16Array(indexCount);
+  let pi = 0;
+  let ci = 0;
+  let ii = 0;
+
+  const rng = createPRNG(o.seed * 7919 + 11);
+  let us = new Float64Array(0);
+  let vs = us;
+  let ws = us;
+  for (const pts of sampled) {
     const n = pts.length;
-    if (n < 2) continue;
     const plane = curvePlane(pts);
-    const flat = pts.map((p) => toPlane(plane, p));
+    if (us.length < n) {
+      us = new Float64Array(n);
+      vs = new Float64Array(n);
+      ws = new Float64Array(n);
+    }
+    // toPlane, inlined.
+    for (let i = 0; i < n; i++) {
+      const p = pts[i];
+      if (plane === "xz") {
+        us[i] = p.x;
+        vs[i] = -p.z;
+        ws[i] = p.y;
+      } else if (plane === "yz") {
+        us[i] = -p.z;
+        vs[i] = p.y;
+        ws[i] = p.x;
+      } else {
+        us[i] = p.x;
+        vs[i] = p.y;
+        ws[i] = p.z;
+      }
+    }
     const n0 = rng() * 100;
     const alpha = 1 - o.alphaJitter * rng();
-    const base = positions.length / 3;
+    const base = pi / 3;
     for (let i = 0; i < n; i++) {
-      const prev = flat[Math.max(0, i - 1)];
-      const next = flat[Math.min(n - 1, i + 1)];
-      let tu = next[0] - prev[0];
-      let tv = next[1] - prev[1];
+      const ip = Math.max(0, i - 1);
+      const inx = Math.min(n - 1, i + 1);
+      let tu = us[inx] - us[ip];
+      let tv = vs[inx] - vs[ip];
       const len = Math.hypot(tu, tv) || 1;
       tu /= len;
       tv /= len;
@@ -176,25 +218,56 @@ export function buildStrokeGeometry(curves: Curve3[], o: StrokeOptions): THREE.B
       w = w * (1 - o.widthNoise) + w * o.widthNoise * valueNoise3(i * 0.5, n0);
       w += o.minWidth;
       const shift = o.wobble * 2 * (valueNoise3(i * o.wobbleScale, n0 + 7) - 0.47);
-      const [u, v, depth] = flat[i];
+      const u = us[i];
+      const v = vs[i];
+      const depth = ws[i] + o.zOffset;
       const cu = u - tv * shift;
       const cv = v + tu * shift;
-      const left = fromPlane(plane, cu - tv * w, cv + tu * w, depth + o.zOffset);
-      const right = fromPlane(plane, cu + tv * w, cv - tu * w, depth + o.zOffset);
-      positions.push(left.x, left.y, left.z, right.x, right.y, right.z);
-      colors.push(1, 1, 1, alpha, 1, 1, 1, alpha);
+      pi = writePlanePoint(positions, pi, plane, cu - tv * w, cv + tu * w, depth);
+      pi = writePlanePoint(positions, pi, plane, cu + tv * w, cv - tu * w, depth);
+      colors[ci++] = 1;
+      colors[ci++] = 1;
+      colors[ci++] = 1;
+      colors[ci++] = alpha;
+      colors[ci++] = 1;
+      colors[ci++] = 1;
+      colors[ci++] = 1;
+      colors[ci++] = alpha;
       if (i > 0) {
         const a = base + (i - 1) * 2;
-        indices.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
+        indices[ii++] = a;
+        indices[ii++] = a + 1;
+        indices[ii++] = a + 2;
+        indices[ii++] = a + 1;
+        indices[ii++] = a + 3;
+        indices[ii++] = a + 2;
       }
     }
   }
   const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
-  geometry.setAttribute("color", new THREE.Float32BufferAttribute(colors, 4));
-  geometry.setIndex(indices);
+  geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+  geometry.setAttribute("color", new THREE.BufferAttribute(colors, 4));
+  geometry.setIndex(new THREE.BufferAttribute(indices, 1));
   geometry.computeBoundingSphere();
   return geometry;
+}
+
+/** fromPlane, written straight into a position buffer. */
+function writePlanePoint(out: Float32Array, at: number, plane: DrawingPlane, u: number, v: number, w: number): number {
+  if (plane === "xz") {
+    out[at] = u;
+    out[at + 1] = w;
+    out[at + 2] = -v;
+  } else if (plane === "yz") {
+    out[at] = w;
+    out[at + 1] = v;
+    out[at + 2] = -u;
+  } else {
+    out[at] = u;
+    out[at + 1] = v;
+    out[at + 2] = w;
+  }
+  return at + 3;
 }
 
 const strokeCache = createNodeCache<InkState>(disposeInk);

@@ -90,6 +90,11 @@ export const STRATA_HATCH_NODE: NodeDefinition = {
       const sampled = stack.map((c) => c.getPoints(resolution - 1));
       const plane = curvePlane(sampled[0]);
       const top = sampled.length - 1;
+      // Every layer in plane coordinates, once: the strokes below interpolate
+      // between two layers point by point, and doing it on Vector3s cloned
+      // and re-projected per point was most of this node's cost. toPlane only
+      // picks and negates components, so lerping here gives the same numbers.
+      const flat = sampled.map((pts) => pts.map((p) => toPlane(plane, p)));
       for (let i = 0; i < count; i++) {
         const mid = Math.floor(distribution(kind, rng) * resolution);
         const half = Math.floor(rng() * resolution * length);
@@ -102,7 +107,11 @@ export const STRATA_HATCH_NODE: NodeDefinition = {
         const amplitude = jitter / (layer + 1);
         const points: THREE.Vector3[] = [];
         for (let j = start; j < end; j++) {
-          const [u, v, w] = toPlane(plane, sampled[lo][j].clone().lerp(sampled[hi][j], f));
+          const a = flat[lo][j];
+          const b = flat[hi][j];
+          const u = a[0] + (b[0] - a[0]) * f;
+          const v = a[1] + (b[1] - a[1]) * f;
+          const w = a[2] + (b[2] - a[2]) * f;
           points.push(
             fromPlane(
               plane,

@@ -8,6 +8,7 @@ import { INSTANCE_ON_POINTS_NODE } from "./instanceOnPoints";
 import { valueNoise3 } from "../../math/valueNoise";
 import { createPRNG } from "../../math/random";
 import { deserializeProject } from "../storage";
+import { curvePlane, curveStacks, fromPlane, polylineCurve, toPlane } from "../curveLists";
 
 const ctx = (nodeId: string): EvalContext => ({ time: 0, step: 0, nodeId });
 
@@ -181,6 +182,66 @@ describe("STRATA_HATCH_NODE", () => {
 
   test("nothing wired gives an empty list", () => {
     expect(STRATA_HATCH_NODE.evaluate({}, STRATA_HATCH_NODE.defaultParams, ctx("hatch-b")).curves).toEqual([]);
+  });
+
+  // The stroke loop as it was before it interpolated in plane coordinates —
+  // the rewrite must thread exactly the same points.
+  function referenceHatch(stacksIn: unknown, count: number, length: number, jitter: number, resolution: number, seed: number) {
+    const out: THREE.Vector3[][] = [];
+    curveStacks(stacksIn).forEach((stack, m) => {
+      const rng = createPRNG(seed * 7919 + m * 104729 + 7);
+      const noiseSeed = seed * 5.3 + m * 2.71;
+      const sampled = stack.map((c) => c.getPoints(resolution - 1));
+      const plane = curvePlane(sampled[0]);
+      const top = sampled.length - 1;
+      for (let i = 0; i < count; i++) {
+        const mid = Math.floor((rng() > 0.5 ? rng() / 3 : 2 / 3 + rng() / 3) * resolution);
+        const half = Math.floor(rng() * resolution * length);
+        const start = Math.max(0, Math.min(resolution, mid - half));
+        const end = Math.max(0, Math.min(resolution, mid + half));
+        const layer = top > 0 ? (i / count) * top : 0;
+        const lo = Math.floor(layer);
+        const hi = Math.min(top, Math.ceil(layer));
+        const f = layer - lo;
+        const amplitude = jitter / (layer + 1);
+        const points: THREE.Vector3[] = [];
+        for (let j = start; j < end; j++) {
+          const [u, v, w] = toPlane(plane, sampled[lo][j].clone().lerp(sampled[hi][j], f));
+          points.push(
+            fromPlane(
+              plane,
+              u + amplitude * (valueNoise3(u * 100, j * 0.5, noiseSeed) - 0.47),
+              v + amplitude * (valueNoise3(v * 100, j * 0.5, noiseSeed + 1) - 0.47),
+              w,
+            ),
+          );
+        }
+        if (points.length >= 2) out.push(points);
+      }
+    });
+    return out;
+  }
+
+  test("threads exactly the points it did before, in every drawing plane", () => {
+    const ridge = RIDGE_LAYERS_NODE.evaluate({}, RIDGE_LAYERS_NODE.defaultParams, ctx("hatch-ref-src"));
+    const front = ridge.stacks as THREE.Curve<THREE.Vector3>[][];
+    const toGround = (p: THREE.Vector3) => new THREE.Vector3(p.x, p.z, -p.y);
+    const toSide = (p: THREE.Vector3) => new THREE.Vector3(p.z, p.y, -p.x);
+    const remap = (f: (p: THREE.Vector3) => THREE.Vector3) => front.map((stack) => stack.map((c) => polylineCurve(c.getPoints(40).map(f))));
+    for (const [name, stacks] of [["xy", front], ["xz", remap(toGround)], ["yz", remap(toSide)]] as const) {
+      const params = { ...STRATA_HATCH_NODE.defaultParams, count: 120, jitter: 0.4, seed: 3 };
+      const got = (STRATA_HATCH_NODE.evaluate({ stacks }, params, ctx(`hatch-ref-${name}`)).curves as THREE.CatmullRomCurve3[]).map((c) => c.points);
+      const want = referenceHatch(stacks, 120, Number(STRATA_HATCH_NODE.defaultParams.length), 0.4, Number(STRATA_HATCH_NODE.defaultParams.resolution), 3);
+      expect(got.length).toBe(want.length);
+      for (let k = 0; k < want.length; k++) {
+        expect(got[k].length).toBe(want[k].length);
+        for (let j = 0; j < want[k].length; j++) {
+          // === rather than toEqual: a zero may come out signed the other way, which draws the same.
+          const same = got[k][j].x === want[k][j].x && got[k][j].y === want[k][j].y && got[k][j].z === want[k][j].z;
+          if (!same) expect([name, k, j, got[k][j].toArray()]).toEqual([name, k, j, want[k][j].toArray()]);
+        }
+      }
+    }
   });
 });
 
