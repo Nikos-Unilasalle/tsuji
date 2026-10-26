@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest";
 import * as THREE from "three";
 import { RIG_HUMAN_NODE } from "./rig";
-import { RIG_BIPED_DANCE_NODE, moveAt, moveWeight, readMoves, type DanceInfo } from "./bipedDance";
+import { RIG_BIPED_DANCE_NODE, moveAt, moveWeight, nextMove, readMoves, type DanceInfo } from "./bipedDance";
+import { diceChoreography } from "./danceDice";
 import { EvalContext } from "../types";
 import { HumanSkeleton } from "../ik/skeletons";
 import { CONTROL, POSE_PRESETS, readHumanPose } from "../ik/humanPose";
@@ -108,5 +109,66 @@ describe("dance moves", () => {
     expect(moveAt(moves, 0, 4)).toBe(0);
     expect(moveAt(moves, 0, 5)).toBe(-1);
     expect(moveAt(moves, 1, 3)).toBe(-1);
+  });
+});
+
+describe("next move and ghost", () => {
+  const moves = readMoves([{ lane: 0, start: 4, length: 2 }, { lane: 1, start: 12, length: 1 }]);
+
+  it("finds the next move round the loop", () => {
+    expect(nextMove(moves, 1, 16)).toMatchObject({ inBeats: 3, move: { lane: 0 } });
+    expect(nextMove(moves, 4, 16)).toMatchObject({ inBeats: 8, move: { lane: 1 } });
+    expect(nextMove(moves, 14 + 16, 16)).toMatchObject({ inBeats: 6, move: { lane: 0 } });
+    expect(nextMove([], 3, 16)).toBeNull();
+  });
+
+  it("tells the grid what comes next, skipping lanes with nothing wired", () => {
+    const info = dance("bd-next", 0, { bpm: 120, moves: [{ lane: 1, start: 2, length: 1 }, { lane: 0, start: 6, length: 1 }] }, { pose0: cheer }).__danceInfo;
+    expect(info.next).toEqual({ lane: 0, inBeats: 6, mirror: false });
+  });
+
+  it("draws the ghost of the next pose as a helper, and none without moves", () => {
+    const ghostBones = (o: Out) => {
+      const ghost = o.geometry.children.find((c) => c.userData.nodeId === "bd-ghost#ghost");
+      let count = 0;
+      ghost?.traverse((c) => {
+        if (c instanceof THREE.InstancedMesh && c.visible) {
+          count += c.count;
+          expect(c.userData.isHelper).toBe(true);
+        }
+      });
+      return count;
+    };
+    expect(ghostBones(dance("bd-ghost", 0, { moves: [{ lane: 0, start: 4, length: 2 }] }, { pose0: cheer }))).toBeGreaterThan(10);
+    expect(ghostBones(dance("bd-ghost", 0, { moves: [] }, { pose0: cheer }))).toBe(0);
+    expect(ghostBones(dance("bd-ghost", 0, { moves: [{ lane: 0, start: 4, length: 2 }], showGhost: false }, { pose0: cheer }))).toBe(0);
+  });
+});
+
+describe("Dice", () => {
+  it("rolls the same dance from the same seed, another from another", () => {
+    expect(diceChoreography([0, 1], 16, 3)).toEqual(diceChoreography([0, 1], 16, 3));
+    expect(diceChoreography([0, 1], 16, 3)).not.toEqual(diceChoreography([0, 1], 16, 4));
+  });
+
+  it("keeps every move in the loop, on a wired lane, one at a time", () => {
+    for (let seed = 1; seed <= 200; seed++) {
+      for (const loop of [4, 8, 16, 32]) {
+        const moves = diceChoreography([0, 2], loop, seed).sort((a, b) => a.start - b.start);
+        moves.forEach((m, i) => {
+          expect([0, 2]).toContain(m.lane);
+          expect(m.start).toBeGreaterThanOrEqual(0);
+          expect(m.length).toBeGreaterThanOrEqual(1);
+          expect(m.start + m.length).toBeLessThanOrEqual(loop);
+          if (i > 0) expect(m.start).toBeGreaterThanOrEqual(moves[i - 1].start + moves[i - 1].length);
+        });
+      }
+    }
+  });
+
+  it("rolls something most of the time, and nothing with no pose wired", () => {
+    const filled = Array.from({ length: 50 }, (_, s) => diceChoreography([0], 16, s + 1).length > 0).filter(Boolean).length;
+    expect(filled).toBeGreaterThan(45);
+    expect(diceChoreography([], 16, 1)).toEqual([]);
   });
 });

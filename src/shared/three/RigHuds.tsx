@@ -185,7 +185,26 @@ export function SkeletonHud({
 }
 
 /** A slider that applies on release: a Skin node weighs its mesh again with every change, so not on every pixel of the drag. */
-export function CommitSlider({ label, value, min, max, step, title, onCommit }: { label: string; value: number; min: number; max: number; step: number; title: string; onCommit: (v: number) => void }) {
+export function CommitSlider({
+  label,
+  value,
+  min,
+  max,
+  step,
+  title,
+  onCommit,
+  digits = 2,
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  title: string;
+  onCommit: (v: number) => void;
+  /** Decimals shown beside the label. */
+  digits?: number;
+}) {
   const [draft, setDraft] = useState<number | null>(null);
   useEffect(() => setDraft(null), [value]);
   const shown = draft ?? value;
@@ -196,7 +215,7 @@ export function CommitSlider({ label, value, min, max, step, title, onCommit }: 
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 4 }} title={title}>
       <span style={{ fontSize: 11, color: "#94a3b8", minWidth: 50, textAlign: "right" }}>
-        {label} {shown.toFixed(2)}
+        {label} {shown.toFixed(digits)}
       </span>
       <input
         type="range"

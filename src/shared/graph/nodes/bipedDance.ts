@@ -1,9 +1,9 @@
 import * as THREE from "three";
 import { NodeDefinition } from "../types";
-import { SocketDef } from "../sockets";
+import { SocketDef, toBoolean } from "../sockets";
 import { growingSockets } from "../dynamicInputs";
 import { numberInput } from "./object";
-import { solveHuman } from "../ik/skeletons";
+import { HumanSkeleton, solveHuman } from "../ik/skeletons";
 import { publishRig } from "../ik/skinning";
 import { boneMatrices, bonesOf, drawEmpty, HumanRigData, parentsOf, viewFor } from "./rig";
 import { CONTROL, flipPose, HumanPose, poseMask, PoseMask, readHumanPose, readPoseList, turnQuaternion } from "../ik/humanPose";
@@ -41,6 +41,51 @@ export interface DanceInfo {
   /** Which lanes have a pose wired in, by index. */
   lanes: boolean[];
   bpm: number;
+  /** The next move to hit, and in how many beats; null with none. */
+  next: { lane: number; inBeats: number; mirror: boolean } | null;
+}
+
+const GHOST_COLOR = 0x67e8f9;
+
+/**
+ * The next pose's ghost: a see-through cyan body inside the dancer's group,
+ * a helper — drawn in the editor, left out of the render.
+ */
+function drawGhost(nodeId: string, group: THREE.Group, positions: THREE.Vector3[] | null, skeleton: HumanSkeleton | null, thickness: number) {
+  const ghost = viewFor(`${nodeId}#ghost`);
+  if (ghost.group.parent !== group) group.add(ghost.group);
+  if (!positions || !skeleton) {
+    drawEmpty(ghost);
+    return;
+  }
+  ghost.update({ positions, bones: bonesOf(skeleton.rig), thickness: thickness * 0.8, color: GHOST_COLOR, jointRadius: thickness });
+  ghost.group.traverse((child) => {
+    // Only the bones and balls: the view also holds a body sphere it keeps hidden, which the helper flag would bring up.
+    if (!(child instanceof THREE.InstancedMesh)) return;
+    child.userData.isHelper = true;
+    // Clicked, the ghost picks the dancer.
+    child.userData.nodeId = nodeId;
+    child.castShadow = false;
+    for (const material of Array.isArray(child.material) ? child.material : [child.material]) {
+      if (material.transparent) continue;
+      material.transparent = true;
+      material.opacity = 0.35;
+      material.depthWrite = false;
+      material.needsUpdate = true;
+    }
+  });
+}
+
+/** The move that hits next after `beat` (going round the loop), and how many beats away. */
+export function nextMove(moves: DanceMove[], beat: number, loopBeats: number): { move: DanceMove; inBeats: number } | null {
+  const inLoop = ((beat % loopBeats) + loopBeats) % loopBeats;
+  let best: { move: DanceMove; inBeats: number } | null = null;
+  for (const move of moves) {
+    let d = (((move.start - inLoop) % loopBeats) + loopBeats) % loopBeats;
+    if (d < 1e-9) d = loopBeats;
+    if (!best || d < best.inBeats) best = { move, inBeats: d };
+  }
+  return best;
 }
 
 export const DANCE_MAX_LOOP = 64;
@@ -146,6 +191,8 @@ export const RIG_BIPED_DANCE_NODE: NodeDefinition = {
     poseGroove: 0.3,
     offset: 0,
     moves: [],
+    diceSeed: 0,
+    showGhost: true,
   },
   paramFields: [
     { id: "preset", label: "Groove style", kind: "select", options: [...GROOVE_PRESET_KEYS], optionLabels: GROOVE_PRESET_KEYS.map((k) => GROOVE_PRESETS[k].label), group: "Groove" },
@@ -159,6 +206,7 @@ export const RIG_BIPED_DANCE_NODE: NodeDefinition = {
     { id: "loopBeats", label: "Loop (beats)", kind: "number", step: 4, group: "Choreography" },
     { id: "snap", label: "Snap (beats to hit a pose)", kind: "number", step: 0.05, group: "Choreography" },
     { id: "poseGroove", label: "Groove kept in a held pose", kind: "number", step: 0.05, percent: true, group: "Choreography" },
+    { id: "showGhost", label: "Ghost of the next pose (editor only)", kind: "boolean", group: "Display" },
   ],
   evaluate: (inputs, params, ctx) => {
     const view = viewFor(ctx.nodeId);
@@ -171,7 +219,8 @@ export const RIG_BIPED_DANCE_NODE: NodeDefinition = {
     const beat = (time * bpm) / 60 + numberInput(undefined, params.offset, 0);
     if (!data) {
       drawEmpty(view);
-      return { geometry: group, matrix: new THREE.Matrix4(), joints: [], bones: [], beat, __danceInfo: { beat, loopBeats, lanes: [], bpm } satisfies DanceInfo };
+      drawGhost(ctx.nodeId, group, null, null, 0);
+      return { geometry: group, matrix: new THREE.Matrix4(), joints: [], bones: [], beat, __danceInfo: { beat, loopBeats, lanes: [], bpm, next: null } satisfies DanceInfo };
     }
     const { skeleton } = data;
     const rest = skeleton.relaxedControls;
@@ -187,41 +236,47 @@ export const RIG_BIPED_DANCE_NODE: NodeDefinition = {
       swing: numberInput(undefined, params.swing, 0),
       seed: numberInput(undefined, params.seed, 0),
     };
-    // Like Biped Motion, the dance starts from the natural stance; Influence lays it over the pose wired in.
-    const g = grooveControls(rest, H, beat, time, GROOVE_PRESETS[presetKey].style, settings);
-
-    // The moves over the groove, each by its own weight and only where its pose moved.
     const poses = wiredPoses(inputs, rest, H);
+    const moves = readMoves(params.moves).filter((m) => poses[m.lane]);
     const snap = Math.max(0.01, numberInput(undefined, params.snap, 0.25));
     const keep = Math.max(0, Math.min(1, numberInput(undefined, params.poseGroove, 0.3)));
-    const inLoop = ((beat % loopBeats) + loopBeats) % loopBeats;
-    const offsets = g.controls.map((c, i) => c.clone().sub(rest[i]));
-    // What carries the upper body along: a held arm still rides the pelvis as it bounces.
-    const ride = offsets[CONTROL.pelvis];
-    const controls = g.controls.map((c) => c.clone());
-    let pelvisRotation = g.pelvisRotation.clone();
-    for (const move of readMoves(params.moves)) {
-      const wired = poses[move.lane];
-      if (!wired) continue;
-      const w = moveWeight(move, inLoop, loopBeats, snap);
-      if (w <= 0) continue;
-      const p = move.mirror ? mirrored(wired) : wired;
-      controls.forEach((c, i) => {
-        const r = UPPER.includes(i) ? ride : null;
-        const target = p.controls[i].clone();
-        if (r) target.add(r).addScaledVector(offsets[i].clone().sub(r), keep);
-        else target.addScaledVector(offsets[i], keep);
-        c.lerp(target, w * p.mask.controls[i]);
-      });
-      const held = p.pelvisRotation.clone().multiply(new THREE.Quaternion().slerp(g.pelvisRotation, keep));
-      pelvisRotation = pelvisRotation.slerp(held, w * p.mask.pelvisTurn);
-    }
-
     const influence = Math.max(0, Math.min(1, numberInput(inputs.influence, params.influence, 1)));
-    const finalControls = upstream.controls.map((u, i) => u.clone().lerp(controls[i], influence));
-    const finalRotation = upstream.pelvisRotation.clone().slerp(pelvisRotation, influence);
+    const solver = { armPull: data.armPull, ...data.solver };
 
-    const positions = solveHuman(skeleton, finalControls, { armPull: data.armPull, ...data.solver, pelvisRotation: finalRotation });
+    /** The body at any beat: a pure function of it, so the ghost can look ahead. */
+    const danceAt = (b: number, t: number) => {
+      // Like Biped Motion, the dance starts from the natural stance; Influence lays it over the pose wired in.
+      const g = grooveControls(rest, H, b, t, GROOVE_PRESETS[presetKey].style, settings);
+      const inLoop = ((b % loopBeats) + loopBeats) % loopBeats;
+      const offsets = g.controls.map((c, i) => c.clone().sub(rest[i]));
+      // What carries the upper body along: a held arm still rides the pelvis as it bounces.
+      const ride = offsets[CONTROL.pelvis];
+      const controls = g.controls.map((c) => c.clone());
+      let pelvisRotation = g.pelvisRotation.clone();
+      // The moves over the groove, each by its own weight and only where its pose moved.
+      for (const move of moves) {
+        const w = moveWeight(move, inLoop, loopBeats, snap);
+        if (w <= 0) continue;
+        const p = move.mirror ? mirrored(poses[move.lane]!) : poses[move.lane]!;
+        controls.forEach((c, i) => {
+          const r = UPPER.includes(i) ? ride : null;
+          const target = p.controls[i].clone();
+          if (r) target.add(r).addScaledVector(offsets[i].clone().sub(r), keep);
+          else target.addScaledVector(offsets[i], keep);
+          c.lerp(target, w * p.mask.controls[i]);
+        });
+        const held = p.pelvisRotation.clone().multiply(new THREE.Quaternion().slerp(g.pelvisRotation, keep));
+        pelvisRotation = pelvisRotation.slerp(held, w * p.mask.pelvisTurn);
+      }
+      const finalControls = upstream.controls.map((u, i) => u.clone().lerp(controls[i], influence));
+      const finalRotation = upstream.pelvisRotation.clone().slerp(pelvisRotation, influence);
+      return { controls: finalControls, pelvisRotation: finalRotation, positions: solveHuman(skeleton, finalControls, { ...solver, pelvisRotation: finalRotation }) };
+    };
+
+    const now = danceAt(beat, time);
+    const finalControls = now.controls;
+    const finalRotation = now.pelvisRotation;
+    const positions = now.positions;
     view.update({
       positions,
       bones: bonesOf(skeleton.rig),
@@ -230,6 +285,10 @@ export const RIG_BIPED_DANCE_NODE: NodeDefinition = {
       jointRadius: data.thickness * 1.3,
       markerSize: 0.03 * H,
     });
+    // The ghost: the body as it will be when the next move hits.
+    const next = nextMove(moves, beat, loopBeats);
+    const ghost = next && (params.showGhost === undefined || toBoolean(params.showGhost)) ? danceAt(beat + next.inBeats, time + (next.inBeats * 60) / bpm).positions : null;
+    drawGhost(ctx.nodeId, group, ghost, skeleton, data.thickness);
     publishRig(group, parentsOf(skeleton.rig), skeleton.rig.rest, positions, group.matrix, skeleton.names);
     group.userData.humanRig = data;
     group.userData.humanPose = { controls: finalControls, pelvisRotation: finalRotation, matrix: group.matrix.clone() } satisfies HumanPose;
@@ -242,7 +301,7 @@ export const RIG_BIPED_DANCE_NODE: NodeDefinition = {
       bones: boneMatrices(skeleton.rig, world),
       beat,
       // Not a socket: the beat grid's playhead and lanes (see DanceHud).
-      __danceInfo: { beat, loopBeats, lanes: poses.map((p) => p !== null), bpm } satisfies DanceInfo,
+      __danceInfo: { beat, loopBeats, lanes: poses.map((p) => p !== null), bpm, next: next ? { lane: next.move.lane, inBeats: next.inBeats, mirror: Boolean(next.move.mirror) } : null } satisfies DanceInfo,
     };
   },
 };

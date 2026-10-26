@@ -3,6 +3,7 @@ import { HUD_PANEL_STYLE, HudBar, HudSeparator } from "./HudToolbars";
 import { CommitSlider } from "./RigHuds";
 import { GROOVE_PRESET_KEYS, GROOVE_PRESETS } from "../graph/ik/danceGroove";
 import { moveAt, readMoves, type DanceInfo, type DanceMove } from "../graph/nodes/bipedDance";
+import { diceChoreography } from "../graph/nodes/danceDice";
 import type { NodeInstance } from "../graph/types";
 
 /**
@@ -72,7 +73,7 @@ export function DanceHud({ node, laneNames, readInfo, onParams }: { node: NodeIn
           ))}
         </select>
         <HudSeparator />
-        <CommitSlider label="BPM" value={Number(p.bpm ?? 110)} min={40} max={200} step={1} title="Tempo, beats per minute" onCommit={(bpm) => set({ bpm })} />
+        <CommitSlider label="BPM" value={Number(p.bpm ?? 110)} min={40} max={200} step={1} digits={0} title="Tempo, beats per minute" onCommit={(bpm) => set({ bpm: Math.round(bpm) })} />
         <button type="button" className="viewport-hud-button" style={wide} onClick={tap} title="Tap along with the music: the tempo follows your last taps">
           Tap
         </button>
@@ -120,6 +121,24 @@ function BeatCount({ beat }: { beat: number }) {
           {i + 1}
         </span>
       ))}
+    </span>
+  );
+}
+
+/** What hits next: the pose's name, mirrored or not, and a countdown in beats. Its ghost is on the body. */
+function NextUp({ info, laneNames }: { info: DanceInfo | null; laneNames: string[] }) {
+  const next = info?.next;
+  if (!next) return null;
+  const color = LANE_COLORS[next.lane % LANE_COLORS.length];
+  const count = Math.ceil(next.inBeats - 1e-6);
+  return (
+    <span style={{ fontSize: 11, color: "#94a3b8", display: "flex", gap: 5, alignItems: "center", minWidth: 120 }} title="The next pose, drawn as a ghost on the body">
+      Next
+      <span style={{ color, fontWeight: 700 }}>
+        {laneNames[next.lane] ?? `Pose ${next.lane + 1}`}
+        {next.mirror ? " ◐" : ""}
+      </span>
+      <span style={{ fontVariantNumeric: "tabular-nums", color: count <= 1 ? "#facc15" : "#94a3b8" }}>in {count}</span>
     </span>
   );
 }
@@ -224,9 +243,26 @@ function BeatGrid({ node, info, laneNames, onParams }: { node: NodeInstance; inf
             </option>
           ))}
         </select>
+        <button
+          type="button"
+          className="viewport-hud-button"
+          style={wide}
+          disabled={!info || !info.lanes.some(Boolean)}
+          onClick={() => {
+            if (!info) return;
+            const seed = Math.round(Number(node.params.diceSeed ?? 0)) + 1;
+            const lanes = info.lanes.flatMap((wired, i) => (wired ? [i] : []));
+            setDraft(null);
+            set({ moves: diceChoreography(lanes, loopBeats, seed), diceSeed: seed });
+          }}
+          title="Roll a choreography from the poses wired in — phrased in call and answer, ending on a held pose. Again for another (undo to go back)"
+        >
+          🎲 Dice
+        </button>
         <button type="button" className="viewport-hud-button" style={wide} onClick={() => commit([])} disabled={saved.length === 0} title="Take every pose out: just the groove">
           Clear
         </button>
+        <NextUp info={info} laneNames={laneNames} />
         <span style={{ color: "#94a3b8", fontSize: 11, marginLeft: "auto" }}>click: drop · drag: hold · click again: remove · ⇧ click: mirror</span>
       </div>
       {laneCount === 0 ? (
@@ -252,7 +288,7 @@ function BeatGrid({ node, info, laneNames, onParams }: { node: NodeInstance; inf
                       key={`${lane}:${cell}`}
                       onPointerDown={(e) => down(lane, cell, e)}
                       onPointerEnter={() => over(cell)}
-                      title={m ? `${laneNames[lane] ?? `Pose ${lane + 1}`}${m.mirror ? " (mirrored)" : ""}, beats ${m.start + 1}–${m.start + m.length}` : `Drop ${laneNames[lane] ?? `Pose ${lane + 1}`} on beat ${cell + 1}`}
+                      title={m ? `${laneNames[lane] ?? `Pose ${lane + 1}`}${m.mirror ? " (mirrored)" : ""}, ${m.length === 1 ? `beat ${m.start + 1}` : `beats ${m.start + 1}–${m.start + m.length}`}` : `Drop ${laneNames[lane] ?? `Pose ${lane + 1}`} on beat ${cell + 1}`}
                       style={{
                         height: CELL,
                         cursor: "pointer",
