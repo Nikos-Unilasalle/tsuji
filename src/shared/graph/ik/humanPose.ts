@@ -51,6 +51,52 @@ export function blendPose(
   };
 }
 
+/**
+ * Which parts of the body a pose actually carries: a weight per control, 0
+ * where it is still at rest, 1 where it was moved, and the same for the pelvis
+ * turn. Layered by these weights a pose with only its arms raised leaves the
+ * feet to whatever moves them underneath (a dance, a walk).
+ *
+ * A limb counts as one: a hand moved brings its elbow pole along, a foot its
+ * knee pole, or the IK would bend the limb against itself. The weight eases
+ * in between `MASK_RANGE` (fractions of the body's height) rather than
+ * switching, so the small drift of a wiggling pose neither pops in nor out.
+ */
+export interface PoseMask {
+  controls: number[];
+  pelvisTurn: number;
+}
+
+/** Below the first a control is at rest, beyond the second fully posed — as fractions of the body's height. */
+export const MASK_RANGE = [0.01, 0.04] as const;
+/** The same for the pelvis turn, in radians (~2° to ~8°). */
+export const MASK_TURN_RANGE = [0.035, 0.14] as const;
+
+const smoothstep = (lo: number, hi: number, x: number) => {
+  const t = Math.max(0, Math.min(1, (x - lo) / (hi - lo)));
+  return t * t * (3 - 2 * t);
+};
+
+export function poseMask(
+  controls: THREE.Vector3[],
+  rest: THREE.Vector3[],
+  height: number,
+  pelvisRotation: THREE.Quaternion = new THREE.Quaternion(),
+): PoseMask {
+  const H = Math.max(0.05, height);
+  const moved = rest.map((r, i) => {
+    const d = controls[i] ? controls[i].distanceTo(r) / H : 0;
+    return Number.isFinite(d) ? smoothstep(MASK_RANGE[0], MASK_RANGE[1], d) : 0;
+  });
+  for (const s of [0, 1] as const) {
+    for (const [end, pole] of [[CONTROL.hand[s], CONTROL.elbowPole[s]], [CONTROL.foot[s], CONTROL.kneePole[s]]]) {
+      moved[end] = moved[pole] = Math.max(moved[end], moved[pole]);
+    }
+  }
+  const angle = 2 * Math.acos(Math.min(1, Math.abs(pelvisRotation.w)));
+  return { controls: moved, pelvisTurn: smoothstep(MASK_TURN_RANGE[0], MASK_TURN_RANGE[1], Number.isFinite(angle) ? angle : 0) };
+}
+
 /** Left and right swapped, as in a mirror: the whole pose flipped across the body's centre plane. */
 export function flipPose(controls: THREE.Vector3[]): THREE.Vector3[] {
   const flipped = controls.map((c) => new THREE.Vector3(-c.x, c.y, c.z));

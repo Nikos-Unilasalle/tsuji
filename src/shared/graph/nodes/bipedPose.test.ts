@@ -5,7 +5,7 @@ import { RIG_BIPED_POSE_NODE } from "./bipedPose";
 import { RIG_BIPED_MOTION_NODE } from "./bipedMotion";
 import { EvalContext } from "../types";
 import { HumanSkeleton, solveHuman } from "../ik/skeletons";
-import { CONTROL, flipPose, mirrorPose, POSE_PRESET_KEYS, POSE_PRESETS, readHumanPose, swingControls } from "../ik/humanPose";
+import { CONTROL, flipPose, mirrorPose, POSE_PRESET_KEYS, POSE_PRESETS, poseMask, readHumanPose, swingControls, turnQuaternion, wigglePose } from "../ik/humanPose";
 
 const ctx = (nodeId: string, extra: Partial<EvalContext> = {}): EvalContext => ({ time: 0, step: 0, nodeId, ...extra });
 const humanGeometry = RIG_HUMAN_NODE.evaluate({}, { ...RIG_HUMAN_NODE.defaultParams }, ctx("bp-human")).geometry as THREE.Object3D;
@@ -16,6 +16,61 @@ const pose = (id: string, params: Record<string, unknown>, source: THREE.Object3
   RIG_BIPED_POSE_NODE.evaluate({ skeleton: source }, { ...RIG_BIPED_POSE_NODE.defaultParams, ...params }, ctx(id, extra)) as Out;
 
 const cheer = POSE_PRESETS.cheer.build(skeleton);
+
+describe("pose mask", () => {
+  const rest = skeleton.relaxedControls;
+  const H = rest[CONTROL.head].y;
+  const mask = (controls: THREE.Vector3[], turn = new THREE.Quaternion()) => poseMask(controls, rest, H, turn);
+
+  it("carries nothing for the natural stance", () => {
+    const m = mask(POSE_PRESETS.stand.build(skeleton));
+    expect(m.controls.every((w) => w === 0)).toBe(true);
+    expect(m.pelvisTurn).toBe(0);
+  });
+
+  it("carries only the arm that moved, with its elbow, and leaves the feet free", () => {
+    const m = mask(POSE_PRESETS.point.build(skeleton));
+    expect(m.controls[CONTROL.hand[0]]).toBe(1);
+    expect(m.controls[CONTROL.elbowPole[0]]).toBe(1);
+    expect(m.controls[CONTROL.hand[1]]).toBe(0);
+    for (const i of [...CONTROL.foot, ...CONTROL.kneePole, CONTROL.pelvis]) expect(m.controls[i]).toBe(0);
+    // The head leant in a little: carried a little.
+    expect(m.controls[CONTROL.head]).toBeGreaterThan(0);
+    expect(m.controls[CONTROL.head]).toBeLessThan(1);
+  });
+
+  it("brings the hand along when only the elbow pole moved, and the foot with its knee", () => {
+    const c = rest.map((r) => r.clone());
+    c[CONTROL.elbowPole[1]].z -= 0.2 * H;
+    c[CONTROL.kneePole[0]].z += 0.2 * H;
+    const m = mask(c);
+    expect(m.controls[CONTROL.hand[1]]).toBe(1);
+    expect(m.controls[CONTROL.foot[0]]).toBe(1);
+    expect(m.controls[CONTROL.hand[0]]).toBe(0);
+    expect(m.controls[CONTROL.foot[1]]).toBe(0);
+  });
+
+  it("carries a turned pelvis, not a barely turned one", () => {
+    expect(mask(rest, turnQuaternion(new THREE.Vector3(0, 0.5, 0))).pelvisTurn).toBe(1);
+    expect(mask(rest, turnQuaternion(new THREE.Vector3(0, 0.01, 0))).pelvisTurn).toBe(0);
+  });
+
+  it("mirrors with the pose", () => {
+    const wave = POSE_PRESETS.wave.build(skeleton);
+    const m = mask(wave).controls;
+    const f = mask(flipPose(wave)).controls;
+    expect(f[CONTROL.hand[0]]).toBeCloseTo(m[CONTROL.hand[1]], 9);
+    expect(f[CONTROL.hand[1]]).toBeCloseTo(m[CONTROL.hand[0]], 9);
+  });
+
+  it("lets a wiggling stance in only faintly, and never its feet", () => {
+    for (let t = 0; t < 20; t += 0.37) {
+      const m = mask(wigglePose(rest, H, t, { amount: 1, speed: 1, breathing: 1, seed: 3 }));
+      expect(Math.max(...m.controls)).toBeLessThan(0.5);
+      for (const i of [...CONTROL.foot, ...CONTROL.kneePole]) expect(m.controls[i]).toBe(0);
+    }
+  });
+});
 
 describe("pose tools", () => {
   it("mirrors one side onto the other and flips the whole pose", () => {
