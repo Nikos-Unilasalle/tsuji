@@ -1,0 +1,458 @@
+{
+  "canvases": [
+    {
+      "nodes": [
+        {
+          "id": "setup_0",
+          "type": "object/plane",
+          "position": {
+            "x": 599,
+            "y": 160
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "rotation": {
+              "x": 1.5707963267948966,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 20,
+              "y": 20,
+              "z": 1
+            },
+            "texturePath": "",
+            "normalMapPath": "",
+            "roughnessMapPath": "",
+            "uvScaleX": 1,
+            "uvScaleY": 1,
+            "uvOffsetX": 0,
+            "uvOffsetY": 0,
+            "color": 16777215,
+            "emissive": 0,
+            "emissiveIntensity": 1,
+            "shadeless": 0,
+            "roughness": 0.1,
+            "metalness": 0.1,
+            "wireframe": 0,
+            "opacity": 1,
+            "transmission": 0,
+            "thickness": 0.5
+          }
+        },
+        {
+          "id": "setup_1",
+          "type": "texture/procedural",
+          "position": {
+            "x": 375,
+            "y": 223
+          },
+          "params": {
+            "type": "checker",
+            "colorA": 16777215,
+            "colorB": 2236962,
+            "scale": 8,
+            "seed": 1,
+            "octaves": 3,
+            "resolution": 256,
+            "uvScaleX": 1,
+            "uvScaleY": 1,
+            "uvOffsetX": 0,
+            "uvOffsetY": 0
+          }
+        },
+        {
+          "id": "setup_2",
+          "type": "light/point",
+          "position": {
+            "x": 857,
+            "y": 193
+          },
+          "params": {
+            "location": {
+              "x": 0,
+              "y": 2.185514752224622,
+              "z": -4.5179526088705275
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "color": 16768110,
+            "intensity": 50,
+            "distance": 15,
+            "decay": 2,
+            "castShadow": 1
+          }
+        },
+        {
+          "id": "setup_3",
+          "type": "light/point",
+          "position": {
+            "x": 1043,
+            "y": 187
+          },
+          "params": {
+            "location": {
+              "x": 0,
+              "y": 2.185514752224622,
+              "z": 4.487400919453167
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "color": 440020,
+            "intensity": 50,
+            "distance": 15,
+            "decay": 2,
+            "castShadow": 1
+          }
+        },
+        {
+          "id": "setup_4",
+          "type": "render",
+          "position": {
+            "x": 610,
+            "y": 393
+          },
+          "params": {
+            "frameCount": 600,
+            "fps": 30,
+            "motionBlur": 0,
+            "resolutionPreset": "16:9 (1920x1080)",
+            "width": 1920,
+            "height": 1080,
+            "holdout": false
+          }
+        },
+        {
+          "id": "setup_5",
+          "type": "lighting/environment",
+          "position": {
+            "x": 340,
+            "y": 406
+          },
+          "params": {
+            "color": 4147542,
+            "intensity": 1,
+            "background": 1,
+            "blurriness": 0,
+            "filePath": "",
+            "backgroundImagePath": "",
+            "backgroundFit": "cover",
+            "backgroundScale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "backgroundOffset": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "backgroundRotation": 0,
+            "ambientIntensity": 0,
+            "sunIntensity": 0
+          }
+        },
+        {
+          "id": "setup_6",
+          "type": "light/point",
+          "position": {
+            "x": 860,
+            "y": 389
+          },
+          "params": {
+            "location": {
+              "x": 3.583607412619263,
+              "y": 2.185514752224622,
+              "z": -0.48624947478730096
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "color": 16777215,
+            "intensity": 50,
+            "distance": 15,
+            "decay": 2,
+            "castShadow": 1
+          }
+        },
+        {
+          "id": "human",
+          "type": "rig/human",
+          "position": {
+            "x": -1250,
+            "y": 0
+          },
+          "params": {}
+        },
+        {
+          "id": "cheer",
+          "type": "rig/biped-pose",
+          "position": {
+            "x": -950,
+            "y": -180
+          },
+          "params": {
+            "name": "Cheer",
+            "pointsList": [
+              {
+                "x": 0,
+                "y": 1.0032,
+                "z": 0
+              },
+              {
+                "x": 0,
+                "y": 1.7052,
+                "z": -0.0341
+              },
+              {
+                "x": 0.4613,
+                "y": 1.986,
+                "z": 0.0341
+              },
+              {
+                "x": -0.4613,
+                "y": 1.986,
+                "z": 0.0341
+              },
+              {
+                "x": 0.162,
+                "y": 0.072,
+                "z": 0
+              },
+              {
+                "x": -0.162,
+                "y": 0.072,
+                "z": 0
+              },
+              {
+                "x": 0.7096,
+                "y": 1.4712,
+                "z": -0.341
+              },
+              {
+                "x": -0.7096,
+                "y": 1.4712,
+                "z": -0.341
+              },
+              {
+                "x": 0.162,
+                "y": 0.5106,
+                "z": 0.5861
+              },
+              {
+                "x": -0.162,
+                "y": 0.5106,
+                "z": 0.5861
+              },
+              {
+                "x": 0,
+                "y": 0,
+                "z": 0
+              }
+            ],
+            "previewAt": {
+              "x": -1.2,
+              "y": 0,
+              "z": 0
+            }
+          }
+        },
+        {
+          "id": "wave",
+          "type": "rig/biped-pose",
+          "position": {
+            "x": -950,
+            "y": 180
+          },
+          "params": {
+            "name": "Wave",
+            "pointsList": [
+              {
+                "x": 0,
+                "y": 1.0032,
+                "z": 0
+              },
+              {
+                "x": -0.0171,
+                "y": 1.7052,
+                "z": 0
+              },
+              {
+                "x": 0.4149,
+                "y": 0.9344,
+                "z": 0.058
+              },
+              {
+                "x": -0.4026,
+                "y": 1.7563,
+                "z": 0.0682
+              },
+              {
+                "x": 0.162,
+                "y": 0.072,
+                "z": 0
+              },
+              {
+                "x": -0.162,
+                "y": 0.072,
+                "z": 0
+              },
+              {
+                "x": 0.3126,
+                "y": 1.1875,
+                "z": -0.54
+              },
+              {
+                "x": -0.7673,
+                "y": 1.2154,
+                "z": -0.0853
+              },
+              {
+                "x": 0.162,
+                "y": 0.5106,
+                "z": 0.5861
+              },
+              {
+                "x": -0.162,
+                "y": 0.5106,
+                "z": 0.5861
+              },
+              {
+                "x": 0,
+                "y": 0,
+                "z": 0
+              }
+            ],
+            "previewAt": {
+              "x": 1.2,
+              "y": 0,
+              "z": 0
+            }
+          }
+        },
+        {
+          "id": "dance",
+          "type": "rig/biped-dance",
+          "position": {
+            "x": -600,
+            "y": 0
+          },
+          "params": {
+            "preset": "stepTouch",
+            "bpm": 112,
+            "groove": 0.5,
+            "moves": [
+              {
+                "lane": 0,
+                "start": 4,
+                "length": 2,
+                "mirror": false
+              },
+              {
+                "lane": 1,
+                "start": 8,
+                "length": 2,
+                "mirror": false
+              },
+              {
+                "lane": 1,
+                "start": 10,
+                "length": 2,
+                "mirror": true
+              },
+              {
+                "lane": 0,
+                "start": 14,
+                "length": 2,
+                "mirror": false
+              }
+            ]
+          }
+        }
+      ],
+      "connections": [
+        {
+          "id": "setup_c0",
+          "fromNode": "setup_1",
+          "fromSocket": "texture",
+          "toNode": "setup_0",
+          "toSocket": "texture"
+        },
+        {
+          "id": "setup_c1",
+          "fromNode": "setup_5",
+          "fromSocket": "environment",
+          "toNode": "setup_4",
+          "toSocket": "environment"
+        },
+        {
+          "id": "human.geometry->dance.skeleton",
+          "fromNode": "human",
+          "fromSocket": "geometry",
+          "toNode": "dance",
+          "toSocket": "skeleton"
+        },
+        {
+          "id": "human.geometry->cheer.skeleton",
+          "fromNode": "human",
+          "fromSocket": "geometry",
+          "toNode": "cheer",
+          "toSocket": "skeleton"
+        },
+        {
+          "id": "human.geometry->wave.skeleton",
+          "fromNode": "human",
+          "fromSocket": "geometry",
+          "toNode": "wave",
+          "toSocket": "skeleton"
+        },
+        {
+          "id": "cheer.pose->dance.pose0",
+          "fromNode": "cheer",
+          "fromSocket": "pose",
+          "toNode": "dance",
+          "toSocket": "pose0"
+        },
+        {
+          "id": "wave.pose->dance.pose1",
+          "fromNode": "wave",
+          "fromSocket": "pose",
+          "toNode": "dance",
+          "toSocket": "pose1"
+        }
+      ],
+      "keyframes": [],
+      "markers": [],
+      "exposedParams": []
+    }
+  ],
+  "activeCanvas": 0
+}

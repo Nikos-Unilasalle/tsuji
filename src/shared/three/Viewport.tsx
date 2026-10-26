@@ -31,6 +31,8 @@ import { SkeletonHud, SkinHud } from "./RigHuds";
 import { BipedHud } from "./BipedHud";
 import { PoseHud } from "./PoseHud";
 import { RIG_BIPED_POSE_NODE } from "../graph/nodes/bipedPose";
+import { RIG_BIPED_DANCE_NODE, type DanceInfo } from "../graph/nodes/bipedDance";
+import { DanceHud } from "./DanceHud";
 import { RIG_HUMAN_NODE } from "../graph/nodes/rig";
 import { RIG_BIPED_MOTION_NODE, type BipedGaitInfo } from "../graph/nodes/bipedMotion";
 import { PointsInfluenceHud } from "./PointsInfluenceHud";
@@ -8697,6 +8699,7 @@ export function Viewport({
                 n.type === SKIN_NODE.type ||
                 n.type === RIG_BIPED_MOTION_NODE.type ||
                 n.type === RIG_BIPED_POSE_NODE.type ||
+                n.type === RIG_BIPED_DANCE_NODE.type ||
                 n.type === RIG_HUMAN_NODE.type),
           );
           if (!rigNode) return null;
@@ -8712,6 +8715,22 @@ export function Viewport({
                 influence={rigNode.type === RIG_BIPED_POSE_NODE.type}
                 onParams={(params, nodeId) => onParamChange?.(params, nodeId)}
                 onAction={(nodeId, action) => onParamAction?.(nodeId, action)}
+              />
+            );
+          }
+          if (rigNode.type === RIG_BIPED_DANCE_NODE.type) {
+            return (
+              <DanceHud
+                node={rigNode}
+                laneNames={graph.connections
+                  .filter((c) => c.toNode === rigNode.id && /^pose\d+$/.test(c.toSocket))
+                  .reduce<string[]>((names, c) => {
+                    const from = graph.nodes.find((n) => n.id === c.fromNode);
+                    names[Number(c.toSocket.slice(4))] = String(from?.params.name || from?.type.replace("rig/", "") || "pose");
+                    return names;
+                  }, [])}
+                readInfo={() => (latestResultsRef.current?.get(rigNode.id)?.__danceInfo as DanceInfo | undefined) ?? null}
+                onParams={(params, nodeId) => onParamChange?.(params, nodeId)}
               />
             );
           }

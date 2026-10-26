@@ -614,6 +614,12 @@ export const DEMO_CATALOG: DemoCategory[] = [
         description: "A human walking an elliptical path: stepping feet, swinging arms, bobbing hips (press Play).",
       },
       {
+        file: "demo_rig_biped_dance.tsuji",
+        label: "Biped Dance",
+        description:
+          "A dancer step-touching at 112 BPM, throwing in a cheer and a wave (mirrored the second time) on the beat — the poses carry only the arms, so the feet keep stepping (press Play). Select Biped Dance: click the beat grid to drop a pose, drag to hold it, shift-click to mirror; Tap the tempo.",
+      },
+      {
         file: "demo_rig_biped_route.tsuji",
         label: "Biped Route",
         description:

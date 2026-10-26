@@ -155,6 +155,7 @@ import { VISUAL_SLICE_NODE, CLIP_BOX_NODE } from "./visualSlice";
 import { RIG_NODES } from "./rig";
 import { RIG_BIPED_MOTION_NODE } from "./bipedMotion";
 import { RIG_BIPED_POSE_NODE } from "./bipedPose";
+import { RIG_BIPED_DANCE_NODE } from "./bipedDance";
 import { SKIN_NODE } from "./skin";
 import { RIG_SKELETON_NODE } from "./skeleton";
 import { WIGGLE_NODE, WIGGLE_NUMBER_NODE, WIGGLE_VECTOR_NODE } from "./wiggle";
@@ -493,6 +494,7 @@ export const STARTER_NODES = [
   ...RIG_NODES,
   RIG_BIPED_MOTION_NODE,
   RIG_BIPED_POSE_NODE,
+  RIG_BIPED_DANCE_NODE,
   RIG_SKELETON_NODE,
   SKIN_NODE,
   MATERIAL_NODE,
