@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { HUD_PANEL_STYLE, HudBar, HudSeparator } from "./HudToolbars";
 import { CommitSlider } from "./RigHuds";
-import { bipedPresetParams, type BipedGaitInfo } from "../graph/nodes/bipedMotion";
+import { bipedPresetParams, readGaitStyle, type BipedGaitInfo } from "../graph/nodes/bipedMotion";
+import { readSavedWalks, savedWalkParams } from "../graph/nodes/bipedWalks";
 import { GAIT_HANDLES, HANDLE_COLORS } from "../graph/nodes/bipedHandles";
 import { GAIT_PRESET_KEYS, GAIT_PRESETS, type GaitPresetKey } from "../graph/ik/gaitPresets";
 import type { NodeInstance } from "../graph/types";
@@ -75,6 +76,8 @@ export function BipedHud({ node, readInfo, onParams, poseNames = [] }: { node: N
   const handles = !showGuides ? "off" : handleSet;
   const set = (params: Record<string, unknown>) => onParams(params, node.id);
   const applyPreset = (key: GaitPresetKey) => set(bipedPresetParams(key, info?.hipHeight));
+  const savedWalks = readSavedWalks(p.myWalks);
+  const mine = preset.startsWith("mine:") ? savedWalks.find((w) => w.id === preset.slice(5)) : undefined;
   const handleOptions = [
     ["gait", "Gait handles", "Design the walk itself: stride, foot lift, width, pelvis, lean, arms"],
     ...(locomotion === "route" ? ([["route", "Route handles", "Stage it: drag the route's points and slide its marks"]] as const) : []),
@@ -85,20 +88,80 @@ export function BipedHud({ node, readInfo, onParams, poseNames = [] }: { node: N
     <>
       <HudBar>
         <select
-          value={GAIT_PRESET_KEYS.includes(preset as GaitPresetKey) ? preset : "custom"}
-          onChange={(e) => e.target.value !== "custom" && applyPreset(e.target.value as GaitPresetKey)}
-          title={GAIT_PRESETS[preset as GaitPresetKey]?.hint ?? "Tuned by hand — pick a preset to start over from one"}
+          value={GAIT_PRESET_KEYS.includes(preset as GaitPresetKey) || mine ? preset : "custom"}
+          onChange={(e) => {
+            const value = e.target.value;
+            if (value.startsWith("mine:")) {
+              const walk = savedWalks.find((w) => `mine:${w.id}` === value);
+              if (walk) set(savedWalkParams(walk));
+            } else if (value !== "custom") applyPreset(value as GaitPresetKey);
+          }}
+          title={mine ? `Your saved walk “${mine.name}”` : (GAIT_PRESETS[preset as GaitPresetKey]?.hint ?? "Tuned by hand — save it with ★, or pick a walk to start over from")}
           style={selectStyle}
         >
-          {GAIT_PRESET_KEYS.map((key) => (
-            <option key={key} value={key}>
-              {GAIT_PRESETS[key].label}
-            </option>
-          ))}
+          {savedWalks.length > 0 && (
+            <optgroup label="My walks">
+              {savedWalks.map((w) => (
+                <option key={w.id} value={`mine:${w.id}`}>
+                  {w.name}
+                </option>
+              ))}
+            </optgroup>
+          )}
+          <optgroup label="Presets">
+            {GAIT_PRESET_KEYS.map((key) => (
+              <option key={key} value={key}>
+                {GAIT_PRESETS[key].label}
+              </option>
+            ))}
+          </optgroup>
           <option value="custom" disabled>
             Custom
           </option>
         </select>
+        {mine ? (
+          <>
+            <input
+              type="text"
+              value={mine.name}
+              onChange={(e) => set({ myWalks: savedWalks.map((w) => (w.id === mine.id ? { ...w, name: e.target.value } : w)) })}
+              title="Name of this saved walk"
+              style={{ ...selectStyle, width: 110 }}
+            />
+            <button
+              type="button"
+              className="viewport-hud-button"
+              style={wide}
+              onClick={() => set({ myWalks: savedWalks.map((w) => (w.id === mine.id ? { ...w, style: readGaitStyle(p), speed: Number(p.speed ?? 1.3), gait } : w)) })}
+              title={`Update “${mine.name}” with the walk as it is tuned now`}
+            >
+              ↻
+            </button>
+            <button
+              type="button"
+              className="viewport-hud-button"
+              style={wide}
+              onClick={() => set({ myWalks: savedWalks.filter((w) => w.id !== mine.id), preset: "custom" })}
+              title={`Delete “${mine.name}” (route marks using it go back to the node's walk)`}
+            >
+              🗑
+            </button>
+          </>
+        ) : (
+          <button
+            type="button"
+            className="viewport-hud-button"
+            style={wide}
+            onClick={() => {
+              const id = `w${Date.now().toString(36)}`;
+              const walk = { id, name: `My walk ${savedWalks.length + 1}`, style: readGaitStyle(p), speed: Number(p.speed ?? 1.3), gait };
+              set({ myWalks: [...savedWalks, walk], preset: `mine:${id}` });
+            }}
+            title="Save this walk under a name, to pick it again — or switch to it at a mark on the route"
+          >
+            ★ Save
+          </button>
+        )}
         <Choice value={locomotion} options={LOCOMOTIONS} onChange={(v) => set({ locomotion: v })} title="How the body moves" />
         <Choice value={gait} options={GAITS} onChange={(v) => set({ gait: v })} title="Walk or run" />
         {locomotion !== "follow" && (

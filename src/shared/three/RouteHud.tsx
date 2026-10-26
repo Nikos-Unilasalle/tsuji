@@ -6,6 +6,8 @@ import type { BipedGaitInfo } from "../graph/nodes/bipedMotion";
 import { readRoutePoints, ROUTE_COLORS } from "../graph/nodes/bipedRoute";
 import { readRouteMarks, type RouteMark, type RouteMarkKind } from "../graph/ik/route";
 import { POSE_PRESET_KEYS, POSE_PRESETS } from "../graph/ik/humanPose";
+import { GAIT_PRESET_KEYS, GAIT_PRESETS } from "../graph/ik/gaitPresets";
+import { readSavedWalks, walkLabel } from "../graph/nodes/bipedWalks";
 import type { NodeInstance } from "../graph/types";
 
 /**
@@ -43,6 +45,7 @@ export function RouteHud({ node, info, onParams, poseNames = [] }: { node: NodeI
     set({ route: [...points, last.clone().add(dir.lengthSq() > 1e-9 ? dir.setLength(2) : new THREE.Vector3(0, 0, 2))] });
   };
   const current = picked >= 0 && picked < marks.length ? marks[picked] : null;
+  const savedWalks = readSavedWalks(node.params.myWalks);
   // The node's Pose inputs, named after what is wired into them.
   const wired = poseNames.map((name, i) => (name ? { value: `input:${i}`, label: `Pose ${i + 1} · ${name}` } : null)).filter((x): x is { value: string; label: string } => x !== null);
   const poseLabel = (pose: string) =>
@@ -99,7 +102,7 @@ export function RouteHud({ node, info, onParams, poseNames = [] }: { node: NodeI
           › Walk
         </button>
       </div>
-      {marks.length > 0 && !current && <span style={{ color: "#94a3b8" }}>Click a mark to edit it: hold, pose, whole body, speed.</span>}
+      {marks.length > 0 && !current && <span style={{ color: "#94a3b8" }}>Click a mark to edit it: its walk, speed, hold, pose.</span>}
       {marks.length > 0 && (
         <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
           {marks.map((m, i) => (
@@ -126,6 +129,7 @@ export function RouteHud({ node, info, onParams, poseNames = [] }: { node: NodeI
               <span style={{ flex: 1 }}>
                 {KIND_LABEL[m.kind]}
                 {m.kind === "stop" && m.pose ? ` · ${poseLabel(m.pose)}` : ""}
+                {m.kind !== "stop" && m.style ? ` · ${walkLabel(m.style, savedWalks)}` : ""}
               </span>
               <span style={{ color: "#94a3b8", fontVariantNumeric: "tabular-nums" }}>{route ? `${route.markTimes[i]?.toFixed(1) ?? "—"} s` : ""}</span>
             </button>
@@ -170,15 +174,41 @@ export function RouteHud({ node, info, onParams, poseNames = [] }: { node: NodeI
               </div>
             </>
           ) : (
-            <CommitSlider
-              label="m/s"
-              value={current.speed ?? 0}
-              min={0}
-              max={8}
-              step={0.1}
-              title={`Speed from here — 0 is the node's ${current.kind === "run" ? "Run Speed" : "Speed"}`}
-              onCommit={(speed) => editMark(picked, { speed })}
-            />
+            <>
+              <select
+                value={current.style ?? ""}
+                onChange={(e) => editMark(picked, { style: e.target.value })}
+                style={{ ...select, width: "100%", minWidth: 0 }}
+                title="The walk taken from here, blended in over about a stride"
+              >
+                <option value="">The node's walk</option>
+                {savedWalks.length > 0 && (
+                  <optgroup label="My walks">
+                    {savedWalks.map((w) => (
+                      <option key={w.id} value={`mine:${w.id}`}>
+                        {w.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+                <optgroup label="Presets">
+                  {GAIT_PRESET_KEYS.map((key) => (
+                    <option key={key} value={key}>
+                      {GAIT_PRESETS[key].label}
+                    </option>
+                  ))}
+                </optgroup>
+              </select>
+              <CommitSlider
+                label="m/s"
+                value={current.speed ?? 0}
+                min={0}
+                max={8}
+                step={0.1}
+                title={`Speed from here — 0 is the walk's own (the node's ${current.kind === "run" ? "Run Speed" : "Speed"} for the node's walk)`}
+                onCommit={(speed) => editMark(picked, { speed })}
+              />
+            </>
           )}
           <button
             type="button"

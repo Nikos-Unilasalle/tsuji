@@ -16,6 +16,7 @@ import { GAIT_PRESET_KEYS, GAIT_PRESETS, GaitMode, GaitPresetKey, presetStyle } 
 import { BipedGaitState, createBipedGait, stepBipedGait } from "../ik/bipedGait";
 import { blendPose, HumanPose, readHumanPose, readPoseList, turnQuaternion } from "../ik/humanPose";
 import { readRouteMarks } from "../ik/route";
+import { marksWithWalkSpeeds, readSavedWalks, routeWalkSchedule } from "./bipedWalks";
 import { holdRoutePose, readRoutePoints, routeBodyAt, RouteHandleContext, routeGuides, routeHandleContext, routeHandlePatch, routePlanFor } from "./bipedRoute";
 import { armPose, buildGaitGuides, GAIT_HANDLE_AXES, HANDLE_COLORS, GaitHandleContext, gaitHandlePatch, handleContextFor } from "./bipedHandles";
 
@@ -174,6 +175,7 @@ export const RIG_BIPED_MOTION_NODE: NodeDefinition = {
     locomotion: "follow",
     route: [],
     routeMarks: [],
+    myWalks: [],
     runSpeed: 2.8,
     handleSet: "auto",
     speed: 1.3,
@@ -239,7 +241,10 @@ export const RIG_BIPED_MOTION_NODE: NodeDefinition = {
       return route ? routeHandlePatch(route, index, position) : null;
     }
     const context = handleContexts.get(nodeId);
-    return context ? gaitHandlePatch(context, index, position, readGaitStyle(params)) : null;
+    const patch = context ? gaitHandlePatch(context, index, position, readGaitStyle(params)) : null;
+    // Tweaking a saved walk keeps it selected, so ↻ can update it.
+    if (patch && String(params.preset ?? "").startsWith("mine:")) delete patch.preset;
+    return patch;
   },
   evaluate: (inputs, params, ctx) => {
     const view = viewFor(ctx.nodeId);
@@ -292,13 +297,19 @@ export const RIG_BIPED_MOTION_NODE: NodeDefinition = {
     const baseUnit = Math.max(1e-6, (baseScale.x + baseScale.y + baseScale.z) / 3);
     const routePoints = readRoutePoints(params.route);
     const routeMarks = readRouteMarks(params.routeMarks);
+    // Walk / Run marks may hand over to another walk — a preset or one saved on the node — whose speed they take unless they set one.
+    const savedWalks = readSavedWalks(params.myWalks);
+    const hipWorld = metrics.hipHeight * baseUnit;
+    const plannedMarks = marksWithWalkSpeeds(routeMarks, savedWalks, hipWorld).map((m) => ({ ...m, speed: (Number(m.speed) || 0) / baseUnit }));
     const plan =
       locomotion === "route"
-        ? routePlanFor(ctx.nodeId, routePoints, routeMarks, Math.abs(driveSpeed) / baseUnit, Math.abs(numberInput(undefined, params.runSpeed, 2.8)) / baseUnit)
+        ? routePlanFor(ctx.nodeId, routePoints, plannedMarks, Math.abs(driveSpeed) / baseUnit, Math.abs(numberInput(undefined, params.runSpeed, 2.8)) / baseUnit)
         : null;
+    const walkAt = plan ? routeWalkSchedule(routeMarks, plan.markTimes, style, savedWalks, hipWorld) : null;
     const routeInput = (time: number): FrameInput => {
       const at = routeBodyAt(plan!, time);
-      return { base, speed: at.sample.speed * baseUnit, turnRate: at.yawRate, root: at.matrix };
+      const walk = walkAt!(time);
+      return { base, speed: at.sample.speed * baseUnit, turnRate: at.yawRate, root: at.matrix, style: walk.style, styleKey: walk.key };
     };
     const routeTime = onTimeline ? frame / fps : ctx.time;
     const input: FrameInput = plan ? routeInput(routeTime) : { base, speed: driveSpeed, turnRate };
@@ -307,7 +318,7 @@ export const RIG_BIPED_MOTION_NODE: NodeDefinition = {
     let state: BipedState;
     let now: number;
     if (onTimeline) {
-      const routeKey = plan ? JSON.stringify([routePoints.map((p) => [p.x, p.z]), routeMarks, driveSpeed, params.runSpeed]) : "";
+      const routeKey = plan ? JSON.stringify([routePoints.map((p) => [p.x, p.z]), routeMarks, driveSpeed, params.runSpeed, savedWalks]) : "";
       const simKey = `${data.key}|${locomotion}|${fps}|${JSON.stringify(style)}|${cfg.mode}|${cfg.transitionFroude}|${epoch}|${routeKey}`;
       const estimate = plan ? (j: number) => routeInput(j / fps) : estimateInput(ctx, params, input);
       const run = runTimeline(ctx.nodeId, `${ctx.sessionId ?? ""}|${ctx.evalScope ?? ""}`, simKey, frame, fps, input, cfg, estimate);
@@ -435,6 +446,9 @@ interface FrameInput {
   turnRate: number;
   /** Route: the body's place in the node's space, given rather than integrated. */
   root?: THREE.Matrix4;
+  /** Route: the walk at this moment, when a mark has handed over to another; `styleKey` names it for comparison. */
+  style?: GaitStyle;
+  styleKey?: string;
 }
 
 interface AdvanceConfig {
@@ -504,7 +518,8 @@ function cloneState(s: BipedState): BipedState {
  * measured over (live, the graph can run twice in one displayed frame).
  */
 function advance(state: BipedState, input: FrameInput, cfg: AdvanceConfig, dt: number, now: number, minSample: number): AdvanceOut {
-  const { data, metrics, style, locomotion } = cfg;
+  const { data, metrics, locomotion } = cfg;
+  const style = input.style ?? cfg.style;
   const { skeleton } = data;
   const rc = skeleton.relaxedControls;
   const ankleY = rc[4].y;
@@ -585,6 +600,7 @@ const MAX_REPLAY = 6000;
 function sameInput(a: FrameInput, b: FrameInput): boolean {
   if (Math.abs(a.speed - b.speed) > 1e-9 || Math.abs(a.turnRate - b.turnRate) > 1e-9) return false;
   if (Boolean(a.root) !== Boolean(b.root) || (a.root && !a.root.equals(b.root!))) return false;
+  if ((a.styleKey ?? "") !== (b.styleKey ?? "")) return false;
   const x = a.base.elements;
   const y = b.base.elements;
   for (let i = 0; i < 16; i++) if (Math.abs(x[i] - y[i]) > 1e-7) return false;

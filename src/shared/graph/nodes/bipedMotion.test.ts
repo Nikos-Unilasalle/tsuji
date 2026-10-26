@@ -351,3 +351,55 @@ describe("Biped Motion handles in Route", () => {
     expect(RIG_BIPED_MOTION_NODE.paramHandleAxes!(0, { locomotion: "route", handleSet: "gait" })).toEqual(["z"]);
   });
 });
+
+describe("walks along a route", () => {
+  const fps = 30;
+  const route = [new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, 12)];
+  const run = (id: string, frames: number, extra: Record<string, unknown>) => {
+    const outs: Out[] = [];
+    for (let f = 0; f <= frames; f++) {
+      outs.push(
+        RIG_BIPED_MOTION_NODE.evaluate(
+          { skeleton: adult.geometry },
+          { ...RIG_BIPED_MOTION_NODE.defaultParams, locomotion: "route", route, ...extra },
+          ctx(id, { time: f / fps, currentFrame: f, fps, sessionId: "walks" }),
+        ) as Out,
+      );
+    }
+    return outs;
+  };
+  type RouteOut = Out & { __gaitInfo: { route: { markTimes: number[] } } };
+
+  it("hands over to a preset at its mark: slower and crouched, as Sneak walks", () => {
+    const outs = run("walk-sneak", 420, { routeMarks: [{ kind: "walk", at: 0.3, style: "sneak" }] }) as RouteOut[];
+    const markFrame = Math.round(outs[0].__gaitInfo.route.markTimes[0] * fps);
+    const pelvisY = (o: Out) => o.joints[0].y;
+    const before = outs.slice(markFrame - 40, markFrame - 10);
+    const after = outs.slice(markFrame + 60, markFrame + 90);
+    const avg = (list: Out[], f: (o: Out) => number) => list.reduce((s, o) => s + f(o), 0) / list.length;
+    expect(avg(after, pelvisY)).toBeLessThan(avg(before, pelvisY) - 0.08);
+    expect(avg(after, (o) => o.__gaitInfo.measuredSpeed)).toBeLessThan(avg(before, (o) => o.__gaitInfo.measuredSpeed) - 0.3);
+    // No jump at the handover.
+    let worst = 0;
+    for (let f = markFrame - 5; f < markFrame + 40; f++) worst = Math.max(worst, Math.abs(pelvisY(outs[f + 1]) - pelvisY(outs[f])));
+    expect(worst).toBeLessThan(0.03);
+  });
+
+  it("takes a walk saved on the node, with its speed", () => {
+    const myWalks = [{ id: "w1", name: "Robot", style: { stride: 0.6, armSwing: 0.1, crouch: 0.1 }, speed: 0.8, gait: "walk" }];
+    const outs = run("walk-mine", 300, { myWalks, routeMarks: [{ kind: "walk", at: 0.2, style: "mine:w1" }] }) as RouteOut[];
+    const markFrame = Math.round(outs[0].__gaitInfo.route.markTimes[0] * fps);
+    expect(outs[markFrame + 90].__gaitInfo.measuredSpeed).toBeCloseTo(0.8, 1);
+  });
+
+  it("stays exact on the timeline: a jump gives the frame played through", () => {
+    const marks = [{ kind: "walk", at: 0.25, style: "march" }, { kind: "run", at: 0.6, style: "sprint" }];
+    const played = run("walk-played", 200, { routeMarks: marks });
+    const jumped = RIG_BIPED_MOTION_NODE.evaluate(
+      { skeleton: adult.geometry },
+      { ...RIG_BIPED_MOTION_NODE.defaultParams, locomotion: "route", route, routeMarks: marks },
+      ctx("walk-jumped", { time: 200 / fps, currentFrame: 200, fps, sessionId: "walks" }),
+    ) as Out;
+    played[200].joints.forEach((j, i) => expect(j.distanceTo(jumped.joints[i])).toBeLessThan(1e-9));
+  });
+});

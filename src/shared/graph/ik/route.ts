@@ -29,6 +29,12 @@ export interface RouteMark {
   pose?: string;
   /** Stop: the pose takes the legs too (they will slide into it); otherwise only the upper body. */
   whole?: boolean;
+  /**
+   * Walk / run: the walk taken from here — "" the node's own, a gait preset
+   * key, or "mine:<id>" one of the node's saved walks. Its speed is the
+   * default for `speed`.
+   */
+  style?: string;
 }
 
 /** Sideways acceleration a walker accepts in a bend, m/s². */
@@ -238,5 +244,6 @@ export function readRouteMarks(value: unknown): RouteMark[] {
       hold: Number.isFinite(Number(m.hold)) ? Number(m.hold) : 1.5,
       pose: typeof m.pose === "string" ? m.pose : "",
       whole: Boolean(m.whole),
+      style: typeof m.style === "string" ? m.style : "",
     }));
 }
