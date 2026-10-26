@@ -2,6 +2,8 @@ import * as THREE from "three";
 import { NodeDefinition } from "../types";
 import { SocketDef, toBoolean } from "../sockets";
 import { growingSockets } from "../dynamicInputs";
+import { createNodeCache } from "../nodeCaches";
+import { createLiveState, LiveMove, LiveState, stepLive } from "./danceLive";
 import { numberInput } from "./object";
 import { HumanSkeleton, solveHuman } from "../ik/skeletons";
 import { publishRig } from "../ik/skinning";
@@ -41,11 +43,15 @@ export interface DanceInfo {
   /** Which lanes have a pose wired in, by index. */
   lanes: boolean[];
   bpm: number;
+  /** Moves played live, in beats from the start (see danceLive.ts). */
+  live: LiveMove[];
   /** The next move to hit, and in how many beats; null with none. */
   next: { lane: number; inBeats: number; mirror: boolean } | null;
 }
 
 const GHOST_COLOR = 0x67e8f9;
+/** Live moves count from the start, never round a loop: a span no dance reaches. */
+const LIVE_SPAN = 1e9;
 
 /**
  * The next pose's ghost: a see-through cyan body inside the dancer's group,
@@ -164,13 +170,18 @@ const FIXED_INPUTS: SocketDef[] = [
   { id: "influence", label: "Influence", type: "value" },
 ];
 const poseSocket = (i: number): SocketDef => ({ id: `pose${i}`, label: `Pose ${i + 1}`, type: "list" });
+const hitSocket = (i: number): SocketDef => ({ id: `hit${i}`, label: `Hit ${i + 1}`, type: "value" });
+const MIRROR_SOCKET: SocketDef = { id: "mirror", label: "Mirror (live)", type: "value" };
+const liveStates = createNodeCache<LiveState>();
+const QUANTIZE = ["0", "0.25", "0.5", "1", "2"];
 
 export const RIG_BIPED_DANCE_NODE: NodeDefinition = {
   type: "rig/biped-dance",
   label: "Biped Dance",
   category: "rig",
-  inputs: [...FIXED_INPUTS, poseSocket(0)],
-  dynamicInputs: (connections) => [...FIXED_INPUTS, ...growingSockets(connections, "pose", poseSocket)],
+  inputs: [...FIXED_INPUTS, MIRROR_SOCKET, poseSocket(0), hitSocket(0)],
+  // Each pose with its Hit beside it, for playing it live.
+  dynamicInputs: (connections) => [...FIXED_INPUTS, MIRROR_SOCKET, ...growingSockets(connections, "pose", poseSocket).flatMap((p, i) => [p, hitSocket(i)])],
   outputs: [
     { id: "geometry", label: "Geometry", type: "geometry" },
     { id: "matrix", label: "Body Matrix", type: "matrix" },
@@ -192,6 +203,8 @@ export const RIG_BIPED_DANCE_NODE: NodeDefinition = {
     offset: 0,
     moves: [],
     diceSeed: 0,
+    quantize: "1",
+    hitLength: 1,
     showGhost: true,
   },
   paramFields: [
@@ -206,6 +219,8 @@ export const RIG_BIPED_DANCE_NODE: NodeDefinition = {
     { id: "loopBeats", label: "Loop (beats)", kind: "number", step: 4, group: "Choreography" },
     { id: "snap", label: "Snap (beats to hit a pose)", kind: "number", step: 0.05, group: "Choreography" },
     { id: "poseGroove", label: "Groove kept in a held pose", kind: "number", step: 0.05, percent: true, group: "Choreography" },
+    { id: "quantize", label: "Live hits land on (beats; 0 at once)", kind: "select", options: QUANTIZE, optionLabels: ["At once", "¼ beat", "½ beat", "The beat", "Every 2 beats"], group: "Live" },
+    { id: "hitLength", label: "Hit Length (beats a tap holds)", kind: "number", step: 0.25, group: "Live" },
     { id: "showGhost", label: "Ghost of the next pose (editor only)", kind: "boolean", group: "Display" },
   ],
   evaluate: (inputs, params, ctx) => {
@@ -220,7 +235,7 @@ export const RIG_BIPED_DANCE_NODE: NodeDefinition = {
     if (!data) {
       drawEmpty(view);
       drawGhost(ctx.nodeId, group, null, null, 0);
-      return { geometry: group, matrix: new THREE.Matrix4(), joints: [], bones: [], beat, __danceInfo: { beat, loopBeats, lanes: [], bpm, next: null } satisfies DanceInfo };
+      return { geometry: group, matrix: new THREE.Matrix4(), joints: [], bones: [], beat, __danceInfo: { beat, loopBeats, lanes: [], bpm, live: [], next: null } satisfies DanceInfo };
     }
     const { skeleton } = data;
     const rest = skeleton.relaxedControls;
@@ -243,6 +258,14 @@ export const RIG_BIPED_DANCE_NODE: NodeDefinition = {
     const influence = Math.max(0, Math.min(1, numberInput(inputs.influence, params.influence, 1)));
     const solver = { armPull: data.armPull, ...data.solver };
 
+    // Live: the Hit sockets throw their poses now, over the choreography.
+    const liveKey = `${ctx.nodeId}|${ctx.sessionId ?? ""}|${ctx.evalScope ?? ""}`;
+    const liveState = liveStates.get(liveKey) ?? createLiveState();
+    liveStates.set(liveKey, liveState);
+    const hits = poses.map((_, i) => toBoolean(inputs[`hit${i}`] ?? 0));
+    const quantize = Math.max(0, Number(params.quantize ?? 1) || 0);
+    const live = stepLive(liveState, hits, toBoolean(inputs.mirror ?? 0), beat, quantize, numberInput(undefined, params.hitLength, 1), snap).filter((m) => poses[m.lane]);
+
     /** The body at any beat: a pure function of it, so the ghost can look ahead. */
     const danceAt = (b: number, t: number) => {
       // Like Biped Motion, the dance starts from the natural stance; Influence lays it over the pose wired in.
@@ -253,9 +276,16 @@ export const RIG_BIPED_DANCE_NODE: NodeDefinition = {
       const ride = offsets[CONTROL.pelvis];
       const controls = g.controls.map((c) => c.clone());
       let pelvisRotation = g.pelvisRotation.clone();
-      // The moves over the groove, each by its own weight and only where its pose moved.
-      for (const move of moves) {
-        const w = moveWeight(move, inLoop, loopBeats, snap);
+      // The moves over the groove, each by its own weight and only where its pose moved; live hits last, on top.
+      const playing = [
+        ...moves.map((move) => ({ move, w: moveWeight(move, inLoop, loopBeats, snap) })),
+        ...live.map((m) => {
+          // Still held: it lasts until a little past now.
+          const move = { lane: m.lane, start: m.start, length: (m.end ?? Math.max(b, m.start) + snap) - m.start, mirror: m.mirror };
+          return { move, w: moveWeight(move, b, LIVE_SPAN, snap) };
+        }),
+      ];
+      for (const { move, w } of playing) {
         if (w <= 0) continue;
         const p = move.mirror ? mirrored(poses[move.lane]!) : poses[move.lane]!;
         controls.forEach((c, i) => {
@@ -301,7 +331,7 @@ export const RIG_BIPED_DANCE_NODE: NodeDefinition = {
       bones: boneMatrices(skeleton.rig, world),
       beat,
       // Not a socket: the beat grid's playhead and lanes (see DanceHud).
-      __danceInfo: { beat, loopBeats, lanes: poses.map((p) => p !== null), bpm, next: next ? { lane: next.move.lane, inBeats: next.inBeats, mirror: Boolean(next.move.mirror) } : null } satisfies DanceInfo,
+      __danceInfo: { beat, loopBeats, lanes: poses.map((p) => p !== null), bpm, live: live.map((m) => ({ ...m })), next: next ? { lane: next.move.lane, inBeats: next.inBeats, mirror: Boolean(next.move.mirror) } : null } satisfies DanceInfo,
     };
   },
 };

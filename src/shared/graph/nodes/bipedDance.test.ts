@@ -172,3 +172,35 @@ describe("Dice", () => {
     expect(diceChoreography([], 16, 1)).toEqual([]);
   });
 });
+
+describe("Biped Dance live", () => {
+  it("throws a pose on its Hit, on the next beat, and holds it while held", () => {
+    const params = { bpm: 120, groove: 0, energy: 0, quantize: "1" };
+    const id = "bd-live";
+    // Frame 17 is beat 1.13 (15 frames a beat): the hit lands on beat 2.
+    dance(id, 0, params, { pose0: cheer, hit0: 0 });
+    const hit = dance(id, 17, params, { pose0: cheer, hit0: 1 });
+    expect(hit.__danceInfo.live).toMatchObject([{ lane: 0, start: 2, end: null }]);
+    const up = controlsOf(dance(id, 50, params, { pose0: cheer, hit0: 1 }));
+    expect(up[CONTROL.hand[0]].y).toBeGreaterThan(skeleton.relaxedControls[CONTROL.hand[0]].y + 0.3 * H);
+    // Let go at beat 7: gone by beat 9.
+    dance(id, 105, params, { pose0: cheer, hit0: 0 });
+    const down = controlsOf(dance(id, 135, params, { pose0: cheer, hit0: 0 }));
+    expect(down[CONTROL.hand[0]].distanceTo(skeleton.relaxedControls[CONTROL.hand[0]])).toBeLessThan(1e-6);
+  });
+
+  it("mirrors a live hit while Mirror is high", () => {
+    const wave = [...POSE_PRESETS.wave.build(skeleton), new THREE.Vector3()];
+    const params = { bpm: 120, groove: 0, energy: 0, quantize: "0" };
+    dance("bd-live-m", 0, params, { pose0: wave, hit0: 0 });
+    dance("bd-live-m", 3, params, { pose0: wave, hit0: 1, mirror: 1 });
+    const c = controlsOf(dance("bd-live-m", 20, params, { pose0: wave, hit0: 1, mirror: 0 }));
+    expect(c[CONTROL.hand[0]].y).toBeGreaterThan(c[CONTROL.hand[1]].y + 0.2 * H);
+  });
+
+  it("puts a Hit socket beside every Pose socket", () => {
+    const sockets = RIG_BIPED_DANCE_NODE.dynamicInputs!([{ id: "c", fromNode: "p", fromSocket: "pose", toNode: "d", toSocket: "pose0" }]).map((s) => s.id);
+    expect(sockets.slice(-4)).toEqual(["pose0", "hit0", "pose1", "hit1"]);
+    expect(sockets).toContain("mirror");
+  });
+});

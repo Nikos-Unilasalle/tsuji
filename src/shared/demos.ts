@@ -620,6 +620,12 @@ export const DEMO_CATALOG: DemoCategory[] = [
           "A dancer step-touching at 112 BPM, throwing in a cheer and a wave (mirrored the second time) on the beat — the poses carry only the arms, so the feet keep stepping (press Play). Select Biped Dance: click the beat grid to drop a pose, drag to hold it, shift-click to mirror; Tap the tempo.",
       },
       {
+        file: "demo_rig_biped_dance_live.tsuji",
+        label: "Biped Dance Live",
+        description:
+          "Play the dancer from the keyboard while it bounces at 120 BPM (press Play): hold J to cheer, K to wave, add Shift to mirror. Enable the Microphone node and the bass kicks make it crouch. Select Biped Dance and press ● Rec to put what you play on the beat grid.",
+      },
+      {
         file: "demo_rig_biped_route.tsuji",
         label: "Biped Route",
         description:

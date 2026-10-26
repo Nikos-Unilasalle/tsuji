@@ -1,0 +1,632 @@
+{
+  "canvases": [
+    {
+      "nodes": [
+        {
+          "id": "setup_0",
+          "type": "object/plane",
+          "position": {
+            "x": 599,
+            "y": 160
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "rotation": {
+              "x": 1.5707963267948966,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 20,
+              "y": 20,
+              "z": 1
+            },
+            "texturePath": "",
+            "normalMapPath": "",
+            "roughnessMapPath": "",
+            "uvScaleX": 1,
+            "uvScaleY": 1,
+            "uvOffsetX": 0,
+            "uvOffsetY": 0,
+            "color": 16777215,
+            "emissive": 0,
+            "emissiveIntensity": 1,
+            "shadeless": 0,
+            "roughness": 0.1,
+            "metalness": 0.1,
+            "wireframe": 0,
+            "opacity": 1,
+            "transmission": 0,
+            "thickness": 0.5
+          }
+        },
+        {
+          "id": "setup_1",
+          "type": "texture/procedural",
+          "position": {
+            "x": 375,
+            "y": 223
+          },
+          "params": {
+            "type": "checker",
+            "colorA": 16777215,
+            "colorB": 2236962,
+            "scale": 8,
+            "seed": 1,
+            "octaves": 3,
+            "resolution": 256,
+            "uvScaleX": 1,
+            "uvScaleY": 1,
+            "uvOffsetX": 0,
+            "uvOffsetY": 0
+          }
+        },
+        {
+          "id": "setup_2",
+          "type": "light/point",
+          "position": {
+            "x": 857,
+            "y": 193
+          },
+          "params": {
+            "location": {
+              "x": 0,
+              "y": 2.185514752224622,
+              "z": -4.5179526088705275
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "color": 16768110,
+            "intensity": 50,
+            "distance": 15,
+            "decay": 2,
+            "castShadow": 1
+          }
+        },
+        {
+          "id": "setup_3",
+          "type": "light/point",
+          "position": {
+            "x": 1043,
+            "y": 187
+          },
+          "params": {
+            "location": {
+              "x": 0,
+              "y": 2.185514752224622,
+              "z": 4.487400919453167
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "color": 440020,
+            "intensity": 50,
+            "distance": 15,
+            "decay": 2,
+            "castShadow": 1
+          }
+        },
+        {
+          "id": "setup_4",
+          "type": "render",
+          "position": {
+            "x": 610,
+            "y": 393
+          },
+          "params": {
+            "frameCount": 600,
+            "fps": 30,
+            "motionBlur": 0,
+            "resolutionPreset": "16:9 (1920x1080)",
+            "width": 1920,
+            "height": 1080,
+            "holdout": false
+          }
+        },
+        {
+          "id": "setup_5",
+          "type": "lighting/environment",
+          "position": {
+            "x": 340,
+            "y": 406
+          },
+          "params": {
+            "color": 4147542,
+            "intensity": 1,
+            "background": 1,
+            "blurriness": 0,
+            "filePath": "",
+            "backgroundImagePath": "",
+            "backgroundFit": "cover",
+            "backgroundScale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "backgroundOffset": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "backgroundRotation": 0,
+            "ambientIntensity": 0,
+            "sunIntensity": 0
+          }
+        },
+        {
+          "id": "setup_6",
+          "type": "light/point",
+          "position": {
+            "x": 860,
+            "y": 389
+          },
+          "params": {
+            "location": {
+              "x": 3.583607412619263,
+              "y": 2.185514752224622,
+              "z": -0.48624947478730096
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "color": 16777215,
+            "intensity": 50,
+            "distance": 15,
+            "decay": 2,
+            "castShadow": 1
+          }
+        },
+        {
+          "id": "human",
+          "type": "rig/human",
+          "position": {
+            "x": -1250,
+            "y": 0
+          },
+          "params": {}
+        },
+        {
+          "id": "cheer",
+          "type": "rig/biped-pose",
+          "position": {
+            "x": -950,
+            "y": -180
+          },
+          "params": {
+            "name": "Cheer",
+            "pointsList": [
+              {
+                "x": 0,
+                "y": 1.0032,
+                "z": 0
+              },
+              {
+                "x": 0,
+                "y": 1.7052,
+                "z": -0.0341
+              },
+              {
+                "x": 0.4613,
+                "y": 1.986,
+                "z": 0.0341
+              },
+              {
+                "x": -0.4613,
+                "y": 1.986,
+                "z": 0.0341
+              },
+              {
+                "x": 0.162,
+                "y": 0.072,
+                "z": 0
+              },
+              {
+                "x": -0.162,
+                "y": 0.072,
+                "z": 0
+              },
+              {
+                "x": 0.7096,
+                "y": 1.4712,
+                "z": -0.341
+              },
+              {
+                "x": -0.7096,
+                "y": 1.4712,
+                "z": -0.341
+              },
+              {
+                "x": 0.162,
+                "y": 0.5106,
+                "z": 0.5861
+              },
+              {
+                "x": -0.162,
+                "y": 0.5106,
+                "z": 0.5861
+              },
+              {
+                "x": 0,
+                "y": 0,
+                "z": 0
+              }
+            ],
+            "previewAt": {
+              "x": -1.2,
+              "y": 0,
+              "z": 0
+            }
+          }
+        },
+        {
+          "id": "wave",
+          "type": "rig/biped-pose",
+          "position": {
+            "x": -950,
+            "y": 180
+          },
+          "params": {
+            "name": "Wave",
+            "pointsList": [
+              {
+                "x": 0,
+                "y": 1.0032,
+                "z": 0
+              },
+              {
+                "x": -0.0171,
+                "y": 1.7052,
+                "z": 0
+              },
+              {
+                "x": 0.4149,
+                "y": 0.9344,
+                "z": 0.058
+              },
+              {
+                "x": -0.4026,
+                "y": 1.7563,
+                "z": 0.0682
+              },
+              {
+                "x": 0.162,
+                "y": 0.072,
+                "z": 0
+              },
+              {
+                "x": -0.162,
+                "y": 0.072,
+                "z": 0
+              },
+              {
+                "x": 0.3126,
+                "y": 1.1875,
+                "z": -0.54
+              },
+              {
+                "x": -0.7673,
+                "y": 1.2154,
+                "z": -0.0853
+              },
+              {
+                "x": 0.162,
+                "y": 0.5106,
+                "z": 0.5861
+              },
+              {
+                "x": -0.162,
+                "y": 0.5106,
+                "z": 0.5861
+              },
+              {
+                "x": 0,
+                "y": 0,
+                "z": 0
+              }
+            ],
+            "previewAt": {
+              "x": 1.2,
+              "y": 0,
+              "z": 0
+            }
+          }
+        },
+        {
+          "id": "dance",
+          "type": "rig/biped-dance",
+          "position": {
+            "x": -600,
+            "y": 0
+          },
+          "params": {
+            "preset": "bounce",
+            "bpm": 120,
+            "groove": 0.5,
+            "moves": [],
+            "quantize": "0.5"
+          }
+        },
+        {
+          "id": "crouch",
+          "type": "rig/biped-pose",
+          "position": {
+            "x": -950,
+            "y": 540
+          },
+          "params": {
+            "name": "Crouch",
+            "pointsList": [
+              {
+                "x": 0,
+                "y": 0.6621,
+                "z": -0.1023
+              },
+              {
+                "x": 0,
+                "y": 1.2959,
+                "z": 0.1364
+              },
+              {
+                "x": 0.1876,
+                "y": 0.6621,
+                "z": 0.341
+              },
+              {
+                "x": -0.1876,
+                "y": 0.6621,
+                "z": 0.341
+              },
+              {
+                "x": 0.1961,
+                "y": 0.072,
+                "z": 0
+              },
+              {
+                "x": -0.1961,
+                "y": 0.072,
+                "z": 0
+              },
+              {
+                "x": 0.3126,
+                "y": 1.1875,
+                "z": -0.54
+              },
+              {
+                "x": -0.3126,
+                "y": 1.1875,
+                "z": -0.54
+              },
+              {
+                "x": 0.2046,
+                "y": 1.0032,
+                "z": 0.6821
+              },
+              {
+                "x": -0.2046,
+                "y": 1.0032,
+                "z": 0.6821
+              },
+              {
+                "x": 0,
+                "y": 0,
+                "z": 0
+              }
+            ],
+            "previewAt": {
+              "x": 0,
+              "y": 0,
+              "z": -1.4
+            }
+          }
+        },
+        {
+          "id": "keyJ",
+          "type": "io/keyboard",
+          "position": {
+            "x": -950,
+            "y": -420
+          },
+          "params": {
+            "key": "j"
+          }
+        },
+        {
+          "id": "keyK",
+          "type": "io/keyboard",
+          "position": {
+            "x": -950,
+            "y": -300
+          },
+          "params": {
+            "key": "k"
+          }
+        },
+        {
+          "id": "keyShift",
+          "type": "io/keyboard",
+          "position": {
+            "x": -950,
+            "y": -540
+          },
+          "params": {
+            "key": "shift"
+          }
+        },
+        {
+          "id": "mic",
+          "type": "sound/microphone",
+          "position": {
+            "x": -1500,
+            "y": 760
+          },
+          "params": {
+            "enable": 0,
+            "gain": 1.4
+          }
+        },
+        {
+          "id": "fft",
+          "type": "sound/spectrum",
+          "position": {
+            "x": -1250,
+            "y": 760
+          },
+          "params": {
+            "bins": 16,
+            "smoothing": 0.6
+          }
+        },
+        {
+          "id": "kick",
+          "type": "sound/peak-detector",
+          "position": {
+            "x": -950,
+            "y": 760
+          },
+          "params": {
+            "threshold": 0.45,
+            "decay": 0.85
+          }
+        }
+      ],
+      "connections": [
+        {
+          "id": "setup_c0",
+          "fromNode": "setup_1",
+          "fromSocket": "texture",
+          "toNode": "setup_0",
+          "toSocket": "texture"
+        },
+        {
+          "id": "setup_c1",
+          "fromNode": "setup_5",
+          "fromSocket": "environment",
+          "toNode": "setup_4",
+          "toSocket": "environment"
+        },
+        {
+          "id": "human.geometry->dance.skeleton",
+          "fromNode": "human",
+          "fromSocket": "geometry",
+          "toNode": "dance",
+          "toSocket": "skeleton"
+        },
+        {
+          "id": "human.geometry->cheer.skeleton",
+          "fromNode": "human",
+          "fromSocket": "geometry",
+          "toNode": "cheer",
+          "toSocket": "skeleton"
+        },
+        {
+          "id": "human.geometry->wave.skeleton",
+          "fromNode": "human",
+          "fromSocket": "geometry",
+          "toNode": "wave",
+          "toSocket": "skeleton"
+        },
+        {
+          "id": "cheer.pose->dance.pose0",
+          "fromNode": "cheer",
+          "fromSocket": "pose",
+          "toNode": "dance",
+          "toSocket": "pose0"
+        },
+        {
+          "id": "wave.pose->dance.pose1",
+          "fromNode": "wave",
+          "fromSocket": "pose",
+          "toNode": "dance",
+          "toSocket": "pose1"
+        },
+        {
+          "id": "human.geometry->crouch.skeleton",
+          "fromNode": "human",
+          "fromSocket": "geometry",
+          "toNode": "crouch",
+          "toSocket": "skeleton"
+        },
+        {
+          "id": "crouch.pose->dance.pose2",
+          "fromNode": "crouch",
+          "fromSocket": "pose",
+          "toNode": "dance",
+          "toSocket": "pose2"
+        },
+        {
+          "id": "keyJ.isDown->dance.hit0",
+          "fromNode": "keyJ",
+          "fromSocket": "isDown",
+          "toNode": "dance",
+          "toSocket": "hit0"
+        },
+        {
+          "id": "keyK.isDown->dance.hit1",
+          "fromNode": "keyK",
+          "fromSocket": "isDown",
+          "toNode": "dance",
+          "toSocket": "hit1"
+        },
+        {
+          "id": "keyShift.isDown->dance.mirror",
+          "fromNode": "keyShift",
+          "fromSocket": "isDown",
+          "toNode": "dance",
+          "toSocket": "mirror"
+        },
+        {
+          "id": "mic.audio->fft.audio",
+          "fromNode": "mic",
+          "fromSocket": "audio",
+          "toNode": "fft",
+          "toSocket": "audio"
+        },
+        {
+          "id": "fft.bass->kick.volume",
+          "fromNode": "fft",
+          "fromSocket": "bass",
+          "toNode": "kick",
+          "toSocket": "volume"
+        },
+        {
+          "id": "kick.trigger->dance.hit2",
+          "fromNode": "kick",
+          "fromSocket": "trigger",
+          "toNode": "dance",
+          "toSocket": "hit2"
+        }
+      ],
+      "keyframes": [],
+      "markers": [],
+      "exposedParams": []
+    }
+  ],
+  "activeCanvas": 0
+}

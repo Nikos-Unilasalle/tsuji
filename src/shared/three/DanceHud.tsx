@@ -4,6 +4,7 @@ import { CommitSlider } from "./RigHuds";
 import { GROOVE_PRESET_KEYS, GROOVE_PRESETS } from "../graph/ik/danceGroove";
 import { moveAt, readMoves, type DanceInfo, type DanceMove } from "../graph/nodes/bipedDance";
 import { diceChoreography } from "../graph/nodes/danceDice";
+import { recordLive, type LiveMove } from "../graph/nodes/danceLive";
 import type { NodeInstance } from "../graph/types";
 
 /**
@@ -161,6 +162,25 @@ function BeatGrid({ node, info, laneNames, onParams }: { node: NodeInstance; inf
   };
   const drag = useRef<Drag | null>(null);
   const moves = draft ?? saved;
+  // Recording: what was played live since Rec, folded into the grid when Rec stops (one undo step).
+  const [recFrom, setRecFrom] = useState<number | null>(null);
+  const played = useRef(new Map<number, LiveMove>());
+  useEffect(() => {
+    if (recFrom === null || !info) return;
+    for (const m of info.live) if (m.start >= recFrom - 1e-6) played.current.set(m.id, m);
+  }, [info, recFrom]);
+  const toggleRec = () => {
+    if (recFrom === null) {
+      played.current.clear();
+      setRecFrom(info?.beat ?? 0);
+      return;
+    }
+    const taken = [...played.current.values()];
+    setRecFrom(null);
+    if (taken.length > 0) commit(recordLive(saved, taken, recFrom, info?.beat ?? recFrom, loopBeats));
+  };
+  const beatNow = info?.beat ?? 0;
+  const liveLane = (lane: number) => info?.live.some((m) => m.lane === lane && m.start <= beatNow + 0.5 && (m.end === null || m.end > beatNow)) ?? false;
   const loopBeats = info?.loopBeats ?? Math.round(Number(node.params.loopBeats ?? 16));
   // Up to the last pose wired: the empty socket below it is no lane yet.
   const laneCount = Math.max((info?.lanes.lastIndexOf(true) ?? -1) + 1, laneNames.length);
@@ -262,6 +282,19 @@ function BeatGrid({ node, info, laneNames, onParams }: { node: NodeInstance; inf
         <button type="button" className="viewport-hud-button" style={wide} onClick={() => commit([])} disabled={saved.length === 0} title="Take every pose out: just the groove">
           Clear
         </button>
+        <button
+          type="button"
+          className={`viewport-hud-button ${recFrom !== null ? "viewport-hud-button-active" : ""}`}
+          style={{ ...wide, color: recFrom !== null ? "#f87171" : undefined }}
+          onClick={toggleRec}
+          title={
+            recFrom !== null
+              ? "Recording what the Hit sockets play — click to stop and put it on the grid"
+              : "Record live: play the poses through their Hit sockets (Keyboard, Audio Peak Detector…) while the timeline plays, and they land on the grid"
+          }
+        >
+          {recFrom !== null ? "■ Stop" : "● Rec"}
+        </button>
         <NextUp info={info} laneNames={laneNames} />
         <span style={{ color: "#94a3b8", fontSize: 11, marginLeft: "auto" }}>click: drop · drag: hold · click again: remove · ⇧ click: mirror</span>
       </div>
@@ -274,7 +307,22 @@ function BeatGrid({ node, info, laneNames, onParams }: { node: NodeInstance; inf
               const color = LANE_COLORS[lane % LANE_COLORS.length];
               const wired = info?.lanes[lane] ?? true;
               return [
-                <span key={`n${lane}`} style={{ fontSize: 11, color: wired ? color : "#64748b", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", paddingRight: 6, lineHeight: `${CELL}px` }} title={laneNames[lane] ?? `Pose ${lane + 1}`}>
+                <span
+                  key={`n${lane}`}
+                  style={{
+                    fontSize: 11,
+                    color: liveLane(lane) ? "#0f172a" : wired ? color : "#64748b",
+                    background: liveLane(lane) ? color : undefined,
+                    borderRadius: 4,
+                    paddingLeft: 3,
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                    marginRight: 6,
+                    lineHeight: `${CELL}px`,
+                  }}
+                  title={`${laneNames[lane] ?? `Pose ${lane + 1}`} — lights up while its Hit socket plays it`}
+                >
                   {lane + 1}. {laneNames[lane] ?? "—"}
                 </span>,
                 ...Array.from({ length: loopBeats }, (_, cell) => {
