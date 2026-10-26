@@ -403,3 +403,17 @@ describe("walks along a route", () => {
     played[200].joints.forEach((j, i) => expect(j.distanceTo(jumped.joints[i])).toBeLessThan(1e-9));
   });
 });
+
+describe("wrists set on the Human Skeleton", () => {
+  it("stay turned while Biped Motion walks it", () => {
+    const flexed = human("bm-wrist", { leftWristFlex: 50 });
+    const out = RIG_BIPED_MOTION_NODE.evaluate(
+      { skeleton: flexed.geometry },
+      { ...RIG_BIPED_MOTION_NODE.defaultParams, locomotion: "drive" },
+      ctx("bm-wrist-walk", { time: 0, currentFrame: 0, fps: 30 }),
+    ) as Out;
+    const { hand, elbow, fingers } = flexed.skeleton.joint;
+    const angle = out.joints[fingers[0]].clone().sub(out.joints[hand[0]]).angleTo(out.joints[hand[0]].clone().sub(out.joints[elbow[0]]));
+    expect((angle * 180) / Math.PI).toBeCloseTo(50, 3);
+  });
+});

@@ -25,6 +25,12 @@ export interface HumanParams {
   legs: number;
   shoulderWidth: number;
   hipWidth: number;
+  /** Neck length ×: how high the head sits on the shoulders. */
+  neck: number;
+  /** Head size ×: neck joint to the top of the head. */
+  headSize: number;
+  /** Hand length × (wrist to fingertips). */
+  hands: number;
   /** Rest pose of the arms, in degrees out from hanging straight down: 22 is an A-pose, 90 a T-pose. */
   armAngle: number;
   /** Rest pose of the legs, in degrees out to the side from straight down: what Skin binds to, like armAngle. */
@@ -54,6 +60,9 @@ export const HUMAN_DEFAULTS: HumanParams = {
   legs: 1,
   shoulderWidth: 1,
   hipWidth: 1,
+  neck: 1,
+  headSize: 1,
+  hands: 1,
   armAngle: 90,
   legAngle: 0,
   spineSegments: 3,
@@ -93,6 +102,8 @@ export interface HumanSkeleton extends Skeleton {
     foot: [number, number];
     knee: [number, number];
     hip: [number, number];
+    /** Fingertips: the end of the hand bone, swung about the wrist by SolveOptions.wrists. */
+    fingers: [number, number];
   };
   /** Control points of the rest pose, in HUMAN_CONTROLS order. */
   restControls: THREE.Vector3[];
@@ -148,8 +159,9 @@ export function buildHumanSkeleton(input: Partial<HumanParams> = {}): HumanSkele
   for (let i = 1; i <= segments; i++) {
     chest = add(i === segments ? "Chest" : `Spine ${i}`, chest, new THREE.Vector3(0, pelvisY + (spineLength * i) / segments, 0));
   }
-  const neck = add("Neck", chest, new THREE.Vector3(0, chestY + 0.05 * H * p.torso, 0));
-  const head = add("Head", neck, new THREE.Vector3(0, chestY + 0.13 * H * p.torso, 0));
+  const neckY = chestY + 0.05 * H * p.torso * Math.max(0.05, p.neck);
+  const neck = add("Neck", chest, new THREE.Vector3(0, neckY, 0));
+  const head = add("Head", neck, new THREE.Vector3(0, neckY + 0.08 * H * p.torso * Math.max(0.05, p.headSize), 0));
 
   const upperArm = 0.17 * H * p.arms;
   const forearm = 0.155 * H * p.arms;
@@ -186,6 +198,13 @@ export function buildHumanSkeleton(input: Partial<HumanParams> = {}): HumanSkele
   }
 
   const poleReach = 0.3 * H;
+  // Hands last, so the joints of skeletons made before them keep their indices (Skin's per-joint settings).
+  const fingers: [number, number] = [0, 0];
+  for (const s of [0, 1] as const) {
+    const along = rest[hand[s]].clone().sub(rest[elbow[s]]).normalize();
+    fingers[s] = add(`${s === 0 ? "Left" : "Right"} Fingers`, hand[s], rest[hand[s]].clone().addScaledVector(along, 0.1 * H * p.arms * Math.max(0.05, p.hands)));
+  }
+
   const restControls = [
     rest[pelvis].clone(),
     rest[head].clone(),
@@ -202,7 +221,7 @@ export function buildHumanSkeleton(input: Partial<HumanParams> = {}): HumanSkele
   return {
     rig: { joints, rest, limits: p.jointLimits ? humanLimits(p, rest, { pelvis, chest, neck, head, hand, elbow, shoulder, foot, knee, hip }) : undefined },
     names,
-    joint: { pelvis, chest, head, hand, elbow, foot, knee, hip },
+    joint: { pelvis, chest, head, hand, elbow, foot, knee, hip, fingers },
     restControls,
     ...relaxedStance(p, restControls, rest),
   };
@@ -271,6 +290,47 @@ export interface SolveOptions {
   maxIterations?: number;
   /** Turns the pelvis — and the hips riding on it — about itself: a walk's pelvic rotation, list and tilt. */
   pelvisRotation?: THREE.Quaternion;
+  /** Left and right wrist, in degrees: see WristTurn. Missing: the hand straight on with the forearm. */
+  wrists?: WristTurn[];
+}
+
+/**
+ * A wrist's turn, degrees. `flex` folds the hand the way the elbow folds the
+ * forearm (− extends it back), `side` tips it sideways, toward the thumb for +
+ * (the same way on both hands). Kept to a wrist's range.
+ */
+export interface WristTurn {
+  flex: number;
+  side: number;
+}
+
+export const WRIST_LIMITS = { flex: [-70, 80], side: [-25, 35] } as const;
+
+/** Each hand's fingertips placed off its wrist: along the forearm, turned by the wrist. */
+function placeHands(skeleton: HumanSkeleton, positions: THREE.Vector3[], poles: THREE.Vector3[], wrists: WristTurn[] | undefined) {
+  const { joint, rig } = skeleton;
+  for (const s of [0, 1] as const) {
+    const tip = joint.fingers[s];
+    const wrist = positions[joint.hand[s]];
+    const elbow = positions[joint.elbow[s]];
+    const length = rig.rest[tip].distanceTo(rig.rest[joint.hand[s]]);
+    const fore = wrist.clone().sub(elbow);
+    if (fore.lengthSq() < 1e-12) fore.copy(rig.rest[joint.hand[s]]).sub(rig.rest[joint.elbow[s]]);
+    fore.normalize();
+    // The plane the elbow bends in: toward its pole. The wrist flexes in it, and tips across it.
+    const toPole = poles[s].clone().sub(elbow);
+    toPole.addScaledVector(fore, -toPole.dot(fore));
+    if (toPole.lengthSq() < 1e-12) toPole.set(0, 0, -1).addScaledVector(fore, fore.z);
+    toPole.normalize();
+    const hinge = fore.clone().cross(toPole).normalize();
+    const turn = wrists?.[s];
+    const clamp = (v: number, [lo, hi]: readonly [number, number]) => (Number.isFinite(v) ? Math.max(lo, Math.min(hi, v)) : 0);
+    const flex = (clamp(Number(turn?.flex), WRIST_LIMITS.flex) * Math.PI) / 180;
+    const side = (clamp(Number(turn?.side), WRIST_LIMITS.side) * Math.PI) / 180;
+    // Away from the pole, as the forearm folds; sideways mirrored so + is the same way on both hands.
+    const dir = fore.clone().applyAxisAngle(hinge, -flex).applyAxisAngle(toPole, (s === 0 ? 1 : -1) * side);
+    positions[tip].copy(wrist).addScaledVector(dir, length);
+  }
 }
 
 /**
@@ -302,13 +362,15 @@ export function solveHuman(skeleton: HumanSkeleton, controls: THREE.Vector3[], o
     { joint: joint.knee[0], pole: c[8] },
     { joint: joint.knee[1], pole: c[9] },
   ];
-  return solveFabrik(skeleton.rig, effectors, {
+  const positions = solveFabrik(skeleton.rig, effectors, {
     start,
     poles,
     tolerance: options.tolerance ?? 1e-4,
     maxIterations: options.maxIterations ?? 24,
     rootRotation: turn,
   }).positions;
+  placeHands(skeleton, positions, [c[6], c[7]], options.wrists);
+  return positions;
 }
 
 // ---------------------------------------------------------------------------

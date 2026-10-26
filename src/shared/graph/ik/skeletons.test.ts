@@ -166,3 +166,44 @@ describe("polypede gait", () => {
     feet.forEach((f, i) => expect(f.distanceTo(far[i])).toBeLessThan(1e-9));
   });
 });
+
+describe("human neck, head and hands", () => {
+  const base = buildHumanSkeleton({ height: 1.8 });
+
+  it("lengthens the neck and sizes the head, the body below unchanged", () => {
+    const long = buildHumanSkeleton({ height: 1.8, neck: 2, headSize: 1.2 });
+    const neckOf = (s: typeof base) => s.rig.rest[s.rig.joints[s.joint.head].parent].y - s.rig.rest[s.joint.chest].y;
+    expect(neckOf(long)).toBeCloseTo(2 * neckOf(base), 6);
+    expect(long.rig.rest[long.joint.head].y).toBeGreaterThan(base.rig.rest[base.joint.head].y);
+    expect(long.rig.rest[long.joint.hand[0]].distanceTo(base.rig.rest[base.joint.hand[0]])).toBeLessThan(1e-9);
+  });
+
+  it("adds the hands at the end of the joint list, so older skins keep their indices", () => {
+    const { fingers, hip } = base.joint;
+    expect(Math.min(...fingers)).toBeGreaterThan(Math.max(...hip, ...base.joint.foot));
+    expect(base.names[fingers[0]]).toBe("Left Fingers");
+  });
+
+  it("keeps the hand straight on the forearm by default, and turns it at the wrist", () => {
+    const { hand, elbow, fingers } = base.joint;
+    const straight = solveHuman(base, base.relaxedControls);
+    const along = straight[fingers[0]].clone().sub(straight[hand[0]]).normalize();
+    expect(along.angleTo(straight[hand[0]].clone().sub(straight[elbow[0]]).normalize())).toBeLessThan(1e-6);
+    const turned = solveHuman(base, base.relaxedControls, { wrists: [{ flex: 60, side: 0 }, { flex: 0, side: 0 }] });
+    const bent = turned[fingers[0]].clone().sub(turned[hand[0]]);
+    const fore = turned[hand[0]].clone().sub(turned[elbow[0]]).normalize();
+    expect((bent.angleTo(fore) * 180) / Math.PI).toBeCloseTo(60, 3);
+    // The hand keeps its length; the other hand is untouched.
+    expect(bent.length()).toBeCloseTo(base.rig.rest[fingers[0]].distanceTo(base.rig.rest[hand[0]]), 9);
+    expect(turned[fingers[1]].distanceTo(straight[fingers[1]])).toBeLessThan(1e-9);
+    // Flexing folds the hand forward, the way the elbow folds the forearm (away from the elbow pole behind).
+    expect(bent.z).toBeGreaterThan(0);
+  });
+
+  it("holds a wrist to its range", () => {
+    const turned = solveHuman(base, base.relaxedControls, { wrists: [{ flex: 300, side: 0 }, { flex: 0, side: 0 }] });
+    const { hand, elbow, fingers } = base.joint;
+    const angle = turned[fingers[0]].clone().sub(turned[hand[0]]).angleTo(turned[hand[0]].clone().sub(turned[elbow[0]]));
+    expect((angle * 180) / Math.PI).toBeCloseTo(80, 3);
+  });
+});

@@ -17,6 +17,7 @@ import {
   PolypedeSkeleton,
   solveHuman,
   solvePolypede,
+  WristTurn,
 } from "../ik/skeletons";
 import { createSkeletonView, SkeletonView } from "../ik/skeletonView";
 import { editPoseList, readPoseList, type HumanPose } from "../ik/humanPose";
@@ -129,6 +130,9 @@ function humanParams(params: Record<string, unknown>): HumanParams {
     legs: Math.max(0.05, n("legs")),
     shoulderWidth: Math.max(0, n("shoulderWidth")),
     hipWidth: Math.max(0, n("hipWidth")),
+    neck: Math.max(0.05, n("neck")),
+    headSize: Math.max(0.05, n("headSize")),
+    hands: Math.max(0.05, n("hands")),
     // The arms' and legs' rest angles are also the pose Skin binds to: one pose,
     // so a mesh skinned to a skeleton at rest is never deformed until a bone moves.
     armAngle: Math.max(0, Math.min(150, numberInput(undefined, params.bindArmAngle, HUMAN_DEFAULTS.armAngle))),
@@ -192,6 +196,10 @@ export const RIG_HUMAN_NODE: NodeDefinition = {
     ...HUMAN_DEFAULTS,
     armPull: 0.3,
     bindArmAngle: HUMAN_DEFAULTS.armAngle,
+    leftWristFlex: 0,
+    leftWristSide: 0,
+    rightWristFlex: 0,
+    rightWristSide: 0,
     bindLegAngle: HUMAN_DEFAULTS.legAngle,
     iterations: 24,
     tolerance: 0.0001,
@@ -208,7 +216,14 @@ export const RIG_HUMAN_NODE: NodeDefinition = {
     { id: "legs", label: "Legs ×", kind: "number", step: 0.05, group: "Proportions" },
     { id: "shoulderWidth", label: "Shoulder Width ×", kind: "number", step: 0.05, group: "Proportions" },
     { id: "hipWidth", label: "Hip Width ×", kind: "number", step: 0.05, group: "Proportions" },
+    { id: "neck", label: "Neck Length ×", kind: "number", step: 0.05, group: "Proportions" },
+    { id: "headSize", label: "Head Size ×", kind: "number", step: 0.05, group: "Proportions" },
+    { id: "hands", label: "Hand Length ×", kind: "number", step: 0.05, group: "Proportions" },
     { id: "spineSegments", label: "Spine Segments", kind: "number", step: 1, group: "Proportions" },
+    { id: "leftWristFlex", label: "Left Wrist Flex (°, − back)", kind: "number", step: 5, group: "Wrists" },
+    { id: "leftWristSide", label: "Left Wrist Tilt (°, + thumb side)", kind: "number", step: 5, group: "Wrists" },
+    { id: "rightWristFlex", label: "Right Wrist Flex (°, − back)", kind: "number", step: 5, group: "Wrists" },
+    { id: "rightWristSide", label: "Right Wrist Tilt (°, + thumb side)", kind: "number", step: 5, group: "Wrists" },
     ...HUMAN_LIMIT_FIELDS,
     { id: "armPull", label: "Arm Pull on Torso", kind: "number", step: 0.05, group: "Solver" },
     { id: "bindArmAngle", label: "Arm Angle (°, 90 = T-pose)", kind: "number", step: 5, group: "Proportions" },
@@ -250,7 +265,13 @@ export const RIG_HUMAN_NODE: NodeDefinition = {
       return stored.length === HUMAN_CONTROLS.length ? asVector3(stored[i], rest).clone() : rest.clone();
     });
 
-    const positions = solveHuman(skeleton, controls, { armPull: numberInput(undefined, params.armPull, 0.3), ...solverOptions(params) });
+    // The wrists ride along in the solver options, so every node posing this skeleton downstream turns them too.
+    const wrists: WristTurn[] = [
+      { flex: numberInput(undefined, params.leftWristFlex, 0), side: numberInput(undefined, params.leftWristSide, 0) },
+      { flex: numberInput(undefined, params.rightWristFlex, 0), side: numberInput(undefined, params.rightWristSide, 0) },
+    ];
+    const solver = { ...solverOptions(params), wrists };
+    const positions = solveHuman(skeleton, controls, { armPull: numberInput(undefined, params.armPull, 0.3), ...solver });
     humanPoseContexts.set(ctx.nodeId, { skeleton, joints: positions, controls });
 
     const H = hp.height;
@@ -280,7 +301,7 @@ export const RIG_HUMAN_NODE: NodeDefinition = {
       thickness,
       color: params.boneColor instanceof THREE.Color ? params.boneColor : new THREE.Color(String(params.boneColor ?? "#9a5b2e")),
       armPull: numberInput(undefined, params.armPull, 0.3),
-      solver: solverOptions(params),
+      solver,
     };
     group.userData.humanRig = rigData;
     group.userData.humanPose = { controls, pelvisRotation: new THREE.Quaternion(), matrix: group.matrix.clone() } satisfies HumanPose;
@@ -307,7 +328,7 @@ export interface HumanRigData {
   thickness: number;
   color: THREE.Color;
   armPull: number;
-  solver: { maxIterations: number; tolerance: number };
+  solver: { maxIterations: number; tolerance: number; wrists?: WristTurn[] };
 }
 
 // ---------------------------------------------------------------------------
