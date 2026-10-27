@@ -1,0 +1,3037 @@
+{
+  "canvases": [
+    {
+      "nodes": [
+        {
+          "id": "env",
+          "type": "lighting/environment",
+          "position": {
+            "x": -200,
+            "y": -400
+          },
+          "params": {
+            "color": 16777215,
+            "intensity": 1,
+            "background": 1,
+            "blurriness": 0,
+            "filePath": "",
+            "backgroundImagePath": "",
+            "backgroundFit": "cover",
+            "backgroundScale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "backgroundOffset": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "backgroundRotation": 0,
+            "ambientIntensity": 0.6,
+            "sunIntensity": 0
+          }
+        },
+        {
+          "id": "render",
+          "type": "render",
+          "position": {
+            "x": 60,
+            "y": -400
+          },
+          "params": {
+            "frameCount": 300,
+            "fps": 30,
+            "motionBlur": 0,
+            "resolutionPreset": "16:9 (1920x1080)",
+            "width": 1920,
+            "height": 1080,
+            "holdout": false
+          }
+        },
+        {
+          "id": "cam",
+          "type": "calibration/camera",
+          "position": {
+            "x": 320,
+            "y": -400
+          },
+          "params": {
+            "location": {
+              "x": 5.2,
+              "y": 3.3,
+              "z": 30
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "useTarget": true,
+            "target": {
+              "x": 5.2,
+              "y": 3.3,
+              "z": 0
+            },
+            "up": {
+              "x": 0,
+              "y": 1,
+              "z": 0
+            },
+            "fov": 20,
+            "active": true,
+            "mode": "manual",
+            "projectionType": "orthographic"
+          }
+        },
+        {
+          "id": "intro0Shown",
+          "type": "math/expression",
+          "position": {
+            "x": -200,
+            "y": -150
+          },
+          "params": {
+            "formula": "t >= a",
+            "a": 0,
+            "b": 0,
+            "c": 0,
+            "d": 0,
+            "x": 0,
+            "y": 0,
+            "z": 0
+          }
+        },
+        {
+          "id": "intro0",
+          "type": "object/text",
+          "position": {
+            "x": 60,
+            "y": -150
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 5.2,
+              "y": 6.9,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "text": "Une pièce, encore et encore",
+            "fontPreset": "Poppins",
+            "fontSize": 41.33,
+            "depth": 0.001,
+            "color": 2236962,
+            "shadeless": 1
+          }
+        },
+        {
+          "id": "intro1Shown",
+          "type": "math/expression",
+          "position": {
+            "x": -200,
+            "y": 30
+          },
+          "params": {
+            "formula": "t >= a",
+            "a": 1.3,
+            "b": 0,
+            "c": 0,
+            "d": 0,
+            "x": 0,
+            "y": 0,
+            "z": 0
+          }
+        },
+        {
+          "id": "intro1",
+          "type": "object/text",
+          "position": {
+            "x": 60,
+            "y": 30
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 5.2,
+              "y": 5.5,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "text": "On lance une pièce équilibrée :\npile ou face, une chance sur deux.",
+            "fontPreset": "Poppins",
+            "fontSize": 26.67,
+            "depth": 0.001,
+            "color": 3355443,
+            "shadeless": 1
+          }
+        },
+        {
+          "id": "intro2Shown",
+          "type": "math/expression",
+          "position": {
+            "x": -200,
+            "y": 210
+          },
+          "params": {
+            "formula": "t >= a",
+            "a": 3.3,
+            "b": 0,
+            "c": 0,
+            "d": 0,
+            "x": 0,
+            "y": 0,
+            "z": 0
+          }
+        },
+        {
+          "id": "intro2",
+          "type": "object/text",
+          "position": {
+            "x": 60,
+            "y": 210
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 5.2,
+              "y": 4.0,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "text": "Sur 10 lancers, on peut très bien obtenir 7 piles.",
+            "fontPreset": "Poppins",
+            "fontSize": 26.67,
+            "depth": 0.001,
+            "color": 3355443,
+            "shadeless": 1
+          }
+        },
+        {
+          "id": "intro3Shown",
+          "type": "math/expression",
+          "position": {
+            "x": -200,
+            "y": 390
+          },
+          "params": {
+            "formula": "t >= a",
+            "a": 5.0,
+            "b": 0,
+            "c": 0,
+            "d": 0,
+            "x": 0,
+            "y": 0,
+            "z": 0
+          }
+        },
+        {
+          "id": "intro3",
+          "type": "object/text",
+          "position": {
+            "x": 60,
+            "y": 390
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 5.2,
+              "y": 3.1,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "text": "Mais sur 1 000 lancers ?",
+            "fontPreset": "Poppins",
+            "fontSize": 26.67,
+            "depth": 0.001,
+            "color": 2060267,
+            "shadeless": 1
+          }
+        },
+        {
+          "id": "intro4Shown",
+          "type": "math/expression",
+          "position": {
+            "x": -200,
+            "y": 570
+          },
+          "params": {
+            "formula": "t >= a",
+            "a": 6.5,
+            "b": 0,
+            "c": 0,
+            "d": 0,
+            "x": 0,
+            "y": 0,
+            "z": 0
+          }
+        },
+        {
+          "id": "intro4",
+          "type": "object/text",
+          "position": {
+            "x": 60,
+            "y": 570
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 5.2,
+              "y": 1.7,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "text": "Suivons la proportion de piles de cinq joueurs\nqui lancent chacun leur pièce.",
+            "fontPreset": "Poppins",
+            "fontSize": 26.67,
+            "depth": 0.001,
+            "color": 3355443,
+            "shadeless": 1
+          }
+        },
+        {
+          "id": "handOver",
+          "type": "math/expression",
+          "position": {
+            "x": -200,
+            "y": 800
+          },
+          "params": {
+            "formula": "t >= a",
+            "a": 9.5,
+            "b": 0,
+            "c": 0,
+            "d": 0,
+            "x": 0,
+            "y": 0,
+            "z": 0
+          }
+        },
+        {
+          "id": "toGraph",
+          "type": "canvas/goto",
+          "position": {
+            "x": 60,
+            "y": 800
+          },
+          "params": {
+            "canvas": 2,
+            "trigger": 0,
+            "onlyWhilePlaying": true
+          }
+        }
+      ],
+      "connections": [
+        {
+          "id": "env.environment->render.environment",
+          "fromNode": "env",
+          "fromSocket": "environment",
+          "toNode": "render",
+          "toSocket": "environment"
+        },
+        {
+          "id": "intro0Shown.value->intro0.visible",
+          "fromNode": "intro0Shown",
+          "fromSocket": "value",
+          "toNode": "intro0",
+          "toSocket": "visible"
+        },
+        {
+          "id": "intro1Shown.value->intro1.visible",
+          "fromNode": "intro1Shown",
+          "fromSocket": "value",
+          "toNode": "intro1",
+          "toSocket": "visible"
+        },
+        {
+          "id": "intro2Shown.value->intro2.visible",
+          "fromNode": "intro2Shown",
+          "fromSocket": "value",
+          "toNode": "intro2",
+          "toSocket": "visible"
+        },
+        {
+          "id": "intro3Shown.value->intro3.visible",
+          "fromNode": "intro3Shown",
+          "fromSocket": "value",
+          "toNode": "intro3",
+          "toSocket": "visible"
+        },
+        {
+          "id": "intro4Shown.value->intro4.visible",
+          "fromNode": "intro4Shown",
+          "fromSocket": "value",
+          "toNode": "intro4",
+          "toSocket": "visible"
+        },
+        {
+          "id": "handOver.value->toGraph.trigger",
+          "fromNode": "handOver",
+          "fromSocket": "value",
+          "toNode": "toGraph",
+          "toSocket": "trigger"
+        }
+      ],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    },
+    {
+      "nodes": [
+        {
+          "id": "env",
+          "type": "lighting/environment",
+          "position": {
+            "x": -200,
+            "y": -400
+          },
+          "params": {
+            "color": 16777215,
+            "intensity": 1,
+            "background": 1,
+            "blurriness": 0,
+            "filePath": "",
+            "backgroundImagePath": "",
+            "backgroundFit": "cover",
+            "backgroundScale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "backgroundOffset": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "backgroundRotation": 0,
+            "ambientIntensity": 0.6,
+            "sunIntensity": 0
+          }
+        },
+        {
+          "id": "render",
+          "type": "render",
+          "position": {
+            "x": 60,
+            "y": -400
+          },
+          "params": {
+            "frameCount": 390,
+            "fps": 30,
+            "motionBlur": 0,
+            "resolutionPreset": "16:9 (1920x1080)",
+            "width": 1920,
+            "height": 1080,
+            "holdout": false
+          }
+        },
+        {
+          "id": "cam",
+          "type": "calibration/camera",
+          "position": {
+            "x": 320,
+            "y": -400
+          },
+          "params": {
+            "location": {
+              "x": 5.2,
+              "y": 3.6,
+              "z": 30
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "useTarget": true,
+            "target": {
+              "x": 5.2,
+              "y": 3.6,
+              "z": 0
+            },
+            "up": {
+              "x": 0,
+              "y": 1,
+              "z": 0
+            },
+            "fov": 25,
+            "active": true,
+            "mode": "manual",
+            "projectionType": "orthographic"
+          }
+        },
+        {
+          "id": "light",
+          "type": "light/point",
+          "position": {
+            "x": 580,
+            "y": -400
+          },
+          "params": {
+            "location": {
+              "x": 5.2,
+              "y": 9,
+              "z": 12
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "color": 16777215,
+            "intensity": 120,
+            "distance": 60,
+            "decay": 1.5,
+            "castShadow": 0
+          }
+        },
+        {
+          "id": "axes",
+          "type": "math/axes",
+          "position": {
+            "x": -200,
+            "y": -200
+          },
+          "params": {
+            "dimension": "2D",
+            "xMin": 0,
+            "xMax": 3.15,
+            "xStep": 1,
+            "yMin": 0,
+            "yMax": 1.05,
+            "yStep": 0.25,
+            "unit": {
+              "x": 3.3333333333333335,
+              "y": 6.0,
+              "z": 1
+            },
+            "grid": "xy",
+            "labels": false,
+            "piTicks": false,
+            "names": "",
+            "labelSize": 0.06,
+            "arrows": true,
+            "axisColor": 2236962,
+            "gridColor": 14015716,
+            "axisWidth": 2,
+            "gridWidth": 1
+          }
+        },
+        {
+          "id": "p",
+          "type": "math/expression",
+          "position": {
+            "x": -1400,
+            "y": 0
+          },
+          "params": {
+            "formula": "a",
+            "a": 0.5,
+            "b": 0,
+            "c": 0,
+            "d": 0,
+            "x": 0,
+            "y": 0,
+            "z": 0
+          }
+        },
+        {
+          "id": "n",
+          "type": "math/expression",
+          "position": {
+            "x": -1400,
+            "y": 200
+          },
+          "params": {
+            "formula": "max(2, min(1000, floor(2·10^(0.3 t))))",
+            "a": 0,
+            "b": 0,
+            "c": 0,
+            "d": 0,
+            "x": 0,
+            "y": 0,
+            "z": 0
+          }
+        },
+        {
+          "id": "ones",
+          "type": "list/random-list",
+          "position": {
+            "x": -1150,
+            "y": 200
+          },
+          "params": {
+            "count": 2,
+            "algorithm": "uniform",
+            "seed": 0,
+            "min": 1,
+            "max": 1
+          }
+        },
+        {
+          "id": "counts",
+          "type": "list/math",
+          "position": {
+            "x": -900,
+            "y": 200
+          },
+          "params": {
+            "op": "cumulative_sum",
+            "b": 0,
+            "factor": 1,
+            "offset": 0
+          }
+        },
+        {
+          "id": "s1_draws",
+          "type": "list/random-list",
+          "position": {
+            "x": -1150,
+            "y": 500
+          },
+          "params": {
+            "count": 2,
+            "algorithm": "uniform",
+            "seed": 11,
+            "min": 0,
+            "max": 1
+          }
+        },
+        {
+          "id": "s1_flips",
+          "type": "math/expression",
+          "position": {
+            "x": -900,
+            "y": 500
+          },
+          "params": {
+            "formula": "floor(x + a)",
+            "a": 0.5,
+            "b": 0,
+            "c": 0,
+            "d": 0,
+            "x": 0,
+            "y": 0,
+            "z": 0
+          }
+        },
+        {
+          "id": "s1_heads",
+          "type": "list/math",
+          "position": {
+            "x": -650,
+            "y": 500
+          },
+          "params": {
+            "op": "cumulative_sum",
+            "b": 0,
+            "factor": 1,
+            "offset": 0
+          }
+        },
+        {
+          "id": "s1_points",
+          "type": "math/expression",
+          "position": {
+            "x": -400,
+            "y": 500
+          },
+          "params": {
+            "formula": "(log10(y), x/y, 0)",
+            "a": 0,
+            "b": 0,
+            "c": 0,
+            "d": 0,
+            "x": 0,
+            "y": 0,
+            "z": 0
+          }
+        },
+        {
+          "id": "s1_curve",
+          "type": "curve/from_points",
+          "position": {
+            "x": -150,
+            "y": 500
+          },
+          "params": {
+            "type": "linear",
+            "closed": false,
+            "tension": 0.5,
+            "sag": 0,
+            "visible": 0,
+            "showPivot": false,
+            "pivot": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "location": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            }
+          }
+        },
+        {
+          "id": "s1_line",
+          "type": "curve/to_line",
+          "position": {
+            "x": 100,
+            "y": 500
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "linewidth": 2.5,
+            "dashed": false,
+            "worldUnits": false,
+            "color": 2060267,
+            "emissive": 0,
+            "emissiveIntensity": 1,
+            "shadeless": 1,
+            "roughness": 0.4,
+            "metalness": 0.1,
+            "wireframe": 0,
+            "opacity": 0.9
+          }
+        },
+        {
+          "id": "s2_draws",
+          "type": "list/random-list",
+          "position": {
+            "x": -1150,
+            "y": 760
+          },
+          "params": {
+            "count": 2,
+            "algorithm": "uniform",
+            "seed": 28,
+            "min": 0,
+            "max": 1
+          }
+        },
+        {
+          "id": "s2_flips",
+          "type": "math/expression",
+          "position": {
+            "x": -900,
+            "y": 760
+          },
+          "params": {
+            "formula": "floor(x + a)",
+            "a": 0.5,
+            "b": 0,
+            "c": 0,
+            "d": 0,
+            "x": 0,
+            "y": 0,
+            "z": 0
+          }
+        },
+        {
+          "id": "s2_heads",
+          "type": "list/math",
+          "position": {
+            "x": -650,
+            "y": 760
+          },
+          "params": {
+            "op": "cumulative_sum",
+            "b": 0,
+            "factor": 1,
+            "offset": 0
+          }
+        },
+        {
+          "id": "s2_points",
+          "type": "math/expression",
+          "position": {
+            "x": -400,
+            "y": 760
+          },
+          "params": {
+            "formula": "(log10(y), x/y, 0)",
+            "a": 0,
+            "b": 0,
+            "c": 0,
+            "d": 0,
+            "x": 0,
+            "y": 0,
+            "z": 0
+          }
+        },
+        {
+          "id": "s2_curve",
+          "type": "curve/from_points",
+          "position": {
+            "x": -150,
+            "y": 760
+          },
+          "params": {
+            "type": "linear",
+            "closed": false,
+            "tension": 0.5,
+            "sag": 0,
+            "visible": 0,
+            "showPivot": false,
+            "pivot": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "location": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            }
+          }
+        },
+        {
+          "id": "s2_line",
+          "type": "curve/to_line",
+          "position": {
+            "x": 100,
+            "y": 760
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "linewidth": 2.5,
+            "dashed": false,
+            "worldUnits": false,
+            "color": 15026253,
+            "emissive": 0,
+            "emissiveIntensity": 1,
+            "shadeless": 1,
+            "roughness": 0.4,
+            "metalness": 0.1,
+            "wireframe": 0,
+            "opacity": 0.9
+          }
+        },
+        {
+          "id": "s3_draws",
+          "type": "list/random-list",
+          "position": {
+            "x": -1150,
+            "y": 1020
+          },
+          "params": {
+            "count": 2,
+            "algorithm": "uniform",
+            "seed": 45,
+            "min": 0,
+            "max": 1
+          }
+        },
+        {
+          "id": "s3_flips",
+          "type": "math/expression",
+          "position": {
+            "x": -900,
+            "y": 1020
+          },
+          "params": {
+            "formula": "floor(x + a)",
+            "a": 0.5,
+            "b": 0,
+            "c": 0,
+            "d": 0,
+            "x": 0,
+            "y": 0,
+            "z": 0
+          }
+        },
+        {
+          "id": "s3_heads",
+          "type": "list/math",
+          "position": {
+            "x": -650,
+            "y": 1020
+          },
+          "params": {
+            "op": "cumulative_sum",
+            "b": 0,
+            "factor": 1,
+            "offset": 0
+          }
+        },
+        {
+          "id": "s3_points",
+          "type": "math/expression",
+          "position": {
+            "x": -400,
+            "y": 1020
+          },
+          "params": {
+            "formula": "(log10(y), x/y, 0)",
+            "a": 0,
+            "b": 0,
+            "c": 0,
+            "d": 0,
+            "x": 0,
+            "y": 0,
+            "z": 0
+          }
+        },
+        {
+          "id": "s3_curve",
+          "type": "curve/from_points",
+          "position": {
+            "x": -150,
+            "y": 1020
+          },
+          "params": {
+            "type": "linear",
+            "closed": false,
+            "tension": 0.5,
+            "sag": 0,
+            "visible": 0,
+            "showPivot": false,
+            "pivot": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "location": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            }
+          }
+        },
+        {
+          "id": "s3_line",
+          "type": "curve/to_line",
+          "position": {
+            "x": 100,
+            "y": 1020
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "linewidth": 2.5,
+            "dashed": false,
+            "worldUnits": false,
+            "color": 3187820,
+            "emissive": 0,
+            "emissiveIntensity": 1,
+            "shadeless": 1,
+            "roughness": 0.4,
+            "metalness": 0.1,
+            "wireframe": 0,
+            "opacity": 0.9
+          }
+        },
+        {
+          "id": "s4_draws",
+          "type": "list/random-list",
+          "position": {
+            "x": -1150,
+            "y": 1280
+          },
+          "params": {
+            "count": 2,
+            "algorithm": "uniform",
+            "seed": 62,
+            "min": 0,
+            "max": 1
+          }
+        },
+        {
+          "id": "s4_flips",
+          "type": "math/expression",
+          "position": {
+            "x": -900,
+            "y": 1280
+          },
+          "params": {
+            "formula": "floor(x + a)",
+            "a": 0.5,
+            "b": 0,
+            "c": 0,
+            "d": 0,
+            "x": 0,
+            "y": 0,
+            "z": 0
+          }
+        },
+        {
+          "id": "s4_heads",
+          "type": "list/math",
+          "position": {
+            "x": -650,
+            "y": 1280
+          },
+          "params": {
+            "op": "cumulative_sum",
+            "b": 0,
+            "factor": 1,
+            "offset": 0
+          }
+        },
+        {
+          "id": "s4_points",
+          "type": "math/expression",
+          "position": {
+            "x": -400,
+            "y": 1280
+          },
+          "params": {
+            "formula": "(log10(y), x/y, 0)",
+            "a": 0,
+            "b": 0,
+            "c": 0,
+            "d": 0,
+            "x": 0,
+            "y": 0,
+            "z": 0
+          }
+        },
+        {
+          "id": "s4_curve",
+          "type": "curve/from_points",
+          "position": {
+            "x": -150,
+            "y": 1280
+          },
+          "params": {
+            "type": "linear",
+            "closed": false,
+            "tension": 0.5,
+            "sag": 0,
+            "visible": 0,
+            "showPivot": false,
+            "pivot": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "location": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            }
+          }
+        },
+        {
+          "id": "s4_line",
+          "type": "curve/to_line",
+          "position": {
+            "x": 100,
+            "y": 1280
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "linewidth": 2.5,
+            "dashed": false,
+            "worldUnits": false,
+            "color": 16098596,
+            "emissive": 0,
+            "emissiveIntensity": 1,
+            "shadeless": 1,
+            "roughness": 0.4,
+            "metalness": 0.1,
+            "wireframe": 0,
+            "opacity": 0.9
+          }
+        },
+        {
+          "id": "s5_draws",
+          "type": "list/random-list",
+          "position": {
+            "x": -1150,
+            "y": 1540
+          },
+          "params": {
+            "count": 2,
+            "algorithm": "uniform",
+            "seed": 79,
+            "min": 0,
+            "max": 1
+          }
+        },
+        {
+          "id": "s5_flips",
+          "type": "math/expression",
+          "position": {
+            "x": -900,
+            "y": 1540
+          },
+          "params": {
+            "formula": "floor(x + a)",
+            "a": 0.5,
+            "b": 0,
+            "c": 0,
+            "d": 0,
+            "x": 0,
+            "y": 0,
+            "z": 0
+          }
+        },
+        {
+          "id": "s5_heads",
+          "type": "list/math",
+          "position": {
+            "x": -650,
+            "y": 1540
+          },
+          "params": {
+            "op": "cumulative_sum",
+            "b": 0,
+            "factor": 1,
+            "offset": 0
+          }
+        },
+        {
+          "id": "s5_points",
+          "type": "math/expression",
+          "position": {
+            "x": -400,
+            "y": 1540
+          },
+          "params": {
+            "formula": "(log10(y), x/y, 0)",
+            "a": 0,
+            "b": 0,
+            "c": 0,
+            "d": 0,
+            "x": 0,
+            "y": 0,
+            "z": 0
+          }
+        },
+        {
+          "id": "s5_curve",
+          "type": "curve/from_points",
+          "position": {
+            "x": -150,
+            "y": 1540
+          },
+          "params": {
+            "type": "linear",
+            "closed": false,
+            "tension": 0.5,
+            "sag": 0,
+            "visible": 0,
+            "showPivot": false,
+            "pivot": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "location": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            }
+          }
+        },
+        {
+          "id": "s5_line",
+          "type": "curve/to_line",
+          "position": {
+            "x": 100,
+            "y": 1540
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "linewidth": 2.5,
+            "dashed": false,
+            "worldUnits": false,
+            "color": 9326278,
+            "emissive": 0,
+            "emissiveIntensity": 1,
+            "shadeless": 1,
+            "roughness": 0.4,
+            "metalness": 0.1,
+            "wireframe": 0,
+            "opacity": 0.9
+          }
+        },
+        {
+          "id": "drawn",
+          "type": "math/expression",
+          "position": {
+            "x": -900,
+            "y": -150
+          },
+          "params": {
+            "formula": "log10(x)/3",
+            "a": 0,
+            "b": 0,
+            "c": 0,
+            "d": 0,
+            "x": 0,
+            "y": 0,
+            "z": 0
+          }
+        },
+        {
+          "id": "limit",
+          "type": "math/function-curve",
+          "position": {
+            "x": -650,
+            "y": -320
+          },
+          "params": {
+            "mode": "function",
+            "to": 3,
+            "samples": 400,
+            "yMin": 0,
+            "yMax": 1.05,
+            "progress": 1,
+            "visible": true,
+            "fill": false,
+            "fillFrom": 0,
+            "fillTo": 3,
+            "fillColor": 8947848,
+            "fillNegativeColor": 8947848,
+            "fillOpacity": 0.15,
+            "a": 0.5,
+            "b": 0,
+            "c": 0,
+            "d": 0,
+            "formula": "a",
+            "color": 2236962,
+            "width": 2,
+            "dashed": true,
+            "from": 0
+          }
+        },
+        {
+          "id": "bandHigh",
+          "type": "math/function-curve",
+          "position": {
+            "x": -650,
+            "y": -200
+          },
+          "params": {
+            "mode": "function",
+            "to": 3,
+            "samples": 400,
+            "yMin": 0,
+            "yMax": 1.05,
+            "progress": 1,
+            "visible": true,
+            "fill": false,
+            "fillFrom": 0,
+            "fillTo": 3,
+            "fillColor": 8947848,
+            "fillNegativeColor": 8947848,
+            "fillOpacity": 0.15,
+            "a": 0.5,
+            "b": 0,
+            "c": 0,
+            "d": 0,
+            "formula": "a + 2 sqrt(a(1 − a)/10^x)",
+            "color": 10134706,
+            "width": 1.5,
+            "dashed": false,
+            "from": 0
+          }
+        },
+        {
+          "id": "bandLow",
+          "type": "math/function-curve",
+          "position": {
+            "x": -650,
+            "y": -80
+          },
+          "params": {
+            "mode": "function",
+            "to": 3,
+            "samples": 400,
+            "yMin": 0,
+            "yMax": 1.05,
+            "progress": 1,
+            "visible": true,
+            "fill": false,
+            "fillFrom": 0,
+            "fillTo": 3,
+            "fillColor": 8947848,
+            "fillNegativeColor": 8947848,
+            "fillOpacity": 0.15,
+            "a": 0.5,
+            "b": 0,
+            "c": 0,
+            "d": 0,
+            "formula": "a − 2 sqrt(a(1 − a)/10^x)",
+            "color": 10134706,
+            "width": 1.5,
+            "dashed": false,
+            "from": 0
+          }
+        },
+        {
+          "id": "xTick0",
+          "type": "object/text",
+          "position": {
+            "x": 400,
+            "y": -200
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 0.0,
+              "y": -0.45,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "text": "1",
+            "fontPreset": "Poppins",
+            "fontSize": 20.0,
+            "depth": 0.001,
+            "color": 5592405,
+            "shadeless": 1
+          }
+        },
+        {
+          "id": "xTick1",
+          "type": "object/text",
+          "position": {
+            "x": 400,
+            "y": -110
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 3.3333333333333335,
+              "y": -0.45,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "text": "10",
+            "fontPreset": "Poppins",
+            "fontSize": 20.0,
+            "depth": 0.001,
+            "color": 5592405,
+            "shadeless": 1
+          }
+        },
+        {
+          "id": "xTick2",
+          "type": "object/text",
+          "position": {
+            "x": 400,
+            "y": -20
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 6.666666666666667,
+              "y": -0.45,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "text": "100",
+            "fontPreset": "Poppins",
+            "fontSize": 20.0,
+            "depth": 0.001,
+            "color": 5592405,
+            "shadeless": 1
+          }
+        },
+        {
+          "id": "xTick3",
+          "type": "object/text",
+          "position": {
+            "x": 400,
+            "y": 70
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 10.0,
+              "y": -0.45,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "text": "1 000",
+            "fontPreset": "Poppins",
+            "fontSize": 20.0,
+            "depth": 0.001,
+            "color": 5592405,
+            "shadeless": 1
+          }
+        },
+        {
+          "id": "yTick0",
+          "type": "object/text",
+          "position": {
+            "x": 650,
+            "y": -200
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": -0.55,
+              "y": 0.0,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "text": "0",
+            "fontPreset": "Poppins",
+            "fontSize": 20.0,
+            "depth": 0.001,
+            "color": 5592405,
+            "shadeless": 1
+          }
+        },
+        {
+          "id": "yTick1",
+          "type": "object/text",
+          "position": {
+            "x": 650,
+            "y": -110
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": -0.55,
+              "y": 1.5,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "text": "0,25",
+            "fontPreset": "Poppins",
+            "fontSize": 20.0,
+            "depth": 0.001,
+            "color": 5592405,
+            "shadeless": 1
+          }
+        },
+        {
+          "id": "yTick2",
+          "type": "object/text",
+          "position": {
+            "x": 650,
+            "y": -20
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": -0.55,
+              "y": 3.0,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "text": "0,5",
+            "fontPreset": "Poppins",
+            "fontSize": 20.0,
+            "depth": 0.001,
+            "color": 5592405,
+            "shadeless": 1
+          }
+        },
+        {
+          "id": "yTick3",
+          "type": "object/text",
+          "position": {
+            "x": 650,
+            "y": 70
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": -0.55,
+              "y": 4.5,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "text": "0,75",
+            "fontPreset": "Poppins",
+            "fontSize": 20.0,
+            "depth": 0.001,
+            "color": 5592405,
+            "shadeless": 1
+          }
+        },
+        {
+          "id": "yTick4",
+          "type": "object/text",
+          "position": {
+            "x": 650,
+            "y": 160
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": -0.55,
+              "y": 6.0,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "text": "1",
+            "fontPreset": "Poppins",
+            "fontSize": 20.0,
+            "depth": 0.001,
+            "color": 5592405,
+            "shadeless": 1
+          }
+        },
+        {
+          "id": "xName",
+          "type": "object/text",
+          "position": {
+            "x": 400,
+            "y": 280
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 5.0,
+              "y": -1.05,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "text": "nombre de lancers n",
+            "fontPreset": "Poppins",
+            "fontSize": 21.33,
+            "depth": 0.001,
+            "color": 2236962,
+            "shadeless": 1
+          }
+        },
+        {
+          "id": "yName",
+          "type": "object/text",
+          "position": {
+            "x": 650,
+            "y": 280
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 1.6,
+              "y": 6.65,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "text": "proportion de pile",
+            "fontPreset": "Poppins",
+            "fontSize": 21.33,
+            "depth": 0.001,
+            "color": 2236962,
+            "shadeless": 1
+          }
+        },
+        {
+          "id": "title",
+          "type": "math/latex",
+          "position": {
+            "x": 900,
+            "y": -320
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "tex": "\\overline{X}_n = \\frac{X_1 + X_2 + \\cdots + X_n}{n} \\;\\xrightarrow[\\;n \\to \\infty\\;]{}\\; p",
+            "inline": false,
+            "size": 0.42,
+            "align": "center",
+            "valign": "middle",
+            "at": {
+              "x": 6.2,
+              "y": 7.75,
+              "z": 0
+            },
+            "progress": 1,
+            "color": 2236962,
+            "opacity": 1,
+            "faceCamera": false
+          }
+        },
+        {
+          "id": "nText",
+          "type": "converter/value-to-text",
+          "position": {
+            "x": 650,
+            "y": 420
+          },
+          "params": {
+            "value": 0,
+            "decimals": 0,
+            "prefix": "n = ",
+            "suffix": ""
+          }
+        },
+        {
+          "id": "nLabel",
+          "type": "object/text",
+          "position": {
+            "x": 900,
+            "y": 420
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 8.6,
+              "y": 5.6,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "text": "n",
+            "fontPreset": "Poppins",
+            "fontSize": 28.0,
+            "depth": 0.001,
+            "color": 2236962,
+            "shadeless": 1
+          }
+        },
+        {
+          "id": "lastHeads",
+          "type": "list/get-item",
+          "position": {
+            "x": -400,
+            "y": 1800
+          },
+          "params": {
+            "index": -1
+          }
+        },
+        {
+          "id": "mean",
+          "type": "math/expression",
+          "position": {
+            "x": 100,
+            "y": 1800
+          },
+          "params": {
+            "formula": "x/y",
+            "a": 0,
+            "b": 0,
+            "c": 0,
+            "d": 0,
+            "x": 0,
+            "y": 0,
+            "z": 0
+          }
+        },
+        {
+          "id": "meanText",
+          "type": "converter/value-to-text",
+          "position": {
+            "x": 400,
+            "y": 1800
+          },
+          "params": {
+            "value": 0,
+            "decimals": 4,
+            "prefix": "série bleue : ",
+            "suffix": ""
+          }
+        },
+        {
+          "id": "meanLabel",
+          "type": "object/text",
+          "position": {
+            "x": 650,
+            "y": 1800
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 8.6,
+              "y": 5.0,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "text": "moyenne",
+            "fontPreset": "Poppins",
+            "fontSize": 24.0,
+            "depth": 0.001,
+            "color": 2060267,
+            "shadeless": 1
+          }
+        },
+        {
+          "id": "pText",
+          "type": "converter/value-to-text",
+          "position": {
+            "x": 400,
+            "y": 2000
+          },
+          "params": {
+            "value": 0,
+            "decimals": 2,
+            "prefix": "p = ",
+            "suffix": ""
+          }
+        },
+        {
+          "id": "pLabel",
+          "type": "object/text",
+          "position": {
+            "x": 650,
+            "y": 2000
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 8.6,
+              "y": 4.45,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "text": "p",
+            "fontPreset": "Poppins",
+            "fontSize": 24.0,
+            "depth": 0.001,
+            "color": 2236962,
+            "shadeless": 1
+          }
+        },
+        {
+          "id": "bandLabel",
+          "type": "math/latex",
+          "position": {
+            "x": 650,
+            "y": 2100
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "tex": "\\text{bande grise : } p \\pm \\frac{2\\sigma}{\\sqrt{n}}",
+            "inline": false,
+            "size": 0.42,
+            "align": "center",
+            "valign": "middle",
+            "at": {
+              "x": 8.6,
+              "y": 0.95,
+              "z": 0
+            },
+            "progress": 1,
+            "color": 8029332,
+            "opacity": 1,
+            "faceCamera": false
+          }
+        },
+        {
+          "id": "tails",
+          "type": "math/expression",
+          "position": {
+            "x": 100,
+            "y": 2400
+          },
+          "params": {
+            "formula": "y − x",
+            "a": 0,
+            "b": 0,
+            "c": 0,
+            "d": 0,
+            "x": 0,
+            "y": 0,
+            "z": 0
+          }
+        },
+        {
+          "id": "coinIndex",
+          "type": "list/generate",
+          "position": {
+            "x": -400,
+            "y": 2400
+          },
+          "params": {
+            "count": 1000,
+            "start": 0,
+            "step": 1
+          }
+        },
+        {
+          "id": "coinScale",
+          "type": "math/expression",
+          "position": {
+            "x": -150,
+            "y": 2400
+          },
+          "params": {
+            "formula": "(0.84 (1 − 0.07 mod(x, 2)), 0.036, 0.84 (1 − 0.07 mod(x, 2)))",
+            "a": 0,
+            "b": 0,
+            "c": 0,
+            "d": 0,
+            "x": 0,
+            "y": 0,
+            "z": 0
+          }
+        },
+        {
+          "id": "headsCoin",
+          "type": "object/cylinder",
+          "position": {
+            "x": -400,
+            "y": 2600
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "heightSegments": 1,
+            "color": 14263296,
+            "emissive": 0,
+            "emissiveIntensity": 1,
+            "shadeless": 0,
+            "roughness": 0.35,
+            "metalness": 0.6,
+            "wireframe": 0,
+            "opacity": 1,
+            "transmission": 0,
+            "thickness": 0.5
+          }
+        },
+        {
+          "id": "headsIndex",
+          "type": "list/generate",
+          "position": {
+            "x": -400,
+            "y": 2750
+          },
+          "params": {
+            "count": 0,
+            "start": 0,
+            "step": 1
+          }
+        },
+        {
+          "id": "headsSpots",
+          "type": "math/expression",
+          "position": {
+            "x": -150,
+            "y": 2750
+          },
+          "params": {
+            "formula": "(a − b floor(x/125) + 0.04 sin(12.9 x), 0.022 + 0.044 mod(x, 125), 0.04 cos(7.3 x))",
+            "a": -1.9,
+            "b": 1,
+            "c": 0,
+            "d": 0,
+            "x": 0,
+            "y": 0,
+            "z": 0
+          }
+        },
+        {
+          "id": "headsPile",
+          "type": "structure/instance-on-points",
+          "position": {
+            "x": 100,
+            "y": 2600
+          },
+          "params": {
+            "visible": 1,
+            "scaleMin": 1,
+            "scaleMax": 1,
+            "rotationJitter": 0,
+            "axis": "Y",
+            "randomFlip": false,
+            "seed": 0
+          }
+        },
+        {
+          "id": "headsText",
+          "type": "converter/value-to-text",
+          "position": {
+            "x": 100,
+            "y": 2750
+          },
+          "params": {
+            "value": 0,
+            "decimals": 0,
+            "prefix": "pile : ",
+            "suffix": ""
+          }
+        },
+        {
+          "id": "headsLabel",
+          "type": "object/text",
+          "position": {
+            "x": 350,
+            "y": 2750
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": -3.9,
+              "y": 6.0,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "text": "heads",
+            "fontPreset": "Poppins",
+            "fontSize": 28.0,
+            "depth": 0.001,
+            "color": 2236962,
+            "shadeless": 1
+          }
+        },
+        {
+          "id": "tailsCoin",
+          "type": "object/cylinder",
+          "position": {
+            "x": -400,
+            "y": 2900
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "heightSegments": 1,
+            "color": 11844292,
+            "emissive": 0,
+            "emissiveIntensity": 1,
+            "shadeless": 0,
+            "roughness": 0.35,
+            "metalness": 0.6,
+            "wireframe": 0,
+            "opacity": 1,
+            "transmission": 0,
+            "thickness": 0.5
+          }
+        },
+        {
+          "id": "tailsIndex",
+          "type": "list/generate",
+          "position": {
+            "x": -400,
+            "y": 3050
+          },
+          "params": {
+            "count": 0,
+            "start": 0,
+            "step": 1
+          }
+        },
+        {
+          "id": "tailsSpots",
+          "type": "math/expression",
+          "position": {
+            "x": -150,
+            "y": 3050
+          },
+          "params": {
+            "formula": "(a − b floor(x/125) + 0.04 sin(12.9 x), 0.022 + 0.044 mod(x, 125), 0.04 cos(7.3 x))",
+            "a": 12.4,
+            "b": -1,
+            "c": 0,
+            "d": 0,
+            "x": 0,
+            "y": 0,
+            "z": 0
+          }
+        },
+        {
+          "id": "tailsPile",
+          "type": "structure/instance-on-points",
+          "position": {
+            "x": 100,
+            "y": 2900
+          },
+          "params": {
+            "visible": 1,
+            "scaleMin": 1,
+            "scaleMax": 1,
+            "rotationJitter": 0,
+            "axis": "Y",
+            "randomFlip": false,
+            "seed": 0
+          }
+        },
+        {
+          "id": "tailsText",
+          "type": "converter/value-to-text",
+          "position": {
+            "x": 100,
+            "y": 3050
+          },
+          "params": {
+            "value": 0,
+            "decimals": 0,
+            "prefix": "face : ",
+            "suffix": ""
+          }
+        },
+        {
+          "id": "tailsLabel",
+          "type": "object/text",
+          "position": {
+            "x": 350,
+            "y": 3050
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 14.4,
+              "y": 6.0,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "text": "tails",
+            "fontPreset": "Poppins",
+            "fontSize": 28.0,
+            "depth": 0.001,
+            "color": 2236962,
+            "shadeless": 1
+          }
+        },
+        {
+          "id": "named",
+          "type": "math/expression",
+          "position": {
+            "x": 400,
+            "y": 2250
+          },
+          "params": {
+            "formula": "t >= a",
+            "a": 9.5,
+            "b": 0,
+            "c": 0,
+            "d": 0,
+            "x": 0,
+            "y": 0,
+            "z": 0
+          }
+        },
+        {
+          "id": "lawName",
+          "type": "object/text",
+          "position": {
+            "x": 650,
+            "y": 2250
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 8.6,
+              "y": 1.75,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "text": "Loi des grands nombres",
+            "fontPreset": "Poppins",
+            "fontSize": 30.0,
+            "depth": 0.001,
+            "color": 2236962,
+            "shadeless": 1
+          }
+        }
+      ],
+      "connections": [
+        {
+          "id": "env.environment->render.environment",
+          "fromNode": "env",
+          "fromSocket": "environment",
+          "toNode": "render",
+          "toSocket": "environment"
+        },
+        {
+          "id": "n.value->ones.count",
+          "fromNode": "n",
+          "fromSocket": "value",
+          "toNode": "ones",
+          "toSocket": "count"
+        },
+        {
+          "id": "ones.list->counts.a",
+          "fromNode": "ones",
+          "fromSocket": "list",
+          "toNode": "counts",
+          "toSocket": "a"
+        },
+        {
+          "id": "n.value->s1_draws.count",
+          "fromNode": "n",
+          "fromSocket": "value",
+          "toNode": "s1_draws",
+          "toSocket": "count"
+        },
+        {
+          "id": "s1_draws.list->s1_flips.x",
+          "fromNode": "s1_draws",
+          "fromSocket": "list",
+          "toNode": "s1_flips",
+          "toSocket": "x"
+        },
+        {
+          "id": "p.value->s1_flips.a",
+          "fromNode": "p",
+          "fromSocket": "value",
+          "toNode": "s1_flips",
+          "toSocket": "a"
+        },
+        {
+          "id": "s1_flips.list->s1_heads.a",
+          "fromNode": "s1_flips",
+          "fromSocket": "list",
+          "toNode": "s1_heads",
+          "toSocket": "a"
+        },
+        {
+          "id": "s1_heads.list->s1_points.x",
+          "fromNode": "s1_heads",
+          "fromSocket": "list",
+          "toNode": "s1_points",
+          "toSocket": "x"
+        },
+        {
+          "id": "counts.list->s1_points.y",
+          "fromNode": "counts",
+          "fromSocket": "list",
+          "toNode": "s1_points",
+          "toSocket": "y"
+        },
+        {
+          "id": "s1_points.list->s1_curve.points",
+          "fromNode": "s1_points",
+          "fromSocket": "list",
+          "toNode": "s1_curve",
+          "toSocket": "points"
+        },
+        {
+          "id": "s1_curve.curve->s1_line.curve",
+          "fromNode": "s1_curve",
+          "fromSocket": "curve",
+          "toNode": "s1_line",
+          "toSocket": "curve"
+        },
+        {
+          "id": "axes.space->s1_line.matrix",
+          "fromNode": "axes",
+          "fromSocket": "space",
+          "toNode": "s1_line",
+          "toSocket": "matrix"
+        },
+        {
+          "id": "n.value->s2_draws.count",
+          "fromNode": "n",
+          "fromSocket": "value",
+          "toNode": "s2_draws",
+          "toSocket": "count"
+        },
+        {
+          "id": "s2_draws.list->s2_flips.x",
+          "fromNode": "s2_draws",
+          "fromSocket": "list",
+          "toNode": "s2_flips",
+          "toSocket": "x"
+        },
+        {
+          "id": "p.value->s2_flips.a",
+          "fromNode": "p",
+          "fromSocket": "value",
+          "toNode": "s2_flips",
+          "toSocket": "a"
+        },
+        {
+          "id": "s2_flips.list->s2_heads.a",
+          "fromNode": "s2_flips",
+          "fromSocket": "list",
+          "toNode": "s2_heads",
+          "toSocket": "a"
+        },
+        {
+          "id": "s2_heads.list->s2_points.x",
+          "fromNode": "s2_heads",
+          "fromSocket": "list",
+          "toNode": "s2_points",
+          "toSocket": "x"
+        },
+        {
+          "id": "counts.list->s2_points.y",
+          "fromNode": "counts",
+          "fromSocket": "list",
+          "toNode": "s2_points",
+          "toSocket": "y"
+        },
+        {
+          "id": "s2_points.list->s2_curve.points",
+          "fromNode": "s2_points",
+          "fromSocket": "list",
+          "toNode": "s2_curve",
+          "toSocket": "points"
+        },
+        {
+          "id": "s2_curve.curve->s2_line.curve",
+          "fromNode": "s2_curve",
+          "fromSocket": "curve",
+          "toNode": "s2_line",
+          "toSocket": "curve"
+        },
+        {
+          "id": "axes.space->s2_line.matrix",
+          "fromNode": "axes",
+          "fromSocket": "space",
+          "toNode": "s2_line",
+          "toSocket": "matrix"
+        },
+        {
+          "id": "n.value->s3_draws.count",
+          "fromNode": "n",
+          "fromSocket": "value",
+          "toNode": "s3_draws",
+          "toSocket": "count"
+        },
+        {
+          "id": "s3_draws.list->s3_flips.x",
+          "fromNode": "s3_draws",
+          "fromSocket": "list",
+          "toNode": "s3_flips",
+          "toSocket": "x"
+        },
+        {
+          "id": "p.value->s3_flips.a",
+          "fromNode": "p",
+          "fromSocket": "value",
+          "toNode": "s3_flips",
+          "toSocket": "a"
+        },
+        {
+          "id": "s3_flips.list->s3_heads.a",
+          "fromNode": "s3_flips",
+          "fromSocket": "list",
+          "toNode": "s3_heads",
+          "toSocket": "a"
+        },
+        {
+          "id": "s3_heads.list->s3_points.x",
+          "fromNode": "s3_heads",
+          "fromSocket": "list",
+          "toNode": "s3_points",
+          "toSocket": "x"
+        },
+        {
+          "id": "counts.list->s3_points.y",
+          "fromNode": "counts",
+          "fromSocket": "list",
+          "toNode": "s3_points",
+          "toSocket": "y"
+        },
+        {
+          "id": "s3_points.list->s3_curve.points",
+          "fromNode": "s3_points",
+          "fromSocket": "list",
+          "toNode": "s3_curve",
+          "toSocket": "points"
+        },
+        {
+          "id": "s3_curve.curve->s3_line.curve",
+          "fromNode": "s3_curve",
+          "fromSocket": "curve",
+          "toNode": "s3_line",
+          "toSocket": "curve"
+        },
+        {
+          "id": "axes.space->s3_line.matrix",
+          "fromNode": "axes",
+          "fromSocket": "space",
+          "toNode": "s3_line",
+          "toSocket": "matrix"
+        },
+        {
+          "id": "n.value->s4_draws.count",
+          "fromNode": "n",
+          "fromSocket": "value",
+          "toNode": "s4_draws",
+          "toSocket": "count"
+        },
+        {
+          "id": "s4_draws.list->s4_flips.x",
+          "fromNode": "s4_draws",
+          "fromSocket": "list",
+          "toNode": "s4_flips",
+          "toSocket": "x"
+        },
+        {
+          "id": "p.value->s4_flips.a",
+          "fromNode": "p",
+          "fromSocket": "value",
+          "toNode": "s4_flips",
+          "toSocket": "a"
+        },
+        {
+          "id": "s4_flips.list->s4_heads.a",
+          "fromNode": "s4_flips",
+          "fromSocket": "list",
+          "toNode": "s4_heads",
+          "toSocket": "a"
+        },
+        {
+          "id": "s4_heads.list->s4_points.x",
+          "fromNode": "s4_heads",
+          "fromSocket": "list",
+          "toNode": "s4_points",
+          "toSocket": "x"
+        },
+        {
+          "id": "counts.list->s4_points.y",
+          "fromNode": "counts",
+          "fromSocket": "list",
+          "toNode": "s4_points",
+          "toSocket": "y"
+        },
+        {
+          "id": "s4_points.list->s4_curve.points",
+          "fromNode": "s4_points",
+          "fromSocket": "list",
+          "toNode": "s4_curve",
+          "toSocket": "points"
+        },
+        {
+          "id": "s4_curve.curve->s4_line.curve",
+          "fromNode": "s4_curve",
+          "fromSocket": "curve",
+          "toNode": "s4_line",
+          "toSocket": "curve"
+        },
+        {
+          "id": "axes.space->s4_line.matrix",
+          "fromNode": "axes",
+          "fromSocket": "space",
+          "toNode": "s4_line",
+          "toSocket": "matrix"
+        },
+        {
+          "id": "n.value->s5_draws.count",
+          "fromNode": "n",
+          "fromSocket": "value",
+          "toNode": "s5_draws",
+          "toSocket": "count"
+        },
+        {
+          "id": "s5_draws.list->s5_flips.x",
+          "fromNode": "s5_draws",
+          "fromSocket": "list",
+          "toNode": "s5_flips",
+          "toSocket": "x"
+        },
+        {
+          "id": "p.value->s5_flips.a",
+          "fromNode": "p",
+          "fromSocket": "value",
+          "toNode": "s5_flips",
+          "toSocket": "a"
+        },
+        {
+          "id": "s5_flips.list->s5_heads.a",
+          "fromNode": "s5_flips",
+          "fromSocket": "list",
+          "toNode": "s5_heads",
+          "toSocket": "a"
+        },
+        {
+          "id": "s5_heads.list->s5_points.x",
+          "fromNode": "s5_heads",
+          "fromSocket": "list",
+          "toNode": "s5_points",
+          "toSocket": "x"
+        },
+        {
+          "id": "counts.list->s5_points.y",
+          "fromNode": "counts",
+          "fromSocket": "list",
+          "toNode": "s5_points",
+          "toSocket": "y"
+        },
+        {
+          "id": "s5_points.list->s5_curve.points",
+          "fromNode": "s5_points",
+          "fromSocket": "list",
+          "toNode": "s5_curve",
+          "toSocket": "points"
+        },
+        {
+          "id": "s5_curve.curve->s5_line.curve",
+          "fromNode": "s5_curve",
+          "fromSocket": "curve",
+          "toNode": "s5_line",
+          "toSocket": "curve"
+        },
+        {
+          "id": "axes.space->s5_line.matrix",
+          "fromNode": "axes",
+          "fromSocket": "space",
+          "toNode": "s5_line",
+          "toSocket": "matrix"
+        },
+        {
+          "id": "n.value->drawn.x",
+          "fromNode": "n",
+          "fromSocket": "value",
+          "toNode": "drawn",
+          "toSocket": "x"
+        },
+        {
+          "id": "axes.space->limit.space",
+          "fromNode": "axes",
+          "fromSocket": "space",
+          "toNode": "limit",
+          "toSocket": "space"
+        },
+        {
+          "id": "p.value->limit.a",
+          "fromNode": "p",
+          "fromSocket": "value",
+          "toNode": "limit",
+          "toSocket": "a"
+        },
+        {
+          "id": "drawn.value->limit.progress",
+          "fromNode": "drawn",
+          "fromSocket": "value",
+          "toNode": "limit",
+          "toSocket": "progress"
+        },
+        {
+          "id": "axes.space->bandHigh.space",
+          "fromNode": "axes",
+          "fromSocket": "space",
+          "toNode": "bandHigh",
+          "toSocket": "space"
+        },
+        {
+          "id": "p.value->bandHigh.a",
+          "fromNode": "p",
+          "fromSocket": "value",
+          "toNode": "bandHigh",
+          "toSocket": "a"
+        },
+        {
+          "id": "drawn.value->bandHigh.progress",
+          "fromNode": "drawn",
+          "fromSocket": "value",
+          "toNode": "bandHigh",
+          "toSocket": "progress"
+        },
+        {
+          "id": "axes.space->bandLow.space",
+          "fromNode": "axes",
+          "fromSocket": "space",
+          "toNode": "bandLow",
+          "toSocket": "space"
+        },
+        {
+          "id": "p.value->bandLow.a",
+          "fromNode": "p",
+          "fromSocket": "value",
+          "toNode": "bandLow",
+          "toSocket": "a"
+        },
+        {
+          "id": "drawn.value->bandLow.progress",
+          "fromNode": "drawn",
+          "fromSocket": "value",
+          "toNode": "bandLow",
+          "toSocket": "progress"
+        },
+        {
+          "id": "n.value->nText.value",
+          "fromNode": "n",
+          "fromSocket": "value",
+          "toNode": "nText",
+          "toSocket": "value"
+        },
+        {
+          "id": "nText.text->nLabel.text",
+          "fromNode": "nText",
+          "fromSocket": "text",
+          "toNode": "nLabel",
+          "toSocket": "text"
+        },
+        {
+          "id": "s1_heads.list->lastHeads.list",
+          "fromNode": "s1_heads",
+          "fromSocket": "list",
+          "toNode": "lastHeads",
+          "toSocket": "list"
+        },
+        {
+          "id": "lastHeads.val->mean.x",
+          "fromNode": "lastHeads",
+          "fromSocket": "val",
+          "toNode": "mean",
+          "toSocket": "x"
+        },
+        {
+          "id": "n.value->mean.y",
+          "fromNode": "n",
+          "fromSocket": "value",
+          "toNode": "mean",
+          "toSocket": "y"
+        },
+        {
+          "id": "mean.value->meanText.value",
+          "fromNode": "mean",
+          "fromSocket": "value",
+          "toNode": "meanText",
+          "toSocket": "value"
+        },
+        {
+          "id": "meanText.text->meanLabel.text",
+          "fromNode": "meanText",
+          "fromSocket": "text",
+          "toNode": "meanLabel",
+          "toSocket": "text"
+        },
+        {
+          "id": "p.value->pText.value",
+          "fromNode": "p",
+          "fromSocket": "value",
+          "toNode": "pText",
+          "toSocket": "value"
+        },
+        {
+          "id": "pText.text->pLabel.text",
+          "fromNode": "pText",
+          "fromSocket": "text",
+          "toNode": "pLabel",
+          "toSocket": "text"
+        },
+        {
+          "id": "lastHeads.val->tails.x",
+          "fromNode": "lastHeads",
+          "fromSocket": "val",
+          "toNode": "tails",
+          "toSocket": "x"
+        },
+        {
+          "id": "n.value->tails.y",
+          "fromNode": "n",
+          "fromSocket": "value",
+          "toNode": "tails",
+          "toSocket": "y"
+        },
+        {
+          "id": "coinIndex.list->coinScale.x",
+          "fromNode": "coinIndex",
+          "fromSocket": "list",
+          "toNode": "coinScale",
+          "toSocket": "x"
+        },
+        {
+          "id": "lastHeads.val->headsIndex.count",
+          "fromNode": "lastHeads",
+          "fromSocket": "val",
+          "toNode": "headsIndex",
+          "toSocket": "count"
+        },
+        {
+          "id": "headsIndex.list->headsSpots.x",
+          "fromNode": "headsIndex",
+          "fromSocket": "list",
+          "toNode": "headsSpots",
+          "toSocket": "x"
+        },
+        {
+          "id": "headsCoin.geometry->headsPile.geometry",
+          "fromNode": "headsCoin",
+          "fromSocket": "geometry",
+          "toNode": "headsPile",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "headsSpots.list->headsPile.points",
+          "fromNode": "headsSpots",
+          "fromSocket": "list",
+          "toNode": "headsPile",
+          "toSocket": "points"
+        },
+        {
+          "id": "coinScale.list->headsPile.scales",
+          "fromNode": "coinScale",
+          "fromSocket": "list",
+          "toNode": "headsPile",
+          "toSocket": "scales"
+        },
+        {
+          "id": "lastHeads.val->headsText.value",
+          "fromNode": "lastHeads",
+          "fromSocket": "val",
+          "toNode": "headsText",
+          "toSocket": "value"
+        },
+        {
+          "id": "headsText.text->headsLabel.text",
+          "fromNode": "headsText",
+          "fromSocket": "text",
+          "toNode": "headsLabel",
+          "toSocket": "text"
+        },
+        {
+          "id": "tails.value->tailsIndex.count",
+          "fromNode": "tails",
+          "fromSocket": "value",
+          "toNode": "tailsIndex",
+          "toSocket": "count"
+        },
+        {
+          "id": "tailsIndex.list->tailsSpots.x",
+          "fromNode": "tailsIndex",
+          "fromSocket": "list",
+          "toNode": "tailsSpots",
+          "toSocket": "x"
+        },
+        {
+          "id": "tailsCoin.geometry->tailsPile.geometry",
+          "fromNode": "tailsCoin",
+          "fromSocket": "geometry",
+          "toNode": "tailsPile",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "tailsSpots.list->tailsPile.points",
+          "fromNode": "tailsSpots",
+          "fromSocket": "list",
+          "toNode": "tailsPile",
+          "toSocket": "points"
+        },
+        {
+          "id": "coinScale.list->tailsPile.scales",
+          "fromNode": "coinScale",
+          "fromSocket": "list",
+          "toNode": "tailsPile",
+          "toSocket": "scales"
+        },
+        {
+          "id": "tails.value->tailsText.value",
+          "fromNode": "tails",
+          "fromSocket": "value",
+          "toNode": "tailsText",
+          "toSocket": "value"
+        },
+        {
+          "id": "tailsText.text->tailsLabel.text",
+          "fromNode": "tailsText",
+          "fromSocket": "text",
+          "toNode": "tailsLabel",
+          "toSocket": "text"
+        },
+        {
+          "id": "named.value->lawName.visible",
+          "fromNode": "named",
+          "fromSocket": "value",
+          "toNode": "lawName",
+          "toSocket": "visible"
+        }
+      ],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": [
+        {
+          "nodeId": "p",
+          "paramId": "a",
+          "label": "p (probabilité de pile)"
+        }
+      ]
+    },
+    {
+      "nodes": [],
+      "connections": [],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    },
+    {
+      "nodes": [],
+      "connections": [],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    },
+    {
+      "nodes": [],
+      "connections": [],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    },
+    {
+      "nodes": [],
+      "connections": [],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    }
+  ],
+  "activeCanvas": 0
+}
