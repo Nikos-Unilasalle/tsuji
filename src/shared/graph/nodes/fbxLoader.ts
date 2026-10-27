@@ -3,7 +3,7 @@ import { FBXLoader } from "three/examples/jsm/loaders/FBXLoader.js";
 import { NodeDefinition } from "../types";
 import { createNodeCache, disposeObject3D } from "../nodeCaches";
 import { composeNativeMatrixWithPivot } from "./transform";
-import { COMMON_PRIMITIVE_OUTPUTS, TextureParams, applyMaterialParams, extractMaterialParams, inheritSourceMaterial, primitiveOutputs } from "./object";
+import { COMMON_PRIMITIVE_OUTPUTS, TextureParams, applyMaterialParams, extractMaterialParams, inheritSourceMaterial, materialParamsFromValue, primitiveOutputs } from "./object";
 
 /** A 1×1 white pixel, served in place of any texture file FBXLoader asks for that isn't embedded in the .fbx. */
 const WHITE_PIXEL =
@@ -230,8 +230,11 @@ export const OBJECT_FBX_NODE: NodeDefinition = {
     // every mesh, never edited into the file's materials, so turning
     // "Use Own Materials" back on can hand them back.
     const useOwnMaterials = params.useOwnMaterials !== undefined ? Boolean(params.useOwnMaterials) : true;
+    // A wired Material is an explicit ask, like a wired map: it wins over the
+    // file's materials whatever the checkbox says.
+    const wiredMaterial = materialParamsFromValue(inputs.material) !== null;
     let override: THREE.Material | THREE.Material[] | undefined;
-    if (!useOwnMaterials || textured) {
+    if (!useOwnMaterials || textured || wiredMaterial) {
       const matParams = extractMaterialParams(inputs, params);
       const texParams: TextureParams = { activeDiffuse, activeNormal, activeRoughness, scaleX, scaleY, offsetX, offsetY };
       state.overrideHolder ??= new THREE.Mesh();

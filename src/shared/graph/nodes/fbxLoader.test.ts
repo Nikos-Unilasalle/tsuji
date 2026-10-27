@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { EvalContext } from "../types";
 import { OBJECT_FBX_NODE } from "./fbxLoader";
 import { DEFAULT_REGISTRY } from "./index";
+import { MATERIAL_NODE } from "./material";
 
 const CTX: EvalContext = { time: 0, step: 0, nodeId: "fbx-test-1" };
 
@@ -64,5 +65,18 @@ describe("OBJECT_FBX_NODE UV controls", () => {
     });
     expect(repeat).toEqual(new THREE.Vector2(3, 2));
     expect(offset).toEqual(new THREE.Vector2(0.5, 0.25));
+  });
+});
+
+describe("OBJECT_FBX_NODE material input", () => {
+  it("lets a wired Material override the model's own materials", () => {
+    const material = MATERIAL_NODE.evaluate({}, { ...MATERIAL_NODE.defaultParams, color: new THREE.Color(0xff0000) }, CTX).material;
+    const ctx = { ...CTX, nodeId: "fbx-test-material" };
+    const out = OBJECT_FBX_NODE.evaluate({ material }, OBJECT_FBX_NODE.defaultParams, ctx);
+    const colors: number[] = [];
+    (out.geometry as THREE.Object3D).traverse((o) => {
+      if (o instanceof THREE.Mesh) colors.push((o.material as THREE.MeshStandardMaterial).color.getHex());
+    });
+    expect(colors).toEqual([0xff0000]);
   });
 });

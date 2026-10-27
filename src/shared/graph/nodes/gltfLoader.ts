@@ -5,7 +5,7 @@ import { MeshoptDecoder } from "three/examples/jsm/libs/meshopt_decoder.module.j
 import { NodeDefinition } from "../types";
 import { createNodeCache, disposeObject3D } from "../nodeCaches";
 import { composeNativeMatrixWithPivot } from "./transform";
-import { COMMON_PRIMITIVE_OUTPUTS, TextureParams, applyMaterialParams, extractMaterialParams, inheritSourceMaterial, primitiveOutputs } from "./object";
+import { COMMON_PRIMITIVE_OUTPUTS, TextureParams, applyMaterialParams, extractMaterialParams, inheritSourceMaterial, materialParamsFromValue, primitiveOutputs } from "./object";
 import { isTauri } from "../../isTauri";
 import { describeMissingResources, directoryOf, externalResourceUris, resolveExternalResources } from "./gltfExternalResources";
 import { findBrowserFile, requestProjectFolder } from "../browserFiles";
@@ -756,8 +756,11 @@ export const OBJECT_GLTF_NODE: NodeDefinition = {
     // every mesh, never edited into the file's materials: those have to
     // survive it, so turning "Use Own Materials" back on can hand them back.
     const useOwnMaterials = params.useOwnMaterials !== undefined ? Boolean(params.useOwnMaterials) : true;
+    // A wired Material is an explicit ask, like a wired map: it wins over the
+    // file's materials whatever the checkbox says.
+    const wiredMaterial = materialParamsFromValue(inputs.material) !== null;
     let override: THREE.Material | THREE.Material[] | undefined;
-    if (!useOwnMaterials) {
+    if (!useOwnMaterials || wiredMaterial) {
       const matParams = extractMaterialParams(inputs, params);
       const texParams: TextureParams = { activeDiffuse: null, activeNormal: null, activeRoughness: null, scaleX: 1, scaleY: 1, offsetX: 0, offsetY: 0 };
       state.overrideHolder ??= new THREE.Mesh();

@@ -4,6 +4,7 @@ import { EvalContext, NodeInstance } from "../types";
 import { EXPLODE_GLTF_ACTION, OBJECT_GLTF_NODE, explodeGltfToMeshData, gltfSourceDirectory, sanitizeFileNamePart } from "./gltfLoader";
 import { evaluateGraph } from "../evaluate";
 import { DEFAULT_REGISTRY } from "./index";
+import { MATERIAL_NODE } from "./material";
 
 const CTX: EvalContext = { time: 0, step: 0, nodeId: "gltf-test-1" };
 const DUMMY_NODE: NodeInstance = { id: "gltf-test-1", type: "object/gltf", params: OBJECT_GLTF_NODE.defaultParams, position: { x: 0, y: 0 } };
@@ -690,5 +691,18 @@ describe("glTF Model material override", () => {
     expect(own.color.getHex()).toBe(ownColor);
 
     expect(meshOf({ useOwnMaterials: 1 }).material).toBe(own);
+  });
+});
+
+describe("OBJECT_GLTF_NODE material input", () => {
+  it("lets a wired Material override the model's own materials", () => {
+    const material = MATERIAL_NODE.evaluate({}, { ...MATERIAL_NODE.defaultParams, color: new THREE.Color(0xff0000) }, CTX).material;
+    const ctx = { ...CTX, nodeId: "gltf-test-material" };
+    const out = OBJECT_GLTF_NODE.evaluate({ material }, OBJECT_GLTF_NODE.defaultParams, ctx);
+    const colors: number[] = [];
+    (out.geometry as THREE.Object3D).traverse((o) => {
+      if (o instanceof THREE.Mesh) colors.push((o.material as THREE.MeshStandardMaterial).color.getHex());
+    });
+    expect(colors).toEqual([0xff0000]);
   });
 });
