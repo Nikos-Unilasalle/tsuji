@@ -5592,6 +5592,15 @@ export function Viewport({
           // was actually evaluated.
           currentFrameRef.current = timelineFrame;
           onFrameChangeRef.current?.(timelineFrame);
+        } else if (!capture && playheadRef.current.anchor !== null) {
+          // Report every driving tick, not only those that move the frame.
+          // App's fallback timer yields only to a viewport that has reported
+          // recently; at a render fps below the display rate most ticks land
+          // on the same frame, so on Play the timer stepped in first, its +1
+          // read here as an outside scrub, the anchor was retaken on it and
+          // nothing was ever reported — leaving the 60 Hz timer in charge of
+          // a 30 fps timeline, and the animation and its sound at double speed.
+          onFrameChangeRef.current?.(timelineFrame);
         }
 
         if (isPlayingRef.current) simulationRunRef.current = true;
