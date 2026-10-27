@@ -104,6 +104,7 @@ const LIST_OPS = [
   "reverse",
   "sort_asc",
   "sort_desc",
+  "cumulative_sum",
 ];
 
 function toNumericList(val: unknown): number[] {
@@ -162,6 +163,12 @@ export const LIST_MATH_NODE: NodeDefinition = {
     if (op === "reverse") return { list: [...listA].reverse().map((n) => n * factor + offset) };
     if (op === "sort_asc") return { list: [...listA].sort((x, y) => x - y).map((n) => n * factor + offset) };
     if (op === "sort_desc") return { list: [...listA].sort((x, y) => y - x).map((n) => n * factor + offset) };
+    // Running total: item i is the sum of items 0..i. Over a list of ones it
+    // counts 1, 2, 3…; over coin flips it gives the number of heads so far.
+    if (op === "cumulative_sum") {
+      let total = 0;
+      return { list: listA.map((n) => (total += n) * factor + offset) };
+    }
 
     const hasBInput = inputs.b !== undefined || (params.b !== undefined && Number(params.b) !== 0);
 
@@ -290,6 +297,65 @@ export const LIST_STATISTICS_NODE: NodeDefinition = {
     const median = count % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
 
     return { sum, average, min, max, median, count };
+  },
+};
+
+const HISTOGRAM_SCALES = ["count", "fraction", "density"];
+
+/**
+ * List Histogram node — sorts a list of numbers into equal-width bins between
+ * Min and Max and outputs how many fall in each, ready for a Bar Graph.
+ * Values outside [Min, Max] are left out (Max itself goes in the last bin).
+ * Scale: raw counts, the fraction of the list in each bin (sums to 1), or a
+ * density (fraction / bin width) — the one to compare with a probability
+ * density curve drawn over it, whatever the bin width.
+ */
+export const LIST_HISTOGRAM_NODE: NodeDefinition = {
+  type: "list/histogram",
+  label: "List Histogram",
+  category: "list",
+  pure: true,
+  inputs: [
+    { id: "list", label: "List", type: "list" },
+    { id: "bins", label: "Bins", type: "value" },
+    { id: "min", label: "Min", type: "value" },
+    { id: "max", label: "Max", type: "value" },
+  ],
+  outputs: [
+    { id: "counts", label: "Counts", type: "list" },
+    { id: "centers", label: "Bin Centers", type: "list" },
+    { id: "peak", label: "Peak", type: "value" },
+    { id: "total", label: "Total", type: "value" },
+  ],
+  defaultParams: { bins: 10, min: 0, max: 1, scale: "count" },
+  paramFields: [
+    { id: "bins", label: "Bins", kind: "number", step: 1 },
+    { id: "min", label: "Min", kind: "number", step: 0.1 },
+    { id: "max", label: "Max", kind: "number", step: 0.1 },
+    { id: "scale", label: "Scale", kind: "select", options: HISTOGRAM_SCALES },
+  ],
+  evaluate: (inputs, params) => {
+    const values = toNumericList(inputs.list);
+    const bins = Math.max(1, Math.min(10000, Math.floor(inputs.bins !== undefined ? Number(inputs.bins) || 1 : Number(params.bins) || 10)));
+    const min = inputs.min !== undefined ? Number(inputs.min) || 0 : Number(params.min) || 0;
+    const max = inputs.max !== undefined ? Number(inputs.max) || 0 : Number(params.max ?? 1);
+    const width = (max - min) / bins;
+
+    const counts = new Array<number>(bins).fill(0);
+    let total = 0;
+    if (width > 0) {
+      for (const v of values) {
+        if (!(v >= min && v <= max)) continue;
+        counts[Math.min(bins - 1, Math.floor((v - min) / width))]++;
+        total++;
+      }
+    }
+
+    const scale = String(params.scale || "count");
+    const divisor = scale === "fraction" ? values.length : scale === "density" ? values.length * width : 1;
+    const scaled = divisor > 0 ? counts.map((c) => c / divisor) : counts.map(() => 0);
+    const centers = counts.map((_, i) => min + (i + 0.5) * width);
+    return { counts: scaled, centers, peak: Math.max(...scaled), total };
   },
 };
 

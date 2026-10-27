@@ -527,6 +527,9 @@ describe("LIST NODES", () => {
     const remapped = LIST_MATH_NODE.evaluate({ a: [10, 20, 30] }, { op: "remap_01" }, CTX).list as number[];
     expect(remapped[0]).toBeCloseTo(0);
     expect(remapped[2]).toBeCloseTo(1);
+
+    const running = LIST_MATH_NODE.evaluate({ a: [1, 0, 1, 1] }, { op: "cumulative_sum" }, CTX).list as number[];
+    expect(running).toEqual([1, 1, 2, 3]);
   });
 
   test("color palette list", () => {

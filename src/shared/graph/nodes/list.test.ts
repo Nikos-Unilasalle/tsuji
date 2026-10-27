@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
-import { DISTANCE_GRADIENT_LIST_NODE, GET_LIST_ITEM_NODE, GRADIENT_LIST_NODE, LIST_MAP_RANGE_NODE, RANDOM_SAMPLE_LIST_NODE } from "./list";
+import { DISTANCE_GRADIENT_LIST_NODE, GET_LIST_ITEM_NODE, GRADIENT_LIST_NODE, LIST_HISTOGRAM_NODE, LIST_MAP_RANGE_NODE, RANDOM_SAMPLE_LIST_NODE } from "./list";
 import { CURVE_FROM_POINTS_NODE } from "./curve";
 import { EvalContext } from "../types";
 
@@ -172,3 +172,22 @@ describe("LIST_MAP_RANGE_NODE", () => {
   });
 });
 
+
+describe("LIST_HISTOGRAM_NODE", () => {
+  const run = (list: number[], params: Record<string, unknown>) =>
+    LIST_HISTOGRAM_NODE.evaluate({ list }, { ...LIST_HISTOGRAM_NODE.defaultParams, ...params }, CTX);
+
+  it("counts values per equal-width bin, Max in the last bin, outsiders left out", () => {
+    const res = run([0, 0.1, 0.5, 0.99, 1, -0.2, 1.5], { bins: 4, min: 0, max: 1 });
+    expect(res.counts).toEqual([2, 0, 1, 2]);
+    expect(res.centers).toEqual([0.125, 0.375, 0.625, 0.875]);
+    expect(res.total).toBe(5);
+    expect(res.peak).toBe(2);
+  });
+
+  it("scales to fractions of the whole list, or to a density over the bin width", () => {
+    const list = [0, 1, 1, 2];
+    expect(run(list, { bins: 3, min: -0.5, max: 2.5, scale: "fraction" }).counts).toEqual([0.25, 0.5, 0.25]);
+    expect(run(list, { bins: 2, min: 0, max: 2, scale: "density" }).counts).toEqual([0.25, 0.75]);
+  });
+});
