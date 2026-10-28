@@ -33,6 +33,9 @@ import { PoseHud } from "./PoseHud";
 import { RIG_BIPED_POSE_NODE } from "../graph/nodes/bipedPose";
 import { RIG_BIPED_DANCE_NODE, type DanceInfo } from "../graph/nodes/bipedDance";
 import { DanceHud } from "./DanceHud";
+import { PatternHud } from "./PatternHud";
+import { previewNote } from "../music/engine/bridge";
+import { isTrack, sequenceOf, type PreviewSound } from "../music/engine/description";
 import { RIG_HUMAN_NODE } from "../graph/nodes/rig";
 import { RIG_BIPED_MOTION_NODE, type BipedGaitInfo } from "../graph/nodes/bipedMotion";
 import { PointsInfluenceHud } from "./PointsInfluenceHud";
@@ -8698,6 +8701,45 @@ export function Viewport({
                 </button>
               </HudBar>
             </>
+          );
+        })()}
+      {/* Music: a selected Pattern is edited as a tracker grid (see PatternHud.tsx) */}
+      {!outputMode &&
+        !elevationView &&
+        selectedNodeId &&
+        (() => {
+          const patternNode = graph.nodes.find((n) => n.id === selectedNodeId && n.type === "music/pattern");
+          if (!patternNode) return null;
+          // Follow the wires downstream (through Arps) to the voice the pattern plays on, and on to its Music Out.
+          const downstream = (id: string) => graph.connections.filter((c) => c.fromNode === id).map((c) => graph.nodes.find((n) => n.id === c.toNode)).filter((n): n is NonNullable<typeof n> => !!n);
+          let frontier = [patternNode];
+          let voice: (typeof graph.nodes)[number] | undefined;
+          for (let hops = 0; hops < 6 && frontier.length > 0 && !voice; hops++) {
+            const next = frontier.flatMap((n) => downstream(n.id));
+            voice = next.find((n) => n.type === "music/fm-voice" || n.type === "music/drum-kit");
+            frontier = next.filter((n) => n.type === "music/arp");
+          }
+          const out = voice ? downstream(voice.id).find((n) => n.type === "music/out") : graph.nodes.find((n) => n.type === "music/out");
+          const voiceResult = voice ? latestResultsRef.current?.get(voice.id)?.track : null;
+          const previewSound: PreviewSound | null = isTrack(voiceResult)
+            ? voiceResult.kind === "fm"
+              ? { kind: "fm", patch: voiceResult.patch }
+              : { kind: "drums", drums: voiceResult.drums }
+            : null;
+          return (
+            <PatternHud
+              node={patternNode}
+              drums={voice?.type === "music/drum-kit"}
+              readPlayhead={() => {
+                const render = renderNodeIdRef.current ? latestResultsRef.current?.get(renderNodeIdRef.current) : undefined;
+                return { frame: Math.max(0, currentFrameRef.current), fps: typeof render?.fps === "number" ? (render.fps as number) : 30 };
+              }}
+              readSequence={() => sequenceOf(latestResultsRef.current?.get(patternNode.id)?.sequence)}
+              startFrame={Math.round(Number(out?.params.startFrame ?? 0)) || 0}
+              previewSound={previewSound}
+              onParams={(params, nodeId) => onParamChange?.(params, nodeId)}
+              onPreview={(sound, note, velocity) => previewNote(sound, note, velocity)}
+            />
           );
         })()}
       {/* Rig palettes: building a Skeleton, and editing how each joint pulls on a Skin's mesh */}

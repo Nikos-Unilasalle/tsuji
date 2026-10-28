@@ -6,7 +6,7 @@
  * transport are kept and sent the moment the node exists — nothing the graph said is lost to the load.
  */
 import { getAudioContext, getAudioOutput } from "../../audio/audioStore";
-import type { MusicDescription } from "./description";
+import type { MusicDescription, PreviewSound } from "./description";
 import type { EngineMessage, EngineState } from "./engine.worklet";
 
 const modules = new WeakMap<BaseAudioContext, Promise<void>>();
@@ -22,6 +22,16 @@ if (import.meta.env?.DEV && typeof window !== "undefined") {
     sampleRate: getAudioContext()?.sampleRate ?? 0,
     engines: [...live].map((h) => h.state),
   });
+}
+
+/**
+ * Auditions a note on the first engine there is — a scene with no Music Out has no engine, and stays silent. For the
+ * Pattern HUD, which sounds what you type.
+ */
+export function previewNote(sound: PreviewSound, note: number, velocity = 0.8): void {
+  const engine = live.values().next().value as MusicEngineHandle | undefined;
+  getAudioContext()?.resume().catch(() => {});
+  engine?.preview(sound, note, velocity);
 }
 
 function loadModule(ctx: AudioContext): Promise<void> {
@@ -93,6 +103,10 @@ export class MusicEngineHandle {
     const m: EngineMessage = { type: "follow", playing, wanted, at: ctx?.currentTime ?? 0, tolerance };
     this.pendingFollow = m;
     this.post(m);
+  }
+
+  preview(sound: PreviewSound, note: number, velocity: number): void {
+    this.post({ type: "preview", sound, note, velocity });
   }
 
   get sampleRate(): number {

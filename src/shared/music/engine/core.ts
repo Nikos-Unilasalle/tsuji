@@ -16,7 +16,7 @@ import { DrumSynth } from "../dsp/drums";
 import { FmSynth } from "../dsp/fm";
 import { Mixer, MonoSource } from "../dsp/mix";
 import { NoteEvent, Sequence, notesSoundingAt, notesStartingIn } from "../seq/sequencer";
-import { MusicDescription, TrackDescription } from "./description";
+import { MusicDescription, PreviewSound, TrackDescription } from "./description";
 
 /** What a track plays through: an FmSynth or a DrumSynth. */
 interface Instrument extends MonoSource {
@@ -49,6 +49,7 @@ interface Due {
 }
 
 const MAX_VOICES = 16;
+const PREVIEW_ID = "__preview";
 
 function glideOf(e: NoteEvent): { from: number; seconds: number } | undefined {
   return e.glideFrom === undefined ? undefined : { from: e.glideFrom, seconds: e.glideSeconds ?? 0 };
@@ -70,6 +71,8 @@ export class EngineCore {
   private pos = 0;
   /** How many times `follow` had to jump: seeks and loops, or drift if it keeps climbing on its own. */
   jumps = 0;
+  /** The audition instrument, on its own channel, heard whether the transport runs or not. */
+  private preview: { key: string; synth: Instrument; offs: { left: number; note: number }[] } | null = null;
 
   constructor(sampleRate: number) {
     this.sampleRate = sampleRate;
@@ -84,8 +87,9 @@ export class EngineCore {
     return this.playing;
   }
 
+  /** Voices sounding, the audition's included. */
   activeVoices(): number {
-    let n = 0;
+    let n = this.preview?.synth.activeVoices() ?? 0;
     for (const t of this.tracks.values()) n += t.synth.activeVoices();
     return n;
   }
@@ -135,6 +139,32 @@ export class EngineCore {
     track.offs = track.offs.filter((o) => {
       if (keep.has(o.note)) return true;
       track.synth.noteOff(o.note);
+      return false;
+    });
+  }
+
+  /** Sounds one note on `sound` for `seconds`, outside the song (the Pattern HUD's audition). */
+  previewNote(sound: PreviewSound, note: number, velocity: number, seconds = 0.35): void {
+    const key = JSON.stringify(sound);
+    if (!this.preview || this.preview.key !== key) {
+      const synth: Instrument = sound.kind === "fm" ? new FmSynth(4, this.sampleRate) : new DrumSynth(this.sampleRate);
+      if (sound.kind === "fm") (synth as FmSynth).setPatch(sound.patch);
+      else (synth as DrumSynth).setSettings(sound.drums);
+      this.preview = { key, synth, offs: [] };
+      this.mixer.addChannel(PREVIEW_ID, synth, { level: 0.8, pan: 0, mute: false });
+    }
+    this.preview.synth.noteOn(note, velocity);
+    this.preview.offs.push({ left: Math.round(seconds * this.sampleRate), note });
+  }
+
+  /** Lets the audition's notes go once their time is up (to the block: an audition needs no sample accuracy). */
+  private tickPreview(n: number): void {
+    if (!this.preview) return;
+    const p = this.preview;
+    p.offs = p.offs.filter((o) => {
+      o.left -= n;
+      if (o.left > 0) return true;
+      p.synth.noteOff(o.note);
       return false;
     });
   }
@@ -197,6 +227,7 @@ export class EngineCore {
 
   /** Writes n samples of the mix into left/right[start ..], scheduling the notes due in them while playing. */
   render(left: Float32Array, right: Float32Array, start: number, n: number): void {
+    this.tickPreview(n);
     if (!this.playing) {
       // Paused: no new notes, but the released ones ring out.
       this.mixer.render(left, right, start, n);

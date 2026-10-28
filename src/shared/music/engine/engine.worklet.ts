@@ -6,7 +6,7 @@
  * Loaded with `?worker&url` (see bridge.ts), so Vite bundles it and the DSP core into one script.
  */
 import { EngineCore } from "./core";
-import type { MusicDescription } from "./description";
+import type { MusicDescription, PreviewSound } from "./description";
 
 // The AudioWorkletGlobalScope, which TypeScript's DOM lib leaves out.
 declare const sampleRate: number;
@@ -22,7 +22,8 @@ export type EngineMessage =
    * `wanted`: the song sample the playhead was on at context time `at`. The engine adds the time the message took to
    * arrive, so the frame loop's latency does not count as drift.
    */
-  | { type: "follow"; playing: boolean; wanted: number; at: number; tolerance: number };
+  | { type: "follow"; playing: boolean; wanted: number; at: number; tolerance: number }
+  | { type: "preview"; sound: PreviewSound; note: number; velocity: number };
 
 export interface EngineState {
   type: "state";
@@ -47,6 +48,7 @@ class MusicEngineProcessor extends AudioWorkletProcessor {
     this.port.onmessage = (e: MessageEvent<EngineMessage>) => {
       const m = e.data;
       if (m.type === "describe") this.core.describe(m.desc);
+      else if (m.type === "preview") this.core.previewNote(m.sound, m.note, m.velocity);
       else if (m.type === "follow") {
         const late = m.playing ? Math.max(0, currentTime - m.at) * sampleRate : 0;
         this.core.follow(m.playing, m.wanted + late, m.tolerance);

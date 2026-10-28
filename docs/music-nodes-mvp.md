@@ -293,6 +293,41 @@ Limites :
 - Pas écouté, pas testé dans Tauri.
 - Dans l'aperçu, la console reçoit en continu « THREE.WebGLRenderer: Texture marked for update but no image data found ». Ça n'a rien à voir avec la musique (aucun code de texture touché) et c'était déjà le cas avant cette étape.
 
+### Étape 5 — HUD Pattern dans la vue 3D (2026-10-28)
+
+Fichiers :
+- `src/shared/three/PatternHud.tsx` : le HUD, monté par `Viewport.tsx` quand un node Pattern est sélectionné (même condition que les palettes du rig : pas en mode sortie, pas en vue d'élévation).
+- `src/shared/music/seq/patternEdit.ts` : ce que fait le HUD, en fonctions pures testées (clavier → note, pose et effacement de cellules, frappes de batterie, curseur, longueur).
+- Le moteur sait **faire écouter une note** (`previewNote`). Elle passe par un instrument sur son propre canal, entendu même transport à l'arrêt, et relâché au bout de 0,35 s. Le HUD l'utilise avec le patch de la FM Voice (ou les réglages du Drum Kit) branchée en aval du Pattern.
+
+Ce que fait le HUD :
+- **Grille mélodique :** 16 pas par ligne, une ligne par mesure. Chaque case montre la note et l'accord (renversement, `^` pour un accord étalé). L'intensité rend la vélocité, et un badge jaune marque l'effet. OFF est en rouge. Le pas joué s'allume pendant la lecture : il est lu à chaque frame d'animation, à partir du playhead, du fps du Render, de la clock branchée et du Start Frame de Music Out.
+- **Grille batterie**, dès que le Pattern alimente un Drum Kit : une ligne par son, un clic pose ou retire une frappe. Les frappes d'un même pas restent dans l'ordre du kit (`kick+hat`, jamais `hat+kick`).
+- **Clavier façon tracker**, par position physique des touches (identique en QWERTY et en AZERTY) :
+  - `Z`–`M` jouent une octave depuis do, `Q`–`P` l'octave au-dessus, les touches noires sur la rangée du dessus ;
+  - `1` écrit un OFF, `⌫` efface ;
+  - les flèches déplacent le curseur ;
+  - `[` `]` changent l'octave ;
+  - `Esc` rend le clavier ;
+  - `Espace` lance ou arrête la lecture, comme ailleurs.
+  En vue batterie, `Z X C V B N M` frappent kick, snare, clap, hat, open hat et les deux toms au curseur.
+- Le clavier passe par un `<input>` invisible qui prend le focus. Les raccourcis globaux (App, Viewport, GraphEditor) ignorent les touches quand un INPUT a le focus, donc taper une note ne déclenche rien d'autre. Les raccourcis avec ⌘ / Ctrl / Alt (annuler…) restent ceux de l'app.
+- **Barre du bas :** accord, renversement, étalement, vélocité, longueur et effet (glide, ratchet, chance, avec sa valeur). Elle modifie la case sous le curseur, et c'est aussi le « pinceau » des notes qu'on tape ensuite.
+- En haut : la longueur (16, 32 ou 64), l'octave, l'avance du curseur (0, 1, 2 ou 4) et Effacer tout.
+- Chaque geste écrit le paramètre texte `steps` en une étape d'annulation : le HUD et le champ texte sont le même pattern.
+
+Vérifié dans l'app (démo Band) :
+- Le HUD s'ouvre à la sélection du Pattern des accords et montre les 4 mesures.
+- Au clavier, un clic sur le pas 5 puis `Z`, `C` et `1` donnent `C4 E4 off`, et le curseur avance. `Q` au pas 9 donne C5. Une voix d'écoute sonne pendant que le transport est à l'arrêt.
+- La vue batterie s'ouvre pour le troisième Pattern. Un clic sur Clap au pas 3 puis `Z` donnent `kick+clap+hat@0.5`, la vélocité est gardée.
+- Pendant la lecture, le pas allumé avance : « Bar 1 · step 11 » après 1,3 s à 120 BPM, puis « Bar 2 · step 4 ».
+
+Limites :
+- Le panneau de paramètres, quand il est ouvert, recouvre la droite du HUD (comme pour les autres HUD).
+- Pas encore de sélection de plusieurs cases, ni copier / coller ou décalage.
+- Le son de l'écoute n'a pas été écouté, seulement compté (1 voix active).
+- Pas testé dans Tauri.
+
 ## 6. Après le MVP (côté SLOOP / KAWA)
 
 - **Live / looper (SLOOP)** : jeu au clavier de l'ordi et en Web MIDI, enregistrement en boucle quantifié dans un pattern, overdub.

@@ -176,6 +176,17 @@ describe("EngineCore — drum tracks", () => {
   });
 });
 
+describe("EngineCore — audition", () => {
+  it("sounds a preview note while paused, and lets it go after its time", () => {
+    const e = new EngineCore(SR);
+    e.previewNote({ kind: "fm", patch: SINE }, 69, 1, 0.1);
+    expect(run(e, 1000).some((x) => x !== 0)).toBe(true);
+    run(e, SR / 2);
+    expect(run(e, 1000).every((x) => x === 0)).toBe(true);
+    expect(e.isPlaying).toBe(false);
+  });
+});
+
 describe("EngineCore — descriptions", () => {
   const a = () => track("a", seqOf({ 0: { note: 60 } }), PAD);
 

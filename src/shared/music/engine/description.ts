@@ -29,6 +29,9 @@ export interface DrumTrackDescription extends TrackBase {
 
 export type TrackDescription = FmTrackDescription | DrumTrackDescription;
 
+/** A sound to audition one note on (the Pattern HUD plays what you type through it). */
+export type PreviewSound = { kind: "fm"; patch: FmPatch } | { kind: "drums"; drums: DrumSettings };
+
 export interface MusicDescription {
   tracks: TrackDescription[];
   master: number;
