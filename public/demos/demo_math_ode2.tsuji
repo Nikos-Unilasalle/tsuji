@@ -1,0 +1,1086 @@
+{
+  "canvases": [
+    {
+      "nodes": [
+        {
+          "id": "env",
+          "type": "lighting/environment",
+          "position": {
+            "x": 340,
+            "y": 406
+          },
+          "params": {
+            "color": 16777215,
+            "intensity": 1,
+            "background": 1,
+            "blurriness": 0,
+            "filePath": "",
+            "backgroundImagePath": "",
+            "backgroundFit": "cover",
+            "backgroundScale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "backgroundOffset": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "backgroundRotation": 0,
+            "ambientIntensity": 0.6,
+            "sunIntensity": 0
+          }
+        },
+        {
+          "id": "render",
+          "type": "render",
+          "position": {
+            "x": 610,
+            "y": 393
+          },
+          "params": {
+            "frameCount": 375,
+            "fps": 30,
+            "motionBlur": 0,
+            "resolutionPreset": "16:9 (1920x1080)",
+            "width": 1920,
+            "height": 1080,
+            "holdout": false
+          }
+        },
+        {
+          "id": "cam",
+          "type": "calibration/camera",
+          "position": {
+            "x": -1200,
+            "y": -200
+          },
+          "params": {
+            "location": {
+              "x": -0.25,
+              "y": 2.2,
+              "z": 30
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "useTarget": true,
+            "target": {
+              "x": -0.25,
+              "y": 2.2,
+              "z": 0
+            },
+            "up": {
+              "x": 0,
+              "y": 1,
+              "z": 0
+            },
+            "fov": 21,
+            "active": true,
+            "mode": "manual",
+            "projectionType": "orthographic"
+          }
+        },
+        {
+          "id": "seq",
+          "type": "time/sequence",
+          "position": {
+            "x": -1200,
+            "y": 100
+          },
+          "params": {
+            "steps": 3,
+            "mode": "timeline",
+            "offset": 0,
+            "step0Name": "setup",
+            "step0Duration": 1.0,
+            "step0Ease": "smooth",
+            "step0Start": "",
+            "step1Name": "release",
+            "step1Duration": 10.0,
+            "step1Ease": "linear",
+            "step1Start": "",
+            "step1From": 0,
+            "step1To": 10,
+            "step2Name": "pause",
+            "step2Duration": 1.5,
+            "step2Ease": "smooth",
+            "step2Start": ""
+          }
+        },
+        {
+          "id": "equation",
+          "type": "math/latex",
+          "position": {
+            "x": 300,
+            "y": -700
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "tex": "\\ddot{x} + 2\\zeta\\omega_0\\,\\dot{x} + \\omega_0^2\\,x = 0",
+            "inline": false,
+            "size": 0.42,
+            "align": "center",
+            "valign": "middle",
+            "at": {
+              "x": -0.25,
+              "y": 6.4,
+              "z": 0
+            },
+            "progress": 1,
+            "color": 2236962,
+            "opacity": 1,
+            "faceCamera": true,
+            "onTop": true
+          }
+        },
+        {
+          "id": "clock",
+          "type": "math/expression",
+          "position": {
+            "x": -900,
+            "y": -700
+          },
+          "params": {
+            "formula": "a"
+          }
+        },
+        {
+          "id": "clockLabelText",
+          "type": "converter/value-to-text",
+          "position": {
+            "x": -640,
+            "y": -700
+          },
+          "params": {
+            "decimals": 1,
+            "prefix": "t = ",
+            "suffix": "\\ \\text{s}"
+          }
+        },
+        {
+          "id": "clockLabel",
+          "type": "math/latex",
+          "position": {
+            "x": -380,
+            "y": -700
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "tex": "t = 0\\ \\text{s}",
+            "inline": false,
+            "size": 0.34,
+            "align": "center",
+            "valign": "middle",
+            "at": {
+              "x": -0.25,
+              "y": -2.0,
+              "z": 0
+            },
+            "progress": 1,
+            "color": 2236962,
+            "opacity": 1,
+            "faceCamera": true,
+            "onTop": true
+          }
+        },
+        {
+          "id": "underCeiling",
+          "type": "object/box",
+          "position": {
+            "x": 600,
+            "y": -500
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": -4.5,
+              "y": 4.15,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1.4,
+              "y": 0.3,
+              "z": 0.6
+            },
+            "color": 11250603,
+            "roughness": 0.9,
+            "metalness": 0,
+            "opacity": 1
+          }
+        },
+        {
+          "id": "underAt",
+          "type": "math/expression",
+          "position": {
+            "x": -900,
+            "y": -400
+          },
+          "params": {
+            "formula": "(c, 1.5 (d < 1 ? e^(-d b a)(cos(b√(1 − d²) a) + d/√(1 − d²) sin(b√(1 − d²) a)) : d == 1 ? (1 + b a) e^(-b a) : ((d + √(d² − 1)) e^(-b(d − √(d² − 1)) a) − (d − √(d² − 1)) e^(-b(d + √(d² − 1)) a)) / (2√(d² − 1))), 0)",
+            "b": 3.77,
+            "c": -4.5,
+            "d": 0.15
+          }
+        },
+        {
+          "id": "underMassPlace",
+          "type": "transform",
+          "position": {
+            "x": -400,
+            "y": -400
+          },
+          "params": {}
+        },
+        {
+          "id": "underMass",
+          "type": "object/box",
+          "position": {
+            "x": -160,
+            "y": -400
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 0.7,
+              "y": 0.7,
+              "z": 0.7
+            },
+            "color": 2060267,
+            "roughness": 0.6,
+            "metalness": 0,
+            "shadeless": 1,
+            "opacity": 1
+          }
+        },
+        {
+          "id": "underSpring",
+          "type": "math/function-curve",
+          "position": {
+            "x": -900,
+            "y": -240
+          },
+          "params": {
+            "mode": "parametric",
+            "formula": "(c + 0.3 sin(12π t), 4.0 − t(4.0 − 1.5 (d < 1 ? e^(-d b a)(cos(b√(1 − d²) a) + d/√(1 − d²) sin(b√(1 − d²) a)) : d == 1 ? (1 + b a) e^(-b a) : ((d + √(d² − 1)) e^(-b(d − √(d² − 1)) a) − (d − √(d² − 1)) e^(-b(d + √(d² − 1)) a)) / (2√(d² − 1))) − 0.35))",
+            "from": 0,
+            "to": 1,
+            "samples": 300,
+            "yMin": -50,
+            "yMax": 50,
+            "progress": 1,
+            "color": 2236962,
+            "width": 2,
+            "dashed": false,
+            "visible": true,
+            "b": 3.77,
+            "c": -4.5,
+            "d": 0.15
+          }
+        },
+        {
+          "id": "underTrace",
+          "type": "math/function-curve",
+          "position": {
+            "x": -900,
+            "y": -80
+          },
+          "params": {
+            "mode": "function",
+            "formula": "(a − 2(c − 0.35 − x)) < 0 ? sqrt(-1) : 1.5 (d < 1 ? e^(-d b (a − 2(c − 0.35 − x)))(cos(b√(1 − d²) (a − 2(c − 0.35 − x))) + d/√(1 − d²) sin(b√(1 − d²) (a − 2(c − 0.35 − x)))) : d == 1 ? (1 + b (a − 2(c − 0.35 − x))) e^(-b (a − 2(c − 0.35 − x))) : ((d + √(d² − 1)) e^(-b(d − √(d² − 1)) (a − 2(c − 0.35 − x))) − (d − √(d² − 1)) e^(-b(d + √(d² − 1)) (a − 2(c − 0.35 − x)))) / (2√(d² − 1)))",
+            "from": -8.1,
+            "to": -4.85,
+            "samples": 500,
+            "yMin": -50,
+            "yMax": 50,
+            "progress": 1,
+            "color": 2060267,
+            "width": 3,
+            "dashed": false,
+            "visible": true,
+            "b": 3.77,
+            "c": -4.5,
+            "d": 0.15
+          }
+        },
+        {
+          "id": "underRest",
+          "type": "math/function-curve",
+          "position": {
+            "x": -640,
+            "y": -80
+          },
+          "params": {
+            "mode": "function",
+            "formula": "0",
+            "from": -8.1,
+            "to": -4.85,
+            "samples": 2,
+            "yMin": -50,
+            "yMax": 50,
+            "progress": 1,
+            "color": 11250603,
+            "width": 1.5,
+            "dashed": true,
+            "visible": true
+          }
+        },
+        {
+          "id": "underLabel",
+          "type": "math/latex",
+          "position": {
+            "x": -640,
+            "y": -240
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "tex": "\\zeta = 0.15\\quad\\text{sous-amorti}",
+            "inline": false,
+            "size": 0.3,
+            "align": "center",
+            "valign": "middle",
+            "at": {
+              "x": -6.1,
+              "y": 4.9,
+              "z": 0
+            },
+            "progress": 1,
+            "color": 2060267,
+            "opacity": 1,
+            "faceCamera": true,
+            "onTop": true
+          }
+        },
+        {
+          "id": "criticalCeiling",
+          "type": "object/box",
+          "position": {
+            "x": 600,
+            "y": 200
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 1.5,
+              "y": 4.15,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1.4,
+              "y": 0.3,
+              "z": 0.6
+            },
+            "color": 11250603,
+            "roughness": 0.9,
+            "metalness": 0,
+            "opacity": 1
+          }
+        },
+        {
+          "id": "criticalAt",
+          "type": "math/expression",
+          "position": {
+            "x": -900,
+            "y": 300
+          },
+          "params": {
+            "formula": "(c, 1.5 (d < 1 ? e^(-d b a)(cos(b√(1 − d²) a) + d/√(1 − d²) sin(b√(1 − d²) a)) : d == 1 ? (1 + b a) e^(-b a) : ((d + √(d² − 1)) e^(-b(d − √(d² − 1)) a) − (d − √(d² − 1)) e^(-b(d + √(d² − 1)) a)) / (2√(d² − 1))), 0)",
+            "b": 3.77,
+            "c": 1.5,
+            "d": 1.0
+          }
+        },
+        {
+          "id": "criticalMassPlace",
+          "type": "transform",
+          "position": {
+            "x": -400,
+            "y": 300
+          },
+          "params": {}
+        },
+        {
+          "id": "criticalMass",
+          "type": "object/box",
+          "position": {
+            "x": -160,
+            "y": 300
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 0.7,
+              "y": 0.7,
+              "z": 0.7
+            },
+            "color": 15234107,
+            "roughness": 0.6,
+            "metalness": 0,
+            "shadeless": 1,
+            "opacity": 1
+          }
+        },
+        {
+          "id": "criticalSpring",
+          "type": "math/function-curve",
+          "position": {
+            "x": -900,
+            "y": 460
+          },
+          "params": {
+            "mode": "parametric",
+            "formula": "(c + 0.3 sin(12π t), 4.0 − t(4.0 − 1.5 (d < 1 ? e^(-d b a)(cos(b√(1 − d²) a) + d/√(1 − d²) sin(b√(1 − d²) a)) : d == 1 ? (1 + b a) e^(-b a) : ((d + √(d² − 1)) e^(-b(d − √(d² − 1)) a) − (d − √(d² − 1)) e^(-b(d + √(d² − 1)) a)) / (2√(d² − 1))) − 0.35))",
+            "from": 0,
+            "to": 1,
+            "samples": 300,
+            "yMin": -50,
+            "yMax": 50,
+            "progress": 1,
+            "color": 2236962,
+            "width": 2,
+            "dashed": false,
+            "visible": true,
+            "b": 3.77,
+            "c": 1.5,
+            "d": 1.0
+          }
+        },
+        {
+          "id": "criticalTrace",
+          "type": "math/function-curve",
+          "position": {
+            "x": -900,
+            "y": 620
+          },
+          "params": {
+            "mode": "function",
+            "formula": "(a − 2(c − 0.35 − x)) < 0 ? sqrt(-1) : 1.5 (d < 1 ? e^(-d b (a − 2(c − 0.35 − x)))(cos(b√(1 − d²) (a − 2(c − 0.35 − x))) + d/√(1 − d²) sin(b√(1 − d²) (a − 2(c − 0.35 − x)))) : d == 1 ? (1 + b (a − 2(c − 0.35 − x))) e^(-b (a − 2(c − 0.35 − x))) : ((d + √(d² − 1)) e^(-b(d − √(d² − 1)) (a − 2(c − 0.35 − x))) − (d − √(d² − 1)) e^(-b(d + √(d² − 1)) (a − 2(c − 0.35 − x)))) / (2√(d² − 1)))",
+            "from": -2.1,
+            "to": 1.15,
+            "samples": 500,
+            "yMin": -50,
+            "yMax": 50,
+            "progress": 1,
+            "color": 15234107,
+            "width": 3,
+            "dashed": false,
+            "visible": true,
+            "b": 3.77,
+            "c": 1.5,
+            "d": 1.0
+          }
+        },
+        {
+          "id": "criticalRest",
+          "type": "math/function-curve",
+          "position": {
+            "x": -640,
+            "y": 620
+          },
+          "params": {
+            "mode": "function",
+            "formula": "0",
+            "from": -2.1,
+            "to": 1.15,
+            "samples": 2,
+            "yMin": -50,
+            "yMax": 50,
+            "progress": 1,
+            "color": 11250603,
+            "width": 1.5,
+            "dashed": true,
+            "visible": true
+          }
+        },
+        {
+          "id": "criticalLabel",
+          "type": "math/latex",
+          "position": {
+            "x": -640,
+            "y": 460
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "tex": "\\zeta = 1\\quad\\text{critique}",
+            "inline": false,
+            "size": 0.3,
+            "align": "center",
+            "valign": "middle",
+            "at": {
+              "x": -0.10000000000000009,
+              "y": 4.9,
+              "z": 0
+            },
+            "progress": 1,
+            "color": 15234107,
+            "opacity": 1,
+            "faceCamera": true,
+            "onTop": true
+          }
+        },
+        {
+          "id": "overCeiling",
+          "type": "object/box",
+          "position": {
+            "x": 600,
+            "y": 900
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 7.5,
+              "y": 4.15,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1.4,
+              "y": 0.3,
+              "z": 0.6
+            },
+            "color": 11250603,
+            "roughness": 0.9,
+            "metalness": 0,
+            "opacity": 1
+          }
+        },
+        {
+          "id": "overAt",
+          "type": "math/expression",
+          "position": {
+            "x": -900,
+            "y": 1000
+          },
+          "params": {
+            "formula": "(c, 1.5 (d < 1 ? e^(-d b a)(cos(b√(1 − d²) a) + d/√(1 − d²) sin(b√(1 − d²) a)) : d == 1 ? (1 + b a) e^(-b a) : ((d + √(d² − 1)) e^(-b(d − √(d² − 1)) a) − (d − √(d² − 1)) e^(-b(d + √(d² − 1)) a)) / (2√(d² − 1))), 0)",
+            "b": 3.77,
+            "c": 7.5,
+            "d": 2.5
+          }
+        },
+        {
+          "id": "overMassPlace",
+          "type": "transform",
+          "position": {
+            "x": -400,
+            "y": 1000
+          },
+          "params": {}
+        },
+        {
+          "id": "overMass",
+          "type": "object/box",
+          "position": {
+            "x": -160,
+            "y": 1000
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 0.7,
+              "y": 0.7,
+              "z": 0.7
+            },
+            "color": 14821709,
+            "roughness": 0.6,
+            "metalness": 0,
+            "shadeless": 1,
+            "opacity": 1
+          }
+        },
+        {
+          "id": "overSpring",
+          "type": "math/function-curve",
+          "position": {
+            "x": -900,
+            "y": 1160
+          },
+          "params": {
+            "mode": "parametric",
+            "formula": "(c + 0.3 sin(12π t), 4.0 − t(4.0 − 1.5 (d < 1 ? e^(-d b a)(cos(b√(1 − d²) a) + d/√(1 − d²) sin(b√(1 − d²) a)) : d == 1 ? (1 + b a) e^(-b a) : ((d + √(d² − 1)) e^(-b(d − √(d² − 1)) a) − (d − √(d² − 1)) e^(-b(d + √(d² − 1)) a)) / (2√(d² − 1))) − 0.35))",
+            "from": 0,
+            "to": 1,
+            "samples": 300,
+            "yMin": -50,
+            "yMax": 50,
+            "progress": 1,
+            "color": 2236962,
+            "width": 2,
+            "dashed": false,
+            "visible": true,
+            "b": 3.77,
+            "c": 7.5,
+            "d": 2.5
+          }
+        },
+        {
+          "id": "overTrace",
+          "type": "math/function-curve",
+          "position": {
+            "x": -900,
+            "y": 1320
+          },
+          "params": {
+            "mode": "function",
+            "formula": "(a − 2(c − 0.35 − x)) < 0 ? sqrt(-1) : 1.5 (d < 1 ? e^(-d b (a − 2(c − 0.35 − x)))(cos(b√(1 − d²) (a − 2(c − 0.35 − x))) + d/√(1 − d²) sin(b√(1 − d²) (a − 2(c − 0.35 − x)))) : d == 1 ? (1 + b (a − 2(c − 0.35 − x))) e^(-b (a − 2(c − 0.35 − x))) : ((d + √(d² − 1)) e^(-b(d − √(d² − 1)) (a − 2(c − 0.35 − x))) − (d − √(d² − 1)) e^(-b(d + √(d² − 1)) (a − 2(c − 0.35 − x)))) / (2√(d² − 1)))",
+            "from": 3.9,
+            "to": 7.15,
+            "samples": 500,
+            "yMin": -50,
+            "yMax": 50,
+            "progress": 1,
+            "color": 14821709,
+            "width": 3,
+            "dashed": false,
+            "visible": true,
+            "b": 3.77,
+            "c": 7.5,
+            "d": 2.5
+          }
+        },
+        {
+          "id": "overRest",
+          "type": "math/function-curve",
+          "position": {
+            "x": -640,
+            "y": 1320
+          },
+          "params": {
+            "mode": "function",
+            "formula": "0",
+            "from": 3.9,
+            "to": 7.15,
+            "samples": 2,
+            "yMin": -50,
+            "yMax": 50,
+            "progress": 1,
+            "color": 11250603,
+            "width": 1.5,
+            "dashed": true,
+            "visible": true
+          }
+        },
+        {
+          "id": "overLabel",
+          "type": "math/latex",
+          "position": {
+            "x": -640,
+            "y": 1160
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "tex": "\\zeta = 2.5\\quad\\text{sur-amorti}",
+            "inline": false,
+            "size": 0.3,
+            "align": "center",
+            "valign": "middle",
+            "at": {
+              "x": 5.9,
+              "y": 4.9,
+              "z": 0
+            },
+            "progress": 1,
+            "color": 14821709,
+            "opacity": 1,
+            "faceCamera": true,
+            "onTop": true
+          }
+        }
+      ],
+      "connections": [
+        {
+          "id": "env->render",
+          "fromNode": "env",
+          "fromSocket": "environment",
+          "toNode": "render",
+          "toSocket": "environment"
+        },
+        {
+          "id": "seq.step0->equation.progress",
+          "fromNode": "seq",
+          "fromSocket": "step0",
+          "toNode": "equation",
+          "toSocket": "progress"
+        },
+        {
+          "id": "seq.step1->clock.a",
+          "fromNode": "seq",
+          "fromSocket": "step1",
+          "toNode": "clock",
+          "toSocket": "a"
+        },
+        {
+          "id": "clock.value->clockLabelText.value",
+          "fromNode": "clock",
+          "fromSocket": "value",
+          "toNode": "clockLabelText",
+          "toSocket": "value"
+        },
+        {
+          "id": "clockLabelText.text->clockLabel.tex",
+          "fromNode": "clockLabelText",
+          "fromSocket": "text",
+          "toNode": "clockLabel",
+          "toSocket": "tex"
+        },
+        {
+          "id": "seq.step1->underAt.a",
+          "fromNode": "seq",
+          "fromSocket": "step1",
+          "toNode": "underAt",
+          "toSocket": "a"
+        },
+        {
+          "id": "underAt.vector->underMassPlace.location",
+          "fromNode": "underAt",
+          "fromSocket": "vector",
+          "toNode": "underMassPlace",
+          "toSocket": "location"
+        },
+        {
+          "id": "underMassPlace.matrix->underMass.matrix",
+          "fromNode": "underMassPlace",
+          "fromSocket": "matrix",
+          "toNode": "underMass",
+          "toSocket": "matrix"
+        },
+        {
+          "id": "seq.step1->underSpring.a",
+          "fromNode": "seq",
+          "fromSocket": "step1",
+          "toNode": "underSpring",
+          "toSocket": "a"
+        },
+        {
+          "id": "seq.step1->underTrace.a",
+          "fromNode": "seq",
+          "fromSocket": "step1",
+          "toNode": "underTrace",
+          "toSocket": "a"
+        },
+        {
+          "id": "seq.step0->underCeiling.visible",
+          "fromNode": "seq",
+          "fromSocket": "step0",
+          "toNode": "underCeiling",
+          "toSocket": "visible"
+        },
+        {
+          "id": "seq.step0->underMass.visible",
+          "fromNode": "seq",
+          "fromSocket": "step0",
+          "toNode": "underMass",
+          "toSocket": "visible"
+        },
+        {
+          "id": "seq.step0->underSpring.visible",
+          "fromNode": "seq",
+          "fromSocket": "step0",
+          "toNode": "underSpring",
+          "toSocket": "visible"
+        },
+        {
+          "id": "seq.step0->underTrace.visible",
+          "fromNode": "seq",
+          "fromSocket": "step0",
+          "toNode": "underTrace",
+          "toSocket": "visible"
+        },
+        {
+          "id": "seq.step0->underRest.visible",
+          "fromNode": "seq",
+          "fromSocket": "step0",
+          "toNode": "underRest",
+          "toSocket": "visible"
+        },
+        {
+          "id": "seq.step0->underLabel.progress",
+          "fromNode": "seq",
+          "fromSocket": "step0",
+          "toNode": "underLabel",
+          "toSocket": "progress"
+        },
+        {
+          "id": "seq.step1->criticalAt.a",
+          "fromNode": "seq",
+          "fromSocket": "step1",
+          "toNode": "criticalAt",
+          "toSocket": "a"
+        },
+        {
+          "id": "criticalAt.vector->criticalMassPlace.location",
+          "fromNode": "criticalAt",
+          "fromSocket": "vector",
+          "toNode": "criticalMassPlace",
+          "toSocket": "location"
+        },
+        {
+          "id": "criticalMassPlace.matrix->criticalMass.matrix",
+          "fromNode": "criticalMassPlace",
+          "fromSocket": "matrix",
+          "toNode": "criticalMass",
+          "toSocket": "matrix"
+        },
+        {
+          "id": "seq.step1->criticalSpring.a",
+          "fromNode": "seq",
+          "fromSocket": "step1",
+          "toNode": "criticalSpring",
+          "toSocket": "a"
+        },
+        {
+          "id": "seq.step1->criticalTrace.a",
+          "fromNode": "seq",
+          "fromSocket": "step1",
+          "toNode": "criticalTrace",
+          "toSocket": "a"
+        },
+        {
+          "id": "seq.step0->criticalCeiling.visible",
+          "fromNode": "seq",
+          "fromSocket": "step0",
+          "toNode": "criticalCeiling",
+          "toSocket": "visible"
+        },
+        {
+          "id": "seq.step0->criticalMass.visible",
+          "fromNode": "seq",
+          "fromSocket": "step0",
+          "toNode": "criticalMass",
+          "toSocket": "visible"
+        },
+        {
+          "id": "seq.step0->criticalSpring.visible",
+          "fromNode": "seq",
+          "fromSocket": "step0",
+          "toNode": "criticalSpring",
+          "toSocket": "visible"
+        },
+        {
+          "id": "seq.step0->criticalTrace.visible",
+          "fromNode": "seq",
+          "fromSocket": "step0",
+          "toNode": "criticalTrace",
+          "toSocket": "visible"
+        },
+        {
+          "id": "seq.step0->criticalRest.visible",
+          "fromNode": "seq",
+          "fromSocket": "step0",
+          "toNode": "criticalRest",
+          "toSocket": "visible"
+        },
+        {
+          "id": "seq.step0->criticalLabel.progress",
+          "fromNode": "seq",
+          "fromSocket": "step0",
+          "toNode": "criticalLabel",
+          "toSocket": "progress"
+        },
+        {
+          "id": "seq.step1->overAt.a",
+          "fromNode": "seq",
+          "fromSocket": "step1",
+          "toNode": "overAt",
+          "toSocket": "a"
+        },
+        {
+          "id": "overAt.vector->overMassPlace.location",
+          "fromNode": "overAt",
+          "fromSocket": "vector",
+          "toNode": "overMassPlace",
+          "toSocket": "location"
+        },
+        {
+          "id": "overMassPlace.matrix->overMass.matrix",
+          "fromNode": "overMassPlace",
+          "fromSocket": "matrix",
+          "toNode": "overMass",
+          "toSocket": "matrix"
+        },
+        {
+          "id": "seq.step1->overSpring.a",
+          "fromNode": "seq",
+          "fromSocket": "step1",
+          "toNode": "overSpring",
+          "toSocket": "a"
+        },
+        {
+          "id": "seq.step1->overTrace.a",
+          "fromNode": "seq",
+          "fromSocket": "step1",
+          "toNode": "overTrace",
+          "toSocket": "a"
+        },
+        {
+          "id": "seq.step0->overCeiling.visible",
+          "fromNode": "seq",
+          "fromSocket": "step0",
+          "toNode": "overCeiling",
+          "toSocket": "visible"
+        },
+        {
+          "id": "seq.step0->overMass.visible",
+          "fromNode": "seq",
+          "fromSocket": "step0",
+          "toNode": "overMass",
+          "toSocket": "visible"
+        },
+        {
+          "id": "seq.step0->overSpring.visible",
+          "fromNode": "seq",
+          "fromSocket": "step0",
+          "toNode": "overSpring",
+          "toSocket": "visible"
+        },
+        {
+          "id": "seq.step0->overTrace.visible",
+          "fromNode": "seq",
+          "fromSocket": "step0",
+          "toNode": "overTrace",
+          "toSocket": "visible"
+        },
+        {
+          "id": "seq.step0->overRest.visible",
+          "fromNode": "seq",
+          "fromSocket": "step0",
+          "toNode": "overRest",
+          "toSocket": "visible"
+        },
+        {
+          "id": "seq.step0->overLabel.progress",
+          "fromNode": "seq",
+          "fromSocket": "step0",
+          "toNode": "overLabel",
+          "toSocket": "progress"
+        }
+      ],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    }
+  ],
+  "activeCanvas": 0
+}

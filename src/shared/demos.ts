@@ -683,6 +683,16 @@ export const DEMO_CATALOG: DemoCategory[] = [
         label: "Taylor Series of sin x (2D)",
         description: "sin x on π-ticked axes, then its Taylor polynomial gains one term every two seconds (orders 1 to 13) and hugs the curve further out each time; the order and the error at x = π read live in LaTeX — one Function Curve whose terms fade in through a Sequence step, plus Expression.",
       },
+      {
+        file: "demo_math_trigonometry.tsuji",
+        label: "Sine as the Height of a Turning Point (2D)",
+        description: "A wheel turns once; its gondola's height (sin θ, blue) and its shadow on the floor (cos θ, red) stand out as segments, and the height unrolls along θ into the sine curve. θ, sin θ and cos θ read live in LaTeX — Function Curves in parametric mode, Expression and one Sequence.",
+      },
+      {
+        file: "demo_math_ode2.tsuji",
+        label: "Damped Springs: x'' + 2ζω₀x' + ω₀²x = 0 (2D)",
+        description: "Three masses released from the same height on springs with ζ = 0.15, 1 and 2.5; each draws its motion on paper scrolling past, so under-damped, critical and over-damped read side by side. One Expression formula holds the exact solution for all three regimes.",
+      },
     ],
   },
   {

@@ -1,0 +1,1130 @@
+{
+  "canvases": [
+    {
+      "nodes": [
+        {
+          "id": "env",
+          "type": "lighting/environment",
+          "position": {
+            "x": 340,
+            "y": 406
+          },
+          "params": {
+            "color": 16777215,
+            "intensity": 1,
+            "background": 1,
+            "blurriness": 0,
+            "filePath": "",
+            "backgroundImagePath": "",
+            "backgroundFit": "cover",
+            "backgroundScale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "backgroundOffset": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "backgroundRotation": 0,
+            "ambientIntensity": 0.6,
+            "sunIntensity": 0
+          }
+        },
+        {
+          "id": "render",
+          "type": "render",
+          "position": {
+            "x": 610,
+            "y": 393
+          },
+          "params": {
+            "frameCount": 405,
+            "fps": 30,
+            "motionBlur": 0,
+            "resolutionPreset": "16:9 (1920x1080)",
+            "width": 1920,
+            "height": 1080,
+            "holdout": false
+          }
+        },
+        {
+          "id": "cam",
+          "type": "calibration/camera",
+          "position": {
+            "x": -1200,
+            "y": -200
+          },
+          "params": {
+            "location": {
+              "x": 3.4,
+              "y": 0.6,
+              "z": 30
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "useTarget": true,
+            "target": {
+              "x": 3.4,
+              "y": 0.6,
+              "z": 0
+            },
+            "up": {
+              "x": 0,
+              "y": 1,
+              "z": 0
+            },
+            "fov": 21,
+            "active": true,
+            "mode": "manual",
+            "projectionType": "orthographic"
+          }
+        },
+        {
+          "id": "seq",
+          "type": "time/sequence",
+          "position": {
+            "x": -1200,
+            "y": 100
+          },
+          "params": {
+            "steps": 5,
+            "mode": "timeline",
+            "offset": 0,
+            "step0Name": "axes",
+            "step0Duration": 1.0,
+            "step0Ease": "smooth",
+            "step0Start": "",
+            "step1Name": "wheel",
+            "step1Duration": 1.5,
+            "step1Ease": "smooth",
+            "step1Start": "",
+            "step2Name": "show",
+            "step2Duration": 1.0,
+            "step2Ease": "smooth",
+            "step2Start": "",
+            "step3Name": "turn",
+            "step3Duration": 8.0,
+            "step3Ease": "linear",
+            "step3Start": "",
+            "step3From": 0,
+            "step3To": 6.2831853,
+            "step4Name": "pause",
+            "step4Duration": 2.0,
+            "step4Ease": "smooth",
+            "step4Start": ""
+          }
+        },
+        {
+          "id": "axes",
+          "type": "math/axes",
+          "position": {
+            "x": -900,
+            "y": -300
+          },
+          "params": {
+            "dimension": "2D",
+            "xMin": 0,
+            "xMax": 6.6,
+            "xStep": 0,
+            "yMin": -1.5,
+            "yMax": 1.5,
+            "yStep": 0.5,
+            "unit": {
+              "x": 1.7,
+              "y": 1.7,
+              "z": 1
+            },
+            "grid": "xy",
+            "labels": true,
+            "piTicks": true,
+            "names": "θ, y",
+            "labelSize": 0.26,
+            "arrows": true,
+            "axisColor": 2236962,
+            "gridColor": 14015457,
+            "axisWidth": 2,
+            "gridWidth": 1
+          }
+        },
+        {
+          "id": "rim",
+          "type": "math/function-curve",
+          "position": {
+            "x": -500,
+            "y": -600
+          },
+          "params": {
+            "mode": "parametric",
+            "formula": "(c + cos t, sin t)",
+            "from": 0,
+            "to": 6.2831853,
+            "samples": 400,
+            "yMin": -50,
+            "yMax": 50,
+            "progress": 1,
+            "color": 2236962,
+            "width": 2.5,
+            "dashed": false,
+            "visible": true,
+            "c": -1.9
+          }
+        },
+        {
+          "id": "crossH",
+          "type": "math/function-curve",
+          "position": {
+            "x": -500,
+            "y": -480
+          },
+          "params": {
+            "mode": "parametric",
+            "formula": "(c + 1.25(2t − 1), 0)",
+            "from": 0,
+            "to": 1,
+            "samples": 2,
+            "yMin": -50,
+            "yMax": 50,
+            "progress": 1,
+            "color": 11250603,
+            "width": 1.5,
+            "dashed": false,
+            "visible": true,
+            "c": -1.9
+          }
+        },
+        {
+          "id": "crossV",
+          "type": "math/function-curve",
+          "position": {
+            "x": -500,
+            "y": -360
+          },
+          "params": {
+            "mode": "parametric",
+            "formula": "(c, 1.25(2t − 1))",
+            "from": 0,
+            "to": 1,
+            "samples": 2,
+            "yMin": -50,
+            "yMax": 50,
+            "progress": 1,
+            "color": 11250603,
+            "width": 1.5,
+            "dashed": false,
+            "visible": true,
+            "c": -1.9
+          }
+        },
+        {
+          "id": "spokes",
+          "type": "math/function-curve",
+          "position": {
+            "x": -500,
+            "y": -240
+          },
+          "params": {
+            "mode": "parametric",
+            "formula": "(c + frac(t) cos(a + floor(t) π/4), frac(t) sin(a + floor(t) π/4))",
+            "from": 0,
+            "to": 7.999,
+            "samples": 800,
+            "yMin": -50,
+            "yMax": 50,
+            "progress": 1,
+            "color": 11250603,
+            "width": 1.5,
+            "dashed": false,
+            "visible": true,
+            "c": -1.9
+          }
+        },
+        {
+          "id": "radius",
+          "type": "math/function-curve",
+          "position": {
+            "x": -500,
+            "y": -120
+          },
+          "params": {
+            "mode": "parametric",
+            "formula": "(c + t cos a, t sin a)",
+            "from": 0,
+            "to": 1,
+            "samples": 2,
+            "yMin": -50,
+            "yMax": 50,
+            "progress": 1,
+            "color": 2236962,
+            "width": 3,
+            "dashed": false,
+            "visible": true,
+            "c": -1.9
+          }
+        },
+        {
+          "id": "arc",
+          "type": "math/function-curve",
+          "position": {
+            "x": -500,
+            "y": 0
+          },
+          "params": {
+            "mode": "parametric",
+            "formula": "(c + 0.3cos(t a), 0.3sin(t a))",
+            "from": 0,
+            "to": 1,
+            "samples": 60,
+            "yMin": -50,
+            "yMax": 50,
+            "progress": 1,
+            "color": 15234107,
+            "width": 2,
+            "dashed": false,
+            "visible": true,
+            "c": -1.9
+          }
+        },
+        {
+          "id": "cosSeg",
+          "type": "math/function-curve",
+          "position": {
+            "x": -500,
+            "y": 120
+          },
+          "params": {
+            "mode": "parametric",
+            "formula": "(c + t cos a, 0)",
+            "from": 0,
+            "to": 1,
+            "samples": 2,
+            "yMin": -50,
+            "yMax": 50,
+            "progress": 1,
+            "color": 14821709,
+            "width": 5,
+            "dashed": false,
+            "visible": true,
+            "c": -1.9
+          }
+        },
+        {
+          "id": "sinSeg",
+          "type": "math/function-curve",
+          "position": {
+            "x": -500,
+            "y": 240
+          },
+          "params": {
+            "mode": "parametric",
+            "formula": "(c + cos a, t sin a)",
+            "from": 0,
+            "to": 1,
+            "samples": 2,
+            "yMin": -50,
+            "yMax": 50,
+            "progress": 1,
+            "color": 2060267,
+            "width": 5,
+            "dashed": false,
+            "visible": true,
+            "c": -1.9
+          }
+        },
+        {
+          "id": "link",
+          "type": "math/function-curve",
+          "position": {
+            "x": -500,
+            "y": 360
+          },
+          "params": {
+            "mode": "parametric",
+            "formula": "(lerp(c + cos a, a, t), sin a)",
+            "from": 0,
+            "to": 1,
+            "samples": 2,
+            "yMin": -50,
+            "yMax": 50,
+            "progress": 1,
+            "color": 11250603,
+            "width": 1.5,
+            "dashed": true,
+            "visible": true,
+            "c": -1.9
+          }
+        },
+        {
+          "id": "trace",
+          "type": "math/function-curve",
+          "position": {
+            "x": -500,
+            "y": 480
+          },
+          "params": {
+            "mode": "function",
+            "formula": "x <= a ? sin x : sqrt(-1)",
+            "from": 0,
+            "to": 6.2831853,
+            "samples": 500,
+            "yMin": -50,
+            "yMax": 50,
+            "progress": 1,
+            "color": 2060267,
+            "width": 3.5,
+            "dashed": false,
+            "visible": true,
+            "c": -1.9
+          }
+        },
+        {
+          "id": "gondolaAt",
+          "type": "math/expression",
+          "position": {
+            "x": -500,
+            "y": 640
+          },
+          "params": {
+            "formula": "(c + cos a, sin a, 0)",
+            "c": -1.9
+          }
+        },
+        {
+          "id": "gondolaWorld",
+          "type": "transform/transform-vector",
+          "position": {
+            "x": -240,
+            "y": 640
+          },
+          "params": {}
+        },
+        {
+          "id": "gondolaPlace",
+          "type": "transform",
+          "position": {
+            "x": 0,
+            "y": 640
+          },
+          "params": {}
+        },
+        {
+          "id": "gondola",
+          "type": "object/sphere",
+          "position": {
+            "x": 240,
+            "y": 640
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 0.2,
+              "y": 0.2,
+              "z": 0.2
+            },
+            "color": 15234107,
+            "roughness": 0.6,
+            "metalness": 0,
+            "shadeless": 1,
+            "sphereType": "uv",
+            "segments": 4
+          }
+        },
+        {
+          "id": "penAt",
+          "type": "math/expression",
+          "position": {
+            "x": -500,
+            "y": 800
+          },
+          "params": {
+            "formula": "(a, sin a, 0)"
+          }
+        },
+        {
+          "id": "penWorld",
+          "type": "transform/transform-vector",
+          "position": {
+            "x": -240,
+            "y": 800
+          },
+          "params": {}
+        },
+        {
+          "id": "penPlace",
+          "type": "transform",
+          "position": {
+            "x": 0,
+            "y": 800
+          },
+          "params": {}
+        },
+        {
+          "id": "pen",
+          "type": "object/sphere",
+          "position": {
+            "x": 240,
+            "y": 800
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 0.16,
+              "y": 0.16,
+              "z": 0.16
+            },
+            "color": 2060267,
+            "roughness": 0.6,
+            "metalness": 0,
+            "shadeless": 1,
+            "sphereType": "uv",
+            "segments": 4
+          }
+        },
+        {
+          "id": "title",
+          "type": "math/latex",
+          "position": {
+            "x": 300,
+            "y": -500
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "tex": "\\text{La hauteur d'un point qui tourne, c'est } \\sin\\theta",
+            "inline": false,
+            "size": 0.42,
+            "align": "center",
+            "valign": "middle",
+            "at": {
+              "x": 3.4,
+              "y": 4.7,
+              "z": 0
+            },
+            "progress": 1,
+            "color": 2236962,
+            "opacity": 1,
+            "faceCamera": true,
+            "onTop": true
+          }
+        },
+        {
+          "id": "theta",
+          "type": "math/expression",
+          "position": {
+            "x": -500,
+            "y": 960
+          },
+          "params": {
+            "formula": "a"
+          }
+        },
+        {
+          "id": "thetaLabelText",
+          "type": "converter/value-to-text",
+          "position": {
+            "x": -240,
+            "y": 960
+          },
+          "params": {
+            "decimals": 2,
+            "prefix": "\\theta = ",
+            "suffix": "\\ \\text{rad}"
+          }
+        },
+        {
+          "id": "thetaLabel",
+          "type": "math/latex",
+          "position": {
+            "x": 20,
+            "y": 960
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "tex": "\\theta = 0\\ \\text{rad}",
+            "inline": false,
+            "size": 0.34,
+            "align": "center",
+            "valign": "middle",
+            "at": {
+              "x": -3.23,
+              "y": 3.4,
+              "z": 0
+            },
+            "progress": 1,
+            "color": 15234107,
+            "opacity": 1,
+            "faceCamera": true,
+            "onTop": true
+          }
+        },
+        {
+          "id": "sinV",
+          "type": "math/expression",
+          "position": {
+            "x": -500,
+            "y": 1120
+          },
+          "params": {
+            "formula": "sin a"
+          }
+        },
+        {
+          "id": "sinLabelText",
+          "type": "converter/value-to-text",
+          "position": {
+            "x": -240,
+            "y": 1120
+          },
+          "params": {
+            "decimals": 2,
+            "prefix": "\\sin\\theta = ",
+            "suffix": ""
+          }
+        },
+        {
+          "id": "sinLabel",
+          "type": "math/latex",
+          "position": {
+            "x": 20,
+            "y": 1120
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "tex": "\\sin\\theta = 0",
+            "inline": false,
+            "size": 0.34,
+            "align": "center",
+            "valign": "middle",
+            "at": {
+              "x": 5.6,
+              "y": 3.4,
+              "z": 0
+            },
+            "progress": 1,
+            "color": 2060267,
+            "opacity": 1,
+            "faceCamera": true,
+            "onTop": true
+          }
+        },
+        {
+          "id": "cosV",
+          "type": "math/expression",
+          "position": {
+            "x": -500,
+            "y": 1280
+          },
+          "params": {
+            "formula": "cos a"
+          }
+        },
+        {
+          "id": "cosLabelText",
+          "type": "converter/value-to-text",
+          "position": {
+            "x": -240,
+            "y": 1280
+          },
+          "params": {
+            "decimals": 2,
+            "prefix": "\\cos\\theta = ",
+            "suffix": ""
+          }
+        },
+        {
+          "id": "cosLabel",
+          "type": "math/latex",
+          "position": {
+            "x": 20,
+            "y": 1280
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "tex": "\\cos\\theta = 0",
+            "inline": false,
+            "size": 0.34,
+            "align": "center",
+            "valign": "middle",
+            "at": {
+              "x": -3.23,
+              "y": -3.3,
+              "z": 0
+            },
+            "progress": 1,
+            "color": 14821709,
+            "opacity": 1,
+            "faceCamera": true,
+            "onTop": true
+          }
+        }
+      ],
+      "connections": [
+        {
+          "id": "env->render",
+          "fromNode": "env",
+          "fromSocket": "environment",
+          "toNode": "render",
+          "toSocket": "environment"
+        },
+        {
+          "id": "seq.step0->axes.visible",
+          "fromNode": "seq",
+          "fromSocket": "step0",
+          "toNode": "axes",
+          "toSocket": "visible"
+        },
+        {
+          "id": "axes.space->rim.space",
+          "fromNode": "axes",
+          "fromSocket": "space",
+          "toNode": "rim",
+          "toSocket": "space"
+        },
+        {
+          "id": "seq.step1->rim.progress",
+          "fromNode": "seq",
+          "fromSocket": "step1",
+          "toNode": "rim",
+          "toSocket": "progress"
+        },
+        {
+          "id": "axes.space->crossH.space",
+          "fromNode": "axes",
+          "fromSocket": "space",
+          "toNode": "crossH",
+          "toSocket": "space"
+        },
+        {
+          "id": "seq.step1->crossH.visible",
+          "fromNode": "seq",
+          "fromSocket": "step1",
+          "toNode": "crossH",
+          "toSocket": "visible"
+        },
+        {
+          "id": "axes.space->crossV.space",
+          "fromNode": "axes",
+          "fromSocket": "space",
+          "toNode": "crossV",
+          "toSocket": "space"
+        },
+        {
+          "id": "seq.step1->crossV.visible",
+          "fromNode": "seq",
+          "fromSocket": "step1",
+          "toNode": "crossV",
+          "toSocket": "visible"
+        },
+        {
+          "id": "axes.space->spokes.space",
+          "fromNode": "axes",
+          "fromSocket": "space",
+          "toNode": "spokes",
+          "toSocket": "space"
+        },
+        {
+          "id": "seq.step1->spokes.visible",
+          "fromNode": "seq",
+          "fromSocket": "step1",
+          "toNode": "spokes",
+          "toSocket": "visible"
+        },
+        {
+          "id": "seq.step3->spokes.a",
+          "fromNode": "seq",
+          "fromSocket": "step3",
+          "toNode": "spokes",
+          "toSocket": "a"
+        },
+        {
+          "id": "axes.space->radius.space",
+          "fromNode": "axes",
+          "fromSocket": "space",
+          "toNode": "radius",
+          "toSocket": "space"
+        },
+        {
+          "id": "seq.step2->radius.visible",
+          "fromNode": "seq",
+          "fromSocket": "step2",
+          "toNode": "radius",
+          "toSocket": "visible"
+        },
+        {
+          "id": "seq.step3->radius.a",
+          "fromNode": "seq",
+          "fromSocket": "step3",
+          "toNode": "radius",
+          "toSocket": "a"
+        },
+        {
+          "id": "axes.space->arc.space",
+          "fromNode": "axes",
+          "fromSocket": "space",
+          "toNode": "arc",
+          "toSocket": "space"
+        },
+        {
+          "id": "seq.step2->arc.visible",
+          "fromNode": "seq",
+          "fromSocket": "step2",
+          "toNode": "arc",
+          "toSocket": "visible"
+        },
+        {
+          "id": "seq.step3->arc.a",
+          "fromNode": "seq",
+          "fromSocket": "step3",
+          "toNode": "arc",
+          "toSocket": "a"
+        },
+        {
+          "id": "axes.space->cosSeg.space",
+          "fromNode": "axes",
+          "fromSocket": "space",
+          "toNode": "cosSeg",
+          "toSocket": "space"
+        },
+        {
+          "id": "seq.step2->cosSeg.visible",
+          "fromNode": "seq",
+          "fromSocket": "step2",
+          "toNode": "cosSeg",
+          "toSocket": "visible"
+        },
+        {
+          "id": "seq.step3->cosSeg.a",
+          "fromNode": "seq",
+          "fromSocket": "step3",
+          "toNode": "cosSeg",
+          "toSocket": "a"
+        },
+        {
+          "id": "axes.space->sinSeg.space",
+          "fromNode": "axes",
+          "fromSocket": "space",
+          "toNode": "sinSeg",
+          "toSocket": "space"
+        },
+        {
+          "id": "seq.step2->sinSeg.visible",
+          "fromNode": "seq",
+          "fromSocket": "step2",
+          "toNode": "sinSeg",
+          "toSocket": "visible"
+        },
+        {
+          "id": "seq.step3->sinSeg.a",
+          "fromNode": "seq",
+          "fromSocket": "step3",
+          "toNode": "sinSeg",
+          "toSocket": "a"
+        },
+        {
+          "id": "axes.space->link.space",
+          "fromNode": "axes",
+          "fromSocket": "space",
+          "toNode": "link",
+          "toSocket": "space"
+        },
+        {
+          "id": "seq.step2->link.visible",
+          "fromNode": "seq",
+          "fromSocket": "step2",
+          "toNode": "link",
+          "toSocket": "visible"
+        },
+        {
+          "id": "seq.step3->link.a",
+          "fromNode": "seq",
+          "fromSocket": "step3",
+          "toNode": "link",
+          "toSocket": "a"
+        },
+        {
+          "id": "axes.space->trace.space",
+          "fromNode": "axes",
+          "fromSocket": "space",
+          "toNode": "trace",
+          "toSocket": "space"
+        },
+        {
+          "id": "seq.step2->trace.visible",
+          "fromNode": "seq",
+          "fromSocket": "step2",
+          "toNode": "trace",
+          "toSocket": "visible"
+        },
+        {
+          "id": "seq.step3->trace.a",
+          "fromNode": "seq",
+          "fromSocket": "step3",
+          "toNode": "trace",
+          "toSocket": "a"
+        },
+        {
+          "id": "seq.step3->gondolaAt.a",
+          "fromNode": "seq",
+          "fromSocket": "step3",
+          "toNode": "gondolaAt",
+          "toSocket": "a"
+        },
+        {
+          "id": "gondolaAt.vector->gondolaWorld.vector",
+          "fromNode": "gondolaAt",
+          "fromSocket": "vector",
+          "toNode": "gondolaWorld",
+          "toSocket": "vector"
+        },
+        {
+          "id": "axes.space->gondolaWorld.matrix",
+          "fromNode": "axes",
+          "fromSocket": "space",
+          "toNode": "gondolaWorld",
+          "toSocket": "matrix"
+        },
+        {
+          "id": "gondolaWorld.vector->gondolaPlace.location",
+          "fromNode": "gondolaWorld",
+          "fromSocket": "vector",
+          "toNode": "gondolaPlace",
+          "toSocket": "location"
+        },
+        {
+          "id": "gondolaPlace.matrix->gondola.matrix",
+          "fromNode": "gondolaPlace",
+          "fromSocket": "matrix",
+          "toNode": "gondola",
+          "toSocket": "matrix"
+        },
+        {
+          "id": "seq.step2->gondola.visible",
+          "fromNode": "seq",
+          "fromSocket": "step2",
+          "toNode": "gondola",
+          "toSocket": "visible"
+        },
+        {
+          "id": "seq.step3->penAt.a",
+          "fromNode": "seq",
+          "fromSocket": "step3",
+          "toNode": "penAt",
+          "toSocket": "a"
+        },
+        {
+          "id": "penAt.vector->penWorld.vector",
+          "fromNode": "penAt",
+          "fromSocket": "vector",
+          "toNode": "penWorld",
+          "toSocket": "vector"
+        },
+        {
+          "id": "axes.space->penWorld.matrix",
+          "fromNode": "axes",
+          "fromSocket": "space",
+          "toNode": "penWorld",
+          "toSocket": "matrix"
+        },
+        {
+          "id": "penWorld.vector->penPlace.location",
+          "fromNode": "penWorld",
+          "fromSocket": "vector",
+          "toNode": "penPlace",
+          "toSocket": "location"
+        },
+        {
+          "id": "penPlace.matrix->pen.matrix",
+          "fromNode": "penPlace",
+          "fromSocket": "matrix",
+          "toNode": "pen",
+          "toSocket": "matrix"
+        },
+        {
+          "id": "seq.step2->pen.visible",
+          "fromNode": "seq",
+          "fromSocket": "step2",
+          "toNode": "pen",
+          "toSocket": "visible"
+        },
+        {
+          "id": "seq.step1->title.progress",
+          "fromNode": "seq",
+          "fromSocket": "step1",
+          "toNode": "title",
+          "toSocket": "progress"
+        },
+        {
+          "id": "seq.step3->theta.a",
+          "fromNode": "seq",
+          "fromSocket": "step3",
+          "toNode": "theta",
+          "toSocket": "a"
+        },
+        {
+          "id": "theta.value->thetaLabelText.value",
+          "fromNode": "theta",
+          "fromSocket": "value",
+          "toNode": "thetaLabelText",
+          "toSocket": "value"
+        },
+        {
+          "id": "thetaLabelText.text->thetaLabel.tex",
+          "fromNode": "thetaLabelText",
+          "fromSocket": "text",
+          "toNode": "thetaLabel",
+          "toSocket": "tex"
+        },
+        {
+          "id": "seq.step3->sinV.a",
+          "fromNode": "seq",
+          "fromSocket": "step3",
+          "toNode": "sinV",
+          "toSocket": "a"
+        },
+        {
+          "id": "sinV.value->sinLabelText.value",
+          "fromNode": "sinV",
+          "fromSocket": "value",
+          "toNode": "sinLabelText",
+          "toSocket": "value"
+        },
+        {
+          "id": "sinLabelText.text->sinLabel.tex",
+          "fromNode": "sinLabelText",
+          "fromSocket": "text",
+          "toNode": "sinLabel",
+          "toSocket": "tex"
+        },
+        {
+          "id": "seq.step3->cosV.a",
+          "fromNode": "seq",
+          "fromSocket": "step3",
+          "toNode": "cosV",
+          "toSocket": "a"
+        },
+        {
+          "id": "cosV.value->cosLabelText.value",
+          "fromNode": "cosV",
+          "fromSocket": "value",
+          "toNode": "cosLabelText",
+          "toSocket": "value"
+        },
+        {
+          "id": "cosLabelText.text->cosLabel.tex",
+          "fromNode": "cosLabelText",
+          "fromSocket": "text",
+          "toNode": "cosLabel",
+          "toSocket": "tex"
+        },
+        {
+          "id": "seq.step2->thetaLabel.visible",
+          "fromNode": "seq",
+          "fromSocket": "step2",
+          "toNode": "thetaLabel",
+          "toSocket": "visible"
+        },
+        {
+          "id": "seq.step2->sinLabel.visible",
+          "fromNode": "seq",
+          "fromSocket": "step2",
+          "toNode": "sinLabel",
+          "toSocket": "visible"
+        },
+        {
+          "id": "seq.step2->cosLabel.visible",
+          "fromNode": "seq",
+          "fromSocket": "step2",
+          "toNode": "cosLabel",
+          "toSocket": "visible"
+        }
+      ],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    }
+  ],
+  "activeCanvas": 0
+}
