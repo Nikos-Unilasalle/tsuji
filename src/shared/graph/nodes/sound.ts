@@ -15,6 +15,7 @@ import {
   syncClip,
 } from "../../audio/audioStore";
 import { planClip } from "../../audio/clipPlan";
+import { recordClipFrame } from "../../audio/exportAudioCapture";
 import { Rolloff, ROLLOFFS, SpatialMode, spatialGain, stereoPan } from "../../audio/spatial";
 import * as THREE from "three";
 import { asVector3 } from "./transform";
@@ -169,10 +170,8 @@ export const AUDIO_PLAYER_NODE: NodeDefinition = {
     const inner = numberInput(inputs.innerRadius, params.innerRadius, 2);
     const outer = numberInput(inputs.outerRadius, params.outerRadius, 12);
     const heard = spatialGain(mode, listener, source, inner, outer, rolloff);
-    if (player.pannerNode) {
-      const pan = mode === "local" && Boolean(params.stereo ?? true) ? stereoPan(listener, right, source, inner) : 0;
-      player.pannerNode.pan.value = pan;
-    }
+    const pan = mode === "local" && Boolean(params.stereo ?? true) ? stereoPan(listener, right, source, inner) : 0;
+    if (player.pannerNode) player.pannerNode.pan.value = pan;
     const level = volume * heard;
 
     audioEl.volume = Math.max(0, Math.min(1, level));
@@ -208,6 +207,8 @@ export const AUDIO_PLAYER_NODE: NodeDefinition = {
       const taken = player.driver !== undefined && player.driver.id !== sessionId && now - player.driver.at < 300;
       if (!taken) player.driver = { id: sessionId, at: now };
       const plan = planClip({ frame, fps, startFrame, clipStart, clipEnd, clipLength: fileLength, loop, rate });
+      // A frame-exact export rebuilds the soundtrack offline from these, instead of recording the speakers.
+      if (ctx.capturing && player.buffer) recordClipFrame(ctx.nodeId, { buffer: player.buffer, plan, rate, loop, level, pan });
 
       if (yieldToExport || taken) {
         // An export, or another viewport, is driving the sound; leave it alone.

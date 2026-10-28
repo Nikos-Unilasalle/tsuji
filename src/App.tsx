@@ -99,6 +99,7 @@ import { serializeSplatToPng } from "./shared/three/splatSerialization";
 import { broadcastCamera, broadcastGraph, maximizeMainWindow, PreviewCameraPose, startBroadcasting } from "./shared/ipc";
 import { createCanvasTour, type CanvasTour } from "./shared/export/canvasTour";
 import { exportVideo, mimeToExtension, saveVideoBlob } from "./shared/export/videoExport";
+import { exportVideoWebCodecs, supportsWebCodecsExport } from "./shared/export/webCodecsExport";
 import { exportPngSequence, saveZipBlob } from "./shared/export/imageSequenceExport";
 import { renderGraphToSvg, saveGraphSvg } from "./shared/export/graphSvg";
 import { TransformPatch, Viewport, ViewportExportHandle } from "./shared/three/Viewport";
@@ -609,12 +610,21 @@ function MainEditor() {
       const handle = await waitForExportHandle();
 
       const tour = startCanvasTour(handle);
-      const blob = await exportVideo(tour.handle, {
+      const videoOpts = {
         totalFrames: tour.totalFrames,
         fps: exportFps,
         onProgress: tour.onProgress,
         isCancelled: tour.isCancelled,
-      });
+      };
+      // Frame-exact WebCodecs encode first; MediaRecorder only where the webview can't encode any codec at this size.
+      const exact = supportsWebCodecsExport() ? await exportVideoWebCodecs(tour.handle, videoOpts) : null;
+      let blob = exact;
+      console.info(`Video export: ${exact ? "WebCodecs (frame-exact)" : "MediaRecorder fallback"}`);
+      if (!blob) {
+        // A fresh tour: the probe above already advanced the first one.
+        const retry = startCanvasTour(handle);
+        blob = await exportVideo(retry.handle, { ...videoOpts, totalFrames: retry.totalFrames, onProgress: retry.onProgress, isCancelled: retry.isCancelled });
+      }
 
       const base = (currentFilename.replace(/\.[^.]+$/, "") || "export") + (source === "2d" ? "_2d" : "");
       const suggested = `${base}.${mimeToExtension(blob.type)}`;
