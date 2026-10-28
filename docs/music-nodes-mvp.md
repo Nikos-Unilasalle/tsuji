@@ -328,6 +328,49 @@ Limites :
 - Le son de l'écoute n'a pas été écouté, seulement compté (1 voix active).
 - Pas testé dans Tauri.
 
+### Sons et morceaux repris des firmwares FM-1 (2026-10-28)
+
+Point de départ : [aroum/fm1-custom-fw](https://github.com/aroum/fm1-custom-fw), un annuaire des firmwares du FM-1 (environ 30, presque tous dérivés de Felucca et sous GPL-3.0). L'annuaire n'a ni sons ni morceaux lui-même. Tout ce qui suit vient des dépôts qu'il référence. Ces dépôts sont sous **GPL-3.0-only, comme tsuji**, et chaque fichier repris cite son auteur et son origine.
+
+| Repris | De | Où chez nous |
+|---|---|---|
+| 8 sons du moteur DIGITAL (E.PIANO, BELL, BASS, BRASS, ORGAN, PAD, MARIMBA, FUNK KEY) | **Felucca**, Leo Kuroshita / Hügelton Instruments — `firmware/src/fm4_convert.c` | `src/shared/music/dsp/fm4Import.ts` |
+| 21 sons DIGITAL (RHODES, DX RHODES, WURLI, CLAV, M1 PIANO, AFRO KEYS, TRAP BELL, MUSIC BOX, KALIMBA, PLUGG BELL, GLASS PAD, FM BASS, STEEL DRUM, GLOCKEN, CELESTA, XYLOPHONE, HARP, BASS GTR, TUBE BELL, FM PLUCK, FM GRAND) | **SLOOP**, isod89 — `firmware/src/eng_digital.c` | idem |
+| 10 phrases d'usine (ACID, OFFBEAT, MELODY, LEAD, PAD, KEYS, BELL, SUB, BEAT, ARP) | **Felucca** — `firmware/src/engines.c`, PATTERNS | `src/shared/music/seq/phrases.ts`, menu « Load Phrase » du Pattern |
+| Le morceau de démo « KAWA QUEST » | **KAWA**, Omnipotard — `source/firmware/src/kawa_edit.c`, `prj_demo()` | `tools/gen_music_kawa_quest.py` → Démos → Music → KAWA QUEST |
+
+**Pourquoi le moteur DIGITAL :** c'est exactement notre architecture (4 opérateurs sinus, les 8 algorithmes Yamaha, feedback sur l'opérateur 4, moyenné sur deux échantillons). Les données sont reprises telles qu'écrites, et `fromFm4()` (testé) les convertit :
+- les temps suivent leur courbe, 1 ms × 10000^(v/127), atteints à 99 % comme les nôtres ;
+- INDEX 127 donne 2 tours de phase chez eux comme chez nous ;
+- les modulateurs démarrent à fond et retombent vers 25 % (leur MODDEC), et sont divisés par deux quand deux modulateurs alimentent un même opérateur (eux font la moyenne, nous la somme) ;
+- les porteurs suivent l'ADSR d'amplitude ;
+- MONO donne 1 voix, et la transposition de SLOOP est gardée.
+
+Ce qui manque : leur feedback va jusqu'à 2 tours, le nôtre jusqu'à 0,25. Les deux plus forts (CLAV, BRASS) sont donc un peu adoucis. Leurs LFO, glide, enveloppe de filtre et envois d'effets ne sont pas repris, faute d'équivalent chez nous.
+
+Le **FM Voice** liste ces 29 sons après les nôtres, sous la forme « Felucca · E.PIANO » ou « SLOOP · RHODES ». Il a deux nouveaux réglages, chargés avec le preset : **Voices** (1 = mono) et **Transpose**.
+
+**KAWA QUEST** (overworld en do, donjon en la mineur, boss breakcore, victoire) : 7 patterns de 2 mesures, la plupart joués deux fois, à 120 BPM sur 6 pistes. Le morceau est transcrit appel par appel depuis `prj_demo()`, puis mis bout à bout en un pattern de 416 pas par piste (52 s, une timeline de 1560 frames). Ce qui change faute d'équivalent chez nous :
+- les moteurs chiptune : le lead pulse passe sur le preset Chip, la basse wave sur Felucca · BASS, les hats noise sur le hat du Drum Kit ;
+- le kalimba est celui de SLOOP (celui de KAWA est un patch DX7 6 opérateurs) ;
+- le kit SNES est rangé sur nos sons (1 kick, 3 snare, 4 clap, 9 crash → open hat…) ;
+- le break samplé du boss est rejoué au Drum Kit, une frappe par tranche ;
+- ARP devient l'accord lui-même, GLIDE devient GLD et ROLL un ratchet (8 frappes au plus) ;
+- vibrato, reverse, pitch et effets live disparaissent.
+
+Il faudra donc l'écouter en sachant que c'est une adaptation et non l'original.
+
+Pour suivre :
+- Le Pattern accepte jusqu'à 1024 pas, pour un morceau entier.
+- Le HUD défile verticalement et affiche toute longueur.
+- `src/shared/music/demoAudio.test.ts` rend 12 s de chaque démo musicale à travers le vrai moteur. Le test vérifie qu'il y a du son, aucune valeur infinie, et pas de saturation.
+
+Ce qui reste disponible pour plus tard :
+- les sons FM6 / DX7 de SLOOP, Felucca, Melodee et KAWA (patchs 6 opérateurs, msfa) : il faudrait un moteur 6 opérateurs ;
+- les moteurs chiptune de KAWA (pulse, wave 4 bits, noise) : ils permettraient un KAWA QUEST fidèle ;
+- l'enchaînement de patterns (song mode), plutôt qu'un pattern unique de 416 pas ;
+- les autres firmwares de l'annuaire (X0X pour 303 / 808 / 909, Hortator pour la batterie, Polly pour les accompagnements…).
+
 ## 6. Après le MVP (côté SLOOP / KAWA)
 
 - **Live / looper (SLOOP)** : jeu au clavier de l'ordi et en Web MIDI, enregistrement en boucle quantifié dans un pattern, overdub.

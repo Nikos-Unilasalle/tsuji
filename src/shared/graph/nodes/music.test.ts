@@ -88,6 +88,15 @@ describe("FM Voice", () => {
     expect(track.patch).toEqual(FM_PRESETS.Organ);
   });
 
+  it("loads an FM-1 firmware sound with its voice count and transposition", () => {
+    const field = MUSIC_FM_VOICE_NODE.paramFields!.find((f) => f.id === "preset");
+    const bass = field && field.kind === "select" ? field.presets!["SLOOP · FM BASS"] : {};
+    expect(bass).toMatchObject({ voices: 1, transpose: -24, algorithm: "1" });
+    const track = run(MUSIC_FM_VOICE_NODE, { sequence: seq() }, { preset: "SLOOP · FM BASS", ...bass }).track as FmTrackDescription;
+    expect(track.voices).toBe(1);
+    expect(track.seq.pattern.steps[0]).toMatchObject({ note: 60 - 24, chord: "maj7" });
+  });
+
   it("brightens the modulators only", () => {
     const plain = run(MUSIC_FM_VOICE_NODE, { sequence: seq() }).track as FmTrackDescription;
     const bright = run(MUSIC_FM_VOICE_NODE, { sequence: seq(), brightness: 2 }).track as FmTrackDescription;

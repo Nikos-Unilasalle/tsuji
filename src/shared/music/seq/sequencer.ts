@@ -77,6 +77,16 @@ export interface NoteEvent {
   glideSeconds?: number;
 }
 
+/** The sequence with every note moved by `semitones` (OFFs and empty steps as they are), kept in MIDI range. */
+export function transposeSequence(seq: Sequence, semitones: number): Sequence {
+  if (!semitones) return seq;
+  const move = (n: number) => Math.min(127, Math.max(0, n + semitones));
+  const steps = seq.pattern.steps.map((c) =>
+    !c || c.note === "off" ? c : { ...c, note: move(c.note), ...(c.add ? { add: c.add.map(move) } : {}) },
+  );
+  return { ...seq, pattern: { ...seq.pattern, steps } };
+}
+
 const DEFAULT_VELOCITY = 0.8;
 const CHANCE_SALT = 0x43484e;
 const RATCHET_GATE = 0.75;

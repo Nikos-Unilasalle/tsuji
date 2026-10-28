@@ -1,0 +1,441 @@
+{
+  "canvases": [
+    {
+      "nodes": [
+        {
+          "id": "clock",
+          "type": "music/clock",
+          "position": {
+            "x": 40,
+            "y": 400
+          },
+          "params": {
+            "bpm": 120,
+            "swing": 0,
+            "stepsPerBeat": "4"
+          }
+        },
+        {
+          "id": "pat_lead",
+          "type": "music/pattern",
+          "position": {
+            "x": 300,
+            "y": 40
+          },
+          "params": {
+            "steps": "C5@0.8 . E5@0.8 G5@0.8 . E5@0.8 C6@0.8!GLD8 . A5@0.8 . G5@0.8 . E5@0.8 . D5@0.8 . F5@0.8 . A5@0.8 . G5@0.8 E5@0.8 . C5@0.8 D5@0.8 . E5@0.8 . C5@0.8 . off . C5@0.8 . E5@0.8 G5@0.8 . E5@0.8 C6@0.8!GLD8 . A5@0.8 . G5@0.8 . E5@0.8 . D5@0.8 . F5@0.8 . A5@0.8 . G5@0.8 E5@0.8 . C5@0.8 D5@0.8 . E5@0.8 . C5@0.8 . off . E5@0.8 . G5@0.8 A5@0.8 . G5@0.8 E5@0.8 . D5@0.8 . E5@0.8 D5@0.8 C5@0.8 . A4@0.8 . B4@0.8 . C5@0.8 D5@0.8 . E5@0.8 G5@0.8 . F5@0.8 . E5@0.8 D5@0.8 C5@0.8 . . off E5@0.8 . G5@0.8 A5@0.8 . G5@0.8 E5@0.8 . D5@0.8 . E5@0.8 D5@0.8 C5@0.8 . A4@0.8 . B4@0.8 . C5@0.8 D5@0.8 . E5@0.8 G5@0.8 . F5@0.8 . E5@0.8 D5@0.8 C5@0.8 . . off . . . . . . A6@0.4 off . . . . . . . . . . . . . . E6@0.4 off . . . . . . . . . . . . . . A6@0.4 off . . . . . . . . . . . . . . E6@0.4 off . . . . . . . . E5@0.73 . . . . . F5@0.73!GLD12 . E5@0.73 . . . D5@0.73 . . . C5@0.73 . . . B4@0.73 . . . G#4@0.73 . . . . . off . E5@0.73 . . . . . F5@0.73!GLD12 . E5@0.73 . . . D5@0.73 . . . C5@0.73 . . . B4@0.73 . . . G#4@0.73 . . . . . off . A5@0.8 . . C6@0.8 . . B5@0.8 . G#5@0.8 . A5@0.8 . E5@0.8 . . . F5@0.8 . . E5@0.8 . . D5@0.8 . C5@0.8!GLD10 . . . B4@0.8 . G#4@0.8 . A5@0.8 . . C6@0.8 . . B5@0.8 . G#5@0.8 . A5@0.8 . E5@0.8 . . . F5@0.8 . . E5@0.8 . . D5@0.8 . C5@0.8!GLD10 . . . B4@0.8 . G#4@0.8 . A5:min@0.8 . . . . . . . A#5:maj@0.8 . . . . . . . A5:min@0.8 . . . . . . . G#5:dim@0.8 . . . . . . . A5:min@0.8 . . . . . . . A#5:maj@0.8 . . . . . . . A5:min@0.8 . . . . . . . G#5:dim@0.8 . . . . . . . G4@0.87 C5@0.87 E5@0.87 G5@0.87 C6@0.87 . . . . . . . A#5@0.87 . C6@0.87 . D6@0.87 . . . E6@0.87 . . . . . . . off . . .",
+            "length": "416",
+            "name": "lead"
+          }
+        },
+        {
+          "id": "voice_lead",
+          "type": "music/fm-voice",
+          "position": {
+            "x": 600,
+            "y": 40
+          },
+          "params": {
+            "preset": "Chip",
+            "level": 0.55,
+            "pan": -0.15
+          }
+        },
+        {
+          "id": "pat_kalimba",
+          "type": "music/pattern",
+          "position": {
+            "x": 300,
+            "y": 190
+          },
+          "params": {
+            "steps": ". . C5:maj@0.6 . . . C5:maj@0.47 . . . A4:min@0.6 . . . A4:min@0.47 . . . F4:maj@0.6 . . . F4:maj@0.47 . . . G4:maj@0.6 . . . G4:maj@0.47 . . . C5:maj@0.6 . . . C5:maj@0.47 . . . A4:min@0.6 . . . A4:min@0.47 . . . F4:maj@0.6 . . . F4:maj@0.47 . . . G4:maj@0.6 . . . G4:maj@0.47 . . . A4:min@0.6 . C7@0.53 . A4:min@0.47 . . . F4:maj@0.6 . E7@0.53 . F4:maj@0.47 . . . G4:maj@0.6 . D7@0.53 . G4:maj@0.47 . . . C5:maj@0.6 . G7@0.53 . C5:maj@0.47 . . . A4:min@0.6 . C7@0.53 . A4:min@0.47 . . . F4:maj@0.6 . E7@0.53 . F4:maj@0.47 . . . G4:maj@0.6 . D7@0.53 . G4:maj@0.47 . . . C5:maj@0.6 . G7@0.53 . C5:maj@0.47 . A4@0.53 E5@0.53 C5@0.53 E5@0.53 A4@0.53 E5@0.53 C5@0.53 E5@0.53 A#4@0.53 F5@0.53 D5@0.53 F5@0.53 A#4@0.53 F5@0.53 D5@0.53 F5@0.53 A4@0.53 E5@0.53 C5@0.53 E5@0.53 A4@0.53 E5@0.53 C5@0.53 E5@0.53 G#4@0.53 E5@0.53 B4@0.53 E5@0.53 G#4@0.53 E5@0.53 B4@0.53 E5@0.53 A4@0.53 E5@0.53 C5@0.53 E5@0.53 A4@0.53 E5@0.53 C5@0.53 E5@0.53 A#4@0.53 F5@0.53 D5@0.53 F5@0.53 A#4@0.53 F5@0.53 D5@0.53 F5@0.53 A4@0.53 E5@0.53 C5@0.53 E5@0.53 A4@0.53 E5@0.53 C5@0.53 E5@0.53 G#4@0.53 E5@0.53 B4@0.53 E5@0.53 G#4@0.53 E5@0.53 B4@0.53 E5@0.53 D5@0.53 A5@0.53 F5@0.53 A5@0.53 D5@0.53 A5@0.53 F5@0.53 A5@0.53 A4@0.53 E5@0.53 C5@0.53 E5@0.53 A4@0.53 E5@0.53 C5@0.53 E5@0.53 A#4@0.53 F5@0.53 D5@0.53 F5@0.53 A#4@0.53 F5@0.53 D5@0.53 F5@0.53 G#4@0.53 E5@0.53 B4@0.53 E5@0.53 G#4@0.53 E5@0.53 B4@0.53 E5@0.53 D5@0.53 A5@0.53 F5@0.53 A5@0.53 D5@0.53 A5@0.53 F5@0.53 A5@0.53 A4@0.53 E5@0.53 C5@0.53 E5@0.53 A4@0.53 E5@0.53 C5@0.53 E5@0.53 A#4@0.53 F5@0.53 D5@0.53 F5@0.53 A#4@0.53 F5@0.53 D5@0.53 F5@0.53 G#4@0.53 E5@0.53 B4@0.53 E5@0.53 G#4@0.53 E5@0.53 B4@0.53 E5@0.53 A4:min@0.47 . . . . . . . G4:maj@0.47 . . . . . . . F4:maj@0.47 . . . . . . . E4:maj@0.47 . . . . . . . A4:min@0.47 . . . . . . . G4:maj@0.47 . . . . . . . F4:maj@0.47 . . . . . . . E4:maj@0.47 . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . C5:maj@0.53 . . . . . . . F4:maj@0.53 . . . A#4:maj@0.53 . . . C5:maj@0.53 . . . . . . . C7@0.53 . G6@0.53 . E6@0.53 . C6@0.53 .",
+            "length": "416",
+            "name": "kalimba"
+          }
+        },
+        {
+          "id": "voice_kalimba",
+          "type": "music/fm-voice",
+          "position": {
+            "x": 600,
+            "y": 190
+          },
+          "params": {
+            "preset": "SLOOP \u00b7 KALIMBA",
+            "level": 0.7,
+            "pan": 0.3
+          }
+        },
+        {
+          "id": "pat_bass",
+          "type": "music/pattern",
+          "position": {
+            "x": 300,
+            "y": 340
+          },
+          "params": {
+            "steps": "C3@0.87 . C4@0.87 . G3@0.87 . C4@0.87 . A2@0.87 . A3@0.87 . E3@0.87 . A3@0.87 . F2@0.87 . F3@0.87 . C3@0.87 . F3@0.87 . G2@0.87 . G3@0.87 . D3@0.87 . G3@0.87 . C3@0.87 . C4@0.87 . G3@0.87 . C4@0.87 . A2@0.87 . A3@0.87 . E3@0.87 . A3@0.87 . F2@0.87 . F3@0.87 . C3@0.87 . F3@0.87 . G2@0.87 . G3@0.87 . D3@0.87 . G3@0.87 . A2@0.87 . A3@0.87 . E3@0.87 . A3@0.87 . F2@0.87 . F3@0.87 . C3@0.87 . F3@0.87 . G2@0.87 . G3@0.87 . D3@0.87 . G3@0.87 . C3@0.87 . C4@0.87 . G3@0.87 . C4@0.87 . A2@0.87 . A3@0.87 . E3@0.87 . A3@0.87 . F2@0.87 . F3@0.87 . C3@0.87 . F3@0.87 . G2@0.87 . G3@0.87 . D3@0.87 . G3@0.87 . C3@0.87 . C4@0.87 . G3@0.87 . C4@0.87 . A2@0.8 . . . . . . . A#2@0.8 . . . . . . . A2@0.8 . . . . . . . E2@0.8 . . . . . . . A2@0.8 . . . . . . . A#2@0.8 . . . . . . . A2@0.8 . . . . . . . E2@0.8 . . . . . . . D3@0.8 . . . . . . . A2@0.8 . . . . . . . A#2@0.8 . . . . . . . E2@0.8 . . . . . . . D3@0.8 . . . . . . . A2@0.8 . . . . . . . A#2@0.8 . . . . . . . E2@0.8 . . . . . . . A2@0.93 . A2@0.93 A3@0.93 . A2@0.93 C3@0.93 . G2@0.93 . G2@0.93 G3@0.93 . G2@0.93 A#2@0.93 . F2@0.93 . F2@0.93 F3@0.93 . F2@0.93 A2@0.93 . E2@0.93 . E2@0.93 E3@0.93 . G#2@0.93 B2@0.93 . A2@0.93 . A2@0.93 A3@0.93 . A2@0.93 C3@0.93 . G2@0.93 . G2@0.93 G3@0.93 . G2@0.93 A#2@0.93 . F2@0.93 . F2@0.93 F3@0.93 . F2@0.93 A2@0.93 . E2@0.93 . E2@0.93 E3@0.93 . G#2@0.93 B2@0.93 . A2@0.93 . A2@0.93 A3@0.93 . A2@0.93 C3@0.93 . G2@0.93 . G2@0.93 G3@0.93 . G2@0.93 A#2@0.93 . F2@0.93 . F2@0.93 F3@0.93 . F2@0.93 A2@0.93 . E2@0.93 E3@0.93 E2@0.93 E3@0.93 G#2@0.93 G#3@0.93 B2@0.93 B3@0.93 A2@0.93 . A2@0.93 A3@0.93 . A2@0.93 C3@0.93 . G2@0.93 . G2@0.93 G3@0.93 . G2@0.93 A#2@0.93 . F2@0.93 . F2@0.93 F3@0.93 . F2@0.93 A2@0.93 . E2@0.93 E3@0.93 E2@0.93 E3@0.93 G#2@0.93 G#3@0.93 B2@0.93 B3@0.93 C3@0.87 . C4@0.87 . C3@0.87 . C4@0.87 . F2@0.87 . F3@0.87 . A#2@0.87 . A#3@0.87 . C3@0.87 . . . . . . . . . . . off . . .",
+            "length": "416",
+            "name": "bass"
+          }
+        },
+        {
+          "id": "voice_bass",
+          "type": "music/fm-voice",
+          "position": {
+            "x": 600,
+            "y": 340
+          },
+          "params": {
+            "preset": "Felucca \u00b7 BASS",
+            "level": 0.85,
+            "pan": 0
+          }
+        },
+        {
+          "id": "pat_hats",
+          "type": "music/pattern",
+          "position": {
+            "x": 300,
+            "y": 490
+          },
+          "params": {
+            "steps": ". . hat@0.6 . . . hat@0.6 hat@0.6 . . hat@0.6 . . . hat@0.6 . . . hat@0.6 . . . hat@0.6 hat@0.6 . . hat@0.6 . . hat@0.6 hat@0.6 hat@0.6 . . hat@0.6 . . . hat@0.6 hat@0.6 . . hat@0.6 . . . hat@0.6 . . . hat@0.6 . . . hat@0.6 hat@0.6 . . hat@0.6 . . hat@0.6 hat@0.6 hat@0.6 . . hat@0.6 . . . hat@0.6 hat@0.6 . . hat@0.6 . . . hat@0.6 . . . hat@0.6 . . . hat@0.6 hat@0.6 . . hat@0.6 . . hat@0.6 hat@0.6 hat@0.6 . . hat@0.6 . . . hat@0.6 hat@0.6 . . hat@0.6 . . . hat@0.6 . . . hat@0.6 . . . hat@0.6 hat@0.6 . . hat@0.6 . . hat@0.6 hat@0.6 hat@0.6 . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . hat@0.33 . hat@0.33 . hat@0.33 . hat@0.33 . hat@0.33 . hat@0.33 . hat@0.33 . hat@0.33 . hat@0.33 . hat@0.33 . hat@0.33 . hat@0.33 . hat@0.33 . hat@0.33 . hat@0.33 . hat@0.33 hat@0.33 hat@0.33 . hat@0.33 . hat@0.33 . hat@0.33 . hat@0.33 . hat@0.33 . hat@0.33 . hat@0.33 . hat@0.33 . hat@0.33 . hat@0.33 . hat@0.33 . hat@0.33 . hat@0.33 . hat@0.33 . hat@0.33 hat@0.33 hat@0.4 hat@0.4 hat@0.4 hat@0.4 hat@0.4 hat@0.4 hat@0.4 hat@0.4 hat@0.4 hat@0.4 hat@0.4 hat@0.4 hat@0.4 hat@0.4 hat@0.4 hat@0.4 hat@0.4 hat@0.4 hat@0.4 hat@0.4 hat@0.4 hat@0.4 hat@0.4 hat@0.4 hat@0.4 hat@0.4 hat@0.4 hat@0.4 hat@0.4 hat@0.4 hat@0.4 hat@0.4 hat@0.4 hat@0.4 hat@0.4 hat@0.4 hat@0.4 hat@0.4 hat@0.4 hat@0.4 hat@0.4 hat@0.4 hat@0.4 hat@0.4 hat@0.4 hat@0.4 hat@0.4 hat@0.4 hat@0.4 hat@0.4 hat@0.4 hat@0.4 hat@0.4 hat@0.4 hat@0.4 hat@0.4 hat@0.4 hat@0.4 hat@0.4 hat@0.4 hat@0.4 hat@0.4 hat@0.4 hat@0.4 hat@0.47 hat@0.47 hat@0.47 hat@0.47 hat@0.47 hat@0.47 hat@0.47 hat@0.47 hat@0.47 hat@0.47 hat@0.47 hat@0.47 hat@0.47 hat@0.47 hat@0.47 hat@0.47!RTG4 hat@0.47 hat@0.47 hat@0.47 hat@0.47 hat@0.47 hat@0.47 hat@0.47 hat@0.47 hat@0.47 hat@0.47 hat@0.47 hat@0.47 hat@0.47 hat@0.47 hat@0.47 hat@0.47 hat@0.47 hat@0.47 hat@0.47 hat@0.47 hat@0.47 hat@0.47 hat@0.47 hat@0.47 hat@0.47 hat@0.47 hat@0.47 hat@0.47 hat@0.47 hat@0.47 hat@0.47 hat@0.47!RTG4 hat@0.47 hat@0.47 hat@0.47 hat@0.47 hat@0.47 hat@0.47 hat@0.47 hat@0.47 hat@0.47 hat@0.47 hat@0.47 hat@0.47 hat@0.47 hat@0.47 hat@0.47 hat@0.47 . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .",
+            "length": "416",
+            "name": "hats"
+          }
+        },
+        {
+          "id": "voice_hats",
+          "type": "music/drum-kit",
+          "position": {
+            "x": 600,
+            "y": 490
+          },
+          "params": {
+            "level": 0.45,
+            "pan": 0.25,
+            "decay": 0.8
+          }
+        },
+        {
+          "id": "pat_kit",
+          "type": "music/pattern",
+          "position": {
+            "x": 300,
+            "y": 640
+          },
+          "params": {
+            "steps": "kick@0.87 . . . snare@0.87 . . kick@0.87 kick@0.87 . kick@0.87 . snare@0.87 . . . kick@0.87 . . . snare@0.87 . . kick@0.87 kick@0.87 . kick@0.87 . snare@0.87 . snare@0.87 snare@0.87 kick@0.87 . . . snare@0.87 . . kick@0.87 kick@0.87 . kick@0.87 . snare@0.87 . . . kick@0.87 . . . snare@0.87 . . kick@0.87 kick@0.87 . kick@0.87 . snare@0.87 . snare@0.87 snare@0.87 kick@0.87 . . . snare@0.87 . . kick@0.87 kick@0.87 . kick@0.87 . snare@0.87 . . . kick@0.87 . . . snare@0.87 . . kick@0.87 kick@0.87 . kick@0.87 . snare@0.87 . snare@0.87 snare@0.87 kick@0.87 . . . snare@0.87 . . kick@0.87 kick@0.87 . kick@0.87 . snare@0.87 . . . kick@0.87 . . . snare@0.87 . . kick@0.87 kick@0.87 . kick@0.87 . snare@0.87 . snare@0.87 snare@0.87 kick@0.67 . . . . . . . . . . . . . . . kick@0.67 . . . . . . . . . . . . . . . kick@0.67 . . . . . . . . . . . . . . . kick@0.67 . . . . . . . . . . . . . . . kick@0.73 . . . . . . . clap@0.73 . kick@0.73 . . . . . kick@0.73 . . . . . . . clap@0.73 . kick@0.73 . . . clap@0.73!RTG4 clap@0.73 kick@0.73 . . . . . . . clap@0.73 . kick@0.73 . . . . . kick@0.73 . . . . . . . clap@0.73 . kick@0.73 . . . clap@0.73!RTG4 clap@0.73 kick@1 . . . kick@1 . . . kick@1 . . . kick@1 . kick@1 . kick@1 . . . kick@1 . . . kick@1 . . . kick@1 . kick@1 kick@1 kick@1 . . . kick@1 . . . kick@1 . . . kick@1 . kick@1 . kick@1 . . . kick@1 . . . kick@1 . . . kick@1 . kick@1 kick@1 kick@1 . . kick@1 kick@1 . . . kick@1 . . kick@1 kick@1 . kick@1 . kick@1 . . kick@1 kick@1 . . . kick@1 . kick@1 . kick@1 kick@1 kick@1!RTG6 kick@1 kick@1 . . kick@1 kick@1 . . . kick@1 . . kick@1 kick@1 . kick@1 . kick@1 . . kick@1 kick@1 . . . kick@1 . kick@1 . kick@1 kick@1 kick@1!RTG6 kick@1 openhat@0.93 . . . snare@0.93 . . . kick@0.93 . . . snare@0.93 . snare@0.93 snare@0.93!RTG6 openhat@0.93 . . . . . . . . . . . . . . .",
+            "length": "416",
+            "name": "kit"
+          }
+        },
+        {
+          "id": "voice_kit",
+          "type": "music/drum-kit",
+          "position": {
+            "x": 600,
+            "y": 640
+          },
+          "params": {
+            "level": 0.85,
+            "pan": 0
+          }
+        },
+        {
+          "id": "pat_break",
+          "type": "music/pattern",
+          "position": {
+            "x": 300,
+            "y": 790
+          },
+          "params": {
+            "steps": ". . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . kick@0.87 hat@0.87 snare@0.87 hat@0.87 kick@0.87 kick@0.87 snare@0.87 hat@0.87 kick@0.87 hat@0.87 snare@0.87 hat@0.87 kick@0.87 hat@0.87 snare@0.87 openhat@0.87 kick@0.87 hat@0.87 kick@0.87 hat@0.87 kick@0.87 kick@0.87 snare@0.87 hat@0.87 snare@0.87 hat@0.87 snare@0.87 hat@0.87 kick@0.87 kick@0.87!RTG3 snare@0.87 openhat@0.87!RTG6 kick@0.87 hat@0.87 snare@0.87 hat@0.87 kick@0.87 kick@0.87 snare@0.87 hat@0.87 kick@0.87 hat@0.87 snare@0.87 hat@0.87 kick@0.87 hat@0.87 snare@0.87 openhat@0.87 kick@0.87 hat@0.87 kick@0.87 hat@0.87 kick@0.87 kick@0.87 snare@0.87 hat@0.87 snare@0.87 hat@0.87 snare@0.87 hat@0.87 kick@0.87 kick@0.87!RTG3 snare@0.87 openhat@0.87!RTG6 kick@0.87 hat@0.87 kick@0.87 kick@0.87 snare@0.87 hat@0.87 snare@0.87 snare@0.87 kick@0.87 hat@0.87 kick@0.87 hat@0.87 snare@0.87 hat@0.87 openhat@0.87!RTG4 openhat@0.87 kick@0.87 . kick@0.87 hat@0.87 kick@0.87 kick@0.87 snare@0.87 hat@0.87 kick@0.87 kick@0.87 snare@0.87 hat@0.87 kick@0.87 hat@0.87 snare@0.87 openhat@0.87!RTG8 kick@0.87 hat@0.87 kick@0.87 kick@0.87 snare@0.87 hat@0.87 snare@0.87 snare@0.87 kick@0.87 hat@0.87 kick@0.87 hat@0.87 snare@0.87 hat@0.87 openhat@0.87!RTG4 openhat@0.87 kick@0.87 . kick@0.87 hat@0.87 kick@0.87 kick@0.87 snare@0.87 hat@0.87 kick@0.87 kick@0.87 snare@0.87 hat@0.87 kick@0.87 hat@0.87 snare@0.87 openhat@0.87!RTG8 . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .",
+            "length": "416",
+            "name": "break"
+          }
+        },
+        {
+          "id": "voice_break",
+          "type": "music/drum-kit",
+          "position": {
+            "x": 600,
+            "y": 790
+          },
+          "params": {
+            "level": 0.7,
+            "pan": -0.1,
+            "tune": 2,
+            "decay": 0.7
+          }
+        },
+        {
+          "id": "out",
+          "type": "music/out",
+          "position": {
+            "x": 900,
+            "y": 360
+          },
+          "params": {
+            "master": 0.8,
+            "startFrame": 0
+          }
+        },
+        {
+          "id": "probe",
+          "type": "music/note-probe",
+          "position": {
+            "x": 900,
+            "y": 40
+          },
+          "params": {
+            "decay": 0.15
+          }
+        },
+        {
+          "id": "pulse",
+          "type": "math/expression",
+          "position": {
+            "x": 1160,
+            "y": 40
+          },
+          "params": {
+            "formula": "0.6 + 0.9 * x"
+          }
+        },
+        {
+          "id": "to_vec",
+          "type": "converter/value-to-vector",
+          "position": {
+            "x": 1400,
+            "y": 40
+          },
+          "params": {}
+        },
+        {
+          "id": "xform",
+          "type": "transform/matrix-transform",
+          "position": {
+            "x": 1620,
+            "y": 40
+          },
+          "params": {}
+        },
+        {
+          "id": "sphere",
+          "type": "object/sphere",
+          "position": {
+            "x": 1860,
+            "y": 40
+          },
+          "params": {
+            "color": 3718648,
+            "emissive": 805486,
+            "emissiveIntensity": 1.0
+          }
+        },
+        {
+          "id": "env",
+          "type": "lighting/environment",
+          "position": {
+            "x": 1860,
+            "y": 320
+          },
+          "params": {
+            "color": 4147542,
+            "intensity": 1,
+            "background": 1,
+            "ambientIntensity": 0.6,
+            "sunIntensity": 1.2
+          }
+        },
+        {
+          "id": "render",
+          "type": "render",
+          "position": {
+            "x": 900,
+            "y": 700
+          },
+          "params": {
+            "frameCount": 1560,
+            "fps": 30,
+            "motionBlur": 0,
+            "resolutionPreset": "16:9 (1920x1080)",
+            "width": 1920,
+            "height": 1080,
+            "holdout": false
+          }
+        }
+      ],
+      "connections": [
+        {
+          "id": "c0",
+          "fromNode": "clock",
+          "fromSocket": "clock",
+          "toNode": "pat_lead",
+          "toSocket": "clock"
+        },
+        {
+          "id": "c1",
+          "fromNode": "pat_lead",
+          "fromSocket": "sequence",
+          "toNode": "voice_lead",
+          "toSocket": "sequence"
+        },
+        {
+          "id": "c2",
+          "fromNode": "voice_lead",
+          "fromSocket": "track",
+          "toNode": "out",
+          "toSocket": "track0"
+        },
+        {
+          "id": "c3",
+          "fromNode": "clock",
+          "fromSocket": "clock",
+          "toNode": "pat_kalimba",
+          "toSocket": "clock"
+        },
+        {
+          "id": "c4",
+          "fromNode": "pat_kalimba",
+          "fromSocket": "sequence",
+          "toNode": "voice_kalimba",
+          "toSocket": "sequence"
+        },
+        {
+          "id": "c5",
+          "fromNode": "voice_kalimba",
+          "fromSocket": "track",
+          "toNode": "out",
+          "toSocket": "track1"
+        },
+        {
+          "id": "c6",
+          "fromNode": "clock",
+          "fromSocket": "clock",
+          "toNode": "pat_bass",
+          "toSocket": "clock"
+        },
+        {
+          "id": "c7",
+          "fromNode": "pat_bass",
+          "fromSocket": "sequence",
+          "toNode": "voice_bass",
+          "toSocket": "sequence"
+        },
+        {
+          "id": "c8",
+          "fromNode": "voice_bass",
+          "fromSocket": "track",
+          "toNode": "out",
+          "toSocket": "track2"
+        },
+        {
+          "id": "c9",
+          "fromNode": "clock",
+          "fromSocket": "clock",
+          "toNode": "pat_hats",
+          "toSocket": "clock"
+        },
+        {
+          "id": "c10",
+          "fromNode": "pat_hats",
+          "fromSocket": "sequence",
+          "toNode": "voice_hats",
+          "toSocket": "sequence"
+        },
+        {
+          "id": "c11",
+          "fromNode": "voice_hats",
+          "fromSocket": "track",
+          "toNode": "out",
+          "toSocket": "track3"
+        },
+        {
+          "id": "c12",
+          "fromNode": "clock",
+          "fromSocket": "clock",
+          "toNode": "pat_kit",
+          "toSocket": "clock"
+        },
+        {
+          "id": "c13",
+          "fromNode": "pat_kit",
+          "fromSocket": "sequence",
+          "toNode": "voice_kit",
+          "toSocket": "sequence"
+        },
+        {
+          "id": "c14",
+          "fromNode": "voice_kit",
+          "fromSocket": "track",
+          "toNode": "out",
+          "toSocket": "track4"
+        },
+        {
+          "id": "c15",
+          "fromNode": "clock",
+          "fromSocket": "clock",
+          "toNode": "pat_break",
+          "toSocket": "clock"
+        },
+        {
+          "id": "c16",
+          "fromNode": "pat_break",
+          "fromSocket": "sequence",
+          "toNode": "voice_break",
+          "toSocket": "sequence"
+        },
+        {
+          "id": "c17",
+          "fromNode": "voice_break",
+          "fromSocket": "track",
+          "toNode": "out",
+          "toSocket": "track5"
+        },
+        {
+          "id": "c18",
+          "fromNode": "pat_lead",
+          "fromSocket": "sequence",
+          "toNode": "probe",
+          "toSocket": "music"
+        },
+        {
+          "id": "c19",
+          "fromNode": "probe",
+          "fromSocket": "envelope",
+          "toNode": "pulse",
+          "toSocket": "x"
+        },
+        {
+          "id": "c20",
+          "fromNode": "pulse",
+          "fromSocket": "value",
+          "toNode": "to_vec",
+          "toSocket": "value"
+        },
+        {
+          "id": "c21",
+          "fromNode": "to_vec",
+          "fromSocket": "vector",
+          "toNode": "xform",
+          "toSocket": "scale"
+        },
+        {
+          "id": "c22",
+          "fromNode": "xform",
+          "fromSocket": "matrix",
+          "toNode": "sphere",
+          "toSocket": "matrix"
+        }
+      ],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    }
+  ],
+  "activeCanvas": 0
+}

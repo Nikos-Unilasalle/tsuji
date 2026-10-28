@@ -703,6 +703,11 @@ export const DEMO_CATALOG: DemoCategory[] = [
         label: "Band",
         description: "Clock, three patterns, an arpeggio, two FM voices and a drum kit into Music Out — press Play.",
       },
+      {
+        file: "demo_music_kawa_quest.tsuji",
+        label: "KAWA QUEST",
+        description: "The demo song of the KAWA tracker for the FM-1, by Omnipotard (GPL-3.0): overworld, dungeon, boss, victory — 52 s on six tracks.",
+      },
     ],
   },
   {

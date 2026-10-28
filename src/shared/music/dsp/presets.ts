@@ -3,6 +3,7 @@
  * routes where.
  */
 import { EPIANO_PATCH, FmOperatorPatch, FmPatch } from "./fm";
+import { FM4_RAW_PRESETS, fm4PresetName, fromFm4 } from "./fm4Import";
 
 const op = (
   ratio: number,
@@ -62,10 +63,30 @@ export const FM_PRESETS = {
 } as const satisfies Record<string, FmPatch>;
 
 export type FmPresetName = keyof typeof FM_PRESETS;
-export const FM_PRESET_NAMES = Object.keys(FM_PRESETS) as FmPresetName[];
+
+/** A preset as the FM Voice loads it: the patch, and how the voice plays it. */
+export interface FmVoicePreset {
+  patch: FmPatch;
+  /** 1 for a mono sound. */
+  voices: number;
+  /** Semitones the voice moves its notes by. */
+  transpose: number;
+}
+
+/** Ours first, then the FM-1 firmwares' (fm4Import.ts), listed as "Felucca · E.PIANO", "SLOOP · RHODES"… */
+export const FM_VOICE_PRESETS: Record<string, FmVoicePreset> = {
+  ...Object.fromEntries(Object.entries(FM_PRESETS).map(([name, patch]) => [name, { patch: patch as FmPatch, voices: 8, transpose: 0 }])),
+  ...Object.fromEntries(FM4_RAW_PRESETS.map((raw) => [fm4PresetName(raw), fromFm4(raw)])),
+};
+
+export const FM_PRESET_NAMES = Object.keys(FM_VOICE_PRESETS);
+
+export function fmVoicePreset(name: unknown): FmVoicePreset {
+  return typeof name === "string" && Object.prototype.hasOwnProperty.call(FM_VOICE_PRESETS, name)
+    ? FM_VOICE_PRESETS[name]
+    : FM_VOICE_PRESETS["E. Piano"];
+}
 
 export function fmPreset(name: unknown): FmPatch {
-  return typeof name === "string" && Object.prototype.hasOwnProperty.call(FM_PRESETS, name)
-    ? (FM_PRESETS[name as FmPresetName] as FmPatch)
-    : EPIANO_PATCH;
+  return typeof name === "string" && Object.prototype.hasOwnProperty.call(FM_VOICE_PRESETS, name) ? FM_VOICE_PRESETS[name].patch : EPIANO_PATCH;
 }

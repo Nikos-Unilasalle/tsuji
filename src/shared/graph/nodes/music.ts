@@ -12,12 +12,13 @@ import {
   sequenceOf,
 } from "../../music/engine/description";
 import { FmOperatorPatch, FmPatch } from "../../music/dsp/fm";
-import { FM_PRESETS, FM_PRESET_NAMES, fmPreset } from "../../music/dsp/presets";
+import { FM_PRESETS, FM_PRESET_NAMES, fmPreset, fmVoicePreset } from "../../music/dsp/presets";
 import { fmAlgorithm } from "../../music/dsp/algorithms";
 import { ARP_MODES, ARP_RATES, ArpMode, ArpRate, ArpSettings, DEFAULT_ARP } from "../../music/seq/arp";
 import { CHORD_NAMES, ChordName } from "../../music/seq/chords";
 import { parsePattern } from "../../music/seq/notation";
-import { Cell, Clock, Sequence, notesSoundingAt, notesStartingIn, stepAt } from "../../music/seq/sequencer";
+import { FELUCCA_PHRASES, phraseSteps } from "../../music/seq/phrases";
+import { Cell, Clock, Sequence, notesSoundingAt, notesStartingIn, stepAt, transposeSequence } from "../../music/seq/sequencer";
 
 /**
  * The music nodes (see docs/music-nodes-mvp.md). Every one of them describes; only Music Out plays.
@@ -105,13 +106,22 @@ export const MUSIC_PATTERN_NODE: NodeDefinition = {
       kind: "text",
     },
     { id: "length", label: "Length", kind: "select", options: ["16", "32", "64"] },
+    {
+      id: "phrase",
+      label: "Load Phrase (Felucca's factory phrases, by Leo Kuroshita / Hügelton — replaces the steps)",
+      kind: "select",
+      options: ["—", ...FELUCCA_PHRASES.map((p) => p.name)],
+      optionLabels: ["—", ...FELUCCA_PHRASES.map((p) => `${p.name} · ${p.hint}`)],
+      presets: Object.fromEntries(FELUCCA_PHRASES.map((p) => [p.name, { steps: phraseSteps(p), length: "16" }])),
+    },
     { id: "transpose", label: "Transpose (semitones)", kind: "number", step: 1 },
     { id: "chord", label: "Force Chord", kind: "select", options: CHORD_OVERRIDES },
     { id: "velocity", label: "Velocity ×", kind: "number", step: 0.05 },
     { id: "seed", label: "Seed (chance, random arp)", kind: "number", step: 1 },
   ],
   evaluate: (inputs, params) => {
-    const length = clamp(Math.round(Number(params.length) || 16), 1, 256);
+    // Up to 1024: a whole song can be one long pattern (the KAWA QUEST demo is 416 steps).
+    const length = clamp(Math.round(Number(params.length) || 16), 1, 1024);
     const transpose = Math.round(numberInput(inputs.transpose, params.transpose, 0));
     const velScale = clamp(numberInput(inputs.velocity, params.velocity, 1), 0, 2);
     // A wired chord number picks from the list; unwired, the param's choice.
@@ -190,6 +200,12 @@ const OP_FIELDS: { key: keyof FmOperatorPatch; label: string; step: number }[] =
   { key: "release", label: "Release (s)", step: 0.05 },
 ];
 
+/** Everything a preset sets on the voice: its patch's flat params, and its voice count and transposition. */
+function presetParams(name: string): Record<string, unknown> {
+  const p = fmVoicePreset(name);
+  return { ...patchParams(p.patch), voices: p.voices, transpose: p.transpose };
+}
+
 /** The flat params a patch is edited as: algorithm, feedback, op1_ratio … op4_release. */
 function patchParams(p: FmPatch): Record<string, unknown> {
   const out: Record<string, unknown> = { algorithm: String(p.algorithm), feedback: p.feedback };
@@ -227,22 +243,23 @@ export const MUSIC_FM_VOICE_NODE: NodeDefinition = {
     { id: "mute", label: "Mute", type: "value" },
   ],
   outputs: [{ id: "track", label: "Track", type: "music" }],
-  defaultParams: { preset: "E. Piano", voices: 8, level: 0.8, pan: 0, brightness: 1, mute: false, ...patchParams(FM_PRESETS["E. Piano"]) },
+  defaultParams: { preset: "E. Piano", voices: 8, transpose: 0, level: 0.8, pan: 0, brightness: 1, mute: false, ...patchParams(FM_PRESETS["E. Piano"]) },
   // A voice saved with a preset name but no operator settings (a hand-written or generated file) gets that preset's
   // settings, not the E. Piano defaults the missing keys would otherwise be filled with.
-  upgradeParams: (params) => (params.preset !== undefined && params.op1_ratio === undefined ? { ...patchParams(fmPreset(params.preset)), ...params } : params),
+  upgradeParams: (params) => (params.preset !== undefined && params.op1_ratio === undefined ? { ...presetParams(String(params.preset)), ...params } : params),
   paramFields: [
     {
       id: "preset",
-      label: "Preset (loads every setting below)",
+      label: "Preset (loads every setting below) — Felucca and SLOOP sounds after ours",
       kind: "select",
       options: FM_PRESET_NAMES,
-      presets: Object.fromEntries(FM_PRESET_NAMES.map((n) => [n, patchParams(FM_PRESETS[n])])),
+      presets: Object.fromEntries(FM_PRESET_NAMES.map((n) => [n, presetParams(n)])),
     },
     { id: "level", label: "Level", kind: "number", step: 0.05 },
     { id: "pan", label: "Pan (−1 left, 1 right)", kind: "number", step: 0.1 },
     { id: "brightness", label: "Brightness × (scales the modulators)", kind: "number", step: 0.1 },
-    { id: "voices", label: "Voices (1–16)", kind: "number", step: 1 },
+    { id: "voices", label: "Voices (1–16, 1 = mono)", kind: "number", step: 1 },
+    { id: "transpose", label: "Transpose (semitones)", kind: "number", step: 1 },
     { id: "mute", label: "Mute", kind: "boolean" },
     {
       id: "algorithm",
@@ -256,8 +273,9 @@ export const MUSIC_FM_VOICE_NODE: NodeDefinition = {
     ...OP_PARAM_FIELDS,
   ],
   evaluate: (inputs, params, ctx) => {
-    const seq = sequenceOf(inputs.sequence);
-    if (!seq) return { track: null };
+    const wired = sequenceOf(inputs.sequence);
+    if (!wired) return { track: null };
+    const seq = transposeSequence(wired, Math.round(Number(params.transpose) || 0));
     const patch = patchFromParams(params, fmPreset(params.preset));
     // Brightness scales what the modulators do (the timbre), leaving the carriers' loudness alone.
     const brightness = clamp(numberInput(inputs.brightness, params.brightness, 1), 0, 4);

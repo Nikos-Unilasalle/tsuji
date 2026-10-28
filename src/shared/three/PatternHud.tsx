@@ -249,9 +249,9 @@ export function PatternHud({
             title="Steps in the pattern before it comes round again"
             style={selectStyle}
           >
-            {[16, 32, 64].map((n) => (
+            {[...new Set([16, 32, 64, length])].sort((a, b) => a - b).map((n) => (
               <option key={n} value={n}>
-                {n} steps · {n / 16} {n === 16 ? "bar" : "bars"}
+                {n} steps · {Number((n / 16).toFixed(2))} {n === 16 ? "bar" : "bars"}
               </option>
             ))}
           </select>
@@ -296,7 +296,7 @@ export function PatternHud({
           style={{ position: "absolute", opacity: 0, width: 1, height: 1, pointerEvents: "none" }}
         />
 
-        <div style={{ overflowX: "auto", maxWidth: "100%" }}>
+        <div style={{ overflowX: "auto", overflowY: "auto", maxWidth: "100%", maxHeight: "min(44vh, 340px)" }}>
           {drums ? (
             <div style={{ display: "grid", gridTemplateColumns: `78px repeat(${length}, ${DRUM_CELL}px)`, rowGap: 3, userSelect: "none" }}>
               {DRUM_LANES.map((d, li) => [
