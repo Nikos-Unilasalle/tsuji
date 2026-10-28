@@ -128,6 +128,25 @@ Le séquenceur pur fait l'expansion dans cet ordre : **note + accord → renvers
 | 6 | Intégration export | Vidéo exportée : kick et flash visuel sur la même frame, vérifié à l'échantillon |
 | 7 | Démo dans le menu Démos : un pattern FM qui pilote une scène | — |
 
+### Résultats du spike (étape 0, 2026-10-28, Apple M1)
+
+Code : `src/shared/music/dsp/fm.ts` (cœur FM pur, testé) et `src/shared/music/spike/` (worklet + panneau de test, dev seulement).
+
+| | Node (vitest) | Chrome (aperçu Vite) | Tauri (WKWebView) |
+|---|---|---|---|
+| Pire cas, 96 opérateurs | 125 µs / bloc, 4,7 % d'un cœur | 125 µs / bloc, 4,7 % | **111 µs / bloc, 4,2 %** |
+| Blocs par seconde | — | 375 (= 48 000 / 128) | 375, stable pendant 30 s sous charge |
+| Latence (base / sortie) | — | 5,3 ms / 16,0 ms | **2,7 ms / 2,5 ms** |
+| `performance.now()` dans le worklet | — | non | non |
+
+Ce qu'on en retient :
+- **Le budget de 4 pistes × 8 voix passe largement**, avec environ 20 fois de marge. On peut garder le DSP en TypeScript. Rust/WASM n'est nécessaire que pour msfa (FM 6 opérateurs).
+- **Charger le worklet avec `?worker&url`** : Vite compile le TypeScript et ses imports en un seul script autonome (4,4 Ko), en dev comme au build. Avec un simple `new URL()`, le `.ts` serait copié tel quel, sans être compilé.
+- **Il n'y a pas d'horloge fine dans le worklet**, ni dans Chrome ni dans WebKit. Le coût se mesure donc par calibration au démarrage (des milliers de blocs chronométrés avec `Date.now()`), pas à chaque bloc.
+- **Les notes démarrent à l'échantillon près** : le bloc est découpé au moment exact de chaque note-on (`currentFrame`). C'est le modèle du futur séquenceur.
+- **Dans Tauri**, ⌘⌥⇧M n'atteint pas la page (WKWebView le garde), et l'AudioContext a besoin d'un vrai clic. Il faudra en tenir compte pour les raccourcis du futur éditeur de pattern.
+- Pas encore vérifié : l'écoute (craquements éventuels), la fenêtre en arrière-plan, et le build Tauri de release.
+
 ## 6. Après le MVP (côté SLOOP / KAWA)
 
 - **Live / looper (SLOOP)** : jeu au clavier de l'ordi et en Web MIDI, enregistrement en boucle quantifié dans un pattern, overdub.
@@ -157,4 +176,4 @@ Le séquenceur pur fait l'expansion dans cet ordre : **note + accord → renvers
 - Pourquoi 8 voix et pas 6 : un accord de 9e prend 5 voix, et la release de l'accord précédent continue à sonner pendant le suivant. Avec 6 voix, on couperait des queues de release.
 - Au-delà de 8 voix : on vole la voix la plus ancienne déjà relâchée, avec un fondu de 2 ms pour éviter le clic.
 - Les voix inactives (enveloppe sous −90 dB) sont ignorées, donc le coût réel suit ce qui sonne vraiment.
-- Le spike (étape 0) mesure le vrai coût dans le WKWebView de Tauri. Il vérifie aussi que l'arrière-plan (fenêtre masquée) ne fait pas décrocher le worklet.
+- Mesuré par le spike (étape 0, voir §5) : 4,2 % d'un cœur dans le WKWebView de Tauri.

@@ -24,6 +24,9 @@ installProfilerOverlay();
 // Rust/WASM inside it — see docs/offthread-geometry.md.
 installGeometryWorker();
 
+// Ctrl/Cmd+Alt+Shift+M: the music engine spike, dev builds only (see src/shared/music/spike).
+if (import.meta.env.DEV) void import("./shared/music/spike/spikePanel").then((m) => m.installMusicSpike());
+
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
     <App />

@@ -6,9 +6,28 @@ import react from "@vitejs/plugin-react";
 const host = process.env.TAURI_DEV_HOST;
 
 // https://vite.dev/config/
+/**
+ * Dev server only: the music engine spike (src/shared/music/spike) posts its log lines here, so what it measures inside
+ * Tauri's WKWebView, which has no console on stdout, lands in the dev server's output.
+ */
+const musicSpikeLog = {
+  name: "tsuji-music-spike-log",
+  apply: "serve" as const,
+  configureServer(server: { middlewares: { use: (path: string, fn: (req: any, res: any) => void) => void } }) {
+    server.middlewares.use("/__music-spike-log", (req, res) => {
+      let body = "";
+      req.on("data", (c: { toString(): string }) => (body += c.toString()));
+      req.on("end", () => {
+        console.log(`[music-spike] ${req.headers["user-agent"]?.includes("Chrome") ? "chrome" : "webkit"} · ${body}`);
+        res.end();
+      });
+    });
+  },
+};
+
 export default defineConfig(async () => ({
   base: "./",
-  plugins: [react()],
+  plugins: [react(), musicSpikeLog],
 
   // @xyflow/react pulls its own nested copy of react/react-dom as a
   // dependency (visible in `npm ls` even though npm dedupes it on disk) —
