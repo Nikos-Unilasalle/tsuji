@@ -147,6 +147,21 @@ Ce qu'on en retient :
 - **Dans Tauri**, ⌘⌥⇧M n'atteint pas la page (WKWebView le garde), et l'AudioContext a besoin d'un vrai clic. Il faudra en tenir compte pour les raccourcis du futur éditeur de pattern.
 - Pas encore vérifié : l'écoute (craquements éventuels), la fenêtre en arrière-plan, et le build Tauri de release.
 
+### Étape 1 — cœur DSP (2026-10-28)
+
+Fichiers dans `src/shared/music/dsp/` :
+- `algorithms.ts` : les 8 algorithmes 4 opérateurs de la famille Yamaha (DX100 / TX81Z), feedback sur l'opérateur 4, sous forme de matrice de routage.
+- `fm.ts` : `FmSynth`. Par opérateur : ratio, detune (cents), niveau, sensibilité à la vélocité, ADSR. Par patch : algorithme et feedback (moyenné sur deux échantillons, comme sur le DX, pour rester stable). Phases remises à 0 à chaque note (« key sync »).
+- `mix.ts` : `Mixer` stéréo (niveau, pan à puissance constante, mute, master), soft clip au-dessus de 0,8.
+- `worstCase.ts` : le patch et les synthés du pire cas, partagés par le benchmark et le worklet.
+
+Choix faits :
+- **Voix :** une note déjà jouée reprend sa voix (pas de clic, pas de doublon). Sinon on prend une voix libre. Sinon on vole la plus ancienne voix relâchée, puis la plus ancienne tenue, avec un fondu de 2 ms avant la nouvelle note.
+- **Lissage :** les niveaux d'opérateur, le feedback, les niveaux et pans du mixeur glissent en 5 ms. Le lissage est calculé à chaque échantillon et jamais par bloc : la sortie est identique bit à bit quel que soit le découpage (testé avec des blocs de 37, 128 et 1000 échantillons).
+- **Pas de dénormaux :** une enveloppe sous −120 dB passe exactement à 0, et une voix se libère quand tous ses porteurs sont silencieux.
+
+Mesures : 28 tests ; pire cas **208 µs par bloc, 7,8 % d'un cœur M1** (Node), 205 µs / 7,7 % dans le worklet Chrome. C'est plus que les 4,7 % du spike, qui n'avait que 2 opérateurs sans routage ni lissage. Il reste 13 fois de marge. Si un jour il en faut plus, la première piste est de dérouler la boucle de modulation pour 4 opérateurs fixes.
+
 ## 6. Après le MVP (côté SLOOP / KAWA)
 
 - **Live / looper (SLOOP)** : jeu au clavier de l'ordi et en Web MIDI, enregistrement en boucle quantifié dans un pattern, overdub.

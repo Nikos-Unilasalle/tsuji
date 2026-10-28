@@ -42,7 +42,7 @@ async function start(): Promise<void> {
       print(`worklet ready · performance.now ${d.hasPerformance ? "yes" : "no"} · worst case ${d.calibration.usPerBlock.toFixed(0)} µs/block = ${d.calibration.loadPercent.toFixed(1)} % of a core`);
     } else if (d.type === "stats") {
       const cost = d.avgUs === null ? "" : ` · avg ${d.avgUs.toFixed(0)} µs, max ${d.maxUs.toFixed(0)} µs of ${d.budgetUs.toFixed(0)}`;
-      print(`${d.stress ? "STRESS " : ""}${d.blocks} blocks · peak ${d.peak.toFixed(2)}${cost}`);
+      print(`${d.stress ? "STRESS " : ""}${d.blocks} blocks · ${d.voices} voices · peak ${d.peak.toFixed(2)}${cost}`);
     }
   };
   node.connect(getAudioOutput() ?? ctx.destination);
