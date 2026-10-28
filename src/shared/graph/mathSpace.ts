@@ -48,8 +48,9 @@ export function ticks(min: number, max: number, step: number): number[] {
   const first = Math.ceil(min / step - 1e-9);
   const last = Math.floor(max / step + 1e-9);
   if (last - first > 1000) return out;
-  const decimals = Math.max(0, -Math.floor(Math.log10(step)) + 1);
-  for (let k = first; k <= last; k++) out.push(Number((k * step).toFixed(decimals)));
+  // Twelve significant digits drop the crumbs but keep a π/2 step's 1.5707963…
+  // whole: rounding to the step's decimals made it 1.6, no longer a multiple of π.
+  for (let k = first; k <= last; k++) out.push(Number((k * step).toPrecision(12)));
   return out;
 }
 

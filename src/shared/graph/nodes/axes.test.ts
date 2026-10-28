@@ -22,6 +22,10 @@ describe("math space", () => {
     expect(ticks(0.5, 3.2, 1)).toEqual([1, 2, 3]);
   });
 
+  test("π ticks stay multiples of π, so they print as π", () => {
+    expect(ticks(0, 6.6, Math.PI / 2).map((v) => formatTick(v, true))).toEqual(["0", "π/2", "π", "3π/2", "2π"]);
+  });
+
   test("tick labels as in a textbook", () => {
     expect(formatTick(-2)).toBe("−2");
     expect(formatTick(0.5)).toBe("0.5");
