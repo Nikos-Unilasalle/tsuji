@@ -54,6 +54,15 @@ export const FM_PRESETS = {
     feedback: 0.2,
     ops: [op(1, 0.6, 0.001, 0.6, 0, 0.3, 0.8), op(1, 0.4, 0.001, 0.2, 0, 0.2, 0.8), op(3, 0.15, 0.001, 0.1, 0, 0.1), op(0.5, 0.1, 0.001, 0.3, 0, 0.2)],
   },
+  /**
+   * A melodica, the dub lead: a reedy stack (an octave-up modulator for the buzz, a little feedback for the breath)
+   * that swells in and holds, with a touch of detune between the two lower operators.
+   */
+  Melodica: {
+    algorithm: 1,
+    feedback: 0.25,
+    ops: [op(1, 0.5, 0.045, 1.2, 0.85, 0.18, 0.5), op(1, 0.32, 0.06, 1.5, 0.7, 0.2, 0.4, 7), op(2, 0.16, 0.05, 0.8, 0.5, 0.2, 0.3), op(1, 0.12, 0.08, 1, 0.6, 0.2)],
+  },
   /** Chip-like square-ish tone: a carrier modulated at its own pitch, hard. */
   Chip: {
     algorithm: 1,

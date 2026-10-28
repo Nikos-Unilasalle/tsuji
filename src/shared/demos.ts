@@ -708,6 +708,11 @@ export const DEMO_CATALOG: DemoCategory[] = [
         label: "KAWA QUEST",
         description: "The demo song of the KAWA tracker for the FM-1, by Omnipotard (GPL-3.0): overworld, dungeon, boss, victory — 52 s on six tracks.",
       },
+      {
+        file: "demo_music_reggae.tsuji",
+        label: "Tsuji Dub",
+        description: "A one-drop riddim in A minor at 75 BPM: skank, organ bubble, melodica, dub siren, written echoes and a drop — three rasta spheres keep time.",
+      },
     ],
   },
   {

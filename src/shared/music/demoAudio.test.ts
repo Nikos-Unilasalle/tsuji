@@ -9,7 +9,7 @@ import { EngineCore } from "./engine/core";
 
 /**
  * Every music demo, heard: its graph evaluated as the app does, the tracks Music Out gathers handed to the real
- * engine, and a stretch of the song rendered offline — it must sound, stay finite and not clip. demos.test.ts only
+ * engine, and the song rendered offline from start to end — it must sound, stay finite and not clip. demos.test.ts only
  * proves a demo evaluates; this proves its song plays.
  */
 const DEMO_DIR = join(process.cwd(), "public/demos");
@@ -37,7 +37,9 @@ describe("music demos", () => {
       const engine = new EngineCore(SR);
       engine.describe({ tracks, master: Number(out.params.master ?? 0.8) });
       engine.play(0);
-      const seconds = 12;
+      // The whole song, as long as the timeline (capped at a minute): every part has to come in and be heard.
+      const render = graph.nodes.find((n) => n.type === "render");
+      const seconds = Math.min(60, Number(render?.params.frameCount ?? 360) / Number(render?.params.fps ?? 30));
       const l = new Float32Array(SR * seconds);
       const r = new Float32Array(SR * seconds);
       for (let s = 0; s < l.length; s += 128) engine.render(l, r, s, Math.min(128, l.length - s));
