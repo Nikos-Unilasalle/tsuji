@@ -696,6 +696,16 @@ export const DEMO_CATALOG: DemoCategory[] = [
     ],
   },
   {
+    title: "Music",
+    demos: [
+      {
+        file: "demo_music_band.tsuji",
+        label: "Band",
+        description: "Clock, three patterns, an arpeggio, two FM voices and a drum kit into Music Out — press Play.",
+      },
+    ],
+  },
+  {
     title: "Showcases",
     demos: [
       {

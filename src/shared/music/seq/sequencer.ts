@@ -37,6 +37,8 @@ export interface Cell {
   /** A MIDI note (the chord's root), or "off" to end the note sounding. */
   note: number | "off";
   chord?: ChordName | null;
+  /** More notes struck with it (kick+hat on a drum track, a voicing of your own on a synth). */
+  add?: number[];
   inversion?: number;
   spread?: boolean;
   /** 0–1, 0.8 when left out. */
@@ -155,6 +157,7 @@ export function expandStep(seq: Sequence, sampleRate: number, g0: number, from =
   const root = cell.note as number;
   const { clock } = seq;
   const notes = chordNotes(root, cell.chord, cell.inversion ?? 0, cell.spread ?? false);
+  for (const n of cell.add ?? []) if (!notes.includes(n)) notes.push(n);
   const velocity = Math.min(1, Math.max(0, cell.velocity ?? DEFAULT_VELOCITY));
   const onT = stepTime(clock, sampleRate, g0);
   const offT = endTime(seq, sampleRate, g0);

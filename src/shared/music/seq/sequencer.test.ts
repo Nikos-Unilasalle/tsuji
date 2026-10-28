@@ -90,6 +90,11 @@ describe("chords", () => {
     ]);
   });
 
+  it("strikes added notes with the cell, without doubling a chord note", () => {
+    const seq = seqOf({ 0: { note: 60, chord: "maj", add: [67, 71] } });
+    expect(collect(seq, STEP).map((e) => e.note)).toEqual([60, 64, 67, 71]);
+  });
+
   it("applies the inversion and the spread", () => {
     const seq = seqOf({ 0: { note: 60, chord: "maj7", inversion: 1, spread: true } });
     expect(collect(seq, STEP).map((e) => e.note)).toEqual([64, 71, 79, 84]);

@@ -1,0 +1,318 @@
+{
+  "canvases": [
+    {
+      "nodes": [
+        {
+          "id": "clock",
+          "type": "music/clock",
+          "position": {
+            "x": 40,
+            "y": 220
+          },
+          "params": {
+            "bpm": 120,
+            "swing": 0.15,
+            "stepsPerBeat": "4"
+          }
+        },
+        {
+          "id": "pat_chords",
+          "type": "music/pattern",
+          "position": {
+            "x": 300,
+            "y": 40
+          },
+          "params": {
+            "steps": "C4:maj7 . . . . . . . . . . . . . . . A3:min7/1 . . . . . . . . . . . . . . . F3:maj7/1 . . . . . . . . . . . . . . . G3:7 . . . . . . . . . . . . . . .",
+            "length": "64"
+          }
+        },
+        {
+          "id": "arp",
+          "type": "music/arp",
+          "position": {
+            "x": 560,
+            "y": 40
+          },
+          "params": {
+            "on": true,
+            "mode": "updown",
+            "rate": "1/16",
+            "octaves": 2,
+            "gate": 0.6,
+            "sync": "grid"
+          }
+        },
+        {
+          "id": "voice_keys",
+          "type": "music/fm-voice",
+          "position": {
+            "x": 820,
+            "y": 40
+          },
+          "params": {
+            "preset": "E. Piano",
+            "level": 0.7,
+            "pan": -0.3
+          }
+        },
+        {
+          "id": "pat_bass",
+          "type": "music/pattern",
+          "position": {
+            "x": 300,
+            "y": 260
+          },
+          "params": {
+            "steps": "C2@1 . . . . . . . . . G2@0.6 . . . . . A1!GLD12 . . . . . . . . . E2@0.6 . . . . . F1!GLD12 . . . . . . . . . C2@0.6 . . . . . G1!GLD12 . . . . . . . . . . . G1!RTG3 . . off",
+            "length": "64"
+          }
+        },
+        {
+          "id": "voice_bass",
+          "type": "music/fm-voice",
+          "position": {
+            "x": 820,
+            "y": 260
+          },
+          "params": {
+            "preset": "Bass",
+            "level": 0.9,
+            "pan": 0.1
+          }
+        },
+        {
+          "id": "pat_drums",
+          "type": "music/pattern",
+          "position": {
+            "x": 300,
+            "y": 480
+          },
+          "params": {
+            "steps": "kick+hat@0.9 . hat@0.5 . snare+hat . hat@0.5 . kick+hat@0.9 . hat@0.5 . snare+hat . hat@0.5 . kick+hat@0.9 . hat@0.5 . snare+hat . hat@0.5 . kick+hat@0.9 . hat@0.5 . snare+hat . hat@0.5 . kick+hat@0.9 . hat@0.5 . snare+hat . hat@0.5 . kick+hat@0.9 . hat@0.5 . snare+hat . hat@0.5 . kick+hat@0.9 . hat@0.5 . snare+hat . hat@0.5 . kick+hat@0.9 . hat@0.5 . snare+hat . clap clap@0.7",
+            "length": "64"
+          }
+        },
+        {
+          "id": "drums",
+          "type": "music/drum-kit",
+          "position": {
+            "x": 820,
+            "y": 480
+          },
+          "params": {
+            "level": 0.8
+          }
+        },
+        {
+          "id": "out",
+          "type": "music/out",
+          "position": {
+            "x": 1100,
+            "y": 240
+          },
+          "params": {
+            "master": 0.8,
+            "startFrame": 0
+          }
+        },
+        {
+          "id": "probe",
+          "type": "music/note-probe",
+          "position": {
+            "x": 1100,
+            "y": 20
+          },
+          "params": {
+            "decay": 0.2
+          }
+        },
+        {
+          "id": "pulse",
+          "type": "math/expression",
+          "position": {
+            "x": 1360,
+            "y": 20
+          },
+          "params": {
+            "formula": "0.6 + 0.9 * x"
+          }
+        },
+        {
+          "id": "to_vec",
+          "type": "converter/value-to-vector",
+          "position": {
+            "x": 1600,
+            "y": 20
+          },
+          "params": {}
+        },
+        {
+          "id": "xform",
+          "type": "transform/matrix-transform",
+          "position": {
+            "x": 1820,
+            "y": 20
+          },
+          "params": {}
+        },
+        {
+          "id": "sphere",
+          "type": "object/sphere",
+          "position": {
+            "x": 2060,
+            "y": 20
+          },
+          "params": {
+            "color": 14239471,
+            "emissive": 3868516,
+            "emissiveIntensity": 1.0
+          }
+        },
+        {
+          "id": "env",
+          "type": "lighting/environment",
+          "position": {
+            "x": 2060,
+            "y": 300
+          },
+          "params": {
+            "color": 4147542,
+            "intensity": 1,
+            "background": 1,
+            "ambientIntensity": 0.6,
+            "sunIntensity": 1.2
+          }
+        },
+        {
+          "id": "render",
+          "type": "render",
+          "position": {
+            "x": 1100,
+            "y": 520
+          },
+          "params": {
+            "frameCount": 240,
+            "fps": 30,
+            "motionBlur": 0,
+            "resolutionPreset": "16:9 (1920x1080)",
+            "width": 1920,
+            "height": 1080,
+            "holdout": false
+          }
+        }
+      ],
+      "connections": [
+        {
+          "id": "c0",
+          "fromNode": "clock",
+          "fromSocket": "clock",
+          "toNode": "pat_chords",
+          "toSocket": "clock"
+        },
+        {
+          "id": "c1",
+          "fromNode": "clock",
+          "fromSocket": "clock",
+          "toNode": "pat_bass",
+          "toSocket": "clock"
+        },
+        {
+          "id": "c2",
+          "fromNode": "clock",
+          "fromSocket": "clock",
+          "toNode": "pat_drums",
+          "toSocket": "clock"
+        },
+        {
+          "id": "c3",
+          "fromNode": "pat_chords",
+          "fromSocket": "sequence",
+          "toNode": "arp",
+          "toSocket": "sequence"
+        },
+        {
+          "id": "c4",
+          "fromNode": "arp",
+          "fromSocket": "sequence",
+          "toNode": "voice_keys",
+          "toSocket": "sequence"
+        },
+        {
+          "id": "c5",
+          "fromNode": "pat_bass",
+          "fromSocket": "sequence",
+          "toNode": "voice_bass",
+          "toSocket": "sequence"
+        },
+        {
+          "id": "c6",
+          "fromNode": "pat_drums",
+          "fromSocket": "sequence",
+          "toNode": "drums",
+          "toSocket": "sequence"
+        },
+        {
+          "id": "c7",
+          "fromNode": "voice_keys",
+          "fromSocket": "track",
+          "toNode": "out",
+          "toSocket": "track0"
+        },
+        {
+          "id": "c8",
+          "fromNode": "voice_bass",
+          "fromSocket": "track",
+          "toNode": "out",
+          "toSocket": "track1"
+        },
+        {
+          "id": "c9",
+          "fromNode": "drums",
+          "fromSocket": "track",
+          "toNode": "out",
+          "toSocket": "track2"
+        },
+        {
+          "id": "c10",
+          "fromNode": "arp",
+          "fromSocket": "sequence",
+          "toNode": "probe",
+          "toSocket": "music"
+        },
+        {
+          "id": "c11",
+          "fromNode": "probe",
+          "fromSocket": "envelope",
+          "toNode": "pulse",
+          "toSocket": "x"
+        },
+        {
+          "id": "c12",
+          "fromNode": "pulse",
+          "fromSocket": "value",
+          "toNode": "to_vec",
+          "toSocket": "value"
+        },
+        {
+          "id": "c13",
+          "fromNode": "to_vec",
+          "fromSocket": "vector",
+          "toNode": "xform",
+          "toSocket": "scale"
+        },
+        {
+          "id": "c14",
+          "fromNode": "xform",
+          "fromSocket": "matrix",
+          "toNode": "sphere",
+          "toSocket": "matrix"
+        }
+      ],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    }
+  ],
+  "activeCanvas": 0
+}

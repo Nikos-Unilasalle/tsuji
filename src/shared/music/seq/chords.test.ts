@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CHORD_NAMES, chordNotes, isChordName } from "./chords";
+import { CHORDS, CHORD_NAMES, chordNotes, isChordName } from "./chords";
 
 const C4 = 60;
 
@@ -20,6 +20,8 @@ describe("chordNotes", () => {
     expect(chordNotes(C4, "dim7")).toEqual([60, 63, 66, 69]);
     expect(chordNotes(C4, "aug")).toEqual([60, 64, 68]);
     expect(CHORD_NAMES).toHaveLength(11);
+    expect(CHORD_NAMES.slice(0, 6)).toEqual(["maj", "min", "7", "9", "sus", "dim"]);
+    expect(new Set(CHORD_NAMES)).toEqual(new Set(Object.keys(CHORDS)));
   });
 
   it("plays the root alone without a chord", () => {

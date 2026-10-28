@@ -12,14 +12,25 @@
  * No clicks: pausing and seeking release the notes (their tails ring out under their envelopes), a seek starts the
  * notes that should already be sounding at the new position, and a stolen voice fades (see FmSynth).
  */
+import { DrumSynth } from "../dsp/drums";
 import { FmSynth } from "../dsp/fm";
-import { Mixer } from "../dsp/mix";
+import { Mixer, MonoSource } from "../dsp/mix";
 import { NoteEvent, Sequence, notesSoundingAt, notesStartingIn } from "../seq/sequencer";
 import { MusicDescription, TrackDescription } from "./description";
 
+/** What a track plays through: an FmSynth or a DrumSynth. */
+interface Instrument extends MonoSource {
+  readonly voices: number;
+  noteOn(note: number, velocity: number, glide?: { from: number; seconds: number }): number;
+  noteOff(note: number): void;
+  allNotesOff(): void;
+  activeVoices(): number;
+}
+
 interface Track {
   id: string;
-  synth: FmSynth;
+  kind: TrackDescription["kind"];
+  synth: Instrument;
   seq: Sequence;
   /** JSON of what was last applied, to tell a real change from the same description sent again. */
   patchKey: string;
@@ -84,18 +95,20 @@ export class EngineCore {
     const seen = new Set<string>();
     for (const d of desc.tracks) {
       seen.add(d.id);
-      const voices = Math.max(1, Math.min(MAX_VOICES, Math.round(d.voices)));
+      const voices = d.kind === "fm" ? Math.max(1, Math.min(MAX_VOICES, Math.round(d.voices))) : 0;
       let track = this.tracks.get(d.id);
-      if (!track || track.synth.voices !== voices) {
+      if (!track || track.kind !== d.kind || (d.kind === "fm" && track.synth.voices !== voices)) {
         track?.synth.allNotesOff();
-        track = { id: d.id, synth: new FmSynth(voices, this.sampleRate), seq: d.seq, patchKey: "", seqKey: "", offs: [] };
+        const synth = d.kind === "fm" ? new FmSynth(voices, this.sampleRate) : new DrumSynth(this.sampleRate);
+        track = { id: d.id, kind: d.kind, synth, seq: d.seq, patchKey: "", seqKey: "", offs: [] };
         this.tracks.set(d.id, track);
         // With its own settings from the start: a track that appears muted must not glide down from full level.
         this.mixer.addChannel(d.id, track.synth, { level: d.level, pan: d.pan, mute: d.mute });
       }
-      const patchKey = JSON.stringify(d.patch);
+      const patchKey = JSON.stringify(d.kind === "fm" ? d.patch : d.drums);
       if (patchKey !== track.patchKey) {
-        track.synth.setPatch(d.patch);
+        if (d.kind === "fm") (track.synth as FmSynth).setPatch(d.patch);
+        else (track.synth as DrumSynth).setSettings(d.drums);
         track.patchKey = patchKey;
       }
       const seqKey = JSON.stringify(d.seq);

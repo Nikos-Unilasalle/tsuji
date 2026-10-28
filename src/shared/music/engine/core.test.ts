@@ -3,7 +3,7 @@ import { FmOperatorPatch, FmPatch } from "../dsp/fm";
 import { DEFAULT_ARP } from "../seq/arp";
 import { Cell, Sequence } from "../seq/sequencer";
 import { EngineCore } from "./core";
-import { MusicDescription, TrackDescription } from "./description";
+import { DrumTrackDescription, FmTrackDescription, MusicDescription, TrackDescription } from "./description";
 
 const SR = 48_000;
 const STEP = 6000; // a sixteenth at 120 BPM
@@ -31,7 +31,7 @@ function seqOf(cells: Record<number, Cell>, length = 16): Sequence {
   };
 }
 
-function track(id: string, seq: Sequence, patch: FmPatch = SINE, extra: Partial<TrackDescription> = {}): TrackDescription {
+function track(id: string, seq: Sequence, patch: FmPatch = SINE, extra: Partial<FmTrackDescription> = {}): FmTrackDescription {
   return { id, kind: "fm", voices: 8, patch, seq, level: 1, pan: -1, mute: false, ...extra };
 }
 
@@ -142,6 +142,37 @@ describe("EngineCore — transport", () => {
     expect(e.position).toBe(0);
     e.follow(false, 0, tol);
     expect(e.isPlaying).toBe(false);
+  });
+});
+
+describe("EngineCore — drum tracks", () => {
+  const drums = (seq: Sequence, extra: Partial<DrumTrackDescription> = {}): DrumTrackDescription => ({
+    id: "d",
+    kind: "drums",
+    seq,
+    level: 1,
+    pan: 0,
+    mute: false,
+    drums: { tune: 0, decay: 1 },
+    ...extra,
+  });
+
+  it("strikes a drum on its exact sample", () => {
+    const e = new EngineCore(SR);
+    e.describe(desc(drums(seqOf({ 2: { note: 36 } }))));
+    e.play(0);
+    expect(firstSound(run(e, 4 * STEP))).toBe(2 * STEP);
+  });
+
+  it("switches a track between FM and drums under the same id", () => {
+    const e = new EngineCore(SR);
+    e.describe(desc(track("d", seqOf({ 0: { note: 60 } }))));
+    e.play(0);
+    run(e, STEP);
+    e.describe(desc(drums(seqOf({ 0: { note: 38 }, 1: { note: 38 } }))));
+    const out = run(e, 2 * STEP);
+    expect(out.some((x) => x !== 0)).toBe(true);
+    expect(Number.isFinite(out.reduce((a, b) => a + b, 0))).toBe(true);
   });
 });
 

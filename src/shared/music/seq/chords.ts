@@ -19,7 +19,11 @@ export const CHORDS = {
 
 export type ChordName = keyof typeof CHORDS;
 
-export const CHORD_NAMES = Object.keys(CHORDS) as ChordName[];
+/**
+ * In the order they are offered (and numbered, for a wired chord input). Spelled out: Object.keys would put "7" and
+ * "9" first, integer-like keys always come first in JavaScript.
+ */
+export const CHORD_NAMES: ChordName[] = ["maj", "min", "7", "9", "sus", "dim", "maj7", "min7", "sus2", "dim7", "aug"];
 
 export function isChordName(name: unknown): name is ChordName {
   return typeof name === "string" && Object.prototype.hasOwnProperty.call(CHORDS, name);

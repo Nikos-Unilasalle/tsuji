@@ -105,11 +105,21 @@ En plus, si c'est peu coûteux (une ligne par accord dans la table) : `maj7` (0 
 
 Le séquenceur pur fait l'expansion dans cet ordre : **note + accord → renversement / étalement → arpège → effets (glide, ratchet, chance)**. Chaque étape est une fonction pure, testée séparément.
 
-### Éditeur de pattern
+### Éditeur de pattern : un HUD dans la vue 3D
 
-- Nouveau `kind: "pattern_grid"` dans `ParamFieldDef`, rendu dans un panneau dédié (comme `ColorRampEditor`), avec une ouverture en grand dans un tiroir de type `TimelineDrawer`.
-- Saisie au clavier façon tracker : rangée `Z–M` / `Q–U` = notes, flèches, `Suppr`, octave ±. Le step joué est surligné en direct.
-- Écoute d'une note pendant la saisie.
+Demandé le 2026-10-28 : comme les autres nodes qui ont un HUD dans la vue 3D (Biped Dance, Route, Pose, Brush…), le Pattern s'édite **dans la vue 3D, quand il est sélectionné**. Pas dans le panneau de paramètres. Le modèle est `DanceHud.tsx`, une grille de temps avec le playhead lu à chaque frame d'animation, des cellules cliquables et une étape d'annulation par geste, écrite par `onParams`.
+
+- **La grille :** une case par pas, 16 par ligne (une mesure), une ligne par mesure (1, 2 ou 4 lignes pour 16, 32 ou 64 pas). La note et l'accord sont écrits dans la case, la vélocité est rendue en intensité, et l'effet par un petit badge. Le pas joué s'allume en direct.
+- **Saisie au clavier façon tracker** :
+  - les rangées `Z–M` et `Q–U` jouent les notes ;
+  - les flèches déplacent le curseur ;
+  - `Suppr` efface, `0` écrit un OFF ;
+  - octave ± ;
+  - après chaque note, le curseur avance d'un pas (avance réglable).
+- **Barre du bas** : accord (les 11, avec renversement et étalement), vélocité, effet (GLD / RTG / CHN et sa valeur), longueur du pattern, transpose.
+- **Écoute** de la note pendant la saisie, par le moteur de Music Out s'il y en a un.
+- Le HUD écrit le même paramètre texte `steps` (notation.ts) : rien ne change pour les fichiers, et le champ texte reste pour qui le préfère.
+- Pour un Pattern branché sur un Drum Kit, la grille prend la forme d'une boîte à rythmes : une ligne par son (kick, snare, hat…) et un clic par pas.
 
 ### Export
 
@@ -124,7 +134,7 @@ Le séquenceur pur fait l'expansion dans cet ordre : **note + accord → renvers
 | 2 | Séquenceur pur : clock + pattern → événements datés à l'échantillon, accords, arpège, swing, effets | Tests : positions des notes exactes à 120 et 137 BPM, intervalles de chaque accord, chaque mode d'arpège, swing, ratchet |
 | 3 | `MusicEngine` worklet + `music/out` + diff des descriptions + liaison timeline (play / pause / seek / boucle) | Lecture synchronisée au playhead, seek sans clic |
 | 4 | Nodes `clock`, `pattern`, `arp`, `fm-voice`, `drum-kit`, `note-probe` + enregistrement + catégorie `music` | Démo jouable construite uniquement au graphe, avec une suite d'accords arpégée |
-| 5 | Éditeur `pattern_grid` + saisie clavier | Écrire un pattern de 16 steps sans souris |
+| 5 | **HUD Pattern dans la vue 3D** (modèle : DanceHud) + saisie clavier | Écrire un pattern de 16 steps sans souris, sans quitter la vue 3D |
 | 6 | Intégration export | Vidéo exportée : kick et flash visuel sur la même frame, vérifié à l'échantillon |
 | 7 | Démo dans le menu Démos : un pattern FM qui pilote une scène | — |
 
@@ -231,6 +241,57 @@ Limites :
 - En dev, si on modifie `engine.worklet.ts` à chaud, il faut recharger la page. Le contexte audio garde l'ancien processeur enregistré sous le même nom.
 - Pas encore testé dans Tauri. Ce n'est pas encore écouté.
 - En dev, `window.__tsujiMusic()` renvoie l'état des moteurs (position, voix, recalages) pour vérifier ce que font les haut-parleurs.
+
+### Étape 4 — les nodes (2026-10-28)
+
+La catégorie **Music** a maintenant sept nodes (`src/shared/graph/nodes/music.ts`) :
+
+| Node | Entrées | Sortie | Rôle |
+|---|---|---|---|
+| **Clock** | BPM, Swing | `clock` | Tempo, swing, pas par temps (2, 3, 4, 6, 8) |
+| **Pattern** | Clock, Transpose, Chord, Velocity × | `sequence` | Le pattern en notation texte, longueur 16/32/64, seed |
+| **Arp** | Sequence, Octaves, Gate, On | `sequence` | Mode, vitesse, triolets, octaves, gate, synchro |
+| **FM Voice** | Sequence, Level, Pan, Brightness ×, Mute | `track` | 8 presets, algorithme, feedback, 4 × 8 réglages d'opérateur, polyphonie |
+| **Drum Kit** | Sequence, Level, Pan, Tune, Decay ×, Mute | `track` | 7 sons synthétisés (kick, snare, clap, hat, open hat, deux toms) |
+| **Note Probe** | Sequence / Track, Start Frame, Decay | gate, trigger, pitch, pitch 0–1, velocity, envelope, count, step, notes | Ce qui joue au playhead, pour la scène |
+| **Music Out** | Master, Start Frame, Track 1… | time, beat, step, playing | Joue les pistes, calé sur la timeline |
+
+Ce qui circule entre eux : un seul type de socket, `music`, qui porte une clock, une séquence ou une piste (`description.ts`). Chaque node lit la forme qu'il attend et ignore les autres. Une séquence branchée directement dans Music Out joue sur le piano électrique par défaut.
+
+**La notation des patterns** (`src/shared/music/seq/notation.ts`), en attendant l'éditeur de l'étape 5. C'est un mot par pas :
+- `.` : vide ;
+- `off` : arrête la note ;
+- `C4:maj7` : note et accord (C4 = MIDI 60, `C-4`, `F#3` et `Bb2` marchent aussi) ;
+- `/1` : renversement ;
+- `^` : accord étalé ;
+- `@0.6` : vélocité ;
+- `~2` : longueur en pas ;
+- `!GLD12`, `!RTG3`, `!CHN50` : glide, ratchet, chance ;
+- `kick+hat` ou `C4+E4+B4` : des notes frappées ensemble (ajouté pour la batterie, utile aussi pour des voicings libres) ;
+- les noms de batterie (`kick`, `snare`, `clap`, `hat`, `openhat`, `tomlow`, `tomhigh`), qui suivent la carte General MIDI.
+
+Autres ajouts :
+- `src/shared/music/dsp/presets.ts` : les 8 presets FM (E. Piano, Bass, Bell, Pad, Lead, Organ, Pluck, Chip). Choisir un preset remplit les 32 réglages d'opérateur, qu'on peut ensuite retoucher. Un fichier qui ne nomme que le preset reçoit ses réglages au chargement (`upgradeParams`).
+- `src/shared/music/dsp/drums.ts` : `DrumSynth`. Une voix par son, le hat fermé coupe le hat ouvert, et le bruit est seedé (rendu identique quelle que soit la taille des blocs).
+- Le moteur joue des pistes FM et des pistes de batterie, à travers une interface `Instrument` commune.
+- **Brightness** multiplie les niveaux des modulateurs seulement : le timbre change, pas le volume. C'est une bonne prise pour les visuels.
+- **Pattern** peut transposer, forcer un accord et changer la vélocité depuis des fils : ce sont les visuels qui pilotent la musique.
+- **La case « Demo » de Music Out est retirée.** Elle est remplacée par une vraie démo dans le menu : **Démos → Music → Band** (`public/demos/demo_music_band.tsuji`, générée par `tools/gen_music_demo.py`). Elle contient Clock, trois patterns de 64 pas, un arpège, deux FM Voice (E. Piano, Bass), un Drum Kit, Music Out et une Note Probe, sur 240 frames à 30 fps, soit les 8 s du morceau.
+
+Vérifié dans l'app (Chrome, panneau visible) : la démo Band se charge et joue. La boucle de 8 s tombe sur celle de la timeline, avec un seul recalage par tour (à la boucle) en 20 s, et 12 à 13 voix.
+
+Ce que les tests ont fait corriger :
+- `CHORD_NAMES` commençait par « 7 » et « 9 » : JavaScript met les clés numériques en tête dans `Object.keys`. Le menu Force Chord et l'entrée numérique étaient décalés. L'ordre est maintenant écrit en dur.
+- Le seuil de silence de la batterie (−100 dB) gardait le kick « actif » plus de 3 s. Il est passé à −80 dB.
+- Le `trigger` de Note Probe manquait une note jouée sur le tout premier échantillon.
+
+Tests : 4 465 + 5 (notation `+`, `upgradeParams`), dont 17 sur les nodes.
+
+Limites :
+- Pas encore d'éditeur de grille : on édite les patterns dans un champ texte d'une ligne (étape 5).
+- Note Probe a son propre Start Frame, à garder égal à celui de Music Out.
+- Pas écouté, pas testé dans Tauri.
+- Dans l'aperçu, la console reçoit en continu « THREE.WebGLRenderer: Texture marked for update but no image data found ». Ça n'a rien à voir avec la musique (aucun code de texture touché) et c'était déjà le cas avant cette étape.
 
 ## 6. Après le MVP (côté SLOOP / KAWA)
 
