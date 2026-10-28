@@ -108,6 +108,13 @@ export class FmSynth {
   /** The note a stolen voice plays once faded out, or −1. */
   private pendingNote: Float64Array;
   private pendingVelocity: Float64Array;
+  /** A pending note's glide: the note it starts from (NaN for none) and the time to reach its own. */
+  private pendingGlideFrom: Float64Array;
+  private pendingGlideSeconds: Float64Array;
+  /** The pitch a voice sounds now, in semitones: its note, or on the way there during a glide. */
+  private pitch: Float64Array;
+  /** Semitones per sample while gliding, 0 otherwise. */
+  private pitchStep: Float64Array;
   private pendingHeld: Uint8Array;
 
   // Per voice × operator, index v * 4 + k.
@@ -139,6 +146,10 @@ export class FmSynth {
     this.fadeStep = new Float64Array(voices);
     this.pendingNote = new Float64Array(voices).fill(-1);
     this.pendingVelocity = new Float64Array(voices);
+    this.pendingGlideFrom = new Float64Array(voices).fill(NaN);
+    this.pendingGlideSeconds = new Float64Array(voices);
+    this.pitch = new Float64Array(voices);
+    this.pitchStep = new Float64Array(voices);
     this.pendingHeld = new Uint8Array(voices);
     this.phase = new Float64Array(voices * OPS);
     this.env = new Float64Array(voices * OPS);
@@ -175,8 +186,11 @@ export class FmSynth {
     }
   }
 
-  /** Plays a note (MIDI number, fractional allowed) and returns the voice it went to. */
-  noteOn(note: number, velocity: number): number {
+  /**
+   * Plays a note (MIDI number, fractional allowed) and returns the voice it went to. With a glide, the note starts at
+   * `glide.from` and slides to its own pitch in `glide.seconds`, in a straight line in semitones.
+   */
+  noteOn(note: number, velocity: number, glide?: { from: number; seconds: number }): number {
     const vel = Math.min(1, Math.max(0, velocity));
     const age = ++this.noteCounter;
     // The same note again: retrigger its voice from where its envelopes are, no click, no second voice.
@@ -186,12 +200,13 @@ export class FmSynth {
         this.held[v] = 1;
         this.age[v] = age;
         for (let k = 0; k < OPS; k++) this.stage[v * OPS + k] = ATTACK;
+        this.setGlide(v, note, glide);
         return v;
       }
     }
     for (let v = 0; v < this.voices; v++) {
       if (!this.active[v]) {
-        this.start(v, note, vel, 1);
+        this.start(v, note, vel, 1, glide);
         this.age[v] = age;
         return v;
       }
@@ -209,6 +224,8 @@ export class FmSynth {
     this.pendingNote[pick] = note;
     this.pendingVelocity[pick] = vel;
     this.pendingHeld[pick] = 1;
+    this.pendingGlideFrom[pick] = glide ? glide.from : NaN;
+    this.pendingGlideSeconds[pick] = glide ? glide.seconds : 0;
     this.fadeStep[pick] = -1 / Math.max(1, STEAL_SECONDS * this.sampleRate);
     this.age[pick] = age;
     return pick;
@@ -246,8 +263,20 @@ export class FmSynth {
     return n;
   }
 
-  private start(v: number, note: number, vel: number, held: number): void {
+  private setGlide(v: number, note: number, glide?: { from: number; seconds: number }): void {
+    const samples = glide ? glide.seconds * this.sampleRate : 0;
+    if (glide && samples >= 1 && glide.from !== note) {
+      this.pitch[v] = glide.from;
+      this.pitchStep[v] = (note - glide.from) / samples;
+    } else {
+      this.pitch[v] = note;
+      this.pitchStep[v] = 0;
+    }
+  }
+
+  private start(v: number, note: number, vel: number, held: number, glide?: { from: number; seconds: number }): void {
     this.note[v] = note;
+    this.setGlide(v, note, glide);
     this.velocity[v] = vel;
     this.active[v] = 1;
     this.held[v] = 1;
@@ -307,7 +336,7 @@ export class FmSynth {
     for (let v = 0; v < this.voices; v++) {
       if (!this.active[v]) continue;
       const base = v * OPS;
-      let freq = midiToHz(this.note[v]) * invSr;
+      let freq = midiToHz(this.pitch[v]) * invSr;
       for (let k = 0; k < OPS; k++) {
         inc[k] = freq * this.ratioMul[k];
         velScale[k] = (1 - this.velSens[k] + this.velSens[k] * this.velocity[v]) * this.outScale[k];
@@ -317,6 +346,18 @@ export class FmSynth {
       let fb2 = this.fbPrev2[v];
 
       for (let i = 0; i < m; i++) {
+        // Glide: one step along the slide, the frequency recomputed (only while gliding — it costs a pow per sample).
+        if (this.pitchStep[v] !== 0) {
+          let p = this.pitch[v] + this.pitchStep[v];
+          const target = this.note[v];
+          if ((this.pitchStep[v] > 0 && p >= target) || (this.pitchStep[v] < 0 && p <= target)) {
+            p = target;
+            this.pitchStep[v] = 0;
+          }
+          this.pitch[v] = p;
+          freq = midiToHz(p) * invSr;
+          for (let k = 0; k < OPS; k++) inc[k] = freq * this.ratioMul[k];
+        }
         let mix = 0;
         for (let k = OPS - 1; k >= 0; k--) {
           const idx = base + k;
@@ -362,10 +403,12 @@ export class FmSynth {
         if (this.fadeStep[v] !== 0) {
           g += this.fadeStep[v];
           if (g <= 0) {
-            this.start(v, this.pendingNote[v], this.pendingVelocity[v], this.pendingHeld[v]);
+            const gf = this.pendingGlideFrom[v];
+            const glide = Number.isNaN(gf) ? undefined : { from: gf, seconds: this.pendingGlideSeconds[v] };
+            this.start(v, this.pendingNote[v], this.pendingVelocity[v], this.pendingHeld[v], glide);
             g = 1;
             fb1 = fb2 = 0;
-            freq = midiToHz(this.note[v]) * invSr;
+            freq = midiToHz(this.pitch[v]) * invSr;
             for (let k = 0; k < OPS; k++) {
               inc[k] = freq * this.ratioMul[k];
               velScale[k] = (1 - this.velSens[k] + this.velSens[k] * this.velocity[v]) * this.outScale[k];

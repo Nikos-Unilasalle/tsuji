@@ -162,6 +162,35 @@ Choix faits :
 
 Mesures : 28 tests ; pire cas **208 µs par bloc, 7,8 % d'un cœur M1** (Node), 205 µs / 7,7 % dans le worklet Chrome. C'est plus que les 4,7 % du spike, qui n'avait que 2 opérateurs sans routage ni lissage. Il reste 13 fois de marge. Si un jour il en faut plus, la première piste est de dérouler la boucle de modulation pour 4 opérateurs fixes.
 
+### Étape 2 — séquenceur (2026-10-28)
+
+Fichiers dans `src/shared/music/seq/` :
+- `chords.ts` : les 11 accords (les 6 demandés et 5 en plus), le renversement et l'étalement. Les accords sont une table de données.
+- `arp.ts` : 6 modes (up, down, up-down, down-up, ordre joué, aléatoire seedé), 5 vitesses de 1/4 à 1/64 avec triolets, 1 à 4 octaves, gate, synchro grille ou relance.
+- `sequencer.ts` : clock (BPM, swing, pas par temps), pattern (cellules : note ou OFF, accord, renversement, étalement, vélocité, longueur, effet), et trois questions posées sans état :
+  - `notesStartingIn(seq, sr, from, to)` : les notes qui commencent dans un bloc ;
+  - `notesSoundingAt(seq, sr, t)` : les notes qui sonnent à un instant donné (pour le seek et pour Note Probe) ;
+  - `stepAt` / `stepSample` : quel pas joue à un instant donné, et à quel échantillon commence un pas.
+- `hash.ts` : le hash seedé, seule source de hasard (effet CHN, arpège aléatoire).
+- `FmSynth` gagne le **glide** : la note part d'une autre hauteur et glisse en ligne droite, en demi-tons, y compris sur une voix volée.
+
+Choix faits :
+- **Sémantique tracker :** une note sonne jusqu'à la prochaine cellule qui déclenche (note ou OFF), ou pendant sa propre longueur. Le pattern boucle, et la fin d'une note est cherchée à travers la boucle.
+- **Pas de dérive :** les temps sont calculés exactement et arrondis à l'échantillon seulement quand une note est émise. À 137 BPM, le pas 548 tombe pile sur l'échantillon 2 880 000.
+- **Swing :** chaque pas impair est retardé, jusqu'à un demi-pas (75/25 à swing 1).
+- **Effets :**
+  - `GLD n` glisse depuis la note précédente en n × 10 ms, l'accord se déplaçant en parallèle ;
+  - `RTG n` frappe n fois dans le pas, et la dernière frappe tient jusqu'à la fin de la note ;
+  - `CHN n` joue la cellule avec n % de chances, de façon reproductible. Une cellule sautée laisse sonner la note précédente.
+- **Arpège + effets :** quand l'arpège est actif, il remplace le ratchet et le glide de la cellule.
+- Quand une note se termine sur l'échantillon où une autre commence, le note-off passe avant le note-on.
+
+Mesures : 63 tests sur la musique (35 de plus). Les notes sont identiques quelle que soit la taille des blocs (37, 61, 128, 5000 échantillons, ou un seul appel), arpège aléatoire compris. Le glide ne coûte rien quand il n'est pas utilisé (pire cas 7,9 %).
+
+Un vrai bug trouvé par les tests : `isChordName("toString")` répondait vrai (l'opérateur `in` remonte le prototype). C'est corrigé avec `hasOwnProperty`.
+
+Dans le worklet de spike, deux pistes séquencées jouent : une suite d'accords Cmaj7 – Am7 – Fmaj7 – G7 arpégée, et une basse avec glide et ratchet. Dans Chrome : 8 à 11 voix, 375 blocs/s, aucune erreur. L'ordonnanceur du worklet (note-ons, note-offs en attente, découpage du bloc) n'est pas encore testé : il sera extrait et testé à l'étape 3, avec le moteur.
+
 ## 6. Après le MVP (côté SLOOP / KAWA)
 
 - **Live / looper (SLOOP)** : jeu au clavier de l'ordi et en Web MIDI, enregistrement en boucle quantifié dans un pattern, overdub.

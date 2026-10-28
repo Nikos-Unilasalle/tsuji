@@ -208,6 +208,28 @@ describe("FmSynth — voices", () => {
   });
 });
 
+describe("FmSynth — glide", () => {
+  it("starts at the glide's note and reaches its own in the glide's time", () => {
+    const s = synthWith(patch(1, [op(1, 1), op(1, 0), op(1, 0), op(1, 0)]));
+    s.noteOn(A4 + 12, 1, { from: A4, seconds: 0.1 });
+    const out = render(s, SR / 2);
+    const start = out.subarray(0, 480); // the first 10 ms: still near 440
+    const end = out.subarray(SR / 4); // well past 100 ms: 880
+    expect(amplitudeAt(start, 440 * Math.pow(2, 0.5 / 12))).toBeGreaterThan(amplitudeAt(start, 880));
+    expect(amplitudeAt(end, 880)).toBeGreaterThan(0.95);
+    expect(maxStep(out)).toBeLessThan(0.13); // a slide, not a jump
+  });
+
+  it("glides on a stolen voice's new note too", () => {
+    const s = synthWith(patch(1, [op(1, 1), op(1, 0), op(1, 0), op(1, 0)]), 1);
+    s.noteOn(48, 1);
+    render(s, 1000);
+    s.noteOn(A4 + 12, 1, { from: A4, seconds: 0.05 });
+    render(s, SR / 4);
+    expect(amplitudeAt(render(s, SR / 4), 880)).toBeGreaterThan(0.95);
+  });
+});
+
 describe("FmSynth — determinism", () => {
   it("renders the same samples whatever the block size, through chords, steals and patch changes", () => {
     const play = (block: number) => {
