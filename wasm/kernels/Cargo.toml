@@ -2,6 +2,7 @@
 name = "tsuji-kernels"
 version = "0.1.0"
 edition = "2021"
+license = "GPL-3.0-only"
 publish = false
 description = "Tsuji's CPU geometry kernels, built to WebAssembly for the geometry worker."
 

@@ -399,4 +399,8 @@ npm run build
 
 ## Licence
 
-Ce projet est distribué sous licence MIT. Consultez le fichier `LICENSE` pour plus de détails.
+Copyright © 2026 Nikos.
+
+Tsuji est un logiciel libre : vous pouvez le redistribuer et le modifier selon les termes de la **GNU General Public License version 3** (GPL-3.0-only), telle que publiée par la Free Software Foundation. Il est distribué sans aucune garantie. Le texte complet est dans le fichier [`LICENSE`](LICENSE).
+
+Le code repris d'autres projets garde ses mentions de copyright d'origine.
