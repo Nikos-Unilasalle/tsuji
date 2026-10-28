@@ -371,6 +371,52 @@ Ce qui reste disponible pour plus tard :
 - l'enchaînement de patterns (song mode), plutôt qu'un pattern unique de 416 pas ;
 - les autres firmwares de l'annuaire (X0X pour 303 / 808 / 909, Hortator pour la batterie, Polly pour les accompagnements…).
 
+### Démo « Tsuji Dub » (2026-10-28)
+
+`tools/gen_music_reggae.py` → **Démos → Music → Tsuji Dub** (`public/demos/demo_music_reggae.tsuji`). C'est une composition originale pour tsuji : un riddim **one drop** en la mineur à 75 BPM, avec un peu de shuffle (swing 0,2), sur 16 mesures (256 pas, 51,2 s = 1536 frames, donc le morceau et la timeline bouclent ensemble). Progression : Am7 Am7 Dm7 Dm7 | Am7 Am7 Em7 Dm7, deux fois.
+
+| Mesures | Ce qui se passe |
+|---|---|
+| 1–2 | Batterie et basse seules : le riddim |
+| 3–4 | Le skank (accords à contretemps, SLOOP · CLAV) et l'orgue « bubble » (Felucca · ORGAN) entrent, et une sirène dub répond |
+| 5–8 | Le riddim complet. La caisse claire et le skank lancent des échos dub, puis un roulement de toms |
+| 9–12 | Steppers (un kick sur chaque temps) et le thème au **mélodica** |
+| 13 | Le drop : la basse sort, le skank résonne dans le vide |
+| 14–16 | Tout le monde revient, avec la sirène et le roulement, et on reboucle |
+
+- Batterie one drop : kick et caisse claire ensemble sur le temps 3, hats en croches, open hat une mesure sur deux.
+- Basse : Felucca · BASS, mélodique, qui laisse le premier temps vide.
+- **Échos écrits** : tsuji n'a pas encore d'effet de delay, donc les répétitions d'un coup sont écrites trois doubles-croches plus tard (une croche pointée), de plus en plus douces.
+- Sirène : le preset Chip en mono, de longues notes qui glissent (GLD 20 à 40).
+- Nouveau preset **Melodica** dans nos sons : une pile « anche » (un modulateur à l'octave pour le grain, un peu de feedback pour le souffle) qui gonfle et tient.
+- Visuel : trois sphères rouge, or et vert, qui respirent avec la batterie, le skank et la basse (une Note Probe chacune).
+
+`demoAudio.test.ts` rend maintenant chaque démo musicale **en entier** (la durée de sa timeline, 60 s au plus), et pas seulement ses 12 premières secondes.
+
+### Étape 6 — la musique dans l'export vidéo (2026-10-28)
+
+Fichiers :
+- `src/shared/music/engine/exportMusic.ts` : `renderMusicFrames` / `renderExportMusic`.
+- `src/shared/audio/exportAudioCapture.ts` : la capture garde aussi, frame par frame, ce que chaque Music Out aurait joué (`recordMusicFrame`, `endExportAudioCaptureWithMusic`). `renderSegments` mixe la bande-son de la musique avec les clips.
+- `src/shared/export/webCodecsExport.ts` : rend la musique après la dernière frame et la mixe à 48 kHz.
+- `music/out` : pendant un export image par image, il enregistre et le moteur live se tait. Pendant l'export de repli (MediaRecorder, en temps réel), il joue en direct en suivant les frames, et le MediaRecorder enregistre le bus de sortie comme le reste du son.
+
+Comment ça marche : pendant l'export, chaque Music Out enregistre à chaque frame sa description et la position du morceau d'après le playhead. Après la dernière frame, le même `EngineCore` que le worklet rejoue tout. À chaque frame, il applique la description et le playhead de cette frame, puis rend les échantillons de cette frame. Le moteur garde son horloge exacte et ne saute que là où le playhead saute (une timeline qui boucle pendant l'export, un changement de canvas). Le seuil est d'une demi-frame, si bien que l'arrondi des frames en échantillons ne compte jamais comme un saut.
+
+Vérifié (8 tests) :
+- le rendu est **identique, échantillon pour échantillon, à la lecture directe du moteur**, à 30 fps et à 29,97 fps (frames de 1601,6 échantillons, sans dérive) ;
+- une note tombe sur son échantillon ;
+- c'est silencieux avant le Start Frame ;
+- une timeline qui boucle pendant l'export fait revenir le morceau au début (do à la place du sol à 1 s) ;
+- plusieurs Music Out s'additionnent ;
+- la capture garde le dernier mot pour chaque frame, dans l'ordre.
+
+Build de production : le worklet du moteur (19 Ko, tout le DSP) est chargé à la demande par un module de 92 octets, et le spike de dev est exclu.
+
+Limites :
+- **Pas encore essayé dans l'app** : il faut lancer un vrai export vidéo et écouter le fichier.
+- Le repli MediaRecorder enregistre la musique en temps réel, avec la même réserve que pour tout le son sur ce chemin : une scène trop lourde pour tenir le fps se décalera.
+
 ## 6. Après le MVP (côté SLOOP / KAWA)
 
 - **Live / looper (SLOOP)** : jeu au clavier de l'ordi et en Web MIDI, enregistrement en boucle quantifié dans un pattern, overdub.

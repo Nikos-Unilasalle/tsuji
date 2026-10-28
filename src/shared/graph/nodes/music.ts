@@ -1,4 +1,5 @@
 import { createNodeCache } from "../nodeCaches";
+import { isExportAudioCapturing, recordMusicFrame } from "../../audio/exportAudioCapture";
 import { growingSockets } from "../dynamicInputs";
 import { NodeDefinition, ParamFieldDef } from "../types";
 import { numberInput } from "./object";
@@ -513,10 +514,17 @@ export const MUSIC_OUT_NODE: NodeDefinition = {
     const taken = driver !== undefined && driver.id !== sessionId && now - driver.at < 300;
     if (!taken) drivers.set(ctx.nodeId, { id: sessionId, at: now });
 
+    if (ctx.capturing && isExportAudioCapturing()) {
+      // A frame-exact export: what this frame would play is recorded, and replayed offline through the same engine
+      // after the last frame (music/engine/exportMusic.ts). The speakers stay out of it.
+      recordMusicFrame(ctx.nodeId, { desc, songTime, playing: running });
+      engine.follow(false, 0, 0);
+      return { time: songTime, beat, step: songTime >= 0 ? stepAt(clock, sr, songTime * sr) : -1, playing: running ? 1 : 0 };
+    }
     engine.describe(desc);
     if (ctx.capturing) {
-      // The export's soundtrack is rendered offline (step 6); the speakers stay out of it.
-      engine.follow(false, 0, 0);
+      // The real-time fallback export (MediaRecorder) records the speakers: play along with its frames.
+      engine.follow(running, Math.max(0, Math.round(songTime * sr)), TOLERANCE_SECONDS * sr);
     } else if (!yieldToExport && !taken) {
       engine.follow(running, Math.max(0, Math.round(songTime * sr)), TOLERANCE_SECONDS * sr);
     }

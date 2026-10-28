@@ -12,6 +12,7 @@
  * have no timeline position to replay and are left out of the offline mix.
  */
 import type { ClipPlan } from "./clipPlan";
+import type { MusicFrame } from "../music/engine/exportMusic";
 import { clipDrift } from "./clipPlan";
 
 export interface ClipFrame {
@@ -45,12 +46,14 @@ interface Capture {
   frame: number;
   /** nodeId → output frame → what the clip did there. A frame evaluated twice (decode retries) keeps the last word. */
   clips: Map<string, Map<number, ClipFrame>>;
+  /** Music Out nodes (see music/engine/exportMusic.ts): nodeId → output frame → what it would have played. */
+  music: Map<string, Map<number, MusicFrame>>;
 }
 
 let capture: Capture | null = null;
 
 export function beginExportAudioCapture(): void {
-  capture = { frame: 0, clips: new Map() };
+  capture = { frame: 0, clips: new Map(), music: new Map() };
 }
 
 /** Called by the exporter right before it asks for output frame `frame`. */
@@ -70,16 +73,30 @@ export function recordClipFrame(nodeId: string, entry: Omit<ClipFrame, "frame">)
   frames.set(capture.frame, { ...entry, frame: capture.frame });
 }
 
+/** Called by a Music Out while a captured frame is evaluated. */
+export function recordMusicFrame(nodeId: string, entry: Omit<MusicFrame, "frame">): void {
+  if (!capture) return;
+  let frames = capture.music.get(nodeId);
+  if (!frames) capture.music.set(nodeId, (frames = new Map()));
+  frames.set(capture.frame, { ...entry, frame: capture.frame });
+}
+
 /** Ends the capture and returns its segments; empty when nothing anchored made a sound. */
 export function endExportAudioCapture(fps: number): ClipSegment[] {
+  return endExportAudioCaptureWithMusic(fps).segments;
+}
+
+/** Ends the capture: the clips' segments, and each Music Out's frames in frame order. */
+export function endExportAudioCaptureWithMusic(fps: number): { segments: ClipSegment[]; music: MusicFrame[][] } {
   const done = capture;
   capture = null;
-  if (!done) return [];
+  if (!done) return { segments: [], music: [] };
   const segments: ClipSegment[] = [];
   for (const frames of done.clips.values()) {
     segments.push(...buildSegments([...frames.values()].sort((a, b) => a.frame - b.frame), fps));
   }
-  return segments;
+  const music = [...done.music.values()].map((frames) => [...frames.values()].sort((a, b) => a.frame - b.frame));
+  return { segments, music };
 }
 
 /**
@@ -132,15 +149,28 @@ export function buildSegments(frames: ClipFrame[], fps: number): ClipSegment[] {
   return out;
 }
 
-/** Mixes the segments into a stereo AudioBuffer exactly `totalFrames / fps` seconds long. */
+/**
+ * Mixes the segments into a stereo AudioBuffer exactly `totalFrames / fps` seconds long — with the music's own
+ * soundtrack (already rendered at this rate, from sample 0) when there is one.
+ */
 export async function renderSegments(
   segments: ClipSegment[],
   totalFrames: number,
   fps: number,
   sampleRate = 48_000,
+  music: [Float32Array, Float32Array] | null = null,
 ): Promise<AudioBuffer> {
   const length = Math.max(1, Math.ceil((totalFrames / fps) * sampleRate));
   const ctx = new OfflineAudioContext(2, length, sampleRate);
+  if (music) {
+    const buffer = ctx.createBuffer(2, length, sampleRate);
+    buffer.copyToChannel(music[0].subarray(0, length) as Float32Array<ArrayBuffer>, 0);
+    buffer.copyToChannel(music[1].subarray(0, length) as Float32Array<ArrayBuffer>, 1);
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.connect(ctx.destination);
+    source.start(0);
+  }
   for (const s of segments) {
     const t0 = s.startFrame / fps;
     const t1 = s.endFrame / fps;

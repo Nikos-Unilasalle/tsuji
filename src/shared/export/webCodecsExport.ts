@@ -14,10 +14,15 @@ import {
 import {
   beginExportAudioCapture,
   endExportAudioCapture,
+  endExportAudioCaptureWithMusic,
   renderSegments,
   setExportAudioFrame,
 } from "../audio/exportAudioCapture";
+import { renderExportMusic } from "../music/engine/exportMusic";
 import type { ViewportExportHandle } from "../three/Viewport";
+
+/** The soundtrack's rate: the clips' mix and the music are rendered at it, and the encoder is asked for it. */
+const EXPORT_SAMPLE_RATE = 48_000;
 import type { VideoExportOptions } from "./videoExport";
 
 /**
@@ -137,7 +142,7 @@ export async function exportVideoWebCodecs(
     // The audio track has to be declared before start(), but its content only exists once every frame has been
     // evaluated. Mediabunny holds the video packets in memory until the audio catches up — fine with an in-memory target.
     const audioCodec = includeAudio
-      ? await getFirstEncodableAudioCodec(format.getSupportedAudioCodecs(), { numberOfChannels: 2, sampleRate: 48_000 })
+      ? await getFirstEncodableAudioCodec(format.getSupportedAudioCodecs(), { numberOfChannels: 2, sampleRate: EXPORT_SAMPLE_RATE })
       : null;
     // No audio encoder here (older WebKit has VideoEncoder but no AudioEncoder): a silent file would be a regression
     // over MediaRecorder, which does carry the sound — hand over to it.
@@ -162,9 +167,12 @@ export async function exportVideoWebCodecs(
     video.close();
 
     if (audio) {
-      const segments = endExportAudioCapture(opts.fps);
+      const { segments, music } = endExportAudioCaptureWithMusic(opts.fps);
+      const frames = Math.max(1, framesDone);
+      // The music nodes' songs, replayed offline through the engine (music/engine/exportMusic.ts), at the mix's rate.
+      const songs = renderExportMusic(music, frames, opts.fps, EXPORT_SAMPLE_RATE);
       // Always write the track once declared — an empty (silent) one is valid, a declared-but-missing one is not.
-      const mix = await renderSegments(segments, Math.max(1, framesDone), opts.fps);
+      const mix = await renderSegments(segments, frames, opts.fps, EXPORT_SAMPLE_RATE, songs);
       // Start the audio early by the encoder's priming: Mediabunny turns the negative start into an edit list that
       // trims the priming off, so the first real sample plays at 0 and every clip lands on its frame.
       const delay = audioCodec === "aac" ? await measureAacDelay(mix.sampleRate, mix.numberOfChannels) : 0;
