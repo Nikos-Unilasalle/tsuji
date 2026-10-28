@@ -678,6 +678,11 @@ export const DEMO_CATALOG: DemoCategory[] = [
         label: "Surface z = f(x, y) (3D)",
         description: "3D axes, z up; z = (x² + a·y²)/4 unrolls row by row, then a bowl bends into a saddle as a Sequence step takes a from 1 to −1, its value shown live in LaTeX, the camera circling slowly.",
       },
+      {
+        file: "demo_math_taylor.tsuji",
+        label: "Taylor Series of sin x (2D)",
+        description: "sin x on π-ticked axes, then its Taylor polynomial gains one term every two seconds (orders 1 to 13) and hugs the curve further out each time; the order and the error at x = π read live in LaTeX — one Function Curve whose terms fade in through a Sequence step, plus Expression.",
+      },
     ],
   },
   {
