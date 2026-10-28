@@ -191,6 +191,47 @@ Un vrai bug trouvé par les tests : `isChordName("toString")` répondait vrai (l
 
 Dans le worklet de spike, deux pistes séquencées jouent : une suite d'accords Cmaj7 – Am7 – Fmaj7 – G7 arpégée, et une basse avec glide et ratchet. Dans Chrome : 8 à 11 voix, 375 blocs/s, aucune erreur. L'ordonnanceur du worklet (note-ons, note-offs en attente, découpage du bloc) n'est pas encore testé : il sera extrait et testé à l'étape 3, avec le moteur.
 
+### Étape 3 — moteur et Music Out (2026-10-28)
+
+Fichiers :
+- `src/shared/music/engine/description.ts` : ce que le graphe envoie au moteur (pistes : id, patch, séquence, voix, niveau, pan, mute ; master). Des données simples, qui passent par `postMessage`.
+- `src/shared/music/engine/core.ts` : `EngineCore`, sans Web Audio. Il contient :
+  - les pistes (un `FmSynth` chacune, à travers le `Mixer`) ;
+  - le transport (`play`, `pause`, `seek`, `follow`) ;
+  - l'ordonnanceur extrait du spike, qui place chaque note-on et note-off sur son échantillon exact.
+  Il est testé (12 tests).
+- `src/shared/music/engine/engine.worklet.ts` : `EngineCore` dans l'AudioWorklet. Il compense la latence des messages et renvoie son état (position, voix, recalages) toutes les 250 ms.
+- `src/shared/music/engine/bridge.ts` : côté page, un `AudioWorkletNode` par node Music Out. Le module est chargé une fois par contexte audio, la description n'est envoyée que si elle a changé, et le playhead à chaque frame.
+- `src/shared/graph/nodes/music.ts` : le node **Music Out** (`music/out`).
+- `src/shared/music/demo.ts` : les deux pistes de démo, partagées par le spike et par la case « Demo » de Music Out.
+- Nouveau type de socket **`music`** (rouge, forme pentagone dans l'export SVG) et nouvelle catégorie **Music** (fuchsia).
+
+Comment le moteur suit la timeline :
+- La position du morceau découle directement du playhead : `(frame − Start Frame) / fps`. Le calcul est identique en lecture et en export.
+- Le moteur garde sa propre horloge, exacte à l'échantillon. Il ne saute que si le playhead s'en écarte de plus de 80 ms, comme l'Audio Player. Un seek ou une boucle de la timeline déclenche donc un saut, mais pas les pas grossiers du frame rate.
+- Pause : plus aucune nouvelle note, et les notes en cours s'éteignent sous leur release.
+- Seek : les notes en cours sont relâchées, et celles qui devraient déjà sonner à la nouvelle position sont lancées. Une note qui commence pile à la cible est laissée à l'ordonnanceur, sans double frappe.
+- Avant Start Frame, le moteur est silencieux. Pendant un export, il se tait (la bande-son sera rendue hors ligne à l'étape 6). Comme l'Audio Player, un seul viewport le pilote à la fois.
+- Si on modifie une piste en cours de lecture, le moteur relâche les notes que la nouvelle séquence ne tient plus et garde les autres. Une piste retirée est relâchée puis supprimée.
+
+Mesures dans l'app (Chrome, panneau visible), timeline de 120 frames à 30 fps :
+- **Un seul recalage par tour, la boucle elle-même**, pendant 13 s de lecture. Aucune dérive.
+- Pause : arrêt à la position exacte, voix à 0 en environ 1,2 s (fin des releases).
+- Seek en lecture vers la frame 90 : le moteur passe à 3,09 s, et les voix continuent sans trou.
+- Seek à l'arrêt vers la frame 60, puis Play : le moteur démarre à 2,0 s avec 4 voix qui sonnent déjà.
+- **Attention aux mesures avec le panneau masqué** : la page passe en arrière-plan, le rendu est bridé et le playhead avance plus lentement que le temps réel. Le moteur se recale alors environ 2 fois par tour. Ce n'est pas un défaut du moteur, mais ça montre qu'un rendu très lent (moins de ~25 fps) ferait des accrocs. Si ça arrive en vrai, on pourra élargir la tolérance ou faire suivre au moteur la vitesse du playhead.
+
+Ce que les tests du moteur ont fait corriger :
+- Une piste créée muette démarrait au niveau par défaut et glissait jusqu'à 0 : on entendait 5 ms de son. Le canal est maintenant créé avec ses réglages.
+- Le mixeur identifiait ses canaux par index, ce qui ne permettait pas de retirer une piste. Il les identifie maintenant par id.
+- Deux attentes de test mal posées (seuil de clic et soft clip), corrigées dans les tests.
+
+Limites :
+- **Case « Demo » provisoire** : elle sera retirée à l'étape 4, quand les nodes de piste existeront.
+- En dev, si on modifie `engine.worklet.ts` à chaud, il faut recharger la page. Le contexte audio garde l'ancien processeur enregistré sous le même nom.
+- Pas encore testé dans Tauri. Ce n'est pas encore écouté.
+- En dev, `window.__tsujiMusic()` renvoie l'état des moteurs (position, voix, recalages) pour vérifier ce que font les haut-parleurs.
+
 ## 6. Après le MVP (côté SLOOP / KAWA)
 
 - **Live / looper (SLOOP)** : jeu au clavier de l'ordi et en Web MIDI, enregistrement en boucle quantifié dans un pattern, overdub.

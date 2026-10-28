@@ -51,8 +51,8 @@ describe("softClip", () => {
 describe("Mixer", () => {
   it("pans and levels each channel and sums them", () => {
     const m = new Mixer(SR);
-    m.addChannel(dc(0.2), { level: 1, pan: -1, mute: false });
-    m.addChannel(dc(0.1), { level: 0.5, pan: 1, mute: false });
+    m.addChannel("a", dc(0.2), { level: 1, pan: -1, mute: false });
+    m.addChannel("b", dc(0.1), { level: 0.5, pan: 1, mute: false });
     const [l, r] = renderStereo(m, 256);
     expect(l[255]).toBeCloseTo(0.2, 6);
     expect(r[255]).toBeCloseTo(0.05, 6);
@@ -60,27 +60,35 @@ describe("Mixer", () => {
 
   it("glides to a new level instead of jumping, and mutes to exact silence", () => {
     const m = new Mixer(SR);
-    const ch = m.addChannel(dc(0.5), { level: 1, pan: -1, mute: false });
+    m.addChannel("a", dc(0.5), { level: 1, pan: -1, mute: false });
     renderStereo(m, 256);
-    m.setChannel(ch, { level: 1, pan: -1, mute: true });
+    m.setChannel("a", { level: 1, pan: -1, mute: true });
     const [l] = renderStereo(m, 4800);
     expect(l[0]).toBeGreaterThan(0.45); // not cut at once
     expect(l[600]).toBeLessThan(1e-5); // −100 dB within 12.5 ms
     expect(l[1500]).toBe(0); // and exactly 0 once the glide lands, ~22 ms
   });
 
+  it("removes a channel", () => {
+    const m = new Mixer(SR);
+    m.addChannel("a", dc(0.5), { level: 1, pan: -1, mute: false });
+    m.removeChannel("a");
+    expect(m.hasChannel("a")).toBe(false);
+    expect(renderStereo(m, 128)[0].every((x) => x === 0)).toBe(true);
+  });
+
   it("renders the same samples whatever the block size", () => {
     const run = (block: number) => {
       const m = new Mixer(SR);
-      const a = m.addChannel(dc(0.3));
-      m.addChannel(dc(-0.2), { level: 0.7, pan: 0.4, mute: false });
+      m.addChannel("a", dc(0.3));
+      m.addChannel("b", dc(-0.2), { level: 0.7, pan: 0.4, mute: false });
       const out: number[] = [];
       const go = (n: number) => {
         const [l, r] = renderStereo(m, n, block);
         out.push(...l, ...r);
       };
       go(1000);
-      m.setChannel(a, { level: 0.2, pan: -0.8, mute: false });
+      m.setChannel("a", { level: 0.2, pan: -0.8, mute: false });
       m.setMaster(1.5);
       go(1000);
       return out;

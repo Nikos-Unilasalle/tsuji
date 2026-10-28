@@ -129,6 +129,7 @@ Pick types for `inputs`/`outputs` from exactly these seven — no others exist:
 | `geometry` | `THREE.Object3D`            | green   |
 | `texture`  | `THREE.Texture`             | teal    |
 | `list`     | `unknown[]`                 | gray    |
+| `music`    | `TrackDescription` (a music track to play, see `docs/music-nodes-mvp.md`) | red |
 
 There is no Boolean or Trigger type. A boolean travels as a `value`
 socket carrying `0` or `1` — use `toBoolean`/`fromBoolean` from

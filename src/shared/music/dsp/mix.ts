@@ -58,7 +58,7 @@ export function softClip(x: number): number {
 
 export class Mixer {
   private readonly smooth: number;
-  private channels: Channel[] = [];
+  private channels = new Map<string, Channel>();
   private mono = new Float32Array(CHUNK);
   private masterTarget = 1;
   private masterNow = 1;
@@ -67,17 +67,24 @@ export class Mixer {
     this.smooth = 1 - Math.exp(-4.6 / Math.max(1, SMOOTH_SECONDS * sampleRate));
   }
 
-  /** Returns the channel's index. */
-  addChannel(source: MonoSource, settings: ChannelSettings = { level: 1, pan: 0, mute: false }): number {
+  /** Adds a channel, or replaces the one with this id. Channels mix in the order they were first added. */
+  addChannel(id: string, source: MonoSource, settings: ChannelSettings = { level: 1, pan: 0, mute: false }): void {
     const [l, r] = this.gainsOf(settings);
-    this.channels.push({ source, targetL: l, targetR: r, nowL: l, nowR: r });
-    return this.channels.length - 1;
+    this.channels.set(id, { source, targetL: l, targetR: r, nowL: l, nowR: r });
   }
 
-  setChannel(index: number, settings: ChannelSettings): void {
-    const ch = this.channels[index];
+  setChannel(id: string, settings: ChannelSettings): void {
+    const ch = this.channels.get(id);
     if (!ch) return;
     [ch.targetL, ch.targetR] = this.gainsOf(settings);
+  }
+
+  removeChannel(id: string): void {
+    this.channels.delete(id);
+  }
+
+  hasChannel(id: string): boolean {
+    return this.channels.has(id);
   }
 
   setMaster(level: number): void {
@@ -97,7 +104,7 @@ export class Mixer {
     const sc = this.smooth;
     left.fill(0, s0, s0 + m);
     right.fill(0, s0, s0 + m);
-    for (const ch of this.channels) {
+    for (const ch of this.channels.values()) {
       this.mono.fill(0, 0, m);
       ch.source.render(this.mono, 0, m);
       let gl = ch.nowL;

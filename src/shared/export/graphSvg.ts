@@ -48,7 +48,7 @@ const FONT = "ui-sans-serif, -apple-system, 'Segoe UI', Roboto, sans-serif";
 
 type Shape =
   | "disc" | "ring" | "disc_ring" | "square" | "square_ring"
-  | "diamond" | "diamond_ring" | "triangle" | "triangle_ring" | "hexagon" | "hexagon_ring" | "star" | "cross";
+  | "diamond" | "diamond_ring" | "triangle" | "triangle_ring" | "hexagon" | "hexagon_ring" | "star" | "cross" | "pentagon";
 
 /** Une forme par type de socket — c'est la forme, pas la couleur, qui porte le sens ici. */
 const TYPE_SHAPE: Record<SocketType, Shape> = {
@@ -64,6 +64,7 @@ const TYPE_SHAPE: Record<SocketType, Shape> = {
   text: "star",
   postprocess: "cross",
   blobfield: "hexagon_ring",
+  music: "pentagon",
   any: "disc_ring",
 };
 
@@ -162,6 +163,13 @@ function portShape(cx: number, cy: number, kind: Shape): string {
         const rr = i % 2 === 0 ? r + 1.5 : r - 2;
         pts.push(`${f(cx + rr * Math.cos(rad))},${f(cy + rr * Math.sin(rad))}`);
       }
+      return `<polygon points="${pts.join(" ")}" fill="${p}"/>`;
+    }
+    case "pentagon": {
+      const pts = [0, 72, 144, 216, 288].map((deg) => {
+        const rad = ((deg - 90) * Math.PI) / 180;
+        return `${f(cx + (r + 1) * Math.cos(rad))},${f(cy + (r + 1) * Math.sin(rad))}`;
+      });
       return `<polygon points="${pts.join(" ")}" fill="${p}"/>`;
     }
     case "cross":

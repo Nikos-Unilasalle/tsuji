@@ -12,6 +12,7 @@ export type NodeCategory =
   | "logic"
   | "material"
   | "math"
+  | "music"
   | "object"
   | "particles"
   | "physics"
@@ -41,6 +42,7 @@ export const CATEGORY_ORDER: NodeCategory[] = [
   "logic",
   "material",
   "math",
+  "music",
   "object",
   "particles",
   "physics",
@@ -70,6 +72,7 @@ export const CATEGORY_LABEL: Record<NodeCategory, string> = {
   logic: "Logic",
   material: "Material",
   math: "Math",
+  music: "Music",
   object: "Object",
   particles: "Particles",
   physics: "Physics",
@@ -102,6 +105,7 @@ export const CATEGORY_COLOR: Record<NodeCategory, string> = {
   logic: "#fb923c",
   material: "#d97706",
   math: "#f2c14e",
+  music: "#d946ef",
   object: "#0284c7",
   particles: "#2dd4bf",
   physics: "#22c55e",
