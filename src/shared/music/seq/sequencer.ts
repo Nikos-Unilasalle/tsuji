@@ -142,17 +142,59 @@ function delayOf(seq: Sequence, sampleRate: number, cell: Cell | null): number {
   return (Math.min(15, Math.max(0, cell.fx.value)) / 16) * stepLength(seq.clock, sampleRate);
 }
 
+/**
+ * The pattern positions holding a cell, in order — so that finding the next or the last trigger costs the cells on the
+ * way, not the empty steps: a whole song in one pattern (thousands of steps, long silences) stays cheap to read once
+ * per audio block. Kept per pattern object, which a description reuses until it changes.
+ */
+const cellIndex = new WeakMap<Pattern, Int32Array>();
+
+function filledPositions(seq: Sequence): Int32Array {
+  let idx = cellIndex.get(seq.pattern);
+  if (!idx) {
+    const L = Math.max(1, Math.round(seq.pattern.length));
+    const out: number[] = [];
+    for (let i = 0; i < L; i++) if (seq.pattern.steps[i]) out.push(i);
+    idx = Int32Array.from(out);
+    cellIndex.set(seq.pattern, idx);
+  }
+  return idx;
+}
+
+/** The first index in the sorted positions holding a value ≥ p. */
+function lowerBound(a: Int32Array, p: number): number {
+  let lo = 0;
+  let hi = a.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (a[mid] < p) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo;
+}
+
+/** The first step after g (up to g + L − 1) that triggers, or −1. */
+function nextTrigger(seq: Sequence, g: number): number {
+  const L = Math.max(1, Math.round(seq.pattern.length));
+  const idx = filledPositions(seq);
+  if (idx.length === 0) return -1;
+  const base = g - (((g % L) + L) % L); // the loop g is in starts here
+  let i = lowerBound(idx, g - base + 1);
+  for (let n = 0; n < idx.length; n++, i++) {
+    const wrap = i >= idx.length ? 1 : 0;
+    const k = base + idx[i - wrap * idx.length] + wrap * L;
+    if (k >= g + L) return -1;
+    if (triggers(seq, k)) return k;
+  }
+  return -1;
+}
+
 /** Exact end of the note triggered at g0: the next trigger, or its own length (from its note-on), or a full loop. */
 function endTime(seq: Sequence, sampleRate: number, g0: number): number {
   const L = Math.max(1, Math.round(seq.pattern.length));
   const { clock } = seq;
-  let end = stepTime(clock, sampleRate, g0 + L);
-  for (let g = g0 + 1; g < g0 + L; g++) {
-    if (triggers(seq, g)) {
-      end = stepTime(clock, sampleRate, g);
-      break;
-    }
-  }
+  const next = nextTrigger(seq, g0);
+  let end = stepTime(clock, sampleRate, next >= 0 ? next : g0 + L);
   const cell = cellAt(seq, g0);
   const len = cell?.length;
   if (len !== undefined && len > 0) end = Math.min(end, stepTime(clock, sampleRate, g0) + delayOf(seq, sampleRate, cell) + len * stepLength(clock, sampleRate));
@@ -161,8 +203,18 @@ function endTime(seq: Sequence, sampleRate: number, g0: number): number {
 
 /** The last step at or before g that triggers (searched back one loop), or −1. */
 function lastTrigger(seq: Sequence, g: number): number {
+  if (g < 0) return -1;
   const L = Math.max(1, Math.round(seq.pattern.length));
-  for (let k = g; k >= 0 && k > g - L; k--) if (triggers(seq, k)) return k;
+  const idx = filledPositions(seq);
+  if (idx.length === 0) return -1;
+  const base = g - (((g % L) + L) % L);
+  let i = lowerBound(idx, g - base + 1) - 1; // the last position ≤ g's
+  for (let n = 0; n < idx.length; n++, i--) {
+    const wrap = i < 0 ? 1 : 0;
+    const k = base + idx[i + wrap * idx.length] - wrap * L;
+    if (k < 0 || k <= g - L) return -1;
+    if (triggers(seq, k)) return k;
+  }
   return -1;
 }
 

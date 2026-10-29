@@ -124,6 +124,18 @@ export function PatternHud({
     return g < 0 ? -1 : g % length;
   });
 
+  // A long pattern (a whole converted song) is shown a page at a time: the page holding the cursor while you type, the
+  // step playing otherwise — thousands of cells redrawn every frame would stall the app.
+  const pageSize = drums ? 64 : 256;
+  const anchor = focused || step < 0 ? cur : step;
+  const pageStart = length > pageSize ? Math.floor(anchor / pageSize) * pageSize : 0;
+  const pageEnd = Math.min(length, pageStart + pageSize);
+  const visible = cells.slice(pageStart, pageEnd);
+  const turnPage = (by: number) => {
+    setCursor(Math.min(length - 1, Math.max(0, pageStart + by * pageSize)));
+    focusKeys();
+  };
+
   const cell = cells[cur];
   const noteCell = asNote(cell);
   // The bar shows the cell under the cursor, or the brush on an empty step.
@@ -270,6 +282,17 @@ export function PatternHud({
       >
         <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 11 }}>
           <span style={{ fontWeight: 600, fontSize: 12, color: ACCENT }}>{drums ? "Drum Pattern" : "Pattern"}</span>
+          {length > pageSize && (
+            <span style={{ display: "flex", alignItems: "center", gap: 3, color: "#94a3b8", fontVariantNumeric: "tabular-nums" }} title="A long pattern shows a page at a time: the one you type in, or the one playing">
+              <button type="button" className="viewport-hud-button" style={{ width: 22 }} disabled={pageStart === 0} onClick={() => turnPage(-1)}>
+                ◀
+              </button>
+              steps {pageStart + 1}–{pageEnd} of {length}
+              <button type="button" className="viewport-hud-button" style={{ width: 22 }} disabled={pageEnd >= length} onClick={() => turnPage(1)}>
+                ▶
+              </button>
+            </span>
+          )}
           <span style={{ color: "#94a3b8", fontVariantNumeric: "tabular-nums", minWidth: 92 }}>
             {step >= 0 ? `Bar ${Math.floor(step / STEPS_PER_ROW) + 1} · step ${(step % STEPS_PER_ROW) + 1}` : "—"}
           </span>
@@ -329,7 +352,7 @@ export function PatternHud({
 
         <div style={{ overflowX: "auto", overflowY: "auto", maxWidth: "100%", maxHeight: "min(44vh, 340px)" }}>
           {drums ? (
-            <div style={{ display: "grid", gridTemplateColumns: `78px repeat(${length}, ${DRUM_CELL}px)`, rowGap: 3, userSelect: "none" }}>
+            <div style={{ display: "grid", gridTemplateColumns: `78px repeat(${visible.length}, ${DRUM_CELL}px)`, rowGap: 3, userSelect: "none" }}>
               {DRUM_LANES.map((d, li) => [
                 <span
                   key={`n${d}`}
@@ -339,7 +362,8 @@ export function PatternHud({
                 >
                   {DRUM_KEY_OF[d]} · {DRUM_LABEL[d]}
                 </span>,
-                ...cells.map((c, i) => {
+                ...visible.map((c, j) => {
+                  const i = pageStart + j;
                   const on = drumsAt(c).has(DRUM_NOTES[d]);
                   const vel = c && c.note !== "off" ? (c.velocity ?? 0.8) : 0.8;
                   return (
@@ -370,7 +394,8 @@ export function PatternHud({
             </div>
           ) : (
             <div style={{ display: "grid", gridTemplateColumns: `repeat(${STEPS_PER_ROW}, ${CELL_W}px)`, rowGap: 4, userSelect: "none" }}>
-              {cells.map((c, i) => {
+              {visible.map((c, j) => {
+                const i = pageStart + j;
                 const isOff = c?.note === "off";
                 const n = asNote(c);
                 const vel = n?.velocity ?? 0.8;

@@ -180,6 +180,18 @@ describe("effects", () => {
   });
 });
 
+describe("long patterns", () => {
+  it("finds notes across long silences and round the loop, a whole song in one pattern", () => {
+    const L = 6000;
+    const seq = seqOf({ 5: { note: 60 }, 3000: { note: "off" }, 5990: { note: 62, fx: { type: "CHN", value: 100 } } }, { length: L });
+    // 60 holds from step 5 to the OFF at 3000; 62 from 5990 round the loop to 60's step 5 again.
+    expect(notesSoundingAt(seq, SR, 1000 * STEP).map((e) => [e.note, e.on, e.off])).toEqual([[60, 5 * STEP, 3000 * STEP]]);
+    expect(notesSoundingAt(seq, SR, 4000 * STEP)).toEqual([]);
+    expect(notesSoundingAt(seq, SR, (L + 2) * STEP).map((e) => [e.note, e.on, e.off])).toEqual([[62, 5990 * STEP, (L + 5) * STEP]]);
+    expect(notesStartingIn(seq, SR, (L + 5) * STEP, (L + 6) * STEP).map((e) => e.note)).toEqual([60]);
+  });
+});
+
 describe("reading the sequence", () => {
   const busy = seqOf(
     {

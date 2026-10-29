@@ -122,8 +122,8 @@ export const MUSIC_PATTERN_NODE: NodeDefinition = {
     { id: "seed", label: "Seed (chance, random arp)", kind: "number", step: 1 },
   ],
   evaluate: (inputs, params) => {
-    // Up to 1024: a whole song can be one long pattern (the KAWA QUEST demo is 416 steps).
-    const length = clamp(Math.round(Number(params.length) || 16), 1, 1024);
+    // Up to 16384: a whole song can be one long pattern (KAWA QUEST is 416 steps, a converted .mod thousands).
+    const length = clamp(Math.round(Number(params.length) || 16), 1, 16384);
     const transpose = Math.round(numberInput(inputs.transpose, params.transpose, 0));
     const velScale = clamp(numberInput(inputs.velocity, params.velocity, 1), 0, 2);
     // A wired chord number picks from the list; unwired, the param's choice.
