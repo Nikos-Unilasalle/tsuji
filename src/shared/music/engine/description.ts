@@ -13,6 +13,10 @@ interface TrackBase {
   level: number;
   pan: number;
   mute: boolean;
+  /** 0–1: to the dub delay (left out = 0). */
+  delaySend?: number;
+  /** 0–1: to the reverb (left out = 0). */
+  reverbSend?: number;
 }
 
 export interface FmTrackDescription extends TrackBase {
@@ -32,9 +36,25 @@ export type TrackDescription = FmTrackDescription | DrumTrackDescription;
 /** A sound to audition one note on (the Pattern HUD plays what you type through it). */
 export type PreviewSound = { kind: "fm"; patch: FmPatch } | { kind: "drums"; drums: DrumSettings };
 
+/** The send effects (dsp/fx.ts), set on Music Out. */
+export interface MusicFx {
+  /** The delay's time in beats: 0.75 is a dotted eighth, dub's echo. */
+  delayBeats: number;
+  delayFeedback: number;
+  delayTone: number;
+  delayLevel: number;
+  reverbSize: number;
+  reverbDamp: number;
+  reverbLevel: number;
+}
+
+export const DEFAULT_FX: MusicFx = { delayBeats: 0.75, delayFeedback: 0.5, delayTone: 0.45, delayLevel: 0.7, reverbSize: 0.6, reverbDamp: 0.5, reverbLevel: 0.4 };
+
 export interface MusicDescription {
   tracks: TrackDescription[];
   master: number;
+  /** Left out: DEFAULT_FX (sending nothing to them, a description without sends sounds as before). */
+  fx?: MusicFx;
 }
 
 export const EMPTY_DESCRIPTION: MusicDescription = { tracks: [], master: 1 };

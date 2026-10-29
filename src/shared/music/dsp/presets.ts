@@ -63,6 +63,15 @@ export const FM_PRESETS = {
     feedback: 0.25,
     ops: [op(1, 0.5, 0.045, 1.2, 0.85, 0.18, 0.5), op(1, 0.32, 0.06, 1.5, 0.7, 0.2, 0.4, 7), op(2, 0.16, 0.05, 0.8, 0.5, 0.2, 0.3), op(1, 0.12, 0.08, 1, 0.6, 0.2)],
   },
+  /**
+   * A dub bass: round and heavy, almost a sine (one faint modulator for warmth, gone after the attack), held legato
+   * with a soft release — the low end that carries a riddim.
+   */
+  "Dub Bass": {
+    algorithm: 1,
+    feedback: 0,
+    ops: [op(1, 0.72, 0.006, 2.5, 0.85, 0.14, 0.35), op(1, 0.07, 0.002, 0.25, 0.02, 0.1, 0.4), op(2, 0.015, 0.002, 0.2, 0, 0.1), op(1, 0, 0.002, 0.2, 0, 0.1)],
+  },
   /** Chip-like square-ish tone: a carrier modulated at its own pitch, hard. */
   Chip: {
     algorithm: 1,

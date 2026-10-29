@@ -156,6 +156,14 @@ describe("effects", () => {
     ]);
   });
 
+  it("delays a note by sixteenths of a step, its length counted from where it starts", () => {
+    const seq = seqOf({ 0: { note: 60, fx: { type: "DLY", value: 4 }, length: 0.5 }, 2: { note: 62 } });
+    expect(collect(seq, 4 * STEP).map(pick)).toEqual([
+      [STEP / 4, STEP / 4 + STEP / 2, 60],
+      [2 * STEP, 16 * STEP, 62], // held round the loop to its own step
+    ]);
+  });
+
   it("plays a chance cell about as often as it says, the same way every run", () => {
     const seq = seqOf({ 0: { note: 60, fx: { type: "CHN", value: 50 } } }, { length: 1, seed: 3 });
     const a = collect(seq, 400 * STEP, 4096);

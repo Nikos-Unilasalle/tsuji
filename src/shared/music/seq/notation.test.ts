@@ -44,6 +44,7 @@ describe("parseCell", () => {
       fx: { type: "GLD", value: 12 },
     });
     expect(parseCell("C4!rtg3@1:maj")).toEqual({ note: 60, fx: { type: "RTG", value: 3 }, velocity: 1, chord: "maj" });
+    expect(parseCell("tomhigh@0.4~0.3!DLY3")).toEqual({ note: 50, velocity: 0.4, length: 0.3, fx: { type: "DLY", value: 3 } });
   });
 
   it("joins notes struck together with +", () => {

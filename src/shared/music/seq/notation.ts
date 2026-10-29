@@ -13,7 +13,8 @@
  *     ^                 spread voicing
  *     @V                velocity, 0–1
  *     ~N                length in steps
- *     !FX               one effect: GLDn (glide n × 10 ms), RTGn (ratchet ×n), CHNn (chance n %)
+ *     !FX               one effect: GLDn (glide n × 10 ms), RTGn (ratchet ×n), CHNn (chance n %),
+ *                       DLYn (the note n / 16 of a step late)
  *
  * NOTE is a pitch with its octave, C4 = MIDI 60 (C-4, C#4, Db4 and c4 work too), a MIDI number, or a drum name
  * (kick snare clap hat openhat tomlow tomhigh) for a Drum Kit.
@@ -73,7 +74,7 @@ export function parseCell(word: string): Cell | null {
     else if (kind === "@" && value !== "" && Number.isFinite(Number(value))) cell.velocity = Math.min(1, Math.max(0, Number(value)));
     else if (kind === "~" && Number(value) > 0) cell.length = Number(value);
     else if (kind === "!") {
-      const fx = /^(GLD|RTG|CHN)(\d+(?:\.\d+)?)$/i.exec(value);
+      const fx = /^(GLD|RTG|CHN|DLY)(\d+(?:\.\d+)?)$/i.exec(value);
       if (fx) cell.fx = { type: fx[1].toUpperCase() as CellFx["type"], value: Number(fx[2]) } as CellFx;
     }
   }

@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { deserializeProject } from "../graph/storage";
 import { DEFAULT_REGISTRY } from "../graph/nodes/index";
 import { evaluateGraph } from "../graph/evaluate";
-import { gatherTracks } from "../graph/nodes/music";
+import { MUSIC_OUT_NODE, musicDescriptionOf } from "../graph/nodes/music";
 import { EngineCore } from "./engine/core";
 
 /**
@@ -31,11 +31,12 @@ describe("music demos", () => {
       // Music Out's inputs, as the evaluator fills them: what is wired into each Track socket.
       const inputs: Record<string, unknown> = {};
       for (const c of graph.connections.filter((c) => c.toNode === out.id)) inputs[c.toSocket] = results.get(c.fromNode)?.[c.fromSocket];
-      const tracks = gatherTracks(inputs, out.id);
-      expect(tracks.length).toBeGreaterThan(0);
+      // As Music Out builds it: its tracks, master and send effects.
+      const desc = musicDescriptionOf(inputs, { ...MUSIC_OUT_NODE.defaultParams, ...out.params }, out.id);
+      expect(desc.tracks.length).toBeGreaterThan(0);
 
       const engine = new EngineCore(SR);
-      engine.describe({ tracks, master: Number(out.params.master ?? 0.8) });
+      engine.describe(desc);
       engine.play(0);
       // The whole song, as long as the timeline (capped at a minute): every part has to come in and be heard.
       const render = graph.nodes.find((n) => n.type === "render");

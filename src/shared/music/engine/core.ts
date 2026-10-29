@@ -16,7 +16,7 @@ import { DrumSynth } from "../dsp/drums";
 import { FmSynth } from "../dsp/fm";
 import { Mixer, MonoSource } from "../dsp/mix";
 import { NoteEvent, Sequence, notesSoundingAt, notesStartingIn } from "../seq/sequencer";
-import { MusicDescription, PreviewSound, TrackDescription } from "./description";
+import { DEFAULT_FX, MusicDescription, PreviewSound, TrackDescription } from "./description";
 
 /** What a track plays through: an FmSynth or a DrumSynth. */
 interface Instrument extends MonoSource {
@@ -51,6 +51,8 @@ interface Due {
 const MAX_VOICES = 16;
 const PREVIEW_ID = "__preview";
 
+const channelOf = (d: TrackDescription) => ({ level: d.level, pan: d.pan, mute: d.mute, delaySend: d.delaySend ?? 0, reverbSend: d.reverbSend ?? 0 });
+
 function glideOf(e: NoteEvent): { from: number; seconds: number } | undefined {
   return e.glideFrom === undefined ? undefined : { from: e.glideFrom, seconds: e.glideSeconds ?? 0 };
 }
@@ -71,6 +73,7 @@ export class EngineCore {
   private pos = 0;
   /** How many times `follow` had to jump: seeks and loops, or drift if it keeps climbing on its own. */
   jumps = 0;
+  private fxKey = "";
   /** The audition instrument, on its own channel, heard whether the transport runs or not. */
   private preview: { key: string; synth: Instrument; offs: { left: number; note: number }[] } | null = null;
 
@@ -107,7 +110,7 @@ export class EngineCore {
         track = { id: d.id, kind: d.kind, synth, seq: d.seq, patchKey: "", seqKey: "", offs: [] };
         this.tracks.set(d.id, track);
         // With its own settings from the start: a track that appears muted must not glide down from full level.
-        this.mixer.addChannel(d.id, track.synth, { level: d.level, pan: d.pan, mute: d.mute });
+        this.mixer.addChannel(d.id, track.synth, channelOf(d));
       }
       const patchKey = JSON.stringify(d.kind === "fm" ? d.patch : d.drums);
       if (patchKey !== track.patchKey) {
@@ -122,7 +125,7 @@ export class EngineCore {
         track.seqKey = seqKey;
         if (!first) this.releaseWhatTheNewSequenceDoesNotHold(track);
       }
-      this.mixer.setChannel(d.id, { level: d.level, pan: d.pan, mute: d.mute });
+      this.mixer.setChannel(d.id, channelOf(d));
     }
     for (const [id, track] of this.tracks) {
       if (seen.has(id)) continue;
@@ -131,6 +134,17 @@ export class EngineCore {
       this.tracks.delete(id);
     }
     this.mixer.setMaster(desc.master);
+    // The delay keeps time with the song: its length in beats, at the first track's tempo.
+    const fx = desc.fx ?? DEFAULT_FX;
+    const bpm = desc.tracks[0]?.seq.clock.bpm ?? 120;
+    const fxKey = JSON.stringify([fx, bpm]);
+    if (fxKey !== this.fxKey) {
+      this.fxKey = fxKey;
+      this.mixer.setFx({
+        delay: { time: (fx.delayBeats * 60) / Math.max(1, bpm), feedback: fx.delayFeedback, tone: fx.delayTone, level: fx.delayLevel },
+        reverb: { size: fx.reverbSize, damp: fx.reverbDamp, level: fx.reverbLevel },
+      });
+    }
   }
 
   /** A pattern edited under a held note: let go of the notes the new pattern does not have sounding here. */

@@ -5,6 +5,7 @@ import { NodeDefinition, ParamFieldDef } from "../types";
 import { numberInput } from "./object";
 import { MusicEngineHandle, musicEngineFor, releaseMusicEngine } from "../../music/engine/bridge";
 import {
+  DEFAULT_FX,
   MusicDescription,
   MusicValue,
   TrackDescription,
@@ -188,6 +189,23 @@ export const MUSIC_ARP_NODE: NodeDefinition = {
   },
 };
 
+// ── Sends (FM Voice, Drum Kit) ─────────────────────────────────────────────
+
+const SEND_INPUTS = [
+  { id: "delaySend", label: "Delay Send", type: "value" as const },
+  { id: "reverbSend", label: "Reverb Send", type: "value" as const },
+];
+const SEND_FIELDS: ParamFieldDef[] = [
+  { id: "delaySend", label: "Delay Send (dub echo, set on Music Out)", kind: "number", step: 0.05, group: "Sends" },
+  { id: "reverbSend", label: "Reverb Send", kind: "number", step: 0.05, group: "Sends" },
+];
+function sendsOf(inputs: Record<string, unknown>, params: Record<string, unknown>) {
+  return {
+    delaySend: clamp(numberInput(inputs.delaySend, params.delaySend, 0), 0, 1),
+    reverbSend: clamp(numberInput(inputs.reverbSend, params.reverbSend, 0), 0, 1),
+  };
+}
+
 // ── FM Voice ───────────────────────────────────────────────────────────────
 
 const OP_FIELDS: { key: keyof FmOperatorPatch; label: string; step: number }[] = [
@@ -242,9 +260,10 @@ export const MUSIC_FM_VOICE_NODE: NodeDefinition = {
     { id: "pan", label: "Pan", type: "value" },
     { id: "brightness", label: "Brightness ×", type: "value" },
     { id: "mute", label: "Mute", type: "value" },
+    ...SEND_INPUTS,
   ],
   outputs: [{ id: "track", label: "Track", type: "music" }],
-  defaultParams: { preset: "E. Piano", voices: 8, transpose: 0, level: 0.8, pan: 0, brightness: 1, mute: false, ...patchParams(FM_PRESETS["E. Piano"]) },
+  defaultParams: { preset: "E. Piano", voices: 8, transpose: 0, level: 0.8, pan: 0, brightness: 1, mute: false, delaySend: 0, reverbSend: 0, ...patchParams(FM_PRESETS["E. Piano"]) },
   // A voice saved with a preset name but no operator settings (a hand-written or generated file) gets that preset's
   // settings, not the E. Piano defaults the missing keys would otherwise be filled with.
   upgradeParams: (params) => (params.preset !== undefined && params.op1_ratio === undefined ? { ...presetParams(String(params.preset)), ...params } : params),
@@ -262,6 +281,7 @@ export const MUSIC_FM_VOICE_NODE: NodeDefinition = {
     { id: "voices", label: "Voices (1–16, 1 = mono)", kind: "number", step: 1 },
     { id: "transpose", label: "Transpose (semitones)", kind: "number", step: 1 },
     { id: "mute", label: "Mute", kind: "boolean" },
+    ...SEND_FIELDS,
     {
       id: "algorithm",
       label: "Algorithm",
@@ -293,6 +313,7 @@ export const MUSIC_FM_VOICE_NODE: NodeDefinition = {
       level: clamp(numberInput(inputs.level, params.level, 0.8), 0, 2),
       pan: clamp(numberInput(inputs.pan, params.pan, 0), -1, 1),
       mute: inputs.mute !== undefined ? Number(inputs.mute) > 0 : Boolean(params.mute),
+      ...sendsOf(inputs, params),
     };
     return { track };
   },
@@ -312,9 +333,10 @@ export const MUSIC_DRUM_KIT_NODE: NodeDefinition = {
     { id: "tune", label: "Tune", type: "value" },
     { id: "decay", label: "Decay ×", type: "value" },
     { id: "mute", label: "Mute", type: "value" },
+    ...SEND_INPUTS,
   ],
   outputs: [{ id: "track", label: "Track", type: "music" }],
-  defaultParams: { level: 0.9, pan: 0, tune: 0, decay: 1, mute: false },
+  defaultParams: { level: 0.9, pan: 0, tune: 0, decay: 1, mute: false, delaySend: 0, reverbSend: 0 },
   paramFields: [
     {
       id: "help",
@@ -326,6 +348,7 @@ export const MUSIC_DRUM_KIT_NODE: NodeDefinition = {
     { id: "tune", label: "Tune (semitones)", kind: "number", step: 1 },
     { id: "decay", label: "Decay ×", kind: "number", step: 0.1 },
     { id: "mute", label: "Mute", kind: "boolean" },
+    ...SEND_FIELDS,
   ],
   evaluate: (inputs, params, ctx) => {
     const seq = sequenceOf(inputs.sequence);
@@ -338,6 +361,7 @@ export const MUSIC_DRUM_KIT_NODE: NodeDefinition = {
       level: clamp(numberInput(inputs.level, params.level, 0.9), 0, 2),
       pan: clamp(numberInput(inputs.pan, params.pan, 0), -1, 1),
       mute: inputs.mute !== undefined ? Number(inputs.mute) > 0 : Boolean(params.mute),
+      ...sendsOf(inputs, params),
     };
     return { track };
   },
@@ -465,6 +489,24 @@ export function gatherTracks(inputs: Record<string, unknown>, nodeId = "out"): T
   return tracks;
 }
 
+/** What a Music Out hands its engine, from its inputs and params: the tracks, the master and the send effects. */
+export function musicDescriptionOf(inputs: Record<string, unknown>, params: Record<string, unknown>, nodeId = "out"): MusicDescription {
+  const num = (k: keyof typeof DEFAULT_FX) => numberInput(undefined, params[k], DEFAULT_FX[k]);
+  return {
+    tracks: gatherTracks(inputs, nodeId),
+    master: clamp(numberInput(inputs.master, params.master, 0.8), 0, 2),
+    fx: {
+      delayBeats: clamp(num("delayBeats"), 0.0625, 4),
+      delayFeedback: clamp(num("delayFeedback"), 0, 0.95),
+      delayTone: clamp(num("delayTone"), 0, 1),
+      delayLevel: clamp(num("delayLevel"), 0, 1.5),
+      reverbSize: clamp(num("reverbSize"), 0, 1),
+      reverbDamp: clamp(num("reverbDamp"), 0, 1),
+      reverbLevel: clamp(num("reverbLevel"), 0, 1.5),
+    },
+  };
+}
+
 export const MUSIC_OUT_NODE: NodeDefinition = {
   type: "music/out",
   label: "Music Out",
@@ -485,17 +527,30 @@ export const MUSIC_OUT_NODE: NodeDefinition = {
     { id: "step", label: "Step", type: "value" },
     { id: "playing", label: "Playing", type: "value" },
   ],
-  defaultParams: { master: 0.8, startFrame: 0 },
+  defaultParams: { master: 0.8, startFrame: 0, ...DEFAULT_FX, delayBeats: String(DEFAULT_FX.delayBeats) },
   paramFields: [
     { id: "master", label: "Master", kind: "number", step: 0.05 },
     { id: "startFrame", label: "Start Frame (the song's first step)", kind: "number", step: 1 },
+    {
+      id: "delayBeats",
+      label: "Delay Time",
+      kind: "select",
+      options: ["0.25", "0.5", "0.75", "1", "1.5", "2"],
+      optionLabels: ["1/16", "1/8", "dotted 1/8 (dub)", "1/4", "dotted 1/4", "1/2"],
+      group: "Dub FX (the voices' sends)",
+    },
+    { id: "delayFeedback", label: "Delay Feedback (0–0.95)", kind: "number", step: 0.05, group: "Dub FX (the voices' sends)" },
+    { id: "delayTone", label: "Delay Tone (dark 0 – open 1)", kind: "number", step: 0.05, group: "Dub FX (the voices' sends)" },
+    { id: "delayLevel", label: "Delay Return", kind: "number", step: 0.05, group: "Dub FX (the voices' sends)" },
+    { id: "reverbSize", label: "Reverb Size (spring 0 – hall 1)", kind: "number", step: 0.05, group: "Dub FX (the voices' sends)" },
+    { id: "reverbDamp", label: "Reverb Damping", kind: "number", step: 0.05, group: "Dub FX (the voices' sends)" },
+    { id: "reverbLevel", label: "Reverb Return", kind: "number", step: 0.05, group: "Dub FX (the voices' sends)" },
   ],
   evaluate: (inputs, params, ctx) => {
     const fps = Math.max(1, Number(ctx.fps) || 30);
     const startFrame = Math.round(numberInput(inputs.startFrame, params.startFrame, 0));
-    const master = clamp(numberInput(inputs.master, params.master, 0.8), 0, 2);
-    const tracks = gatherTracks(inputs, ctx.nodeId);
-    const desc: MusicDescription = { tracks, master };
+    const desc = musicDescriptionOf(inputs, params, ctx.nodeId);
+    const tracks = desc.tracks;
 
     // Where the playhead puts the song: a pure function of the frame, the same live and in an export.
     const frame = ctx.currentFrame ?? 0;

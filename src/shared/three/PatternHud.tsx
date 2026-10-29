@@ -237,7 +237,7 @@ export function PatternHud({
   };
 
   const fx = shown.fx ?? null;
-  const fxRange = { GLD: { min: 1, max: 50, step: 1, label: "Glide ×10 ms" }, RTG: { min: 2, max: 8, step: 1, label: "Strikes" }, CHN: { min: 0, max: 100, step: 5, label: "Chance %" } } as const;
+  const fxRange = { GLD: { min: 1, max: 50, step: 1, label: "Glide ×10 ms" }, RTG: { min: 2, max: 8, step: 1, label: "Strikes" }, CHN: { min: 0, max: 100, step: 5, label: "Chance %" }, DLY: { min: 1, max: 15, step: 1, label: "Late /16 step" } } as const;
 
   return (
     <>
@@ -481,7 +481,7 @@ export function PatternHud({
           value={fx?.type ?? ""}
           onChange={(e) => {
             const type = e.target.value as CellFx["type"] | "";
-            change({ fx: type ? ({ type, value: type === "GLD" ? 10 : type === "RTG" ? 3 : 50 } as CellFx) : undefined });
+            change({ fx: type ? ({ type, value: type === "GLD" ? 10 : type === "RTG" ? 3 : type === "DLY" ? 2 : 50 } as CellFx) : undefined });
           }}
           title="Effect: glide from the previous note, ratchet, or chance"
           style={selectStyle}
@@ -490,6 +490,7 @@ export function PatternHud({
           {!drums && <option value="GLD">Glide</option>}
           <option value="RTG">Ratchet</option>
           <option value="CHN">Chance</option>
+          <option value="DLY">Late</option>
         </select>
         {fx && (
           <CommitSlider

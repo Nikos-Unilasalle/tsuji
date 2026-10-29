@@ -31,7 +31,9 @@ export type CellFx =
   /** Ratchet: the note is struck `value` times (2–8) inside its step. */
   | { type: "RTG"; value: number }
   /** Chance: the cell plays with a probability of value %; seeded, so every run plays the same. */
-  | { type: "CHN"; value: number };
+  | { type: "CHN"; value: number }
+  /** Delay: the note comes value / 16 of a step late (0–15) — a hand that is not a machine. */
+  | { type: "DLY"; value: number };
 
 export interface Cell {
   /** A MIDI note (the chord's root), or "off" to end the note sounding. */
@@ -134,7 +136,13 @@ function playsNote(seq: Sequence, g: number): boolean {
   return triggers(seq, g) && cellAt(seq, g)!.note !== "off";
 }
 
-/** Exact end of the note triggered at g0: the next trigger, or its own length, or a full loop. */
+/** How late a cell's note comes: its DLY, in samples (exact). */
+function delayOf(seq: Sequence, sampleRate: number, cell: Cell | null): number {
+  if (cell?.fx?.type !== "DLY") return 0;
+  return (Math.min(15, Math.max(0, cell.fx.value)) / 16) * stepLength(seq.clock, sampleRate);
+}
+
+/** Exact end of the note triggered at g0: the next trigger, or its own length (from its note-on), or a full loop. */
 function endTime(seq: Sequence, sampleRate: number, g0: number): number {
   const L = Math.max(1, Math.round(seq.pattern.length));
   const { clock } = seq;
@@ -145,8 +153,9 @@ function endTime(seq: Sequence, sampleRate: number, g0: number): number {
       break;
     }
   }
-  const len = cellAt(seq, g0)?.length;
-  if (len !== undefined && len > 0) end = Math.min(end, stepTime(clock, sampleRate, g0) + len * stepLength(clock, sampleRate));
+  const cell = cellAt(seq, g0);
+  const len = cell?.length;
+  if (len !== undefined && len > 0) end = Math.min(end, stepTime(clock, sampleRate, g0) + delayOf(seq, sampleRate, cell) + len * stepLength(clock, sampleRate));
   return end;
 }
 
@@ -169,7 +178,7 @@ export function expandStep(seq: Sequence, sampleRate: number, g0: number, from =
   const notes = chordNotes(root, cell.chord, cell.inversion ?? 0, cell.spread ?? false);
   for (const n of cell.add ?? []) if (!notes.includes(n)) notes.push(n);
   const velocity = Math.min(1, Math.max(0, cell.velocity ?? DEFAULT_VELOCITY));
-  const onT = stepTime(clock, sampleRate, g0);
+  const onT = stepTime(clock, sampleRate, g0) + delayOf(seq, sampleRate, cell);
   const offT = endTime(seq, sampleRate, g0);
   const out: NoteEvent[] = [];
   const emit = (onX: number, offX: number, note: number, glide?: { from: number; seconds: number }) => {
