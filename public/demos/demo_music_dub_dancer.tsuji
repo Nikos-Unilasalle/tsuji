@@ -1,0 +1,1209 @@
+{
+  "canvases": [
+    {
+      "nodes": [
+        {
+          "id": "clock",
+          "type": "music/clock",
+          "position": {
+            "x": 40,
+            "y": 460
+          },
+          "params": {
+            "bpm": 75,
+            "swing": 0.2,
+            "stepsPerBeat": "4"
+          }
+        },
+        {
+          "id": "pat_drums",
+          "type": "music/pattern",
+          "position": {
+            "x": 300,
+            "y": 40
+          },
+          "params": {
+            "steps": "hat@0.4 . hat@0.55 . hat@0.4 . hat@0.55 . kick+snare+hat@0.85 . hat@0.55 . hat@0.4 . hat@0.55 . hat@0.4 . hat@0.55 . hat@0.4 . hat@0.55 . kick+snare+hat@0.85 . hat@0.55 . hat@0.4 . openhat@0.5 . hat@0.4 . hat@0.55 . hat@0.4 . hat@0.55 . kick+snare+hat@0.85 . hat@0.55 . hat@0.4 . hat@0.55 . hat@0.4 . hat@0.55 . hat@0.4 . hat@0.55 . kick+snare+hat@0.85 . hat@0.55 snare@0.35 hat@0.4 . snare+hat@0.2 . hat@0.4 . hat@0.55 . hat@0.4 . hat@0.55 . kick+snare+hat@0.85 . hat@0.55 . hat@0.4 . hat@0.55 . hat@0.4 . hat@0.55 . hat@0.4 . hat@0.55 . kick+snare+hat@0.85 . hat@0.55 . hat@0.4 . openhat@0.5 . hat@0.4 . hat@0.55 . hat@0.4 . hat@0.55 . kick+snare+hat@0.85 . hat@0.55 . hat@0.4 . hat@0.55 . hat@0.4 . hat@0.55 . hat@0.4 . hat@0.55 . kick+snare+hat@0.85 . hat@0.55 . tomhigh@0.8!RTG2 tomhigh@0.7 tomlow@0.85!RTG2 tomlow@0.75 kick+hat@0.8 . hat@0.55 . kick+hat@0.8 . hat@0.55 . kick+snare+hat@0.85 . hat@0.55 . kick+hat@0.8 . hat@0.55 . kick+hat@0.8 . hat@0.55 . kick+hat@0.8 . hat@0.55 . kick+snare+hat@0.85 . hat@0.55 . kick+hat@0.8 . hat@0.55 . kick+hat@0.8 . hat@0.55 . kick+hat@0.8 . hat@0.55 . kick+snare+hat@0.85 . hat@0.55 . kick+hat@0.8 . hat@0.55 . kick+hat@0.8 . hat@0.55 . kick+hat@0.8 . hat@0.55 . kick+snare+hat@0.85 . hat@0.55 . kick+hat@0.8 . hat@0.55 . hat@0.4 . hat@0.55 . hat@0.4 . hat@0.55 . kick+snare+hat@0.85 . hat@0.55 snare@0.35 hat@0.4 . snare+hat@0.2 . kick+hat@0.8 . hat@0.55 . kick+hat@0.8 . hat@0.55 . kick+snare+hat@0.85 . hat@0.55 . kick+hat@0.8 . hat@0.55 . kick+hat@0.8 . hat@0.55 . kick+hat@0.8 . hat@0.55 . kick+snare+hat@0.85 . hat@0.55 . kick+hat@0.8 . hat@0.55 . kick+hat@0.8 . hat@0.55 . kick+hat@0.8 . hat@0.55 . kick+snare+hat@0.85 . hat@0.55 . kick+tomhigh@0.8!RTG2 . tomlow@0.85!RTG3 clap@0.7",
+            "length": "256",
+            "name": "drums"
+          }
+        },
+        {
+          "id": "voice_drums",
+          "type": "music/drum-kit",
+          "position": {
+            "x": 600,
+            "y": 40
+          },
+          "params": {
+            "level": 0.85,
+            "pan": 0,
+            "tune": -2,
+            "decay": 1.1
+          }
+        },
+        {
+          "id": "pat_bass",
+          "type": "music/pattern",
+          "position": {
+            "x": 300,
+            "y": 190
+          },
+          "params": {
+            "steps": ". . A1@0.95~3 . . . C2~1 E2~2 . . A2~2 . G2~2 . E2~2 . . . A1@0.95~3 . . . C2~1 D2~2 . . E2~3 . . . D2~1 C2~1 . . D2@0.95~3 . . . F2~1 A2~2 . . D2~2 . C2~2 . A1~2 . . . D2@0.95~3 . . . F2~1 G2~2 . . A2~3 . . . G2~1 F2~1 . . A1@0.95~3 . . . C2~1 E2~2 . . A2~2 . G2~2 . E2~2 . . . A1@0.95~3 . . . C2~1 D2~2 . . E2~3 . . . D2~1 C2~1 . . E2@0.95~3 . . . G2~1 B2~2 . . E2~2 . D2~2 . B1~2 . . . D2@0.95~3 . . . F2~1 G2~2 . . A2~3 . . . G2~1 F2~1 . . A1@0.95~3 . . . C2~1 E2~2 . . A2~2 . G2~2 . E2~2 . . . A1@0.95~3 . . . C2~1 D2~2 . . E2~3 . . . D2~1 C2~1 . . D2@0.95~3 . . . F2~1 A2~2 . . D2~2 . C2~2 . A1~2 . . . D2@0.95~3 . . . F2~1 G2~2 . . A2~3 . . . G2~1 F2~1 A1@0.9~2 . . . . . . . . . . . . . . . . . A1@0.95~3 . . . C2~1 D2~2 . . E2~3 . . . D2~1 C2~1 . . E2@0.95~3 . . . G2~1 B2~2 . . E2~2 . D2~2 . B1~2 . . . D2@0.95~3 . . . F2~1 G2~2 . . A2~3 . . . G2~1 F2~1",
+            "length": "256",
+            "name": "bass"
+          }
+        },
+        {
+          "id": "voice_bass",
+          "type": "music/fm-voice",
+          "position": {
+            "x": 600,
+            "y": 190
+          },
+          "params": {
+            "preset": "Felucca \u00b7 BASS",
+            "level": 1.0,
+            "pan": 0
+          }
+        },
+        {
+          "id": "pat_skank",
+          "type": "music/pattern",
+          "position": {
+            "x": 300,
+            "y": 340
+          },
+          "params": {
+            "steps": ". . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . D3:min7/2@0.85~1 . . . . . . . D3:min7/2@0.9~1 . . . . . . . D3:min7/2@0.85~1 . . . . . . . D3:min7/2@0.9~1 . . D3:min7/2@0.4~1 . . . . A3:min7@0.85~1 . . . . . . . A3:min7@0.9~1 . . . . . . . A3:min7@0.85~1 . . . . . . . A3:min7@0.9~1 . . . . . . . E3:min7/2@0.85~1 . . . . . . . E3:min7/2@0.9~1 . . . . . . . D3:min7/2@0.85~1 . . . . . . . D3:min7/2@0.9~1 . . D3:min7/2@0.4~1 . . . . A3:min7@0.85~1 . . . . . . . A3:min7@0.9~1 . . . . . . . A3:min7@0.85~1 . . . . . . . A3:min7@0.9~1 . . . . . . . D3:min7/2@0.85~1 . . . . . . . D3:min7/2@0.9~1 . . . . . . . D3:min7/2@0.85~1 . . . . . . . D3:min7/2@0.9~1 . . D3:min7/2@0.4~1 . . . . A3:min7@0.85~1 . . A3:min7@0.4~1 . . A3:min7@0.2~1 . A3:min7@0.9~1 . . A3:min7@0.4~1 . . . . A3:min7@0.85~1 . . . . . . . A3:min7@0.9~1 . . . . . . . E3:min7/2@0.85~1 . . . . . . . E3:min7/2@0.9~1 . . . . . . . D3:min7/2@0.85~1 . . . . . . . D3:min7/2@0.9~1 . . D3:min7/2@0.4~1",
+            "length": "256",
+            "name": "skank"
+          }
+        },
+        {
+          "id": "voice_skank",
+          "type": "music/fm-voice",
+          "position": {
+            "x": 600,
+            "y": 340
+          },
+          "params": {
+            "preset": "SLOOP \u00b7 CLAV",
+            "level": 0.45,
+            "pan": -0.35
+          }
+        },
+        {
+          "id": "pat_organ",
+          "type": "music/pattern",
+          "position": {
+            "x": 300,
+            "y": 490
+          },
+          "params": {
+            "steps": ". . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . D2:min7/2@0.4~1 . . . D2:min7/2@0.55~1 . . . D2:min7/2@0.4~1 . . . D2:min7/2@0.55~1 . . . D2:min7/2@0.4~1 . . . D2:min7/2@0.55~1 . . . D2:min7/2@0.4~1 . . . D2:min7/2@0.55~1 . . . A2:min7@0.4~1 . . . A2:min7@0.55~1 . . . A2:min7@0.4~1 . . . A2:min7@0.55~1 . . . A2:min7@0.4~1 . . . A2:min7@0.55~1 . . . A2:min7@0.4~1 . . . A2:min7@0.55~1 . . . E2:min7/2@0.4~1 . . . E2:min7/2@0.55~1 . . . E2:min7/2@0.4~1 . . . E2:min7/2@0.55~1 . . . D2:min7/2@0.4~1 . . . D2:min7/2@0.55~1 . . . D2:min7/2@0.4~1 . . . D2:min7/2@0.55~1 . . . A2:min7@0.4~1 . . . A2:min7@0.55~1 . . . A2:min7@0.4~1 . . . A2:min7@0.55~1 . . . A2:min7@0.4~1 . . . A2:min7@0.55~1 . . . A2:min7@0.4~1 . . . A2:min7@0.55~1 . . . D2:min7/2@0.4~1 . . . D2:min7/2@0.55~1 . . . D2:min7/2@0.4~1 . . . D2:min7/2@0.55~1 . . . D2:min7/2@0.4~1 . . . D2:min7/2@0.55~1 . . . D2:min7/2@0.4~1 . . . D2:min7/2@0.55~1 . . . . . . . . . . . . . . . . . . . A2:min7@0.4~1 . . . A2:min7@0.55~1 . . . A2:min7@0.4~1 . . . A2:min7@0.55~1 . . . E2:min7/2@0.4~1 . . . E2:min7/2@0.55~1 . . . E2:min7/2@0.4~1 . . . E2:min7/2@0.55~1 . . . D2:min7/2@0.4~1 . . . D2:min7/2@0.55~1 . . . D2:min7/2@0.4~1 . . . D2:min7/2@0.55~1 .",
+            "length": "256",
+            "name": "organ"
+          }
+        },
+        {
+          "id": "voice_organ",
+          "type": "music/fm-voice",
+          "position": {
+            "x": 600,
+            "y": 490
+          },
+          "params": {
+            "preset": "Felucca \u00b7 ORGAN",
+            "level": 0.3,
+            "pan": 0.35
+          }
+        },
+        {
+          "id": "pat_melodica",
+          "type": "music/pattern",
+          "position": {
+            "x": 300,
+            "y": 640
+          },
+          "params": {
+            "steps": ". . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . E5~3 . . D5~1 C5~2 . A4~6 . . . . . . . . . . . C5~2 . D5~2 . E5~4 . . . G5~2 . E5~2 . . . F5~4 . . . E5~2 . D5~2 . C5~2 . D5~6 . . . . . . . . . A4~2 . C5~2 . D5~8!GLD4 . . . . . . . E5~2 . G5~2 . A5~6 . . . . . G5~2 . E5~2 . . . D5~2 . C5~2 . A4~4 . . . C5~2 . D5~2 . E5~2 . . . B4~4 . . . D5~2 . E5~4 . . . G5~2 . E5~2 . . . D5~3 . . C5~1 A4~12!GLD3 . . . . . . . . . . .",
+            "length": "256",
+            "name": "melodica"
+          }
+        },
+        {
+          "id": "voice_melodica",
+          "type": "music/fm-voice",
+          "position": {
+            "x": 600,
+            "y": 640
+          },
+          "params": {
+            "preset": "Melodica",
+            "level": 0.55,
+            "pan": 0.1
+          }
+        },
+        {
+          "id": "pat_siren",
+          "type": "music/pattern",
+          "position": {
+            "x": 300,
+            "y": 790
+          },
+          "params": {
+            "steps": ". . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . A5@0.5~4 . . . E6@0.5~4!GLD40 . . . A5@0.5~4!GLD40 . . . E6@0.45~4!GLD40 . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . A5@0.4~2 . C6@0.45~2!GLD20 . E6@0.5~2!GLD20 . A6@0.5~2!GLD30 . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . A5@0.5~4 . . . E6@0.5~4!GLD40 . . . A5@0.5~4!GLD40 . . . E6@0.45~4!GLD40 . . .",
+            "length": "256",
+            "name": "siren"
+          }
+        },
+        {
+          "id": "voice_siren",
+          "type": "music/fm-voice",
+          "position": {
+            "x": 600,
+            "y": 790
+          },
+          "params": {
+            "preset": "Chip",
+            "level": 0.18,
+            "pan": 0.6,
+            "voices": 1
+          }
+        },
+        {
+          "id": "out",
+          "type": "music/out",
+          "position": {
+            "x": 900,
+            "y": 460
+          },
+          "params": {
+            "master": 0.8,
+            "startFrame": 0
+          }
+        },
+        {
+          "id": "probe_drums",
+          "type": "music/note-probe",
+          "position": {
+            "x": 1180,
+            "y": 40
+          },
+          "params": {
+            "decay": 0.22
+          }
+        },
+        {
+          "id": "probe_skank",
+          "type": "music/note-probe",
+          "position": {
+            "x": 1180,
+            "y": 200
+          },
+          "params": {
+            "decay": 0.16
+          }
+        },
+        {
+          "id": "probe_bass",
+          "type": "music/note-probe",
+          "position": {
+            "x": 1180,
+            "y": 360
+          },
+          "params": {
+            "decay": 0.35
+          }
+        },
+        {
+          "id": "human",
+          "type": "rig/human",
+          "position": {
+            "x": 1180,
+            "y": 560
+          },
+          "params": {}
+        },
+        {
+          "id": "cheer",
+          "type": "rig/biped-pose",
+          "position": {
+            "x": 1440,
+            "y": 560
+          },
+          "params": {
+            "name": "Cheer",
+            "pointsList": [
+              {
+                "x": 0,
+                "y": 1.0032,
+                "z": 0
+              },
+              {
+                "x": 0,
+                "y": 1.7052,
+                "z": -0.0341
+              },
+              {
+                "x": 0.4613,
+                "y": 1.986,
+                "z": 0.0341
+              },
+              {
+                "x": -0.4613,
+                "y": 1.986,
+                "z": 0.0341
+              },
+              {
+                "x": 0.162,
+                "y": 0.072,
+                "z": 0
+              },
+              {
+                "x": -0.162,
+                "y": 0.072,
+                "z": 0
+              },
+              {
+                "x": 0.7096,
+                "y": 1.4712,
+                "z": -0.341
+              },
+              {
+                "x": -0.7096,
+                "y": 1.4712,
+                "z": -0.341
+              },
+              {
+                "x": 0.162,
+                "y": 0.5106,
+                "z": 0.5861
+              },
+              {
+                "x": -0.162,
+                "y": 0.5106,
+                "z": 0.5861
+              },
+              {
+                "x": 0,
+                "y": 0,
+                "z": 0
+              }
+            ],
+            "previewAt": {
+              "x": -1.2,
+              "y": 0,
+              "z": 0
+            }
+          }
+        },
+        {
+          "id": "wave",
+          "type": "rig/biped-pose",
+          "position": {
+            "x": 1440,
+            "y": 720
+          },
+          "params": {
+            "name": "Wave",
+            "pointsList": [
+              {
+                "x": 0,
+                "y": 1.0032,
+                "z": 0
+              },
+              {
+                "x": -0.0171,
+                "y": 1.7052,
+                "z": 0
+              },
+              {
+                "x": 0.4149,
+                "y": 0.9344,
+                "z": 0.058
+              },
+              {
+                "x": -0.4026,
+                "y": 1.7563,
+                "z": 0.0682
+              },
+              {
+                "x": 0.162,
+                "y": 0.072,
+                "z": 0
+              },
+              {
+                "x": -0.162,
+                "y": 0.072,
+                "z": 0
+              },
+              {
+                "x": 0.3126,
+                "y": 1.1875,
+                "z": -0.54
+              },
+              {
+                "x": -0.7673,
+                "y": 1.2154,
+                "z": -0.0853
+              },
+              {
+                "x": 0.162,
+                "y": 0.5106,
+                "z": 0.5861
+              },
+              {
+                "x": -0.162,
+                "y": 0.5106,
+                "z": 0.5861
+              },
+              {
+                "x": 0,
+                "y": 0,
+                "z": 0
+              }
+            ],
+            "previewAt": {
+              "x": 1.2,
+              "y": 0,
+              "z": 0
+            }
+          }
+        },
+        {
+          "id": "dance",
+          "type": "rig/biped-dance",
+          "position": {
+            "x": 1700,
+            "y": 560
+          },
+          "params": {
+            "preset": "sway",
+            "bpm": 75,
+            "energy": 0.9,
+            "groove": 0.45,
+            "swing": 0.2,
+            "loopBeats": 64,
+            "moves": [
+              {
+                "lane": 1,
+                "start": 13,
+                "length": 2,
+                "mirror": false
+              },
+              {
+                "lane": 1,
+                "start": 30,
+                "length": 2,
+                "mirror": true
+              },
+              {
+                "lane": 0,
+                "start": 32,
+                "length": 3,
+                "mirror": false
+              },
+              {
+                "lane": 0,
+                "start": 48,
+                "length": 4,
+                "mirror": true
+              },
+              {
+                "lane": 1,
+                "start": 61,
+                "length": 2,
+                "mirror": false
+              }
+            ]
+          }
+        },
+        {
+          "id": "energy",
+          "type": "math/expression",
+          "position": {
+            "x": 1440,
+            "y": 900
+          },
+          "params": {
+            "formula": "0.75 + 0.45 * x"
+          }
+        },
+        {
+          "id": "lamp_drums",
+          "type": "math/expression",
+          "position": {
+            "x": 1700,
+            "y": 1000
+          },
+          "params": {
+            "formula": "18 + 90 * x"
+          }
+        },
+        {
+          "id": "light_drums",
+          "type": "light/point",
+          "position": {
+            "x": 1960,
+            "y": 1000
+          },
+          "params": {
+            "location": {
+              "x": -3.2,
+              "y": 3.4,
+              "z": 2.2
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "color": 16726862,
+            "intensity": 40,
+            "distance": 16,
+            "decay": 2,
+            "castShadow": 0
+          }
+        },
+        {
+          "id": "lamp_skank",
+          "type": "math/expression",
+          "position": {
+            "x": 1700,
+            "y": 1160
+          },
+          "params": {
+            "formula": "18 + 90 * x"
+          }
+        },
+        {
+          "id": "light_skank",
+          "type": "light/point",
+          "position": {
+            "x": 1960,
+            "y": 1160
+          },
+          "params": {
+            "location": {
+              "x": 0.0,
+              "y": 4.2,
+              "z": -3.0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "color": 16763196,
+            "intensity": 40,
+            "distance": 16,
+            "decay": 2,
+            "castShadow": 1
+          }
+        },
+        {
+          "id": "lamp_bass",
+          "type": "math/expression",
+          "position": {
+            "x": 1700,
+            "y": 1320
+          },
+          "params": {
+            "formula": "18 + 90 * x"
+          }
+        },
+        {
+          "id": "light_bass",
+          "type": "light/point",
+          "position": {
+            "x": 1960,
+            "y": 1320
+          },
+          "params": {
+            "location": {
+              "x": 3.2,
+              "y": 3.4,
+              "z": 2.2
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "color": 4054148,
+            "intensity": 40,
+            "distance": 16,
+            "decay": 2,
+            "castShadow": 0
+          }
+        },
+        {
+          "id": "breath_drums",
+          "type": "math/expression",
+          "position": {
+            "x": 1440,
+            "y": 1500
+          },
+          "params": {
+            "formula": "0.35 + 0.35 * x"
+          }
+        },
+        {
+          "id": "bvec_drums",
+          "type": "converter/value-to-vector",
+          "position": {
+            "x": 1700,
+            "y": 1500
+          },
+          "params": {}
+        },
+        {
+          "id": "bxf_drums",
+          "type": "transform/matrix-transform",
+          "position": {
+            "x": 1960,
+            "y": 1500
+          },
+          "params": {
+            "location": {
+              "x": -2.4,
+              "y": 2.2,
+              "z": -3.2
+            }
+          }
+        },
+        {
+          "id": "orb_drums",
+          "type": "object/sphere",
+          "position": {
+            "x": 2200,
+            "y": 1500
+          },
+          "params": {
+            "color": 14100029,
+            "emissive": 5966362,
+            "emissiveIntensity": 2.2
+          }
+        },
+        {
+          "id": "breath_skank",
+          "type": "math/expression",
+          "position": {
+            "x": 1440,
+            "y": 1670
+          },
+          "params": {
+            "formula": "0.35 + 0.35 * x"
+          }
+        },
+        {
+          "id": "bvec_skank",
+          "type": "converter/value-to-vector",
+          "position": {
+            "x": 1700,
+            "y": 1670
+          },
+          "params": {}
+        },
+        {
+          "id": "bxf_skank",
+          "type": "transform/matrix-transform",
+          "position": {
+            "x": 1960,
+            "y": 1670
+          },
+          "params": {
+            "location": {
+              "x": 0.0,
+              "y": 2.2,
+              "z": -3.2
+            }
+          }
+        },
+        {
+          "id": "orb_skank",
+          "type": "object/sphere",
+          "position": {
+            "x": 2200,
+            "y": 1670
+          },
+          "params": {
+            "color": 16041008,
+            "emissive": 6046214,
+            "emissiveIntensity": 2.2
+          }
+        },
+        {
+          "id": "breath_bass",
+          "type": "math/expression",
+          "position": {
+            "x": 1440,
+            "y": 1840
+          },
+          "params": {
+            "formula": "0.35 + 0.35 * x"
+          }
+        },
+        {
+          "id": "bvec_bass",
+          "type": "converter/value-to-vector",
+          "position": {
+            "x": 1700,
+            "y": 1840
+          },
+          "params": {}
+        },
+        {
+          "id": "bxf_bass",
+          "type": "transform/matrix-transform",
+          "position": {
+            "x": 1960,
+            "y": 1840
+          },
+          "params": {
+            "location": {
+              "x": 2.4,
+              "y": 2.2,
+              "z": -3.2
+            }
+          }
+        },
+        {
+          "id": "orb_bass",
+          "type": "object/sphere",
+          "position": {
+            "x": 2200,
+            "y": 1840
+          },
+          "params": {
+            "color": 3050327,
+            "emissive": 538143,
+            "emissiveIntensity": 2.2
+          }
+        },
+        {
+          "id": "floor_tex",
+          "type": "texture/procedural",
+          "position": {
+            "x": 1960,
+            "y": 1980
+          },
+          "params": {
+            "type": "checker",
+            "colorA": 1315860,
+            "colorB": 1915690,
+            "scale": 10,
+            "seed": 1,
+            "octaves": 3,
+            "resolution": 256,
+            "uvScaleX": 1,
+            "uvScaleY": 1,
+            "uvOffsetX": 0,
+            "uvOffsetY": 0
+          }
+        },
+        {
+          "id": "floor",
+          "type": "object/plane",
+          "position": {
+            "x": 2200,
+            "y": 1980
+          },
+          "params": {
+            "visible": 1,
+            "location": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "rotation": {
+              "x": 1.5707963267948966,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 24,
+              "y": 24,
+              "z": 1
+            }
+          }
+        },
+        {
+          "id": "orbit",
+          "type": "transform/orbit",
+          "position": {
+            "x": 1960,
+            "y": 2160
+          },
+          "params": {
+            "radius": 6.2,
+            "speed": 9,
+            "phase": 20,
+            "height": 1.9
+          }
+        },
+        {
+          "id": "camera",
+          "type": "calibration/camera",
+          "position": {
+            "x": 2200,
+            "y": 2160
+          },
+          "params": {
+            "location": {
+              "x": 0,
+              "y": 1.9,
+              "z": 6.2
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "useTarget": true,
+            "target": {
+              "x": 0,
+              "y": 1.05,
+              "z": 0
+            },
+            "up": {
+              "x": 0,
+              "y": 1,
+              "z": 0
+            },
+            "fov": 42,
+            "active": true,
+            "mode": "manual",
+            "projectionType": "perspective"
+          }
+        },
+        {
+          "id": "env",
+          "type": "lighting/environment",
+          "position": {
+            "x": 2200,
+            "y": 2340
+          },
+          "params": {
+            "color": 723730,
+            "intensity": 1,
+            "background": 1,
+            "ambientIntensity": 0.18,
+            "sunIntensity": 0.35
+          }
+        },
+        {
+          "id": "bloom",
+          "type": "postprocess/bloom",
+          "position": {
+            "x": 2200,
+            "y": 2480
+          },
+          "params": {
+            "strength": 0.55,
+            "radius": 0.5,
+            "threshold": 0.55
+          }
+        },
+        {
+          "id": "render",
+          "type": "render",
+          "position": {
+            "x": 2460,
+            "y": 2340
+          },
+          "params": {
+            "frameCount": 1536,
+            "fps": 30,
+            "motionBlur": 0,
+            "resolutionPreset": "16:9 (1920x1080)",
+            "width": 1920,
+            "height": 1080,
+            "holdout": false
+          }
+        }
+      ],
+      "connections": [
+        {
+          "id": "c0",
+          "fromNode": "clock",
+          "fromSocket": "clock",
+          "toNode": "pat_drums",
+          "toSocket": "clock"
+        },
+        {
+          "id": "c1",
+          "fromNode": "pat_drums",
+          "fromSocket": "sequence",
+          "toNode": "voice_drums",
+          "toSocket": "sequence"
+        },
+        {
+          "id": "c2",
+          "fromNode": "voice_drums",
+          "fromSocket": "track",
+          "toNode": "out",
+          "toSocket": "track0"
+        },
+        {
+          "id": "c3",
+          "fromNode": "clock",
+          "fromSocket": "clock",
+          "toNode": "pat_bass",
+          "toSocket": "clock"
+        },
+        {
+          "id": "c4",
+          "fromNode": "pat_bass",
+          "fromSocket": "sequence",
+          "toNode": "voice_bass",
+          "toSocket": "sequence"
+        },
+        {
+          "id": "c5",
+          "fromNode": "voice_bass",
+          "fromSocket": "track",
+          "toNode": "out",
+          "toSocket": "track1"
+        },
+        {
+          "id": "c6",
+          "fromNode": "clock",
+          "fromSocket": "clock",
+          "toNode": "pat_skank",
+          "toSocket": "clock"
+        },
+        {
+          "id": "c7",
+          "fromNode": "pat_skank",
+          "fromSocket": "sequence",
+          "toNode": "voice_skank",
+          "toSocket": "sequence"
+        },
+        {
+          "id": "c8",
+          "fromNode": "voice_skank",
+          "fromSocket": "track",
+          "toNode": "out",
+          "toSocket": "track2"
+        },
+        {
+          "id": "c9",
+          "fromNode": "clock",
+          "fromSocket": "clock",
+          "toNode": "pat_organ",
+          "toSocket": "clock"
+        },
+        {
+          "id": "c10",
+          "fromNode": "pat_organ",
+          "fromSocket": "sequence",
+          "toNode": "voice_organ",
+          "toSocket": "sequence"
+        },
+        {
+          "id": "c11",
+          "fromNode": "voice_organ",
+          "fromSocket": "track",
+          "toNode": "out",
+          "toSocket": "track3"
+        },
+        {
+          "id": "c12",
+          "fromNode": "clock",
+          "fromSocket": "clock",
+          "toNode": "pat_melodica",
+          "toSocket": "clock"
+        },
+        {
+          "id": "c13",
+          "fromNode": "pat_melodica",
+          "fromSocket": "sequence",
+          "toNode": "voice_melodica",
+          "toSocket": "sequence"
+        },
+        {
+          "id": "c14",
+          "fromNode": "voice_melodica",
+          "fromSocket": "track",
+          "toNode": "out",
+          "toSocket": "track4"
+        },
+        {
+          "id": "c15",
+          "fromNode": "clock",
+          "fromSocket": "clock",
+          "toNode": "pat_siren",
+          "toSocket": "clock"
+        },
+        {
+          "id": "c16",
+          "fromNode": "pat_siren",
+          "fromSocket": "sequence",
+          "toNode": "voice_siren",
+          "toSocket": "sequence"
+        },
+        {
+          "id": "c17",
+          "fromNode": "voice_siren",
+          "fromSocket": "track",
+          "toNode": "out",
+          "toSocket": "track5"
+        },
+        {
+          "id": "c18",
+          "fromNode": "pat_drums",
+          "fromSocket": "sequence",
+          "toNode": "probe_drums",
+          "toSocket": "music"
+        },
+        {
+          "id": "c19",
+          "fromNode": "pat_skank",
+          "fromSocket": "sequence",
+          "toNode": "probe_skank",
+          "toSocket": "music"
+        },
+        {
+          "id": "c20",
+          "fromNode": "pat_bass",
+          "fromSocket": "sequence",
+          "toNode": "probe_bass",
+          "toSocket": "music"
+        },
+        {
+          "id": "c21",
+          "fromNode": "human",
+          "fromSocket": "geometry",
+          "toNode": "cheer",
+          "toSocket": "skeleton"
+        },
+        {
+          "id": "c22",
+          "fromNode": "human",
+          "fromSocket": "geometry",
+          "toNode": "wave",
+          "toSocket": "skeleton"
+        },
+        {
+          "id": "c23",
+          "fromNode": "human",
+          "fromSocket": "geometry",
+          "toNode": "dance",
+          "toSocket": "skeleton"
+        },
+        {
+          "id": "c24",
+          "fromNode": "cheer",
+          "fromSocket": "pose",
+          "toNode": "dance",
+          "toSocket": "pose0"
+        },
+        {
+          "id": "c25",
+          "fromNode": "wave",
+          "fromSocket": "pose",
+          "toNode": "dance",
+          "toSocket": "pose1"
+        },
+        {
+          "id": "c26",
+          "fromNode": "clock",
+          "fromSocket": "bpm",
+          "toNode": "dance",
+          "toSocket": "bpm"
+        },
+        {
+          "id": "c27",
+          "fromNode": "probe_drums",
+          "fromSocket": "envelope",
+          "toNode": "energy",
+          "toSocket": "x"
+        },
+        {
+          "id": "c28",
+          "fromNode": "energy",
+          "fromSocket": "value",
+          "toNode": "dance",
+          "toSocket": "energy"
+        },
+        {
+          "id": "c29",
+          "fromNode": "probe_drums",
+          "fromSocket": "envelope",
+          "toNode": "lamp_drums",
+          "toSocket": "x"
+        },
+        {
+          "id": "c30",
+          "fromNode": "lamp_drums",
+          "fromSocket": "value",
+          "toNode": "light_drums",
+          "toSocket": "intensity"
+        },
+        {
+          "id": "c31",
+          "fromNode": "probe_skank",
+          "fromSocket": "envelope",
+          "toNode": "lamp_skank",
+          "toSocket": "x"
+        },
+        {
+          "id": "c32",
+          "fromNode": "lamp_skank",
+          "fromSocket": "value",
+          "toNode": "light_skank",
+          "toSocket": "intensity"
+        },
+        {
+          "id": "c33",
+          "fromNode": "probe_bass",
+          "fromSocket": "envelope",
+          "toNode": "lamp_bass",
+          "toSocket": "x"
+        },
+        {
+          "id": "c34",
+          "fromNode": "lamp_bass",
+          "fromSocket": "value",
+          "toNode": "light_bass",
+          "toSocket": "intensity"
+        },
+        {
+          "id": "c35",
+          "fromNode": "probe_drums",
+          "fromSocket": "envelope",
+          "toNode": "breath_drums",
+          "toSocket": "x"
+        },
+        {
+          "id": "c36",
+          "fromNode": "breath_drums",
+          "fromSocket": "value",
+          "toNode": "bvec_drums",
+          "toSocket": "value"
+        },
+        {
+          "id": "c37",
+          "fromNode": "bvec_drums",
+          "fromSocket": "vector",
+          "toNode": "bxf_drums",
+          "toSocket": "scale"
+        },
+        {
+          "id": "c38",
+          "fromNode": "bxf_drums",
+          "fromSocket": "matrix",
+          "toNode": "orb_drums",
+          "toSocket": "matrix"
+        },
+        {
+          "id": "c39",
+          "fromNode": "probe_skank",
+          "fromSocket": "envelope",
+          "toNode": "breath_skank",
+          "toSocket": "x"
+        },
+        {
+          "id": "c40",
+          "fromNode": "breath_skank",
+          "fromSocket": "value",
+          "toNode": "bvec_skank",
+          "toSocket": "value"
+        },
+        {
+          "id": "c41",
+          "fromNode": "bvec_skank",
+          "fromSocket": "vector",
+          "toNode": "bxf_skank",
+          "toSocket": "scale"
+        },
+        {
+          "id": "c42",
+          "fromNode": "bxf_skank",
+          "fromSocket": "matrix",
+          "toNode": "orb_skank",
+          "toSocket": "matrix"
+        },
+        {
+          "id": "c43",
+          "fromNode": "probe_bass",
+          "fromSocket": "envelope",
+          "toNode": "breath_bass",
+          "toSocket": "x"
+        },
+        {
+          "id": "c44",
+          "fromNode": "breath_bass",
+          "fromSocket": "value",
+          "toNode": "bvec_bass",
+          "toSocket": "value"
+        },
+        {
+          "id": "c45",
+          "fromNode": "bvec_bass",
+          "fromSocket": "vector",
+          "toNode": "bxf_bass",
+          "toSocket": "scale"
+        },
+        {
+          "id": "c46",
+          "fromNode": "bxf_bass",
+          "fromSocket": "matrix",
+          "toNode": "orb_bass",
+          "toSocket": "matrix"
+        },
+        {
+          "id": "c47",
+          "fromNode": "floor_tex",
+          "fromSocket": "texture",
+          "toNode": "floor",
+          "toSocket": "texture"
+        },
+        {
+          "id": "c48",
+          "fromNode": "orbit",
+          "fromSocket": "position",
+          "toNode": "camera",
+          "toSocket": "location"
+        },
+        {
+          "id": "c49",
+          "fromNode": "env",
+          "fromSocket": "environment",
+          "toNode": "render",
+          "toSocket": "environment"
+        },
+        {
+          "id": "c50",
+          "fromNode": "bloom",
+          "fromSocket": "effect",
+          "toNode": "render",
+          "toSocket": "postprocess"
+        }
+      ],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    }
+  ],
+  "activeCanvas": 0
+}

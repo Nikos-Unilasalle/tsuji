@@ -13,7 +13,7 @@
 tsuji has no delay effect yet, so the echoes are written: the repeats of a hit three sixteenths later (a dotted
 eighth), each one softer. Three spheres, red, gold and green, pulse with the drums, the skank and the bass.
 
-Run: python3 tools/gen_music_reggae.py
+Run: python3 tools/gen_music_reggae.py (tools/gen_music_dub_dancer.py imports the song from here).
 """
 import json
 from pathlib import Path
@@ -214,5 +214,6 @@ project = {
     "activeCanvas": 0,
 }
 
-OUT.write_text(json.dumps(project, indent=2) + "\n")
-print(f"wrote {OUT} ({STEPS} steps at {BPM} BPM, {FRAMES} frames)")
+if __name__ == "__main__":
+    OUT.write_text(json.dumps(project, indent=2) + "\n")
+    print(f"wrote {OUT} ({STEPS} steps at {BPM} BPM, {FRAMES} frames)")

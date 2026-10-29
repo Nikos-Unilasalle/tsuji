@@ -713,6 +713,11 @@ export const DEMO_CATALOG: DemoCategory[] = [
         label: "Tsuji Dub",
         description: "A one-drop riddim in A minor at 75 BPM: skank, organ bubble, melodica, dub siren, written echoes and a drop — three rasta spheres keep time.",
       },
+      {
+        file: "demo_music_dub_dancer.tsuji",
+        label: "Dub Dancer",
+        description: "The music drives the scene: a dancer swaying on the Clock's tempo, waving with the sirens and cheering for the melodica, stage lights and orbs struck by the drums, the skank and the bass, a camera circling — press Play.",
+      },
     ],
   },
   {

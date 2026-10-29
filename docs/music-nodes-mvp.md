@@ -447,3 +447,39 @@ Limites :
 - Au-delà de 8 voix : on vole la voix la plus ancienne déjà relâchée, avec un fondu de 2 ms pour éviter le clic.
 - Les voix inactives (enveloppe sous −90 dB) sont ignorées, donc le coût réel suit ce qui sonne vraiment.
 - Mesuré par le spike (étape 0, voir §5) : 4,2 % d'un cœur dans le WKWebView de Tauri.
+
+### Clavier du HUD : les notes par leur nom (2026-10-29)
+
+Demandé : écrire les notes avec les lettres A–G plutôt qu'avec la disposition tracker (Z–M / Q–P). Le HUD Pattern lit maintenant **le caractère tapé**, pas la position de la touche, donc ça marche pareil en AZERTY et en QWERTY :
+- `A` `B` `C` `D` `E` `F` `G` écrivent la note dans l'octave du clavier (C4 = 60) ;
+- Maj + lettre, ou `#` juste après la note, donne le dièse ;
+- **un chiffre juste après la note fixe son octave**, et devient celle du clavier. Taper `C` `4`, `F` `#` `3`, `A` `2` écrit les notes comme le texte du pattern les épelle ;
+- `X` ou `O` écrit un OFF. `⌫`, les flèches, `[` `]`, Espace et Esc ne changent pas ;
+- vue batterie : l'initiale de chaque son, `K` kick, `S` snare, `C` clap, `H` hat, `O` open hat, `L` tom grave, `T` tom aigu.
+
+`patternEdit.ts` : `noteForLetter`, `withOctave`, `OFF_LETTERS`, `DRUM_LETTERS` (testés). Vérifié dans l'app : `A` `3`, Maj+`F`, `C` `5` et `X` donnent `A3 F#3 C5 off`, puis tout s'annule avec ⌘Z. Le `#` tapé comme caractère n'a pas pu être essayé depuis l'outil de test, qui l'insère sans événement de touche. Sur un vrai clavier, la touche `#` envoie bien un événement de touche.
+
+**Correction, moteurs en double en dev.** Après chaque rechargement à chaud de `music.ts`, un nouveau moteur était créé et l'ancien restait branché, muet (jusqu'à 6 à la fois). Vite n'appelle `import.meta.hot.dispose` que sur le module frontière, pas sur `music.ts`. Le registre des moteurs est donc passé dans `bridge.ts` (`musicEngineFor` / `releaseMusicEngine`), qui survit au rechargement de `music.ts`. Le cache du node ne sert plus qu'à libérer le moteur d'un node supprimé. En production, rien ne changeait. Vérifié : il reste 1 moteur après un rechargement à chaud.
+
+### Étape 7 — « Dub Dancer » : la musique pilote une scène (2026-10-29)
+
+`tools/gen_music_dub_dancer.py` → **Démos → Music → Dub Dancer** (`public/demos/demo_music_dub_dancer.tsuji`, 47 nodes). Le morceau est Tsuji Dub, importé tel quel depuis `gen_music_reggae.py`. Sur scène :
+- **Un danseur** (`rig/human` → `rig/biped-dance`, groove Sway). Son **BPM est branché sur celui du Clock**, et il compte les temps sur le même playhead que Music Out, donc le corps est sur le temps par construction. Son énergie gonfle avec la batterie (l'enveloppe d'une Note Probe). Sa chorégraphie place les poses sur les moments du morceau : un salut à chaque sirène, une acclamation quand le mélodica entre, les bras en l'air pendant le drop.
+- **Trois projecteurs**, rouge, or et vert, frappés chacun par une partie : la batterie, le skank, la basse (`18 + 90 × enveloppe`).
+- **Trois orbes** derrière le danseur, qui respirent avec les mêmes parties.
+- Une **caméra en orbite** (`transform/orbit`, 9°/s) qui vise le danseur, un sol en damier sombre et du **bloom** sur les lumières.
+
+Rien n'est écouté, tout est lu dans les séquences et le playhead. L'image est donc exactement en phase avec le son en lecture, et à l'échantillon près dans un export vidéo (étape 6).
+
+Vérifié sans affichage (`src/shared/music/dubDancer.test.ts`) :
+- le temps du danseur est celui de Music Out à toutes les frames essayées ;
+- le projecteur rouge flambe sur la frappe du one drop (frame 48 : plus de 100) et retombe ensuite (moins de 60 %) ;
+- l'orbe vert reste éteint sur le premier temps et s'allume quand la basse entre au pas 2.
+
+Les tests de démo (évaluation, quelque chose à l'écran, mémo) passent, et le morceau joue en entier dans le moteur.
+
+Limites :
+- **Pas encore regardée dans l'app** : la charger aurait remplacé le projet ouvert. Le cadrage de la caméra, la force du bloom et les intensités restent à juger à l'œil.
+
+Le MVP est terminé : les étapes 0 à 7 sont faites. Pour la suite, voir « Après le MVP » et ce qui reste disponible dans les firmwares (6 opérateurs, chiptune, enchaînement de patterns, delay et reverb).
+
