@@ -240,7 +240,7 @@ const WORKING_BONES = 8;
  * standing for each weld. Open addressing over quantised integer coordinates,
  * no string keys.
  */
-function weldVertices(positions: ArrayLike<number>, vertexCount: number): { weldOf: Int32Array; reps: Int32Array; welds: number } {
+export function weldVertices(positions: ArrayLike<number>, vertexCount: number): { weldOf: Int32Array; reps: Int32Array; welds: number } {
   const qx = new Int32Array(vertexCount);
   const qy = new Int32Array(vertexCount);
   const qz = new Int32Array(vertexCount);

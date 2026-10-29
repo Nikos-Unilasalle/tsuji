@@ -1,7 +1,8 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { HudBar, HudSeparator, HudToolColumn } from "./HudToolbars";
 import { readSkeleton } from "../graph/ik/skeletonEdit";
-import { readJointInfluence, withJointInfluence } from "../graph/nodes/skin";
+import { hasJointPaint, readJointInfluence, withJointInfluence, withoutJointPaint } from "../graph/nodes/skin";
+import { WEIGHT_BRUSHES } from "../graph/ik/weightPaint";
 import type { SkeletonOp } from "./skeletonEditor";
 import type { NodeInstance } from "../graph/types";
 
@@ -251,6 +252,7 @@ export function SkinHud({
   const step = (by: number) => count > 0 && onParams({ selectedJoint: has ? (selected + by + count) % count : by > 0 ? 0 : count - 1 }, node.id);
   const toggle = (key: string, fallback: boolean) => onParams({ [key]: !(node.params[key] === undefined ? fallback : Boolean(node.params[key])) }, node.id);
   const flag = (key: string, fallback: boolean) => (node.params[key] === undefined ? fallback : Boolean(node.params[key]));
+  const painting = flag("weightPaintMode", false);
 
   return (
     <HudBar>
@@ -312,6 +314,60 @@ export function SkinHud({
       >
         Rig
       </button>
+      <HudSeparator />
+      <button
+        type="button"
+        className={`viewport-hud-button ${painting ? "viewport-hud-button-active" : ""}`}
+        style={{ width: "auto", padding: "0 8px" }}
+        onClick={() => onParams({ weightPaintMode: !painting, ...(!painting ? { showWeights: true } : {}) }, node.id)}
+        title="Paint the selected joint's weights on the mesh, on top of the automatic ones. Shift smooths, Alt swaps Add and Subtract"
+      >
+        Paint
+      </button>
+      {painting && (
+        <>
+          {WEIGHT_BRUSHES.map((brush) => (
+            <button
+              key={brush}
+              type="button"
+              className={`viewport-hud-button ${(node.params.weightBrush ?? "Add") === brush ? "viewport-hud-button-active" : ""}`}
+              style={{ width: "auto", padding: "0 6px" }}
+              onClick={() => onParams({ weightBrush: brush }, node.id)}
+              title={brush === "Add" ? "More of this joint under the brush" : brush === "Subtract" ? "Less of this joint under the brush" : "Even this joint's weight out with the neighbours'"}
+            >
+              {brush}
+            </button>
+          ))}
+          <CommitSlider
+            label="Radius"
+            value={Number(node.params.weightBrushSize ?? 0.15)}
+            min={0.01}
+            max={1}
+            step={0.01}
+            title="Brush radius, in scene units"
+            onCommit={(weightBrushSize) => onParams({ weightBrushSize }, node.id)}
+          />
+          <CommitSlider
+            label="Strength"
+            value={Number(node.params.weightBrushStrength ?? 0.3)}
+            min={0.05}
+            max={1}
+            step={0.05}
+            title="How far one dab goes, at the brush centre"
+            onCommit={(weightBrushStrength) => onParams({ weightBrushStrength }, node.id)}
+          />
+          <button
+            type="button"
+            className="viewport-hud-button"
+            style={{ width: "auto", padding: "0 8px" }}
+            disabled={!has || !hasJointPaint(node.params.weightPaint, selected)}
+            onClick={() => onParams({ weightPaint: withoutJointPaint(node.params.weightPaint, selected) }, node.id)}
+            title="Remove the paint on this joint: back to its automatic weights"
+          >
+            Clear
+          </button>
+        </>
+      )}
     </HudBar>
   );
 }

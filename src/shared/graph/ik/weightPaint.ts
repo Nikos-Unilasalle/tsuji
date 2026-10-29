@@ -1,0 +1,253 @@
+import { SkinWeights, weldVertices } from "./skinning";
+
+/**
+ * Painted corrections on top of Skin's automatic weights.
+ *
+ * Nothing painted replaces the automatic weights: each stroke leaves, per
+ * joint and per vertex, an offset from them. The automatic weights can then be
+ * weighed again (another falloff, a moved joint) and the paint still says
+ * "more of this joint here, less there". A vertex never painted keeps its
+ * automatic weights exactly.
+ *
+ * Applying one joint's offset sets that joint's share of the vertex and scales
+ * every other joint so the total stays 1; what a joint gives up when nothing
+ * else holds the vertex goes to its parent (a root's, to its first child).
+ * Joints apply in index order.
+ */
+
+/** Per joint, per vertex: the offset from the automatic weight. */
+export type PaintLayer = Map<number, Map<number, number>>;
+
+/** What a Skin node stores, one entry per mesh it binds (null where nothing is painted). */
+export interface StoredPaint {
+  /** Vertex count the paint was made on: paint on a mesh of another size is dropped, not misplaced. */
+  vertices: number;
+  /** Joint index -> flat [vertex, offset, vertex, offset, ...]. */
+  joints: Record<string, number[]>;
+}
+
+export type WeightBrush = "Add" | "Subtract" | "Smooth";
+export const WEIGHT_BRUSHES: WeightBrush[] = ["Add", "Subtract", "Smooth"];
+
+/** Offsets smaller than this are no paint at all. */
+const NEGLIGIBLE = 1e-4;
+
+export function readPaintLayer(raw: unknown, mesh: number, vertexCount: number): PaintLayer {
+  const layer: PaintLayer = new Map();
+  if (!Array.isArray(raw)) return layer;
+  const stored = raw[mesh] as StoredPaint | null | undefined;
+  if (!stored || stored.vertices !== vertexCount || !stored.joints || typeof stored.joints !== "object") return layer;
+  for (const [key, flat] of Object.entries(stored.joints)) {
+    const joint = Number(key);
+    if (!Number.isInteger(joint) || joint < 0 || !Array.isArray(flat)) continue;
+    const offsets = new Map<number, number>();
+    for (let i = 0; i + 1 < flat.length; i += 2) {
+      const v = flat[i];
+      const d = Number(flat[i + 1]);
+      if (Number.isInteger(v) && v >= 0 && v < vertexCount && Number.isFinite(d) && Math.abs(d) >= NEGLIGIBLE) offsets.set(v, Math.max(-1, Math.min(1, d)));
+    }
+    if (offsets.size > 0) layer.set(joint, offsets);
+  }
+  return layer;
+}
+
+/** The params value for these layers; an empty list when nothing is painted anywhere. */
+export function storePaintLayers(layers: PaintLayer[], vertexCounts: number[]): (StoredPaint | null)[] {
+  const out: (StoredPaint | null)[] = layers.map((layer, i) => {
+    const joints: Record<string, number[]> = {};
+    let any = false;
+    for (const joint of [...layer.keys()].sort((a, b) => a - b)) {
+      const flat: number[] = [];
+      for (const v of [...layer.get(joint)!.keys()].sort((a, b) => a - b)) {
+        const d = Math.round(layer.get(joint)!.get(v)! * 1e4) / 1e4;
+        if (Math.abs(d) >= NEGLIGIBLE) flat.push(v, d);
+      }
+      if (flat.length > 0) {
+        joints[joint] = flat;
+        any = true;
+      }
+    }
+    return any ? { vertices: vertexCounts[i], joints } : null;
+  });
+  while (out.length > 0 && out[out.length - 1] === null) out.pop();
+  return out;
+}
+
+export function cloneSkin(skin: SkinWeights): SkinWeights {
+  return { influences: skin.influences, indices: skin.indices.slice(), weights: skin.weights.slice() };
+}
+
+/** How much of vertex `v` follows `joint`. */
+export function jointWeight(skin: SkinWeights, v: number, joint: number): number {
+  let w = 0;
+  const o = v * skin.influences;
+  for (let k = 0; k < skin.influences; k++) if (skin.indices[o + k] === joint) w += skin.weights[o + k];
+  return w;
+}
+
+/** Where a joint's weight goes when nothing else holds the vertex. */
+function heirOf(joint: number, parents: number[]): number {
+  if (parents[joint] >= 0) return parents[joint];
+  return parents.indexOf(joint);
+}
+
+/**
+ * Writes the painted weights of `vertices` (every painted vertex when omitted)
+ * into `into`, starting from `auto`. `into` may be a copy of `auto` made
+ * earlier: vertices not listed are left as they are.
+ */
+export function applyPaintLayer(auto: SkinWeights, layer: PaintLayer, parents: number[], into: SkinWeights, vertices?: Iterable<number>): void {
+  const n = auto.influences;
+  let todo: Iterable<number>;
+  if (vertices) todo = vertices;
+  else {
+    const all = new Set<number>();
+    for (const offsets of layer.values()) for (const v of offsets.keys()) all.add(v);
+    todo = all;
+  }
+  const joints = [...layer.keys()].sort((a, b) => a - b);
+  const share = new Map<number, number>();
+  for (const v of todo) {
+    const o = v * n;
+    share.clear();
+    for (let k = 0; k < n; k++) {
+      const w = auto.weights[o + k];
+      if (w > 0) share.set(auto.indices[o + k], (share.get(auto.indices[o + k]) ?? 0) + w);
+    }
+    let painted = false;
+    for (const joint of joints) {
+      const d = layer.get(joint)!.get(v);
+      if (d === undefined) continue;
+      painted = true;
+      const old = share.get(joint) ?? 0;
+      const now = Math.max(0, Math.min(1, old + d));
+      const restOld = 1 - old;
+      const restNow = 1 - now;
+      if (restOld > 1e-6) {
+        const scale = restNow / restOld;
+        for (const [j, w] of share) if (j !== joint) share.set(j, w * scale);
+      } else if (restNow > 0) {
+        const heir = heirOf(joint, parents);
+        if (heir >= 0) share.set(heir, (share.get(heir) ?? 0) + restNow);
+      }
+      share.set(joint, now);
+    }
+    if (!painted) {
+      into.indices.set(auto.indices.subarray(o, o + n), o);
+      into.weights.set(auto.weights.subarray(o, o + n), o);
+      continue;
+    }
+    // The strongest `n`, renormalised.
+    const kept = [...share].filter(([, w]) => w > 1e-4).sort((a, b) => b[1] - a[1]).slice(0, n);
+    const total = kept.reduce((sum, [, w]) => sum + w, 0);
+    if (total <= 0) {
+      into.indices.set(auto.indices.subarray(o, o + n), o);
+      into.weights.set(auto.weights.subarray(o, o + n), o);
+      continue;
+    }
+    for (let k = 0; k < n; k++) {
+      into.indices[o + k] = k < kept.length ? kept[k][0] : 0;
+      into.weights[o + k] = k < kept.length ? kept[k][1] / total : 0;
+    }
+  }
+}
+
+/** Neighbours through welded positions, so a split mesh smooths across its seams. */
+export interface PaintNeighbours {
+  weldOf: Int32Array;
+  reps: Int32Array;
+  /** Per weld, the welds sharing a triangle edge with it. */
+  around: Int32Array[];
+}
+
+export function paintNeighbours(positions: ArrayLike<number>, index: ArrayLike<number> | null): PaintNeighbours {
+  const vertexCount = Math.floor(positions.length / 3);
+  const { weldOf, reps, welds } = weldVertices(positions, vertexCount);
+  const sets: Set<number>[] = Array.from({ length: welds }, () => new Set<number>());
+  const triangles = index ? Math.floor(index.length / 3) : Math.floor(vertexCount / 3);
+  const at = (i: number) => weldOf[index ? index[i] : i];
+  for (let t = 0; t < triangles; t++) {
+    const a = at(t * 3);
+    const b = at(t * 3 + 1);
+    const c = at(t * 3 + 2);
+    if (a !== b) sets[a].add(b), sets[b].add(a);
+    if (b !== c) sets[b].add(c), sets[c].add(b);
+    if (c !== a) sets[c].add(a), sets[a].add(c);
+  }
+  return { weldOf, reps: reps.subarray(0, welds), around: sets.map((s) => Int32Array.from(s)) };
+}
+
+export interface Dab {
+  joint: number;
+  tool: WeightBrush;
+  /** Brush centre, in the same space as `positions`. */
+  center: { x: number; y: number; z: number };
+  radius: number;
+  /** 0..1: how far one dab goes towards its target at the brush centre. */
+  strength: number;
+}
+
+/**
+ * One dab of the brush: moves `joint`'s weight under it towards 1 (Add), 0
+ * (Subtract) or its neighbours' average (Smooth), with a smooth falloff to the
+ * brush's edge. Updates `layer`, rewrites the touched vertices of `skin` (the
+ * painted weights, starting from `auto`) and returns them.
+ * `positions` are where the vertices are now, so one paints what one sees.
+ */
+export function paintDab(
+  layer: PaintLayer,
+  auto: SkinWeights,
+  skin: SkinWeights,
+  parents: number[],
+  positions: ArrayLike<number>,
+  neighbours: PaintNeighbours | null,
+  dab: Dab,
+): number[] {
+  const { joint, tool, center, radius } = dab;
+  const strength = Math.max(0, Math.min(1, dab.strength));
+  const r2 = radius * radius;
+  const vertexCount = Math.floor(positions.length / 3);
+  const hit: number[] = [];
+  const reach: number[] = [];
+  for (let v = 0; v < vertexCount; v++) {
+    const dx = positions[v * 3] - center.x;
+    const dy = positions[v * 3 + 1] - center.y;
+    const dz = positions[v * 3 + 2] - center.z;
+    const d2 = dx * dx + dy * dy + dz * dz;
+    if (d2 >= r2) continue;
+    const t = 1 - d2 / r2;
+    hit.push(v);
+    reach.push(t * t);
+  }
+  if (hit.length === 0) return hit;
+
+  // Targets first, all read from the weights before this dab, so Smooth does not chase itself.
+  const targets = hit.map((v) => {
+    if (tool === "Add") return 1;
+    if (tool === "Subtract") return 0;
+    if (!neighbours) return jointWeight(skin, v, joint);
+    const around = neighbours.around[neighbours.weldOf[v]];
+    if (around.length === 0) return jointWeight(skin, v, joint);
+    let sum = 0;
+    for (let i = 0; i < around.length; i++) sum += jointWeight(skin, neighbours.reps[around[i]], joint);
+    return sum / around.length;
+  });
+
+  let offsets = layer.get(joint);
+  if (!offsets) {
+    offsets = new Map();
+    layer.set(joint, offsets);
+  }
+  hit.forEach((v, i) => {
+    const now = jointWeight(skin, v, joint);
+    const step = (targets[i] - now) * strength * reach[i];
+    const base = jointWeight(auto, v, joint);
+    // Kept to what can show: auto + offset within 0..1.
+    const d = Math.max(-base, Math.min(1 - base, (offsets!.get(v) ?? 0) + step));
+    if (Math.abs(d) < NEGLIGIBLE) offsets!.delete(v);
+    else offsets!.set(v, d);
+  });
+  if (offsets.size === 0) layer.delete(joint);
+  applyPaintLayer(auto, layer, parents, skin, hit);
+  return hit;
+}

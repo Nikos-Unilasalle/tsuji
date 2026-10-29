@@ -18,6 +18,7 @@ import {
   SkinWeights,
   skinVertices,
 } from "../ik/skinning";
+import { applyPaintLayer, cloneSkin, Dab, jointWeight, paintDab, PaintLayer, PaintNeighbours, paintNeighbours, readPaintLayer, StoredPaint, storePaintLayers, WEIGHT_BRUSHES } from "../ik/weightPaint";
 
 /**
  * Skin: binds a mesh to any rig and deforms it as the rig moves.
@@ -35,6 +36,10 @@ import {
  * the CPU (the result is a real, deformed geometry other nodes can read) or on
  * the GPU (a SkinnedMesh: free at any size, but downstream nodes see the rest
  * shape). Auto picks the GPU for big meshes.
+ *
+ * Weights can be corrected by hand: the viewport's weight brush paints, per
+ * joint, offsets from the automatic weights (see weightPaint.ts), kept in
+ * `weightPaint`. Changing the paint does not weigh the mesh again.
  */
 
 type Mode = "CPU" | "GPU";
@@ -47,7 +52,15 @@ interface BoundMesh {
   output: THREE.Mesh;
   /** The mesh's matrix when it was weighed: what the bones' rest space sees of it. */
   frame: THREE.Matrix4;
+  /** The automatic weights. */
+  auto: SkinWeights;
+  /** What skinning uses: the automatic weights with the paint applied. */
   skin: SkinWeights;
+  layer: PaintLayer;
+  /** For the Smooth brush, built on its first dab. */
+  neighbours?: PaintNeighbours;
+  /** Scratch for where the vertices are now, in world space, while painting. */
+  worldPositions?: Float32Array;
   /** Output position/normal versions last synced from the source; the source may be an animated deformer. */
   syncedPosition: number;
   syncedNormal: number;
@@ -73,6 +86,11 @@ interface SkinState {
   snapshotKey?: string;
   /** The rig object this node hid, to show it again when it is switched back or the node goes. */
   hiddenRig?: THREE.Object3D;
+  parents?: number[];
+  /** The `weightPaint` param last applied, by identity. */
+  paintRaw?: unknown;
+  /** Bumped whenever the painted weights change, so the overlay redraws. */
+  paintVersion?: number;
 }
 
 function removeHeat(bound: BoundMesh) {
@@ -114,6 +132,7 @@ interface ResolvedRig {
   /** What rest joints are in, for the cache key. */
   restKey: string;
   names?: string[];
+  twist?: number[];
 }
 
 const flatten = (points: THREE.Vector3[]) => points.map((p) => `${Math.round(p.x * 1e6)},${Math.round(p.y * 1e6)},${Math.round(p.z * 1e6)}`).join(";");
@@ -132,7 +151,6 @@ function resolveRig(inputs: Record<string, unknown>, state: SkinState): Resolved
     return { parents: data.parents, rest: data.rest, pose: data.pose, matrix: data.matrix, restKey, names: data.names, twist: data.twist };
   }
 
-  twist?: number[];
   if (!Array.isArray(inputs.joints) || inputs.joints.length === 0) return null;
   const zero = new THREE.Vector3();
   const pose = inputs.joints.map((j) => asVector3(j, zero).clone());
@@ -179,12 +197,7 @@ function syncHeat(meshes: BoundMesh[], joint: number, version: string) {
     const source = bound.output.geometry;
     const count = source.attributes.position.count;
     const colors = new Float32Array(count * 3);
-    const { influences, indices, weights } = bound.skin;
-    for (let v = 0; v < count; v++) {
-      let w = 0;
-      for (let k = 0; k < influences; k++) if (indices[v * influences + k] === joint) w += weights[v * influences + k];
-      heatColor(w, colors, v * 3);
-    }
+    for (let v = 0; v < count; v++) heatColor(jointWeight(bound.skin, v, joint), colors, v * 3);
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute("position", source.attributes.position);
     if (source.index) geometry.setIndex(source.index);
@@ -253,8 +266,16 @@ function chooseMode(requested: string, sources: THREE.Mesh[]): Mode {
 function gpuAttributes(skin: SkinWeights, vertexCount: number) {
   const indices = new Uint16Array(vertexCount * 4);
   const weights = new Float32Array(vertexCount * 4);
+  writeGpuWeights(skin, indices, weights);
+  return { indices, weights };
+}
+
+function writeGpuWeights(skin: SkinWeights, indices: Uint16Array, weights: Float32Array, vertices?: Iterable<number>) {
   const take = Math.min(4, skin.influences);
-  for (let v = 0; v < vertexCount; v++) {
+  const all = function* () {
+    for (let v = 0; v < indices.length / 4; v++) yield v;
+  };
+  for (const v of vertices ?? all()) {
     let total = 0;
     for (let k = 0; k < take; k++) total += skin.weights[v * skin.influences + k];
     for (let k = 0; k < take; k++) {
@@ -262,7 +283,25 @@ function gpuAttributes(skin: SkinWeights, vertexCount: number) {
       weights[v * 4 + k] = total > 0 ? skin.weights[v * skin.influences + k] / total : 0;
     }
   }
-  return { indices, weights };
+}
+
+/** After the painted weights of `vertices` (all when omitted) changed: the GPU's copy and the overlay follow. */
+function weightsChanged(bound: BoundMesh, vertices?: number[]) {
+  const geometry = bound.output.geometry;
+  const skinIndex = geometry.attributes.skinIndex as THREE.BufferAttribute | undefined;
+  const skinWeight = geometry.attributes.skinWeight as THREE.BufferAttribute | undefined;
+  if (skinIndex && skinWeight) {
+    writeGpuWeights(bound.skin, skinIndex.array as Uint16Array, skinWeight.array as Float32Array, vertices);
+    skinIndex.needsUpdate = true;
+    skinWeight.needsUpdate = true;
+  }
+  const heat = bound.heat;
+  if (!heat) return;
+  const color = heat.mesh.geometry.attributes.color as THREE.BufferAttribute;
+  const colors = color.array as Float32Array;
+  if (vertices) for (const v of vertices) heatColor(jointWeight(bound.skin, v, heat.joint), colors, v * 3);
+  else for (let v = 0; v < color.count; v++) heatColor(jointWeight(bound.skin, v, heat.joint), colors, v * 3);
+  color.needsUpdate = true;
 }
 
 function makeOutput(source: THREE.Mesh, geometry: THREE.BufferGeometry, mode: Mode, skin: SkinWeights, boneCount: number): { output: THREE.Mesh; gpuBones?: THREE.Bone[] } {
@@ -314,6 +353,13 @@ export const SKIN_NODE: NodeDefinition = {
     stretch: false,
     rebind: false,
     showRig: true,
+    // Weight brush, in the viewport: on while weightPaintMode is.
+    weightPaintMode: false,
+    weightBrush: "Add",
+    weightBrushSize: 0.15,
+    weightBrushStrength: 0.3,
+    // Painted corrections, one entry per mesh: see weightPaint.ts.
+    weightPaint: [],
     showWeights: false,
     selectedJoint: -1,
     // Per joint, by index, missing = 1: how strongly it pulls (0 switches it off) and how far it reaches.
@@ -331,6 +377,10 @@ export const SKIN_NODE: NodeDefinition = {
     { id: "falloff", label: "Falloff", kind: "number", step: 0.5, group: "Weights" },
     { id: "smooth", label: "Smooth Weights", kind: "number", step: 1, group: "Weights" },
     { id: "rebind", label: "Re-bind (toggle)", kind: "boolean", group: "Weights" },
+    { id: "weightPaintMode", label: "Paint Weights", kind: "boolean", group: "Weight Brush" },
+    { id: "weightBrush", label: "Brush", kind: "select", options: [...WEIGHT_BRUSHES], group: "Weight Brush" },
+    { id: "weightBrushSize", label: "Radius", kind: "number", step: 0.01, group: "Weight Brush" },
+    { id: "weightBrushStrength", label: "Strength", kind: "number", step: 0.05, group: "Weight Brush" },
   ],
   evaluate: (inputs, params, ctx) => {
     const raw = inputs.geometry;
@@ -386,14 +436,18 @@ export const SKIN_NODE: NodeDefinition = {
         const geometry = source.geometry.clone();
         const position = geometry.attributes.position as THREE.BufferAttribute;
         const normal = geometry.attributes.normal as THREE.BufferAttribute | undefined;
-        const skin = computeSkinWeights(position.array, source.geometry.getIndex()?.array ?? null, frames[i], bones, { influences, falloff, smooth, strength, radius });
+        const auto = computeSkinWeights(position.array, source.geometry.getIndex()?.array ?? null, frames[i], bones, { influences, falloff, smooth, strength, radius });
+        // The paint goes on below; until then the automatic weights.
+        const skin = cloneSkin(auto);
         // Material and shadow flags are taken from the source every frame, below.
         const { output, gpuBones } = makeOutput(source, geometry, mode, skin, bones.length);
         const bound: BoundMesh = {
           source,
           output,
           frame: frames[i],
+          auto,
           skin,
+          layer: new Map(),
           syncedPosition: (source.geometry.attributes.position as THREE.BufferAttribute).version,
           syncedNormal: (source.geometry.attributes.normal as THREE.BufferAttribute | undefined)?.version ?? 0,
           gpuBones,
@@ -405,11 +459,24 @@ export const SKIN_NODE: NodeDefinition = {
         return bound;
       });
       state.key = key;
+      state.parents = rig.parents.slice();
+      state.paintRaw = undefined;
       state.posed = undefined;
       state.bounds = { min: new THREE.Vector3(), max: new THREE.Vector3() };
     }
 
     const { bones, meshes } = state;
+    if (state.paintRaw === undefined || state.paintRaw !== params.weightPaint) {
+      state.paintRaw = params.weightPaint ?? null;
+      meshes.forEach((bound, i) => {
+        bound.layer = readPaintLayer(params.weightPaint, i, bound.auto.indices.length / bound.auto.influences);
+        bound.skin.indices.set(bound.auto.indices);
+        bound.skin.weights.set(bound.auto.weights);
+        applyPaintLayer(bound.auto, bound.layer, state!.parents!, bound.skin);
+        weightsChanged(bound);
+      });
+      state.paintVersion = (state.paintVersion ?? 0) + 1;
+    }
     const bonePose = rigSpace ? rig.pose : rig.pose.map((p) => p.clone().applyMatrix4(rig.matrix));
     const options = { stretch: toBoolean(params.stretch), amount: Math.max(0, Math.min(1, numberInput(inputs.amount, params.amount, 1))) };
     const turns = boneRotations(bones, bonePose, rig.twist);
@@ -501,7 +568,7 @@ export const SKIN_NODE: NodeDefinition = {
     // Joints the viewport lets one pick to edit their influence, where the rig stands now.
     const worldJoints = rig.pose.map((p) => p.clone().applyMatrix4(rig.matrix));
     const selected = Math.round(numberInput(undefined, params.selectedJoint, -1));
-    syncHeat(meshes, toBoolean(params.showWeights) && !ctx.capturing && selected >= 0 && selected < rig.pose.length ? selected : -1, state.key!);
+    syncHeat(meshes, toBoolean(params.showWeights) && !ctx.capturing && selected >= 0 && selected < rig.pose.length ? selected : -1, `${state.key}|${state.paintVersion}`);
     state.object.userData = {
       ...raw.userData,
       nodeId: ctx.nodeId,
@@ -533,4 +600,80 @@ export function withJointInfluence(params: Record<string, unknown>, joint: numbe
     ...(change.strength !== undefined ? { jointStrength: put(params.jointStrength, change.strength) } : {}),
     ...(change.radius !== undefined ? { jointRadius: put(params.jointRadius, change.radius) } : {}),
   };
+}
+
+/** The meshes a Skin node shows, for the weight brush to hit; empty when it has bound nothing. */
+export function skinPaintMeshes(nodeId: string): THREE.Mesh[] {
+  return skinStates.get(nodeId)?.meshes?.map((bound) => bound.output) ?? [];
+}
+
+const scratch = new THREE.Vector3();
+
+/** Where `bound`'s vertices are now, in world space: what the brush is measured against. */
+function worldPositions(bound: BoundMesh): Float32Array {
+  const { output } = bound;
+  const position = output.geometry.attributes.position as THREE.BufferAttribute;
+  const out = bound.worldPositions?.length === position.count * 3 ? bound.worldPositions : new Float32Array(position.count * 3);
+  bound.worldPositions = out;
+  output.updateMatrixWorld(true);
+  const skinned = output instanceof THREE.SkinnedMesh ? output : null;
+  if (skinned) skinned.skeleton.update();
+  for (let v = 0; v < position.count; v++) {
+    if (skinned) skinned.getVertexPosition(v, scratch);
+    else scratch.fromBufferAttribute(position, v);
+    scratch.applyMatrix4(output.matrixWorld);
+    out[v * 3] = scratch.x;
+    out[v * 3 + 1] = scratch.y;
+    out[v * 3 + 2] = scratch.z;
+  }
+  return out;
+}
+
+/**
+ * One dab of the weight brush on a Skin node, centre and radius in world
+ * space, on every mesh it binds. Changes what is shown at once; the paint
+ * reaches the node's params only through `skinStoredPaint`, at the stroke's
+ * end. False when the node has nothing bound.
+ */
+export function skinWeightDab(nodeId: string, dab: Dab): boolean {
+  const state = skinStates.get(nodeId);
+  if (!state?.meshes || !state.parents || dab.joint < 0 || dab.joint >= state.parents.length) return false;
+  for (const bound of state.meshes) {
+    if (dab.tool === "Smooth" && !bound.neighbours) {
+      const source = bound.source.geometry;
+      bound.neighbours = paintNeighbours((source.attributes.position as THREE.BufferAttribute).array, source.getIndex()?.array ?? null);
+    }
+    const touched = paintDab(bound.layer, bound.auto, bound.skin, state.parents, worldPositions(bound), bound.neighbours ?? null, dab);
+    if (touched.length > 0) weightsChanged(bound, touched);
+  }
+  return true;
+}
+
+/** The paint as it stands on the node now, to store in `weightPaint`. */
+export function skinStoredPaint(nodeId: string): (StoredPaint | null)[] | null {
+  const meshes = skinStates.get(nodeId)?.meshes;
+  if (!meshes) return null;
+  return storePaintLayers(
+    meshes.map((bound) => bound.layer),
+    meshes.map((bound) => bound.auto.indices.length / bound.auto.influences),
+  );
+}
+
+/** `weightPaint` with one joint's paint (or all of it, joint -1) removed. */
+export function withoutJointPaint(raw: unknown, joint: number): (StoredPaint | null)[] {
+  if (!Array.isArray(raw)) return [];
+  const out = raw.map((entry: StoredPaint | null) => {
+    if (!entry || joint < 0) return null;
+    const joints = { ...entry.joints };
+    delete joints[joint];
+    return Object.keys(joints).length > 0 ? { ...entry, joints } : null;
+  });
+  while (out.length > 0 && out[out.length - 1] === null) out.pop();
+  return out;
+}
+
+/** Whether a joint (or any, -1) has paint on it. */
+export function hasJointPaint(raw: unknown, joint: number): boolean {
+  if (!Array.isArray(raw)) return false;
+  return raw.some((entry: StoredPaint | null) => !!entry && (joint < 0 ? Object.keys(entry.joints ?? {}).length > 0 : !!entry.joints?.[joint]));
 }

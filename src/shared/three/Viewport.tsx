@@ -26,7 +26,8 @@ import { POSE_PROXY_NODES } from "./poseProxyNodes";
 import { createCurvePointHandles } from "./curveHandles";
 import { createPointCloudHandles } from "./pointCloudHandles";
 import { SKELETON_NODE_TYPE } from "../graph/nodes/skeleton";
-import { SKIN_NODE } from "../graph/nodes/skin";
+import { SKIN_NODE, skinPaintMeshes, skinStoredPaint, skinWeightDab } from "../graph/nodes/skin";
+import type { WeightBrush } from "../graph/ik/weightPaint";
 import { SkeletonHud, SkinHud } from "./RigHuds";
 import { BipedHud } from "./BipedHud";
 import { PoseHud } from "./PoseHud";
@@ -2212,6 +2213,10 @@ export function Viewport({
     const pivotCrossPool: THREE.LineSegments[] = [];
     const terrainBrushGizmo = createTerrainBrushGizmo();
     const sculptBrushGizmo = createTerrainBrushGizmo();
+    // A Skin node's weight brush: the same ring, amber, and the stroke under way.
+    const weightBrushGizmo = createTerrainBrushGizmo();
+    (weightBrushGizmo.material as THREE.LineBasicMaterial).color.set(0xf59e0b);
+    let weightPainting: { nodeId: string; last: THREE.Vector3 | null } | null = null;
     const textureBrushGizmo = createTextureBrushGizmo();
     textureBrushGizmoRef.current = textureBrushGizmo;
 
@@ -2231,6 +2236,7 @@ export function Viewport({
       editorUiScene.add(pivotCrossGroup);
       editorUiScene.add(terrainBrushGizmo);
       editorUiScene.add(sculptBrushGizmo);
+      editorUiScene.add(weightBrushGizmo);
       editorUiScene.add(textureBrushGizmo);
       // The face-selection highlight lives in the *main* scene (not the
       // editor overlay, which clears depth and would show every selected face
@@ -3493,6 +3499,43 @@ export function Viewport({
         : null;
     }
 
+    /** The selected Skin node while its weight brush is on and a joint is picked to paint. */
+    function weightPaintNode() {
+      if (outputMode || elevationView || !selectedNodeIdRef.current) return null;
+      const node = graphRef.current.nodes.find((n) => n.id === selectedNodeIdRef.current && n.type === SKIN_NODE.type);
+      if (!node || !node.params.weightPaintMode) return null;
+      return Math.round(Number(node.params.selectedJoint ?? -1)) >= 0 ? node : null;
+    }
+
+    function weightPaintHit(nodeId: string, e: PointerEvent) {
+      if (!raycaster) return null;
+      const rect = renderer.domElement.getBoundingClientRect();
+      const ndc = new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1);
+      raycaster.setFromCamera(ndc, camera);
+      return raycaster.intersectObjects(skinPaintMeshes(nodeId), false)[0] ?? null;
+    }
+
+    /**
+     * One dab where the brush is, spaced a fifth of its radius from the last
+     * so a slow drag does not paint harder than a fast one. Shift smooths, Alt
+     * turns Add into Subtract and back.
+     */
+    function weightDab(node: { id: string; params: Record<string, unknown> }, point: THREE.Vector3, e: PointerEvent) {
+      const radius = Math.max(0.001, Number(node.params.weightBrushSize) || 0.15);
+      if (weightPainting?.last && weightPainting.last.distanceTo(point) < radius * 0.2) return;
+      const brush = String(node.params.weightBrush ?? "Add") as WeightBrush;
+      const tool: WeightBrush = e.shiftKey ? "Smooth" : e.altKey && brush !== "Smooth" ? (brush === "Add" ? "Subtract" : "Add") : brush;
+      const pressure = e.pointerType === "pen" && e.pressure > 0 ? e.pressure : 1;
+      skinWeightDab(node.id, {
+        joint: Math.round(Number(node.params.selectedJoint)),
+        tool,
+        center: point,
+        radius,
+        strength: (Number(node.params.weightBrushStrength) || 0.3) * pressure,
+      });
+      if (weightPainting) weightPainting.last = point.clone();
+    }
+
     function onCanvasPointerDown(e: PointerEvent) {
       if (e.ctrlKey && !e.metaKey && e.button === 0) {
         try {
@@ -3619,6 +3662,22 @@ export function Viewport({
             e.stopImmediatePropagation();
             return;
           }
+        }
+      }
+
+      // The Skin weight brush; a click on a joint ball still picks the joint.
+      const weightNode = weightPaintNode();
+      if (weightNode && e.button === 0 && !isMarqueeModifier) {
+        const rect = renderer.domElement.getBoundingClientRect();
+        const ndc = new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1);
+        const onJoint = skinJointHandles.count() > 0 && skinJointHandles.pick(ndc, camera, rect.width, rect.height) !== null;
+        const hit = onJoint ? null : weightPaintHit(weightNode.id, e);
+        if (hit) {
+          weightPainting = { nodeId: weightNode.id, last: null };
+          controls.enabled = false;
+          weightDab(weightNode, hit.point, e);
+          e.stopImmediatePropagation();
+          return;
         }
       }
 
@@ -4088,6 +4147,28 @@ export function Viewport({
         }
       } else if (terrainBrushGizmo && terrainBrushGizmo.visible) {
         terrainBrushGizmo.visible = false;
+      }
+
+      const weightMoveNode = weightPaintNode();
+      if (weightMoveNode && raycaster) {
+        const hit = weightPaintHit(weightMoveNode.id, e);
+        if (hit) {
+          const radius = Math.max(0.001, Number(weightMoveNode.params.weightBrushSize) || 0.15);
+          weightBrushGizmo.visible = true;
+          weightBrushGizmo.position.copy(hit.point);
+          if (hit.face) weightBrushGizmo.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), hit.face.normal.clone().transformDirection(hit.object.matrixWorld));
+          weightBrushGizmo.scale.setScalar(radius);
+          if (weightPainting?.nodeId === weightMoveNode.id) weightDab(weightMoveNode, hit.point, e);
+        } else {
+          weightBrushGizmo.visible = false;
+        }
+        // Off the mesh mid-stroke: still the brush's drag, not an orbit.
+        if (weightPainting) {
+          e.stopImmediatePropagation();
+          return;
+        }
+      } else if (weightBrushGizmo.visible) {
+        weightBrushGizmo.visible = false;
       }
 
       const sculptNode = selectedNodeIdRef.current
@@ -4612,6 +4693,15 @@ export function Viewport({
     }
 
     function onCanvasPointerUp(e: PointerEvent) {
+      if (weightPainting) {
+        const { nodeId } = weightPainting;
+        weightPainting = null;
+        pointerDownAt = null;
+        controls.enabled = true;
+        const stored = skinStoredPaint(nodeId);
+        if (stored) onParamChangeRef.current?.("weightPaint", stored, nodeId, { coalesce: false });
+        return;
+      }
       if (editMeshPaintDragRef.current) {
         editMeshPaintDragRef.current = false;
         setEditMeshPaintCursor(null);
@@ -7356,6 +7446,7 @@ export function Viewport({
       pivotHandle.clear();
       terrainBrushGizmo.removeFromParent();
       sculptBrushGizmo.removeFromParent();
+      weightBrushGizmo.removeFromParent();
       textureBrushGizmo.removeFromParent();
       textureBrushGizmo.geometry.dispose();
       view2DQuad.geometry.dispose();
