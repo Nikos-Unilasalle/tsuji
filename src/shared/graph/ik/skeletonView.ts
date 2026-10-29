@@ -24,6 +24,8 @@ export interface SkeletonViewInput {
   /** Radius of the joint balls; 0 for none. */
   jointRadius: number;
   body?: { center: THREE.Vector3; radius: number } | null;
+  /** A nose: a little cone from `at` along `dir` (unit), so a head turning about itself shows. */
+  face?: { at: THREE.Vector3; dir: THREE.Vector3; length: number; radius: number } | null;
   targets?: THREE.Vector3[];
   poles?: { at: THREE.Vector3; joint: THREE.Vector3 }[];
   markerSize?: number;
@@ -92,6 +94,10 @@ export function createSkeletonView(nodeId: string): SkeletonView {
   let poles = instanced(poleGeo, poleMaterial, 1, nodeId);
   const body = new THREE.Mesh(ballGeo, boneMaterial);
   body.userData.nodeId = nodeId;
+  // Unit cone along +Y, base at the origin.
+  const noseGeo = new THREE.ConeGeometry(1, 1, 10, 1).translate(0, 0.5, 0);
+  const nose = new THREE.Mesh(noseGeo, boneMaterial);
+  nose.visible = false;
   const links = new THREE.LineSegments(new THREE.BufferGeometry(), linkMaterial);
   const circles = new THREE.LineSegments(new THREE.BufferGeometry(), circleMaterial);
   // Fat lines: a 1 px guide is lost against a checker floor.
@@ -118,8 +124,8 @@ export function createSkeletonView(nodeId: string): SkeletonView {
   // breaks that (the output pane clones every object it draws).
   Object.defineProperty(group.userData, "selectionGuides", { value: guides, enumerable: false, configurable: true });
   for (const helper of [targets, poles, links, circles]) helper.userData.isHelper = true;
-  for (const obj of [bones, joints, body, targets, poles, links, circles]) {
-    obj.castShadow = obj === bones || obj === joints || obj === body;
+  for (const obj of [bones, joints, body, nose, targets, poles, links, circles]) {
+    obj.castShadow = obj === bones || obj === joints || obj === body || obj === nose;
     obj.userData.nodeId = nodeId;
     group.add(obj);
   }
@@ -177,6 +183,16 @@ export function createSkeletonView(nodeId: string): SkeletonView {
       body.scale.setScalar(input.body.radius);
     } else {
       body.visible = false;
+    }
+
+    const face = input.face;
+    if (face && face.length > 0 && face.dir.lengthSq() > 1e-12) {
+      nose.visible = true;
+      nose.position.copy(face.at);
+      nose.quaternion.setFromUnitVectors(UP, dir.copy(face.dir).normalize());
+      nose.scale.set(face.radius, face.length, face.radius);
+    } else {
+      nose.visible = false;
     }
 
     const markerSize = Math.max(0, input.markerSize ?? 0.05);
@@ -251,6 +267,7 @@ export function createSkeletonView(nodeId: string): SkeletonView {
     boneGeo.dispose();
     ballGeo.dispose();
     poleGeo.dispose();
+    noseGeo.dispose();
     links.geometry.dispose();
     circles.geometry.dispose();
     paths.geometry.dispose();

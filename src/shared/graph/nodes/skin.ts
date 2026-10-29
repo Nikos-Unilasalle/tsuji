@@ -129,9 +129,10 @@ function resolveRig(inputs: Record<string, unknown>, state: SkinState): Resolved
       restKey = flatten(data.rest);
       restKeys.set(data.rest, restKey);
     }
-    return { parents: data.parents, rest: data.rest, pose: data.pose, matrix: data.matrix, restKey, names: data.names };
+    return { parents: data.parents, rest: data.rest, pose: data.pose, matrix: data.matrix, restKey, names: data.names, twist: data.twist };
   }
 
+  twist?: number[];
   if (!Array.isArray(inputs.joints) || inputs.joints.length === 0) return null;
   const zero = new THREE.Vector3();
   const pose = inputs.joints.map((j) => asVector3(j, zero).clone());
@@ -411,7 +412,7 @@ export const SKIN_NODE: NodeDefinition = {
     const { bones, meshes } = state;
     const bonePose = rigSpace ? rig.pose : rig.pose.map((p) => p.clone().applyMatrix4(rig.matrix));
     const options = { stretch: toBoolean(params.stretch), amount: Math.max(0, Math.min(1, numberInput(inputs.amount, params.amount, 1))) };
-    const turns = boneRotations(bones, bonePose);
+    const turns = boneRotations(bones, bonePose, rig.twist);
 
     for (const bound of meshes) {
       const sourcePosition = bound.source.geometry.attributes.position as THREE.BufferAttribute | undefined;

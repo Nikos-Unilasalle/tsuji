@@ -17,8 +17,12 @@ import { CONTROL, wigglePose } from "./humanPose";
  * the beat; between steps it stays planted, so nothing slides. The pelvis
  * follows the feet, halfway between them.
  *
- * Amplitudes are fractions of the body's height (pelvis and shoulder turns in
- * radians), so a groove carries over to any body.
+ * The head also turns on its neck — nods, looks aside, tilts (`look`, in
+ * radians): the turn is applied after the solve (see turnHead), the look
+ * aside as a twist the skin follows.
+ *
+ * Amplitudes are fractions of the body's height (pelvis, shoulder and head
+ * turns in radians), so a groove carries over to any body.
  */
 
 /** sine: smooth back and forth · pulse: a beat that hits and recovers (0..1, peak on the beat) · snap: robot, held then snapped. */
@@ -48,6 +52,8 @@ export interface GrooveStyle {
   /** The shoulders, with the head and arms riding on them; twist turns them about the spine. */
   chest?: Axes & { twist?: GrooveOsc };
   head?: Axes;
+  /** The head turning on its neck, radians: x nods (+ down), y looks aside (+ to its left), z tilts (+ toward its right shoulder). */
+  look?: Axes;
   /** Both hands, the right half a cycle behind the left when `alternate`. */
   hands?: Axes & { alternate?: boolean };
   /** One step per beat, round and round; null holds the beat. Empty: the feet stay planted. */
@@ -71,34 +77,37 @@ export const NATURAL_GROOVE: GrooveSettings = { energy: 1, groove: 0, swing: 0, 
 export const GROOVE_PRESETS = {
   bounce: {
     label: "Bounce",
-    hint: "Knees on the beat, head nodding, feet tapping",
+    hint: "Knees on the beat, head nodding, shoulders rolling, feet tapping",
     style: {
-      pelvis: { y: { amp: -0.025, rate: 1, wave: "pulse" } },
-      chest: { y: { amp: -0.008, rate: 1, phase: 0.05, wave: "pulse" } },
+      pelvis: { y: { amp: -0.025, rate: 1, wave: "pulse" }, twist: { amp: 0.05, rate: 0.5 } },
+      chest: { y: { amp: -0.008, rate: 1, phase: 0.05, wave: "pulse" }, twist: { amp: -0.06, rate: 0.5, phase: 0.1 } },
       head: { z: { amp: 0.012, rate: 1, phase: 0.08, wave: "pulse" } },
-      hands: { y: { amp: -0.02, rate: 1, phase: 0.1, wave: "pulse" } },
+      look: { x: { amp: 0.16, rate: 1, phase: 0.1, wave: "pulse" }, y: { amp: 0.12, rate: 0.25, phase: 0.5 } },
+      hands: { y: { amp: -0.02, rate: 1, phase: 0.1, wave: "pulse" }, x: { amp: 0.01, rate: 0.5, phase: 0.2 } },
       steps: [{ foot: 0, dx: 0, dz: 0 }, { foot: 1, dx: 0, dz: 0 }],
       lift: 0.02,
     },
   },
   sway: {
     label: "Sway",
-    hint: "Slow side to side, hips first, shoulders after",
+    hint: "Slow side to side, hips first, shoulders after, head leaning in",
     style: {
-      pelvis: { x: { amp: 0.03, rate: 0.5 }, tilt: { amp: 0.06, rate: 0.5 } },
-      chest: { x: { amp: 0.015, rate: 0.5, phase: 0.25 } },
+      pelvis: { x: { amp: 0.03, rate: 0.5 }, tilt: { amp: 0.06, rate: 0.5 }, y: { amp: -0.008, rate: 1, wave: "pulse" } },
+      chest: { x: { amp: 0.015, rate: 0.5, phase: 0.25 }, twist: { amp: 0.05, rate: 0.5, phase: 0.3 } },
       head: { x: { amp: 0.008, rate: 0.5, phase: 0.4 } },
-      hands: { x: { amp: 0.03, rate: 0.5, phase: 0.3 } },
+      look: { z: { amp: -0.14, rate: 0.5, phase: 0.45 }, y: { amp: 0.18, rate: 0.125, phase: 1 }, x: { amp: 0.05, rate: 1, phase: 0.2, wave: "pulse" } },
+      hands: { x: { amp: 0.03, rate: 0.5, phase: 0.3 }, y: { amp: 0.012, rate: 0.5, phase: 0.55 } },
     },
   },
   stepTouch: {
     label: "Step-Touch",
-    hint: "Step out, close, step back, close — the party two-step",
+    hint: "Step out, close, step back, close — the party two-step, looking where it goes",
     style: {
-      pelvis: { y: { amp: -0.02, rate: 1, wave: "pulse" } },
-      chest: { x: { amp: 0.01, rate: 0.25, phase: 0.5 } },
+      pelvis: { y: { amp: -0.02, rate: 1, wave: "pulse" }, twist: { amp: -0.06, rate: 0.25, phase: 0.5 } },
+      chest: { x: { amp: 0.01, rate: 0.25, phase: 0.5 }, twist: { amp: -0.05, rate: 0.25, phase: 0.6 } },
       head: { z: { amp: 0.008, rate: 1, phase: 0.1, wave: "pulse" } },
-      hands: { z: { amp: 0.05, rate: 0.5 }, y: { amp: -0.015, rate: 1, wave: "pulse" }, alternate: true },
+      look: { y: { amp: -0.3, rate: 0.25, phase: 0.4 }, x: { amp: 0.08, rate: 1, phase: 0.1, wave: "pulse" } },
+      hands: { z: { amp: 0.05, rate: 0.5 }, y: { amp: -0.015, rate: 1, wave: "pulse" }, x: { amp: -0.02, rate: 0.25, phase: 0.5 }, alternate: true },
       steps: [
         { foot: 1, dx: -0.12, dz: 0 },
         { foot: 0, dx: -0.12, dz: 0 },
@@ -115,6 +124,8 @@ export const GROOVE_PRESETS = {
       pelvis: { x: { amp: 0.02, rate: 0.5 }, twist: { amp: 0.15, rate: 0.5 }, y: { amp: -0.012, rate: 1, wave: "pulse" } },
       chest: { twist: { amp: -0.1, rate: 0.5, phase: 0.1 } },
       head: { x: { amp: 0.006, rate: 0.5, phase: 0.2 } },
+      // The head follows the hand going up, chin lifting with it.
+      look: { y: { amp: 0.35, rate: 0.5, phase: 0.08 }, x: { amp: -0.08, rate: 1, phase: 0.5, wave: "pulse" }, z: { amp: -0.06, rate: 0.5, phase: 0.1 } },
       hands: { y: { amp: 0.12, rate: 0.5 }, x: { amp: 0.04, rate: 0.5 }, alternate: true },
       steps: [{ foot: 0, dx: 0, dz: 0 }, { foot: 1, dx: 0, dz: 0 }],
       lift: 0.015,
@@ -127,6 +138,7 @@ export const GROOVE_PRESETS = {
       pelvis: { y: { amp: -0.04, rate: 1, wave: "pulse" }, z: { amp: -0.01, rate: 1, wave: "pulse" } },
       chest: { z: { amp: 0.02, rate: 1, phase: 0.1, wave: "pulse" } },
       head: { z: { amp: 0.02, rate: 1, phase: 0.15, wave: "pulse" }, y: { amp: -0.008, rate: 1, phase: 0.15, wave: "pulse" } },
+      look: { x: { amp: 0.3, rate: 1, phase: 0.12, wave: "pulse" }, y: { amp: 0.2, rate: 0.25, wave: "snap" }, z: { amp: 0.08, rate: 0.5, phase: 0.2 } },
       hands: { z: { amp: 0.04, rate: 0.5 }, y: { amp: -0.02, rate: 1, wave: "pulse" }, alternate: true },
       steps: [{ foot: 0, dx: 0, dz: 0 }, null, { foot: 1, dx: 0, dz: 0 }, null],
       lift: 0.03,
@@ -139,7 +151,21 @@ export const GROOVE_PRESETS = {
       pelvis: { y: { amp: -0.01, rate: 1, wave: "pulse" } },
       chest: { twist: { amp: 0.25, rate: 0.25, wave: "snap" } },
       head: { x: { amp: 0.015, rate: 0.25, phase: 0.5, wave: "snap" } },
+      // Snapped aside half a beat after the chest, then the other way: the head leads the next turn.
+      look: { y: { amp: 0.6, rate: 0.25, phase: 0.5, wave: "snap" }, x: { amp: 0.15, rate: 0.5, phase: 0.25, wave: "snap" } },
       hands: { y: { amp: 0.08, rate: 0.5, wave: "snap" }, alternate: true },
+    },
+  },
+  headbang: {
+    label: "Headbang",
+    hint: "Stomping, chest pumping, the head thrown down on every beat",
+    style: {
+      pelvis: { y: { amp: -0.03, rate: 1, wave: "pulse" }, z: { amp: -0.008, rate: 1, wave: "pulse" } },
+      chest: { z: { amp: 0.03, rate: 1, phase: 0.05, wave: "pulse" }, y: { amp: -0.012, rate: 1, phase: 0.05, wave: "pulse" } },
+      look: { x: { amp: 0.55, rate: 1, phase: 0.08, wave: "pulse" }, z: { amp: 0.1, rate: 0.25, phase: 0.5 } },
+      hands: { y: { amp: -0.03, rate: 1, phase: 0.08, wave: "pulse" }, z: { amp: 0.02, rate: 1, phase: 0.08, wave: "pulse" }, alternate: true },
+      steps: [{ foot: 0, dx: 0, dz: 0 }, null, { foot: 1, dx: 0, dz: 0 }, null],
+      lift: 0.05,
     },
   },
 } satisfies Record<string, { label: string; hint: string; style: GrooveStyle }>;
@@ -223,7 +249,7 @@ export function grooveControls(
   time: number,
   style: GrooveStyle,
   settings: GrooveSettings = NATURAL_GROOVE,
-): { controls: THREE.Vector3[]; pelvisRotation: THREE.Quaternion } {
+): { controls: THREE.Vector3[]; pelvisRotation: THREE.Quaternion; look: THREE.Vector3 } {
   const H = Math.max(0.05, height);
   const energy = Number.isFinite(settings.energy) ? Math.max(0, settings.energy) : 1;
   const groove = Number.isFinite(settings.groove) ? Math.max(0, settings.groove) : 0;
@@ -287,5 +313,10 @@ export function grooveControls(
 
   // Groove's drift on top: the breathing, shifting body of the wiggle, feet left planted.
   const controls = groove > 0 ? wigglePose(out, H, t, { amount: groove, speed: 1, breathing: 0.5, seed }) : out;
-  return { controls, pelvisRotation };
+  // The head turns last (so the other parts keep their drift), wandering a little with Groove: a dancer looks around.
+  const look = new THREE.Vector3(osc(style.look?.x), osc(style.look?.y), osc(style.look?.z));
+  look.x += 0.04 * groove * drift(t, 0.19, seed, 97);
+  look.y += 0.15 * groove * drift(t, 0.11, seed, 98);
+  look.z += 0.04 * groove * drift(t, 0.15, seed, 99);
+  return { controls, pelvisRotation, look };
 }

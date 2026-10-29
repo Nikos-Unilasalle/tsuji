@@ -19,6 +19,8 @@ export interface LiveMove {
   /** Null while the hit is still held. */
   end: number | null;
   mirror: boolean;
+  /** When the hit came, in beats from the start: the body sets off then, to land on `start`. */
+  pressed?: number;
 }
 
 export interface LiveState {
@@ -54,7 +56,7 @@ export function stepLive(state: LiveState, hits: boolean[], mirror: boolean, bea
       const start = quantizeUp(beat, quantize);
       // A new hit on a lane cuts its previous move short.
       for (const m of state.moves) if (m.lane === lane && (m.end === null || m.end > start)) m.end = Math.max(m.start, start);
-      state.moves.push({ id: state.nextId++, lane, start, end: null, mirror });
+      state.moves.push({ id: state.nextId++, lane, start, end: null, mirror, pressed: beat });
     } else if (!hit && was) {
       for (const m of state.moves) if (m.lane === lane && m.end === null) m.end = Math.max(m.start + minLength, quantizeUp(beat, quantize));
     }

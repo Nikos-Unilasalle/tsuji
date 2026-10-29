@@ -12,7 +12,8 @@ import * as THREE from "three";
  * Rigs hand their joints over as positions, so a bone is a segment: its pose
  * is the smallest rotation taking the rest segment onto the posed one, plus
  * the translation of its head, plus optionally a stretch along its length.
- * (Twist around the bone axis is not in the data, and so not in the result.)
+ * Twist around the bone axis is not in the positions: a rig that turns a
+ * bone about itself (a head looking aside) hands it over in `twist`.
  */
 
 /** What every rig node publishes on its geometry's `userData.rig`; what Skin reads. */
@@ -27,10 +28,12 @@ export interface RigData {
   matrix: THREE.Matrix4;
   /** A name per joint, for editing UIs. */
   names?: string[];
+  /** Radians per joint: how far its bone turns about itself (+ counter-clockwise looking down the bone from its tip). Absent: none. */
+  twist?: number[];
 }
 
-export function publishRig(target: THREE.Object3D, parents: number[], rest: THREE.Vector3[], pose: THREE.Vector3[], matrix: THREE.Matrix4, names?: string[]) {
-  const data: RigData = { parents, rest, pose, matrix: matrix.clone(), names };
+export function publishRig(target: THREE.Object3D, parents: number[], rest: THREE.Vector3[], pose: THREE.Vector3[], matrix: THREE.Matrix4, names?: string[], twist?: number[]) {
+  const data: RigData = { parents, rest, pose, matrix: matrix.clone(), names, twist };
   target.userData.rig = data;
 }
 
@@ -90,7 +93,7 @@ export interface BoneRotations {
   real: boolean[];
 }
 
-export function boneRotations(bones: SkinBone[], pose: THREE.Vector3[]): BoneRotations {
+export function boneRotations(bones: SkinBone[], pose: THREE.Vector3[], twist?: number[]): BoneRotations {
   const rotations: THREE.Quaternion[] = bones.map(() => new THREE.Quaternion());
   const real: boolean[] = bones.map(() => false);
   const dir = new THREE.Vector3();
@@ -101,6 +104,8 @@ export function boneRotations(bones: SkinBone[], pose: THREE.Vector3[]): BoneRot
     if (dir.lengthSq() < EPS * EPS) return;
     dir.normalize();
     rotations[i].setFromUnitVectors(bone.dir, dir);
+    const angle = twist?.[bone.joint];
+    if (angle && Number.isFinite(angle)) rotations[i].premultiply(new THREE.Quaternion().setFromAxisAngle(dir, angle));
     real[i] = true;
   });
 

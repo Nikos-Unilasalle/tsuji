@@ -1,10 +1,11 @@
 import { describe, it, expect } from "vitest";
 import * as THREE from "three";
 import { RIG_HUMAN_NODE } from "./rig";
-import { RIG_BIPED_DANCE_NODE, moveAt, moveWeight, nextMove, readMoves, type DanceInfo } from "./bipedDance";
+import { RIG_BIPED_DANCE_NODE, moveAt, moveWeight, moveWindows, nextMove, poseLook, readMoves, type DanceInfo } from "./bipedDance";
+import { readRig } from "../ik/skinning";
 import { diceChoreography } from "./danceDice";
 import { EvalContext } from "../types";
-import { HumanSkeleton } from "../ik/skeletons";
+import { HumanSkeleton, turnHead } from "../ik/skeletons";
 import { CONTROL, POSE_PRESETS, readHumanPose } from "../ik/humanPose";
 
 const ctx = (nodeId: string, frame: number): EvalContext => ({ time: frame / 30, step: frame, nodeId, currentFrame: frame, fps: 30 });
@@ -102,6 +103,24 @@ describe("dance moves", () => {
     expect(moveWeight(m, 3.5, 16, 0.25)).toBe(0);
     expect(moveWeight(m, 6.25, 16, 0.25)).toBe(0);
     expect(moveWeight({ lane: 0, start: 0, length: 1 }, 15.875, 16, 0.25)).toBeCloseTo(0.5, 9);
+  });
+
+  it("goes from one pose straight to the next, never back through the groove", () => {
+    const moves = readMoves([{ lane: 0, start: 4, length: 2 }, { lane: 1, start: 7, length: 2 }, { lane: 0, start: 14, length: 1 }]);
+    const windows = moveWindows(moves, 16, 0.4, 0.75);
+    // The second takes over from the first over the whole beat between them.
+    for (let b = 6; b <= 7; b += 0.125) {
+      const total = moveWeight(moves[0], b, 16, 0.4, windows[0]) + moveWeight(moves[1], b, 16, 0.4, windows[1]);
+      expect(total).toBeCloseTo(1, 9);
+    }
+    expect(moveWeight(moves[1], 6.5, 16, 0.4, windows[1])).toBeCloseTo(0.5, 9);
+    // Far apart: let go over the release, then the groove.
+    expect(windows[1].outEnd).toBeCloseTo(9.75, 9);
+    expect(moveWeight(moves[1], 10, 16, 0.4, windows[1])).toBe(0);
+    // Round the loop: the last move hands over to the first of the next round.
+    const loop = readMoves([{ lane: 0, start: 0, length: 3 }, { lane: 1, start: 3.5, length: 12 }]);
+    const lw = moveWindows(loop, 16, 0.4, 0.75);
+    expect(moveWeight(loop[0], 15.75, 16, 0.4, lw[0]) + moveWeight(loop[1], 15.75, 16, 0.4, lw[1])).toBeCloseTo(1, 9);
   });
 
   it("finds the move under a cell", () => {
@@ -202,5 +221,42 @@ describe("Biped Dance live", () => {
     const sockets = RIG_BIPED_DANCE_NODE.dynamicInputs!([{ id: "c", fromNode: "p", fromSocket: "pose", toNode: "d", toSocket: "pose0" }]).map((s) => s.id);
     expect(sockets.slice(-4)).toEqual(["pose0", "hit0", "pose1", "hit1"]);
     expect(sockets).toContain("mirror");
+  });
+});
+
+describe("head turns", () => {
+  it("nods, tilts and looks aside on the neck, the look carried as the head bone's twist", () => {
+    const positions = skeleton.rig.rest.map((p) => p.clone());
+    const head = skeleton.joint.head;
+    const neck = skeleton.rig.joints[head].parent;
+    const length = positions[head].distanceTo(positions[neck]);
+    const nod = turnHead(skeleton, positions.map((p) => p.clone()), new THREE.Vector3(0.4, 0, 0));
+    expect(nod.face.y).toBeLessThan(0);
+    const nodded = positions.map((p) => p.clone());
+    turnHead(skeleton, nodded, new THREE.Vector3(0.4, 0, 0));
+    expect(nodded[head].z).toBeGreaterThan(positions[head].z + 0.1 * length);
+    expect(nodded[head].distanceTo(nodded[neck])).toBeCloseTo(length, 9);
+    const aside = positions.map((p) => p.clone());
+    const look = turnHead(skeleton, aside, new THREE.Vector3(0, 0.5, 0));
+    expect(aside[head].distanceTo(positions[head])).toBeLessThan(1e-9);
+    expect(look.twist[head]).toBeCloseTo(0.5, 6);
+    expect(look.face.x).toBeGreaterThan(0.4);
+  });
+
+  it("dances with its head: the twist reaches the rig, and a pose reaching out looks at its hand", () => {
+    const out = dance("bd-head", 37, { preset: "robot", groove: 0 });
+    const rig = readRig(out.geometry)!;
+    const twists = new Set<number>();
+    for (const f of [0, 15, 30, 45, 60]) twists.add(Math.round(readRig(dance("bd-head", f, { preset: "robot", groove: 0 }).geometry)!.twist![skeleton.joint.head] * 100));
+    expect(rig.twist).toHaveLength(rig.pose.length);
+    expect(twists.size).toBeGreaterThan(1);
+    const still = readRig(dance("bd-head-still", 37, { preset: "robot", groove: 0, head: 0 }).geometry)!;
+    // Head Turns at 0: the head only faces where the shoulders do.
+    expect(Math.abs(still.twist![skeleton.joint.head])).toBeLessThan(0.1);
+    expect(Math.abs(rig.twist![skeleton.joint.head])).toBeGreaterThan(0.3);
+    const point = POSE_PRESETS.point.build(skeleton);
+    const { look, mask } = poseLook(point, skeleton.relaxedControls, H);
+    expect(mask).toBeGreaterThan(0.5);
+    expect(Math.abs(look.y)).toBeLessThan(0.5);
   });
 });

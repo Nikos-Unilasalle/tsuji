@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import * as THREE from "three";
-import { buildBones, computeSkinWeights, poseBones, skinNormals, skinPositions } from "./skinning";
+import { boneRotations, buildBones, computeSkinWeights, poseBones, skinNormals, skinPositions } from "./skinning";
 
 const v = (x: number, y: number, z = 0) => new THREE.Vector3(x, y, z);
 const chainRest = [v(0, 0), v(0, 1), v(0, 2)];
@@ -100,5 +100,16 @@ describe("skinning", () => {
     skinPositions(out, new Float32Array([0, 0.5, 0]), { influences: 1, indices: new Uint16Array([0]), weights: new Float32Array([1]) }, posed.pos);
     expect(out[0]).toBeCloseTo(0.5, 4);
     expect(out[1]).toBeCloseTo(0, 4);
+  });
+});
+
+describe("bone twist", () => {
+  it("turns a bone about itself by the rig's twist", () => {
+    const rest = [new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 1, 0)];
+    const bones = buildBones([-1, 0], rest);
+    const { rotations } = boneRotations(bones, rest, [0, Math.PI / 2]);
+    const forward = new THREE.Vector3(0, 0, 1).applyQuaternion(rotations[1]);
+    expect(forward.x).toBeCloseTo(1, 9);
+    expect(new THREE.Vector3(0, 1, 0).applyQuaternion(rotations[1]).y).toBeCloseTo(1, 9);
   });
 });

@@ -64,12 +64,13 @@ export function bonesOf(rig: IkRig): [number, number][] {
   return rig.joints.flatMap((j, i) => (j.parent >= 0 ? [[j.parent, i] as [number, number]] : []));
 }
 
-/** World matrix per bone: at the parent joint, +Y down the bone, unit scale. */
-export function boneMatrices(rig: IkRig, world: THREE.Vector3[]): THREE.Matrix4[] {
+/** World matrix per bone: at the parent joint, +Y down the bone, unit scale; `twist` (radians per joint) turns a bone about itself. */
+export function boneMatrices(rig: IkRig, world: THREE.Vector3[], twist?: number[]): THREE.Matrix4[] {
   const up = new THREE.Vector3(0, 1, 0);
   return bonesOf(rig).map(([a, b]) => {
     const dir = world[b].clone().sub(world[a]);
     const q = dir.lengthSq() > 1e-18 ? new THREE.Quaternion().setFromUnitVectors(up, dir.normalize()) : new THREE.Quaternion();
+    if (twist?.[b] && dir.lengthSq() > 0) q.premultiply(new THREE.Quaternion().setFromAxisAngle(dir, twist[b]));
     return new THREE.Matrix4().compose(world[a], q, new THREE.Vector3(1, 1, 1));
   });
 }

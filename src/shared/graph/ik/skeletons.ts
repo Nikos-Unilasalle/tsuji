@@ -373,6 +373,50 @@ export function solveHuman(skeleton: HumanSkeleton, controls: THREE.Vector3[], o
   return positions;
 }
 
+/** How far a head turns, in radians: x the nod (+ down), y the look aside (+ to its left), z the tilt (+ toward its right shoulder). */
+export const HEAD_TURN_LIMITS = { x: 0.7, y: 1.2, z: 0.5 } as const;
+
+/**
+ * The head turned on its neck after a solve: nodded and tilted about the neck
+ * joint (the head joint moves, in place in `positions`), looked aside about
+ * itself — which positions cannot carry, so it comes back as the head bone's
+ * twist (see RigData.twist). The turn is the body's: forward is where the
+ * shoulders face, so a twisted chest takes the head with it.
+ */
+export function turnHead(skeleton: HumanSkeleton, positions: THREE.Vector3[], turn: THREE.Vector3): { twist: number[]; face: THREE.Vector3 } {
+  const { joint, rig } = skeleton;
+  const head = joint.head;
+  const neck = rig.joints[head].parent;
+  const twist = positions.map(() => 0);
+  const clamp = (v: number, lim: number) => (Number.isFinite(v) ? Math.max(-lim, Math.min(lim, v)) : 0);
+  const pitch = clamp(turn.x, HEAD_TURN_LIMITS.x);
+  const yaw = clamp(turn.y, HEAD_TURN_LIMITS.y);
+  const roll = clamp(turn.z, HEAD_TURN_LIMITS.z);
+  const length = rig.rest[head].distanceTo(rig.rest[neck]);
+  const up = positions[head].clone().sub(positions[neck]);
+  if (neck < 0 || length < 1e-9 || up.lengthSq() < 1e-18) return { twist, face: new THREE.Vector3(0, 0, 1) };
+  up.normalize();
+  // The body's frame at the neck: up the neck, forward square to the shoulders (the left one is +x at rest).
+  const shoulder = (s: 0 | 1) => positions[rig.joints[joint.elbow[s]].parent];
+  const across = shoulder(0).clone().sub(shoulder(1));
+  const forward = across.clone().cross(up);
+  if (forward.lengthSq() < 1e-12) forward.set(0, 0, 1);
+  forward.addScaledVector(up, -forward.dot(up)).normalize();
+  const side = up.clone().cross(forward);
+  const body = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(side, up, forward));
+  const look = body.multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(pitch, yaw, roll, "YXZ")));
+  const dir = new THREE.Vector3(0, 1, 0).applyQuaternion(look);
+  positions[head].copy(positions[neck]).addScaledVector(dir, length);
+  // The skin swings the head bone the shortest way onto `dir`; the twist is what is left to face `face`.
+  const face = new THREE.Vector3(0, 0, 1).applyQuaternion(look);
+  const restDir = rig.rest[head].clone().sub(rig.rest[neck]).normalize();
+  const swung = new THREE.Vector3(0, 0, 1).applyQuaternion(new THREE.Quaternion().setFromUnitVectors(restDir, dir));
+  swung.addScaledVector(dir, -swung.dot(dir));
+  const want = face.clone().addScaledVector(dir, -face.dot(dir));
+  if (swung.lengthSq() > 1e-12 && want.lengthSq() > 1e-12) twist[head] = Math.atan2(swung.clone().cross(want).dot(dir), swung.dot(want));
+  return { twist, face };
+}
+
 // ---------------------------------------------------------------------------
 // Polypede
 
