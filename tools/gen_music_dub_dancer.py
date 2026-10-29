@@ -1,6 +1,6 @@
 """Writes public/demos/demo_music_dub_dancer.tsuji — step 7 of the music nodes: the music drives a whole scene.
 
-The song is Tsuji Dub (tools/gen_music_reggae.py, imported as it is). On stage:
+The song is Tsuji Dub (tools/dub_song.py, imported as it is). On stage:
 
   - a dancer (rig/human → rig/biped-dance, the Sway groove) whose tempo is the Clock's: its BPM is wired from the
     Clock, and both count beats from the same playhead, so the body is on the beat by construction. Its energy
@@ -19,7 +19,7 @@ import json
 import math
 from pathlib import Path
 
-import gen_music_reggae as song
+import dub_song as song
 
 OUT = Path(__file__).resolve().parent.parent / "public" / "demos" / "demo_music_dub_dancer.tsuji"
 DANCE_DEMO = Path(__file__).resolve().parent.parent / "public" / "demos" / "demo_rig_biped_dance.tsuji"
@@ -39,7 +39,7 @@ def wire(a, sa, b, sb):
 
 
 # ── the band: Tsuji Dub's tracks as they are ──────────────────────────────
-node("clock", "music/clock", 40, 460, bpm=song.BPM, swing=0.2, stepsPerBeat="4")
+node("clock", "music/clock", 40, 460, bpm=song.BPM, swing=song.SWING, stepsPerBeat="4")
 for i, (tid, steps, vtype, params) in enumerate(song.TRACKS):
     y = 40 + i * 150
     node(f"pat_{tid}", "music/pattern", 300, y, steps=steps, length=str(song.STEPS), name=tid)
@@ -47,7 +47,7 @@ for i, (tid, steps, vtype, params) in enumerate(song.TRACKS):
     wire("clock", "clock", f"pat_{tid}", "clock")
     wire(f"pat_{tid}", "sequence", f"voice_{tid}", "sequence")
     wire(f"voice_{tid}", "track", "out", f"track{i}")
-node("out", "music/out", 900, 460, master=0.8, startFrame=0)
+node("out", "music/out", 900, 460, **song.OUT_PARAMS)
 
 # ── what the music says, as values ────────────────────────────────────────
 for part, src, decay in (("drums", "pat_drums", 0.22), ("skank", "pat_skank", 0.16), ("bass", "pat_bass", 0.35)):
@@ -71,7 +71,7 @@ moves = [
     {"lane": 0, "start": BEAT(12), "length": 4, "mirror": True},       # the drop: arms up through it
     {"lane": 1, "start": BEAT(15) + 1, "length": 2, "mirror": False},  # the last siren
 ]
-node("dance", "rig/biped-dance", 1700, 560, preset="sway", bpm=song.BPM, energy=0.9, groove=0.45, swing=0.2, loopBeats=song.BARS * 4, moves=moves)
+node("dance", "rig/biped-dance", 1700, 560, preset="sway", bpm=song.BPM, energy=0.9, groove=0.45, swing=song.SWING, loopBeats=song.BARS * 4, moves=moves)
 wire("human", "geometry", "dance", "skeleton")
 wire("cheer", "pose", "dance", "pose0")
 wire("wave", "pose", "dance", "pose1")

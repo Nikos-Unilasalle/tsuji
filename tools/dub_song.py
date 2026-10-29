@@ -1,31 +1,38 @@
-"""Writes public/demos/demo_music_reggae.tsuji — "Tsuji Dub": a one-drop riddim in A minor, built from music nodes.
+"""Tsuji Dub, the song of the Dub Dancer demo (tools/gen_music_dub_dancer.py imports it): a one-drop riddim in A minor.
 
-75 BPM, a touch of shuffle, sixteen bars of sixteenths: 256 steps, 51.2 s — the 1536 frames of the timeline at
-30 fps, so song and timeline loop together. Am7 Am7 Dm7 Dm7 | Am7 Am7 Em7 Dm7, twice.
+Written after a reggae-on-a-tracker guide: the skank on the offbeats and the shuffle are the two pillars.
 
-  bars 1–2    drums and bass alone: the riddim
-  bars 3–4    the skank (offbeat guitar chords) and the organ bubble come in; a dub siren answers
-  bars 5–8    the full riddim; the snare and the skank throw dub echoes; a tom fill into…
-  bars 9–12   steppers (a kick on every beat) and the melodica's tune
-  bar 13      the drop: the bass steps out, the skank echoes in the space
-  bars 14–16  everyone back, the siren again, the fill, round we go
+  - 75 BPM (reggae lives between 65 and 80), sixteenths, swing 0.4 (≈ 60 % shuffle) on the Clock;
+  - drums, one drop: kick and rimshot only on beat 3 (line 08); hats loud on the beats, soft on the offbeats, with
+    ghost notes; steppers (a kick on every beat, the snare still on 3) under the tune;
+  - the skank on the offbeats, lines 02 06 10 14, a muted clav cut short (~0.3 of a step), doubled by the organ with
+    its sixteenth "bubble" pickups;
+  - the bass round and heavy (the Dub Bass preset, mono), legato, leaving the one empty, answering the kick on 3,
+    sliding between notes (GLD);
+  - bongos (toms tuned up) humanised with DLY: each hit a few sixty-fourths late;
+  - dub: a snare and a skank chord thrown into the dotted-eighth ping-pong delay on chosen hits (tracks that play
+    only those hits, with the delay send up), reverb on the snare, the skank, the melodica and the siren.
 
-tsuji has no delay effect yet, so the echoes are written: the repeats of a hit three sixteenths later (a dotted
-eighth), each one softer. Three spheres, red, gold and green, pulse with the drums, the skank and the bass.
+Sixteen bars, 256 steps, 51.2 s — the 1536 frames of the timeline at 30 fps, so song and timeline loop together.
+Am7 Am7 Dm7 Dm7 | Am7 Am7 Em7 Dm7, twice:
 
-Run: python3 tools/gen_music_reggae.py (tools/gen_music_dub_dancer.py imports the song from here).
+  bars 1–2    drums and bass: the riddim
+  bars 3–8    the skank and the organ; a siren at bar 4; throws; a tom fill into…
+  bars 9–12   steppers, bongos, the melodica's tune
+  bar 13      the drop: the bass steps out, the skank echoes
+  bars 14–16  everyone back, the siren, the fill, round we go
+
+It was a demo of its own; it lives on as Dub Dancer's soundtrack. This module only holds the song: TRACKS (each
+track's pattern text, voice type and settings), OUT_PARAMS (Music Out's, the dub FX), BPM, SWING, BARS, STEPS, FRAMES.
 """
-import json
-from pathlib import Path
-
-OUT = Path(__file__).resolve().parent.parent / "public" / "demos" / "demo_music_reggae.tsuji"
 BARS = 16
 STEPS = BARS * 16
 BPM = 75
+SWING = 0.4
 FRAMES = STEPS * 15 * 30 // BPM  # 15 = 60 s / 4 sixteenths per beat
 
-# The progression, bar by bar.
 FORM = ["Am", "Am", "Dm", "Dm", "Am", "Am", "Em", "Dm"] * 2
+THROW_BARS = {3, 7, 11, 15}  # bars 4, 8, 12, 16 (from 0)
 
 
 def bar(words: str) -> list[str]:
@@ -41,93 +48,117 @@ def song(bars: list[list[str]]) -> str:
 
 REST = bar(". " * 16)
 
+
 # ── drums ─────────────────────────────────────────────────────────────────
-def one_drop(open_hat=False, echo=False, fill=False):
-    # Hats on the eighths, the offbeat ones a little louder; kick and rim together on beat 3 — the one drop.
-    w = ["hat@0.4" if i % 4 == 0 else "hat@0.55" if i % 2 == 0 else "." for i in range(16)]
-    w[8] = "kick+snare+hat@0.85"
+def hats():
+    # Loud on the beats, soft on the offbeats, a ghost before the next beat.
+    w = ["."] * 16
+    for i in (0, 4, 8, 12):
+        w[i] = "hat@0.62"
+    for i in (2, 6, 10, 14):
+        w[i] = "hat@0.3"
+    for i in (7, 15):
+        w[i] = "hat@0.12"
+    return w
+
+
+def one_drop(open_hat=False, fill=False):
+    w = hats()
+    w[8] = "kick+snare+hat@0.9"  # the one drop: kick and rim on 3, nothing else
     if open_hat:
-        w[14] = "openhat@0.5"
-    if echo:  # the rim thrown into the echo: a dotted eighth later, softer each time
-        w[11] = "snare@0.35"
-        w[14] = "snare+hat@0.2"
+        w[14] = "openhat@0.35"
     if fill:
-        w[12] = "tomhigh@0.8!RTG2"
-        w[13] = "tomhigh@0.7"
-        w[14] = "tomlow@0.85!RTG2"
-        w[15] = "tomlow@0.75"
+        w[12] = "tomhigh@0.75!RTG2"
+        w[13] = "tomhigh@0.6"
+        w[14] = "tomlow@0.8!RTG2"
+        w[15] = "tomlow@0.7"
     return w
 
 
 def steppers(fill=False):
-    w = one_drop()
+    w = hats()
     for i in (0, 4, 12):
-        w[i] = "kick+hat@0.8"
+        w[i] = "kick+hat@0.75"
+    w[8] = "kick+snare+hat@0.9"
     if fill:
-        w[12] = "kick+tomhigh@0.8!RTG2"
-        w[14] = "tomlow@0.85!RTG3"
-        w[15] = "clap@0.7"
+        w[12] = "kick+tomhigh@0.75!RTG2"
+        w[14] = "tomlow@0.8!RTG3"
+        w[15] = "snare@0.6"
     return w
 
 
 drums = [
-    one_drop(), one_drop(open_hat=True), one_drop(), one_drop(echo=True),
+    one_drop(), one_drop(open_hat=True), one_drop(), one_drop(),
     one_drop(), one_drop(open_hat=True), one_drop(), one_drop(fill=True),
     steppers(), steppers(), steppers(), steppers(),
-    one_drop(echo=True), steppers(), steppers(), steppers(fill=True),
+    one_drop(), steppers(), steppers(), steppers(fill=True),
 ]
 
-# ── bass: deep, melodic, leaving the one ──────────────────────────────────
+# The snare thrown into the echo: the one-drop rim doubled on a few bars, a ghost before the turn.
+snare_throws = []
+for i in range(BARS):
+    if i in THROW_BARS or i == 12:
+        snare_throws.append(bar(". . . . . . . . snare@0.8 . . . . . snare@0.35 ."))
+    else:
+        snare_throws.append(REST)
+
+# Bongos (toms tuned up), humanised: every hit a little late, never twice the same.
+BONGO = bar(". . . tomhigh@0.3!DLY2 . . tomlow@0.35!DLY1 tomhigh@0.25!DLY3 . . . tomhigh@0.3!DLY1 . . tomlow@0.4!DLY2 tomhigh@0.2!DLY3")
+bongos = [REST] * 8 + [BONGO] * 4 + [REST] + [BONGO] * 3
+
+# ── bass: round, legato, the one left empty, answering the kick on 3 ─────
 BASS = {
-    "Am": [bar(". . A1@0.95~3 . . . C2~1 E2~2 . . A2~2 . G2~2 . E2~2 ."),
-           bar(". . A1@0.95~3 . . . C2~1 D2~2 . . E2~3 . . . D2~1 C2~1")],
-    "Dm": [bar(". . D2@0.95~3 . . . F2~1 A2~2 . . D2~2 . C2~2 . A1~2 ."),
-           bar(". . D2@0.95~3 . . . F2~1 G2~2 . . A2~3 . . . G2~1 F2~1")],
-    "Em": [bar(". . E2@0.95~3 . . . G2~1 B2~2 . . E2~2 . D2~2 . B1~2 ."),
-           bar(". . E2@0.95~3 . . . G2~1 A2~2 . . B2~3 . . . A2~1 G2~1")],
+    "Am": [bar(". . A1@0.95 . C2@0.8 . . . E2@0.9 . E2@0.7 . G2@0.85!GLD5 . . ."),
+           bar(". . A1@0.95 . C2@0.8 . . . E2@0.9 . D2@0.7!GLD4 . C2@0.85 . B1@0.6 .")],
+    "Dm": [bar(". . D2@0.95 . F2@0.8 . . . A2@0.9 . A2@0.7 . C2@0.85!GLD5 . . ."),
+           bar(". . D2@0.95 . F2@0.8 . . . A2@0.9 . G2@0.7!GLD4 . F2@0.85 . E2@0.6 .")],
+    "Em": [bar(". . E2@0.95 . G2@0.8 . . . B2@0.9 . B2@0.7 . D2@0.85!GLD5 . . ."),
+           bar(". . E2@0.95 . G2@0.8 . . . B2@0.9 . A2@0.7!GLD4 . G2@0.85 . E2@0.6 .")],
 }
 bass = []
 for i, ch in enumerate(FORM):
     if i == 12:  # the drop: one low note, then space
-        bass.append(bar("A1@0.9~2 . . . . . . . . . . . . . . ."))
-        continue
-    bass.append(BASS[ch][i % 2])
+        bass.append(bar(". . A1@0.9~2 . . . . . . . . . . . . ."))
+    else:
+        bass.append(BASS[ch][i % 2])
 
-# ── skank: the offbeat chords, short and sharp ────────────────────────────
+# ── skank: the offbeats, 02 06 10 14, cut short ───────────────────────────
 VOICING = {"Am": "A3:min7", "Dm": "D3:min7/2", "Em": "E3:min7/2"}
 
 
-def skank(ch, echo=False):
+def skank(ch, vel=0.8):
     c = VOICING[ch]
     w = ["."] * 16
-    w[4] = f"{c}@0.85~1"
-    w[12] = f"{c}@0.9~1"
-    if echo:
-        w[15] = f"{c}@0.4~1"
+    for i in (2, 6, 10, 14):
+        w[i] = f"{c}@{vel}~0.3"
     return w
 
 
-skanks = []
-for i, ch in enumerate(FORM):
-    if i < 2:
-        skanks.append(REST)
-    elif i == 12:  # the drop: the skank alone with its echoes
-        w = skank(ch, echo=True)
-        w[7] = f"{VOICING[ch]}@0.4~1"
-        w[10] = f"{VOICING[ch]}@0.2~1"
-        skanks.append(w)
-    else:
-        skanks.append(skank(ch, echo=i in (3, 7, 11, 15)))
+skanks = [REST if i < 2 else skank(ch, 0.55) if i == 12 else skank(ch) for i, ch in enumerate(FORM)]
 
-# ── organ bubble: the eighth offbeats, the "and" of every beat ────────────
+# A skank chord thrown into the echo at the end of some bars.
+skank_throws = []
+for i, ch in enumerate(FORM):
+    if i in THROW_BARS or i == 12:
+        w = ["."] * 16
+        w[14] = f"{VOICING[ch]}@0.85~0.3"
+        if i == 12:
+            w[6] = f"{VOICING[ch]}@0.7~0.3"
+        skank_throws.append(w)
+    else:
+        skank_throws.append(REST)
+
+# ── organ: the skank doubled, with the bubble's sixteenth pickups ────────
 BUBBLE = {"Am": "A2:min7", "Dm": "D2:min7/2", "Em": "E2:min7/2"}
 
 
 def bubble(ch):
     c = BUBBLE[ch]
     w = ["."] * 16
-    for i, v in ((2, 0.4), (6, 0.55), (10, 0.4), (14, 0.55)):
-        w[i] = f"{c}@{v}~1"
+    for i in (2, 6, 10, 14):
+        w[i] = f"{c}@0.5~0.6"
+    for i in (3, 7, 11, 15):
+        w[i] = f"{c}@0.22~0.3"
     return w
 
 
@@ -146,7 +177,7 @@ TUNE = [
 ]
 melodica = [REST] * 8 + TUNE
 
-# ── dub siren: a slow wail, gliding up and down ───────────────────────────
+# ── dub siren ─────────────────────────────────────────────────────────────
 WAIL = bar("A5@0.5~4 . . . E6@0.5~4!GLD40 . . . A5@0.5~4!GLD40 . . . E6@0.45~4!GLD40 . . .")
 RISE = bar(". . . . . . . . A5@0.4~2 . C6@0.45~2!GLD20 . E6@0.5~2!GLD20 . A6@0.5~2!GLD30 .")
 siren = [REST] * BARS
@@ -156,64 +187,24 @@ siren[15] = WAIL
 
 TRACKS = [
     # id, steps, voice node type, params
-    ("drums", song(drums), "music/drum-kit", {"level": 0.85, "pan": 0, "tune": -2, "decay": 1.1}),
-    ("bass", song(bass), "music/fm-voice", {"preset": "Felucca · BASS", "level": 1.0, "pan": 0}),
-    ("skank", song(skanks), "music/fm-voice", {"preset": "SLOOP · CLAV", "level": 0.45, "pan": -0.35}),
-    ("organ", song(organ), "music/fm-voice", {"preset": "Felucca · ORGAN", "level": 0.3, "pan": 0.35}),
-    ("melodica", song(melodica), "music/fm-voice", {"preset": "Melodica", "level": 0.55, "pan": 0.1}),
-    ("siren", song(siren), "music/fm-voice", {"preset": "Chip", "level": 0.18, "pan": 0.6, "voices": 1}),
+    ("drums", song(drums), "music/drum-kit", {"level": 0.85, "pan": 0, "tune": -2, "decay": 1.05, "reverbSend": 0.12}),
+    ("bass", song(bass), "music/fm-voice", {"preset": "Dub Bass", "voices": 1, "level": 1.0, "pan": 0}),
+    ("skank", song(skanks), "music/fm-voice", {"preset": "SLOOP · CLAV", "level": 0.5, "pan": -0.3, "reverbSend": 0.22}),
+    ("organ", song(organ), "music/fm-voice", {"preset": "Felucca · ORGAN", "level": 0.26, "pan": 0.35, "reverbSend": 0.15}),
+    ("bongos", song(bongos), "music/drum-kit", {"level": 0.45, "pan": 0.45, "tune": 14, "decay": 0.6, "reverbSend": 0.2}),
+    ("snare_throw", song(snare_throws), "music/drum-kit", {"level": 0.35, "pan": 0, "tune": -2, "delaySend": 1, "reverbSend": 0.35}),
+    ("skank_throw", song(skank_throws), "music/fm-voice", {"preset": "SLOOP · CLAV", "level": 0.3, "pan": 0.2, "delaySend": 1, "reverbSend": 0.3}),
+    ("melodica", song(melodica), "music/fm-voice", {"preset": "Melodica", "level": 0.5, "pan": 0.1, "delaySend": 0.28, "reverbSend": 0.35}),
+    ("siren", song(siren), "music/fm-voice", {"preset": "Chip", "level": 0.16, "pan": 0.6, "voices": 1, "delaySend": 0.6, "reverbSend": 0.4}),
 ]
-
-nodes = [{"id": "clock", "type": "music/clock", "position": {"x": 40, "y": 420}, "params": {"bpm": BPM, "swing": 0.2, "stepsPerBeat": "4"}}]
-links = []
-for i, (tid, steps, vtype, params) in enumerate(TRACKS):
-    y = 40 + i * 150
-    nodes.append({"id": f"pat_{tid}", "type": "music/pattern", "position": {"x": 300, "y": y}, "params": {"steps": steps, "length": str(STEPS), "name": tid}})
-    nodes.append({"id": f"voice_{tid}", "type": vtype, "position": {"x": 600, "y": y}, "params": params})
-    links += [("clock", "clock", f"pat_{tid}", "clock"), (f"pat_{tid}", "sequence", f"voice_{tid}", "sequence"), (f"voice_{tid}", "track", "out", f"track{i}")]
-
-nodes += [
-    {"id": "out", "type": "music/out", "position": {"x": 900, "y": 420}, "params": {"master": 0.8, "startFrame": 0}},
-    {"id": "env", "type": "lighting/environment", "position": {"x": 1900, "y": 560}, "params": {"color": 1315860, "intensity": 1, "background": 1, "ambientIntensity": 0.55, "sunIntensity": 1.3}},
-    {"id": "render", "type": "render", "position": {"x": 900, "y": 720}, "params": {"frameCount": FRAMES, "fps": 30, "motionBlur": 0, "resolutionPreset": "16:9 (1920x1080)", "width": 1920, "height": 1080, "holdout": False}},
-]
-
-# Three spheres, red, gold and green, each breathing with one part.
-SPHERES = [
-    ("red", "pat_drums", 0xD7263D, 0x4C0519, -2.6, 0.25),
-    ("gold", "pat_skank", 0xF4C430, 0x4A3405, 0.0, 0.18),
-    ("green", "pat_bass", 0x2E8B57, 0x052E16, 2.6, 0.35),
-]
-for k, (name, src, color, glow, x, decay) in enumerate(SPHERES):
-    y = 40 + k * 170
-    nodes += [
-        {"id": f"probe_{name}", "type": "music/note-probe", "position": {"x": 1160, "y": y}, "params": {"decay": decay}},
-        {"id": f"pulse_{name}", "type": "math/expression", "position": {"x": 1380, "y": y}, "params": {"formula": "0.7 + 0.7 * x"}},
-        {"id": f"vec_{name}", "type": "converter/value-to-vector", "position": {"x": 1580, "y": y}, "params": {}},
-        {"id": f"xf_{name}", "type": "transform/matrix-transform", "position": {"x": 1760, "y": y}, "params": {"location": {"x": x, "y": 0, "z": 0}}},
-        {"id": f"sphere_{name}", "type": "object/sphere", "position": {"x": 1960, "y": y}, "params": {"color": color, "emissive": glow, "emissiveIntensity": 1.0}},
-    ]
-    links += [
-        (src, "sequence", f"probe_{name}", "music"),
-        (f"probe_{name}", "envelope", f"pulse_{name}", "x"),
-        (f"pulse_{name}", "value", f"vec_{name}", "value"),
-        (f"vec_{name}", "vector", f"xf_{name}", "scale"),
-        (f"xf_{name}", "matrix", f"sphere_{name}", "matrix"),
-    ]
-
-project = {
-    "canvases": [
-        {
-            "nodes": nodes,
-            "connections": [{"id": f"c{i}", "fromNode": a, "fromSocket": sa, "toNode": b, "toSocket": sb} for i, (a, sa, b, sb) in enumerate(links)],
-            "keyframes": {},
-            "markers": [],
-            "exposedParams": [],
-        }
-    ],
-    "activeCanvas": 0,
+OUT_PARAMS = {
+    "master": 0.8,
+    "startFrame": 0,
+    "delayBeats": "0.75",
+    "delayFeedback": 0.55,
+    "delayTone": 0.4,
+    "delayLevel": 0.75,
+    "reverbSize": 0.55,
+    "reverbDamp": 0.55,
+    "reverbLevel": 0.45,
 }
-
-if __name__ == "__main__":
-    OUT.write_text(json.dumps(project, indent=2) + "\n")
-    print(f"wrote {OUT} ({STEPS} steps at {BPM} BPM, {FRAMES} frames)")

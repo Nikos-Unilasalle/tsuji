@@ -483,3 +483,35 @@ Limites :
 
 Le MVP est terminé : les étapes 0 à 7 sont faites. Pour la suite, voir « Après le MVP » et ce qui reste disponible dans les firmwares (6 opérateurs, chiptune, enchaînement de patterns, delay et reverb).
 
+### Tsuji Dub réécrit, delay et reverb dub, DLY (2026-10-29)
+
+La première version était décevante. Elle est réécrite d'après un guide « reggae sur tracker » fourni par l'utilisateur. Ce qui avait tort, et ce qui change :
+
+| | Avant | D'après le guide |
+|---|---|---|
+| Skank | sur les temps 2 et 4 | sur les **contretemps, lignes 02 06 10 14**, coupé net (`~0.3` de pas) |
+| Hats | contretemps plus forts que les temps | **forts sur les temps, faibles sur les contretemps**, avec des ghost notes |
+| Swing | 0,2 (≈ 55 %) | **0,4 (≈ 60 %)** |
+| Basse | Felucca · BASS (FM, brillante) | **Dub Bass**, nouveau preset presque sinus, mono, liée : le 1er temps laissé vide, qui répond au kick sur le 3 et glisse (GLD) |
+| Orgue | « bubble » seul | double le skank, avec des petites relances en double-croche |
+| Percussions | — | **bongos** (toms accordés haut) humanisés avec **DLY** |
+| Effets dub | échos écrits à la main | un vrai **delay ping-pong en croche pointée** et une **reverb**, en envois, avec des **throws** (une piste qui ne joue que la caisse claire ou l'accord de skank à jeter dans l'écho, envoi delay à 1) |
+
+Ce que ça a ajouté au moteur :
+- **`DLY n`** (`notation.ts`, `sequencer.ts`) : la note arrive n/16 de pas plus tard (0–15). Sa longueur se compte depuis là. C'est le « SDx » des trackers, pour humaniser. Il est aussi proposé dans le HUD (« Late »).
+- **`src/shared/music/dsp/fx.ts`** :
+  - `DubDelay` : un vrai ping-pong à deux lignes croisées, la gauche nourrissant la droite puis revenant à gauche, filtré dans la boucle (passe-bas façon bande, passe-haut pour que les graves ne s'empilent pas) ;
+  - `Reverb` : façon Freeverb (8 filtres en peigne et 4 passe-tout par côté, design public de Jezar).
+  Les deux sont calculés échantillon par échantillon, donc identiques quelle que soit la taille des blocs (testé).
+- **Le mixeur** a deux bus d'envoi. Chaque canal a ses envois delay et reverb, lissés, après le niveau (un canal muet n'envoie rien). Les retours rentrent avant le master.
+- **FM Voice et Drum Kit** : réglages et entrées **Delay Send** et **Reverb Send**. Une entrée laisse la scène piloter un throw.
+- **Music Out** : groupe « Dub FX » avec la durée du delay en fraction de temps (1/16 … 1/2, croche pointée par défaut, calée sur le tempo du morceau), le feedback, la couleur et le retour, plus la taille, l'amortissement et le retour de la reverb.
+- `musicDescriptionOf()` construit la description de Music Out (pistes, master, effets). Elle est partagée par le node et par le test audio des démos, qui entend donc exactement ce que joue l'app.
+- Preset **Dub Bass**.
+
+Mix mesuré sur 50 s : niveau moyen 0,27 (≈ −11 dBFS), 0,15 % des échantillons dans le soft clip. Dub Dancer reprend le nouveau morceau avec son swing et ses effets.
+
+Pas encore écouté par moi. C'est l'oreille de l'utilisateur qui tranchera.
+
+**Démo « Tsuji Dub » retirée** (2026-10-29, à la demande de l'utilisateur). `public/demos/demo_music_reggae.tsuji` et son entrée du menu sont supprimés. Le morceau reste la bande-son de **Dub Dancer** : `tools/gen_music_reggae.py` est devenu `tools/dub_song.py`, qui ne contient plus que le morceau (TRACKS, OUT_PARAMS, BPM, SWING…), importé par `tools/gen_music_dub_dancer.py`. Le delay et la reverb dub, DLY et Dub Bass restent dans le moteur.
+
