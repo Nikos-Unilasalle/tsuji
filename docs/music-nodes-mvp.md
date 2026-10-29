@@ -515,3 +515,23 @@ Pas encore écouté par moi. C'est l'oreille de l'utilisateur qui tranchera.
 
 **Démo « Tsuji Dub » retirée** (2026-10-29, à la demande de l'utilisateur). `public/demos/demo_music_reggae.tsuji` et son entrée du menu sont supprimés. Le morceau reste la bande-son de **Dub Dancer** : `tools/gen_music_reggae.py` est devenu `tools/dub_song.py`, qui ne contient plus que le morceau (TRACKS, OUT_PARAMS, BPM, SWING…), importé par `tools/gen_music_dub_dancer.py`. Le delay et la reverb dub, DLY et Dub Bass restent dans le moteur.
 
+### Importer un module ProTracker (.mod) — `tools/mod2tsuji.py` (2026-10-29)
+
+Premier essai sur le thème titre de **Cybernoid II** (Maniacs of Noise, 1988), un module « M.K. » à 4 canaux, 10 samples, 46 positions, à 125 BPM. tsuji n'a pas de sampler : les samples deviennent des voix FM et des sons de Drum Kit. Le reste est traduit au plus près :
+
+- **Le temps** : le pas est le plus grand diviseur commun des vitesses utilisées, en ticks. Un temps vaut 24 ticks, comme dans ProTracker (4 lignes de 6). Pour Cybernoid, une ligne en vitesse 6 donne 2 pas et une ligne en vitesse 3 en donne 1, à 8 pas par temps. Les sauts de pattern (`Dxx`) sont respectés.
+- **Une piste par canal et par sample.** Une note sur un canal arrête ce que tenaient ses autres pistes (un OFF), puisqu'un canal ne joue qu'un son à la fois.
+- **L'arpège `0xy`** devient la note avec ses +x et +y ajoutés, sur une piste avec un Arp en **1/64 triolet, qui vaut exactement un tick** (un temps = 24 ticks), dans l'ordre joué et relancé avec la note. C'est l'arpège chip, fidèle.
+- **Les portamentos** `1xx`, `2xx` et `3xx` deviennent la hauteur atteinte avec un glide. **`Cxx`** donne la vélocité, `C00` coupe la note, **`ECx`** coupe au tick x. Un sample non bouclé arrête la note quand il serait épuisé.
+- **La hauteur** de chaque sample est mesurée sur sa forme d'onde (autocorrélation).
+- **Le rôle** de chaque sample (kick, snare, hat, open hat, ou voix mélodique avec un preset FM selon le registre) est deviné. Un fichier `--map` JSON le remplace, sample par sample.
+
+Ce qu'il a fallu ajouter :
+- **Un index des cases du pattern** (`sequencer.ts`) : la note suivante ou précédente se trouve en sautant directement aux cases remplies, pas en parcourant les pas vides. Un morceau entier tient dans un Pattern (Cybernoid : 14 pistes de 5 760 pas) et se rend à **5,9 % du temps réel** (60 s en 3,5 s). Testé sur un pattern de 6 000 pas presque vide.
+- **Le Pattern** accepte jusqu'à 16 384 pas.
+- **Le HUD** affiche un long pattern **par pages** de 256 pas (64 en vue batterie), avec des boutons ◀ ▶ : la page du curseur quand on tape, celle du pas joué sinon. Il ne redessine plus des milliers de cases à chaque frame.
+
+**Droits** : `mod2tsuji.py` est un convertisseur et ne contient rien d'aucun morceau. La conversion de Cybernoid II reste **en local**, dans `music-local/` (ignoré par git via `.git/info/exclude`), avec le fichier de correspondance et un WAV de la première minute. La composition appartient à ses auteurs.
+
+Pas encore vérifié : l'écoute (le WAV est là pour ça) et le HUD paginé dans l'app (charger le projet aurait remplacé le projet ouvert).
+
