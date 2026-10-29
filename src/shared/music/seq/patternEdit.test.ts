@@ -1,22 +1,30 @@
 import { describe, expect, it } from "vitest";
 import { DRUM_NOTES } from "../dsp/drums";
 import { formatPattern, parsePattern } from "./notation";
-import { drumsAt, editCell, moveCursor, noteForKey, resize, toggleDrum, writeNote } from "./patternEdit";
+import { drumsAt, editCell, moveCursor, noteForLetter, resize, toggleDrum, withOctave, writeNote } from "./patternEdit";
 
-describe("noteForKey", () => {
-  it("plays an octave from C on the bottom row and the next one on the top row", () => {
-    expect(noteForKey("KeyZ", 4)).toBe(60);
-    expect(noteForKey("KeyS", 4)).toBe(61);
-    expect(noteForKey("KeyM", 4)).toBe(71);
-    expect(noteForKey("KeyQ", 4)).toBe(72);
-    expect(noteForKey("Digit2", 4)).toBe(73);
-    expect(noteForKey("KeyP", 4)).toBe(88);
-    expect(noteForKey("KeyZ", 2)).toBe(36);
+describe("note letters", () => {
+  it("names the notes in the keyboard's octave, C4 = 60, either case", () => {
+    expect(noteForLetter("c", 4)).toBe(60);
+    expect(noteForLetter("A", 4)).toBe(69);
+    expect(noteForLetter("b", 3)).toBe(59);
+    expect(noteForLetter("g", 2)).toBe(43);
+  });
+
+  it("sharpens", () => {
+    expect(noteForLetter("f", 3, true)).toBe(54);
+    expect(noteForLetter("b", 3, true)).toBe(60); // B# is C
   });
 
   it("ignores other keys and notes out of MIDI range", () => {
-    expect(noteForKey("KeyA", 4)).toBe(null);
-    expect(noteForKey("KeyP", 9)).toBe(null);
+    expect(noteForLetter("h", 4)).toBe(null);
+    expect(noteForLetter("Enter", 4)).toBe(null);
+    expect(noteForLetter("a", 9)).toBe(null); // A9 = 129; G9 = 127 is the top note
+  });
+
+  it("moves a note to another octave, keeping its name", () => {
+    expect(withOctave(61, 2)).toBe(37);
+    expect(withOctave(60, 10)).toBe(null);
   });
 });
 

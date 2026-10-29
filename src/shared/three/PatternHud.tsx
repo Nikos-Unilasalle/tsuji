@@ -6,16 +6,17 @@ import type { PreviewSound } from "../music/engine/description";
 import { CHORD_NAMES, ChordName } from "../music/seq/chords";
 import { formatPattern, noteName, parsePattern } from "../music/seq/notation";
 import {
-  DRUM_KEYS,
   DRUM_LANES,
-  OFF_KEYS,
+  DRUM_LETTERS,
+  OFF_LETTERS,
   drumsAt,
   editCell,
   moveCursor,
-  noteForKey,
+  noteForLetter,
   resize,
   setCell,
   toggleDrum,
+  withOctave,
   writeNote,
 } from "../music/seq/patternEdit";
 import { Cell, CellFx, Sequence, stepAt } from "../music/seq/sequencer";
@@ -23,13 +24,14 @@ import type { NodeInstance } from "../graph/types";
 
 /**
  * Pattern's palette in the 3D view (see docs/music-nodes-mvp.md, step 5): the pattern as a tracker grid — a cell per
- * step, a row per bar, the step playing lit as the timeline runs — and a tracker keyboard. Click a cell to put the
- * cursor there; type notes on the bottom two rows of the keyboard (Z = C, Q = the octave above), 1 for OFF, ⌫ to
- * clear, the arrows to move, [ ] for the octave. The bar along the bottom edits the cell under the cursor and is
- * also the brush new notes are written with (chord, inversion, spread, velocity).
+ * step, a row per bar, the step playing lit as the timeline runs — and the keyboard. Click a cell to put the
+ * cursor there; type notes by name, A B C D E F G in the keyboard's octave, Shift or # for the sharp, a digit right
+ * after for the note's octave (C 4, F # 3: as the pattern text spells them), X or O for OFF, ⌫ to clear, the arrows to
+ * move, [ ] for the octave. The bar along the bottom edits the cell under the cursor and is also the brush new notes
+ * are written with (chord, inversion, spread, velocity).
  *
- * A pattern feeding a Drum Kit shows as a drum machine instead: a lane per sound, a click per hit, Z X C V B N M to
- * strike kick, snare, clap, hat, open hat and the toms at the cursor.
+ * A pattern feeding a Drum Kit shows as a drum machine instead: a lane per sound, a click per hit, and each sound's
+ * initial — K S C H O L T: kick, snare, clap, hat, open hat, low and top tom — strikes it at the cursor.
  *
  * Every edit writes the node's `steps` text (notation.ts) in one undo step: the HUD and the text field are the same
  * pattern.
@@ -53,7 +55,7 @@ const STEPS_PER_ROW = 16;
 const selectStyle = { background: "rgba(0,0,0,0.35)", color: "#fff", border: "1px solid rgba(255,255,255,0.2)", borderRadius: 4, padding: "2px 4px", fontSize: 11 } as const;
 const wide = { width: "auto", padding: "0 8px" } as const;
 const DRUM_LABEL: Record<DrumName, string> = { kick: "Kick", snare: "Snare", clap: "Clap", hat: "Hat", openhat: "Open Hat", tomlow: "Low Tom", tomhigh: "High Tom" };
-const DRUM_KEY_OF = Object.fromEntries(Object.entries(DRUM_KEYS).map(([code, d]) => [d, code.replace("Key", "")])) as Record<DrumName, string>;
+const DRUM_KEY_OF = Object.fromEntries(Object.entries(DRUM_LETTERS).map(([letter, d]) => [d, letter.toUpperCase()])) as Record<DrumName, string>;
 
 /** The step under the playhead, read every animation frame: the light has to land on the step, not near it. */
 function useLiveStep(read: () => number): number {
@@ -104,6 +106,8 @@ export function PatternHud({
   const [advance, setAdvance] = useState(1);
   const [brush, setBrush] = useState<Partial<Cell>>({});
   const keysRef = useRef<HTMLInputElement>(null);
+  /** The step the last note was typed on, while the next key may still give it its octave or its sharp. */
+  const lastTyped = useRef<number | null>(null);
   const [focused, setFocused] = useState(false);
   const cur = Math.min(cursor, length - 1);
 
@@ -131,11 +135,37 @@ export function PatternHud({
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     const code = e.code;
+    const key = e.key;
+    const typed = lastTyped.current;
+    lastTyped.current = null;
     const move = (by: number) => {
       e.preventDefault();
       setCursor(moveCursor(cur, by, length));
     };
-    if (e.metaKey || e.ctrlKey || e.altKey) return; // leave the app's shortcuts (undo…) alone
+    if (e.metaKey || e.ctrlKey) return; // leave the app's shortcuts (undo…) alone
+    // Right after a note: a digit is its octave, # its sharp (C 4, F # 3).
+    const prev = typed !== null ? asNote(cells[typed]) : null;
+    if (prev && /^[0-9]$/.test(key) && !drums) {
+      e.preventDefault();
+      const n = withOctave(prev.note, Number(key));
+      setOctave(Number(key));
+      if (n !== null) {
+        write(setCell(cells, typed!, { ...prev, note: n }));
+        audition(n, prev.velocity ?? 0.8);
+      }
+      lastTyped.current = typed;
+      return;
+    }
+    if (prev && key === "#" && !drums) {
+      e.preventDefault();
+      if (prev.note < 127) {
+        write(setCell(cells, typed!, { ...prev, note: prev.note + 1 }));
+        audition(prev.note + 1, prev.velocity ?? 0.8);
+      }
+      lastTyped.current = typed;
+      return;
+    }
+    if (e.altKey) return;
     if (code === "Space") {
       // Play / pause, as everywhere else: hand the key back to the app.
       e.preventDefault();
@@ -181,7 +211,7 @@ export function PatternHud({
       return;
     }
     if (drums) {
-      const drum = DRUM_KEYS[code] ?? (code === "Enter" ? DRUM_LANES[lane] : undefined);
+      const drum = DRUM_LETTERS[key.toLowerCase()] ?? (code === "Enter" ? DRUM_LANES[lane] : undefined);
       if (!drum) return;
       e.preventDefault();
       const next = toggleDrum(cells, cur, drum);
@@ -190,18 +220,19 @@ export function PatternHud({
       setCursor(moveCursor(cur, advance, length));
       return;
     }
-    if (OFF_KEYS.has(code)) {
+    if (OFF_LETTERS.has(key.toLowerCase())) {
       e.preventDefault();
       write(setCell(cells, cur, { note: "off" }));
       setCursor(moveCursor(cur, advance, length));
       return;
     }
-    const note = noteForKey(code, octave);
+    const note = noteForLetter(key, octave, e.shiftKey);
     if (note === null) return;
     e.preventDefault();
     if (e.repeat) return;
     write(writeNote(cells, cur, note, brush));
     audition(note, brush.velocity ?? 0.8);
+    lastTyped.current = cur;
     setCursor(moveCursor(cur, advance, length));
   };
 
@@ -279,8 +310,8 @@ export function PatternHud({
           <span style={{ color: focused ? "#e2e8f0" : "#94a3b8", marginLeft: "auto" }}>
             {focused
               ? drums
-                ? "Z X C V B N M strike · ↵ the lane · ← → ↑ ↓ · ⌫ clear · Esc"
-                : "Z–M / Q–P notes · 1 off · ⌫ clear · ← → ↑ ↓ · [ ] octave · Esc"
+                ? "K S C H O L T strike · ↵ the lane · ← → ↑ ↓ · ⌫ clear · Esc"
+                : "A–G notes · ⇧ or # sharp · 0–9 octave · X off · ⌫ clear · ← → ↑ ↓ · [ ] · Esc"
               : "click the grid to type"}
           </span>
         </div>

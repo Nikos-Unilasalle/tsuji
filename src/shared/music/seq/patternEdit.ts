@@ -8,38 +8,38 @@ import { DRUM_NOTES, DrumName } from "../dsp/drums";
 import type { Cell } from "./sequencer";
 
 /**
- * The tracker keyboard, by physical key (KeyboardEvent.code, so it is the same on QWERTY, AZERTY or anything else):
- * the bottom row is an octave from C, with the black keys on the row above it; the top row the octave above.
- *
- *    S D   G H J          2 3   5 6 7   9 0
- *   Z X C V B N M  ,     Q W E R T Y U I O P
+ * The keyboard writes notes by their names: A B C D E F G (by the character typed, so on any layout), Shift or a #
+ * right after for the sharp, and a digit right after for the note's octave — typing C 4, F # 3, A 2 writes the notes
+ * the way the pattern text spells them.
  */
-const KEY_SEMITONES: Record<string, number> = {
-  KeyZ: 0, KeyS: 1, KeyX: 2, KeyD: 3, KeyC: 4, KeyV: 5, KeyG: 6, KeyB: 7, KeyH: 8, KeyN: 9, KeyJ: 10, KeyM: 11, Comma: 12,
-  KeyQ: 12, Digit2: 13, KeyW: 14, Digit3: 15, KeyE: 16, KeyR: 17, Digit5: 18, KeyT: 19, Digit6: 20, KeyY: 21, Digit7: 22, KeyU: 23,
-  KeyI: 24, Digit9: 25, KeyO: 26, Digit0: 27, KeyP: 28,
-};
+const LETTER_SEMITONES: Record<string, number> = { c: 0, d: 2, e: 4, f: 5, g: 7, a: 9, b: 11 };
 
-/** The note a key plays with the keyboard's octave (C of `octave` on Z, so octave 4 puts C4 = 60 there), or null. */
-export function noteForKey(code: string, octave: number): number | null {
-  const s = KEY_SEMITONES[code];
-  if (s === undefined) return null;
-  const note = (octave + 1) * 12 + s;
+/** The note a letter names in `octave` (C4 = 60), sharp or not; null if the key is no note letter. */
+export function noteForLetter(key: string, octave: number, sharp = false): number | null {
+  const s = LETTER_SEMITONES[key.toLowerCase()];
+  if (s === undefined || key.length !== 1) return null;
+  const note = (octave + 1) * 12 + s + (sharp ? 1 : 0);
   return note >= 0 && note <= 127 ? note : null;
 }
 
-/** Keys that write an OFF: 1 and the key left of it. */
-export const OFF_KEYS = new Set(["Digit1", "Backquote", "IntlBackslash"]);
+/** The same note in another octave. */
+export function withOctave(note: number, octave: number): number | null {
+  const n = (octave + 1) * 12 + (((note % 12) + 12) % 12);
+  return n >= 0 && n <= 127 ? n : null;
+}
 
-/** In the drum view, the bottom row strikes the kit, one key per sound. */
-export const DRUM_KEYS: Record<string, DrumName> = {
-  KeyZ: "kick",
-  KeyX: "snare",
-  KeyC: "clap",
-  KeyV: "hat",
-  KeyB: "openhat",
-  KeyN: "tomlow",
-  KeyM: "tomhigh",
+/** Keys that write an OFF: X (KAWA's) and O. */
+export const OFF_LETTERS = new Set(["x", "o"]);
+
+/** In the drum view, each sound's initial strikes it: Kick Snare Clap Hat Open hat, L(ow) and T(op) tom. */
+export const DRUM_LETTERS: Record<string, DrumName> = {
+  k: "kick",
+  s: "snare",
+  c: "clap",
+  h: "hat",
+  o: "openhat",
+  l: "tomlow",
+  t: "tomhigh",
 };
 
 export const DRUM_LANES: DrumName[] = ["kick", "snare", "clap", "hat", "openhat", "tomlow", "tomhigh"];
