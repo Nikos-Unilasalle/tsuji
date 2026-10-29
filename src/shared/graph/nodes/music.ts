@@ -3,7 +3,7 @@ import { isExportAudioCapturing, recordMusicFrame } from "../../audio/exportAudi
 import { growingSockets } from "../dynamicInputs";
 import { NodeDefinition, ParamFieldDef } from "../types";
 import { numberInput } from "./object";
-import { MusicEngineHandle } from "../../music/engine/bridge";
+import { MusicEngineHandle, musicEngineFor, releaseMusicEngine } from "../../music/engine/bridge";
 import {
   MusicDescription,
   MusicValue,
@@ -420,15 +420,15 @@ export const MUSIC_NOTE_PROBE_NODE: NodeDefinition = {
 const TRACK_PREFIX = "track";
 const TOLERANCE_SECONDS = 0.08;
 
-const engines = createNodeCache<MusicEngineHandle>((engine) => engine.dispose());
+/**
+ * The engines live in bridge.ts, by node id: this cache only lets a deleted node's engine go. Kept there, not here,
+ * so that a hot reload of this file in dev finds the engine it had instead of leaving it connected and making another.
+ */
+const owned = createNodeCache<string>((nodeId) => releaseMusicEngine(nodeId));
 
 function engineFor(nodeId: string): MusicEngineHandle {
-  let engine = engines.get(nodeId);
-  if (!engine) {
-    engine = new MusicEngineHandle();
-    engines.set(nodeId, engine);
-  }
-  return engine;
+  owned.set(nodeId, nodeId);
+  return musicEngineFor(nodeId);
 }
 
 /** When an export last captured a frame: the live engine stays quiet meanwhile (as the Audio Player does). */

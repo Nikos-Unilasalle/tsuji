@@ -24,6 +24,24 @@ if (import.meta.env?.DEV && typeof window !== "undefined") {
   });
 }
 
+/** One engine per Music Out node, made on first use. */
+const byNode = new Map<string, MusicEngineHandle>();
+
+export function musicEngineFor(nodeId: string): MusicEngineHandle {
+  let engine = byNode.get(nodeId);
+  if (!engine) {
+    engine = new MusicEngineHandle();
+    byNode.set(nodeId, engine);
+  }
+  return engine;
+}
+
+/** The node is gone: its engine lets its notes ring out, then disconnects. */
+export function releaseMusicEngine(nodeId: string): void {
+  byNode.get(nodeId)?.dispose();
+  byNode.delete(nodeId);
+}
+
 /**
  * Auditions a note on the first engine there is — a scene with no Music Out has no engine, and stays silent. For the
  * Pattern HUD, which sounds what you type.
