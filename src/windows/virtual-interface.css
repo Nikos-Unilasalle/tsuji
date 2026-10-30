@@ -1,0 +1,388 @@
+/*
+ * The Virtual Interface HUD (VirtualInterfaceHUD.tsx): a control surface in the interface theme's colours (theme.css),
+ * lit in its accent (--vi-accent — the theme's own unless the node picks another). The recessed parts (displays,
+ * fields) and the knobs' shading are mixed from the theme rather than fixed, so a light theme gets a light desk.
+ */
+
+.vi-panel {
+  --vi-text: var(--chrome-text, #eef2f6);
+  --vi-muted: var(--chrome-text-muted, #b3bdc9);
+  --vi-border: var(--chrome-border, #5a6472);
+  --vi-surface: var(--chrome-surface-raised, #47505d);
+  --vi-surface-lo: var(--chrome-surface, #3b434f);
+  --vi-well: color-mix(in srgb, var(--chrome-bg, #2f3641) 80%, black);
+  --vi-unlit: color-mix(in srgb, var(--vi-muted) 30%, transparent);
+  /* A display stays dark in a light theme too, as a real one does: its lit text needs the contrast. */
+  --vi-display: color-mix(in srgb, var(--chrome-bg, #2f3641) 20%, #06080c);
+
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  z-index: 15;
+  max-width: calc(100% - 24px);
+  max-height: calc(100% - 24px);
+  overflow: auto;
+  scrollbar-width: none;
+  background: linear-gradient(180deg, var(--vi-surface) 0%, var(--vi-surface-lo) 100%);
+  border: 1px solid var(--vi-border);
+  border-radius: 10px;
+  box-shadow: 0 10px 36px rgba(0, 0, 0, 0.45), inset 0 1px 0 color-mix(in srgb, var(--vi-text) 8%, transparent);
+  color: var(--vi-text);
+  font-family: "Roboto", system-ui, sans-serif;
+  user-select: none;
+}
+
+.vi-panel::-webkit-scrollbar {
+  display: none;
+}
+
+/* Playing live: the whole window, the controls bigger and centred. */
+.vi-panel.vi-fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 5000;
+  max-width: none;
+  max-height: none;
+  border-radius: 0;
+  border: none;
+  display: flex;
+  flex-direction: column;
+}
+
+.vi-fullscreen .vi-body {
+  flex: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-content: center;
+  justify-content: center;
+  gap: 28px;
+  padding: 24px;
+}
+
+.vi-titlebar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 7px 10px;
+  border-bottom: 1px solid color-mix(in srgb, var(--vi-text) 8%, transparent);
+}
+
+.vi-title {
+  flex: 1;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--vi-accent);
+  text-shadow: 0 0 8px color-mix(in srgb, var(--vi-accent) 50%, transparent);
+}
+
+.vi-titlebar button {
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: var(--vi-muted);
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+  padding: 3px 5px;
+}
+
+.vi-titlebar button:hover,
+.vi-titlebar button.vi-on {
+  color: var(--vi-text);
+  border-color: color-mix(in srgb, var(--vi-accent) 60%, transparent);
+}
+
+.vi-body {
+  padding: 8px 10px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.vi-empty {
+  margin: 4px 0;
+  max-width: 260px;
+  font-size: 11px;
+  color: var(--vi-muted);
+}
+
+.vi-group header {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--vi-muted);
+  opacity: 0.75;
+  margin: 0 0 4px 2px;
+}
+
+.vi-fullscreen .vi-group header {
+  font-size: 12px;
+}
+
+.vi-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.vi-cell {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.vi-control {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 64px;
+}
+
+.vi-disabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.vi-value {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--vi-text);
+  min-height: 13px;
+}
+
+.vi-label {
+  font-size: 10px;
+  color: var(--vi-muted);
+  max-width: 96px;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.vi-fullscreen .vi-value {
+  font-size: 14px;
+}
+
+.vi-fullscreen .vi-label {
+  font-size: 12px;
+  max-width: 140px;
+}
+
+/* Switch: a rocker with its LED */
+.vi-switch-body {
+  position: relative;
+  width: 30px;
+  height: 46px;
+  margin: 6px 0 4px;
+  border-radius: 6px;
+  border: 1px solid var(--vi-border);
+  background: linear-gradient(180deg, var(--vi-well), var(--vi-surface-lo));
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.5);
+  cursor: pointer;
+  padding: 0;
+}
+
+.vi-switch-cap {
+  position: absolute;
+  left: 3px;
+  right: 3px;
+  height: 20px;
+  bottom: 3px;
+  border-radius: 4px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--vi-surface) 75%, white), var(--vi-surface));
+  border: 1px solid var(--vi-border);
+  transition: bottom 0.12s ease;
+}
+
+.vi-switch-body.vi-on .vi-switch-cap {
+  bottom: 21px;
+}
+
+.vi-led {
+  position: absolute;
+  top: -10px;
+  left: 50%;
+  width: 6px;
+  height: 6px;
+  margin-left: -3px;
+  border-radius: 50%;
+  background: var(--vi-unlit);
+}
+
+.vi-switch-body.vi-on .vi-led {
+  background: var(--vi-accent);
+  box-shadow: 0 0 8px var(--vi-accent);
+}
+
+.vi-fullscreen .vi-switch-body {
+  width: 44px;
+  height: 70px;
+}
+
+.vi-fullscreen .vi-switch-cap {
+  height: 31px;
+}
+
+.vi-fullscreen .vi-switch-body.vi-on .vi-switch-cap {
+  bottom: 34px;
+}
+
+/* Selector: an LCD with steps under it */
+.vi-selector {
+  min-width: 120px;
+}
+
+.vi-lcd {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-top: 6px;
+  padding: 2px;
+  border-radius: 5px;
+  background: var(--vi-display);
+  border: 1px solid var(--vi-border);
+  box-shadow: inset 0 1px 4px rgba(0, 0, 0, 0.5);
+}
+
+.vi-lcd button {
+  background: none;
+  border: none;
+  color: var(--vi-muted);
+  cursor: pointer;
+  font-size: 9px;
+  padding: 4px 3px;
+}
+
+.vi-lcd button:hover {
+  color: var(--vi-accent);
+}
+
+.vi-lcd-text {
+  width: 96px;
+  text-align: center;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 11px;
+  color: var(--vi-accent);
+  text-shadow: 0 0 6px color-mix(in srgb, var(--vi-accent) 60%, transparent);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.vi-fullscreen .vi-lcd-text {
+  width: 150px;
+  font-size: 14px;
+}
+
+.vi-steps {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 3px;
+  max-width: 128px;
+  margin: 4px 0 2px;
+}
+
+.vi-steps button {
+  width: 7px;
+  height: 7px;
+  padding: 0;
+  border-radius: 50%;
+  border: none;
+  background: var(--vi-unlit);
+  cursor: pointer;
+}
+
+.vi-steps button.vi-on {
+  background: var(--vi-accent);
+  box-shadow: 0 0 6px var(--vi-accent);
+}
+
+.vi-color {
+  padding-top: 10px;
+}
+
+.vi-unsupported .vi-value {
+  margin-top: 18px;
+  color: var(--vi-muted);
+}
+
+/* Edit mode */
+.vi-unpin {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  z-index: 1;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid var(--vi-border);
+  background: var(--vi-surface);
+  color: var(--danger-color, #f87171);
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.vi-range {
+  display: flex;
+  gap: 3px;
+  margin-top: 3px;
+}
+
+.vi-range input {
+  width: 34px;
+  padding: 1px 3px;
+  border-radius: 3px;
+  border: 1px solid var(--vi-border);
+  background: var(--vi-well);
+  color: var(--vi-text);
+  font-size: 10px;
+  text-align: center;
+  outline: none;
+}
+
+.vi-range input:focus {
+  border-color: var(--vi-accent);
+}
+
+/* The knob (LiveControls.tsx), shaded from the theme */
+.vi-knob-hi {
+  stop-color: color-mix(in srgb, var(--vi-surface) 70%, white);
+}
+
+.vi-knob-mid {
+  stop-color: var(--vi-surface);
+}
+
+.vi-knob-lo {
+  stop-color: color-mix(in srgb, var(--vi-surface-lo) 60%, black);
+}
+
+.vi-knob-tick {
+  stroke: color-mix(in srgb, var(--vi-muted) 55%, transparent);
+}
+
+.vi-knob-track {
+  stroke: color-mix(in srgb, var(--vi-text) 12%, transparent);
+}
+
+.vi-knob-shadow {
+  fill: rgba(0, 0, 0, 0.35);
+}
+
+.vi-knob-rim {
+  stroke: color-mix(in srgb, var(--vi-text) 14%, transparent);
+}
+
+.vi-knob-ring {
+  stroke: color-mix(in srgb, var(--vi-text) 6%, transparent);
+}

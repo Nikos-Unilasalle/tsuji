@@ -579,6 +579,8 @@ import { isKeyReservedForPlayback } from "../graph/playbackKeys";
 import { isTauri } from "../ipc";
 import type { PreviewCameraPose } from "../ipc";
 import { ViewportParamHUD } from "../../windows/ViewportParamHUD";
+import { VirtualInterfaceHUD } from "../../windows/VirtualInterfaceHUD";
+import { VIRTUAL_INTERFACE_NODE } from "../graph/nodes/virtualInterface";
 import "./viewport.css";
 
 // HUD elements are CSS/DOM overlays, which video export (which captures the
@@ -7637,6 +7639,9 @@ export function Viewport({
     window.addEventListener("pointercancel", onUp);
   };
 
+  // The first Virtual Interface left shown, at the top level of the scene.
+  const virtualInterfaceNode = graph.nodes.find((n) => n.type === VIRTUAL_INTERFACE_NODE.type && n.params.show !== false && n.params.show !== 0);
+
   return (
     <div
       className="viewport-container"
@@ -10500,7 +10505,19 @@ export function Viewport({
           just that pane's bounds (absolute within .viewport-container) and
           naturally unmounted whenever this pane isn't on screen at all
           (full-canvas Graph view). */}
-      {!outputMode && onParamChange && onUnpinParam && (graph.exposedParams?.length ?? 0) > 0 && (
+      {/* A shown Virtual Interface plays the pinned params as knobs, switches and selectors, in place of the list. */}
+      {!outputMode && onParamChange && virtualInterfaceNode && (
+        <VirtualInterfaceHUD
+          graph={graph}
+          registry={registry}
+          node={virtualInterfaceNode}
+          currentFrame={currentFrame}
+          keyframesEnabled={keyframesEnabled}
+          onParamChange={onParamChange}
+          onUnpin={onUnpinParam}
+        />
+      )}
+      {!outputMode && onParamChange && onUnpinParam && !virtualInterfaceNode && (graph.exposedParams?.length ?? 0) > 0 && (
         <ViewportParamHUD
           graph={graph}
           registry={registry}

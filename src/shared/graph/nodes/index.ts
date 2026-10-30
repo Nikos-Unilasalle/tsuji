@@ -38,6 +38,7 @@ import {
 } from "./music";
 import { RANDOM_LIST_NODE, RANDOM_MATRIX_NODE, RANDOM_VALUE_NODE, RANDOM_VECTOR_NODE } from "./random";
 import { KEYBOARD_NODE } from "./keyboard";
+import { VIRTUAL_INTERFACE_NODE } from "./virtualInterface";
 import { MOUSE_NODE } from "./mouse";
 import { CLICK_NODE } from "./click";
 import { ARRAY_NODE } from "./array";
@@ -383,6 +384,7 @@ export const STARTER_NODES = [
   GATE_NODE,
   LOGIC_BRIDGE_NODE,
   KEYBOARD_NODE,
+  VIRTUAL_INTERFACE_NODE,
   MOUSE_NODE,
   CLICK_NODE,
   OSCILLATOR_NODE,
