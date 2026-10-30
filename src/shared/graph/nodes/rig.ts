@@ -127,6 +127,7 @@ function humanParams(params: Record<string, unknown>): HumanParams {
   return {
     height: Math.max(0.05, n("height")),
     torso: Math.max(0.05, n("torso")),
+    torsoForward: Math.max(-0.3, Math.min(0.3, n("torsoForward"))),
     arms: Math.max(0.05, n("arms")),
     legs: Math.max(0.05, n("legs")),
     shoulderWidth: Math.max(0, n("shoulderWidth")),
@@ -220,6 +221,7 @@ export const RIG_HUMAN_NODE: NodeDefinition = {
     ...NATIVE_TRANSFORM_PARAM_FIELDS,
     { id: "height", label: "Height", kind: "number", step: 0.05, group: "Proportions" },
     { id: "torso", label: "Torso ×", kind: "number", step: 0.05, group: "Proportions" },
+    { id: "torsoForward", label: "Torso Forward (share of height, − back)", kind: "number", step: 0.01, group: "Proportions" },
     { id: "arms", label: "Arms ×", kind: "number", step: 0.05, group: "Proportions" },
     { id: "legs", label: "Legs ×", kind: "number", step: 0.05, group: "Proportions" },
     { id: "shoulderWidth", label: "Shoulder Width ×", kind: "number", step: 0.05, group: "Proportions" },

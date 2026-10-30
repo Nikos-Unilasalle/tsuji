@@ -241,7 +241,7 @@ export function SkinHud({
 }: {
   node: NodeInstance;
   /** What the Skin node published for the viewport: joint names, null when it has no rig yet. */
-  joints: { names?: string[]; count: number } | null;
+  joints: { names?: string[]; count: number; mirror?: number[] } | null;
   onParams: OnParams;
 }) {
   const selected = Math.round(Number(node.params.selectedJoint ?? -1));
@@ -253,6 +253,10 @@ export function SkinHud({
   const toggle = (key: string, fallback: boolean) => onParams({ [key]: !(node.params[key] === undefined ? fallback : Boolean(node.params[key])) }, node.id);
   const flag = (key: string, fallback: boolean) => (node.params[key] === undefined ? fallback : Boolean(node.params[key]));
   const painting = flag("weightPaintMode", false);
+  const symmetric = flag("symmetry", false);
+  // With symmetry on, what is set on a joint goes to its counterpart on the other side too.
+  const counterpart = symmetric && has ? (joints?.mirror?.[selected] ?? -1) : -1;
+  const mirror = counterpart !== selected ? counterpart : -1;
 
   return (
     <HudBar>
@@ -274,7 +278,7 @@ export function SkinHud({
           max={2}
           step={0.05}
           title="How strongly this joint pulls on the mesh: 0 switches it off, above 1 it wins over its neighbours"
-          onCommit={(strength) => onParams(withJointInfluence(node.params, selected, { strength }), node.id)}
+          onCommit={(strength) => onParams(withJointInfluence(node.params, selected, { strength }, mirror), node.id)}
         />
         <CommitSlider
           label="Radius"
@@ -283,13 +287,13 @@ export function SkinHud({
           max={4}
           step={0.1}
           title="How far this joint reaches: 2 is twice as far"
-          onCommit={(radius) => onParams(withJointInfluence(node.params, selected, { radius }), node.id)}
+          onCommit={(radius) => onParams(withJointInfluence(node.params, selected, { radius }, mirror), node.id)}
         />
         <button
           type="button"
           className="viewport-hud-button"
           style={{ width: "auto", padding: "0 8px" }}
-          onClick={() => onParams(withJointInfluence(node.params, selected, { strength: 1, radius: 1 }), node.id)}
+          onClick={() => onParams(withJointInfluence(node.params, selected, { strength: 1, radius: 1 }, mirror), node.id)}
           title="Back to Strength 1, Radius 1 for this joint"
         >
           Reset
@@ -315,6 +319,19 @@ export function SkinHud({
         Rig
       </button>
       <HudSeparator />
+      <button
+        type="button"
+        className={`viewport-hud-button ${symmetric ? "viewport-hud-button-active" : ""}`}
+        style={{ width: "auto", padding: "0 8px" }}
+        onClick={() => toggle("symmetry", false)}
+        title={
+          mirror >= 0
+            ? `Symmetry: paint, Strength and Radius go to ${joints?.names?.[mirror] ?? `Joint ${mirror + 1}`} too, mirrored across the rig's centre`
+            : "Left ↔ Right symmetry: paint, Strength and Radius on one side go to the other too, mirrored across the rig's centre"
+        }
+      >
+        ⇆ Sym
+      </button>
       <button
         type="button"
         className={`viewport-hud-button ${painting ? "viewport-hud-button-active" : ""}`}
@@ -361,7 +378,7 @@ export function SkinHud({
             className="viewport-hud-button"
             style={{ width: "auto", padding: "0 8px" }}
             disabled={!has || !hasJointPaint(node.params.weightPaint, selected)}
-            onClick={() => onParams({ weightPaint: withoutJointPaint(node.params.weightPaint, selected) }, node.id)}
+            onClick={() => onParams({ weightPaint: withoutJointPaint(node.params.weightPaint, selected, mirror) }, node.id)}
             title="Remove the paint on this joint: back to its automatic weights"
           >
             Clear

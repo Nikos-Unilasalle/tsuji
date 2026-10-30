@@ -21,6 +21,8 @@ export interface Skeleton {
 export interface HumanParams {
   height: number;
   torso: number;
+  /** Chest, head and arms carried forward (− back) of the pelvis, as a share of the height: the spine leans to reach them. */
+  torsoForward: number;
   arms: number;
   legs: number;
   shoulderWidth: number;
@@ -60,6 +62,7 @@ export interface HumanParams {
 export const HUMAN_DEFAULTS: HumanParams = {
   height: 1.8,
   torso: 1,
+  torsoForward: 0,
   arms: 1,
   legs: 1,
   shoulderWidth: 1,
@@ -183,14 +186,17 @@ export function buildHumanSkeleton(input: Partial<HumanParams> = {}): HumanSkele
   const spineLength = 0.26 * H * p.torso;
   const chestY = pelvisY + spineLength;
 
+  // Everything above the spine sits this far forward of the pelvis; the spine runs straight up to it.
+  const chestZ = Math.max(-0.3, Math.min(0.3, Number.isFinite(p.torsoForward) ? p.torsoForward : 0)) * H;
+
   const pelvis = add("Pelvis", -1, new THREE.Vector3(0, pelvisY, 0));
   let chest = pelvis;
   for (let i = 1; i <= segments; i++) {
-    chest = add(i === segments ? "Chest" : `Spine ${i}`, chest, new THREE.Vector3(0, pelvisY + (spineLength * i) / segments, 0));
+    chest = add(i === segments ? "Chest" : `Spine ${i}`, chest, new THREE.Vector3(0, pelvisY + (spineLength * i) / segments, (chestZ * i) / segments));
   }
   const neckY = chestY + 0.05 * H * p.torso * Math.max(0.05, p.neck);
-  const neck = add("Neck", chest, new THREE.Vector3(0, neckY, 0));
-  const head = add("Head", neck, new THREE.Vector3(0, neckY + 0.08 * H * p.torso * Math.max(0.05, p.headSize), 0));
+  const neck = add("Neck", chest, new THREE.Vector3(0, neckY, chestZ));
+  const head = add("Head", neck, new THREE.Vector3(0, neckY + 0.08 * H * p.torso * Math.max(0.05, p.headSize), chestZ));
 
   const upperArm = 0.17 * H * p.arms;
   const forearm = 0.155 * H * p.arms;
@@ -202,7 +208,7 @@ export function buildHumanSkeleton(input: Partial<HumanParams> = {}): HumanSkele
   const shoulder: [number, number] = [0, 0];
   for (const [s, side] of [[0, 1], [1, -1]] as const) {
     const label = s === 0 ? "Left" : "Right";
-    const shoulderAt = new THREE.Vector3(side * 0.11 * H * p.shoulderWidth, chestY, 0);
+    const shoulderAt = new THREE.Vector3(side * 0.11 * H * p.shoulderWidth, chestY, chestZ);
     shoulder[s] = add(`${label} Shoulder`, chest, shoulderAt, true);
     const down = new THREE.Vector3(side * Math.sin(armAngle), -Math.cos(armAngle), 0);
     const elbowAt = shoulderAt.clone().addScaledVector(down, upperArm);
@@ -311,7 +317,8 @@ function humanLimits(
 
   const spine: number[] = [];
   for (let i = j.chest; i > j.pelvis; i--) spine.push(i);
-  for (const i of spine) limits.push({ joint: i, axis: new THREE.Vector3(0, 1, 0), maxAngle: deg(p.spineBend) / spine.length });
+  // Around the spine's own rest line, which leans when the torso is carried forward or back.
+  for (const i of spine) limits.push({ joint: i, axis: dir(i - 1, i), maxAngle: deg(p.spineBend) / spine.length });
   limits.push({ joint: j.neck, axis: new THREE.Vector3(0, 1, 0), maxAngle: deg(p.neckBend) / 2 });
   limits.push({ joint: j.head, axis: dir(j.chest, j.neck), maxAngle: deg(p.neckBend) / 2 });
 

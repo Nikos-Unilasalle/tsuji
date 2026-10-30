@@ -251,3 +251,129 @@ export function paintDab(
   applyPaintLayer(auto, layer, parents, skin, hit);
   return hit;
 }
+
+// ---------------------------------------------------------------------------
+// Left / right symmetry
+
+/**
+ * Each joint's counterpart across the body's centre plane (x = 0 of the rig):
+ * by name where the rig names its joints ("Left Knee" ↔ "Right Knee"), else
+ * the joint nearest its mirrored rest position. A joint on the centre line,
+ * or with no counterpart close enough, is its own.
+ */
+export function mirrorJoints(rest: { x: number; y: number; z: number }[], names?: string[]): number[] {
+  let extent = 1e-6;
+  for (const p of rest) extent = Math.max(extent, Math.abs(p.x), Math.abs(p.y), Math.abs(p.z));
+  const tolerance = 0.03 * extent;
+  return rest.map((p, i) => {
+    const name = names?.[i];
+    if (name && /\b(Left|Right)\b/.test(name)) {
+      const other = name.replace(/\b(Left|Right)\b/g, (side) => (side === "Left" ? "Right" : "Left"));
+      const k = names!.indexOf(other);
+      if (k >= 0) return k;
+    }
+    let best = i;
+    let bestD = tolerance;
+    rest.forEach((q, k) => {
+      const d = Math.hypot(q.x + p.x, q.y - p.y, q.z - p.z);
+      if (d < bestD) {
+        bestD = d;
+        best = k;
+      }
+    });
+    return best;
+  });
+}
+
+/** Vertices by position: each position's mirror across x = 0, and every vertex sitting at each position. */
+export interface VertexMirror {
+  weldOf: Int32Array;
+  /** Per weld, the weld across the plane (itself on it, −1 where none lies close). */
+  mirrorOf: Int32Array;
+  /** Per weld, its vertices. */
+  members: number[][];
+}
+
+/**
+ * Pairs each vertex with the one across the x = 0 plane, `positions` given in
+ * the space whose x = 0 is the centre plane. Vertices at the same position
+ * (a seam) go together, so paint copied across reaches all of them. A mesh
+ * that is not quite symmetric still pairs, within 1% of its size.
+ */
+export function mirrorVertices(positions: ArrayLike<number>): VertexMirror {
+  const count = Math.floor(positions.length / 3);
+  const { weldOf, reps, welds } = weldVertices(positions, count);
+  const members: number[][] = Array.from({ length: welds }, () => []);
+  for (let v = 0; v < count; v++) members[weldOf[v]].push(v);
+  let min = [Infinity, Infinity, Infinity];
+  let max = [-Infinity, -Infinity, -Infinity];
+  for (let w = 0; w < welds; w++) {
+    const o = reps[w] * 3;
+    min = min.map((m, a) => Math.min(m, positions[o + a]));
+    max = max.map((m, a) => Math.max(m, positions[o + a]));
+  }
+  const size = welds > 0 ? Math.hypot(max[0] - min[0], max[1] - min[1], max[2] - min[2]) : 0;
+  const tolerance = Math.max(1e-6, 0.01 * size);
+  const cell = (x: number) => Math.floor(x / tolerance);
+  const grid = new Map<string, number[]>();
+  for (let w = 0; w < welds; w++) {
+    const o = reps[w] * 3;
+    const key = `${cell(positions[o])},${cell(positions[o + 1])},${cell(positions[o + 2])}`;
+    const list = grid.get(key);
+    if (list) list.push(w);
+    else grid.set(key, [w]);
+  }
+  const mirrorOf = new Int32Array(welds).fill(-1);
+  for (let w = 0; w < welds; w++) {
+    const o = reps[w] * 3;
+    const x = -positions[o];
+    const y = positions[o + 1];
+    const z = positions[o + 2];
+    let best = -1;
+    let bestD = tolerance;
+    for (let i = -1; i <= 1; i++)
+      for (let j = -1; j <= 1; j++)
+        for (let k = -1; k <= 1; k++) {
+          for (const u of grid.get(`${cell(x) + i},${cell(y) + j},${cell(z) + k}`) ?? []) {
+            const q = reps[u] * 3;
+            const d = Math.hypot(positions[q] - x, positions[q + 1] - y, positions[q + 2] - z);
+            if (d < bestD) {
+              bestD = d;
+              best = u;
+            }
+          }
+        }
+    mirrorOf[w] = best;
+  }
+  return { weldOf, mirrorOf, members };
+}
+
+/**
+ * Copies `joint`'s paint on `vertices` (just painted) across the centre
+ * plane: onto `jointMirror[joint]`, at the mirrored vertices. Returns the
+ * vertices it wrote, for the caller to apply.
+ */
+export function mirrorPaint(layer: PaintLayer, joint: number, vertices: number[], mirror: VertexMirror, jointMirror: number[]): number[] {
+  const other = jointMirror[joint] ?? joint;
+  const source = layer.get(joint);
+  // Read first: across the centre the same joint may be both written and read.
+  const copies: [number, number | undefined][] = [];
+  for (const v of vertices) {
+    const w = mirror.mirrorOf[mirror.weldOf[v]];
+    if (w < 0) continue;
+    const d = source?.get(v);
+    for (const m of mirror.members[w]) if (m !== v || other !== joint) copies.push([m, d]);
+  }
+  if (copies.length === 0) return [];
+  let target = layer.get(other);
+  if (!target) {
+    target = new Map();
+    layer.set(other, target);
+  }
+  for (const [m, d] of copies) {
+    if (d === undefined) target.delete(m);
+    else target.set(m, d);
+  }
+  if (target.size === 0) layer.delete(other);
+  return [...new Set(copies.map(([m]) => m))];
+}

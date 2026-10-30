@@ -8912,7 +8912,7 @@ export function Viewport({
           return (
             <SkinHud
               node={rigNode}
-              joints={published ? { names: published.names, count: published.joints.length } : null}
+              joints={published ? { names: published.names, count: published.joints.length, mirror: published.mirror } : null}
               onParams={(params, nodeId) => onParamChange?.(params, nodeId)}
             />
           );

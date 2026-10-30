@@ -18,7 +18,24 @@ import {
   SkinWeights,
   skinVertices,
 } from "../ik/skinning";
-import { applyPaintLayer, cloneSkin, Dab, jointWeight, paintDab, PaintLayer, PaintNeighbours, paintNeighbours, readPaintLayer, StoredPaint, storePaintLayers, WEIGHT_BRUSHES } from "../ik/weightPaint";
+import {
+  applyPaintLayer,
+  cloneSkin,
+  Dab,
+  jointWeight,
+  mirrorJoints,
+  mirrorPaint,
+  mirrorVertices,
+  paintDab,
+  PaintLayer,
+  PaintNeighbours,
+  paintNeighbours,
+  readPaintLayer,
+  StoredPaint,
+  storePaintLayers,
+  VertexMirror,
+  WEIGHT_BRUSHES,
+} from "../ik/weightPaint";
 
 /**
  * Skin: binds a mesh to any rig and deforms it as the rig moves.
@@ -39,7 +56,10 @@ import { applyPaintLayer, cloneSkin, Dab, jointWeight, paintDab, PaintLayer, Pai
  *
  * Weights can be corrected by hand: the viewport's weight brush paints, per
  * joint, offsets from the automatic weights (see weightPaint.ts), kept in
- * `weightPaint`. Changing the paint does not weigh the mesh again.
+ * `weightPaint`. Changing the paint does not weigh the mesh again. With
+ * Left ↔ Right Symmetry on, each stroke is copied across the rig's centre
+ * plane (x = 0 in its own space) onto the joint's counterpart — "Left Knee"
+ * to "Right Knee" — and so are a joint's Strength, Radius and Clear.
  */
 
 type Mode = "CPU" | "GPU";
@@ -59,6 +79,8 @@ interface BoundMesh {
   layer: PaintLayer;
   /** For the Smooth brush, built on its first dab. */
   neighbours?: PaintNeighbours;
+  /** Each vertex's counterpart across the rig's centre plane, worked out the first time symmetry paints it. */
+  mirror?: VertexMirror;
   /** Scratch for where the vertices are now, in world space, while painting. */
   worldPositions?: Float32Array;
   /** Output position/normal versions last synced from the source; the source may be an animated deformer. */
@@ -91,6 +113,10 @@ interface SkinState {
   paintRaw?: unknown;
   /** Bumped whenever the painted weights change, so the overlay redraws. */
   paintVersion?: number;
+  /** Left ↔ Right Symmetry: each joint's counterpart, and the bind space back to the rig's own (where x = 0 is its centre plane). */
+  symmetry?: boolean;
+  jointMirror?: number[];
+  mirrorSpace?: THREE.Matrix4;
 }
 
 function removeHeat(bound: BoundMesh) {
@@ -358,6 +384,8 @@ export const SKIN_NODE: NodeDefinition = {
     weightBrush: "Add",
     weightBrushSize: 0.15,
     weightBrushStrength: 0.3,
+    // Paint, Strength and Radius on one side go to the other too, mirrored across the rig's centre plane.
+    symmetry: false,
     // Painted corrections, one entry per mesh: see weightPaint.ts.
     weightPaint: [],
     showWeights: false,
@@ -381,6 +409,7 @@ export const SKIN_NODE: NodeDefinition = {
     { id: "weightBrush", label: "Brush", kind: "select", options: [...WEIGHT_BRUSHES], group: "Weight Brush" },
     { id: "weightBrushSize", label: "Radius", kind: "number", step: 0.01, group: "Weight Brush" },
     { id: "weightBrushStrength", label: "Strength", kind: "number", step: 0.05, group: "Weight Brush" },
+    { id: "symmetry", label: "Left ↔ Right Symmetry", kind: "boolean", group: "Weight Brush" },
   ],
   evaluate: (inputs, params, ctx) => {
     const raw = inputs.geometry;
@@ -460,12 +489,15 @@ export const SKIN_NODE: NodeDefinition = {
       });
       state.key = key;
       state.parents = rig.parents.slice();
+      state.jointMirror = mirrorJoints(rig.rest, rig.names);
+      state.mirrorSpace = rigSpace ? new THREE.Matrix4() : rig.matrix.clone().invert();
       state.paintRaw = undefined;
       state.posed = undefined;
       state.bounds = { min: new THREE.Vector3(), max: new THREE.Vector3() };
     }
 
     const { bones, meshes } = state;
+    state.symmetry = toBoolean(params.symmetry);
     if (state.paintRaw === undefined || state.paintRaw !== params.weightPaint) {
       state.paintRaw = params.weightPaint ?? null;
       meshes.forEach((bound, i) => {
@@ -572,7 +604,7 @@ export const SKIN_NODE: NodeDefinition = {
     state.object.userData = {
       ...raw.userData,
       nodeId: ctx.nodeId,
-      skinEdit: { joints: worldJoints, names: rig.names, parents: rig.parents, selected },
+      skinEdit: { joints: worldJoints, names: rig.names, parents: rig.parents, selected, mirror: state.jointMirror },
     };
     return { geometry: state.object, matrix: single ? meshes[0].output.matrix : place(frames[0]) };
   },
@@ -588,11 +620,13 @@ export function readJointInfluence(params: Record<string, unknown>, joint: numbe
  * they were. A value back at 1 is stored as unset, so an untouched joint
  * leaves nothing in the saved file.
  */
-export function withJointInfluence(params: Record<string, unknown>, joint: number, change: { strength?: number; radius?: number }): Record<string, unknown> {
+export function withJointInfluence(params: Record<string, unknown>, joint: number, change: { strength?: number; radius?: number }, mirror = -1): Record<string, unknown> {
   const put = (raw: unknown, value: number | undefined) => {
     const list: (number | null)[] = numberList(raw).map((v) => v ?? null);
-    while (list.length <= joint) list.push(null);
-    if (value !== undefined) list[joint] = Math.abs(value - 1) < 1e-9 ? null : value;
+    for (const j of mirror >= 0 ? [joint, mirror] : [joint]) {
+      while (list.length <= j) list.push(null);
+      if (value !== undefined) list[j] = Math.abs(value - 1) < 1e-9 ? null : value;
+    }
     while (list.length > 0 && list[list.length - 1] === null) list.pop();
     return list;
   };
@@ -645,8 +679,30 @@ export function skinWeightDab(nodeId: string, dab: Dab): boolean {
     }
     const touched = paintDab(bound.layer, bound.auto, bound.skin, state.parents, worldPositions(bound), bound.neighbours ?? null, dab);
     if (touched.length > 0) weightsChanged(bound, touched);
+    if (state.symmetry && state.jointMirror && touched.length > 0) {
+      bound.mirror ??= mirrorVertices(bindPositions(bound, state.mirrorSpace));
+      const mirrored = mirrorPaint(bound.layer, dab.joint, touched, bound.mirror, state.jointMirror);
+      if (mirrored.length > 0) {
+        applyPaintLayer(bound.auto, bound.layer, state.parents, bound.skin, mirrored);
+        weightsChanged(bound, mirrored);
+      }
+    }
   }
   return true;
+}
+
+/** Where `bound`'s vertices were bound, in the rig's own space: what symmetry mirrors across. */
+function bindPositions(bound: BoundMesh, mirrorSpace = new THREE.Matrix4()): Float32Array {
+  const position = bound.source.geometry.attributes.position as THREE.BufferAttribute;
+  const toRig = mirrorSpace.clone().multiply(bound.frame);
+  const out = new Float32Array(position.count * 3);
+  for (let v = 0; v < position.count; v++) {
+    scratch.fromBufferAttribute(position, v).applyMatrix4(toRig);
+    out[v * 3] = scratch.x;
+    out[v * 3 + 1] = scratch.y;
+    out[v * 3 + 2] = scratch.z;
+  }
+  return out;
 }
 
 /** The paint as it stands on the node now, to store in `weightPaint`. */
@@ -659,13 +715,14 @@ export function skinStoredPaint(nodeId: string): (StoredPaint | null)[] | null {
   );
 }
 
-/** `weightPaint` with one joint's paint (or all of it, joint -1) removed. */
-export function withoutJointPaint(raw: unknown, joint: number): (StoredPaint | null)[] {
+/** `weightPaint` with one joint's paint (or all of it, joint -1) removed — and its mirror's, when given. */
+export function withoutJointPaint(raw: unknown, joint: number, mirror = -1): (StoredPaint | null)[] {
   if (!Array.isArray(raw)) return [];
   const out = raw.map((entry: StoredPaint | null) => {
     if (!entry || joint < 0) return null;
     const joints = { ...entry.joints };
     delete joints[joint];
+    if (mirror >= 0) delete joints[mirror];
     return Object.keys(joints).length > 0 ? { ...entry, joints } : null;
   });
   while (out.length > 0 && out[out.length - 1] === null) out.pop();
