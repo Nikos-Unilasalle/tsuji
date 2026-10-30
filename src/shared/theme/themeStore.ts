@@ -2,6 +2,7 @@
  * Interface theme definition and manager for Tsuji.
  * Controls CSS variables across the entire application chrome and canvas.
  */
+import { calculateContrastRatio } from "./themeFromImage";
 
 export interface ThemeColors {
   // Chrome
@@ -233,6 +234,20 @@ export function getCurrentColors(): ThemeColors {
 /**
  * Apply the given theme colors as CSS root variables in the document, persist to localStorage, and dispatch window event.
  */
+/**
+ * The text to write on the pill colour (tooltips, tags): the theme's own text when it reads there, otherwise white or
+ * near-black, whichever stands out more. A theme can pair a light interface — dark text — with a dark pill, and its
+ * tooltips then came out dark on dark.
+ */
+export function pillTextColor(pillBg: string, text: string): string {
+  try {
+    if (calculateContrastRatio(text, pillBg) >= 4.5) return text;
+    return calculateContrastRatio("#ffffff", pillBg) >= calculateContrastRatio("#111111", pillBg) ? "#ffffff" : "#111111";
+  } catch {
+    return text;
+  }
+}
+
 export function applyThemeColors(colors: ThemeColors): void {
   const normalized = normalizeThemeColors(colors);
   if (typeof localStorage !== "undefined") {
@@ -250,6 +265,7 @@ export function applyThemeColors(colors: ThemeColors): void {
     root.style.setProperty("--chrome-surface-raised", normalized.chromeSurfaceRaised);
     root.style.setProperty("--chrome-border", normalized.chromeBorder);
     root.style.setProperty("--chrome-pill-bg", normalized.chromePillBg);
+    root.style.setProperty("--chrome-pill-text", pillTextColor(normalized.chromePillBg, normalized.chromeText));
     root.style.setProperty("--chrome-text", normalized.chromeText);
     root.style.setProperty("--chrome-text-muted", normalized.chromeTextMuted);
     root.style.setProperty("--canvas-bg", normalized.canvasBg);

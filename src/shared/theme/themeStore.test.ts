@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import {
+  pillTextColor,
   PRESET_THEMES,
   applyThemeColors,
   getCurrentColors,
@@ -204,5 +205,20 @@ describe("themeStore", () => {
     expect(mocks.cssProperties.get("--chrome-text")).toBe(londonTheme!.colors.chromeText);
     expect(mocks.cssProperties.get("--accent-color")).toBe(londonTheme!.colors.accentColor);
     expect(mocks.cssProperties.get("--canvas-text")).toBe(londonTheme!.colors.chromeText);
+  });
+});
+
+describe("pillTextColor", () => {
+  it("keeps the theme's text where it reads on the pill", () => {
+    expect(pillTextColor("#1e2430", "#eef2f6")).toBe("#eef2f6");
+    expect(pillTextColor("#ded9cf", "#2d3238")).toBe("#2d3238");
+  });
+
+  it("switches to white on a dark pill when the theme's text is dark", () => {
+    expect(pillTextColor("#1e2430", "#2d3238")).toBe("#ffffff");
+  });
+
+  it("switches to near-black on a light pill when the theme's text is light", () => {
+    expect(pillTextColor("#f5f2eb", "#eef2f6")).toBe("#111111");
   });
 });

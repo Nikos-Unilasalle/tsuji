@@ -22,6 +22,7 @@
   --chrome-border: #5a6472;
   /* Badges, pills, and resize handles. */
   --chrome-pill-bg: #1e2430;
+  --chrome-pill-text: #eef2f6;
   /* Primary text. */
   --chrome-text: #eef2f6;
   /* Secondary text: labels, hints. */
@@ -79,7 +80,7 @@ body, input, button, select, textarea {
   border: 1px solid var(--chrome-border);
   border-radius: 5px;
   background: var(--chrome-pill-bg);
-  color: var(--chrome-text);
+  color: var(--chrome-pill-text, var(--chrome-text));
   font-size: 11px;
   line-height: 1.35;
   white-space: pre-line;
