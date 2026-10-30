@@ -113,3 +113,37 @@
 .viewport-param-hud-unpin:hover {
   color: var(--danger-color);
 }
+
+/* A pinned menu dressed like the parameter panel's, not the system's white box. */
+.viewport-param-hud-control select {
+  width: 100%;
+  min-width: 0;
+  appearance: none;
+  -webkit-appearance: none;
+  background-color: var(--chrome-bg);
+  background-image: linear-gradient(45deg, transparent 50%, var(--chrome-text-muted) 50%),
+    linear-gradient(135deg, var(--chrome-text-muted) 50%, transparent 50%);
+  background-position: calc(100% - 11px) 50%, calc(100% - 7px) 50%;
+  background-size: 4px 4px;
+  background-repeat: no-repeat;
+  border: 1px solid var(--chrome-border);
+  border-radius: 4px;
+  outline: none;
+  color: var(--chrome-text);
+  font-family: inherit;
+  font-size: 12px;
+  padding: 4px 20px 4px 6px;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  transition: border-color 0.12s ease;
+}
+
+.viewport-param-hud-control select:hover,
+.viewport-param-hud-control select:focus {
+  border-color: var(--accent-color, #38bdf8);
+}
+
+.viewport-param-hud-control select option {
+  background: var(--chrome-surface);
+  color: var(--chrome-text);
+}
