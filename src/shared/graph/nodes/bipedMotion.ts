@@ -8,7 +8,7 @@ import { createNodeCache } from "../nodeCaches";
 import { NATIVE_TRANSFORM_PARAM_FIELDS, numberInput } from "./object";
 import { toBoolean } from "../sockets";
 import { footPivot, FootRoll, solveHuman } from "../ik/skeletons";
-import { publishRig } from "../ik/skinning";
+import { bindPoseOf, publishRig } from "../ik/skinning";
 import { idleSwayOffset } from "../ik/bipedStyle";
 import { boneMatrices, bonesOf, drawEmpty, HumanRigData, motionClock, parentsOf, placeGroup, TRANSFORM_DEFAULTS, viewFor } from "./rig";
 import { armWave, BodyMetrics, bodyMetrics, GaitSolution, GaitStyle, GRAVITY, NATURAL_STYLE, pelvisMotion, preferredSpeed, solveGait, strideSink, wantsToRun } from "../ik/gaitModel";
@@ -404,7 +404,7 @@ export const RIG_BIPED_MOTION_NODE: NodeDefinition = {
       knobRadius: routeDrawn && routeContext?.plan ? Math.max(0.022 * metrics.height, routeContext.plan.curve.length * 0.008) : 0.022 * metrics.height,
     });
 
-    publishRig(group, parentsOf(skeleton.rig), skeleton.rig.rest, positions, display, skeleton.names);
+    publishRig(group, parentsOf(skeleton.rig), skeleton.rig.rest, positions, display, skeleton.names, undefined, bindPoseOf(source, skeleton.rig.rest));
     group.userData.humanRig = data;
     group.userData.humanPose = { controls: pose.controls, pelvisRotation: pose.pelvisRotation, feet: pose.feet, matrix: display.clone() } satisfies HumanPose;
     group.updateMatrixWorld(true);

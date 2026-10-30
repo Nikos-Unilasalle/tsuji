@@ -6,7 +6,7 @@ import { createNodeCache } from "../nodeCaches";
 import { createLiveState, LiveMove, LiveState, stepLive } from "./danceLive";
 import { numberInput } from "./object";
 import { HumanSkeleton, solveHuman, turnHead } from "../ik/skeletons";
-import { publishRig } from "../ik/skinning";
+import { bindPoseOf, publishRig } from "../ik/skinning";
 import { boneMatrices, bonesOf, drawEmpty, HumanRigData, parentsOf, viewFor } from "./rig";
 import { blendFeet, CONTROL, flipPose, HumanPose, poseMask, PoseMask, readHumanPose, readPoseList, turnQuaternion } from "../ik/humanPose";
 import { GROOVE_PRESET_KEYS, GROOVE_PRESETS, GroovePresetKey, grooveControls } from "../ik/danceGroove";
@@ -445,7 +445,7 @@ export const RIG_BIPED_DANCE_NODE: NodeDefinition = {
     const next = nextMove(moves, beat, loopBeats);
     const ghost = next && (params.showGhost === undefined || toBoolean(params.showGhost)) ? danceAt(beat + next.inBeats, time + (next.inBeats * 60) / bpm).positions : null;
     drawGhost(ctx.nodeId, group, ghost, skeleton, data.thickness);
-    publishRig(group, parentsOf(skeleton.rig), skeleton.rig.rest, positions, group.matrix, skeleton.names, now.twist);
+    publishRig(group, parentsOf(skeleton.rig), skeleton.rig.rest, positions, group.matrix, skeleton.names, now.twist, bindPoseOf(source, skeleton.rig.rest));
     group.userData.humanRig = data;
     group.userData.humanPose = { controls: finalControls, pelvisRotation: finalRotation, feet: now.feet, matrix: group.matrix.clone() } satisfies HumanPose;
     group.updateMatrixWorld(true);

@@ -117,6 +117,11 @@ interface SkinState {
   symmetry?: boolean;
   jointMirror?: number[];
   mirrorSpace?: THREE.Matrix4;
+  /** Bind To "connected": the pose taken when the rig was connected, until the node's params carry it. */
+  captured?: { key: string; pose: THREE.Vector3[] };
+  /** The stored `bindPose` last read, by identity, and what it reads as. */
+  bindRaw?: unknown;
+  bindParsed?: THREE.Vector3[];
 }
 
 function removeHeat(bound: BoundMesh) {
@@ -152,6 +157,8 @@ const skinStates = createNodeCache<SkinState>((state) => {
 interface ResolvedRig {
   parents: number[];
   rest: THREE.Vector3[];
+  /** The pose to bind at when connecting (RigData.bind). */
+  bind?: THREE.Vector3[];
   pose: THREE.Vector3[];
   /** Rig space -> world, now. */
   matrix: THREE.Matrix4;
@@ -166,6 +173,71 @@ const flatten = (points: THREE.Vector3[]) => points.map((p) => `${Math.round(p.x
 /** A rig node's rest joints are one array for as long as its proportions hold; flatten them once. */
 const restKeys = new WeakMap<THREE.Vector3[], string>();
 
+const keyOf = (points: THREE.Vector3[]) => {
+  let key = restKeys.get(points);
+  if (key === undefined) {
+    key = flatten(points);
+    restKeys.set(points, key);
+  }
+  return key;
+};
+
+/** A short, stable digest of a string (FNV-1a), for keys kept in params. */
+function digest(text: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) {
+    h ^= text.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return (h >>> 0).toString(36);
+}
+
+/**
+ * Bind poses Skin nodes took when their rig was connected, waiting to be
+ * written into their params (`bindPose`, `bindKey`) — or, when a rig or mesh
+ * was disconnected, the cleared ones. The editor takes them after each
+ * evaluation and stores them outside the undo history: they record what the
+ * connection itself did, so undoing the connection undoes them too.
+ */
+const bindRequests = new Map<string, Record<string, unknown>>();
+
+export function consumeSkinBindRequests(): { nodeId: string; params: Record<string, unknown> }[] {
+  const out = [...bindRequests].map(([nodeId, params]) => ({ nodeId, params }));
+  bindRequests.clear();
+  return out;
+}
+
+const bindToConnected = (params: Record<string, unknown>) => params.bindTo === "connected";
+
+/** A Skin left without a rig or a mesh forgets the pose it was bound at, so connecting again takes the pose then. */
+function forgetBindPose(nodeId: string, params: Record<string, unknown>, state: SkinState | undefined, capturing?: boolean) {
+  if (state) state.captured = undefined;
+  if (!bindToConnected(params) || capturing) return;
+  if ((Array.isArray(params.bindPose) && params.bindPose.length > 0) || params.bindKey) bindRequests.set(nodeId, { bindPose: [], bindKey: "" });
+}
+
+/**
+ * The joints a mesh is bound at. Bind To "rest": the rig's rest pose. Bind To
+ * "connected": the pose the rig had when it was connected (its RigData.bind,
+ * else its pose), so connecting moves nothing — kept in the params once the
+ * editor has stored it, taken again when the rig changes shape or proportions
+ * or Re-bind is toggled.
+ */
+function bindJoints(params: Record<string, unknown>, rig: ResolvedRig, state: SkinState, nodeId: string, capturing?: boolean): THREE.Vector3[] {
+  if (!bindToConnected(params)) return rig.rest;
+  const key = digest(`${rig.parents.join(",")}|${rig.restKey}|${toBoolean(params.rebind)}`);
+  if (state.bindRaw !== params.bindPose) {
+    state.bindRaw = params.bindPose;
+    state.bindParsed = Array.isArray(params.bindPose) ? params.bindPose.map((p) => asVector3(p, new THREE.Vector3()).clone()) : [];
+  }
+  const stored = state.bindParsed ?? [];
+  if (stored.length === rig.rest.length && params.bindKey === key && stored.every((p) => Number.isFinite(p.x + p.y + p.z))) return stored;
+  if (!state.captured || state.captured.key !== key) state.captured = { key, pose: (rig.bind ?? rig.pose).map((p) => p.clone()) };
+  // Stored exactly: binding again from the params must give the very weights bound now.
+  if (!capturing) bindRequests.set(nodeId, { bindPose: state.captured.pose.map((p) => ({ x: p.x, y: p.y, z: p.z })), bindKey: key });
+  return state.captured.pose;
+}
+
 function resolveRig(inputs: Record<string, unknown>, state: SkinState): ResolvedRig | null {
   const data: RigData | null = readRig(inputs.rig);
   if (data) {
@@ -174,7 +246,8 @@ function resolveRig(inputs: Record<string, unknown>, state: SkinState): Resolved
       restKey = flatten(data.rest);
       restKeys.set(data.rest, restKey);
     }
-    return { parents: data.parents, rest: data.rest, pose: data.pose, matrix: data.matrix, restKey, names: data.names, twist: data.twist };
+    const bind = data.bind && data.bind.length === data.rest.length ? data.bind : undefined;
+    return { parents: data.parents, rest: data.rest, pose: data.pose, matrix: data.matrix, restKey, names: data.names, twist: data.twist, bind };
   }
 
   if (!Array.isArray(inputs.joints) || inputs.joints.length === 0) return null;
@@ -379,6 +452,10 @@ export const SKIN_NODE: NodeDefinition = {
     stretch: false,
     rebind: false,
     showRig: true,
+    // Files from before Bind To bind at the rest pose, as they always did; new nodes at the pose when connected.
+    bindTo: "rest",
+    bindPose: [],
+    bindKey: "",
     // Weight brush, in the viewport: on while weightPaintMode is.
     weightPaintMode: false,
     weightBrush: "Add",
@@ -394,9 +471,19 @@ export const SKIN_NODE: NodeDefinition = {
     jointStrength: [],
     jointRadius: [],
   },
+  // A Skin made now binds where the rig stands when it is connected: connecting moves nothing.
+  newNodeParams: { bindTo: "connected" },
   paramFields: [
     { id: "amount", label: "Amount", kind: "number", step: 0.05, group: "Skin" },
     { id: "bindSpace", label: "Bind Space", kind: "select", options: ["Rig", "World"], group: "Skin" },
+    {
+      id: "bindTo",
+      label: "Bind To",
+      kind: "select",
+      options: ["connected", "rest"],
+      optionLabels: ["Pose when connected (nothing moves)", "Rest pose of the rig"],
+      group: "Skin",
+    },
     { id: "mode", label: "Skinning", kind: "select", options: ["Auto", "CPU", "GPU"], group: "Skin" },
     { id: "stretch", label: "Stretch Bones", kind: "boolean", group: "Skin" },
     { id: "showRig", label: "Show Rig", kind: "boolean", group: "Skin" },
@@ -415,11 +502,13 @@ export const SKIN_NODE: NodeDefinition = {
     const raw = inputs.geometry;
     if (!(raw instanceof THREE.Object3D)) {
       if (raw) warnMeshRequired(ctx.nodeId, "Skin", null);
+      forgetBindPose(ctx.nodeId, params, skinStates.get(ctx.nodeId), ctx.capturing);
       return { geometry: raw, matrix: (raw as any)?.matrix };
     }
     const sources = collectMeshes(raw);
     if (sources.length === 0) {
       warnMeshRequired(ctx.nodeId, "Skin", raw);
+      forgetBindPose(ctx.nodeId, params, skinStates.get(ctx.nodeId), ctx.capturing);
       return { geometry: raw, matrix: (raw as any)?.matrix };
     }
     clearMeshWarning(ctx.nodeId);
@@ -433,7 +522,11 @@ export const SKIN_NODE: NodeDefinition = {
     hideRig(state, inputs.rig, toBoolean(params.showRig ?? true));
     raw.updateMatrixWorld(true);
     const frames = sources.map((mesh) => frameOf(raw, mesh, inputs.matrix));
-    if (!rig || rig.rest.length === 0) return { geometry: raw, matrix: frames[0] };
+    if (!rig || rig.rest.length === 0) {
+      forgetBindPose(ctx.nodeId, params, state, ctx.capturing);
+      return { geometry: raw, matrix: frames[0] };
+    }
+    const bind = bindJoints(params, rig, state, ctx.nodeId, ctx.capturing);
 
     // Bones are posed in one of two spaces. Rig: the rig's own space — the
     // mesh is modelled around the rig's origin, and the rig's transform then
@@ -450,14 +543,14 @@ export const SKIN_NODE: NodeDefinition = {
     const key = [
       sources.map((m) => `${m.geometry.uuid}:${m.geometry.attributes.position?.count ?? 0}:${m.geometry.getIndex()?.count ?? -1}`).join("|"),
       rig.parents.join(","),
-      rig.restKey,
+      keyOf(bind),
       `${rigSpace}|${mode}|${influences}|${falloff}|${smooth}|${toBoolean(params.rebind)}`,
       JSON.stringify([strength, radius]),
     ].join("#");
 
     if (state.key !== key || !state.meshes || !state.bones) {
       disposeState(state);
-      const restInSpace = rigSpace ? rig.rest : rig.rest.map((p) => p.clone().applyMatrix4(rig.matrix));
+      const restInSpace = rigSpace ? bind : bind.map((p) => p.clone().applyMatrix4(rig.matrix));
       const bones = buildBones(rig.parents, restInSpace);
       state.bones = bones;
       state.mode = mode;

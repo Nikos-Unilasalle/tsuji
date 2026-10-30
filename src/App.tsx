@@ -55,6 +55,7 @@ import { rehydrateFileNodesFromDisk } from "./shared/graph/rehydrateFiles";
 import { cloneGraph, cloneParams, cloneParamValue } from "./shared/graph/cloneGraph";
 import { consumeCameraHandoffRequest } from "./shared/graph/cameraHandoffStore";
 import { consumeCanvasSwitchRequest } from "./shared/graph/canvasSwitchStore";
+import { consumeSkinBindRequests } from "./shared/graph/nodes/skin";
 import { isGraphZone } from "./shared/graph/inputZoneStore";
 import { onSimulationReset, resetSimulations } from "./shared/graph/simulationEpoch";
 import {
@@ -232,6 +233,19 @@ const HISTORY_COALESCE_MS = 600;
  */
 function coalesceKeyFor(nodeId: string | null, paramId: string, options?: { coalesce?: boolean }): string | undefined {
   return options?.coalesce === false ? undefined : `${nodeId}:${paramId}`;
+}
+
+/** `graph` with params merged into the nodes named in `patches`, inside groups too; the same graph when none is there. */
+function withNodeParams(graph: Graph, patches: Map<string, Record<string, unknown>>): Graph {
+  let changed = false;
+  const nodes = graph.nodes.map((node) => {
+    const patch = patches.get(node.id);
+    const subgraph = node.subgraph ? withNodeParams(node.subgraph, patches) : node.subgraph;
+    if (!patch && subgraph === node.subgraph) return node;
+    changed = true;
+    return { ...node, ...(patch ? { params: { ...node.params, ...patch } } : {}), ...(subgraph !== node.subgraph ? { subgraph } : {}) };
+  });
+  return changed ? { ...graph, nodes } : graph;
 }
 
 /** Quiet time after the last edit before the document is written to localStorage. */
@@ -752,8 +766,11 @@ function MainEditor() {
       if (requestedCanvas !== null) switchCanvas(requestedCanvas);
       const handoff = consumeCameraHandoffRequest();
       if (handoff !== null) activateCameraNode(handoff);
+      // Skin's bind pose, taken as a rig was connected: kept with the node, but not an undo step of its own.
+      const binds = consumeSkinBindRequests();
+      if (binds.length > 0) setGraph((prev) => withNodeParams(prev, new Map(binds.map((b) => [b.nodeId, b.params]))));
     },
-    [switchCanvas, activateCameraNode],
+    [switchCanvas, activateCameraNode, setGraph],
   );
 
   useEffect(() => {

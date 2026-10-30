@@ -6,7 +6,7 @@ import { asVector3 } from "./transform";
 import { toBoolean } from "../sockets";
 import { TOGGLE_POINTS_KEYFRAME_ACTION } from "./curve";
 import { HumanSkeleton, solveHuman } from "../ik/skeletons";
-import { publishRig } from "../ik/skinning";
+import { bindPoseOf, publishRig } from "../ik/skinning";
 import { boneMatrices, bonesOf, drawEmpty, HumanRigData, parentsOf, viewFor } from "./rig";
 import { blendPose, CONTROL, editPoseList, wigglePose, HumanPose, POSE_REGIONS, readHumanPose, readPoseList, turnQuaternion } from "../ik/humanPose";
 
@@ -164,7 +164,7 @@ export const RIG_BIPED_POSE_NODE: NodeDefinition = {
       child.userData.helperOwn ??= Boolean(child.userData.isHelper);
       child.userData.isHelper = child.userData.helperOwn || sourceOnly;
     }
-    publishRig(group, parentsOf(skeleton.rig), skeleton.rig.rest, positions, group.matrix, skeleton.names);
+    publishRig(group, parentsOf(skeleton.rig), skeleton.rig.rest, positions, group.matrix, skeleton.names, undefined, bindPoseOf(source, skeleton.rig.rest));
     group.userData.humanRig = data;
     group.userData.humanPose = { controls: pose.controls, pelvisRotation: pose.pelvisRotation, feet: pose.feet, matrix: group.matrix.clone() } satisfies HumanPose;
     group.updateMatrixWorld(true);

@@ -30,11 +30,25 @@ export interface RigData {
   names?: string[];
   /** Radians per joint: how far its bone turns about itself (+ counter-clockwise looking down the bone from its tip). Absent: none. */
   twist?: number[];
+  /**
+   * The pose a mesh connected now should be bound at, so that connecting it
+   * moves nothing: the skeleton as it was fitted (a Human Skeleton's own
+   * pose), which a walk or a dance built on it hands along unchanged.
+   * Absent: the pose.
+   */
+  bind?: THREE.Vector3[];
 }
 
-export function publishRig(target: THREE.Object3D, parents: number[], rest: THREE.Vector3[], pose: THREE.Vector3[], matrix: THREE.Matrix4, names?: string[], twist?: number[]) {
-  const data: RigData = { parents, rest, pose, matrix: matrix.clone(), names, twist };
+export function publishRig(target: THREE.Object3D, parents: number[], rest: THREE.Vector3[], pose: THREE.Vector3[], matrix: THREE.Matrix4, names?: string[], twist?: number[], bind?: THREE.Vector3[]) {
+  const data: RigData = { parents, rest, pose, matrix: matrix.clone(), names, twist, bind };
   target.userData.rig = data;
+}
+
+/** The fitted pose `source`'s rig says a mesh should be bound at (see RigData.bind), for a rig built on it to hand along. */
+export function bindPoseOf(source: unknown, fallback: THREE.Vector3[]): THREE.Vector3[] {
+  const data = readRig(source);
+  const bind = data?.bind ?? data?.pose;
+  return bind && bind.length === fallback.length ? bind : fallback;
 }
 
 export function readRig(source: unknown): RigData | null {

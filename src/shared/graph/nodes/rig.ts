@@ -316,7 +316,8 @@ export const RIG_HUMAN_NODE: NodeDefinition = {
     };
     group.userData.humanRig = rigData;
     group.userData.humanPose = { controls, pelvisRotation: new THREE.Quaternion(), matrix: group.matrix.clone() } satisfies HumanPose;
-    publishRig(group, parentsOf(skeleton.rig), skeleton.rig.rest, positions, group.matrix, skeleton.names);
+    // Its own pose is the one a mesh is bound at when connected (see Skin's Bind To).
+    publishRig(group, parentsOf(skeleton.rig), skeleton.rig.rest, positions, group.matrix, skeleton.names, undefined, positions);
 
     group.updateMatrixWorld(true);
     const world = positions.map((p) => p.clone().applyMatrix4(group.matrix));
