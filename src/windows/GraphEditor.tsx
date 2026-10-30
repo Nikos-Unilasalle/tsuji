@@ -42,7 +42,15 @@ import { SOCKET_COLOR, SocketDef } from "../shared/graph/sockets";
 import { Connection, ExposedParamRef, Graph, KeyframeStore, Marker, NodeInstance, NodeRegistry } from "../shared/graph/types";
 import { FRAME_TYPE, frameSize } from "../shared/graph/nodes/frame";
 import { parseColorToHex } from "./color-utils";
-import { FrameActions, FrameActionsContext, GraphNode, GraphNodeData, NodeActions, NodeActionsContext } from "./GraphNode";
+import {
+  FrameActions,
+  FrameActionsContext,
+  GraphNode,
+  GraphNodeData,
+  groupFolderSize,
+  NodeActions,
+  NodeActionsContext,
+} from "./GraphNode";
 import { canApplyTransform, resetActionOf } from "../shared/graph/nodeActions";
 import { NodePalette } from "./NodePalette";
 import { QuickAddToolbar } from "./QuickAddToolbar";
@@ -105,6 +113,28 @@ function frameData(instance: NodeInstance): Partial<GraphNodeData> {
   const title = instance.params?.title;
   return { frameTitle: typeof title === "string" ? title : "Frame", frameColor: parseColorToHex(instance.params?.color) };
 }
+/**
+ * React Flow props a group's folder needs: its size, so the resize handle has
+ * something to resize and the folder fills it. `rows` is the longer of its
+ * two socket lists, which sets how short it may get.
+ */
+function groupFlowProps(instance: NodeInstance, rows: number): Partial<Node<GraphNodeData>> {
+  if (instance.type !== GROUP_TYPE) return {};
+  const { width, height } = groupFolderSize(instance.params, rows);
+  return { width, height, className: "graph-group-node" };
+}
+
+function groupData(instance: NodeInstance): Partial<GraphNodeData> {
+  if (instance.type !== GROUP_TYPE) return {};
+  const color = instance.params?.folderColor;
+  return typeof color === "string" && color ? { groupColor: color } : {};
+}
+
+/** What a group holds, not counting its own Group Input/Output. */
+function innerNodeCount(subgraph: Graph): number {
+  return subgraph.nodes.filter((n) => n.type !== GROUP_INPUT_TYPE && n.type !== GROUP_OUTPUT_TYPE).length;
+}
+
 /** Node types that only ever exist because a group put them there. */
 const GROUP_INTERNAL_TYPES = new Set([GROUP_TYPE, GROUP_INPUT_TYPE, GROUP_OUTPUT_TYPE]);
 const EDGE_STROKE_WIDTH = 3;
@@ -128,8 +158,10 @@ function toFlowNodes(graph: Graph, registry: NodeRegistry, selectedIds?: Set<str
       position: instance.position,
       selected: selectedIds ? selectedIds.has(instance.id) : false,
       ...frameFlowProps(instance),
+      ...groupFlowProps(instance, Math.max(inputs.length, outputs.length)),
       data: {
         ...frameData(instance),
+        ...groupData(instance),
         nodeId: instance.id,
         nodeType: instance.type,
         label: def?.label ?? `${instance.type} (unknown)`,
@@ -137,7 +169,7 @@ function toFlowNodes(graph: Graph, registry: NodeRegistry, selectedIds?: Set<str
         category: def?.category,
         inputs,
         outputs,
-        ...(instance.subgraph ? { groupSize: instance.subgraph.nodes.length } : {}),
+        ...(instance.subgraph ? { groupSize: innerNodeCount(instance.subgraph) } : {}),
       },
     };
   });
@@ -469,9 +501,13 @@ function GraphEditorContent({
           selected: selectedIdsRef.current.has(fn.id),
           position: graphNode.position,
           ...frameFlowProps(graphNode),
+          ...(nextNode
+            ? groupFlowProps(graphNode, Math.max(nextNode.data.inputs.length, nextNode.data.outputs.length))
+            : {}),
           data: {
             ...fn.data,
             ...frameData(graphNode),
+            ...groupData(graphNode),
             ...(nextNode ? nextNode.data : {}),
             params: graphNode.params,
             customName: typeof graphNode.params?.name === "string" ? graphNode.params.name : "",
@@ -1224,8 +1260,11 @@ function GraphEditorContent({
         position: instance.position,
         selected: true,
         ...frameFlowProps(instance),
+        ...groupFlowProps(instance, Math.max(def?.inputs.length ?? 0, def?.outputs.length ?? 0)),
         data: {
           ...frameData(instance),
+          ...groupData(instance),
+          ...(instance.subgraph ? { groupSize: innerNodeCount(instance.subgraph) } : {}),
           nodeId: instance.id,
           nodeType: instance.type,
           label: def?.label ?? instance.type,

@@ -1,4 +1,5 @@
-import { Graph, NodeDefinition } from "../types";
+import { walkNodes } from "../groups";
+import { Graph, NodeDefinition, NodeInstance } from "../types";
 import { numberInput } from "./object";
 
 /**
@@ -96,7 +97,16 @@ export const RENDER_NODE: NodeDefinition = {
   },
 };
 
-/** First `render`-type node in the graph — what a Viewport draws when it isn't told a specific node id to use. Multiple Render nodes: first one wins, arbitrary order, not an error. */
+/**
+ * First `render`-type node in the graph — what a Viewport draws when it isn't
+ * told a specific node id to use. Searched inside groups too (top level
+ * first), so grouping the Render node with its scene keeps it the output.
+ * Multiple Render nodes: first one wins, arbitrary order, not an error.
+ */
+export function findRenderNode(graph: Graph): NodeInstance | undefined {
+  return walkNodes(graph).find((n) => n.type === RENDER_NODE.type);
+}
+
 export function findRenderNodeId(graph: Graph): string | undefined {
-  return graph.nodes.find((n) => n.type === RENDER_NODE.type)?.id;
+  return findRenderNode(graph)?.id;
 }

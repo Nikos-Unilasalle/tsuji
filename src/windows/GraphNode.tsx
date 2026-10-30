@@ -1,8 +1,8 @@
-import React, { createContext, memo, useContext, useEffect, useState } from "react";
+import React, { createContext, memo, useContext, useEffect, useRef, useState } from "react";
 import { Handle, NodeResizeControl, Position, useUpdateNodeInternals } from "@xyflow/react";
 import * as THREE from "three";
 import { CATEGORY_COLOR, NodeCategory, UNKNOWN_CATEGORY_COLOR } from "../shared/graph/categories";
-import { NEW_PORT_SOCKET } from "../shared/graph/groups";
+import { GROUP_TYPE, NEW_PORT_SOCKET } from "../shared/graph/groups";
 import { getInspectorValue, subscribeInspector } from "../shared/graph/inspectorStore";
 import { SOCKET_COLOR, SocketDef } from "../shared/graph/sockets";
 import { NODE_APPLY_TRANSFORM_ACTION, NODE_FREEZE_ACTION } from "../shared/graph/nodeActions";
@@ -18,6 +18,8 @@ export interface GraphNodeData {
   outputs: SocketDef[];
   /** How many nodes a group holds — absent on every other kind of node. */
   groupSize?: number;
+  /** A group's folder colour (hex) — absent on every other kind of node. */
+  groupColor?: string;
   /** A Frame's title and colour (hex) — absent on every other kind of node. */
   frameTitle?: string;
   frameColor?: string;
@@ -113,6 +115,154 @@ function FrameNodeView({ data, selected }: { data: GraphNodeData; selected?: boo
           )}
         </div>
       </div>
+    </>
+  );
+}
+
+/** Folder colour a group gets until someone picks another — the macOS folder blue. */
+export const GROUP_DEFAULT_COLOR = "#5eb4ec";
+const GROUP_MIN_WIDTH = 120;
+const GROUP_DEFAULT_WIDTH = 180;
+/** Where the socket rows start: below the tab and the paper peeking out of the folder. */
+const GROUP_SOCKETS_TOP = 30;
+const GROUP_ROW_HEIGHT = 22;
+const GROUP_BOTTOM_ROOM = 24;
+
+/**
+ * The size a group's folder is drawn at: what the author dragged it to, but
+ * never so small that its sockets spill out of it — the ports are the whole
+ * reason the folder is on this level at all.
+ */
+export function groupFolderSize(
+  params: Record<string, unknown> | undefined,
+  rows: number,
+): { width: number; height: number; minWidth: number; minHeight: number } {
+  const minHeight = GROUP_SOCKETS_TOP + Math.max(1, rows) * GROUP_ROW_HEIGHT + GROUP_BOTTOM_ROOM;
+  const w = Number(params?.folderWidth);
+  const h = Number(params?.folderHeight);
+  return {
+    width: Number.isFinite(w) ? Math.max(GROUP_MIN_WIDTH, w) : GROUP_DEFAULT_WIDTH,
+    height: Number.isFinite(h) ? Math.max(minHeight, h) : Math.max(minHeight, 120),
+    minWidth: GROUP_MIN_WIDTH,
+    minHeight,
+  };
+}
+
+const FolderIcon = () => (
+  <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+    <path d="M3 6.5A1.5 1.5 0 0 1 4.5 5h4.38a1.5 1.5 0 0 1 1.06.44L11.5 7h8a1.5 1.5 0 0 1 1.5 1.5v9a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5z" />
+  </svg>
+);
+
+/**
+ * A group drawn as what it is — a folder holding part of the graph. Same
+ * sockets as any node (its ports, down the left and right edges), its name
+ * underneath like a file in Finder, and a size and colour of its own.
+ * Double-click opens it, as before.
+ */
+function GroupFolderView({ data, selected }: { data: GraphNodeData; selected?: boolean }) {
+  const actions = useContext(FrameActionsContext);
+  const nodeId = data.nodeId;
+  const [colorDraft, setColorDraft] = useState<string | null>(null);
+  const color = colorDraft ?? data.groupColor ?? GROUP_DEFAULT_COLOR;
+  const name = typeof data.customName === "string" && data.customName.trim() !== "" ? data.customName : "Group";
+  const rows = Math.max(data.inputs.length, data.outputs.length);
+  const { minWidth, minHeight } = groupFolderSize(undefined, rows);
+
+  const setColor = (hex: string) => {
+    setColorDraft(null);
+    if (nodeId) actions?.updateParams(nodeId, { folderColor: hex });
+  };
+  // The picker previews as it moves (React's onChange is the `input` event)
+  // and commits on the native `change`, when it is let go — one undo step per
+  // colour picked, not one per pixel the cursor crossed.
+  const colorInputRef = useRef<HTMLInputElement>(null);
+  const setColorRef = useRef(setColor);
+  setColorRef.current = setColor;
+  useEffect(() => {
+    const el = colorInputRef.current;
+    if (!el) return;
+    const onCommit = () => setColorRef.current(el.value);
+    el.addEventListener("change", onCommit);
+    return () => el.removeEventListener("change", onCommit);
+  }, [selected]);
+
+  return (
+    <>
+      {selected && (
+        <NodeResizeControl
+          position="bottom-right"
+          minWidth={minWidth}
+          minHeight={minHeight}
+          className="graph-group-resize-handle"
+          onResizeEnd={(_event, params) => {
+            if (nodeId) actions?.updateParams(nodeId, { folderWidth: Math.round(params.width), folderHeight: Math.round(params.height) });
+          }}
+        />
+      )}
+      <div
+        className={"graph-group-folder" + (selected ? " selected" : "")}
+        style={{ ["--folder-color" as string]: color }}
+        title="Double-click to open"
+      >
+        <div className="graph-group-folder-tab" />
+        <div className="graph-group-folder-back" />
+        <div className="graph-group-folder-paper" />
+        <div className="graph-group-folder-front" />
+        <div className="graph-group-folder-sockets">
+          <div className="graph-node-column">
+            {data.inputs.map((socket) => (
+              <div
+                className={"graph-node-socket" + (socket.id === NEW_PORT_SOCKET ? " graph-node-socket-new" : "")}
+                key={socket.id}
+                title={socket.id === NEW_PORT_SOCKET ? "Drop a wire here to add a port" : undefined}
+              >
+                <Handle type="target" position={Position.Left} id={socket.id} style={{ background: SOCKET_COLOR[socket.type] }} />
+                <span>{socket.label}</span>
+              </div>
+            ))}
+          </div>
+          <div className="graph-node-column graph-node-column-right">
+            {data.outputs.map((socket) => (
+              <div
+                className={"graph-node-socket graph-node-socket-out" + (socket.id === NEW_PORT_SOCKET ? " graph-node-socket-new" : "")}
+                key={socket.id}
+                title={socket.id === NEW_PORT_SOCKET ? "Drag from here to add a port" : undefined}
+              >
+                <span>{socket.label}</span>
+                <Handle type="source" position={Position.Right} id={socket.id} style={{ background: SOCKET_COLOR[socket.type] }} />
+              </div>
+            ))}
+          </div>
+        </div>
+        {typeof data.groupSize === "number" && (
+          <div className="graph-group-folder-count">
+            <FolderIcon />
+            {data.groupSize}
+          </div>
+        )}
+      </div>
+      <div className="graph-group-folder-name">{name}</div>
+      {selected && (
+        <div className="graph-group-folder-swatches nodrag nopan">
+          {FRAME_SWATCHES.concat(GROUP_DEFAULT_COLOR).map((hex) => (
+            <button
+              key={hex}
+              type="button"
+              className={"graph-frame-swatch" + (hex === color ? " active" : "")}
+              style={{ background: hex }}
+              title={`Folder color ${hex}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                setColor(hex);
+              }}
+            />
+          ))}
+          <label className="graph-frame-swatch graph-group-swatch-custom" title="Custom color">
+            <input ref={colorInputRef} type="color" value={color} onChange={(e) => setColorDraft(e.target.value)} />
+          </label>
+        </div>
+      )}
     </>
   );
 }
@@ -285,6 +435,7 @@ export const GraphNode = memo(function GraphNode({ data, selected }: { data: Gra
   }, [data.nodeId, socketSignature, updateNodeInternals]);
 
   if (data.nodeType === FRAME_TYPE) return <FrameNodeView data={data} selected={selected} />;
+  if (data.nodeType === GROUP_TYPE) return <GroupFolderView data={data} selected={selected} />;
 
   if (data.nodeType === "utility/reroute") {
     const socketType = data.inputs[0]?.type || "any";

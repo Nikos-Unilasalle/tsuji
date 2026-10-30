@@ -508,3 +508,187 @@ input, textarea, [contenteditable="true"], .drag-number-editing, .param-text-inp
   background: var(--accent-color, #38bdf8) !important;
   border: none !important;
 }
+
+/*
+ * A group drawn as a folder (GraphNode's GroupFolderView): a back panel with
+ * its tab, a sheet of paper peeking out, and the front panel the sockets sit
+ * on. Every shade comes from one --folder-color, so a picked colour recolours
+ * the whole folder the way Finder's tags do.
+ */
+.react-flow__node.graph-group-node {
+  background: transparent;
+}
+
+.graph-group-folder {
+  --folder-color: #5eb4ec;
+  position: relative;
+  width: 100%;
+  height: 100%;
+  font-family: "Roboto", system-ui, sans-serif;
+  font-size: 11px;
+  filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.35));
+}
+
+.graph-group-folder-tab {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 40%;
+  max-width: 120px;
+  height: 16px;
+  border-radius: 7px 10px 0 0;
+  background: color-mix(in srgb, var(--folder-color) 78%, #0b2a44);
+}
+
+.graph-group-folder-back {
+  position: absolute;
+  top: 9px;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  border-radius: 0 9px 10px 10px;
+  background: color-mix(in srgb, var(--folder-color) 78%, #0b2a44);
+}
+
+.graph-group-folder-paper {
+  position: absolute;
+  top: 15px;
+  left: 6px;
+  right: 6px;
+  height: 14px;
+  border-radius: 4px 4px 0 0;
+  background: linear-gradient(#ffffff, #e8eef4);
+}
+
+.graph-group-folder-front {
+  position: absolute;
+  top: 20px;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  border-radius: 8px 8px 10px 10px;
+  background: linear-gradient(
+    color-mix(in srgb, var(--folder-color) 82%, #ffffff),
+    var(--folder-color)
+  );
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45);
+}
+
+.graph-group-folder.selected .graph-group-folder-front,
+.graph-group-folder.selected .graph-group-folder-back {
+  outline: 2px solid var(--accent-color, #38bdf8);
+  outline-offset: 1px;
+}
+
+.graph-group-folder.selected .graph-group-folder-back {
+  outline: none;
+}
+
+.graph-group-folder-sockets {
+  position: absolute;
+  top: 30px;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.graph-group-folder-sockets .graph-node-column {
+  gap: 4px;
+  min-width: 0;
+}
+
+.graph-group-folder-sockets .graph-node-socket {
+  height: 18px;
+  color: #ffffff;
+  font-weight: 600;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+}
+
+.graph-group-folder .react-flow__handle {
+  width: 9px;
+  height: 9px;
+  border: 1px solid var(--canvas-bg);
+}
+
+.graph-group-folder .react-flow__handle::after {
+  content: "";
+  position: absolute;
+  inset: -9px;
+  border-radius: 50%;
+  pointer-events: auto;
+  cursor: crosshair;
+}
+
+.graph-group-folder-count {
+  position: absolute;
+  right: 8px;
+  bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.graph-group-folder-count svg {
+  width: 11px;
+  height: 11px;
+}
+
+.graph-group-folder-name {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 220%;
+  color: var(--canvas-text, #e6edf3);
+  font-family: "Roboto", system-ui, sans-serif;
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.react-flow__node.selected .graph-group-folder-name {
+  padding: 0 6px;
+  border-radius: 4px;
+  background: var(--accent-color, #38bdf8);
+  color: #0b1220;
+}
+
+.graph-group-folder-swatches {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 0;
+  display: flex;
+  gap: 4px;
+  padding: 4px 6px;
+  border-radius: 10px;
+  background: rgba(15, 18, 24, 0.85);
+}
+
+.graph-group-swatch-custom {
+  position: relative;
+  overflow: hidden;
+  background: conic-gradient(#ef4444, #eab308, #22c55e, #38bdf8, #a855f7, #ef4444);
+}
+
+.graph-group-swatch-custom input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+  border: none;
+  padding: 0;
+}
+
+.graph-group-resize-handle {
+  width: 12px !important;
+  height: 12px !important;
+  border-radius: 2px !important;
+  background: var(--accent-color, #38bdf8) !important;
+  border: none !important;
+}

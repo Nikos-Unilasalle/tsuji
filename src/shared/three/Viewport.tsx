@@ -4,7 +4,7 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { TransformControls } from "three/examples/jsm/controls/TransformControls.js";
 import { installScaleGizmoTweaks } from "./gizmoScale";
 import { ClockState, createClock, STEP_SECONDS, tickClock } from "../graph/clock";
-import { EvalResult, disposeEvalSession, evaluateGraph } from "../graph/evaluate";
+import { EvalResult, deepResultEntries, disposeEvalSession, evaluateGraph } from "../graph/evaluate";
 import { getEvalProfiler } from "../graph/evalProfiler";
 import { copyTextureToCanvas, textureSize } from "../graph/gpuTexture";
 import { CAMERA_FLY_TO_NODE, CAMERA_NODE } from "../graph/nodes/camera";
@@ -67,7 +67,7 @@ import {
   materialInputSockets,
 } from "../graph/nodes/editMesh";
 import { createEditMeshHandles, polygonRegion, rectRegion } from "./editMeshHandles";
-import { findNodeWithGraph } from "../graph/groups";
+import { findNodeWithGraph, walkNodes } from "../graph/groups";
 import {
   createEditMeshController,
   findEditMeshNode,
@@ -833,13 +833,13 @@ function resolveActiveCameraResult(
   results: Map<string, Record<string, unknown>>,
   graph: Graph,
 ): Record<string, unknown> | undefined {
-  for (const node of graph.nodes) {
+  for (const node of walkNodes(graph)) {
     if (node.type !== CAMERA_FLY_TO_NODE.type) continue;
     const res = results.get(node.id);
     if (res && res.active !== 0 && res.active !== false) return res;
   }
 
-  const cameraNodes = graph.nodes.filter((n) => n.type === CAMERA_NODE.type);
+  const cameraNodes = walkNodes(graph).filter((n) => n.type === CAMERA_NODE.type);
   for (const node of cameraNodes) {
     const res = results.get(node.id);
     if (res && res.active !== 0 && res.active !== false) return res;
@@ -5488,7 +5488,7 @@ export function Viewport({
         : undefined;
 
       if (!targetNode) {
-        const cameraNodes = graphRef.current.nodes.filter((n) => n.type === CAMERA_NODE.type);
+        const cameraNodes = walkNodes(graphRef.current).filter((n) => n.type === CAMERA_NODE.type);
         if (cameraNodes.length === 0) return;
 
         targetNode =
@@ -5727,9 +5727,10 @@ export function Viewport({
       latestResultsRef.current = results;
       onEvaluatedResultsRef.current?.(results);
 
-      // Evaluate and sync ALL 3D Lights & Light Helpers in the scene (standalone or array instances)
+      // Evaluate and sync ALL 3D Lights & Light Helpers in the scene (standalone,
+      // array instances, or inside a group at any depth)
       const detectedLights = new Map<string, { light: THREE.Light; nodeId: string }>();
-      for (const [nodeId, res] of results.entries()) {
+      for (const [nodeId, res] of deepResultEntries(results)) {
         const obj = (res.light || res.geometry) as THREE.Object3D;
         if (obj instanceof THREE.Object3D) {
           obj.traverse((child) => {

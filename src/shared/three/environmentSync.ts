@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { EnvironmentData } from "../graph/nodes/environment";
-import { EvalResult } from "../graph/evaluate";
+import { EvalResult, deepResultEntries } from "../graph/evaluate";
 import { createBackgroundBlur } from "./backgroundBlur";
 import { applyBackgroundImageTransform } from "./viewportScenery";
 
@@ -16,7 +16,8 @@ export function resolveActiveEnvironment(results: EvalResult, renderNodeId: stri
   const fromRender = results.get(renderNodeId)?.environment;
   if (fromRender && typeof fromRender === "object") return fromRender as EnvironmentData;
 
-  for (const res of results.values()) {
+  // Inside groups too: an Environment is ambient wherever it sits.
+  for (const [, res] of deepResultEntries(results)) {
     if (res.environment && typeof res.environment === "object") return res.environment as EnvironmentData;
   }
   return null;

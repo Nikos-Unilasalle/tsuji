@@ -463,6 +463,23 @@ export class EvalResultMap extends Map<string, Record<string, unknown>> {
   }
 }
 
+/**
+ * Every node's results, those inside groups included, at any depth.
+ *
+ * Iterating an EvalResultMap only visits its own level (see above); this is
+ * for the passes that have to find something wherever it lives — a light or
+ * an Environment dropped inside a group still lights the scene.
+ */
+export function* deepResultEntries(
+  results: Map<string, Record<string, unknown>>,
+): Generator<[string, Record<string, unknown>]> {
+  for (const entry of results.entries()) {
+    yield entry;
+    const sub = entry[1]?.__subResults;
+    if (sub instanceof Map) yield* deepResultEntries(sub as Map<string, Record<string, unknown>>);
+  }
+}
+
 export function connectionInto(connections: Connection[], nodeId: string, socketId: string): Connection | undefined {
   return connections.find((c) => c.toNode === nodeId && c.toSocket === socketId);
 }

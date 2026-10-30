@@ -49,7 +49,7 @@ import {
 import type { KeyframeDrawing } from "./shared/graph/nodes/greasePencil";
 import { randomId } from "./shared/randomId";
 import { buildDroppedNodes, DroppedImage, droppedKind, isDroppableMedia, projectDrop } from "./shared/graph/imageDrop";
-import { findRenderNodeId } from "./shared/graph/nodes/render";
+import { findRenderNode, findRenderNodeId } from "./shared/graph/nodes/render";
 import { findView2DNodeId } from "./shared/graph/nodes/view2d";
 import { rehydrateFileNodesFromDisk } from "./shared/graph/rehydrateFiles";
 import { cloneGraph, cloneParams, cloneParamValue } from "./shared/graph/cloneGraph";
@@ -506,7 +506,7 @@ function MainEditor() {
     setSelectedNodeId(ids[0] ?? null);
   }, []);
 
-  const renderNodeInstance = graph.nodes.find((n) => n.type === "render");
+  const renderNodeInstance = findRenderNode(graph);
   const rawFrameCount = Number(renderNodeInstance?.params?.frameCount);
   const totalFrames = renderNodeInstance
     ? Number.isFinite(rawFrameCount) && rawFrameCount > 0
@@ -559,7 +559,7 @@ function MainEditor() {
   const startCanvasTour = useCallback((handle: ViewportExportHandle) => {
     const tour = createCanvasTour(
       canvasesRef.current.map((c) => {
-        const render = c.nodes.find((n) => n.type === "render");
+        const render = findRenderNode(c);
         const raw = Number(render?.params?.frameCount);
         return Number.isFinite(raw) && raw > 0 ? Math.round(raw) : 120;
       }),
