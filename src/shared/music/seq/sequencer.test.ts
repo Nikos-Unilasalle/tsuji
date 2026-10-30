@@ -229,3 +229,12 @@ describe("reading the sequence", () => {
     expect(notesSoundingAt(arp, SR, 2 * STEP + 0.9 * STEP)).toEqual([]); // between two gated arp notes
   });
 });
+
+describe("per-note velocity", () => {
+  it("each added note sounds at its own velocity", () => {
+    const seq = seqOf({ 0: { note: 36, add: [42], velocity: 1, addVelocity: [0.3] } });
+    const ev = collect(seq, STEP);
+    expect(ev.find((e) => e.note === 36)!.velocity).toBe(1);
+    expect(ev.find((e) => e.note === 42)!.velocity).toBe(0.3);
+  });
+});

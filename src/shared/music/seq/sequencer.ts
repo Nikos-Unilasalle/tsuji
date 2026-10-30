@@ -45,6 +45,8 @@ export interface Cell {
   spread?: boolean;
   /** 0–1, 0.8 when left out. */
   velocity?: number;
+  /** The velocity of each `add` note when they are not all struck as hard as `note` (a soft hat on a loud kick). */
+  addVelocity?: number[];
   /** In steps. When left out, the note lasts until the next note or OFF. */
   length?: number;
   fx?: CellFx | null;
@@ -230,6 +232,14 @@ export function expandStep(seq: Sequence, sampleRate: number, g0: number, from =
   const notes = chordNotes(root, cell.chord, cell.inversion ?? 0, cell.spread ?? false);
   for (const n of cell.add ?? []) if (!notes.includes(n)) notes.push(n);
   const velocity = Math.min(1, Math.max(0, cell.velocity ?? DEFAULT_VELOCITY));
+  // An added note struck harder or softer than the root keeps its own velocity (unless the chord already plays it).
+  const ownVelocity = new Map<number, number>();
+  cell.add?.forEach((n, k) => {
+    const v = cell.addVelocity?.[k];
+    if (v !== undefined && !ownVelocity.has(n)) ownVelocity.set(n, Math.min(1, Math.max(0, v)));
+  });
+  const chordSet = new Set(chordNotes(root, cell.chord, cell.inversion ?? 0, cell.spread ?? false));
+  const velocityOf = (n: number) => (chordSet.has(n) ? velocity : (ownVelocity.get(n) ?? velocity));
   const onT = stepTime(clock, sampleRate, g0) + delayOf(seq, sampleRate, cell);
   const offT = endTime(seq, sampleRate, g0);
   const out: NoteEvent[] = [];
@@ -237,7 +247,7 @@ export function expandStep(seq: Sequence, sampleRate: number, g0: number, from =
     const on = Math.round(onX);
     const off = Math.round(offX);
     if (off <= on || on < from || on >= to) return;
-    const e: NoteEvent = { on, off, note, velocity, step: g0 };
+    const e: NoteEvent = { on, off, note, velocity: velocityOf(note), step: g0 };
     if (glide) {
       e.glideFrom = glide.from;
       e.glideSeconds = glide.seconds;

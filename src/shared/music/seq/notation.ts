@@ -11,7 +11,7 @@
  *     :CHORD            a chord on it (maj min 7 9 sus dim maj7 min7 sus2 dim7 aug)
  *     /N                inversion N (0–3)
  *     ^                 spread voicing
- *     @V                velocity, 0–1
+ *     @V                velocity, 0–1 — or one per note, @V,V,… (kick+hat@1,0.4: a soft hat on a loud kick)
  *     ~N                length in steps
  *     !FX               one effect: GLDn (glide n × 10 ms), RTGn (ratchet ×n), CHNn (chance n %),
  *                       DLYn (the note n / 16 of a step late)
@@ -71,7 +71,17 @@ export function parseCell(word: string): Cell | null {
     const [, kind, value] = x;
     if (kind === ":" && isChordName(value)) cell.chord = value;
     else if (kind === "/" && /^\d$/.test(value)) cell.inversion = Number(value);
-    else if (kind === "@" && value !== "" && Number.isFinite(Number(value))) cell.velocity = Math.min(1, Math.max(0, Number(value)));
+    else if (kind === "@" && value !== "") {
+      const vs = value.split(",").map(Number);
+      if (vs.every(Number.isFinite)) {
+        const v = vs.map((x) => Math.min(1, Math.max(0, x)));
+        cell.velocity = v[0];
+        if (v.length > 1 && cell.add) {
+          const own = cell.add.map((_, k) => v[k + 1] ?? v[0]);
+          if (own.some((x) => x !== v[0])) cell.addVelocity = own;
+        }
+      }
+    }
     else if (kind === "~" && Number(value) > 0) cell.length = Number(value);
     else if (kind === "!") {
       const fx = /^(GLD|RTG|CHN|DLY)(\d+(?:\.\d+)?)$/i.exec(value);
@@ -97,7 +107,10 @@ export function formatCell(cell: Cell | null, opts: { drums?: boolean } = {}): s
   if (cell.chord) s += `:${cell.chord}`;
   if (cell.inversion) s += `/${cell.inversion}`;
   if (cell.spread) s += "^";
-  if (cell.velocity !== undefined) s += `@${Number(cell.velocity.toFixed(2))}`;
+  const v = (x: number) => Number(x.toFixed(2));
+  const own = cell.add && cell.addVelocity?.some((x) => x !== (cell.velocity ?? 0.8)) ? cell.addVelocity : null;
+  if (own) s += `@${[cell.velocity ?? 0.8, ...cell.add!.map((_, k) => own[k] ?? cell.velocity ?? 0.8)].map(v).join(",")}`;
+  else if (cell.velocity !== undefined) s += `@${v(cell.velocity)}`;
   if (cell.length !== undefined) s += `~${cell.length}`;
   if (cell.fx) s += `!${cell.fx.type}${cell.fx.value}`;
   return s;

@@ -107,7 +107,7 @@ export const MUSIC_PATTERN_NODE: NodeDefinition = {
       label: "Steps — one word per step: C4:maj7 . off A3:min7/1@0.6~2!GLD12 (kick snare hat… for drums)",
       kind: "text",
     },
-    { id: "length", label: "Length", kind: "select", options: ["16", "32", "64"] },
+    { id: "length", label: "Length (steps — 16 a bar, up to 16384)", kind: "number", step: 16 },
     {
       id: "phrase",
       label: "Load Phrase (Felucca's factory phrases, by Leo Kuroshita / Hügelton — replaces the steps)",
@@ -134,7 +134,10 @@ export const MUSIC_PATTERN_NODE: NodeDefinition = {
       if (!c || c.note === "off") return c;
       const cell: Cell = { ...c, note: clamp(c.note + transpose, 0, 127) };
       if (forced) cell.chord = forced;
-      if (velScale !== 1) cell.velocity = clamp((c.velocity ?? 0.8) * velScale, 0, 1);
+      if (velScale !== 1) {
+        cell.velocity = clamp((c.velocity ?? 0.8) * velScale, 0, 1);
+        if (c.addVelocity) cell.addVelocity = c.addVelocity.map((v) => clamp(v * velScale, 0, 1));
+      }
       return cell;
     });
     const seq: Sequence = {

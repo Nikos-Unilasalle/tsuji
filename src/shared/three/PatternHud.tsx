@@ -11,11 +11,16 @@ import {
   OFF_LETTERS,
   drumsAt,
   editCell,
+  heldBy,
+  hitVelocity,
   moveCursor,
   noteForLetter,
   resize,
   setCell,
+  setHitVelocity,
+  spanNote,
   toggleDrum,
+  toggleSharp,
   withOctave,
   writeNote,
 } from "../music/seq/patternEdit";
@@ -30,8 +35,13 @@ import type { NodeInstance } from "../graph/types";
  * move, [ ] for the octave. The bar along the bottom edits the cell under the cursor and is also the brush new notes
  * are written with (chord, inversion, spread, velocity).
  *
- * A pattern feeding a Drum Kit shows as a drum machine instead: a lane per sound, a click per hit, and each sound's
- * initial — K S C H O L T: kick, snare, clap, hat, open hat, low and top tom — strikes it at the cursor.
+ * The mouse: a click on an empty step writes a note there (the last note's pitch, in the keyboard's octave), on a note
+ * selects it — a digit then moves it to that octave; ⌘-click sharpens a note (or makes it natural again); Shift-click
+ * clears a note, or writes an OFF on an empty step; press and drag across steps to hold a note over them (its length).
+ *
+ * A pattern feeding a Drum Kit shows as a drum machine instead: a lane per sound; a click on an empty cell adds a hit, on
+ * a hit selects it (the bar's Vel is then that hit's alone, not the whole step's), Shift-click takes it away; each
+ * sound's initial — K S C H O L T: kick, snare, clap, hat, open hat, low and top tom — strikes it at the cursor.
  *
  * Every edit writes the node's `steps` text (notation.ts) in one undo step: the HUD and the text field are the same
  * pattern.
@@ -74,6 +84,49 @@ function useLiveStep(read: () => number): number {
   return step;
 }
 
+const MAX_STEPS = 16384;
+
+/** The pattern's length in bars (16 steps each; a quarter bar is 4 steps), typed: Enter or leaving the field sets it,
+ * Esc takes it back. */
+function LengthField({ length, onLength }: { length: number; onLength: (steps: number) => void }) {
+  const bars = Number((length / STEPS_PER_ROW).toFixed(2));
+  const [draft, setDraft] = useState<string | null>(null);
+  const commit = () => {
+    if (draft === null) return;
+    const n = Math.round(Number(draft.replace(",", ".")) * STEPS_PER_ROW);
+    setDraft(null);
+    if (Number.isFinite(n) && n >= 1 && n !== length) onLength(Math.min(MAX_STEPS, n));
+  };
+  return (
+    <span style={{ display: "flex", alignItems: "center", gap: 4, color: "#94a3b8" }} title="Bars before the pattern comes round again (16 steps a bar; 0.25 is a beat)">
+      <input
+        type="text"
+        inputMode="decimal"
+        aria-label="Bars"
+        value={draft ?? String(bars)}
+        onChange={(e) => setDraft(e.target.value)}
+        onFocus={(e) => e.target.select()}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          e.stopPropagation();
+          if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+          else if (e.key === "Escape") {
+            setDraft(null);
+            (e.target as HTMLInputElement).blur();
+          } else if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+            e.preventDefault();
+            const b = Math.max(1, Math.floor(bars) + (e.key === "ArrowUp" ? 1 : Math.ceil(bars) === bars ? -1 : 0));
+            setDraft(null);
+            onLength(Math.min(MAX_STEPS, b * STEPS_PER_ROW));
+          }
+        }}
+        style={{ ...selectStyle, width: 44, textAlign: "right" }}
+      />
+      {bars === 1 ? "bar" : "bars"} · {length} steps
+    </span>
+  );
+}
+
 export function PatternHud({
   node,
   drums,
@@ -109,6 +162,11 @@ export function PatternHud({
   /** The step the last note was typed on, while the next key may still give it its octave or its sharp. */
   const lastTyped = useRef<number | null>(null);
   const [focused, setFocused] = useState(false);
+  /** The pitch the last note clicked, typed or selected had: a click on an empty step writes it again. */
+  const [lastNote, setLastNote] = useState(60);
+  /** The steps a press-and-drag runs over, from where it started. */
+  const [drag, setDrag] = useState<{ from: number; to: number } | null>(null);
+  const dragRef = useRef<{ from: number; to: number; moved: boolean } | null>(null);
   const cur = Math.min(cursor, length - 1);
 
   const write = (next: (Cell | null)[]) => onParams({ steps: formatPattern(next, { drums }) }, node.id);
@@ -138,11 +196,33 @@ export function PatternHud({
 
   const cell = cells[cur];
   const noteCell = asNote(cell);
+  // In the drum view the hit under the cursor (its lane, its step), whose velocity is its own.
+  const laneNote = DRUM_NOTES[DRUM_LANES[lane]];
+  const hitVel = drums ? hitVelocity(cell, laneNote) : null;
   // The bar shows the cell under the cursor, or the brush on an empty step.
-  const shown: Partial<Cell> = noteCell ?? brush;
+  const shown: Partial<Cell> = noteCell ? { ...noteCell, velocity: drums ? (hitVel ?? brush.velocity) : noteCell.velocity } : brush;
   const change = (patch: Partial<Cell>) => {
+    if (drums && "velocity" in patch && hitVel !== null) {
+      // A drum's velocity is the selected hit's, the step's other hits as they are — and new hits as they were.
+      write(setHitVelocity(cells, cur, laneNote, patch.velocity ?? 0.8));
+      return;
+    }
     setBrush((b) => ({ ...b, ...patch }));
-    if (noteCell) write(editCell(cells, cur, patch));
+    if (!noteCell || (drums && "velocity" in patch)) return;
+    write(editCell(cells, cur, patch));
+  };
+
+  /** − / + and [ ]: the selected note an octave down or up; with no note selected, the octave the next notes are in. */
+  const shiftOctave = (by: number) => {
+    if (!drums && noteCell) {
+      const n = noteCell.note + 12 * by;
+      if (n < 0 || n > 127) return;
+      write(setCell(cells, cur, { ...noteCell, note: n }));
+      audition(n, noteCell.velocity ?? 0.8);
+      remember(n);
+      return;
+    }
+    setOctave((o) => Math.min(8, Math.max(0, o + by)));
   };
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -155,15 +235,17 @@ export function PatternHud({
       setCursor(moveCursor(cur, by, length));
     };
     if (e.metaKey || e.ctrlKey) return; // leave the app's shortcuts (undo…) alone
-    // Right after a note: a digit is its octave, # its sharp (C 4, F # 3).
-    const prev = typed !== null ? asNote(cells[typed]) : null;
+    // Right after a note, or on the note selected: a digit is its octave, # its sharp (C 4, F # 3).
+    const target = typed ?? (asNote(cells[cur]) ? cur : null);
+    const prev = target !== null ? asNote(cells[target]) : null;
     if (prev && /^[0-9]$/.test(key) && !drums) {
       e.preventDefault();
       const n = withOctave(prev.note, Number(key));
       setOctave(Number(key));
       if (n !== null) {
-        write(setCell(cells, typed!, { ...prev, note: n }));
+        write(setCell(cells, target!, { ...prev, note: n }));
         audition(n, prev.velocity ?? 0.8);
+        setLastNote(n);
       }
       lastTyped.current = typed;
       return;
@@ -171,7 +253,7 @@ export function PatternHud({
     if (prev && key === "#" && !drums) {
       e.preventDefault();
       if (prev.note < 127) {
-        write(setCell(cells, typed!, { ...prev, note: prev.note + 1 }));
+        write(setCell(cells, target!, { ...prev, note: prev.note + 1 }));
         audition(prev.note + 1, prev.velocity ?? 0.8);
       }
       lastTyped.current = typed;
@@ -209,12 +291,12 @@ export function PatternHud({
     }
     if (code === "BracketLeft" || code === "NumpadSubtract") {
       e.preventDefault();
-      setOctave((o) => Math.max(0, o - 1));
+      shiftOctave(-1);
       return;
     }
     if (code === "BracketRight" || code === "NumpadAdd") {
       e.preventDefault();
-      setOctave((o) => Math.min(8, o + 1));
+      shiftOctave(1);
       return;
     }
     if (code === "Backspace" || code === "Delete") {
@@ -226,7 +308,7 @@ export function PatternHud({
       const drum = DRUM_LETTERS[key.toLowerCase()] ?? (code === "Enter" ? DRUM_LANES[lane] : undefined);
       if (!drum) return;
       e.preventDefault();
-      const next = toggleDrum(cells, cur, drum);
+      const next = toggleDrum(cells, cur, drum, brush.velocity ?? 0.8);
       write(next);
       if (drumsAt(next[cur]).has(DRUM_NOTES[drum])) audition(DRUM_NOTES[drum], 1);
       setCursor(moveCursor(cur, advance, length));
@@ -244,9 +326,62 @@ export function PatternHud({
     if (e.repeat) return;
     write(writeNote(cells, cur, note, brush));
     audition(note, brush.velocity ?? 0.8);
+    setLastNote(note);
     lastTyped.current = cur;
     setCursor(moveCursor(cur, advance, length));
   };
+
+  // The melodic grid's mouse. The pitch a click writes: the last note's, in the keyboard's octave.
+  const newPitch = () => withOctave(lastNote, octave) ?? lastNote;
+  /** A note clicked or selected: the next click writes it again, the keyboard types in its octave. */
+  const remember = (note: number) => {
+    setLastNote(note);
+    setOctave(Math.floor(note / 12) - 1);
+  };
+  const clickStep = (i: number, e: { shiftKey: boolean; metaKey: boolean; ctrlKey: boolean }) => {
+    const c = cells[i];
+    const n = asNote(c);
+    setCursor(i);
+    if (e.shiftKey) {
+      // Shift: a note or an OFF goes, an empty step gets an OFF.
+      write(setCell(cells, i, c ? null : { note: "off" }));
+      return;
+    }
+    if (e.metaKey || e.ctrlKey) {
+      // ⌘: sharp (or natural again); on an empty step, a new note already sharp.
+      if (c?.note === "off") return;
+      const note = toggleSharp(n ? n.note : newPitch());
+      write(n ? setCell(cells, i, { ...n, note }) : writeNote(cells, i, note, brush));
+      audition(note, n?.velocity ?? brush.velocity ?? 0.8);
+      remember(note);
+      return;
+    }
+    if (n) {
+      audition(n.note, n.velocity ?? 0.8);
+      remember(n.note);
+      return;
+    }
+    if (c) return; // an OFF: selected
+    const note = newPitch();
+    write(writeNote(cells, i, note, brush));
+    audition(note, brush.velocity ?? 0.8);
+  };
+  const endDragRef = useRef<() => void>(() => {});
+  endDragRef.current = () => {
+    const d = dragRef.current;
+    dragRef.current = null;
+    setDrag(null);
+    if (!d) return;
+    if (!d.moved) return clickStep(d.from, { shiftKey: false, metaKey: false, ctrlKey: false });
+    const from = Math.min(d.from, d.to);
+    const n = asNote(cells[from]);
+    write(spanNote(cells, d.from, d.to, newPitch(), brush));
+    setCursor(from);
+    const note = n ? n.note : newPitch();
+    audition(note, n?.velocity ?? brush.velocity ?? 0.8);
+    remember(note);
+  };
+  const held = drums ? [] : heldBy(cells);
 
   const fx = shown.fx ?? null;
   const fxRange = { GLD: { min: 1, max: 50, step: 1, label: "Glide ×10 ms" }, RTG: { min: 2, max: 8, step: 1, label: "Strikes" }, CHN: { min: 0, max: 100, step: 5, label: "Chance %" }, DLY: { min: 1, max: 15, step: 1, label: "Late /16 step" } } as const;
@@ -297,25 +432,14 @@ export function PatternHud({
             {step >= 0 ? `Bar ${Math.floor(step / STEPS_PER_ROW) + 1} · step ${(step % STEPS_PER_ROW) + 1}` : "—"}
           </span>
           <HudSeparator />
-          <select
-            value={length}
-            onChange={(e) => onParams({ length: e.target.value, steps: formatPattern(resize(cells, Number(e.target.value)), { drums }) }, node.id)}
-            title="Steps in the pattern before it comes round again"
-            style={selectStyle}
-          >
-            {[...new Set([16, 32, 64, length])].sort((a, b) => a - b).map((n) => (
-              <option key={n} value={n}>
-                {n} steps · {Number((n / 16).toFixed(2))} {n === 16 ? "bar" : "bars"}
-              </option>
-            ))}
-          </select>
+          <LengthField length={length} onLength={(n) => onParams({ length: String(n), steps: formatPattern(resize(cells, n), { drums }) }, node.id)} />
           {!drums && (
-            <span style={{ display: "flex", alignItems: "center", gap: 3 }} title="The keyboard's octave: Z plays C of this octave ([ and ] to change it)">
-              <button type="button" className="viewport-hud-button" style={{ width: 22 }} onClick={() => setOctave((o) => Math.max(0, o - 1))}>
+            <span style={{ display: "flex", alignItems: "center", gap: 3 }} title={noteCell ? "The selected note's octave: − and + (or [ ]) move it" : "The octave the next notes are written in: − and + (or [ ])"}>
+              <button type="button" className="viewport-hud-button" style={{ width: 22 }} onPointerDown={(e) => e.preventDefault()} onClick={() => shiftOctave(-1)}>
                 −
               </button>
-              <span style={{ minWidth: 52, textAlign: "center" }}>Oct {octave}</span>
-              <button type="button" className="viewport-hud-button" style={{ width: 22 }} onClick={() => setOctave((o) => Math.min(8, o + 1))}>
+              <span style={{ minWidth: 52, textAlign: "center" }}>Oct {noteCell ? Math.floor(noteCell.note / 12) - 1 : octave}</span>
+              <button type="button" className="viewport-hud-button" style={{ width: 22 }} onPointerDown={(e) => e.preventDefault()} onClick={() => shiftOctave(1)}>
                 +
               </button>
             </span>
@@ -330,14 +454,30 @@ export function PatternHud({
           <button type="button" className="viewport-hud-button" style={wide} onClick={() => write(cells.map(() => null))} disabled={cells.every((c) => c === null)} title="Empty every step (undo to get them back)">
             Clear
           </button>
-          <span style={{ color: focused ? "#e2e8f0" : "#94a3b8", marginLeft: "auto" }}>
-            {focused
-              ? drums
-                ? "K S C H O L T strike · ↵ the lane · ← → ↑ ↓ · ⌫ clear · Esc"
-                : "A–G notes · ⇧ or # sharp · 0–9 octave · X off · ⌫ clear · ← → ↑ ↓ · [ ] · Esc"
-              : "click the grid to type"}
-          </span>
         </div>
+
+        {/* The keys, above the palette and out of its layout: showing them must not resize it. */}
+        <span
+          style={{
+            position: "absolute",
+            bottom: "calc(100% + 6px)",
+            left: "50%",
+            transform: "translateX(-50%)",
+            whiteSpace: "nowrap",
+            pointerEvents: "none",
+            fontSize: 11,
+            padding: "3px 8px",
+            borderRadius: 4,
+            background: "rgba(15, 23, 42, 0.8)",
+            color: focused ? "#e2e8f0" : "#94a3b8",
+          }}
+        >
+          {focused
+            ? drums
+              ? "click add / select · ⇧click remove · K S C H O L T strike · ↵ the lane · ← → ↑ ↓ · ⌫ clear · Esc"
+              : "click note / select · ⌘click ♯ · ⇧click clear / OFF · drag length · A–G notes · 0–9 octave · X off · ⌫ · [ ] · Esc"
+            : "click the grid to type"}
+        </span>
 
         <input
           ref={keysRef}
@@ -364,8 +504,8 @@ export function PatternHud({
                 </span>,
                 ...visible.map((c, j) => {
                   const i = pageStart + j;
-                  const on = drumsAt(c).has(DRUM_NOTES[d]);
-                  const vel = c && c.note !== "off" ? (c.velocity ?? 0.8) : 0.8;
+                  const vel = hitVelocity(c, DRUM_NOTES[d]);
+                  const on = vel !== null;
                   return (
                     <div
                       key={`${d}:${i}`}
@@ -373,17 +513,22 @@ export function PatternHud({
                         e.preventDefault();
                         setCursor(i);
                         setLane(li);
-                        const next = toggleDrum(cells, i, d);
-                        write(next);
-                        if (on === false) audition(DRUM_NOTES[d], 1);
+                        // Click: add a hit on an empty cell, select one already there. Shift-click: take it away.
+                        if (e.shiftKey) {
+                          if (on) write(toggleDrum(cells, i, d));
+                        } else if (on) audition(DRUM_NOTES[d], vel);
+                        else {
+                          write(toggleDrum(cells, i, d, brush.velocity ?? 0.8));
+                          audition(DRUM_NOTES[d], brush.velocity ?? 0.8);
+                        }
                         focusKeys();
                       }}
-                      title={`${DRUM_LABEL[d]}, step ${i + 1}${on ? "" : " — click to add"}`}
+                      title={`${DRUM_LABEL[d]}, step ${i + 1}${on ? ` · vel ${Number(vel.toFixed(2))} — shift-click to remove` : " — click to add"}`}
                       style={{
                         height: DRUM_CELL,
                         cursor: "pointer",
                         borderLeft: i % 4 === 0 ? "1px solid rgba(255,255,255,0.25)" : "1px solid rgba(255,255,255,0.06)",
-                        background: on ? `rgba(217, 70, 239, ${0.35 + 0.65 * vel})` : step === i ? "rgba(250,204,21,0.2)" : i % 8 < 4 ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.02)",
+                        background: on ? `rgba(217, 70, 239, ${0.2 + 0.8 * vel})` : step === i ? "rgba(250,204,21,0.2)" : i % 8 < 4 ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.02)",
                         borderRadius: on ? 4 : 0,
                         boxShadow: i === cur && li === lane && focused ? "inset 0 0 0 2px #fff" : step === i && on ? "inset 0 0 0 2px #facc15" : undefined,
                       }}
@@ -401,29 +546,54 @@ export function PatternHud({
                 const vel = n?.velocity ?? 0.8;
                 const playing = step === i;
                 const isCursor = i === cur;
+                const inDrag = drag !== null && drag.from !== drag.to && i >= Math.min(drag.from, drag.to) && i <= Math.max(drag.from, drag.to);
+                const isHeld = !c && held[i] >= 0;
                 return (
                   <div
                     key={i}
                     onPointerDown={(e) => {
                       e.preventDefault();
-                      setCursor(i);
-                      if (n) audition(n.note, vel);
                       focusKeys();
+                      if (e.button !== 0) return;
+                      if (e.shiftKey || e.metaKey || e.ctrlKey) return clickStep(i, e);
+                      // A plain press: a click when let go on the same step, a held note when dragged across steps.
+                      setCursor(i);
+                      dragRef.current = { from: i, to: i, moved: false };
+                      setDrag({ from: i, to: i });
+                      window.addEventListener("pointerup", () => endDragRef.current(), { once: true });
                     }}
-                    onDoubleClick={() => write(setCell(cells, i, null))}
-                    title={n ? `${formatPattern([n])} — double-click to clear` : isOff ? "OFF: ends the note" : `Step ${i + 1}`}
+                    onPointerEnter={() => {
+                      const d = dragRef.current;
+                      if (!d || d.to === i) return;
+                      d.to = i;
+                      d.moved = true;
+                      setDrag({ from: d.from, to: i });
+                    }}
+                    title={
+                      n
+                        ? `${formatPattern([n])} — digit: octave · ⌘-click: sharp · shift-click: clear · drag: length`
+                        : isOff
+                          ? "OFF: ends the note — shift-click to clear"
+                          : `Step ${i + 1} — click: note · shift-click: OFF · drag: a held note`
+                    }
                     style={{
                       height: CELL_H,
                       cursor: "pointer",
                       borderLeft: i % 4 === 0 ? "1px solid rgba(255,255,255,0.3)" : "1px solid rgba(255,255,255,0.06)",
                       background: n
                         ? `rgba(217, 70, 239, ${0.25 + 0.6 * vel})`
-                        : playing
+                        : inDrag
+                          ? "rgba(217, 70, 239, 0.35)"
+                          : isHeld
+                            ? "rgba(217, 70, 239, 0.16)"
+                            : playing
                           ? "rgba(250,204,21,0.22)"
                           : (i % STEPS_PER_ROW) % 8 < 4
                             ? "rgba(255,255,255,0.05)"
                             : "rgba(255,255,255,0.02)",
-                      boxShadow: isCursor && focused ? "inset 0 0 0 2px #fff" : isCursor ? "inset 0 0 0 1px rgba(255,255,255,0.5)" : playing && n ? "inset 0 0 0 2px #facc15" : undefined,
+                      boxShadow: inDrag
+                        ? "inset 0 0 0 1px rgba(255,255,255,0.7)"
+                        : isCursor && focused ? "inset 0 0 0 2px #fff" : isCursor ? "inset 0 0 0 1px rgba(255,255,255,0.5)" : playing && n ? "inset 0 0 0 2px #facc15" : undefined,
                       borderRadius: n ? 4 : 0,
                       display: "flex",
                       flexDirection: "column",
@@ -449,6 +619,7 @@ export function PatternHud({
                       </>
                     )}
                     {isOff && <span style={{ fontSize: 10, color: "#f87171", fontWeight: 700 }}>OFF</span>}
+                    {isHeld && <span style={{ position: "absolute", left: 0, right: 0, top: "50%", height: 2, background: "rgba(217, 70, 239, 0.7)" }} />}
                   </div>
                 );
               })}
@@ -458,7 +629,7 @@ export function PatternHud({
       </div>
 
       <HudBar>
-        <span style={{ fontSize: 11, color: "#94a3b8" }}>{noteCell ? `Step ${cur + 1}` : "New notes"}</span>
+        <span style={{ fontSize: 11, color: "#94a3b8" }}>{drums ? (hitVel !== null ? `${DRUM_LABEL[DRUM_LANES[lane]]} · step ${cur + 1}` : `Step ${cur + 1} · new hits`) : noteCell ? `Step ${cur + 1}` : "New notes"}</span>
         {!drums && (
           <>
             <select

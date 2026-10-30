@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { DRUM_NOTES } from "../dsp/drums";
 import { formatPattern, parsePattern } from "./notation";
-import { drumsAt, editCell, moveCursor, noteForLetter, resize, toggleDrum, withOctave, writeNote } from "./patternEdit";
+import { drumsAt, editCell, heldBy, hitVelocity, moveCursor, noteForLetter, resize, setHitVelocity, spanNote, toggleDrum, toggleSharp, withOctave, writeNote } from "./patternEdit";
 
 describe("note letters", () => {
   it("names the notes in the keyboard's octave, C4 = 60, either case", () => {
@@ -62,5 +62,53 @@ describe("cells", () => {
     expect(moveCursor(0, -1, 32)).toBe(31);
     expect(resize(cells(), 6)).toHaveLength(6);
     expect(formatPattern(resize(cells(), 2))).toBe("C4:maj7 .");
+  });
+});
+
+describe("per-hit velocity", () => {
+  const { kick, hat, snare } = DRUM_NOTES;
+
+  it("reads and writes one velocity per note: kick+hat@1,0.4", () => {
+    const [c] = parsePattern("kick+hat@1,0.4", 1);
+    expect(c).toEqual({ note: kick, add: [hat], velocity: 1, addVelocity: [0.4] });
+    expect(formatPattern([c], { drums: true })).toBe("kick+hat@1,0.4");
+    // The same velocity for every hit stays one number.
+    expect(parsePattern("kick+hat@0.5,0.5", 1)[0]).toEqual({ note: kick, add: [hat], velocity: 0.5 });
+  });
+
+  it("changes one hit, the others as they were", () => {
+    const cells = parsePattern("kick+hat+snare@0.6", 1);
+    const next = setHitVelocity(cells, 0, hat, 0.3);
+    expect(hitVelocity(next[0], kick)).toBe(0.6);
+    expect(hitVelocity(next[0], hat)).toBe(0.3);
+    expect(hitVelocity(next[0], snare)).toBe(0.6);
+    expect(formatPattern(next, { drums: true })).toBe("kick+snare+hat@0.6,0.6,0.3");
+  });
+
+  it("a new hit is struck at its own velocity; taking one away keeps the others'", () => {
+    let cells = parsePattern("kick@1", 1);
+    cells = toggleDrum(cells, 0, "hat", 0.3);
+    expect(formatPattern(cells, { drums: true })).toBe("kick+hat@1,0.3");
+    cells = toggleDrum(cells, 0, "kick");
+    expect(formatPattern(cells, { drums: true })).toBe("hat@0.3");
+  });
+});
+
+describe("mouse editing", () => {
+  it("toggles a sharp", () => {
+    expect(toggleSharp(60)).toBe(61);
+    expect(toggleSharp(61)).toBe(60);
+    expect(toggleSharp(64)).toBe(65); // E# is F
+  });
+
+  it("spans a note over a dragged range, either way", () => {
+    const cells = parsePattern("C4@0.5 . . . .", 5);
+    expect(formatPattern(spanNote(cells, 0, 3, 50))).toBe("C4@0.5~4 . . . .");
+    expect(formatPattern(spanNote(cells, 4, 2, 62))).toBe("C4@0.5 . D4 . .".replace("D4", "D4~3"));
+    expect(formatPattern(spanNote(parsePattern("C4~4 . . .", 4), 0, 0, 50))).toBe("C4 . . .");
+  });
+
+  it("knows which steps a long note holds", () => {
+    expect(heldBy(parsePattern("C4~3 . . D4~4 . off .", 7))).toEqual([-1, 0, 0, -1, 3, -1, -1]);
   });
 });
