@@ -364,31 +364,57 @@ export interface WristTurn {
 
 export const WRIST_LIMITS = { flex: [-70, 80], side: [-25, 35] } as const;
 
+/** A wrist's frame: down the forearm, toward the elbow's pole across it, and the hinge it flexes about. */
+function wristFrame(skeleton: HumanSkeleton, positions: THREE.Vector3[], pole: THREE.Vector3, s: 0 | 1) {
+  const { joint, rig } = skeleton;
+  const wrist = positions[joint.hand[s]];
+  const elbow = positions[joint.elbow[s]];
+  const fore = wrist.clone().sub(elbow);
+  if (fore.lengthSq() < 1e-12) fore.copy(rig.rest[joint.hand[s]]).sub(rig.rest[joint.elbow[s]]);
+  fore.normalize();
+  // The plane the elbow bends in: toward its pole. The wrist flexes in it, and tips across it.
+  const toPole = pole.clone().sub(elbow);
+  toPole.addScaledVector(fore, -toPole.dot(fore));
+  if (toPole.lengthSq() < 1e-12) toPole.set(0, 0, -1).addScaledVector(fore, fore.z);
+  toPole.normalize();
+  const hinge = fore.clone().cross(toPole).normalize();
+  return { fore, toPole, hinge };
+}
+
+/** Which way hand `s` points for a wrist `turn`, in a pose solved as `positions` with that elbow's `pole`. */
+export function wristDirection(skeleton: HumanSkeleton, positions: THREE.Vector3[], pole: THREE.Vector3, s: 0 | 1, turn: WristTurn | undefined): THREE.Vector3 {
+  const { fore, toPole, hinge } = wristFrame(skeleton, positions, pole, s);
+  const clamp = (v: number, [lo, hi]: readonly [number, number]) => (Number.isFinite(v) ? Math.max(lo, Math.min(hi, v)) : 0);
+  const flex = (clamp(Number(turn?.flex), WRIST_LIMITS.flex) * Math.PI) / 180;
+  const side = (clamp(Number(turn?.side), WRIST_LIMITS.side) * Math.PI) / 180;
+  // Away from the pole, as the forearm folds; sideways mirrored so + is the same way on both hands.
+  return fore.applyAxisAngle(hinge, -flex).applyAxisAngle(toPole, (s === 0 ? 1 : -1) * side);
+}
+
 /** Each hand's fingertips placed off its wrist: along the forearm, turned by the wrist. */
 function placeHands(skeleton: HumanSkeleton, positions: THREE.Vector3[], poles: THREE.Vector3[], wrists: WristTurn[] | undefined) {
   const { joint, rig } = skeleton;
   for (const s of [0, 1] as const) {
     const tip = joint.fingers[s];
-    const wrist = positions[joint.hand[s]];
-    const elbow = positions[joint.elbow[s]];
     const length = rig.rest[tip].distanceTo(rig.rest[joint.hand[s]]);
-    const fore = wrist.clone().sub(elbow);
-    if (fore.lengthSq() < 1e-12) fore.copy(rig.rest[joint.hand[s]]).sub(rig.rest[joint.elbow[s]]);
-    fore.normalize();
-    // The plane the elbow bends in: toward its pole. The wrist flexes in it, and tips across it.
-    const toPole = poles[s].clone().sub(elbow);
-    toPole.addScaledVector(fore, -toPole.dot(fore));
-    if (toPole.lengthSq() < 1e-12) toPole.set(0, 0, -1).addScaledVector(fore, fore.z);
-    toPole.normalize();
-    const hinge = fore.clone().cross(toPole).normalize();
-    const turn = wrists?.[s];
-    const clamp = (v: number, [lo, hi]: readonly [number, number]) => (Number.isFinite(v) ? Math.max(lo, Math.min(hi, v)) : 0);
-    const flex = (clamp(Number(turn?.flex), WRIST_LIMITS.flex) * Math.PI) / 180;
-    const side = (clamp(Number(turn?.side), WRIST_LIMITS.side) * Math.PI) / 180;
-    // Away from the pole, as the forearm folds; sideways mirrored so + is the same way on both hands.
-    const dir = fore.clone().applyAxisAngle(hinge, -flex).applyAxisAngle(toPole, (s === 0 ? 1 : -1) * side);
-    positions[tip].copy(wrist).addScaledVector(dir, length);
+    const dir = wristDirection(skeleton, positions, poles[s], s, wrists?.[s]);
+    positions[tip].copy(positions[joint.hand[s]]).addScaledVector(dir, length);
   }
+}
+
+/**
+ * The wrist turn that points hand `s` along `dir` (placeHands backwards), for
+ * a pose solved as `positions` with that elbow's `pole`; kept to the wrist's
+ * range. A turn about the forearm itself has no say: the wrist has no twist.
+ */
+export function wristTurnToward(skeleton: HumanSkeleton, positions: THREE.Vector3[], pole: THREE.Vector3, s: 0 | 1, dir: THREE.Vector3): WristTurn {
+  const { fore, toPole, hinge } = wristFrame(skeleton, positions, pole, s);
+  const d = dir.clone().normalize();
+  const deg = (r: number) => (r * 180) / Math.PI;
+  const clamp = (v: number, [lo, hi]: readonly [number, number]) => Math.max(lo, Math.min(hi, v));
+  const flex = deg(Math.asin(Math.max(-1, Math.min(1, -d.dot(toPole)))));
+  const tip = deg(Math.atan2(-d.dot(hinge), d.dot(fore)));
+  return { flex: clamp(flex, WRIST_LIMITS.flex), side: clamp((s === 0 ? 1 : -1) * tip, WRIST_LIMITS.side) };
 }
 
 // ---------------------------------------------------------------------------

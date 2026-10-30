@@ -18,9 +18,11 @@ import {
   solveHuman,
   solvePolypede,
   WristTurn,
+  wristDirection,
+  wristTurnToward,
 } from "../ik/skeletons";
 import { createSkeletonView, SkeletonView } from "../ik/skeletonView";
-import { editPoseList, readPoseList, type HumanPose } from "../ik/humanPose";
+import { CONTROL, editPoseList, readPoseList, type HumanPose } from "../ik/humanPose";
 import { createGait, GAIT_DEFAULTS, GaitParams, GaitState, polypedeNeighbors, stepGait } from "../ik/polypedeGait";
 import { IkRig } from "../ik/fabrik";
 import { publishRig } from "../ik/skinning";
@@ -122,6 +124,17 @@ const humanSkeletons = createNodeCache<{ key: string; skeleton: HumanSkeleton }>
 /** The last pose solved per Human Skeleton: what its handles edit, and the joints a limb swings about. */
 const humanPoseContexts = createNodeCache<{ skeleton: HumanSkeleton; joints: THREE.Vector3[]; controls: THREE.Vector3[] }>();
 
+const DEG = Math.PI / 180;
+/** The hips' turn param (degrees, applied Y then X then Z) as a quaternion. */
+const hipsTurnQuaternion = (turn: unknown) => {
+  const t = asVector3(turn, new THREE.Vector3());
+  return new THREE.Quaternion().setFromEuler(new THREE.Euler(t.x * DEG, t.y * DEG, t.z * DEG, "YXZ"));
+};
+const WRIST_PARAMS = [
+  { flex: "leftWristFlex", side: "leftWristSide" },
+  { flex: "rightWristFlex", side: "rightWristSide" },
+] as const;
+
 function humanParams(params: Record<string, unknown>): HumanParams {
   const n = (id: keyof HumanParams) => numberInput(undefined, params[id], HUMAN_DEFAULTS[id]);
   return {
@@ -205,6 +218,7 @@ export const RIG_HUMAN_NODE: NodeDefinition = {
     ...HUMAN_DEFAULTS,
     armPull: 0.3,
     bindArmAngle: HUMAN_DEFAULTS.armAngle,
+    hipsTurn: new THREE.Vector3(0, 0, 0),
     leftWristFlex: 0,
     leftWristSide: 0,
     rightWristFlex: 0,
@@ -231,6 +245,7 @@ export const RIG_HUMAN_NODE: NodeDefinition = {
     { id: "hands", label: "Hand Length ×", kind: "number", step: 0.05, group: "Proportions" },
     { id: "feet", label: "Foot Length ×", kind: "number", step: 0.05, group: "Proportions" },
     { id: "spineSegments", label: "Spine Segments", kind: "number", step: 1, group: "Proportions" },
+    { id: "hipsTurn", label: "Hips Turn (°)", kind: "vector", step: 5, group: "Hips" },
     { id: "leftWristFlex", label: "Left Wrist Flex (°, − back)", kind: "number", step: 5, group: "Wrists" },
     { id: "leftWristSide", label: "Left Wrist Tilt (°, + thumb side)", kind: "number", step: 5, group: "Wrists" },
     { id: "rightWristFlex", label: "Right Wrist Flex (°, − back)", kind: "number", step: 5, group: "Wrists" },
@@ -244,11 +259,29 @@ export const RIG_HUMAN_NODE: NodeDefinition = {
     ...DISPLAY_FIELDS,
     { id: "pointsKeyframeButton", label: "Keyframe controls at frame", kind: "button", action: TOGGLE_POINTS_KEYFRAME_ACTION, group: "Animation" },
   ],
-  reset: { params: ["pointsList"] },
-  paramHandleRotates: (index) => index !== 0,
+  reset: { params: ["pointsList", "hipsTurn", "leftWristFlex", "leftWristSide", "rightWristFlex", "rightWristSide"] },
+  // R on a handle: the pelvis turns the hips, a hand turns at its wrist, the other controls swing their limb.
+  paramHandleRotates: () => true,
   paramHandles: (index, position, params, nodeId, rotation) => {
     const context = humanPoseContexts.get(nodeId);
     if (!context) return null;
+    const turning = rotation !== undefined && rotation.angleTo(new THREE.Quaternion()) > 1e-6;
+    if (rotation && index === CONTROL.pelvis) {
+      if (!turning) return null;
+      const e = new THREE.Euler().setFromQuaternion(rotation.clone().multiply(hipsTurnQuaternion(params.hipsTurn)), "YXZ");
+      return { hipsTurn: new THREE.Vector3(e.x / DEG, e.y / DEG, e.z / DEG) };
+    }
+    const side = CONTROL.hand.indexOf(index as 2 | 3);
+    if (rotation && side >= 0) {
+      if (!turning) return null;
+      const s = side as 0 | 1;
+      // From the wrist as the drag began: the pose solved since has the hand turned already.
+      const pole = context.controls[CONTROL.elbowPole[s]];
+      const start = { flex: numberInput(undefined, params[WRIST_PARAMS[s].flex], 0), side: numberInput(undefined, params[WRIST_PARAMS[s].side], 0) };
+      const dir = wristDirection(context.skeleton, context.joints, pole, s, start).applyQuaternion(rotation);
+      const turn = wristTurnToward(context.skeleton, context.joints, pole, s, dir);
+      return { [WRIST_PARAMS[s].flex]: turn.flex, [WRIST_PARAMS[s].side]: turn.side };
+    }
     const { controls } = readPoseList(params.pointsList, context.controls);
     return { pointsList: editPoseList(context.skeleton, context.joints, controls, new THREE.Vector3(), index, position, rotation, false) };
   },
@@ -282,7 +315,8 @@ export const RIG_HUMAN_NODE: NodeDefinition = {
       { flex: numberInput(undefined, params.rightWristFlex, 0), side: numberInput(undefined, params.rightWristSide, 0) },
     ];
     const solver = { ...solverOptions(params), wrists };
-    const positions = solveHuman(skeleton, controls, { armPull: numberInput(undefined, params.armPull, 0.3), ...solver });
+    const pelvisRotation = hipsTurnQuaternion(params.hipsTurn);
+    const positions = solveHuman(skeleton, controls, { armPull: numberInput(undefined, params.armPull, 0.3), ...solver, pelvisRotation });
     humanPoseContexts.set(ctx.nodeId, { skeleton, joints: positions, controls });
 
     const H = hp.height;
@@ -315,7 +349,7 @@ export const RIG_HUMAN_NODE: NodeDefinition = {
       solver,
     };
     group.userData.humanRig = rigData;
-    group.userData.humanPose = { controls, pelvisRotation: new THREE.Quaternion(), matrix: group.matrix.clone() } satisfies HumanPose;
+    group.userData.humanPose = { controls, pelvisRotation, matrix: group.matrix.clone() } satisfies HumanPose;
     // Its own pose is the one a mesh is bound at when connected (see Skin's Bind To).
     publishRig(group, parentsOf(skeleton.rig), skeleton.rig.rest, positions, group.matrix, skeleton.names, undefined, positions);
 
