@@ -243,6 +243,16 @@ export interface WeightOptions {
    */
   strength?: ArrayLike<number | undefined>;
   radius?: ArrayLike<number | undefined>;
+  /** Share of a vertex's weight under which a bone is dropped (default 0.001). */
+  prune?: number;
+  /** How far each smoothing pass moves a vertex toward its neighbours' average, 0..1 (default 0.5). */
+  smoothStrength?: number;
+  /**
+   * Bones a vertex may follow, in steps through the skeleton from its nearest
+   * bone: 1 is that bone, its parent and its children, so a thigh never takes
+   * weight from the other leg. 0 (default) lets every bone in.
+   */
+  boneHops?: number;
 }
 
 /** Bones kept per vertex while smoothing: enough to blend across a joint without a table of every bone. */
@@ -288,13 +298,36 @@ export function weldVertices(positions: ArrayLike<number>, vertexCount: number):
   return { weldOf, reps, welds };
 }
 
-/** Zeroes weights too small to show, renormalises the rest. `wt` is sorted strongest first. */
-function pruneAndNormalise(wt: Float32Array, o: number, keep: number) {
+/** Per bone, the bones within `hops` steps of it through the skeleton (parent and children), itself included. */
+function boneNeighbourhoods(bones: SkinBone[], hops: number): Int32Array[] {
+  const index = new Map(bones.map((bone, b) => [bone.joint, b]));
+  const links: number[][] = bones.map(() => []);
+  bones.forEach((bone, b) => {
+    const parent = index.get(bone.parent);
+    if (parent === undefined) return;
+    links[b].push(parent);
+    links[parent].push(b);
+  });
+  return bones.map((_, start) => {
+    const seen = new Set([start]);
+    let front = [start];
+    for (let h = 0; h < hops && front.length > 0; h++) {
+      const next: number[] = [];
+      for (const b of front) for (const c of links[b]) if (!seen.has(c)) (seen.add(c), next.push(c));
+      front = next;
+    }
+    return Int32Array.from(seen);
+  });
+}
+
+/** Zeroes weights under `prune` of the total, renormalises the rest. `wt` is sorted strongest first. */
+function pruneAndNormalise(wt: Float32Array, o: number, keep: number, prune = 1e-3) {
   let total = 0;
   for (let k = 0; k < keep; k++) total += wt[o + k];
   if (total <= 0) return;
   let kept = 0;
-  const floor = total * 1e-3;
+  // Never past the strongest bone, which always stays.
+  const floor = Math.min(total * prune, wt[o] * 0.999);
   for (let k = 0; k < keep; k++) {
     if (wt[o + k] < floor) wt[o + k] = 0;
     else kept += wt[o + k];
@@ -338,7 +371,14 @@ export function computeSkinWeights(positions: ArrayLike<number>, index: ArrayLik
   // a whole power is a few multiplications, no pow, no sqrt.
   const half = Math.max(0.05, options.falloff) / 2;
   const wholeHalf = Number.isInteger(half) && half <= 8;
-  const negligible = Math.pow(1e-3, 1 / half);
+  const prune = Number.isFinite(options.prune) ? Math.max(0, Math.min(0.5, Number(options.prune))) : 1e-3;
+  const negligible = Math.pow(Math.max(1e-6, Math.min(1e-3, prune)), 1 / half);
+  const own = 1 - (Number.isFinite(options.smoothStrength) ? Math.max(0, Math.min(1, Number(options.smoothStrength))) : 0.5);
+
+  // Bone Hops: each bone's neighbourhood in the skeleton, as a stamp per bone to test against cheaply.
+  const hops = Math.max(0, Math.min(8, Math.round(Number(options.boneHops) || 0)));
+  const around: Int32Array[] | null = hops > 0 ? boneNeighbourhoods(bones, hops) : null;
+  const allowed = new Int32Array(boneCount).fill(-1);
 
   // Flat copies of the segments, and the frame, for the hot loop.
   const hx = new Float64Array(boneCount);
@@ -382,6 +422,7 @@ export function computeSkinWeights(positions: ArrayLike<number>, index: ArrayLik
     const py = m[1] * lx + m[5] * ly + m[9] * lz + m[13];
     const pz = m[2] * lx + m[6] * ly + m[10] * lz + m[14];
     let nearest = Infinity;
+    let nearestBone = -1;
     for (let b = 0; b < boneCount; b++) {
       const ox = px - hx[b];
       const oy = py - hy[b];
@@ -395,8 +436,12 @@ export function computeSkinWeights(positions: ArrayLike<number>, index: ArrayLik
       // A wider reach counts as being nearer; a bone switched off is never nearest.
       const d2 = (cx * cx + cy * cy + cz * cz) * reach2[b];
       dist2[b] = d2;
-      if (strengths[b] > 0 && d2 < nearest) nearest = d2;
+      if (strengths[b] > 0 && d2 < nearest) {
+        nearest = d2;
+        nearestBone = b;
+      }
     }
+    if (around && nearestBone >= 0) for (const b of around[nearestBone]) allowed[b] = w;
     const near = nearest + eps2;
     const o = w * keep;
     // Strongest `keep` bones by insertion, weight computed only when it can make the cut.
@@ -404,7 +449,7 @@ export function computeSkinWeights(positions: ArrayLike<number>, index: ArrayLik
     // A bone weighing under a thousandth of the nearest is pruned anyway: skip its power.
     const farthest = near / negligible;
     for (let b = 0; b < boneCount; b++) {
-      if (strengths[b] <= 0) continue;
+      if (strengths[b] <= 0 || (around && allowed[b] !== w)) continue;
       const d2 = dist2[b] + eps2;
       if (d2 > farthest) continue;
       const r = near / d2;
@@ -426,7 +471,7 @@ export function computeSkinWeights(positions: ArrayLike<number>, index: ArrayLik
       wt[o + slot] = value;
       idx[o + slot] = b;
     }
-    pruneAndNormalise(wt, o, keep);
+    pruneAndNormalise(wt, o, keep, prune);
   }
 
   if (options.smooth > 0 && welds > 1) {
@@ -482,16 +527,16 @@ export function computeSkinWeights(positions: ArrayLike<number>, index: ArrayLik
           }
         }
         touchedList.length = 0;
-        const own = n > 0 ? 0.5 : 1;
+        const self = n > 0 ? own : 1;
         for (let k = 0; k < keep; k++) {
           const value = wt[o + k];
           if (value === 0) break;
           const b = idx[o + k];
           if (row[b] === 0) touchedList.push(b);
-          row[b] += own * value;
+          row[b] += self * value;
         }
         if (n > 0) {
-          const share = 0.5 / n;
+          const share = (1 - self) / n;
           for (let e = first; e < last; e++) {
             const q = neighbours[e] * keep;
             for (let k = 0; k < keep; k++) {
@@ -524,7 +569,7 @@ export function computeSkinWeights(positions: ArrayLike<number>, index: ArrayLik
           nextWt[o + k] = 0;
           nextIdx[o + k] = 0;
         }
-        pruneAndNormalise(nextWt, o, keep);
+        pruneAndNormalise(nextWt, o, keep, prune);
       }
       [idx, nextIdx] = [nextIdx, idx];
       [wt, nextWt] = [nextWt, wt];

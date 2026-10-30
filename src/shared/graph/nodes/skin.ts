@@ -25,6 +25,7 @@ import {
   jointWeight,
   mirrorJoints,
   mirrorPaint,
+  mirrorSkinWeights,
   mirrorVertices,
   paintDab,
   PaintLayer,
@@ -205,6 +206,14 @@ export function consumeSkinBindRequests(): { nodeId: string; params: Record<stri
   const out = [...bindRequests].map(([nodeId, params]) => ({ nodeId, params }));
   bindRequests.clear();
   return out;
+}
+
+/** The Recompute button's action: see skinReweighParams. */
+export const SKIN_REWEIGH_ACTION = "skin-reweigh";
+
+/** The params that make a Skin weigh its mesh again from scratch (the automatic weights; the paint stays on top). */
+export function skinReweighParams(params: Record<string, unknown>): Record<string, unknown> {
+  return { reweigh: (Math.round(Number(params.reweigh)) || 0) + 1 };
 }
 
 const bindToConnected = (params: Record<string, unknown>) => params.bindTo === "connected";
@@ -449,6 +458,12 @@ export const SKIN_NODE: NodeDefinition = {
     influences: 4,
     falloff: 4,
     smooth: 2,
+    prune: 0.001,
+    smoothStrength: 0.5,
+    boneHops: 0,
+    mirrorWeights: "off",
+    // Bumped by Recompute: weighs the mesh again, as it is now, keeping the paint and the bind pose.
+    reweigh: 0,
     stretch: false,
     rebind: false,
     showRig: true,
@@ -491,7 +506,19 @@ export const SKIN_NODE: NodeDefinition = {
     { id: "influences", label: "Max Influences", kind: "number", step: 1, group: "Weights" },
     { id: "falloff", label: "Falloff", kind: "number", step: 0.5, group: "Weights" },
     { id: "smooth", label: "Smooth Weights", kind: "number", step: 1, group: "Weights" },
-    { id: "rebind", label: "Re-bind (toggle)", kind: "boolean", group: "Weights" },
+    { id: "prune", label: "Ignore Weights Below (share)", kind: "number", step: 0.01, group: "Weights" },
+    { id: "smoothStrength", label: "Smooth Strength (0..1)", kind: "number", step: 0.05, group: "Weights" },
+    { id: "boneHops", label: "Bone Reach (steps through the skeleton, 0 = all)", kind: "number", step: 1, group: "Weights" },
+    {
+      id: "mirrorWeights",
+      label: "Mirror Weights",
+      kind: "select",
+      options: ["off", "left", "right"],
+      optionLabels: ["Off", "Left side onto right", "Right side onto left"],
+      group: "Weights",
+    },
+    { id: "reweighButton", label: "Recompute weights", kind: "button", action: SKIN_REWEIGH_ACTION, group: "Weights" },
+    { id: "rebind", label: "Re-bind to the current pose (toggle)", kind: "boolean", group: "Weights" },
     { id: "weightPaintMode", label: "Paint Weights", kind: "boolean", group: "Weight Brush" },
     { id: "weightBrush", label: "Brush", kind: "select", options: [...WEIGHT_BRUSHES], group: "Weight Brush" },
     { id: "weightBrushSize", label: "Radius", kind: "number", step: 0.01, group: "Weight Brush" },
@@ -539,13 +566,24 @@ export const SKIN_NODE: NodeDefinition = {
     const smooth = Math.max(0, Math.min(20, Math.round(numberInput(undefined, params.smooth, 2))));
     const strength = numberList(params.jointStrength);
     const radius = numberList(params.jointRadius);
+    const weightOptions = {
+      influences,
+      falloff,
+      smooth,
+      strength,
+      radius,
+      prune: Math.max(0, Math.min(0.5, numberInput(undefined, params.prune, 0.001))),
+      smoothStrength: Math.max(0, Math.min(1, numberInput(undefined, params.smoothStrength, 0.5))),
+      boneHops: Math.max(0, Math.min(8, Math.round(numberInput(undefined, params.boneHops, 0)))),
+    };
+    const mirrorWeights = params.mirrorWeights === "left" || params.mirrorWeights === "right" ? params.mirrorWeights : "off";
 
     const key = [
       sources.map((m) => `${m.geometry.uuid}:${m.geometry.attributes.position?.count ?? 0}:${m.geometry.getIndex()?.count ?? -1}`).join("|"),
       rig.parents.join(","),
       keyOf(bind),
       `${rigSpace}|${mode}|${influences}|${falloff}|${smooth}|${toBoolean(params.rebind)}`,
-      JSON.stringify([strength, radius]),
+      JSON.stringify([strength, radius, weightOptions.prune, weightOptions.smoothStrength, weightOptions.boneHops, mirrorWeights, params.reweigh ?? 0]),
     ].join("#");
 
     if (state.key !== key || !state.meshes || !state.bones) {
@@ -554,11 +592,13 @@ export const SKIN_NODE: NodeDefinition = {
       const bones = buildBones(rig.parents, restInSpace);
       state.bones = bones;
       state.mode = mode;
+      state.jointMirror = mirrorJoints(rig.rest, rig.names);
+      state.mirrorSpace = rigSpace ? new THREE.Matrix4() : rig.matrix.clone().invert();
       state.meshes = sources.map((source, i) => {
         const geometry = source.geometry.clone();
         const position = geometry.attributes.position as THREE.BufferAttribute;
         const normal = geometry.attributes.normal as THREE.BufferAttribute | undefined;
-        const auto = computeSkinWeights(position.array, source.geometry.getIndex()?.array ?? null, frames[i], bones, { influences, falloff, smooth, strength, radius });
+        const auto = computeSkinWeights(position.array, source.geometry.getIndex()?.array ?? null, frames[i], bones, weightOptions);
         // The paint goes on below; until then the automatic weights.
         const skin = cloneSkin(auto);
         // Material and shadow flags are taken from the source every frame, below.
@@ -578,12 +618,19 @@ export const SKIN_NODE: NodeDefinition = {
           bound.basePositions = new Float32Array(position.array as Float32Array);
           bound.baseNormals = normal ? new Float32Array(normal.array as Float32Array) : null;
         }
+        if (mirrorWeights !== "off") {
+          // One side's weights, mirrored onto the other: before the paint, which stays as painted.
+          const atRig = bindPositions(bound, state!.mirrorSpace);
+          bound.mirror = mirrorVertices(atRig);
+          mirrorSkinWeights(auto, atRig, bound.mirror, state!.jointMirror!, mirrorWeights);
+          skin.indices.set(auto.indices);
+          skin.weights.set(auto.weights);
+          weightsChanged(bound);
+        }
         return bound;
       });
       state.key = key;
       state.parents = rig.parents.slice();
-      state.jointMirror = mirrorJoints(rig.rest, rig.names);
-      state.mirrorSpace = rigSpace ? new THREE.Matrix4() : rig.matrix.clone().invert();
       state.paintRaw = undefined;
       state.posed = undefined;
       state.bounds = { min: new THREE.Vector3(), max: new THREE.Vector3() };

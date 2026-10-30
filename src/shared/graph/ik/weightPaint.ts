@@ -377,3 +377,30 @@ export function mirrorPaint(layer: PaintLayer, joint: number, vertices: number[]
   if (target.size === 0) layer.delete(other);
   return [...new Set(copies.map(([m]) => m))];
 }
+
+/**
+ * Automatic weights made symmetric: every vertex on one side of the centre
+ * plane takes the weights of its counterpart on the other, each joint swapped
+ * for its own counterpart ("Left Knee" → "Right Knee"). `positions` are the
+ * vertices in the rig's own space (x = 0 its centre plane); `from` is the side
+ * copied, the character's left being +x. Vertices on the plane, or with no
+ * counterpart, keep their own. Writes `skin` in place.
+ */
+export function mirrorSkinWeights(skin: SkinWeights, positions: ArrayLike<number>, mirror: VertexMirror, jointMirror: number[], from: "left" | "right"): void {
+  const n = skin.influences;
+  const count = Math.min(Math.floor(positions.length / 3), skin.indices.length / n);
+  const sign = from === "left" ? 1 : -1;
+  const slack = 1e-6;
+  for (let v = 0; v < count; v++) {
+    // Only the side being written: strictly across the plane from the side copied.
+    if (positions[v * 3] * sign >= -slack) continue;
+    const w = mirror.mirrorOf[mirror.weldOf[v]];
+    if (w < 0) continue;
+    const m = mirror.members[w][0];
+    if (m === v) continue;
+    for (let k = 0; k < n; k++) {
+      skin.indices[v * n + k] = jointMirror[skin.indices[m * n + k]] ?? skin.indices[m * n + k];
+      skin.weights[v * n + k] = skin.weights[m * n + k];
+    }
+  }
+}

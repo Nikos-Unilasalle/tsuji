@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { HudBar, HudSeparator, HudToolColumn } from "./HudToolbars";
 import { readSkeleton } from "../graph/ik/skeletonEdit";
-import { hasJointPaint, readJointInfluence, withJointInfluence, withoutJointPaint } from "../graph/nodes/skin";
+import { hasJointPaint, readJointInfluence, skinReweighParams, withJointInfluence, withoutJointPaint } from "../graph/nodes/skin";
 import { WEIGHT_BRUSHES } from "../graph/ik/weightPaint";
 import type { SkeletonOp } from "./skeletonEditor";
 import type { NodeInstance } from "../graph/types";
@@ -317,6 +317,15 @@ export function SkinHud({
         title="Show or hide the rig itself"
       >
         Rig
+      </button>
+      <button
+        type="button"
+        className="viewport-hud-button"
+        style={{ width: "auto", padding: "0 8px" }}
+        onClick={() => onParams(skinReweighParams(node.params), node.id)}
+        title="Recompute the automatic weights from the mesh as it is now (the paint stays on top, the bind pose is kept)"
+      >
+        ↻ Weights
       </button>
       <HudSeparator />
       <button
