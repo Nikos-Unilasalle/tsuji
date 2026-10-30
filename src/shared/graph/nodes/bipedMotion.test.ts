@@ -180,10 +180,10 @@ describe("gait handles", () => {
     const params = { ...RIG_BIPED_MOTION_NODE.defaultParams, ...bipedPresetParams("swagger"), locomotion: "drive", armBend: 0.3 };
     const outs = play("bm-handles", 30, () => params);
     const handles = outs[outs.length - 1].__controlPoints as THREE.Vector3[];
-    expect(handles.length).toBe(6);
+    expect(handles.length).toBe(8);
     const style = readGaitStyle(params);
     const patch = Object.assign({}, ...handles.map((p, i) => RIG_BIPED_MOTION_NODE.paramHandles!(i, p, params, "bm-handles")));
-    for (const key of ["stride", "clearance", "stepWidth", "sway", "bob", "lean", "crouch", "armSwing", "armBend"] as const) {
+    for (const key of ["stride", "clearance", "stepWidth", "sway", "bob", "lean", "crouch", "armSwing", "armBend", "heelLift", "heelTime", "heelStrike"] as const) {
       expect(patch[key]).toBeCloseTo(style[key], 1);
     }
   });
@@ -346,7 +346,7 @@ describe("Biped Motion handles in Route", () => {
         { ...RIG_BIPED_MOTION_NODE.defaultParams, locomotion: "route", handleSet },
         ctx(`route-hs-${handleSet}`, { time: 0, currentFrame: 0, fps: 30, sessionId: "hs" }),
       ).__controlPoints as THREE.Vector3[];
-    expect(run("gait").length).toBe(6);
+    expect(run("gait").length).toBe(8);
     expect(run("auto").length).toBe(4);
     expect(RIG_BIPED_MOTION_NODE.paramHandleAxes!(0, { locomotion: "route", handleSet: "gait" })).toEqual(["z"]);
   });

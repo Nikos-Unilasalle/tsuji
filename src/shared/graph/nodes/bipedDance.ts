@@ -8,7 +8,7 @@ import { numberInput } from "./object";
 import { HumanSkeleton, solveHuman, turnHead } from "../ik/skeletons";
 import { publishRig } from "../ik/skinning";
 import { boneMatrices, bonesOf, drawEmpty, HumanRigData, parentsOf, viewFor } from "./rig";
-import { CONTROL, flipPose, HumanPose, poseMask, PoseMask, readHumanPose, readPoseList, turnQuaternion } from "../ik/humanPose";
+import { blendFeet, CONTROL, flipPose, HumanPose, poseMask, PoseMask, readHumanPose, readPoseList, turnQuaternion } from "../ik/humanPose";
 import { GROOVE_PRESET_KEYS, GROOVE_PRESETS, GroovePresetKey, grooveControls } from "../ik/danceGroove";
 
 /**
@@ -325,7 +325,7 @@ export const RIG_BIPED_DANCE_NODE: NodeDefinition = {
     const { skeleton } = data;
     const rest = skeleton.relaxedControls;
     const H = Math.max(0.05, rest[CONTROL.head].y);
-    const upstream = readHumanPose(source) ?? { controls: rest, pelvisRotation: new THREE.Quaternion(), matrix: source!.matrix.clone() };
+    const upstream: HumanPose = readHumanPose(source) ?? { controls: rest, pelvisRotation: new THREE.Quaternion(), matrix: source!.matrix.clone() };
     group.matrix.copy(upstream.matrix);
     group.matrixWorldNeedsUpdate = true;
 
@@ -419,9 +419,11 @@ export const RIG_BIPED_DANCE_NODE: NodeDefinition = {
       );
       const finalControls = upstream.controls.map((u, i) => u.clone().lerp(controls[i], influence));
       const finalRotation = upstream.pelvisRotation.clone().slerp(pelvisRotation, influence);
-      const positions = solveHuman(skeleton, finalControls, { ...solver, pelvisRotation: finalRotation });
+      // The dance's own feet roll by themselves; a walk's roll wired in lasts as far as Influence leaves it.
+      const feet = blendFeet(upstream.feet, undefined, () => influence);
+      const positions = solveHuman(skeleton, finalControls, { ...solver, pelvisRotation: finalRotation, feet });
       const head = turnHead(skeleton, positions, look.multiplyScalar(headAmount * influence));
-      return { controls: finalControls, pelvisRotation: finalRotation, positions, twist: head.twist, face: head.face };
+      return { controls: finalControls, pelvisRotation: finalRotation, feet, positions, twist: head.twist, face: head.face };
     };
 
     const now = danceAt(beat, time);
@@ -445,7 +447,7 @@ export const RIG_BIPED_DANCE_NODE: NodeDefinition = {
     drawGhost(ctx.nodeId, group, ghost, skeleton, data.thickness);
     publishRig(group, parentsOf(skeleton.rig), skeleton.rig.rest, positions, group.matrix, skeleton.names, now.twist);
     group.userData.humanRig = data;
-    group.userData.humanPose = { controls: finalControls, pelvisRotation: finalRotation, matrix: group.matrix.clone() } satisfies HumanPose;
+    group.userData.humanPose = { controls: finalControls, pelvisRotation: finalRotation, feet: now.feet, matrix: group.matrix.clone() } satisfies HumanPose;
     group.updateMatrixWorld(true);
     const world = positions.map((p) => p.clone().applyMatrix4(group.matrix));
     return {

@@ -31,6 +31,8 @@ export interface HumanParams {
   headSize: number;
   /** Hand length × (wrist to fingertips). */
   hands: number;
+  /** Foot length × (heel to the tips of the toes). */
+  feet: number;
   /** Rest pose of the arms, in degrees out from hanging straight down: 22 is an A-pose, 90 a T-pose. */
   armAngle: number;
   /** Rest pose of the legs, in degrees out to the side from straight down: what Skin binds to, like armAngle. */
@@ -48,6 +50,8 @@ export interface HumanParams {
   hipSide: number;
   /** Shoulder: cone around pointing out to the side (slightly forward). */
   shoulderRange: number;
+  /** Toes: furthest they bend up from the foot's line at the ball, as the heel rises with the toes left on the ground. */
+  toeBend: number;
   /** Whole spine, shared between its segments; neck and head share neckBend. */
   spineBend: number;
   neckBend: number;
@@ -63,6 +67,7 @@ export const HUMAN_DEFAULTS: HumanParams = {
   neck: 1,
   headSize: 1,
   hands: 1,
+  feet: 1,
   armAngle: 90,
   legAngle: 0,
   spineSegments: 3,
@@ -73,6 +78,7 @@ export const HUMAN_DEFAULTS: HumanParams = {
   hipBack: 30,
   hipSide: 45,
   shoulderRange: 110,
+  toeBend: 60,
   spineBend: 60,
   neckBend: 70,
 };
@@ -104,7 +110,12 @@ export interface HumanSkeleton extends Skeleton {
     hip: [number, number];
     /** Fingertips: the end of the hand bone, swung about the wrist by SolveOptions.wrists. */
     fingers: [number, number];
+    /** Ball of the foot and tips of the toes: placed off the ankle after each solve (see SolveOptions.feet). */
+    ball: [number, number];
+    toes: [number, number];
   };
+  /** The foot's shape, the same on both sides. */
+  foot: FootShape;
   /** Control points of the rest pose, in HUMAN_CONTROLS order. */
   restControls: THREE.Vector3[];
   /**
@@ -116,6 +127,24 @@ export interface HumanSkeleton extends Skeleton {
   /** The joints of that same natural stance. */
   relaxedRest: THREE.Vector3[];
 }
+
+/**
+ * A foot in its own plane: `along` its length (forward), `up` from the
+ * ground. Offsets are from the ankle (ball) and from the ball (toes) with the
+ * foot flat; `heel` is how far the heel's contact with the ground sits
+ * behind the ankle. Skeleton units, radians.
+ */
+export interface FootShape {
+  ankleY: number;
+  heel: number;
+  ball: { along: number; up: number };
+  toes: { along: number; up: number };
+  maxToeBend: number;
+}
+
+/** Ball of the foot and tips of the toes above the ground at rest, as fractions of the height. */
+const BALL_HEIGHT = 0.012;
+const TOE_HEIGHT = 0.007;
 
 /** Arms hanging loose, in degrees out from straight down: the A-pose a walk swings its arms from. */
 export const HANGING_ARM_ANGLE = 22;
@@ -204,6 +233,25 @@ export function buildHumanSkeleton(input: Partial<HumanParams> = {}): HumanSkele
     const along = rest[hand[s]].clone().sub(rest[elbow[s]]).normalize();
     fingers[s] = add(`${s === 0 ? "Left" : "Right"} Fingers`, hand[s], rest[hand[s]].clone().addScaledVector(along, 0.1 * H * p.arms * Math.max(0.05, p.hands)));
   }
+  // Feet after the hands, for the same reason: from the ankle forward to the
+  // ball of the foot, then the toes, flat on the ground and pointing ahead.
+  const footLength = 0.15 * H * Math.max(0.05, p.feet);
+  const ball: [number, number] = [0, 0];
+  const toes: [number, number] = [0, 0];
+  for (const s of [0, 1] as const) {
+    const label = s === 0 ? "Left" : "Right";
+    const ankle = rest[foot[s]];
+    ball[s] = add(`${label} Ball`, foot[s], new THREE.Vector3(ankle.x, BALL_HEIGHT * H, ankle.z + 0.52 * footLength));
+    toes[s] = add(`${label} Toes`, ball[s], new THREE.Vector3(ankle.x, TOE_HEIGHT * H, ankle.z + 0.78 * footLength));
+  }
+  const ankleRest = rest[foot[0]];
+  const footShape: FootShape = {
+    ankleY: ankleRest.y,
+    heel: 0.22 * footLength,
+    ball: { along: rest[ball[0]].z - ankleRest.z, up: rest[ball[0]].y - ankleRest.y },
+    toes: { along: rest[toes[0]].z - rest[ball[0]].z, up: rest[toes[0]].y - rest[ball[0]].y },
+    maxToeBend: p.jointLimits ? Math.max(0, Math.min(90, p.toeBend)) * DEG : 90 * DEG,
+  };
 
   const restControls = [
     rest[pelvis].clone(),
@@ -221,7 +269,8 @@ export function buildHumanSkeleton(input: Partial<HumanParams> = {}): HumanSkele
   return {
     rig: { joints, rest, limits: p.jointLimits ? humanLimits(p, rest, { pelvis, chest, neck, head, hand, elbow, shoulder, foot, knee, hip }) : undefined },
     names,
-    joint: { pelvis, chest, head, hand, elbow, foot, knee, hip, fingers },
+    joint: { pelvis, chest, head, hand, elbow, foot, knee, hip, fingers, ball, toes },
+    foot: footShape,
     restControls,
     ...relaxedStance(p, restControls, rest),
   };
@@ -292,6 +341,8 @@ export interface SolveOptions {
   pelvisRotation?: THREE.Quaternion;
   /** Left and right wrist, in degrees: see WristTurn. Missing: the hand straight on with the forearm. */
   wrists?: WristTurn[];
+  /** Left and right foot's roll: see FootRoll. Missing: the automatic roll off the ankle's height. */
+  feet?: (FootRoll | null | undefined)[];
 }
 
 /**
@@ -333,6 +384,145 @@ function placeHands(skeleton: HumanSkeleton, positions: THREE.Vector3[], poles: 
   }
 }
 
+// ---------------------------------------------------------------------------
+// Feet
+
+/**
+ * How a foot meets the ground, handed to the solve by whatever animates it (a
+ * walk's heel strike and push-off). `pitch` is the foot's angle from flat,
+ * radians, + the heel up and the toes down, − the toes up; `forward` where it
+ * points (skeleton space). Both lie over the automatic foot by `weight`, 0..1
+ * (default 1), so a pose blended over a walk can hand its feet back to the
+ * automatic roll. `maxToeBend` (radians) can only tighten the skeleton's own.
+ */
+export interface FootRoll {
+  pitch: number;
+  forward?: THREE.Vector3;
+  weight?: number;
+  maxToeBend?: number;
+}
+
+/** A vector of the foot's plane turned by `pitch`, toes-down positive. */
+export function pitchFootVector(v: { along: number; up: number }, pitch: number): { along: number; up: number } {
+  const c = Math.cos(pitch);
+  const s = Math.sin(pitch);
+  return { along: v.along * c + v.up * s, up: -v.along * s + v.up * c };
+}
+
+/**
+ * Where the ankle goes when a flat foot rolls by `pitch` about what stays on
+ * the ground — the ball when the heel rises, the heel's back edge when the
+ * toes come up — as an offset in the foot's plane. A walk moves its ankle by
+ * this so the foot rolls instead of the ankle rising in place.
+ */
+export function footPivot(shape: FootShape, pitch: number): { along: number; up: number } {
+  const pivot = pitch >= 0 ? shape.ball : { along: -shape.heel, up: -shape.ankleY };
+  const turned = pitchFootVector(pivot, pitch);
+  return { along: pivot.along - turned.along, up: pivot.up - turned.up };
+}
+
+/** The largest bend of a foot vector `v` turned by `pitch` from `fromY` keeping its end at or above `floorY`, before `max`. */
+function bendToClear(v: { along: number; up: number }, pitch: number, fromY: number, floorY: number, max: number): number {
+  if (fromY + pitchFootVector(v, pitch).up >= floorY) return 0;
+  // −along·sin φ + up·cos φ = R cos(φ + α): the end's height falls as the angle φ grows.
+  const r = Math.hypot(v.along, v.up);
+  const alpha = Math.atan2(v.along, v.up);
+  const k = (floorY - fromY) / Math.max(1e-12, r);
+  if (k > 1) return max;
+  const phi = Math.acos(Math.max(-1, k)) - alpha;
+  return Math.max(0, Math.min(max, pitch - phi));
+}
+
+/** Heel lift the automatic foot allows itself: past it a raised foot hangs pointed rather than standing on its toes. */
+export const AUTO_HEEL_LIFT = 40 * Math.PI / 180;
+
+/**
+ * The automatic roll: the foot pivots on its ball as the ankle rises above
+ * its rest height, the ball staying on the ground (up to AUTO_HEEL_LIFT), and
+ * tips its toes up when the ankle is pressed below it.
+ */
+export function autoFootPitch(shape: FootShape, ankleY: number): number {
+  const v = shape.ball;
+  const r = Math.hypot(v.along, v.up);
+  const alpha = Math.atan2(v.along, v.up);
+  const k = (v.up - (ankleY - shape.ankleY)) / Math.max(1e-12, r);
+  const pitch = Math.acos(Math.max(-1, Math.min(1, k))) - alpha;
+  return Math.max(-AUTO_HEEL_LIFT, Math.min(AUTO_HEEL_LIFT, Number.isFinite(pitch) ? pitch : 0));
+}
+
+/**
+ * A foot posed off its solved ankle, the ground at y = 0: the ball and toes
+ * of foot `shape` at `pitch` along `forward`, the toes bending up at the ball
+ * just enough to stay on the ground (up to `maxToeBend`) — which, with the
+ * heel up and the toes down, is what leaves them flat. Neither the ball nor
+ * the toes go under the ground: where the toes cannot bend far enough the
+ * foot pitches up instead.
+ */
+export function rollFoot(
+  shape: FootShape,
+  ankle: THREE.Vector3,
+  forward: THREE.Vector3,
+  pitch: number,
+  maxToeBend: number,
+): { ball: THREE.Vector3; toes: THREE.Vector3; pitch: number; bend: number } {
+  const ballY = shape.ankleY + shape.ball.up;
+  const toeY = ballY + shape.toes.up;
+  const slack = 1e-6 * Math.max(1e-3, shape.ankleY);
+  const clears = (p: number) => {
+    const b = ankle.y + pitchFootVector(shape.ball, p).up;
+    return b >= ballY - slack && b + pitchFootVector(shape.toes, p - maxToeBend).up >= toeY - slack;
+  };
+  let p = Number.isFinite(pitch) ? Math.max(-80 * DEG, Math.min(85 * DEG, pitch)) : 0;
+  if (!clears(p)) {
+    let lo = -80 * DEG;
+    let hi = p;
+    if (clears(lo)) {
+      for (let k = 0; k < 30; k++) {
+        const mid = (lo + hi) / 2;
+        if (clears(mid)) lo = mid;
+        else hi = mid;
+      }
+    }
+    p = lo;
+  }
+  const flatForward = new THREE.Vector3(forward.x, 0, forward.z);
+  if (flatForward.lengthSq() < 1e-12) flatForward.set(0, 0, 1);
+  flatForward.normalize();
+  const at = (from: THREE.Vector3, v: { along: number; up: number }) => from.clone().addScaledVector(flatForward, v.along).add(new THREE.Vector3(0, v.up, 0));
+  const ballOffset = pitchFootVector(shape.ball, p);
+  const ball = at(ankle, ballOffset);
+  const bend = bendToClear(shape.toes, p, ball.y, toeY, maxToeBend);
+  return { ball, toes: at(ball, pitchFootVector(shape.toes, p - bend)), pitch: p, bend };
+}
+
+/**
+ * Each foot's ball and toes placed off its solved ankle: pointing where its
+ * knee points (or as the roll says), rolled by the walk's pitch over the
+ * automatic one.
+ */
+function placeFeet(skeleton: HumanSkeleton, positions: THREE.Vector3[], kneePoles: THREE.Vector3[], feet: (FootRoll | null | undefined)[] | undefined, turn: THREE.Quaternion | undefined) {
+  const { joint, foot: shape } = skeleton;
+  for (const s of [0, 1] as const) {
+    const ankle = positions[joint.foot[s]];
+    const roll = feet?.[s];
+    const w = roll ? Math.max(0, Math.min(1, Number.isFinite(roll.weight) ? Number(roll.weight) : 1)) : 0;
+    const forward = kneePoles[s].clone().sub(positions[joint.knee[s]]).setY(0);
+    if (forward.lengthSq() < 1e-10) forward.set(0, 0, 1).applyQuaternion(turn ?? new THREE.Quaternion()).setY(0);
+    if (forward.lengthSq() < 1e-10) forward.set(0, 0, 1);
+    forward.normalize();
+    if (roll?.forward && w > 0) {
+      const wanted = roll.forward.clone().setY(0);
+      if (wanted.lengthSq() > 1e-10) forward.lerp(wanted.normalize(), w);
+    }
+    const auto = autoFootPitch(shape, ankle.y);
+    const pitch = roll && w > 0 && Number.isFinite(roll.pitch) ? auto + (roll.pitch - auto) * w : auto;
+    const maxBend = Math.min(shape.maxToeBend, roll && Number.isFinite(roll.maxToeBend) ? Math.max(0, Number(roll.maxToeBend)) : Infinity);
+    const placed = rollFoot(shape, ankle, forward, pitch, maxBend);
+    positions[joint.ball[s]].copy(placed.ball);
+    positions[joint.toes[s]].copy(placed.toes);
+  }
+}
+
 /**
  * Poses the human for its controls (HUMAN_CONTROLS order; missing ones fall
  * back to rest). The whole rest pose is first carried to the pelvis control,
@@ -370,6 +560,7 @@ export function solveHuman(skeleton: HumanSkeleton, controls: THREE.Vector3[], o
     rootRotation: turn,
   }).positions;
   placeHands(skeleton, positions, [c[6], c[7]], options.wrists);
+  placeFeet(skeleton, positions, [c[8], c[9]], options.feet, turn);
   return positions;
 }
 

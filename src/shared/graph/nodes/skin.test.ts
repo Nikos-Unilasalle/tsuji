@@ -73,7 +73,7 @@ describe("Skin node: modes and binding", () => {
     const out = SKIN_NODE.evaluate({ geometry: mesh, rig: humanRig("gpu-rig") }, params({ mode: "GPU" }), ctx("skin-gpu")).geometry as THREE.SkinnedMesh;
     expect(out).toBeInstanceOf(THREE.SkinnedMesh);
     expect(out.geometry.attributes.skinIndex.itemSize).toBe(4);
-    expect(out.skeleton.bones.length).toBe(20);
+    expect(out.skeleton.bones.length).toBe(24);
     const at = (bones: THREE.Bone[]) => bones.map((b) => b.matrixWorld.elements.slice());
     const before = at(out.skeleton.bones);
     const moved = SKIN_NODE.evaluate({ geometry: mesh, rig: humanRig("gpu-rig", new THREE.Vector3(0.9, 1.7, 0.2)) }, params({ mode: "GPU" }), ctx("skin-gpu")).geometry as THREE.SkinnedMesh;
@@ -224,7 +224,7 @@ describe("Skin node: editing the influence of each joint", () => {
     const rig = rigAt("pub-rig");
     const out = SKIN_NODE.evaluate({ geometry: mesh, rig }, params({ mode: "CPU", selectedJoint: 3 }), ctx("pub")).geometry as THREE.Object3D;
     const edit = out.userData.skinEdit as { joints: THREE.Vector3[]; names?: string[]; selected: number };
-    expect(edit.joints.length).toBe(20);
+    expect(edit.joints.length).toBe(24);
     expect(edit.names?.[0]).toBe("Pelvis");
     expect(edit.selected).toBe(3);
 

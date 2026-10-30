@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import type { HumanSkeleton } from "./skeletons";
+import type { FootRoll, HumanSkeleton } from "./skeletons";
 
 /**
  * A human pose as the rig nodes pass it along: the ten IK controls
@@ -11,9 +11,13 @@ import type { HumanSkeleton } from "./skeletons";
 export interface HumanPose {
   controls: THREE.Vector3[];
   pelvisRotation: THREE.Quaternion;
+  /** How each foot meets the ground, where something animates it (a walk); missing, the automatic roll. */
+  feet?: (FootRoll | undefined)[];
   /** Where the skeleton's space sits in the world. */
   matrix: THREE.Matrix4;
 }
+
+type PoseParts = { controls: THREE.Vector3[]; pelvisRotation: THREE.Quaternion; feet?: (FootRoll | undefined)[] };
 
 export const CONTROL = {
   pelvis: 0,
@@ -37,18 +41,49 @@ export function readHumanPose(source: unknown): HumanPose | null {
   return pose && Array.isArray(pose.controls) && pose.controls.length === 10 ? pose : null;
 }
 
-/** `a` toward `b` by a weight per control (0 keeps `a`), and the pelvis turn by `pelvisWeight`. */
-export function blendPose(
-  a: { controls: THREE.Vector3[]; pelvisRotation: THREE.Quaternion },
-  b: { controls: THREE.Vector3[]; pelvisRotation: THREE.Quaternion },
-  weight: (index: number) => number,
-  pelvisWeight: number,
-): { controls: THREE.Vector3[]; pelvisRotation: THREE.Quaternion } {
+/**
+ * `a` toward `b` by a weight per control (0 keeps `a`), and the pelvis turn by
+ * `pelvisWeight`. Each foot's roll goes with its foot control; a pose with no
+ * roll stands for the automatic one, so a walk's roll fades out as a pose
+ * without one takes the feet over.
+ */
+export function blendPose(a: PoseParts, b: PoseParts, weight: (index: number) => number, pelvisWeight: number): PoseParts {
   const clamp = (w: number) => (Number.isFinite(w) ? Math.max(0, Math.min(1, w)) : 0);
+  const feet = blendFeet(a.feet, b.feet, (s) => clamp(weight(CONTROL.foot[s])));
   return {
     controls: a.controls.map((c, i) => c.clone().lerp(b.controls[i] ?? c, clamp(weight(i)))),
     pelvisRotation: a.pelvisRotation.clone().slerp(b.pelvisRotation, clamp(pelvisWeight)),
+    ...(feet ? { feet } : {}),
   };
+}
+
+/**
+ * Two feet's rolls mixed, `k` of the way to `b`'s. Each is the automatic roll
+ * moved toward its own by its weight, so the mix is too: the weights add up,
+ * the pitches and directions average by what each brings.
+ */
+export function blendFeet(a: PoseParts["feet"], b: PoseParts["feet"], k: (side: 0 | 1) => number): FootRoll[] | undefined {
+  if (!a?.some(Boolean) && !b?.some(Boolean)) return undefined;
+  return ([0, 1] as const).map((s) => {
+    const share = (roll: FootRoll | undefined, by: number) => (roll ? Math.max(0, Math.min(1, Number.isFinite(roll.weight) ? Number(roll.weight) : 1)) * by : 0);
+    const fa = a?.[s];
+    const fb = b?.[s];
+    const wa = share(fa, 1 - k(s));
+    const wb = share(fb, k(s));
+    const total = wa + wb;
+    if (total <= 1e-9) return { pitch: 0, weight: 0 };
+    const pitch = ((fa?.pitch ?? 0) * wa + (fb?.pitch ?? 0) * wb) / total;
+    const forward = new THREE.Vector3();
+    if (fa?.forward) forward.addScaledVector(fa.forward, wa);
+    if (fb?.forward) forward.addScaledVector(fb.forward, wb);
+    const bends = [fa?.maxToeBend, fb?.maxToeBend].filter((x): x is number => Number.isFinite(x));
+    return {
+      pitch,
+      weight: Math.min(1, total),
+      ...(forward.lengthSq() > 1e-12 ? { forward: forward.normalize() } : {}),
+      ...(bends.length > 0 ? { maxToeBend: Math.min(...bends) } : {}),
+    };
+  });
 }
 
 /**

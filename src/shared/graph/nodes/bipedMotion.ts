@@ -7,7 +7,7 @@ import { evaluateKeyframeValue } from "../evaluate";
 import { createNodeCache } from "../nodeCaches";
 import { NATIVE_TRANSFORM_PARAM_FIELDS, numberInput } from "./object";
 import { toBoolean } from "../sockets";
-import { solveHuman } from "../ik/skeletons";
+import { footPivot, FootRoll, solveHuman } from "../ik/skeletons";
 import { publishRig } from "../ik/skinning";
 import { idleSwayOffset } from "../ik/bipedStyle";
 import { boneMatrices, bonesOf, drawEmpty, HumanRigData, motionClock, parentsOf, placeGroup, TRANSFORM_DEFAULTS, viewFor } from "./rig";
@@ -111,8 +111,11 @@ const STYLE_FIELDS: ParamFieldDef[] = [
   { id: "stepWidth", label: "Step Width × (0 = one line)", kind: "number", step: 0.05, group: "Steps" },
   { id: "clearance", label: "Foot Lift ×", kind: "number", step: 0.05, group: "Steps" },
   { id: "swingPeak", label: "Lift Timing (0 early · 1 late)", kind: "number", step: 0.05, group: "Steps" },
-  { id: "heelLift", label: "Heel Lift × (push-off)", kind: "number", step: 0.1, group: "Steps" },
   { id: "kneeOut", label: "Knees Out (°)", kind: "number", step: 2, group: "Steps" },
+  { id: "heelStrike", label: "Heel Strike × (toes up landing, − on the ball)", kind: "number", step: 0.1, group: "Feet" },
+  { id: "heelLift", label: "Heel Lift × (push-off)", kind: "number", step: 0.1, group: "Feet" },
+  { id: "heelTime", label: "Heel Up Time × (share of stance)", kind: "number", step: 0.1, group: "Feet" },
+  { id: "toeBend", label: "Toe Bend Max (°)", kind: "number", step: 5, group: "Feet" },
   { id: "limp", label: "Limp (right leg)", kind: "number", step: 0.05, group: "Steps" },
   { id: "crouch", label: "Crouch (share of hip height)", kind: "number", step: 0.02, group: "Pelvis" },
   { id: "bob", label: "Vertical Bob ×", kind: "number", step: 0.05, group: "Pelvis" },
@@ -357,7 +360,7 @@ export const RIG_BIPED_MOTION_NODE: NodeDefinition = {
       routeNow && routeNow.holding >= 0
         ? holdRoutePose(ctx.nodeId, skeleton, data.key, walked, readHumanPose(source), wiredPoses(inputs, skeleton), routeMarks[routeNow.holding], routeNow.poseWeight)
         : walked;
-    const positions = solveHuman(skeleton, pose.controls, { armPull: data.armPull, ...data.solver, pelvisRotation: pose.pelvisRotation });
+    const positions = solveHuman(skeleton, pose.controls, { armPull: data.armPull, ...data.solver, pelvisRotation: pose.pelvisRotation, feet: pose.feet });
 
     // Handles and guides at a reference speed: the walk as it is now, or the one it would be at its usual pace.
     const refSpeed = driven ? Math.abs(driveSpeed) / unit : Math.max(speedSk, preferredSpeed(metrics) / Math.sqrt(unit));
@@ -403,7 +406,7 @@ export const RIG_BIPED_MOTION_NODE: NodeDefinition = {
 
     publishRig(group, parentsOf(skeleton.rig), skeleton.rig.rest, positions, display, skeleton.names);
     group.userData.humanRig = data;
-    group.userData.humanPose = { controls: pose.controls, pelvisRotation: pose.pelvisRotation, matrix: display.clone() } satisfies HumanPose;
+    group.userData.humanPose = { controls: pose.controls, pelvisRotation: pose.pelvisRotation, feet: pose.feet, matrix: display.clone() } satisfies HumanPose;
     group.updateMatrixWorld(true);
     const world = positions.map((p) => p.clone().applyMatrix4(display));
     return {
@@ -466,7 +469,7 @@ interface AdvanceOut {
   sol: GaitSolution;
   stepped: ReturnType<typeof stepBipedGait>;
   feet: THREE.Vector3[];
-  gaitPose: { controls: THREE.Vector3[]; pelvisRotation: THREE.Quaternion };
+  gaitPose: { controls: THREE.Vector3[]; pelvisRotation: THREE.Quaternion; feet?: FootRoll[] };
   speedSk: number;
   unit: number;
 }
@@ -475,7 +478,10 @@ function createState(key: string, epoch: number, base: THREE.Matrix4, rc: THREE.
   return {
     key,
     epoch,
-    gait: createBipedGait([0, 1].map((s) => new THREE.Vector3(rc[4 + s].x, ankleY, 0).applyMatrix4(base))),
+    gait: createBipedGait(
+      [0, 1].map((s) => new THREE.Vector3(rc[4 + s].x, ankleY, 0).applyMatrix4(base)),
+      new THREE.Vector3(0, 0, 1).transformDirection(base),
+    ),
     lastTime: null,
     clock,
     prevPos: null,
@@ -501,7 +507,7 @@ function cloneState(s: BipedState): BipedState {
     gait: {
       phase: s.gait.phase,
       standing: s.gait.standing,
-      feet: s.gait.feet.map((f) => ({ ...f, planted: f.planted.clone(), liftOff: f.liftOff.clone(), target: f.target.clone() })) as BipedGaitState["feet"],
+      feet: s.gait.feet.map((f) => ({ ...f, planted: f.planted.clone(), liftOff: f.liftOff.clone(), target: f.target.clone(), heading: f.heading.clone() })) as BipedGaitState["feet"],
     },
     prevPos: s.prevPos?.clone() ?? null,
     prevForward: s.prevForward?.clone() ?? null,
@@ -566,12 +572,14 @@ function advance(state: BipedState, input: FrameInput, cfg: AdvanceConfig, dt: n
     legLength: metrics.legLength,
     limp: style.limp,
     dt,
+    forward: forward.clone().addScaledVector(up, -forward.dot(up)).normalize(),
   });
   state.motion += ((stepped.standing ? 0 : 1) - state.motion) * Math.min(1, dt * (stepped.standing ? 2.5 : 4));
 
   const toLocal = body.clone().invert();
   const feet = stepped.feet.map((f) => f.position.clone().applyMatrix4(toLocal));
-  const gaitPose = composePose({ skeleton: data, metrics, style, sol: stepped.active, state, feet, phase: state.gait.phase, now, dt, speedSk, unit });
+  const rolls = stepped.feet.map((f) => ({ pitch: f.pitch, heading: f.heading.clone().transformDirection(toLocal).setY(0) }));
+  const gaitPose = composePose({ skeleton: data, metrics, style, sol: stepped.active, state, feet, rolls, phase: state.gait.phase, now, dt, speedSk, unit });
   return { body, display, sol, stepped, feet, gaitPose, speedSk, unit };
 }
 
@@ -767,6 +775,8 @@ interface PoseInput {
   sol: GaitSolution;
   state: BipedState;
   feet: THREE.Vector3[];
+  /** Each foot's roll from the gait, its heading in the body's space. */
+  rolls: { pitch: number; heading: THREE.Vector3 }[];
   phase: number;
   now: number;
   dt: number;
@@ -774,14 +784,29 @@ interface PoseInput {
   unit: number;
 }
 
-/** The ten IK controls and the pelvis's turn for this instant of the stride, in the body's space. */
-function composePose({ skeleton: data, metrics, style, sol, state, feet, phase, now, dt, speedSk, unit }: PoseInput) {
+/** The ten IK controls, the pelvis's turn and the feet's roll for this instant of the stride, in the body's space. */
+function composePose({ skeleton: data, metrics, style, sol, state, feet, rolls, phase, now, dt, speedSk, unit }: PoseInput) {
   const skeleton = data.skeleton;
   const { joint, rig } = skeleton;
   const rc = skeleton.relaxedControls;
   const h = metrics.hipHeight;
   const motion = state.motion;
   const g = GRAVITY / unit;
+
+  // The feet roll: the ankle of each flat foot moved by its pitch about the heel or the ball, which stay down.
+  // Turned out with the knees; the roll eases in and out with the stride, so a body standing stands flat.
+  const pitches = rolls.map((r) => r.pitch * motion);
+  const headings = rolls.map((r, s) => {
+    const h = r.heading.lengthSq() > 1e-12 ? r.heading.clone().normalize() : new THREE.Vector3(0, 0, 1);
+    return h.applyAxisAngle(new THREE.Vector3(0, 1, 0), ((s === 0 ? 1 : -1) * style.kneeOut * Math.PI) / 180);
+  });
+  const roll = (s: number, pitch: number, from: number) => {
+    const a = footPivot(metrics.foot, from);
+    const b = footPivot(metrics.foot, pitch);
+    feet[s].addScaledVector(headings[s], b.along - a.along).y += b.up - a.up;
+    pitches[s] = pitch;
+  };
+  for (const s of [0, 1]) roll(s, pitches[s], 0);
 
   const pm = pelvisMotion(sol, phase, style.limp);
   // Turning: lean into the bend, by the angle a cyclist would (atan v·ω / g).
@@ -802,10 +827,11 @@ function composePose({ skeleton: data, metrics, style, sol, state, feet, phase, 
   const targetDrop = strideDrop + Math.min(0.12 * h, Math.max(shortfall(0, hips[0].y - sol.crouch - strideDrop), shortfall(1, hips[1].y - sol.crouch - strideDrop)));
   state.drop = state.drop < 0 || dt === 0 ? targetDrop : state.drop + (targetDrop - state.drop) * Math.min(1, dt * 12);
   const sink = sol.crouch + state.drop;
-  // A planted foot still out of reach lifts its heel, as a trailing foot does.
+  // A planted foot still out of reach lifts its heel, as a trailing foot does: further up onto its ball.
   for (const s of [0, 1]) {
     if (state.gait.feet[s].inSwing) continue;
-    feet[s].y += Math.min(0.5 * metrics.footLength, shortfall(s, hips[s].y - sink));
+    const need = Math.min(0.5 * metrics.footLength, shortfall(s, hips[s].y - sink));
+    if (need > 1e-6) roll(s, pitchRaising(metrics, pitches[s], need), pitches[s]);
   }
 
   const pelvisDelta = new THREE.Vector3(pm.side * motion + Math.sin(bank) * 0.25 * h, pm.up * motion - sink, 0);
@@ -863,7 +889,23 @@ function composePose({ skeleton: data, metrics, style, sol, state, feet, phase, 
     kneePoles[0],
     kneePoles[1],
   ];
-  return { controls, pelvisRotation };
+  const footRolls: FootRoll[] = [0, 1].map((s) => ({ pitch: pitches[s], forward: headings[s], maxToeBend: sol.toeBend }));
+  return { controls, pelvisRotation, feet: footRolls };
+}
+
+/** The pitch above `from` (and at least flat) that raises the ankle `raise` higher on the ball. */
+function pitchRaising(metrics: BodyMetrics, from: number, raise: number): number {
+  const start = Math.max(0, from);
+  const want = footPivot(metrics.foot, from).up + raise;
+  let lo = start;
+  let hi = (80 * Math.PI) / 180;
+  if (footPivot(metrics.foot, hi).up <= want) return hi;
+  for (let k = 0; k < 24; k++) {
+    const mid = (lo + hi) / 2;
+    if (footPivot(metrics.foot, mid).up < want) lo = mid;
+    else hi = mid;
+  }
+  return Math.max(start, hi);
 }
 
 function gaitInfo(sol: GaitSolution, froude: number, standing: boolean, state: BipedState, metrics: BodyMetrics, unit: number, locomotion: Locomotion) {
@@ -878,6 +920,9 @@ function gaitInfo(sol: GaitSolution, froude: number, standing: boolean, state: B
     duty: sol.duty,
     flightTime: sol.flightTime,
     doubleSupport: sol.doubleSupport,
+    /** Toes up as the heel lands, and the foot's pitch as it leaves the ground (degrees). */
+    heelStrike: (sol.heelStrike * 180) / Math.PI,
+    toeOff: (sol.toeOff * 180) / Math.PI,
     phase: state.gait.phase,
     /** Each foot in the air (a settling foot sitting its turn out counts as down). */
     swing: state.gait.feet.map((f) => f.inSwing && !f.skip),

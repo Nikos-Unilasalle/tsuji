@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { GaitSolution, STANCE_AHEAD, strikePhase, swingAlong, swingHeight } from "./gaitModel";
+import { GaitSolution, STANCE_AHEAD, stancePitch, strikePhase, swingAlong, swingHeight, swingPitch } from "./gaitModel";
 
 /**
  * The biped's feet, driven by a stride phase rather than chased by the body.
@@ -22,6 +22,11 @@ import { GaitSolution, STANCE_AHEAD, strikePhase, swingAlong, swingHeight } from
  * — and a foot already there sits its turn out instead of stepping in place.
  * Once both are down and home the clock stops, in double support.
  *
+ * Each foot also says how it rolls — its pitch through the stance and the
+ * swing (see stancePitch) and the way it points, kept from when it landed —
+ * while its position stays the ankle of a flat foot: the caller rolls it
+ * (footPivot), so the heel can rise over a ball that stays put.
+ *
  * World space throughout; lengths in the solution are multiplied by `unit`.
  */
 
@@ -34,6 +39,8 @@ export interface BipedFoot {
   skip: boolean;
   /** Swing progress 0..1 while in the air, stance progress 0..1 while down. */
   progress: number;
+  /** Where the foot points: the body's forward when it last landed. */
+  heading: THREE.Vector3;
 }
 
 export interface BipedGaitState {
@@ -61,6 +68,8 @@ export interface BipedGaitFrame {
   legLength: number;
   limp: number;
   dt: number;
+  /** The body's forward, flat on the ground: where a landing foot points. Missing, a foot keeps pointing where it did. */
+  forward?: THREE.Vector3;
 }
 
 export interface BipedFootPose {
@@ -70,6 +79,10 @@ export interface BipedFootPose {
   progress: number;
   /** Where the foot is headed (or stands). */
   target: THREE.Vector3;
+  /** Its roll: + heel up, − toes up (radians). */
+  pitch: number;
+  /** Where it points. */
+  heading: THREE.Vector3;
 }
 
 export interface BipedGaitResult {
@@ -79,8 +92,8 @@ export interface BipedGaitResult {
   standing: boolean;
 }
 
-export function createBipedGait(homes: THREE.Vector3[]): BipedGaitState {
-  const foot = (h: THREE.Vector3): BipedFoot => ({ planted: h.clone(), liftOff: h.clone(), target: h.clone(), inSwing: false, skip: false, progress: 0 });
+export function createBipedGait(homes: THREE.Vector3[], forward = new THREE.Vector3(0, 0, 1)): BipedGaitState {
+  const foot = (h: THREE.Vector3): BipedFoot => ({ planted: h.clone(), liftOff: h.clone(), target: h.clone(), inSwing: false, skip: false, progress: 0, heading: forward.clone() });
   // Starts in double support just after the left foot struck: both feet down.
   return { phase: 0.02, feet: [foot(homes[0]), foot(homes[1])], standing: true };
 }
@@ -130,6 +143,7 @@ export function stepBipedGait(state: BipedGaitState, frame: BipedGaitFrame): Bip
       foot.liftOff.copy(home);
       foot.target.copy(home);
       foot.inSwing = false;
+      if (frame.forward) foot.heading.copy(frame.forward);
     }
   });
 
@@ -166,32 +180,35 @@ export function stepBipedGait(state: BipedGaitState, frame: BipedGaitFrame): Bip
       foot.skip = !moving && flatDistance(first, foot.planted, up) < tol;
     } else if (!swinging && foot.inSwing) {
       foot.inSwing = false;
-      if (!foot.skip) foot.planted.copy(foot.target);
+      if (!foot.skip) {
+        foot.planted.copy(foot.target);
+        if (frame.forward) foot.heading.copy(frame.forward);
+      }
     }
 
     if (!foot.inSwing) {
       foot.progress = local / duty;
-      // Push-off: the heel comes up over the last part of the stance.
-      const raise = sol.heelLift * unit * smooth((foot.progress - 0.6) / 0.4) * (moving ? 1 : 0);
       foot.target.copy(foot.planted);
-      return { position: foot.planted.clone().addScaledVector(up, raise), inSwing: false, progress: foot.progress, target: foot.planted.clone() };
+      // Heel strike, rolled flat, then the heel up over the ball at push-off.
+      return { position: foot.planted.clone(), inSwing: false, progress: foot.progress, target: foot.planted.clone(), pitch: stancePitch(sol, foot.progress), heading: foot.heading.clone() };
     }
 
     const u = (local - duty) / (1 - duty);
     foot.progress = u;
     if (foot.skip) {
       foot.target.copy(foot.planted);
-      return { position: foot.planted.clone(), inSwing: false, progress: u, target: foot.planted.clone() };
+      return { position: foot.planted.clone(), inSwing: false, progress: u, target: foot.planted.clone(), pitch: 0, heading: foot.heading.clone() };
     }
     foot.target.copy(placement(frame, s, (1 - u) * (1 - duty) * period + duty * period * STANCE_AHEAD));
     const along = swingAlong(u, sol.runBlend, duty);
     const position = foot.liftOff.clone().lerp(foot.target, along);
     // A runner's heel folds up toward the buttock as the thigh comes through, before the foot reaches forward.
     const kick = 0.5 * sol.clearance * unit * sol.runBlend * Math.sin(Math.PI * Math.min(1, u / 0.65));
-    const lift = sol.clearance * unit * swingHeight(u, sol.swingPeak);
-    const heel = sol.heelLift * unit * (1 - smooth(u / 0.3));
-    position.addScaledVector(up, Math.max(lift, heel) + kick);
-    return { position, inSwing: true, progress: u, target: foot.target.clone() };
+    position.addScaledVector(up, sol.clearance * unit * swingHeight(u, sol.swingPeak) + kick);
+    // Turning toward where it will land: the body's forward by the time it does.
+    const heading = frame.forward ? foot.heading.clone().lerp(frame.forward, smooth(u / 0.6)) : foot.heading.clone();
+    if (heading.lengthSq() < 1e-12) heading.copy(foot.heading);
+    return { position, inSwing: true, progress: u, target: foot.target.clone(), pitch: swingPitch(sol, u), heading: heading.normalize() };
   }) as [BipedFootPose, BipedFootPose];
 
   return { feet: poses, active: sol, standing: state.standing };

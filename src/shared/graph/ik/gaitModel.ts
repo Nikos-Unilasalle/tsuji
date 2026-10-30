@@ -1,4 +1,4 @@
-import type { HumanSkeleton } from "./skeletons";
+import { footPivot, type FootShape, type HumanSkeleton } from "./skeletons";
 import { boneLengths } from "./fabrik";
 
 /**
@@ -30,6 +30,11 @@ import { boneLengths } from "./fabrik";
  *   seconds and width w the pelvis swings w/2·(1 − 1/cosh(ω₀·Ts/2)),
  *   ω₀ = √(g/h) — about 2 cm for an adult walk, less the faster the steps.
  * - **Lean** into acceleration atan(a/g), and into a turn atan(v·ω/g).
+ * - **Foot roll**: walking, the heel strikes with the toes up (~15–20°), the
+ *   foot rolls flat by about 15% of the stance, and the heel rises over the
+ *   ball for its last 40%, leaving the ground at ~35° (Perry's rockers).
+ *   Running, the foot lands nearly flat and pushes off the ball for longer
+ *   and steeper.
  */
 
 export const GRAVITY = 9.81;
@@ -47,8 +52,10 @@ export interface BodyMetrics {
   /** Shoulder to wrist. */
   armLength: number;
   upperArm: number;
-  /** Not modelled by the skeleton (it ends at the ankle): the anthropometric 0.15 of the height. */
+  /** Heel to the tips of the toes. */
   footLength: number;
+  /** The foot's shape: where it rolls about. */
+  foot: FootShape;
   /** Pelvis to head, the lever a lean turns. */
   trunkLength: number;
 }
@@ -68,7 +75,8 @@ export function bodyMetrics(skeleton: HumanSkeleton): BodyMetrics {
     hipWidth: Math.abs(rest[joint.hip[0]].x - rest[joint.hip[1]].x),
     armLength: lengths[elbowL] + lengths[joint.hand[0]],
     upperArm: lengths[elbowL],
-    footLength: 0.15 * height,
+    footLength: skeleton.foot.heel + skeleton.foot.ball.along + skeleton.foot.toes.along,
+    foot: skeleton.foot,
     trunkLength: Math.max(0.02, rest[joint.head].y - rest[joint.pelvis].y),
   };
 }
@@ -90,6 +98,12 @@ export interface GaitStyle {
   swingPeak: number;
   /** Heel lift at push-off ×: high is a tiptoe, 0 a flat-footed shuffle. */
   heelLift: number;
+  /** How long the heel is up ×, as a share of the stance: past 1/0.4 it never comes down (a tiptoe). */
+  heelTime: number;
+  /** Toes up at heel strike ×: 0 lands flat, − on the ball of the foot. */
+  heelStrike: number;
+  /** Furthest the toes bend at the ball, degrees: on top of the skeleton's own Toe Bend. */
+  toeBend: number;
   /** Knees turned out, degrees (− in). */
   kneeOut: number;
   /** Pelvis lowered by this share of the hip height: a sneak, a Groucho walk. */
@@ -127,6 +141,9 @@ export const NATURAL_STYLE: GaitStyle = {
   clearance: 1,
   swingPeak: 0.4,
   heelLift: 1,
+  heelTime: 1,
+  heelStrike: 1,
+  toeBend: 60,
   kneeOut: 0,
   crouch: 0,
   bob: 1,
@@ -166,7 +183,17 @@ export interface GaitSolution {
   /** Between the two feet's lines, while moving at this speed. */
   stepWidth: number;
   clearance: number;
+  /** How high the ankle rises over the ball at push-off. */
   heelLift: number;
+  /** The foot's pitch as it leaves the ground (+ heel up). */
+  toeOff: number;
+  /** Toes up as the heel lands (− lands on the ball). */
+  heelStrike: number;
+  /** Share of the stance spent rolling flat from the heel strike, and with the heel up (above 1: up from the start). */
+  loadShare: number;
+  heelShare: number;
+  /** The toes' bend limit. */
+  toeBend: number;
   swingPeak: number;
   /** Peak to peak. */
   bob: number;
@@ -244,7 +271,11 @@ export function solveGait(metrics: BodyMetrics, style: GaitStyle, speed: number,
   const stepping = clamp(froude / 0.01, 0, 1);
   const clearance =
     h * lerp(0.07 + 0.12 * Math.min(froude, 0.6), 0.16 + 0.06 * clamp(froude - 0.5, 0, 2), run) * stepping * clamp(finite(style.clearance, 1), 0, 5);
-  const heelLift = metrics.footLength * Math.sin((15 + 20 * Math.min(froude, 1)) * DEG) * stepping * clamp(finite(style.heelLift, 1), 0, 5);
+  // Push-off over the ball, steeper running; the ankle rises by what that roll lifts it.
+  const toeOff = clamp(lerp(30 + 15 * Math.min(froude / 0.5, 1), 45 + 5 * clamp(froude - 0.5, 0, 2), run) * DEG * stepping * clamp(finite(style.heelLift, 1), 0, 5), 0, 75 * DEG);
+  const heelLift = footPivot(metrics.foot, toeOff).up;
+  const heelStrike = clamp(lerp(15 + 6 * Math.min(froude / 0.5, 1), 6, run) * DEG * stepping * clamp(finite(style.heelStrike, 1), -3, 3), -40 * DEG, 35 * DEG);
+  const heelShare = lerp(0.4, 0.6, run) * clamp(finite(style.heelTime, 1), 0, 5);
 
   const halfAngle = Math.asin(clamp(stepLength / (2 * metrics.legLength), 0, 0.95));
   const pendulum = 0.65 * metrics.legLength * (1 - Math.cos(halfAngle));
@@ -279,6 +310,11 @@ export function solveGait(metrics: BodyMetrics, style: GaitStyle, speed: number,
     stepWidth,
     clearance,
     heelLift,
+    toeOff,
+    heelStrike,
+    loadShare: lerp(0.15, 0.08, run),
+    heelShare,
+    toeBend: clamp(finite(style.toeBend, 60), 0, 90) * DEG,
     swingPeak: clamp(finite(style.swingPeak, 0.4), 0.1, 0.9) - 0.1 * run,
     bob,
     sway,
@@ -348,6 +384,28 @@ export function swingHeight(u: number, peak: number): number {
   const p = clamp(peak, 0.05, 0.95);
   const warped = t < p ? 0.5 * (t / p) : 0.5 + 0.5 * ((t - p) / (1 - p));
   return Math.pow(Math.sin(Math.PI * warped), 1.3);
+}
+
+const smooth = (t: number) => {
+  const u = clamp(t, 0, 1);
+  return u * u * (3 - 2 * u);
+};
+
+/**
+ * The foot's pitch (+ heel up) at stance progress `p`, 0..1: from the heel
+ * strike rolled down flat over the load share, flat, then the heel rising
+ * onto the ball through the heel share, to the toe-off angle.
+ */
+export function stancePitch(sol: GaitSolution, p: number): number {
+  const load = -sol.heelStrike * (1 - smooth(p / Math.max(1e-3, sol.loadShare)));
+  const share = Math.max(1e-3, sol.heelShare);
+  return load + sol.toeOff * smooth((p - (1 - share)) / share);
+}
+
+/** The foot's pitch at swing progress `u`: the push-off's angle let go early in the swing, then readied for the next strike. */
+export function swingPitch(sol: GaitSolution, u: number): number {
+  const t = clamp(u, 0, 1);
+  return sol.toeOff * (1 - smooth(t / 0.4)) + stancePitch(sol, 0) * smooth((t - 0.5) / 0.5);
 }
 
 /** Phase of the stride where foot `side` (0 left, 1 right) strikes the ground. */

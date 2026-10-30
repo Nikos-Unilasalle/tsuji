@@ -1,9 +1,9 @@
 import * as THREE from "three";
-import type { HumanSkeleton } from "../ik/skeletons";
-import { armWave, BodyMetrics, GaitSolution, GaitStyle, pelvisMotion, STANCE_AHEAD, swingAlong, swingHeight } from "../ik/gaitModel";
+import { footPivot, type HumanSkeleton } from "../ik/skeletons";
+import { armWave, BodyMetrics, GaitSolution, GaitStyle, pelvisMotion, STANCE_AHEAD, stancePitch, swingAlong, swingHeight, swingPitch } from "../ik/gaitModel";
 
 /**
- * Biped Motion's viewport interface: six handles, each standing where the
+ * Biped Motion's viewport interface: eight handles, each standing where the
  * quantity it edits shows on the body, and the coloured guides that draw the
  * walk they shape — so the gait is designed by grabbing the walk itself.
  *
@@ -15,18 +15,20 @@ import { armWave, BodyMetrics, GaitSolution, GaitStyle, pelvisMotion, STANCE_AHE
  * | Pelvis | corner of the pelvis's path   | sideways: sway · up/down: bob         |
  * | Head   | the head                      | forward/back: lean · up/down: crouch  |
  * | Arm    | the left hand's front swing   | swing: arm swing · in/out: elbow bend |
+ * | Heel   | where the left heel comes up  | up/down: heel lift · along: how long  |
+ * | Strike | toes of the landing left foot | round the heel: heel strike angle     |
  *
  * All in the body's own space at a reference speed (see Biped Motion), and
  * every drag is turned back into the relative style params — a handle never
  * writes an absolute that would stop following the skeleton's proportions.
  */
 
-export const GAIT_HANDLES = ["Stride", "Foot Lift", "Step Width", "Pelvis Sway & Bob", "Lean & Crouch", "Arm Swing & Elbow"] as const;
+export const GAIT_HANDLES = ["Stride", "Foot Lift", "Step Width", "Pelvis Sway & Bob", "Lean & Crouch", "Arm Swing & Elbow", "Heel Lift & Time", "Heel Strike"] as const;
 /** The body axes each handle's drag reads (X left, Y up, Z forward); the others would do nothing. */
-export const GAIT_HANDLE_AXES: ("x" | "y" | "z")[][] = [["z"], ["y"], ["x"], ["x", "y"], ["y", "z"], ["y", "z"]];
-export const GUIDE_COLORS = { foot: 0xf97316, width: 0xfacc15, pelvis: 0x22d3ee, arm: 0xf472b6, lean: 0xa78bfa } as const;
+export const GAIT_HANDLE_AXES: ("x" | "y" | "z")[][] = [["z"], ["y"], ["x"], ["x", "y"], ["y", "z"], ["y", "z"], ["y", "z"], ["y", "z"]];
+export const GUIDE_COLORS = { foot: 0xf97316, width: 0xfacc15, pelvis: 0x22d3ee, arm: 0xf472b6, lean: 0xa78bfa, heel: 0x84cc16 } as const;
 /** One per GAIT_HANDLES entry: the colour of the guide it shapes. */
-export const HANDLE_COLORS = [GUIDE_COLORS.foot, GUIDE_COLORS.foot, GUIDE_COLORS.width, GUIDE_COLORS.pelvis, GUIDE_COLORS.lean, GUIDE_COLORS.arm];
+export const HANDLE_COLORS = [GUIDE_COLORS.foot, GUIDE_COLORS.foot, GUIDE_COLORS.width, GUIDE_COLORS.pelvis, GUIDE_COLORS.lean, GUIDE_COLORS.arm, GUIDE_COLORS.heel, GUIDE_COLORS.heel];
 
 /** The pelvis path is drawn this many times its real size, or a 2 cm sway would be invisible. */
 const PELVIS_MAGNIFY = 4;
@@ -38,7 +40,7 @@ export interface GaitHandleContext {
   style: GaitStyle;
   metrics: BodyMetrics;
   /** Each edited quantity at a multiplier of 1 (or, for lean, the part physics adds). */
-  auto: { stride: number; clearance: number; stepWidth: number; sway: number; bob: number; armAngle: number; physicalLean: number };
+  auto: { stride: number; clearance: number; stepWidth: number; sway: number; bob: number; armAngle: number; physicalLean: number; toeOff: number; heelShare: number; heelStrike: number };
   ankleY: number;
   headRest: THREE.Vector3;
   pelvisRest: THREE.Vector3;
@@ -105,6 +107,9 @@ export function handleContextFor(skeleton: HumanSkeleton, metrics: BodyMetrics, 
     bob: ratio(sol.bob, style.bob, 0.04 * h),
     armAngle: ratio(sol.armAngle, style.armSwing, 20 * DEG),
     physicalLean: sol.lean - style.lean * DEG,
+    toeOff: ratio(sol.toeOff, style.heelLift, 35 * DEG),
+    heelShare: ratio(sol.heelShare, style.heelTime, 0.4 + 0.2 * sol.runBlend),
+    heelStrike: ratio(sol.heelStrike, style.heelStrike, (15 - 9 * sol.runBlend) * DEG),
   };
   const anchor = new THREE.Vector3(0, pelvisRest.y - sol.crouch, 0.45 * h);
 
@@ -124,12 +129,38 @@ export function handleContextFor(skeleton: HumanSkeleton, metrics: BodyMetrics, 
     anchor.clone().add(new THREE.Vector3(sol.sway * PELVIS_MAGNIFY, (sol.bob / 2) * PELVIS_MAGNIFY, 0)),
     headRest.clone().add(new THREE.Vector3(0, -sol.crouch - trunk * (1 - Math.cos(lean)), trunk * Math.sin(lean))),
     arm.hand,
+    heelHandle(sol, w, ankleY, front, travel),
+    strikeHandle(metrics, sol, w, front),
   ];
   return { handles, sol, style, metrics, auto, ankleY, headRest, pelvisRest, shoulderRest, anchor };
 }
 
+/** Over the stance track where the heel leaves the ground, as high as the ankle is lifted at push-off. */
+function heelHandle(sol: GaitSolution, w: number, ankleY: number, front: number, travel: number) {
+  return new THREE.Vector3(w, ankleY + sol.heelLift, front - travel * (1 - Math.min(1, sol.heelShare)));
+}
+
+/** Toes of the foot landing at the stride handle, tipped up about its heel by the strike angle. */
+function strikeHandle(metrics: BodyMetrics, sol: GaitSolution, w: number, front: number) {
+  const { foot, footLength } = metrics;
+  return new THREE.Vector3(w, footLength * Math.sin(sol.heelStrike), front - foot.heel + footLength * Math.cos(sol.heelStrike));
+}
+
 const clamp = (x: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, x));
 const round = (x: number, step = 0.001) => Math.round(x / step) * step;
+
+/** The push-off pitch that lifts the ankle `raise` over the ball. */
+function pitchForLift(metrics: BodyMetrics, raise: number): number {
+  let lo = 0;
+  let hi = 75 * DEG;
+  if (footPivot(metrics.foot, hi).up <= raise) return hi;
+  for (let k = 0; k < 24; k++) {
+    const mid = (lo + hi) / 2;
+    if (footPivot(metrics.foot, mid).up < raise) lo = mid;
+    else hi = mid;
+  }
+  return (lo + hi) / 2;
+}
 
 /** The params handle `index` dropped at `p` (body space) stands for. */
 export function gaitHandlePatch(c: GaitHandleContext, index: number, p: THREE.Vector3, style: GaitStyle): Record<string, unknown> | null {
@@ -174,6 +205,22 @@ export function gaitHandlePatch(c: GaitHandleContext, index: number, p: THREE.Ve
         preset: "custom",
       };
     }
+    case 6: {
+      const travel = sol.stride * sol.duty;
+      const front = travel * STANCE_AHEAD;
+      const share = 1 - (front - p.z) / Math.max(1e-6, travel);
+      return {
+        heelLift: round(clamp(pitchForLift(metrics, Math.max(0, p.y - c.ankleY)) / Math.max(1e-6, auto.toeOff), 0, 5), 0.01),
+        heelTime: round(clamp(clamp(share, 0, 1) / Math.max(1e-6, auto.heelShare), 0, 5), 0.01),
+        preset: "custom",
+      };
+    }
+    case 7: {
+      const travel = sol.stride * sol.duty;
+      const heelZ = travel * STANCE_AHEAD - metrics.foot.heel;
+      const angle = Math.atan2(p.y, Math.max(1e-6, p.z - heelZ));
+      return { heelStrike: round(clamp(angle / Math.max(1e-6, auto.heelStrike), -3, 3), 0.01), preset: "custom" };
+    }
     default:
       return null;
   }
@@ -188,22 +235,30 @@ export function buildGaitGuides(c: GaitHandleContext, pelvis: THREE.Vector3, hea
   const back = front - travel;
   const paths: { points: THREE.Vector3[]; color: number; closed?: boolean }[] = [];
 
-  // Foot loops: the swing arc forward, the stance back along the ground with the heel coming up at the end.
+  // Foot loops: the swing arc forward, the stance back along the ground, the ankle rolled over the heel as it lands and over the ball as it pushes off.
   for (const side of [1, -1]) {
     const x = (side * sol.stepWidth) / 2;
     const loop: THREE.Vector3[] = [];
     for (let k = 0; k <= N; k++) {
       const u = k / N;
       const kick = 0.5 * sol.clearance * sol.runBlend * Math.sin(Math.PI * Math.min(1, u / 0.65));
-      const y = Math.max(sol.clearance * swingHeight(u, sol.swingPeak), sol.heelLift * (1 - smoothstep(u / 0.3))) + kick;
-      loop.push(new THREE.Vector3(x, c.ankleY + y, back + travel * swingAlong(u, sol.runBlend, sol.duty)));
+      const roll = footPivot(metrics.foot, swingPitch(sol, u));
+      const y = sol.clearance * swingHeight(u, sol.swingPeak) + kick + roll.up;
+      loop.push(new THREE.Vector3(x, c.ankleY + y, back + travel * swingAlong(u, sol.runBlend, sol.duty) + roll.along));
     }
     for (let k = 1; k < N; k++) {
       const u = k / N;
-      loop.push(new THREE.Vector3(x, c.ankleY + sol.heelLift * smoothstep((u - 0.6) / 0.4), front - travel * u));
+      const roll = footPivot(metrics.foot, stancePitch(sol, u));
+      loop.push(new THREE.Vector3(x, c.ankleY + roll.up, front - travel * u + roll.along));
     }
     paths.push({ points: loop, color: side > 0 ? GUIDE_COLORS.foot : 0x9a4a1a, closed: true });
   }
+
+  // The heel: where it leaves the ground, up to how high push-off lifts the ankle; the landing foot's sole, toes up.
+  const heelAt = c.handles[6];
+  paths.push({ points: [new THREE.Vector3(heelAt.x, c.ankleY, heelAt.z), heelAt.clone(), new THREE.Vector3(heelAt.x, heelAt.y, back)], color: GUIDE_COLORS.heel });
+  const heelGround = new THREE.Vector3(c.handles[7].x, 0.002, front - metrics.foot.heel);
+  paths.push({ points: [heelGround.clone().setZ(heelGround.z + metrics.footLength), heelGround, c.handles[7].clone()], color: GUIDE_COLORS.heel });
 
   paths.push({ points: [new THREE.Vector3(-sol.stepWidth / 2, c.ankleY, 0), new THREE.Vector3(sol.stepWidth / 2, c.ankleY, 0)], color: GUIDE_COLORS.width });
 
@@ -229,9 +284,4 @@ export function buildGaitGuides(c: GaitHandleContext, pelvis: THREE.Vector3, hea
   paths.push({ points: [pelvis.clone(), head.clone()], color: GUIDE_COLORS.lean });
   paths.push({ points: [pelvis.clone(), pelvis.clone().add(new THREE.Vector3(0, metrics.trunkLength, 0))], color: 0x4c1d95 });
   return paths;
-}
-
-function smoothstep(t: number): number {
-  const u = Math.max(0, Math.min(1, t));
-  return u * u * (3 - 2 * u);
 }

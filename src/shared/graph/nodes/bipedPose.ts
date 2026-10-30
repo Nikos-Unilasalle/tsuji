@@ -132,7 +132,7 @@ export const RIG_BIPED_POSE_NODE: NodeDefinition = {
     const pose = blendPose(upstream, living, (i) => influence * region[regionOf(i)], influence * region.body);
 
     const solver = { armPull: data.armPull, ...data.solver };
-    const positions = solveHuman(skeleton, pose.controls, { ...solver, pelvisRotation: pose.pelvisRotation });
+    const positions = solveHuman(skeleton, pose.controls, { ...solver, pelvisRotation: pose.pelvisRotation, feet: pose.feet });
     // Limbs swing about the joints of the pose being edited, not of the blend.
     const ownJoints = influence >= 1 && !wiggling ? positions : solveHuman(skeleton, own.controls, { ...solver, pelvisRotation: own.pelvisRotation });
     contexts.set(ctx.nodeId, { skeleton, joints: ownJoints, controls: own.controls });
@@ -166,7 +166,7 @@ export const RIG_BIPED_POSE_NODE: NodeDefinition = {
     }
     publishRig(group, parentsOf(skeleton.rig), skeleton.rig.rest, positions, group.matrix, skeleton.names);
     group.userData.humanRig = data;
-    group.userData.humanPose = { controls: pose.controls, pelvisRotation: pose.pelvisRotation, matrix: group.matrix.clone() } satisfies HumanPose;
+    group.userData.humanPose = { controls: pose.controls, pelvisRotation: pose.pelvisRotation, feet: pose.feet, matrix: group.matrix.clone() } satisfies HumanPose;
     group.updateMatrixWorld(true);
     const world = positions.map((p) => p.clone().applyMatrix4(group.matrix));
     return {

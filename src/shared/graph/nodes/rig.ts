@@ -134,6 +134,7 @@ function humanParams(params: Record<string, unknown>): HumanParams {
     neck: Math.max(0.05, n("neck")),
     headSize: Math.max(0.05, n("headSize")),
     hands: Math.max(0.05, n("hands")),
+    feet: Math.max(0.05, n("feet")),
     // The arms' and legs' rest angles are also the pose Skin binds to: one pose,
     // so a mesh skinned to a skeleton at rest is never deformed until a bone moves.
     armAngle: Math.max(0, Math.min(150, numberInput(undefined, params.bindArmAngle, HUMAN_DEFAULTS.armAngle))),
@@ -146,6 +147,7 @@ function humanParams(params: Record<string, unknown>): HumanParams {
     hipBack: n("hipBack"),
     hipSide: n("hipSide"),
     shoulderRange: n("shoulderRange"),
+    toeBend: n("toeBend"),
     spineBend: n("spineBend"),
     neckBend: n("neckBend"),
   };
@@ -159,6 +161,7 @@ const HUMAN_LIMIT_FIELDS: ParamFieldDef[] = [
   { id: "hipBack", label: "Hip Back (°)", kind: "number", step: 5, group: "Joint Limits" },
   { id: "hipSide", label: "Hip Side (°)", kind: "number", step: 5, group: "Joint Limits" },
   { id: "shoulderRange", label: "Shoulder Range (°)", kind: "number", step: 5, group: "Joint Limits" },
+  { id: "toeBend", label: "Toe Bend (°)", kind: "number", step: 5, group: "Joint Limits" },
   { id: "spineBend", label: "Spine Bend (°)", kind: "number", step: 5, group: "Joint Limits" },
   { id: "neckBend", label: "Neck Bend (°)", kind: "number", step: 5, group: "Joint Limits" },
 ];
@@ -177,6 +180,10 @@ const HUMAN_LIMIT_FIELDS: ParamFieldDef[] = [
  *
  * Arm Pull is how much the hands drag the chest along against the head — 0
  * leaves the torso to the head alone, 1 lets a hand pull as hard as the head.
+ *
+ * Each foot rolls by itself off its ankle: raise a Foot control a little and
+ * the heel comes up over the ball, the toes left flat on the ground and bent
+ * at it (up to Toe Bend); nothing goes under the ground at y = 0.
  */
 export const RIG_HUMAN_NODE: NodeDefinition = {
   type: "rig/human",
@@ -220,6 +227,7 @@ export const RIG_HUMAN_NODE: NodeDefinition = {
     { id: "neck", label: "Neck Length ×", kind: "number", step: 0.05, group: "Proportions" },
     { id: "headSize", label: "Head Size ×", kind: "number", step: 0.05, group: "Proportions" },
     { id: "hands", label: "Hand Length ×", kind: "number", step: 0.05, group: "Proportions" },
+    { id: "feet", label: "Foot Length ×", kind: "number", step: 0.05, group: "Proportions" },
     { id: "spineSegments", label: "Spine Segments", kind: "number", step: 1, group: "Proportions" },
     { id: "leftWristFlex", label: "Left Wrist Flex (°, − back)", kind: "number", step: 5, group: "Wrists" },
     { id: "leftWristSide", label: "Left Wrist Tilt (°, + thumb side)", kind: "number", step: 5, group: "Wrists" },

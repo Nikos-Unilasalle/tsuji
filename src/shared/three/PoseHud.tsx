@@ -19,7 +19,7 @@ const KEY: [string, string][] = [
   ["#22d3ee", "Pelvis — rotate (E) to turn the hips"],
   ["#a78bfa", "Head"],
   ["#f472b6", "Hands"],
-  ["#f97316", "Feet"],
+  ["#f97316", "Feet (ankles) — raise a little and the heel rolls up onto the toes"],
   ["#facc15", "Elbow & knee poles"],
 ];
 

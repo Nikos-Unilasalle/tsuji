@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { createNodeCache } from "../nodeCaches";
 import { asVector3 } from "./transform";
-import type { HumanSkeleton } from "../ik/skeletons";
+import type { FootRoll, HumanSkeleton } from "../ik/skeletons";
 import { blendPose, POSE_PRESETS, POSE_REGIONS, type PosePresetKey } from "../ik/humanPose";
 import { DEFAULT_ROUTE, planRoute, projectOnRoute, routeMatrix, type RouteMark, type RoutePlan } from "../ik/route";
 
@@ -57,15 +57,15 @@ export function holdRoutePose(
   nodeId: string,
   skeleton: HumanSkeleton,
   skeletonKey: string,
-  walk: { controls: THREE.Vector3[]; pelvisRotation: THREE.Quaternion },
-  wired: { controls: THREE.Vector3[]; pelvisRotation: THREE.Quaternion } | null,
+  walk: { controls: THREE.Vector3[]; pelvisRotation: THREE.Quaternion; feet?: (FootRoll | undefined)[] },
+  wired: { controls: THREE.Vector3[]; pelvisRotation: THREE.Quaternion; feet?: (FootRoll | undefined)[] } | null,
   /** The poses wired into the node's Pose 1, Pose 2… inputs: a stop's "input:N". */
   inputs: ({ controls: THREE.Vector3[]; pelvisRotation: THREE.Quaternion } | null)[],
   mark: RouteMark | undefined,
   weight: number,
 ) {
   if (!mark?.pose || weight <= 0) return walk;
-  let target: { controls: THREE.Vector3[]; pelvisRotation: THREE.Quaternion } | null = null;
+  let target: { controls: THREE.Vector3[]; pelvisRotation: THREE.Quaternion; feet?: (FootRoll | undefined)[] } | null = null;
   if (mark.pose === "wired") target = wired;
   else if (mark.pose.startsWith("input:")) target = inputs[Number(mark.pose.slice(6))] ?? null;
   else if (mark.pose in POSE_PRESETS) {

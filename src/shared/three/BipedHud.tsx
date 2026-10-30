@@ -248,6 +248,7 @@ function GaitReadout({ info, showGuides }: { info: BipedGaitInfo | null; showGui
       {row("Ground contact", `${Math.round(info.duty * 100)} %`, "Duty factor: share of the stride each foot is down. Over 50 % is a walk, under is a run")}
       {moving && info.doubleSupport > 0 && row("Double support", `${Math.round(info.doubleSupport * 1000)} ms`, "Both feet down, each step")}
       {moving && info.flightTime > 0 && row("Flight", `${Math.round(info.flightTime * 1000)} ms`, "Both feet in the air, each step")}
+      {moving && row("Foot roll", `${info.heelStrike >= 0 ? "heel" : "ball"} ${Math.round(Math.abs(info.heelStrike))}° · push ${Math.round(info.toeOff)}°`, "How the foot lands (toes up on the heel, or on the ball) and its pitch as it pushes off the ball; the toes bend to stay on the ground")}
       {row("Hip height", `${info.hipHeight.toFixed(2)} m`, `From the skeleton: it sets every length and time here. Natural pace ${info.preferredSpeed.toFixed(2)} m/s`)}
       {showGuides && (
         <div style={{ borderTop: "1px solid rgba(255,255,255,0.12)", marginTop: 4, paddingTop: 5, display: "flex", flexDirection: "column", gap: 2 }}>
