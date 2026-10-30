@@ -26,6 +26,7 @@ import { cloneKeyframes, cloneParams, cloneParamValue, newNodeParams } from "../
 import { groupSelection, materializeNewPort, ungroupNode } from "../shared/graph/groupSelection";
 import {
   boundaryNodes,
+  collectAllNodeIds,
   GROUP_INPUT_TYPE,
   GROUP_OUTPUT_TYPE,
   GROUP_TYPE,
@@ -304,7 +305,7 @@ function sameFlowNode(a: Node<GraphNodeData>, b: Node<GraphNodeData>): boolean {
   );
 }
 
-function toGraph(
+export function toGraph(
   baseNodes: NodeInstance[],
   flowNodes: Node<GraphNodeData>[],
   flowEdges: Edge[],
@@ -329,16 +330,20 @@ function toGraph(
       toSocket: e.targetHandle ?? "",
     }));
 
+  // Keyframes and pins are kept for every node still in the document, at any depth: a grouped node's live on the
+  // level that owns the timeline (see groupSelection.ts), and checking them against this canvas's own nodes alone
+  // threw them away at the next edit made outside the group.
+  const keptIds = new Set(collectAllNodeIds({ nodes, connections: [] }));
   const keyframes: KeyframeStore = {};
   if (existingKeyframes) {
     for (const nodeId of Object.keys(existingKeyframes)) {
-      if (flowNodeIds.has(nodeId)) {
+      if (keptIds.has(nodeId)) {
         keyframes[nodeId] = existingKeyframes[nodeId];
       }
     }
   }
 
-  const exposedParams = (existingExposedParams ?? []).filter((e) => flowNodeIds.has(e.nodeId));
+  const exposedParams = (existingExposedParams ?? []).filter((e) => keptIds.has(e.nodeId));
 
   return { nodes, connections, keyframes, markers: existingMarkers ?? [], exposedParams };
 }
