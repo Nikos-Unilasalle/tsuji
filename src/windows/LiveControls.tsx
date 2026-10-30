@@ -41,6 +41,8 @@ export function Knob({
   title,
   onChange,
   onReset,
+  onDragStart,
+  compact,
 }: {
   value: number;
   range: ViRange;
@@ -54,6 +56,10 @@ export function Knob({
   onChange: (v: number) => void;
   /** Double-click: back to the param's default. */
   onReset?: () => void;
+  /** A drag begins (a vector's linked axes take their starting point from it). */
+  onDragStart?: () => void;
+  /** Tight: no room kept for a long label (a vector's axes, side by side). */
+  compact?: boolean;
 }) {
   const gid = useId().replace(/:/g, "");
   const drag = useRef<{ y: number; start: number } | null>(null);
@@ -70,7 +76,7 @@ export function Knob({
   const to = START + SWEEP * Math.max(f, zero);
 
   return (
-    <div className={`vi-control vi-knob${disabled ? " vi-disabled" : ""}`} title={title} style={{ width: Math.max(s, 64) }}>
+    <div className={`vi-control vi-knob${disabled ? " vi-disabled" : ""}`} title={title} style={{ width: compact ? s + 6 : Math.max(s, 64), minWidth: compact ? 0 : undefined }}>
       <svg
         width={s}
         height={s}
@@ -81,6 +87,7 @@ export function Knob({
           e.preventDefault();
           (e.currentTarget as Element).setPointerCapture(e.pointerId);
           drag.current = { y: e.clientY, start: value };
+          onDragStart?.();
         }}
         onPointerMove={(e) => {
           const d = drag.current;

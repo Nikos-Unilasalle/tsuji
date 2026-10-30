@@ -52,11 +52,21 @@
 .vi-fullscreen .vi-body {
   flex: 1;
   display: flex;
-  flex-wrap: wrap;
-  align-content: center;
+  flex-direction: column;
+  align-items: center;
   justify-content: center;
-  gap: 28px;
+  gap: 24px;
   padding: 24px;
+}
+
+/* Each node's row of controls centred, as wide as the widest, so the rules between them line up. */
+.vi-fullscreen .vi-group {
+  min-width: min(100%, 640px);
+}
+
+.vi-fullscreen .vi-row {
+  justify-content: center;
+  gap: 20px;
 }
 
 .vi-titlebar {
@@ -385,4 +395,68 @@
 
 .vi-knob-ring {
   stroke: color-mix(in srgb, var(--vi-text) 6%, transparent);
+}
+
+/* Vector: a knob per axis under one name, with the link that turns them together */
+.vi-vector {
+  padding: 4px 6px 2px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--vi-text) 4%, transparent);
+  border: 1px solid color-mix(in srgb, var(--vi-text) 7%, transparent);
+}
+
+.vi-vector-knobs {
+  display: flex;
+  gap: 2px;
+}
+
+.vi-vector-axis {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.vi-vector-name {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.vi-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  background: none;
+  color: var(--vi-muted);
+  cursor: pointer;
+}
+
+.vi-link:hover {
+  color: var(--vi-text);
+}
+
+.vi-link.vi-on {
+  color: var(--vi-accent);
+  border-color: color-mix(in srgb, var(--vi-accent) 55%, transparent);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--vi-accent) 35%, transparent);
+}
+
+.vi-fullscreen .vi-link {
+  width: 24px;
+  height: 24px;
+}
+
+/* A light rule between one node's controls and the next's. */
+.vi-group + .vi-group {
+  border-top: 1px solid color-mix(in srgb, var(--vi-text) 10%, transparent);
+  padding-top: 8px;
+}
+
+.vi-fullscreen .vi-group + .vi-group {
+  padding-top: 24px;
 }

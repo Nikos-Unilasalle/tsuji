@@ -3,11 +3,11 @@ import { NodeDefinition } from "../types";
 /**
  * Virtual Interface — a control surface for playing a scene live. It draws every pinned param (the ones pinned from
  * the param panel) as hardware in the 3D view: a knob for a number, a switch for an on/off, a stepped selector for a
- * menu. It evaluates to nothing; it is the HUD it shows (see windows/VirtualInterfaceHUD.tsx), and while it is shown
+ * menu, a knob per axis for a vector (whose axes can be linked to turn together — kept in `linked`). It evaluates to nothing; it is the HUD it shows (see windows/VirtualInterfaceHUD.tsx), and while it is shown
  * it stands in for the plain Pinned Params list.
  *
  * A knob needs a range a number field does not carry, so each knob gets one guessed from its value (defaultRange) and
- * kept, once edited, in `ranges` — keyed "nodeId:paramId", in the units the panel shows (degrees, percent).
+ * kept, once edited, in `ranges` — keyed "nodeId:paramId" ("nodeId:paramId.x" for a vector's axis), in the units the panel shows (degrees, percent).
  */
 
 export const VI_ACCENTS = ["theme", "magenta", "cyan", "amber", "lime", "white"] as const;
@@ -106,7 +106,7 @@ export const VIRTUAL_INTERFACE_NODE: NodeDefinition = {
   category: "io",
   inputs: [],
   outputs: [],
-  defaultParams: { title: "Live", show: true, accent: "theme", size: "M", ranges: {} },
+  defaultParams: { title: "Live", show: true, accent: "theme", size: "M", ranges: {}, linked: {} },
   paramFields: [
     { id: "title", label: "Title", kind: "text" },
     { id: "show", label: "Show in the 3D view (pin params from the panel to add controls)", kind: "boolean" },
@@ -115,3 +115,24 @@ export const VIRTUAL_INTERFACE_NODE: NodeDefinition = {
   ],
   evaluate: () => ({}),
 };
+
+export type ViAxis = "x" | "y" | "z";
+
+/** A vector axis's range when none was set: a scale from 0 with room to double, an angle a turn either way, anything
+ * else (a position, an offset) the same distance either side of zero, wide enough to move. */
+export function vectorAxisRange(value: number, field: { degrees?: boolean; label?: string } = {}): ViRange {
+  const v = Number.isFinite(value) ? value : 0;
+  if (field.degrees) return [-180, 180];
+  if (/scale|size/i.test(field.label ?? "") && v >= 0) return [0, niceCeil(Math.max(v * 2, 2))];
+  const m = niceCeil(Math.max(Math.abs(v) * 2, 5));
+  return [-m, m];
+}
+
+/** A vector knob turned while its axes are linked: every axis moves by what the turned one moved since the drag began
+ * — the same amount, not the same ratio, so an axis at zero follows too. */
+export function linkedVector(start: Record<ViAxis, number>, axis: ViAxis, next: number, axes: readonly ViAxis[]): Record<ViAxis, number> {
+  const delta = next - start[axis];
+  const out = { ...start };
+  for (const k of axes) out[k] = k === axis ? next : start[k] + delta;
+  return out;
+}
