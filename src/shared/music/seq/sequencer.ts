@@ -16,6 +16,7 @@
 import { ArpSettings, arpNote, arpPool, arpStepBeats } from "./arp";
 import { ChordName, chordNotes } from "./chords";
 import { hash01 } from "./hash";
+import type { BankLayout } from "./order";
 
 export interface Clock {
   bpm: number;
@@ -65,6 +66,9 @@ export interface Sequence {
   arp?: ArpSettings | null;
   /** Makes two tracks with the same pattern draw their chances differently. */
   seed?: number;
+  /** A bank of patterns laid end to end along an order list (order.ts): `pattern` is the whole song; this says which
+   * numbered pattern is where. The sequencer does not read it. */
+  bank?: BankLayout;
 }
 
 export interface NoteEvent {

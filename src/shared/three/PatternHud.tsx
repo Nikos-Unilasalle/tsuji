@@ -4,7 +4,8 @@ import { CommitSlider } from "./RigHuds";
 import { DRUM_NOTES, DrumName } from "../music/dsp/drums";
 import type { PreviewSound } from "../music/engine/description";
 import { CHORD_NAMES, ChordName } from "../music/seq/chords";
-import { formatPattern, noteName, parsePattern } from "../music/seq/notation";
+import { compactPattern, formatPattern, noteName, parsePattern } from "../music/seq/notation";
+import { joinBank, positionAt, splitBank } from "../music/seq/order";
 import {
   DRUM_LANES,
   DRUM_LETTERS,
@@ -151,8 +152,11 @@ export function PatternHud({
   onPreview: (sound: PreviewSound, note: number, velocity: number) => void;
 }) {
   const p = node.params;
-  const length = Math.max(1, Math.round(Number(p.length) || 16));
-  const cells = parsePattern(String(p.steps ?? ""), length);
+  const text = String(p.steps ?? "");
+  // A bank (an Order List before it, or | in its text): the HUD shows one numbered pattern at a time.
+  const bank = readSequence()?.bank ?? null;
+  const sections = bank ? splitBank(text) : null;
+  const [picked, setPicked] = useState<number | null>(null);
   const [cursor, setCursor] = useState(0);
   const [lane, setLane] = useState(0);
   const [octave, setOctave] = useState(4);
@@ -162,6 +166,25 @@ export function PatternHud({
   /** The step the last note was typed on, while the next key may still give it its octave or its sharp. */
   const lastTyped = useRef<number | null>(null);
   const [focused, setFocused] = useState(false);
+
+  const songStep = useLiveStep(() => {
+    const seq = readSequence();
+    const { frame, fps } = readPlayhead();
+    const t = (frame - startFrame) / Math.max(1, fps);
+    if (!seq || t < 0) return -1;
+    return stepAt(seq.clock, 48_000, t * 48_000);
+  });
+  const at = bank && songStep >= 0 ? positionAt(bank, songStep) : null;
+  /** The pattern number shown: the one playing, unless you are typing in it or picked another with the song stopped. */
+  const patternCount = bank ? Math.max(sections!.length, bank.lengths.length) : 1;
+  const number = bank ? Math.min(patternCount - 1, !focused && at ? at.pattern : (picked ?? at?.pattern ?? bank.list[0] ?? 0)) : 0;
+  const length = bank ? Math.max(1, bank.lengths[number] ?? 1) : Math.max(1, Math.round(Number(p.length) || 16));
+  const cells = parsePattern(bank ? (sections![number] ?? "") : text, length);
+  const step = bank ? (at && at.pattern === number ? at.row : -1) : songStep < 0 ? -1 : songStep % length;
+  const pick = (k: number) => {
+    setPicked(Math.min(patternCount - 1, Math.max(0, k)));
+    setCursor(0);
+  };
   /** The pitch the last note clicked, typed or selected had: a click on an empty step writes it again. */
   const [lastNote, setLastNote] = useState(60);
   /** The steps a press-and-drag runs over, from where it started. */
@@ -169,18 +192,16 @@ export function PatternHud({
   const dragRef = useRef<{ from: number; to: number; moved: boolean } | null>(null);
   const cur = Math.min(cursor, length - 1);
 
-  const write = (next: (Cell | null)[]) => onParams({ steps: formatPattern(next, { drums }) }, node.id);
+  const write = (next: (Cell | null)[]) => {
+    if (!sections) return onParams({ steps: formatPattern(next, { drums }) }, node.id);
+    const all = [...sections];
+    while (all.length <= number) all.push("");
+    all[number] = compactPattern(formatPattern(next, { drums }));
+    onParams({ steps: joinBank(all) }, node.id);
+  };
   const audition = (note: number, velocity = 0.8) => previewSound && onPreview(previewSound, note, velocity);
   const focusKeys = () => keysRef.current?.focus({ preventScroll: true });
 
-  const step = useLiveStep(() => {
-    const seq = readSequence();
-    const { frame, fps } = readPlayhead();
-    const t = (frame - startFrame) / Math.max(1, fps);
-    if (!seq || t < 0) return -1;
-    const g = stepAt(seq.clock, 48_000, t * 48_000);
-    return g < 0 ? -1 : g % length;
-  });
 
   // A long pattern (a whole converted song) is shown a page at a time: the page holding the cursor while you type, the
   // step playing otherwise — thousands of cells redrawn every frame would stall the app.
@@ -432,7 +453,23 @@ export function PatternHud({
             {step >= 0 ? `Bar ${Math.floor(step / STEPS_PER_ROW) + 1} · step ${(step % STEPS_PER_ROW) + 1}` : "—"}
           </span>
           <HudSeparator />
-          <LengthField length={length} onLength={(n) => onParams({ length: String(n), steps: formatPattern(resize(cells, n), { drums }) }, node.id)} />
+          {bank ? (
+            <span
+              style={{ display: "flex", alignItems: "center", gap: 3, color: "#94a3b8", fontVariantNumeric: "tabular-nums" }}
+              title="The numbered pattern shown: the one playing, or pick one (its length is the Order List's)"
+            >
+              <button type="button" className="viewport-hud-button" style={{ width: 22 }} disabled={number <= 0} onPointerDown={(e) => e.preventDefault()} onClick={() => pick(number - 1)}>
+                ◀
+              </button>
+              <span style={{ color: "#fff", minWidth: 70, textAlign: "center" }}>Pattern {String(number).padStart(2, "0")}</span>
+              <button type="button" className="viewport-hud-button" style={{ width: 22 }} disabled={number >= patternCount - 1} onPointerDown={(e) => e.preventDefault()} onClick={() => pick(number + 1)}>
+                ▶
+              </button>
+              {length} steps{at ? ` · order ${at.position + 1}/${bank.list.length}` : ` · ${bank.list.length} in the order`}
+            </span>
+          ) : (
+            <LengthField length={length} onLength={(n) => onParams({ length: String(n), steps: formatPattern(resize(cells, n), { drums }) }, node.id)} />
+          )}
           {!drums && (
             <span style={{ display: "flex", alignItems: "center", gap: 3 }} title={noteCell ? "The selected note's octave: − and + (or [ ]) move it" : "The octave the next notes are written in: − and + (or [ ])"}>
               <button type="button" className="viewport-hud-button" style={{ width: 22 }} onPointerDown={(e) => e.preventDefault()} onClick={() => shiftOctave(-1)}>
@@ -485,7 +522,11 @@ export function PatternHud({
           readOnly
           value=""
           onKeyDown={onKeyDown}
-          onFocus={() => setFocused(true)}
+          onFocus={() => {
+            setFocused(true);
+            // Typing keeps the pattern you are in, even as the song moves on.
+            if (bank) setPicked(number);
+          }}
           onBlur={() => setFocused(false)}
           style={{ position: "absolute", opacity: 0, width: 1, height: 1, pointerEvents: "none" }}
         />

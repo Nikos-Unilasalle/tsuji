@@ -4,6 +4,7 @@
  */
 import type { DrumSettings } from "../dsp/drums";
 import type { FmPatch } from "../dsp/fm";
+import type { SongOrder } from "../seq/order";
 import type { Sequence } from "../seq/sequencer";
 
 interface TrackBase {
@@ -64,7 +65,8 @@ export const EMPTY_DESCRIPTION: MusicDescription = { tracks: [], master: 1 };
  * (a voice → Music Out). One socket type, three shapes; each node reads the one it wants and ignores the others.
  */
 export type MusicValue =
-  | { kind: "clock"; clock: Sequence["clock"] }
+  /** `order`: an Order List's, for the Patterns after it. */
+  | { kind: "clock"; clock: Sequence["clock"]; order?: SongOrder }
   | { kind: "sequence"; seq: Sequence }
   | TrackDescription;
 
@@ -87,4 +89,11 @@ export function clockOf(v: unknown): Sequence["clock"] | null {
   const m = v as MusicValue;
   if (m.kind === "clock") return m.clock;
   return sequenceOf(m)?.clock ?? null;
+}
+
+/** The order list a clock carries, when an Order List is on its way. */
+export function orderOf(v: unknown): SongOrder | null {
+  if (typeof v !== "object" || v === null) return null;
+  const m = v as MusicValue;
+  return m.kind === "clock" ? (m.order ?? null) : null;
 }

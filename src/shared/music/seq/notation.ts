@@ -6,6 +6,7 @@
  *
  * A step is one of:
  *   .  or  -          empty
+ *   .*N               N empty steps (a converted song's long silences)
  *   off               ends the note sounding
  *   NOTE[+NOTE…][…]   a note — more joined with + are struck with it (kick+hat) — then any of, in any order:
  *     :CHORD            a chord on it (maj min 7 9 sus dim maj7 min7 sus2 dim7 aug)
@@ -91,9 +92,24 @@ export function parseCell(word: string): Cell | null {
   return cell;
 }
 
+const MAX_RUN = 65_536;
+
+/** A pattern's text → one word per step, `.*N` spelled out as N empty steps. */
+export function stepWords(text: string): string[] {
+  const words: string[] = [];
+  for (const w of String(text ?? "").split(/\s+/)) {
+    if (w === "") continue;
+    const run = /^\.\*(\d+)$/.exec(w);
+    if (run) {
+      for (let k = Math.min(MAX_RUN, Number(run[1])); k > 0; k--) words.push(".");
+    } else words.push(w);
+  }
+  return words;
+}
+
 /** A whole pattern's text → its steps, `length` long (padded with empty steps, or cut). */
 export function parsePattern(text: string, length: number): (Cell | null)[] {
-  const words = String(text ?? "").split(/\s+/).filter((w) => w !== "");
+  const words = stepWords(text);
   const L = Math.max(1, Math.round(length));
   return Array.from({ length: L }, (_, i) => (i < words.length ? parseCell(words[i]) : null));
 }
@@ -118,4 +134,24 @@ export function formatCell(cell: Cell | null, opts: { drums?: boolean } = {}): s
 
 export function formatPattern(steps: readonly (Cell | null)[], opts: { drums?: boolean } = {}): string {
   return steps.map((c) => formatCell(c, opts)).join(" ");
+}
+
+/** The same text, each run of 4 or more empty steps written `.*N` (a converted song's patterns stay readable). */
+export function compactPattern(text: string): string {
+  const out: string[] = [];
+  let run = 0;
+  const flush = () => {
+    if (run >= 4) out.push(`.*${run}`);
+    else for (; run > 0; run--) out.push(".");
+    run = 0;
+  };
+  for (const w of stepWords(text)) {
+    if (w === "." || w === "-") run++;
+    else {
+      flush();
+      out.push(w);
+    }
+  }
+  flush();
+  return out.join(" ");
 }

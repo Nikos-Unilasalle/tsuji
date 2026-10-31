@@ -10,6 +10,10 @@ song: an order list, patterns of rows of cells, instruments with their PCM) and 
     so speed 6 → 2 steps a row at 8 a beat, and a song changing speed every row (FastTracker's shuffle: 2, 3, 4…)
     gets one step per tick, 24 a beat, its groove intact. The song plays its order list once; Dxx (break) and Bxx
     (jump) are followed, a jump back ends it;
+  - the order list is kept: an Order List node between the Clock and the Patterns, and each Pattern a bank of the
+    module's patterns (`|` between them), numbered as in the tracker. A pattern played twice the same way (in every
+    track) is written once; one that plays differently at another position (entered mid-way by Dxx, a note ringing
+    in from before) gets a number of its own after the module's;
   - each channel × instrument is a track (a voice plays one sound); a note on a channel ends what its other tracks
     held, as a channel is monophonic. Key-off (XM), C00 and ECx end notes; a one-shot sample ends its note when it
     would run out;
@@ -43,7 +47,8 @@ import sys
 from collections import Counter, defaultdict
 
 NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
-MAX_STEPS = 16384
+MAX_STEPS = 65536  # a song laid out along its order (a Pattern bank's longest)
+MAX_PATTERN = 16384  # one pattern's
 
 
 def note_name(m: int) -> str:
@@ -424,7 +429,12 @@ def convert(song: Song, overrides: dict, title: str) -> dict:
                 return
 
     step = 0
+    segments = []  # (module pattern, first row, start step): a new one at each order position, or a jump inside one
+    last = None
     for _pos, p, r, speed, _b in rows:
+        if last is None or (_pos, p) != last[:2] or r != last[2] + 1:
+            segments.append((p, r, step))
+        last = (_pos, p, r)
         row_steps = max(1, round(speed / step_ticks))
         for c, cell in enumerate(song.patterns[p][r]):
             st = state[c]
@@ -522,7 +532,7 @@ def convert(song: Song, overrides: dict, title: str) -> dict:
     for c in range(song.channels):
         close_loop(c, step)
     if step > MAX_STEPS:
-        sys.exit(f"{step} steps: past tsuji's {MAX_STEPS} (a Pattern's longest)")
+        sys.exit(f"{step} steps: past tsuji's {MAX_STEPS} (a song's longest)")
     # Drum hits into words: the hits of a step joined, each with its velocity; a late first hit by DLY.
     order_ = ["kick", "snare", "clap", "hat", "openhat", "tomlow", "tomhigh"]
     for t in tracks.values():
@@ -539,11 +549,55 @@ def convert(song: Song, overrides: dict, title: str) -> dict:
         "bpm": bpm,
         "steps_per_beat": steps_per_beat,
         "total_steps": step,
+        "segments": segments,
+        "patterns": len(song.patterns),
         "seconds": step * step_seconds,
         "tracks": tracks,
         "roles": roles,
         "names": {k: song.instruments[k].name for k in roles},
     }
+
+
+def bank_order(conv: dict, tracks_words: list):
+    """The song cut at its order positions: the order (pattern numbers), each number's slice of the song (one of its
+    plays: number, start, end) and length. A module pattern keeps its number the first way it plays; played another
+    way (in any track), it gets a new number after the module's."""
+    bounds = [seg[2] for seg in conv["segments"]] + [conv["total_steps"]]
+    numbers, lengths, order, seen = [], {}, [], {}
+    spare = conv["patterns"]
+    for i, (p, row, start) in enumerate(conv["segments"]):
+        end = bounds[i + 1]
+        if end <= start:
+            continue
+        content = (row, end - start, tuple(" ".join(w[start:end]) for w in tracks_words))
+        if content not in seen:
+            n = p if row == 0 and p not in lengths else spare
+            if n == spare:
+                spare += 1
+            seen[content] = n
+            lengths[n] = end - start
+            numbers.append((n, start, end))
+        order.append(seen[content])
+        if lengths[seen[content]] > MAX_PATTERN:
+            sys.exit(f"pattern {seen[content]}: {lengths[seen[content]]} steps, past tsuji's {MAX_PATTERN}")
+    return order, numbers, lengths
+
+
+def compact(words: list) -> str:
+    """A pattern's words, its trailing silence left out (the Order List pads it) and long silences as .*N."""
+    while words and words[-1] == ".":
+        words = words[:-1]
+    out, run = [], 0
+    for w in words + [None]:
+        if w == ".":
+            run += 1
+            continue
+        if run:
+            out.append(f".*{run}" if run >= 4 else " ".join(["."] * run))
+            run = 0
+        if w is not None:
+            out.append(w)
+    return " ".join(out) or "."
 
 
 def project(conv: dict, master: float = 0.8) -> dict:
@@ -555,16 +609,22 @@ def project(conv: dict, master: float = 0.8) -> dict:
     node("clock", "music/clock", 40, 300, bpm=conv["bpm"], swing=0, stepsPerBeat=str(conv["steps_per_beat"]))
     lead_pattern = None
     keys = sorted(conv["tracks"], key=lambda k: (k[0], str(k[1]), k[2]))
+    total = conv["total_steps"]
+    all_words = {k: [conv["tracks"][k]["words"].get(i, ".") for i in range(total)] for k in keys}
+    keys = [k for k in keys if not all(w in (".", "off") for w in all_words[k])]
+    order, numbers, lengths = bank_order(conv, [all_words[k] for k in keys])
     n_melodic = sum(1 for k in keys if conv["tracks"][k]["role"]["kind"] == "fm")
     for i, key in enumerate(keys):
         t = conv["tracks"][key]
         ch, inst, arp = key
         tid = f"ch{ch + 1}_i{str(inst).replace('.', '_')}" + ("_arp" if arp else "")
         y = 40 + i * 150
-        words = [t["words"].get(k, ".") for k in range(conv["total_steps"])]
-        if all(w in (".", "off") for w in words):
-            continue
-        node(f"pat_{tid}", "music/pattern", 300, y, steps=" ".join(words), length=str(conv["total_steps"]), name=tid)
+        words = all_words[key]
+        sections = ["."] * (max(order) + 1)
+        for (n, start, end) in numbers:
+            sections[n] = compact(words[start:end])
+        common = Counter(lengths.values()).most_common(1)[0][0]
+        node(f"pat_{tid}", "music/pattern", 300, y, steps=" | ".join(sections), length=str(common), name=tid)
         src = f"pat_{tid}"
         if arp:
             node(f"arp_{tid}", "music/arp", 560, y, on=True, mode="played", rate="1/64", triplet=True, octaves=1, gate=1, sync="retrigger")
@@ -581,7 +641,12 @@ def project(conv: dict, master: float = 0.8) -> dict:
             node(f"voice_{tid}", "music/fm-voice", 820, y, **params)
             if lead_pattern is None:
                 lead_pattern = f"pat_{tid}"
-        links += [("clock", "clock", f"pat_{tid}", "clock"), (src, "sequence", f"voice_{tid}", "sequence"), (f"voice_{tid}", "track", "out", f"track{i}")]
+        links += [("order", "clock", f"pat_{tid}", "clock"), (src, "sequence", f"voice_{tid}", "sequence"), (f"voice_{tid}", "track", "out", f"track{i}")]
+
+    common = Counter(lengths.values()).most_common(1)[0][0]
+    node("order", "music/order", 170, 300, order=" ".join(f"{n:02d}" for n in order), length=str(common),
+         lengths=" ".join(str(lengths.get(n, 0) if lengths.get(n, 0) != common else 0) for n in range(max(order) + 1)))
+    links.append(("clock", "clock", "order", "clock"))
 
     frames = math.ceil(conv["seconds"] * 30)
     node("out", "music/out", 1100, 300, master=master, startFrame=0, reverbSize=0.4, reverbLevel=0.35)
@@ -609,6 +674,10 @@ def project(conv: dict, master: float = 0.8) -> dict:
     }
 
 
+def project_nodes(proj: dict) -> list:
+    return proj["canvases"][0]["nodes"]
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("module")
@@ -621,10 +690,12 @@ def main():
     song = read_xm(data) if data[:17] == b"Extended Module: " else read_mod(data)
     overrides = json.load(open(args.map)) if args.map else {}
     conv = convert(song, overrides, args.title)
+    proj = project(conv, args.master)
     with open(args.out, "w") as f:
-        json.dump(project(conv, args.master), f, indent=1)
+        json.dump(proj, f, indent=1)
         f.write("\n")
-    print(f"{conv['title']} ({song.fmt}, {song.channels} channels): {conv['total_steps']} steps at {conv['bpm']} BPM ({conv['steps_per_beat']} a beat), {conv['seconds']:.1f} s, {len(conv['tracks'])} tracks")
+    order = next(n for n in project_nodes(proj) if n["type"] == "music/order")["params"]["order"].split()
+    print(f"{conv['title']} ({song.fmt}, {song.channels} channels): {conv['total_steps']} steps at {conv['bpm']} BPM ({conv['steps_per_beat']} a beat), {conv['seconds']:.1f} s, {len(conv['tracks'])} tracks; order of {len(order)}, {len(set(order))} patterns")
     for key, role in sorted(conv["roles"].items(), key=lambda kv: str(kv[0])):
         shown = {k: v for k, v in role.items() if k != "hits"}
         if role["kind"] == "loop":

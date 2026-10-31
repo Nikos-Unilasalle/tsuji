@@ -552,3 +552,21 @@ Les conversions restent **en local** dans `music-local/` (ignoré par git) : `di
 
 Pas encore vérifié : l'écoute, et le projet ouvert dans l'app (55 pistes, 24 pas par temps, HUD paginé).
 
+
+### Order List : des patterns courtes, comme dans un tracker (2026-10-31)
+
+Un morceau converti était une seule pattern par piste, longue comme tout le morceau (9 360 pas pour Disco Beef). Un tracker, lui, a des patterns courtes, numérotées, et une **order list** qui dit laquelle joue quand. tsuji a maintenant les deux :
+
+- **Order List** (`music/order`), entre le Clock et les Patterns : l'ordre (`07 08 11 12 …`), la longueur commune d'une pattern en pas, et la longueur propre de certains numéros. Comme dans un tracker, une pattern est une tranche de temps commune à toutes les pistes : c'est l'Order List qui en fixe la longueur, pas chaque Pattern.
+- **Pattern en banque** : son texte contient plusieurs patterns séparées par `|`, numérotées à partir de 0. Sans Order List, une banque joue chaque pattern une fois, dans l'ordre, chacune au moins aussi longue que Length. Un texte sans `|` et sans Order List joue comme avant.
+- **`.*N`** écrit N pas vides d'un coup. Le convertisseur s'en sert pour les longs silences, et le HUD aussi quand il réécrit une pattern.
+- **Le HUD** montre une pattern à la fois : celle qui joue, ou une autre choisie avec ◀ ▶, avec sa position dans l'ordre (« Pattern 08 · 384 steps · order 2/31 »). Une édition ne réécrit que cette pattern.
+- **Le séquenceur n'a pas changé.** Le node Pattern met la banque bout à bout selon l'ordre, en une longue pattern. Les notes tenues traversent donc les jointures exactement comme avant, et le moteur, l'export et la Note Probe n'y voient rien. La disposition (`Sequence.bank`) suit la séquence pour le HUD.
+
+Le convertisseur garde l'order list du module. Il coupe le morceau à chaque position de l'ordre (et à chaque saut `Dxx`). Une pattern jouée deux fois de la même façon, dans toutes les pistes, n'est écrite qu'une fois, sous son numéro du tracker. Une pattern qui sonne autrement à une autre position (entrée en cours par `Dxx`, ou une boucle de batterie qui déborde de la précédente) reçoit un numéro après ceux du module.
+
+- **Disco Beef** : ordre de 31 positions, 28 patterns. Le fichier passe de 1,15 Mo à 176 Ko.
+- **Cybernoid** : ordre de 46 positions, 32 patterns. Le fichier passe de 248 Ko à 96 Ko.
+- Remis bout à bout, chacun redonne **exactement** les mêmes cases, piste par piste, que la conversion d'avant.
+
+**Stop** : quand aucune vue 3D, 2D ou caméra n'est affichée, la Viewport ne calcule plus d'images et Music Out n'est plus évaluée. L'engine continuait donc de jouer, Stop ou non. Play et Stop préviennent maintenant tous les engines directement (`onPlaybackActiveChange`, dans playbackKeys.ts).

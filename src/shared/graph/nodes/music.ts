@@ -11,6 +11,7 @@ import {
   TrackDescription,
   clockOf,
   isTrack,
+  orderOf,
   sequenceOf,
 } from "../../music/engine/description";
 import { FmOperatorPatch, FmPatch } from "../../music/dsp/fm";
@@ -18,14 +19,15 @@ import { FM_PRESETS, FM_PRESET_NAMES, fmPreset, fmVoicePreset } from "../../musi
 import { fmAlgorithm } from "../../music/dsp/algorithms";
 import { ARP_MODES, ARP_RATES, ArpMode, ArpRate, ArpSettings, DEFAULT_ARP } from "../../music/seq/arp";
 import { CHORD_NAMES, ChordName } from "../../music/seq/chords";
-import { parsePattern } from "../../music/seq/notation";
+import { parsePattern, stepWords } from "../../music/seq/notation";
+import { BankLayout, MAX_ORDER, SongOrder, bankLayout, isBank, parseOrder, splitBank } from "../../music/seq/order";
 import { FELUCCA_PHRASES, phraseSteps } from "../../music/seq/phrases";
 import { Cell, Clock, Sequence, notesSoundingAt, notesStartingIn, stepAt, transposeSequence } from "../../music/seq/sequencer";
 
 /**
  * The music nodes (see docs/music-nodes-mvp.md). Every one of them describes; only Music Out plays.
  *
- *   Clock → Pattern → (Arp) → FM Voice / Drum Kit → Music Out
+ *   Clock → (Order List) → Pattern → (Arp) → FM Voice / Drum Kit → Music Out
  *                                      └→ Note Probe → anything in the scene
  *
  * All of them pass one socket type, `music`, carrying a clock, a sequence or a track (description.ts). A node reads
@@ -86,9 +88,71 @@ export const MUSIC_CLOCK_NODE: NodeDefinition = {
   },
 };
 
+// ── Order List ─────────────────────────────────────────────────────────────
+
+/**
+ * A tracker's order list (seq/order.ts): which of the Patterns' numbered patterns play when, and how long each number
+ * is — the same for every track wired after it, as a tracker's pattern is a slice of time across all its channels.
+ */
+export const MUSIC_ORDER_NODE: NodeDefinition = {
+  type: "music/order",
+  label: "Order List",
+  category: "music",
+  pure: true,
+  inputs: [{ id: "clock", label: "Clock", type: "music" }],
+  outputs: [{ id: "clock", label: "Clock", type: "music" }],
+  defaultParams: { order: "0 1 0 2", length: "16", lengths: "" },
+  paramFields: [
+    { id: "order", label: "Order — the pattern numbers, in play order (0 1 0 2: a Pattern's text has them | between)", kind: "text" },
+    { id: "length", label: "Pattern Length (steps — 16 a bar)", kind: "number", step: 16 },
+    { id: "lengths", label: "Own Lengths — one per pattern number, from 0 (blank or 0: the Pattern Length)", kind: "text" },
+  ],
+  evaluate: (inputs, params) => {
+    const order: SongOrder = {
+      list: parseOrder(String(params.order ?? "")),
+      lengths: String(params.lengths ?? "")
+        .split(/[\s,;]+/)
+        .filter((w) => w !== "")
+        .slice(0, MAX_ORDER)
+        .map((w) => clamp(Math.round(Number(w) || 0), 0, 16384)),
+      length: clamp(Math.round(Number(params.length) || 16), 1, 16384),
+    };
+    const out: MusicValue = { kind: "clock", clock: clockOf(inputs.clock) ?? DEFAULT_CLOCK, order };
+    return { clock: out };
+  },
+};
+
 // ── Pattern ────────────────────────────────────────────────────────────────
 
 const CHORD_OVERRIDES = ["as written", ...CHORD_NAMES];
+
+/**
+ * A Pattern's text → the steps the song plays. One pattern: `length` steps. A bank (`|` between its patterns), or any
+ * text with an Order List before it: its numbered patterns laid end to end in the order's order, each cut or padded
+ * to its number's length — or, with no order, each once in turn.
+ */
+export function patternCells(text: string, length: number, order: SongOrder | null): { cells: (Cell | null)[]; bank: BankLayout | null } {
+  if (!order && !isBank(text)) return { cells: parsePattern(text, length), bank: null };
+  const sections = splitBank(text);
+  const words = sections.map(stepWords);
+  const bank = bankLayout(
+    words.map((w) => w.length),
+    length,
+    order,
+  );
+  const parsed = new Map<number, (Cell | null)[]>();
+  const cells: (Cell | null)[] = [];
+  bank.list.forEach((k) => {
+    let p = parsed.get(k);
+    if (!p) {
+      p = parsePattern(sections[k] ?? "", bank.lengths[k]);
+      parsed.set(k, p);
+    }
+    for (const c of p) cells.push(c);
+  });
+  if (cells.length === 0) cells.push(null);
+  return { cells, bank };
+}
 
 export const MUSIC_PATTERN_NODE: NodeDefinition = {
   type: "music/pattern",
@@ -113,7 +177,7 @@ export const MUSIC_PATTERN_NODE: NodeDefinition = {
   paramFields: [
     {
       id: "steps",
-      label: "Steps — one word per step: C4:maj7 . off A3:min7/1@0.6~2!GLD12 (kick snare hat… for drums)",
+      label: "Steps — one word per step: C4:maj7 . off A3:min7/1@0.6~2!GLD12 (kick snare hat… for drums); | between numbered patterns, for an Order List",
       kind: "text",
     },
     { id: "length", label: "Length (steps — 16 a bar, up to 16384)", kind: "number", step: 16 },
@@ -139,7 +203,8 @@ export const MUSIC_PATTERN_NODE: NodeDefinition = {
     const chordIndex = inputs.chord !== undefined ? Math.round(Number(inputs.chord)) : CHORD_OVERRIDES.indexOf(String(params.chord));
     const forced: ChordName | null = chordIndex >= 1 && chordIndex <= CHORD_NAMES.length ? CHORD_NAMES[chordIndex - 1] : null;
 
-    const steps = parsePattern(String(params.steps ?? ""), length).map((c): Cell | null => {
+    const { cells, bank } = patternCells(String(params.steps ?? ""), length, orderOf(inputs.clock));
+    const steps = cells.map((c): Cell | null => {
       if (!c || c.note === "off") return c;
       const cell: Cell = { ...c, note: clamp(c.note + transpose, 0, 127) };
       if (forced) cell.chord = forced;
@@ -151,8 +216,9 @@ export const MUSIC_PATTERN_NODE: NodeDefinition = {
     });
     const seq: Sequence = {
       clock: clockOf(inputs.clock) ?? DEFAULT_CLOCK,
-      pattern: { length, steps },
+      pattern: { length: steps.length, steps },
       seed: Math.round(Number(params.seed) || 0),
+      ...(bank ? { bank } : {}),
     };
     const out: MusicValue = { kind: "sequence", seq };
     return { sequence: out };
