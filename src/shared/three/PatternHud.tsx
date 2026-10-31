@@ -157,6 +157,8 @@ export function PatternHud({
   const bank = readSequence()?.bank ?? null;
   const sections = bank ? splitBank(text) : null;
   const [picked, setPicked] = useState<number | null>(null);
+  /** Showing the pattern under the playhead (a tracker's "follow song"), until you pick one or touch the palette. */
+  const [follow, setFollow] = useState(true);
   const [cursor, setCursor] = useState(0);
   const [lane, setLane] = useState(0);
   const [octave, setOctave] = useState(4);
@@ -175,15 +177,22 @@ export function PatternHud({
     return stepAt(seq.clock, 48_000, t * 48_000);
   });
   const at = bank && songStep >= 0 ? positionAt(bank, songStep) : null;
-  /** The pattern number shown: the one playing, unless you are typing in it or picked another with the song stopped. */
+  /** The pattern number shown: the one under the playhead while following, else the one picked. */
   const patternCount = bank ? Math.max(sections!.length, bank.lengths.length) : 1;
-  const number = bank ? Math.min(patternCount - 1, !focused && at ? at.pattern : (picked ?? at?.pattern ?? bank.list[0] ?? 0)) : 0;
+  const number = bank ? Math.min(patternCount - 1, follow && at ? at.pattern : (picked ?? at?.pattern ?? bank.list[0] ?? 0)) : 0;
   const length = bank ? Math.max(1, bank.lengths[number] ?? 1) : Math.max(1, Math.round(Number(p.length) || 16));
   const cells = parsePattern(bank ? (sections![number] ?? "") : text, length);
   const step = bank ? (at && at.pattern === number ? at.row : -1) : songStep < 0 ? -1 : songStep % length;
   const pick = (k: number) => {
     setPicked(Math.min(patternCount - 1, Math.max(0, k)));
+    setFollow(false);
     setCursor(0);
+  };
+  /** Touching the palette keeps the pattern shown where it is, whatever the song does next. */
+  const pin = () => {
+    if (!bank || !follow) return;
+    setPicked(number);
+    setFollow(false);
   };
   /** The pitch the last note clicked, typed or selected had: a click on an empty step writes it again. */
   const [lastNote, setLastNote] = useState(60);
@@ -429,6 +438,7 @@ export function PatternHud({
           gap: 6,
         }}
         onPointerDown={(e) => {
+          if (!(e.target as HTMLElement).closest("[data-follow]")) pin();
           // Clicks inside the palette keep the keyboard on it; controls take their own focus.
           if (!(e.target as HTMLElement).closest("select, input, button")) {
             e.preventDefault();
@@ -466,6 +476,17 @@ export function PatternHud({
                 ▶
               </button>
               {length} steps{at ? ` · order ${at.position + 1}/${bank.list.length}` : ` · ${bank.list.length} in the order`}
+              <button
+                type="button"
+                data-follow
+                className="viewport-hud-button"
+                style={{ width: "auto", padding: "0 6px", marginLeft: 4, color: follow ? "#0f172a" : undefined, background: follow ? ACCENT : undefined }}
+                title="Follow: show the pattern under the playhead (picking one, or editing, stops following)"
+                onPointerDown={(e) => e.preventDefault()}
+                onClick={() => setFollow((f) => !f)}
+              >
+                Follow
+              </button>
             </span>
           ) : (
             <LengthField length={length} onLength={(n) => onParams({ length: String(n), steps: formatPattern(resize(cells, n), { drums }) }, node.id)} />
@@ -525,7 +546,7 @@ export function PatternHud({
           onFocus={() => {
             setFocused(true);
             // Typing keeps the pattern you are in, even as the song moves on.
-            if (bank) setPicked(number);
+            pin();
           }}
           onBlur={() => setFocused(false)}
           style={{ position: "absolute", opacity: 0, width: 1, height: 1, pointerEvents: "none" }}
@@ -669,6 +690,8 @@ export function PatternHud({
         </div>
       </div>
 
+      {/* The bar edits a cell of the pattern shown: touching it keeps that pattern shown. */}
+      <div style={{ display: "contents" }} onPointerDownCapture={pin}>
       <HudBar>
         <span style={{ fontSize: 11, color: "#94a3b8" }}>{drums ? (hitVel !== null ? `${DRUM_LABEL[DRUM_LANES[lane]]} · step ${cur + 1}` : `Step ${cur + 1} · new hits`) : noteCell ? `Step ${cur + 1}` : "New notes"}</span>
         {!drums && (
@@ -742,6 +765,7 @@ export function PatternHud({
           />
         )}
       </HudBar>
+      </div>
     </>
   );
 }
