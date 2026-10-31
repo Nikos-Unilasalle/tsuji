@@ -124,4 +124,23 @@ describe("SID voice", () => {
     expect(track.sid.cutoff).toBe(300);
     expect(track.sid.ringRatio).toBeCloseTo(2.41);
   });
+
+  it("plays an absolute note from the arpeggio macro (128 + n), whatever the note", () => {
+    const a = render({ waveform: 0x20, sustain: 15, macroArp: "| 197", tickRate: 50 }, 0.5, (s) => s.noteOn(40, 1));
+    const b = render({ waveform: 0x20, sustain: 15, macroArp: "| 197", tickRate: 50 }, 0.5, (s) => s.noteOn(52, 1));
+    // 197 = 128 + 69: A4, 440 Hz, either way.
+    expect(hz(a, 0.1, 0.5)).toBeCloseTo(440, -1);
+    expect(hz(b, 0.1, 0.5)).toBeCloseTo(440, -1);
+  });
+
+  it("does not strike a released note again from the wave macro's gate", () => {
+    const s = new SidSynth(1, SR);
+    s.setPatch({ ...DEFAULT_SID_PATCH, waveform: 0x20, release: 1, macroWave: "| 21" });
+    s.noteOn(60, 1);
+    const out = new Float32Array(SR);
+    s.render(out, 0, SR / 4);
+    s.noteOff(60);
+    s.render(out, SR / 4, (SR * 3) / 4);
+    expect(s.activeVoices()).toBe(0);
+  });
 });

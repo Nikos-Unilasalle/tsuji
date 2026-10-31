@@ -650,3 +650,33 @@ Exemple : `15 13 11 | 10 9 9 10 / 6 3 0`. Les valeurs sont en décimal, ou en he
 - **Pur**, comme les autres voix : le rendu ne dépend pas de la taille des blocs (testé).
 
 Pas encore fait : l'import des instruments GoatTracker (`.ins`) et SID-Wizard (`.swi`). Les tables de GoatTracker se traduiront en macros : la table jouée tick par tick jusqu'à ce qu'elle se répète, qui donne la boucle.
+
+### `gt2tsuji.py` : les chansons GoatTracker 2 (C64) (2026-10-31)
+
+Essai sur **« Sixpack of Cola »** (beek, reprise par No-XS), une chanson GoatTracker 2 (`.sng`, GTS5) jouée par le firmware FM-1 SID ([fm1-sid](https://github.com/joakimeriksson/fm1-sid)). Ce firmware ne la rejoue pas en FM : il fait tourner la playroutine de GoatTracker sur un SID émulé (reSID). Notre SID Voice est donc la cible naturelle.
+
+`tools/gt2tsuji.py song.sng out.tsuji [--synth sid|fm]` joue la chanson comme la playroutine de GoatTracker (gplay.c, lu dans le port `player/gt2.c` de fm1-sid, GPL 2+), frame par frame à 50 Hz :
+
+- **Timing** :
+  - une ligne dure son tempo en frames : 6 par défaut, `Fxx` le change pour tous les canaux (ou un seul, à partir de $80), `Exx` est le funktempo ;
+  - le pas est le PGCD des longueurs de lignes : ici 3 frames, donc 8 pas par temps à 125 BPM ;
+  - chaque canal joue sa propre order list une fois, répétitions et transpositions comprises.
+- **Notes** : une piste par canal × instrument.
+  - Une note dure jusqu'à la note suivante ou au key-off du canal, moins le `gatetimer` de l'instrument : le hard restart de GoatTracker lâche le gate autant de frames plus tôt. Ça devient la longueur `~`.
+  - Le tone portamento (`3xx`) devient un glide.
+- **Instruments → SID Voice** : l'ADSR tel quel, et les tables en macros, jouées frame par frame depuis la note-on jusqu'à ce qu'elles se répètent. Ce point de répétition devient la boucle `|`.
+  - table wave → macros wave (octets de contrôle, le `$09` du hard restart compris) et arpège (relatif ; les notes absolues `$81…` en 128 + la note, une nouveauté de la SID Voice) ;
+  - table pulse → macro pulse ;
+  - table filter → macro cutoff, avec le type et la résonance. Sur la puce, le filtre est partagé par les trois voix ; ici, chaque instrument qui le règle a le sien.
+  - vibrato de la speed table → macro pitch (cents), après son délai.
+- **SID Voice** : une fois la note relâchée, les bits de gate d'une macro wave ne la relancent plus.
+- **`--synth fm`** : FM Voices et Drum Kit, choisis d'après les formes d'onde et le nom de chaque instrument. C'est une approximation ; le son de la puce, c'est `--synth sid`.
+- **Non convertis** (comptés et affichés) : les commandes de pattern autres que 3, E et F.
+
+Sixpack of Cola : **80,6 s**, 1 345 pas, 23 pistes, 24 instruments. Les accords des instruments « chord » sont leurs arpèges de table, les batteries leurs tables noise → pulse.
+- En SID : rendu à 1,8 % du temps réel, niveau moyen 0,17, crête 0,87 (master 1,1 par défaut).
+- En FM : 7 %, niveau moyen 0,09.
+
+Les deux versions et leurs WAV sont dans `music-local/`.
+
+Pas encore vérifié : la comparaison à l'oreille ou au registre près avec GoatTracker lui-même. Il faudrait un rendu de référence par reSID, que fm1-sid sait faire.

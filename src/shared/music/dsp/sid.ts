@@ -13,8 +13,10 @@
  *   PWM        the pulse width moving by itself, `pwSpeed` a tick, back and forth between `pwLow` and `pwHigh`
  *
  * Macros (macros.ts), one value a tick — GoatTracker's tables: wave (control bytes in hex: 41 pulse, 21 saw, 11
- * triangle, 81 noise, + 04 ring, + 02 sync; the low bit is the gate — 40 lets the note go), arpeggio (semitones),
- * pulse (width 0–4095), cutoff (0–2047) and pitch (cents). A drum is a wave macro: 81 41 40, noise then pulse.
+ * triangle, 81 noise, + 04 ring, + 02 sync; the low bit is the gate — 40 lets the note go; once the note is let go,
+ * the macro's gate bits no longer strike it again), arpeggio (semitones; 128 + n plays the absolute note n, as
+ * GoatTracker's $81… do), pulse (width 0–4095), cutoff (0–2047) and pitch (cents). A drum is a wave macro: 81 41 40,
+ * noise then pulse.
  *
  * Pure like fm.ts: per-sample, no allocation in render, the output does not depend on block sizes.
  */
@@ -360,15 +362,16 @@ export class SidSynth {
       this.mPos[i] = pos;
       const x = mac.values[pos];
       if (k === 0) {
-        // The control byte: its gate bit too (a 40 lets the note go, a 41 strikes it again).
-        const gate = (x & GATE) !== 0;
+        // The control byte: its gate bit too (a 40 lets the note go, a 41 strikes it again) — while the note is held.
+        const gate = (x & GATE) !== 0 && held;
         const was = (this.control[v] & GATE) !== 0;
         this.control[v] = x & 0xff;
         if (gate && !was) this.stage[v] = ATTACK;
         else if (!gate && was) this.stage[v] = RELEASE;
         retune = true;
       } else if (k === 1) {
-        this.arpOff[v] = x;
+        // 128 + n: the absolute note n.
+        this.arpOff[v] = x >= 128 ? x - 128 - this.note[v] : x;
         retune = true;
       } else if (k === 2) this.pw[v] = Math.min(4095, Math.max(0, x));
       else if (k === 3) {
