@@ -30,6 +30,38 @@ import { EvalContext, Graph, NodeDefinition, ParamFieldDef } from "../types";
  */
 const containers = createNodeCache<THREE.Group>();
 
+/**
+ * Each group's outputs from the last frame its interior actually ran.
+ *
+ * A hidden group skips its whole subgraph — that is what hiding it is for: a
+ * folder of simulations switched off should cost nothing, not keep stepping
+ * them behind a `visible = false`. What it hands out meanwhile is this: the
+ * same objects as before (the evaluator hides them through the `visible`
+ * socket), and value outputs frozen at what they last were rather than
+ * dropping to undefined under whatever downstream reads them.
+ */
+const lastOutputs = createNodeCache<Record<string, unknown>>();
+
+function isHidden(value: unknown): boolean {
+  if (value === undefined) return false;
+  const asNumber = Number(value);
+  return Number.isFinite(asNumber) ? asNumber === 0 : !value;
+}
+
+function containerFor(nodeId: string): THREE.Group {
+  let container = containers.get(nodeId);
+  if (!container) {
+    container = new THREE.Group();
+    container.name = `group:${nodeId}`;
+    containers.set(nodeId, container);
+  }
+  // Tagged so a click on anything inside resolves to the group: from
+  // outside, the group is the thing you selected (Viewport.tsx walks up
+  // to the outermost tag that the graph it is drawing actually knows).
+  container.userData.nodeId = nodeId;
+  return container;
+}
+
 // Scene roots depend on the subgraph's shape, which changes on an edit, not on
 // a frame — the same reasoning (and the same fix) as Viewport's cachedRoots.
 const rootsBySubgraph = new WeakMap<Graph, string[]>();
@@ -105,6 +137,15 @@ export const GROUP_NODE: NodeDefinition = {
     const subgraph = ctx.instance?.subgraph;
     if (!subgraph || !ctx.registry) return {};
 
+    if (isHidden(inputs.visible)) {
+      const previous = lastOutputs.get(ctx.nodeId);
+      if (previous) return previous;
+      // Hidden since load: nothing has run yet, so there is nothing to hold.
+      // An empty container keeps the group a scene object with a pose; it
+      // fills on the first frame the group is shown.
+      return groupRendersOwnContainer(subgraph) ? { geometry: containerFor(ctx.nodeId) } : {};
+    }
+
     // Nested groups each get their own scope, so a group inside a group can't
     // become its parent's carried-over frame either.
     const evalScope = ctx.evalScope ? `${ctx.evalScope}/${ctx.nodeId}` : ctx.nodeId;
@@ -133,16 +174,7 @@ export const GROUP_NODE: NodeDefinition = {
     // Everything the interior built that no boundary port claimed still has to
     // reach the screen: the outer graph only draws this one node.
     if (outputs.geometry === undefined) {
-      let container = containers.get(ctx.nodeId);
-      if (!container) {
-        container = new THREE.Group();
-        container.name = `group:${ctx.nodeId}`;
-        containers.set(ctx.nodeId, container);
-      }
-      // Tagged so a click on anything inside resolves to the group: from
-      // outside, the group is the thing you selected (Viewport.tsx walks up
-      // to the outermost tag that the graph it is drawing actually knows).
-      container.userData.nodeId = ctx.nodeId;
+      const container = containerFor(ctx.nodeId);
 
       const objects: THREE.Object3D[] = [];
       for (const rootId of sceneRootsOf(subgraph, ctx)) {
@@ -164,6 +196,7 @@ export const GROUP_NODE: NodeDefinition = {
       outputs.geometry = container;
     }
 
+    lastOutputs.set(ctx.nodeId, outputs);
     return outputs;
   },
 };

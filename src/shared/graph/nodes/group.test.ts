@@ -87,6 +87,41 @@ describe("structure/group", () => {
     expect(second.children).toHaveLength(1);
   });
 
+  it("skips its interior while hidden, holding its last outputs", () => {
+    const g = doublingGroup("gh");
+    const graph = (visible: number, value: number): Graph => ({
+      ...emptyGraph(),
+      nodes: [node("src", "value/constant", { value }), { ...g, params: { visible } }],
+      connections: [edge("src", "out", "gh", "amount")],
+    });
+
+    expect(evaluateGraph(graph(1, 3), DEFAULT_REGISTRY, CTX).get("gh")?.result).toBe(6);
+    const hidden = evaluateGraph(graph(0, 10), DEFAULT_REGISTRY, CTX);
+    expect(hidden.get("gh")?.result).toBe(6);
+    expect(hidden.get("mul")?.out).toBe(6); // the interior did not run on 10
+    expect(evaluateGraph(graph(1, 10), DEFAULT_REGISTRY, CTX).get("gh")?.result).toBe(20);
+  });
+
+  it("hidden from the start: an empty, invisible container, filled once shown", () => {
+    const subgraph: Graph = { ...emptyGraph(), nodes: [node("hbox", "object/box")] };
+    const graph = (visible: number): Graph => ({
+      ...emptyGraph(),
+      nodes: [{ ...node("gh2", GROUP_TYPE, { visible }), subgraph }],
+    });
+
+    const hidden = evaluateGraph(graph(0), DEFAULT_REGISTRY, CTX);
+    const container = hidden.get("gh2")?.geometry as THREE.Group;
+    expect(container).toBeInstanceOf(THREE.Group);
+    expect(container.visible).toBe(false);
+    expect(container.children).toHaveLength(0);
+    expect(hidden.get("hbox")).toBeUndefined(); // never ran
+
+    const shown = evaluateGraph(graph(1), DEFAULT_REGISTRY, CTX).get("gh2")?.geometry as THREE.Group;
+    expect(shown).toBe(container);
+    expect(shown.visible).toBe(true);
+    expect(shown.children).toHaveLength(1);
+  });
+
   it("nests: a group inside a group still resolves", () => {
     const inner = doublingGroup("inner");
     const middle: Graph = {
