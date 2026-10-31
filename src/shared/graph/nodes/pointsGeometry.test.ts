@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 import { EvalContext } from "../types";
-import { MESH_TO_POINTS_NODE, POINTS_TO_MESH_NODE } from "./pointsGeometry";
+import { MESH_TO_POINTS_NODE, POINTS_TO_MESH_NODE, mapQuadVerticesToBuffer } from "./pointsGeometry";
 
 const CTX: EvalContext = { time: 0, step: 0, nodeId: "p2g-test" };
 
@@ -120,5 +120,13 @@ describe("POINTS_TO_MESH_NODE", () => {
     expect(pos.x).toBeCloseTo(3);
     expect(pos.y).toBeCloseTo(-1);
     expect(pos.z).toBeCloseTo(4);
+  });
+});
+
+describe("mapQuadVerticesToBuffer", () => {
+  it("maps each quad vertex to the first coincident buffer vertex, else the nearest within reach, else -1", () => {
+    const pos = new THREE.Float32BufferAttribute([0, 0, 0, 1, 0, 0, 1, 0, 0, 2.004, 0, 0], 3);
+    const quad = { positions: [[1, 0, 0], [0, 0, 0], [2, 0, 0], [5, 5, 5]] as [number, number, number][], faces: [] };
+    expect(Array.from(mapQuadVerticesToBuffer(quad, pos))).toEqual([1, 0, 3, -1]);
   });
 });

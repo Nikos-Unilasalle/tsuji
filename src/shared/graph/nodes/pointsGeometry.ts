@@ -232,6 +232,57 @@ function recomputeGroupedNormals(geometry: THREE.BufferGeometry, groups: Int32Ar
   nor.needsUpdate = true;
 }
 
+/** Farthest a buffer vertex may sit from a QuadMesh vertex and still be its copy. */
+const QUAD_MATCH_DIST = 1e-2;
+
+/**
+ * For each QuadMesh vertex, the buffer vertex sitting on it (-1: none within
+ * QUAD_MATCH_DIST) — the first one in buffer order when several coincide,
+ * else the nearest.
+ *
+ * Bucketed on a grid of QUAD_MATCH_DIST cells, so each vertex only looks at
+ * the 27 cells around it: the all-pairs search this replaces was quadratic,
+ * and froze the app for seconds on a subdivided mesh (25k quad vertices
+ * against 150k buffer vertices) every time the source geometry changed.
+ */
+export function mapQuadVerticesToBuffer(quad: QuadMesh, pos: THREE.BufferAttribute | THREE.InterleavedBufferAttribute): Int32Array {
+  const cell = (x: number) => Math.floor(x / QUAD_MATCH_DIST);
+  const buckets = new Map<string, number[]>();
+  for (let b = 0; b < pos.count; b++) {
+    const key = `${cell(pos.getX(b))},${cell(pos.getY(b))},${cell(pos.getZ(b))}`;
+    const bucket = buckets.get(key);
+    if (bucket) bucket.push(b);
+    else buckets.set(key, [b]);
+  }
+
+  const out = new Int32Array(quad.positions.length).fill(-1);
+  for (let v = 0; v < quad.positions.length; v++) {
+    const [qx, qy, qz] = quad.positions[v];
+    const cx = cell(qx), cy = cell(qy), cz = cell(qz);
+    let exact = Infinity;
+    let bestDist = Infinity;
+    let bestIdx = -1;
+    for (let dx = -1; dx <= 1; dx++)
+      for (let dy = -1; dy <= 1; dy++)
+        for (let dz = -1; dz <= 1; dz++) {
+          const bucket = buckets.get(`${cx + dx},${cy + dy},${cz + dz}`);
+          if (!bucket) continue;
+          for (const b of bucket) {
+            const ex = pos.getX(b) - qx, ey = pos.getY(b) - qy, ez = pos.getZ(b) - qz;
+            const d = ex * ex + ey * ey + ez * ez;
+            if (d < 1e-8) exact = Math.min(exact, b);
+            if (d < bestDist) {
+              bestDist = d;
+              bestIdx = b;
+            }
+          }
+        }
+    if (exact !== Infinity) out[v] = exact;
+    else if (bestDist < QUAD_MATCH_DIST * QUAD_MATCH_DIST) out[v] = bestIdx;
+  }
+  return out;
+}
+
 const pointsMeshCache = createNodeCache<PointsMeshState>((s) => {
   if (s.mesh) disposeObject3D(s.mesh);
 });
@@ -297,29 +348,7 @@ export function writePointsToMesh(nodeId: string, inputObj: THREE.Object3D, poin
     if (srcGeom.userData?.quadMesh) {
       const srcQuad = srcGeom.userData.quadMesh as QuadMesh;
       state.quadMesh = cloneQuadMesh(srcQuad);
-      const vToBuf = new Int32Array(srcQuad.positions.length);
-      vToBuf.fill(-1);
-      const pos = srcGeom.attributes.position;
-      for (let v = 0; v < srcQuad.positions.length; v++) {
-        const qx = srcQuad.positions[v][0];
-        const qy = srcQuad.positions[v][1];
-        const qz = srcQuad.positions[v][2];
-        let bestDist = Infinity;
-        let bestIdx = -1;
-        for (let b = 0; b < pos.count; b++) {
-          const dx = pos.getX(b) - qx;
-          const dy = pos.getY(b) - qy;
-          const dz = pos.getZ(b) - qz;
-          const distSq = dx * dx + dy * dy + dz * dz;
-          if (distSq < bestDist) {
-            bestDist = distSq;
-            bestIdx = b;
-            if (distSq < 1e-8) break;
-          }
-        }
-        vToBuf[v] = bestDist < 1e-4 ? bestIdx : -1;
-      }
-      state.quadVertexToBufferIndex = vToBuf;
+      state.quadVertexToBufferIndex = mapQuadVerticesToBuffer(srcQuad, srcGeom.attributes.position);
     } else {
       state.quadMesh = undefined;
       state.quadVertexToBufferIndex = undefined;
