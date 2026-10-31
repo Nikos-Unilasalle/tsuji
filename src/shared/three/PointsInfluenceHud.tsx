@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { HudBar, HudSeparator, HudToolColumn } from "./HudToolbars";
 import {
   POINTS_INFLUENCE_LEVELS,
@@ -13,7 +13,8 @@ import type { NodeInstance } from "../graph/types";
  * palettes: the tools in a column on the left, the options for the armed
  * tool in a bar along the bottom. The tools paint the node's influence map
  * on the surface (Texture Paint's strokes); Compute, in the parameters,
- * hands it to the points.
+ * hands it to the points. Shift-drag, whatever the tool, paints a gradient
+ * along the dragged line (see Viewport's applyInfluenceGradientLine).
  */
 
 type OnParams = (params: Record<string, unknown>, nodeId: string) => void;
@@ -77,9 +78,20 @@ export interface PointsInfluenceHudProps {
   onParams: OnParams;
   /** Clears the map to 0% everywhere (undoable). */
   onClear: () => void;
+  /** Shows the whole map blurred by `radius` map px, from what it was when the drag started (0: as it was). */
+  onBlurPreview: (radius: number) => void;
+  /** Ends the Blur drag: keeps the previewed blur as one undoable change, or drops it when `commit` is false. */
+  onBlurEnd: (commit: boolean) => void;
 }
 
-export function PointsInfluenceHud({ node, levelColors, maxRows, left, onParams, onClear }: PointsInfluenceHudProps) {
+export function PointsInfluenceHud({ node, levelColors, maxRows, left, onParams, onClear, onBlurPreview, onBlurEnd }: PointsInfluenceHudProps) {
+  // The Blur slider is an action, not a setting: it springs back to 0 once
+  // the drag that applied it ends.
+  const [blur, setBlur] = useState(0);
+  const endBlur = () => {
+    onBlurEnd(blur > 0);
+    setBlur(0);
+  };
   const tool = readPointsInfluenceTool(node.params);
   const value = readPointsInfluenceValue(node.params);
   const size = Number(node.params.brushSize) || 24;
@@ -141,6 +153,38 @@ export function PointsInfluenceHud({ node, levelColors, maxRows, left, onParams,
             </div>
           </>
         )}
+        <HudSeparator />
+        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          <span
+            style={{ fontSize: 11, color: "#94a3b8", minWidth: 40 }}
+            title="Blur the whole map — drag, release to keep it (undoable; Compute to apply it to the points)"
+          >
+            Blur: {blur}
+          </span>
+          <input
+            type="range"
+            min={0}
+            max={40}
+            step={1}
+            value={blur}
+            onChange={(e) => {
+              const radius = Number(e.target.value);
+              setBlur(radius);
+              onBlurPreview(radius);
+            }}
+            onPointerUp={endBlur}
+            onKeyUp={endBlur}
+            style={{ width: 70, accentColor: "#38bdf8", cursor: "pointer" }}
+            title="Blur radius (map px) — smooths over the whole surface, across UV seams"
+          />
+        </div>
+        <HudSeparator />
+        <span
+          style={{ fontSize: 11, color: "#94a3b8" }}
+          title="Gradient — hold Shift and drag a line across the object: 100% where the line starts, 0% where it ends. Replaces the whole map and applies to the points at once."
+        >
+          Shift-drag: gradient
+        </span>
         <HudSeparator />
         <span style={{ fontSize: 11, color: "#94a3b8" }} title="Points with influence after the last Compute (in the parameters)">
           {computed} point{computed === 1 ? "" : "s"} computed

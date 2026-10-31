@@ -1,7 +1,16 @@
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 import { EvalContext } from "../types";
-import { POINTS_INFLUENCE_NODE, influenceStroke, sampleInfluences } from "./pointsInfluence";
+import {
+  POINTS_INFLUENCE_NODE,
+  blurInfluenceMap,
+  blurInfluenceOnSurface,
+  prepareSurfaceBlur,
+  gradientInfluences,
+  influenceStroke,
+  rasterizeVertexValues,
+  sampleInfluences,
+} from "./pointsInfluence";
 
 const CTX: EvalContext = { time: 0, step: 0, nodeId: "influence-test" };
 
@@ -90,5 +99,81 @@ describe("influenceStroke", () => {
 
   it("falls back to Paint at 100% for unknown values", () => {
     expect(influenceStroke({ brushTool: "watercolor", brushValue: "x" })).toEqual({ tool: "paint", color: "#ffffff" });
+  });
+});
+
+describe("gradientInfluences", () => {
+  it("is 1 at the line's start, 0 at its end, linear between and clamped past both ends", () => {
+    const screen = new Float32Array([0, 0, 5, 3, 10, -2, -4, 0, 20, 0]);
+    const values = gradientInfluences(screen, { x: 0, y: 0 }, { x: 10, y: 0 });
+    expect(Array.from(values)).toEqual([1, 0.5, 0, 1, 0]);
+  });
+});
+
+describe("rasterizeVertexValues", () => {
+  it("fills each triangle with its corners' values blended, readable back by sampleInfluences", () => {
+    // Two triangles covering the whole square; value = u.
+    const uv = new THREE.Float32BufferAttribute([0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1], 2);
+    const values = [0, 1, 1, 0, 1, 0];
+    const pixels = new Uint8ClampedArray(16 * 16 * 4);
+    rasterizeVertexValues(pixels, 16, 16, uv, values);
+    const probe = new THREE.Float32BufferAttribute([0.25, 0.5, 0.75, 0.5], 2);
+    const read = sampleInfluences(pixels, 16, 16, probe);
+    expect(read[0]).toBeCloseTo(0.25, 1);
+    expect(read[1]).toBeCloseTo(0.75, 1);
+  });
+
+  it("leaves texels away from every island at 0, opaque", () => {
+    const uv = new THREE.Float32BufferAttribute([0, 0, 0.25, 0, 0, 0.25], 2);
+    const pixels = new Uint8ClampedArray(32 * 32 * 4);
+    rasterizeVertexValues(pixels, 32, 32, uv, [1, 1, 1]);
+    // Top-right corner (U=1, V=1) is far from the triangle at the bottom-left.
+    expect(pixels[(0 * 32 + 31) * 4]).toBe(0);
+    expect(pixels[(0 * 32 + 31) * 4 + 3]).toBe(255);
+    // Inside the triangle.
+    expect(pixels[(30 * 32 + 1) * 4]).toBe(255);
+  });
+});
+
+describe("blurInfluenceMap", () => {
+  it("spreads a hard edge into a ramp and keeps a flat map flat", () => {
+    const sharp = grayMap(32, 1, (x) => (x < 16 ? 0 : 255));
+    const out = blurInfluenceMap(sharp, 32, 1, 6);
+    expect(out[15 * 4]).toBeGreaterThan(40);
+    expect(out[15 * 4]).toBeLessThan(215);
+    expect(out[0]).toBe(0);
+    expect(out[31 * 4]).toBe(255);
+    const flat = blurInfluenceMap(grayMap(8, 8, () => 128), 8, 8, 3);
+    expect(Array.from(flat.filter((_, i) => i % 4 === 0)).every((g) => g === 128)).toBe(true);
+  });
+
+  it("with a mask, an island's edge doesn't darken toward the empty texels around it", () => {
+    // White island in the middle 8 texels, black gap either side.
+    const pixels = grayMap(24, 1, (x) => (x >= 8 && x < 16 ? 255 : 0));
+    const mask = new Uint8Array(24).map((_, x) => (x >= 8 && x < 16 ? 1 : 0));
+    const out = blurInfluenceMap(pixels, 24, 1, 6, mask);
+    expect(out[8 * 4]).toBe(255);
+    expect(out[15 * 4]).toBe(255);
+    expect(out[2 * 4]).toBe(0);
+  });
+});
+
+describe("blurInfluenceOnSurface", () => {
+  it("evens out a seam: the copies of a vertex split across islands read the same value afterwards", () => {
+    // A square of two triangles sharing the edge (1,0,0)-(0,1,0), laid out as
+    // two islands apart in UV: the left one painted white, the right one black.
+    const position = new THREE.Float32BufferAttribute([0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0], 3);
+    const uv = new THREE.Float32BufferAttribute([0.05, 0.05, 0.45, 0.05, 0.05, 0.45, 0.95, 0.05, 0.95, 0.45, 0.55, 0.45], 2);
+    const size = 64;
+    const pixels = grayMap(size, size, (x) => (x < size / 2 ? 255 : 0));
+    const setup = prepareSurfaceBlur(size, size, uv, position);
+    expect(setup.weldCount).toBe(4);
+    const out = blurInfluenceOnSurface(setup, pixels, 8);
+    // Vertex 1 and 3 are the same corner (1,0,0) on either island; 2 and 5 are (0,1,0).
+    const read = (i: number) => sampleInfluences(out, size, size, new THREE.Float32BufferAttribute([uv.getX(i), uv.getY(i)], 2))[0] ?? 0;
+    expect(Math.abs(read(1) - read(3))).toBeLessThan(0.08);
+    expect(Math.abs(read(2) - read(5))).toBeLessThan(0.08);
+    expect(read(1)).toBeGreaterThan(0.1);
+    expect(read(1)).toBeLessThan(0.9);
   });
 });

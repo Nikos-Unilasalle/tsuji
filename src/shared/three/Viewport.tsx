@@ -51,7 +51,17 @@ import {
 import { POINTS_SELECTION_NODE } from "../graph/nodes/pointsSelection";
 import { applyWeldedPointMoves, EDIT_MESH_POINTS_NODE, RESEED_MESH_POINTS_ACTION } from "../graph/nodes/editMeshPoints";
 import { extractPointsFromMesh } from "../graph/nodes/pointsGeometry";
-import { POINTS_INFLUENCE_NODE, POINTS_INFLUENCE_BASE, POINTS_INFLUENCE_LEVELS, influenceStroke } from "../graph/nodes/pointsInfluence";
+import {
+  POINTS_INFLUENCE_NODE,
+  POINTS_INFLUENCE_BASE,
+  POINTS_INFLUENCE_LEVELS,
+  applyInfluenceGradient,
+  blurInfluenceMap,
+  blurInfluenceOnSurface,
+  influenceStroke,
+  prepareSurfaceBlur,
+  type SurfaceBlurSetup,
+} from "../graph/nodes/pointsInfluence";
 import { FACE_SELECTION_NODE } from "../graph/nodes/meshEdit";
 import { createFaceSelectionHandles } from "./faceSelectionHandles";
 import {
@@ -373,6 +383,12 @@ function texturePaintStroke(node: NodeInstance): { tool: TexturePaintTool; color
  * around it (see influenceMesh in tick()). Pulled toward the camera so that,
  * drawn as an overlay, it wins over the same surface shown downstream.
  */
+/** The Blur drag's map at `radius`: over the surface, across seams, when the mesh has UVs; a plain map blur otherwise. */
+function blurInfluence(session: { src: ImageData; surface: SurfaceBlurSetup | null }, radius: number): Uint8ClampedArray {
+  const { src, surface } = session;
+  return surface ? blurInfluenceOnSurface(surface, src.data, radius) : blurInfluenceMap(src.data, src.width, src.height, radius);
+}
+
 function createInfluenceHeatmapMaterial(): THREE.MeshStandardMaterial {
   const material = new THREE.MeshStandardMaterial({
     roughness: 0.7,
@@ -604,7 +620,7 @@ function influenceColor(v: number): number {
   return INFLUENCE_RAMP[Math.round(Math.max(0, Math.min(1, v || 0)) * 255)];
 }
 
-/** The palette's 5 level colors, in the same order as POINTS_INFLUENCE_LEVELS. */
+/** The palette's level colors, in the same order as POINTS_INFLUENCE_LEVELS. */
 const DISCRETE_LEVEL_HEX = POINTS_INFLUENCE_LEVELS.map((v) => `#${influenceColor(v).toString(16).padStart(6, "0")}`);
 
 /** Hands each mounted viewport its own evaluator session id. */
@@ -1111,6 +1127,8 @@ export function Viewport({
   const hubDragMovedRef = useRef(false);
 
   const [marqueeBox, setMarqueeBox] = useState<{ left: number; top: number; width: number; height: number } | null>(null);
+  /** Points Influence's Shift-drag gradient line while it is being dragged, in viewport pixels. */
+  const [gradientLine, setGradientLine] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
 
   // Grease Pencil drawing state
   const onParamChangeRef = useRef(onParamChange);
@@ -1291,8 +1309,20 @@ export function Viewport({
   // Texture Paint and Texture Mix painting state
   /** Pending debounced param writes for painted textures, by node id. */
   const textureSnapshotTimersRef = useRef<Map<string, number>>(new Map());
+  /** Points Influence's Blur drag: the map as it was when the drag began, and its UV coverage. */
+  const influenceBlurRef = useRef<{
+    nodeId: string;
+    src: ImageData;
+    /** The mesh's welded surface; null without UVs (then a plain map blur). */
+    surface: SurfaceBlurSetup | null;
+    /** The radius the slider asks for, and the frame that will show it (a blur of the whole map takes ~100 ms: one per frame, the latest). */
+    radius: number;
+    frame: number | null;
+  } | null>(null);
   const isTexturePaintingRef = useRef(false);
   const texturePaintLastUvRef = useRef<{ x: number; y: number } | null>(null);
+  /** Client-pixel position of the last painted sample — where a stroke resumes from when its UV jumps (see texturePaintSegments). */
+  const texturePaintLastScreenRef = useRef<{ x: number; y: number } | null>(null);
   const textureBrushGizmoRef = useRef<THREE.LineLoop | null>(null);
   const texturePaintLastPressureRef = useRef<number>(1.0);
   const texturePaintPressureTrackerRef = useRef<PressureTracker>(createPressureTracker());
@@ -2219,6 +2249,8 @@ export function Viewport({
     const weightBrushGizmo = createTerrainBrushGizmo();
     (weightBrushGizmo.material as THREE.LineBasicMaterial).color.set(0xf59e0b);
     let weightPainting: { nodeId: string; last: THREE.Vector3 | null } | null = null;
+    /** Points Influence's Shift-drag gradient: where the line started, in canvas pixels. */
+    let influenceGradient: { nodeId: string; start: { x: number; y: number } } | null = null;
     const textureBrushGizmo = createTextureBrushGizmo();
     textureBrushGizmoRef.current = textureBrushGizmo;
 
@@ -3538,6 +3570,103 @@ export function Viewport({
       if (weightPainting) weightPainting.last = point.clone();
     }
 
+    /**
+     * Points Influence's gradient: every vertex of its mesh projected to the
+     * screen and given its place along the line (1 at the start, 0 at the
+     * end), painted into the map and handed to the points at once — the
+     * gradient redefines the whole field, so it doesn't wait for Compute.
+     */
+    function applyInfluenceGradientLine(
+      nodeId: string,
+      start: { x: number; y: number },
+      end: { x: number; y: number },
+      rect: DOMRect,
+    ) {
+      const result = latestResultsRef.current?.get(nodeId);
+      const mesh = result?.geometry instanceof THREE.Object3D ? findFirstMesh(result.geometry) : null;
+      const pos = mesh?.geometry.attributes.position;
+      if (!mesh || !pos) return;
+      if (!mesh.geometry.attributes.uv) {
+        console.warn("Points Influence: this mesh has no UVs, so a gradient cannot be painted on it.");
+        return;
+      }
+      mesh.updateWorldMatrix(true, false);
+      const toClip = new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse).multiply(mesh.matrixWorld);
+      const screen = new Float32Array(pos.count * 2);
+      const v = new THREE.Vector3();
+      for (let i = 0; i < pos.count; i++) {
+        v.fromBufferAttribute(pos, i).applyMatrix4(toClip);
+        screen[i * 2] = ((v.x + 1) / 2) * rect.width;
+        screen[i * 2 + 1] = ((1 - v.y) / 2) * rect.height;
+      }
+      const influences = applyInfluenceGradient(nodeId, mesh.geometry, screen, start, end);
+      const state = getTexturePaintState(nodeId);
+      if (!influences || !state.canvas) return;
+      // The map is already what the param will say: mark it restored so the
+      // node doesn't decode its own PNG back over it.
+      const textureData = serializePaintCanvas(state.canvas);
+      state.lastDataUrl = textureData;
+      const pending = textureSnapshotTimersRef.current.get(nodeId);
+      if (pending !== undefined) {
+        clearTimeout(pending);
+        textureSnapshotTimersRef.current.delete(nodeId);
+      }
+      onParamChangeRef.current?.({ textureData, influences }, undefined, nodeId, { coalesce: false });
+    }
+
+    /**
+     * The stamps between the last painted sample and this one. A stroke is
+     * joined in UV space, which is only the surface's shape inside one UV
+     * island: when the cursor crosses a seam (onto an ear, a tail, another
+     * island packed far away), the straight UV line between the two hits
+     * runs across whatever islands lie between them and paints long streaks
+     * there. So a jump longer than the brush is walked in screen space
+     * instead — raycast every few pixels, each hit stamped, joined to the
+     * previous one only while they stay close in UV — and samples that miss
+     * the mesh break the stroke rather than bridging the gap.
+     */
+    function texturePaintSegments(
+      prevUv: { x: number; y: number } | null,
+      prevScreen: { x: number; y: number } | null,
+      uv: { x: number; y: number },
+      screen: { x: number; y: number },
+      resPx: number,
+      brushPx: number,
+      targetMeshes: THREE.Object3D[],
+    ): { uv: { x: number; y: number }; prevUv: { x: number; y: number } | null }[] {
+      if (!prevUv) return [{ uv, prevUv: null }];
+      const maxGap = Math.max(8, brushPx * 2);
+      const close = (a: { x: number; y: number }, b: { x: number; y: number }) =>
+        Math.hypot(a.x - b.x, a.y - b.y) * resPx <= maxGap;
+      if (close(prevUv, uv)) return [{ uv, prevUv }];
+      if (!prevScreen || !raycaster) return [{ uv, prevUv: null }];
+
+      const rect = renderer.domElement.getBoundingClientRect();
+      const steps = Math.min(48, Math.max(1, Math.ceil(Math.hypot(screen.x - prevScreen.x, screen.y - prevScreen.y) / 3)));
+      const out: { uv: { x: number; y: number }; prevUv: { x: number; y: number } | null }[] = [];
+      const ndc = new THREE.Vector2();
+      let last: { x: number; y: number } | null = prevUv;
+      for (let i = 1; i <= steps; i++) {
+        let at: { x: number; y: number } | null = uv;
+        if (i < steps) {
+          const t = i / steps;
+          const x = prevScreen.x + (screen.x - prevScreen.x) * t;
+          const y = prevScreen.y + (screen.y - prevScreen.y) * t;
+          ndc.set(((x - rect.left) / rect.width) * 2 - 1, -((y - rect.top) / rect.height) * 2 + 1);
+          raycaster.setFromCamera(ndc, camera);
+          const hit = raycaster.intersectObjects(targetMeshes, true)[0];
+          at = hit?.uv ? { x: hit.uv.x, y: hit.uv.y } : null;
+        }
+        if (!at) {
+          last = null;
+          continue;
+        }
+        out.push({ uv: at, prevUv: last && close(last, at) ? last : null });
+        last = at;
+      }
+      return out;
+    }
+
     function onCanvasPointerDown(e: PointerEvent) {
       if (e.ctrlKey && !e.metaKey && e.button === 0) {
         try {
@@ -3780,6 +3909,24 @@ export function Viewport({
         }
       }
 
+      // Points Influence: Shift-drag draws a line, and the whole map becomes
+      // a gradient along it (applyInfluenceGradientLine on release).
+      if (!outputMode && !elevationView && e.button === 0 && e.shiftKey && !isMarqueeModifier) {
+        const infNode = graphRef.current.nodes.find(
+          (n) => n.id === selectedNodeIdRef.current && n.type === POINTS_INFLUENCE_NODE.type,
+        );
+        if (infNode) {
+          const rect = renderer.domElement.getBoundingClientRect();
+          const start = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+          influenceGradient = { nodeId: infNode.id, start };
+          setGradientLine({ x1: start.x, y1: start.y, x2: start.x, y2: start.y });
+          controls.enabled = false;
+          if (textureBrushGizmo) textureBrushGizmo.visible = false;
+          e.stopImmediatePropagation();
+          return;
+        }
+      }
+
       const texPaintNode = selectedNodeIdRef.current
         ? graphRef.current.nodes.find(
             (n) => n.id === selectedNodeIdRef.current && (isTexturePaintNode(n) || isTextureMixNode(n)),
@@ -3805,6 +3952,7 @@ export function Viewport({
             if (uv) {
               isTexturePaintingRef.current = true;
               texturePaintLastUvRef.current = { ...uv };
+              texturePaintLastScreenRef.current = { x: e.clientX, y: e.clientY };
               controls.enabled = false;
 
               texturePaintPressureTrackerRef.current = createPressureTracker({
@@ -4073,6 +4221,12 @@ export function Viewport({
         updateEditModal(e.clientX, e.clientY, e);
         return;
       }
+      if (influenceGradient) {
+        const rect = renderer.domElement.getBoundingClientRect();
+        const { start } = influenceGradient;
+        setGradientLine({ x1: start.x, y1: start.y, x2: e.clientX - rect.left, y2: e.clientY - rect.top });
+        return;
+      }
       const terrainNode = selectedNodeIdRef.current
         ? graphRef.current.nodes.find((n) => n.id === selectedNodeIdRef.current && isTerrainNode(n))
         : null;
@@ -4334,70 +4488,84 @@ export function Viewport({
             }
 
             if (isTexturePaintingRef.current && uv) {
-              const prevUv = texturePaintLastUvRef.current;
+              const resPx = isTexturePaintNode(texPaintNode)
+                ? (getTexturePaintState(texPaintNode.id).canvas?.width ?? 1024)
+                : (getTextureMixPaintState(texPaintNode.id).outCanvas?.width ?? 1024);
+              const segments = texturePaintSegments(
+                texturePaintLastUvRef.current,
+                texturePaintLastScreenRef.current,
+                uv,
+                { x: e.clientX, y: e.clientY },
+                resPx,
+                Number(texPaintNode.params.brushSize) || 24,
+                targetMeshes,
+              );
               texturePaintLastUvRef.current = { ...uv };
+              texturePaintLastScreenRef.current = { x: e.clientX, y: e.clientY };
 
-              if (isTexturePaintNode(texPaintNode)) {
-                const state = getTexturePaintState(texPaintNode.id);
-                if (state.canvas) {
-                  const { tool: brushTool, color: brushColor } = texturePaintStroke(texPaintNode);
-                  const brushSize = Number(texPaintNode.params.brushSize) || 24;
-                  const brushOpacity = Number(texPaintNode.params.brushOpacity ?? 1.0);
-                  const brushHardness = Number(texPaintNode.params.brushHardness ?? 0.5);
-                  const symmetryX = Boolean(texPaintNode.params.symmetryX);
+              for (const { uv, prevUv } of segments) {
+                if (isTexturePaintNode(texPaintNode)) {
+                  const state = getTexturePaintState(texPaintNode.id);
+                  if (state.canvas) {
+                    const { tool: brushTool, color: brushColor } = texturePaintStroke(texPaintNode);
+                    const brushSize = Number(texPaintNode.params.brushSize) || 24;
+                    const brushOpacity = Number(texPaintNode.params.brushOpacity ?? 1.0);
+                    const brushHardness = Number(texPaintNode.params.brushHardness ?? 0.5);
+                    const symmetryX = Boolean(texPaintNode.params.symmetryX);
 
-                  const res = applyPaintStroke(state.canvas, {
-                    tool: brushTool,
-                    color: brushColor,
-                    radius: brushSize,
-                    opacity: brushOpacity,
-                    hardness: brushHardness,
-                    uv,
-                    prevUv,
-                    symmetryX,
-                    pressure,
-                    prevPressure,
-                    pressureAffects: pressureTarget,
-                    p5: texturePaintP5Style(texPaintNode.params),
-                  });
-                  if (res.sampledColor) {
-                    onParamChangeRef.current?.("brushColor", res.sampledColor, texPaintNode.id);
+                    const res = applyPaintStroke(state.canvas, {
+                      tool: brushTool,
+                      color: brushColor,
+                      radius: brushSize,
+                      opacity: brushOpacity,
+                      hardness: brushHardness,
+                      uv,
+                      prevUv,
+                      symmetryX,
+                      pressure,
+                      prevPressure,
+                      pressureAffects: pressureTarget,
+                      p5: texturePaintP5Style(texPaintNode.params),
+                    });
+                    if (res.sampledColor) {
+                      onParamChangeRef.current?.("brushColor", res.sampledColor, texPaintNode.id);
+                    }
+                    if (state.texture) state.texture.needsUpdate = true;
                   }
-                  if (state.texture) state.texture.needsUpdate = true;
-                }
-              } else if (isTextureMixNode(texPaintNode)) {
-                const state = getTextureMixPaintState(texPaintNode.id);
-                if (state.splatBuffer && state.outCanvas) {
-                  const resPx = state.outCanvas.width;
-                  const activeLayer = Number(texPaintNode.params.activeLayer) || 0;
-                  const brushTool = (texPaintNode.params.brushTool as TextureMixTool) || "paint";
-                  const brushSize = Number(texPaintNode.params.brushSize) || 32;
-                  const brushStrength = Number(texPaintNode.params.brushStrength) || 0.8;
-                  const brushFalloff = (texPaintNode.params.brushFalloff as any) || "smooth";
+                } else if (isTextureMixNode(texPaintNode)) {
+                  const state = getTextureMixPaintState(texPaintNode.id);
+                  if (state.splatBuffer && state.outCanvas) {
+                    const resPx = state.outCanvas.width;
+                    const activeLayer = Number(texPaintNode.params.activeLayer) || 0;
+                    const brushTool = (texPaintNode.params.brushTool as TextureMixTool) || "paint";
+                    const brushSize = Number(texPaintNode.params.brushSize) || 32;
+                    const brushStrength = Number(texPaintNode.params.brushStrength) || 0.8;
+                    const brushFalloff = (texPaintNode.params.brushFalloff as any) || "smooth";
 
-                  const dirty = applyMixStroke(state.splatBuffer, resPx, resPx, state.lastLayerCount || 1, {
-                    tool: brushTool,
-                    activeLayer,
-                    radius: brushSize,
-                    strength: brushStrength,
-                    falloff: brushFalloff,
-                    uv,
-                    prevUv,
-                    pressure,
-                    prevPressure,
-                    pressureAffects: pressureTarget,
-                  });
-                  // GPU pass when the renderer is up, CPU dirty-rect otherwise.
-                  const composited = compositeLayersAuto(state, state.layers ?? [], {
-                    renderer,
-                    res: resPx,
-                    layerCount: state.lastLayerCount || 1,
-                    region: dirty,
-                  });
-                  if (composited) state.texture = composited;
-                  state.splatVersion = (state.splatVersion ?? 0) + 1;
-                  if (state.texture) state.texture.needsUpdate = true;
-                  if (state.splatTexture) state.splatTexture.needsUpdate = true;
+                    const dirty = applyMixStroke(state.splatBuffer, resPx, resPx, state.lastLayerCount || 1, {
+                      tool: brushTool,
+                      activeLayer,
+                      radius: brushSize,
+                      strength: brushStrength,
+                      falloff: brushFalloff,
+                      uv,
+                      prevUv,
+                      pressure,
+                      prevPressure,
+                      pressureAffects: pressureTarget,
+                    });
+                    // GPU pass when the renderer is up, CPU dirty-rect otherwise.
+                    const composited = compositeLayersAuto(state, state.layers ?? [], {
+                      renderer,
+                      res: resPx,
+                      layerCount: state.lastLayerCount || 1,
+                      region: dirty,
+                    });
+                    if (composited) state.texture = composited;
+                    state.splatVersion = (state.splatVersion ?? 0) + 1;
+                    if (state.texture) state.texture.needsUpdate = true;
+                    if (state.splatTexture) state.splatTexture.needsUpdate = true;
+                  }
                 }
               }
               e.stopImmediatePropagation();
@@ -4695,6 +4863,19 @@ export function Viewport({
     }
 
     function onCanvasPointerUp(e: PointerEvent) {
+      if (influenceGradient) {
+        const { nodeId, start } = influenceGradient;
+        influenceGradient = null;
+        pointerDownAt = null;
+        controls.enabled = true;
+        setGradientLine(null);
+        const rect = renderer.domElement.getBoundingClientRect();
+        const end = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+        if (e.type === "pointerup" && Math.hypot(end.x - start.x, end.y - start.y) > CLICK_MOVE_THRESHOLD_PX) {
+          applyInfluenceGradientLine(nodeId, start, end, rect);
+        }
+        return;
+      }
       if (weightPainting) {
         const { nodeId } = weightPainting;
         weightPainting = null;
@@ -4799,6 +4980,7 @@ export function Viewport({
         isTexturePaintingRef.current = false;
         controls.enabled = true;
         texturePaintLastUvRef.current = null;
+        texturePaintLastScreenRef.current = null;
         const node = selectedNodeIdRef.current
           ? graphRef.current.nodes.find((n) => n.id === selectedNodeIdRef.current)
           : null;
@@ -7999,6 +8181,23 @@ export function Viewport({
           }}
         />
       )}
+      {/* Points Influence's Shift-drag gradient, while it is dragged: hot
+          (influence 1) at the start, cold (0) at the end. */}
+      {!outputMode && gradientLine && (
+        <svg style={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: 40 }} width="100%" height="100%">
+          <line
+            x1={gradientLine.x1}
+            y1={gradientLine.y1}
+            x2={gradientLine.x2}
+            y2={gradientLine.y2}
+            stroke="#38bdf8"
+            strokeWidth={2}
+            strokeDasharray="6 4"
+          />
+          <circle cx={gradientLine.x1} cy={gradientLine.y1} r={5} fill={DISCRETE_LEVEL_HEX[DISCRETE_LEVEL_HEX.length - 1]} />
+          <circle cx={gradientLine.x2} cy={gradientLine.y2} r={5} fill={DISCRETE_LEVEL_HEX[0]} />
+        </svg>
+      )}
       {/* Points Influence palette — tools on the left, the armed tool's
           options along the bottom (see PointsInfluenceHud). */}
       {!outputMode &&
@@ -8019,6 +8218,73 @@ export function Viewport({
                 if (state.canvas) clearPaintCanvas(state.canvas, POINTS_INFLUENCE_BASE);
                 if (state.texture) state.texture.needsUpdate = true;
                 onParamChange?.("textureData", "", infNode.id);
+              }}
+              onBlurPreview={(radius) => {
+                const state = getTexturePaintState(infNode.id);
+                const ctx2d = state.canvas?.getContext("2d", { willReadFrequently: true });
+                if (!state.canvas || !ctx2d) return;
+                let session = influenceBlurRef.current;
+                if (!session || session.nodeId !== infNode.id) {
+                  const result = latestResultsRef.current?.get(infNode.id);
+                  const mesh = result?.geometry instanceof THREE.Object3D ? findFirstMesh(result.geometry) : null;
+                  const uv = mesh?.geometry.attributes.uv;
+                  const position = mesh?.geometry.attributes.position;
+                  session = {
+                    nodeId: infNode.id,
+                    src: ctx2d.getImageData(0, 0, state.canvas.width, state.canvas.height),
+                    surface:
+                      uv && position
+                        ? prepareSurfaceBlur(state.canvas.width, state.canvas.height, uv, position, mesh.geometry.index?.array)
+                        : null,
+                    radius,
+                    frame: null,
+                  };
+                  influenceBlurRef.current = session;
+                }
+                session.radius = radius;
+                if (session.frame !== null) return;
+                const current = session;
+                current.frame = requestAnimationFrame(() => {
+                  current.frame = null;
+                  if (influenceBlurRef.current !== current) return;
+                  const blurred = blurInfluence(current, current.radius);
+                  const { src } = current;
+                  ctx2d.putImageData(new ImageData(blurred, src.width, src.height), 0, 0);
+                  if (state.texture) state.texture.needsUpdate = true;
+                });
+              }}
+              onBlurEnd={(commit) => {
+                const session = influenceBlurRef.current;
+                influenceBlurRef.current = null;
+                const state = getTexturePaintState(infNode.id);
+                if (!session || session.nodeId !== infNode.id || !state.canvas) return;
+                const ctx2d = state.canvas.getContext("2d", { willReadFrequently: true });
+                if (session.frame !== null) {
+                  // Released before the last radius was shown: show it now, so what is kept is what was asked for.
+                  cancelAnimationFrame(session.frame);
+                  if (commit) {
+                    const { src } = session;
+                    const blurred = blurInfluence(session, session.radius);
+                    ctx2d?.putImageData(new ImageData(blurred, src.width, src.height), 0, 0);
+                    if (state.texture) state.texture.needsUpdate = true;
+                  }
+                }
+                if (!commit) {
+                  ctx2d?.putImageData(session.src, 0, 0);
+                  if (state.texture) state.texture.needsUpdate = true;
+                  return;
+                }
+                // The canvas already shows the result: mark it restored so the
+                // node doesn't decode its own PNG back over it, and drop any
+                // pending stroke snapshot this one supersedes.
+                const textureData = serializePaintCanvas(state.canvas);
+                state.lastDataUrl = textureData;
+                const pending = textureSnapshotTimersRef.current.get(infNode.id);
+                if (pending !== undefined) {
+                  clearTimeout(pending);
+                  textureSnapshotTimersRef.current.delete(infNode.id);
+                }
+                onParamChange?.("textureData", textureData, infNode.id, { coalesce: false });
               }}
             />
           );
