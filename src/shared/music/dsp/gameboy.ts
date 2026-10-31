@@ -12,9 +12,13 @@
  * register, a wave that is not smoothed and the DMG's high-pass on the output. Two liberties: a note-off fades over
  * `release` (the hardware cuts, which clicks), and a track may have more than one voice, for chords.
  *
+ * Macros (macros.ts), one value a tick: volume (0–15, in place of the envelope), arpeggio (semitones), duty (0–3)
+ * and pitch (cents) — LSDJ's tables, Furnace's macros.
+ *
  * Pure like fm.ts: per-sample, no allocation in render, the output does not depend on block sizes.
  */
 import { midiToHz } from "./fm";
+import { DEFAULT_TICK_RATE, Macro, macroDone, macroNext, macroRelease, parseMacro } from "./macros";
 
 export type GbChannel = "pulse" | "wave" | "noise" | "kit";
 
@@ -34,8 +38,33 @@ export interface GbPatch {
   sweep: number;
   /** 1–7: how big each sweep step is (1 is an octave and more, 7 a hair). */
   sweepShift: number;
-  /** Seconds a note-off takes to fade (0.005: the hardware's cut, without the click). */
+  /** Seconds a note-off takes to fade (0.005: the hardware's cut, without the click). A volume macro with a release
+   * mark plays its own release instead. */
   release: number;
+  /** Macros (macros.ts): volume 0–15, arpeggio in semitones, duty 0–3, pitch in cents; "" for none. */
+  macroVol: string;
+  macroArp: string;
+  macroDuty: string;
+  macroPitch: string;
+  /** Macro ticks a second (60 NTSC, 50 PAL). */
+  tickRate: number;
+}
+
+interface GbMacros {
+  vol: Macro | null;
+  arp: Macro | null;
+  duty: Macro | null;
+  pitch: Macro | null;
+}
+const MACRO_KEYS = ["vol", "arp", "duty", "pitch"] as const;
+const parsedMacros = new WeakMap<GbPatch, GbMacros>();
+function macrosOf(p: GbPatch): GbMacros {
+  let m = parsedMacros.get(p);
+  if (!m) {
+    m = { vol: parseMacro(p.macroVol), arp: parseMacro(p.macroArp), duty: parseMacro(p.macroDuty), pitch: parseMacro(p.macroPitch) };
+    parsedMacros.set(p, m);
+  }
+  return m;
 }
 
 export const DEFAULT_GB_PATCH: GbPatch = {
@@ -48,6 +77,11 @@ export const DEFAULT_GB_PATCH: GbPatch = {
   sweep: 0,
   sweepShift: 3,
   release: 0.005,
+  macroVol: "",
+  macroArp: "",
+  macroDuty: "",
+  macroPitch: "",
+  tickRate: DEFAULT_TICK_RATE,
 };
 
 export const GB_DUTIES = [0.125, 0.25, 0.5, 0.75] as const;
@@ -148,6 +182,13 @@ export class GbSynth {
   private gain: Float64Array;
   private relStep: Float64Array;
   private velocity: Float64Array;
+  /** Macros: samples to the next tick, each macro's position (4 a voice), and what they set. */
+  private tickLeft: Float64Array;
+  private mPos: Int32Array;
+  private mReleased: Uint8Array;
+  private arpOff: Float64Array;
+  private centsOff: Float64Array;
+  private dutyOv: Int32Array;
   private active: Uint8Array;
   private held: Uint8Array;
   private age: Float64Array;
@@ -179,6 +220,12 @@ export class GbSynth {
     this.gain = new Float64Array(n);
     this.relStep = new Float64Array(n);
     this.velocity = new Float64Array(n);
+    this.tickLeft = new Float64Array(n);
+    this.mPos = new Int32Array(n * 4);
+    this.mReleased = new Uint8Array(n);
+    this.arpOff = new Float64Array(n);
+    this.centsOff = new Float64Array(n);
+    this.dutyOv = new Int32Array(n);
     this.active = new Uint8Array(n);
     this.held = new Uint8Array(n);
     this.age = new Float64Array(n);
@@ -240,7 +287,42 @@ export class GbSynth {
 
   private release(v: number): void {
     this.held[v] = 0;
-    this.relStep[v] = 1 / Math.max(1, this.vPatch[v].release * this.sr);
+    this.mReleased[v] = 1;
+    // A volume macro with a release plays it out; otherwise the note fades.
+    const vol = macrosOf(this.vPatch[v]).vol;
+    if (!(vol && vol.release > 0)) this.relStep[v] = 1 / Math.max(1, this.vPatch[v].release * this.sr);
+  }
+
+  /** One macro tick on voice v: each macro on a step, and what it sets applied. */
+  private tick(v: number): void {
+    const p = this.vPatch[v];
+    const m = macrosOf(p);
+    const held = this.held[v] === 1;
+    const released = this.mReleased[v] === 1;
+    this.mReleased[v] = 0;
+    for (let k = 0; k < 4; k++) {
+      const mac = m[MACRO_KEYS[k]];
+      if (!mac) continue;
+      const i = v * 4 + k;
+      if (released) this.mPos[i] = macroRelease(mac, this.mPos[i]) - 1;
+      const pos = macroNext(mac, this.mPos[i], held);
+      this.mPos[i] = pos;
+      const x = mac.values[pos];
+      if (k === 0) {
+        this.vol[v] = Math.round(Math.min(LEVELS, Math.max(0, x)) * this.velocity[v]);
+        // Released and over: silent ends the note, a level left fades out.
+        if (!held && macroDone(mac, pos) && this.relStep[v] === 0) {
+          if (this.vol[v] === 0) this.active[v] = 0;
+          else this.relStep[v] = 1 / Math.max(1, p.release * this.sr);
+        }
+      } else if (k === 1) this.arpOff[v] = x;
+      else if (k === 2) this.dutyOv[v] = Math.min(3, Math.max(0, x));
+      else this.centsOff[v] = x;
+    }
+    if (m.arp || m.pitch) {
+      if (p.channel === "noise") this.noiseInc[v] = noiseRateFor(this.pitch[v] + this.arpOff[v] + this.centsOff[v] / 100) / this.sr;
+      else if (!this.swept[v]) this.retune(v);
+    }
   }
 
   /** A note on voice v: a free voice starts from phase 0; a voice playing on keeps its phase (no click), like the DMG's. */
@@ -272,7 +354,15 @@ export class GbSynth {
     this.noiseInc[v] = noiseRateFor(played) / this.sr;
     const ch = patch.channel === "wave" ? "wave" : "pulse";
     this.xreg[v] = Math.round(2048 - REGISTER_BASE[ch] / midiToHz(this.pitch[v]));
+    // Macros from their first value, on the note's first sample.
+    this.mPos.fill(-1, v * 4, v * 4 + 4);
+    this.mReleased[v] = 0;
+    this.arpOff[v] = 0;
+    this.centsOff[v] = 0;
+    this.dutyOv[v] = -1;
+    this.tickLeft[v] = this.sr / Math.max(1, patch.tickRate || DEFAULT_TICK_RATE);
     this.retune(v);
+    this.tick(v);
   }
 
   private envPeriod(p: GbPatch): number {
@@ -290,7 +380,7 @@ export class GbSynth {
     const p = this.vPatch[v];
     if (p.channel === "noise") return;
     const ch = p.channel === "wave" ? "wave" : "pulse";
-    const hz = fromRegister ? REGISTER_BASE[ch] / (2048 - this.xreg[v]) : registerHz(midiToHz(this.pitch[v]), ch);
+    const hz = fromRegister ? REGISTER_BASE[ch] / (2048 - this.xreg[v]) : registerHz(midiToHz(this.pitch[v] + this.arpOff[v] + this.centsOff[v] / 100), ch);
     this.inc[v] = hz / this.sr;
   }
 
@@ -305,8 +395,10 @@ export class GbSynth {
       if (!this.active[v]) continue;
       const p = this.vPatch[v];
       const ch = p.channel;
-      const duty = ch === "pulse" ? Math.min(0.875, Math.max(0.125, p.duty)) : 0.5;
+      let duty = ch === "pulse" ? Math.min(0.875, Math.max(0.125, p.duty)) : 0.5;
       const up = p.envelope > 0;
+      const macros = macrosOf(p);
+      const tickSamples = this.sr / Math.max(1, p.tickRate || DEFAULT_TICK_RATE);
       const sweepUp = p.sweep > 0;
       const shift = Math.min(7, Math.max(1, Math.round(p.sweepShift)));
       const short = p.noiseShort;
@@ -324,8 +416,15 @@ export class GbSynth {
           this.pitch[v] = q;
           if (!this.swept[v]) this.retune(v);
         }
-        // Volume envelope.
-        if (--this.envLeft[v] <= 0) {
+        // Macros, a step a tick.
+        if (--this.tickLeft[v] <= 0) {
+          this.tickLeft[v] += tickSamples;
+          this.tick(v);
+          if (!this.active[v]) break;
+        }
+        if (this.dutyOv[v] >= 0 && ch === "pulse") duty = GB_DUTIES[this.dutyOv[v]];
+        // Volume envelope (a volume macro takes its place).
+        if (!macros.vol && --this.envLeft[v] <= 0) {
           this.envLeft[v] += envPeriod;
           this.vol[v] = Math.min(LEVELS, Math.max(0, this.vol[v] + (up ? 1 : -1)));
         }
@@ -384,7 +483,7 @@ export class GbSynth {
         }
         buf[i] += x * (this.vol[v] / LEVELS) * AMP * g;
         // Faded to nothing: the envelope at 0 going down (or a sweep run out) is the end of the note.
-        if (this.vol[v] === 0 && !up) this.active[v] = 0;
+        if (this.vol[v] === 0 && !up && !macros.vol) this.active[v] = 0;
         if (!this.active[v]) break;
       }
     }
@@ -428,6 +527,15 @@ export const GB_PRESETS: Record<string, GbPreset> = {
   "Noise · Hiss": gb({ channel: "noise", volume: 12, envelope: -2 }),
   "Noise · Metal": gb({ channel: "noise", noiseShort: true, volume: 11, envelope: -3 }),
   "Kit · DMG Drums": gb({ channel: "kit", volume: 15 }, 3),
+  // With macros: LSDJ's table tricks.
+  "Macro · Major Arp": gb({ duty: 0.25, volume: 13, macroArp: "| 0 4 7" }),
+  "Macro · Minor Arp": gb({ duty: 0.25, volume: 13, macroArp: "| 0 3 7" }),
+  "Macro · Octave Arp": gb({ duty: 0.5, volume: 13, macroArp: "| 0 12" }),
+  "Macro · Vibrato Lead": gb({ duty: 0.5, volume: 13, macroPitch: "0 0 0 0 0 0 | 0 8 15 8 0 -8 -15 -8" }),
+  "Macro · Duty Sweep": gb({ volume: 13, macroDuty: "| 0 0 1 1 2 2 3 3 2 2 1 1" }),
+  "Macro · Echo Pluck": gb({ duty: 0.25, macroVol: "15 12 9 6 4 2 0 0 0 0 7 5 3 2 1 0 0 0 0 0 3 2 1 0" }),
+  "Macro · Swell Release": gb({ duty: 0.125, macroVol: "2 4 6 8 10 12 | 12 / 9 6 4 2 1 0" }, 3),
+  "Macro · Drum Zap": gb({ duty: 0.5, macroVol: "15 13 10 7 4 2 0", macroArp: "24 12 5 0 -5 -9 -12" }),
 };
 
 export const GB_PRESET_NAMES = Object.keys(GB_PRESETS);

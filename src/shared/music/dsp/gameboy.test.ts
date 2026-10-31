@@ -105,4 +105,25 @@ describe("Game Boy voice", () => {
     expect(track.gb.wave).toBe(GB_PRESETS["Wave · Saw"].patch.wave);
     expect(track.gb.duty).toBe(0.25);
   });
+
+  it("arpeggiates by its macro, a step a tick", () => {
+    // 0 then +12, a tick each (slow ticks, to count the cycles): the second tick an octave up.
+    const x = render({ duty: 0.5, macroArp: "| 0 12", tickRate: 5 }, 0.4, (s) => s.noteOn(57, 1));
+    expect(hz(x, 0.01, 0.19)).toBeCloseTo(registerHz(220, "pulse"), -1);
+    expect(hz(x, 0.21, 0.39)).toBeCloseTo(registerHz(440, "pulse"), -1);
+  });
+
+  it("plays a volume macro's release after the note-off, then ends", () => {
+    const s = new GbSynth(1, SR);
+    s.setPatch({ ...DEFAULT_GB_PATCH, macroVol: "15 / 8 8 8 8 8 0" });
+    s.noteOn(60, 1);
+    const out = new Float32Array(SR / 2);
+    s.render(out, 0, SR / 10);
+    s.noteOff(60);
+    s.render(out, SR / 10, 2000);
+    // Still sounding: the release part (8) plays, not a 5 ms fade.
+    expect(rms(out, SR / 10 + 500, SR / 10 + 2000)).toBeGreaterThan(0.05);
+    s.render(out, SR / 10 + 2000, SR / 2 - SR / 10 - 2000);
+    expect(s.activeVoices()).toBe(0);
+  });
 });
