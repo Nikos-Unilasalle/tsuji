@@ -15,6 +15,9 @@ import type { NodeInstance } from "../graph/types";
  * on the surface (Texture Paint's strokes); Compute, in the parameters,
  * hands it to the points. Shift-drag, whatever the tool, paints a gradient
  * along the dragged line (see Viewport's applyInfluenceGradientLine).
+ *
+ * A Skin in Paint mode uses the same palette for its joints' weight maps,
+ * with its own controls at either end of the bar (`leading`, `trailing`).
  */
 
 type OnParams = (params: Record<string, unknown>, nodeId: string) => void;
@@ -82,9 +85,27 @@ export interface PointsInfluenceHudProps {
   onBlurPreview: (radius: number) => void;
   /** Ends the Blur drag: keeps the previewed blur as one undoable change, or drops it when `commit` is false. */
   onBlurEnd: (commit: boolean) => void;
+  /** What the painted value is called ("Influence", "Weight"). */
+  valueLabel?: string;
+  /** Controls before the brush's. */
+  leading?: ReactNode;
+  /** Controls after the Blur, in place of the gradient hint, the count and Clear. */
+  trailing?: ReactNode;
 }
 
-export function PointsInfluenceHud({ node, levelColors, maxRows, left, onParams, onClear, onBlurPreview, onBlurEnd }: PointsInfluenceHudProps) {
+export function PointsInfluenceHud({
+  node,
+  levelColors,
+  maxRows,
+  left,
+  onParams,
+  onClear,
+  onBlurPreview,
+  onBlurEnd,
+  valueLabel = "Influence",
+  leading,
+  trailing,
+}: PointsInfluenceHudProps) {
   // The Blur slider is an action, not a setting: it springs back to 0 once
   // the drag that applied it ends.
   const [blur, setBlur] = useState(0);
@@ -116,9 +137,15 @@ export function PointsInfluenceHud({ node, levelColors, maxRows, left, onParams,
         ))}
       </HudToolColumn>
       <HudBar>
+        {leading && (
+          <>
+            {leading}
+            <HudSeparator />
+          </>
+        )}
         {usesValue && (
           <>
-            <span style={{ fontSize: 11, color: "#94a3b8" }}>Influence</span>
+            <span style={{ fontSize: 11, color: "#94a3b8" }}>{valueLabel}</span>
             {POINTS_INFLUENCE_LEVELS.map((level, i) => (
               <button
                 key={level}
@@ -126,7 +153,7 @@ export function PointsInfluenceHud({ node, levelColors, maxRows, left, onParams,
                 className={`viewport-influence-level ${Math.abs(value - level) < 1e-6 ? "viewport-influence-level-active" : ""}`}
                 style={{ backgroundColor: levelColors[i] }}
                 onClick={() => onParams({ brushValue: level }, node.id)}
-                title={`${Math.round(level * 100)}% — the influence the ${tool === "fill" ? "fill" : "brush"} paints`}
+                title={`${Math.round(level * 100)}% — the ${valueLabel.toLowerCase()} the ${tool === "fill" ? "fill" : "brush"} paints`}
               >
                 {Math.round(level * 100)}
               </button>
@@ -179,25 +206,29 @@ export function PointsInfluenceHud({ node, levelColors, maxRows, left, onParams,
           />
         </div>
         <HudSeparator />
-        <span
-          style={{ fontSize: 11, color: "#94a3b8" }}
-          title="Gradient — hold Shift and drag a line across the object: 100% where the line starts, 0% where it ends. Replaces the whole map and applies to the points at once."
-        >
-          Shift-drag: gradient
-        </span>
-        <HudSeparator />
-        <span style={{ fontSize: 11, color: "#94a3b8" }} title="Points with influence after the last Compute (in the parameters)">
-          {computed} point{computed === 1 ? "" : "s"} computed
-        </span>
-        <button
-          type="button"
-          className="viewport-hud-button"
-          onClick={onClear}
-          title="Clear — paint the whole map back to 0% (undoable; Compute to apply it to the points)"
-          style={{ fontSize: 11, padding: "2px 6px", width: "auto" }}
-        >
-          Clear
-        </button>
+        {trailing ?? (
+          <>
+            <span
+              style={{ fontSize: 11, color: "#94a3b8" }}
+              title="Gradient — hold Shift and drag a line across the object: 100% where the line starts, 0% where it ends. Replaces the whole map and applies to the points at once."
+            >
+              Shift-drag: gradient
+            </span>
+            <HudSeparator />
+            <span style={{ fontSize: 11, color: "#94a3b8" }} title="Points with influence after the last Compute (in the parameters)">
+              {computed} point{computed === 1 ? "" : "s"} computed
+            </span>
+            <button
+              type="button"
+              className="viewport-hud-button"
+              onClick={onClear}
+              title="Clear — paint the whole map back to 0% (undoable; Compute to apply it to the points)"
+              style={{ fontSize: 11, padding: "2px 6px", width: "auto" }}
+            >
+              Clear
+            </button>
+          </>
+        )}
       </HudBar>
     </>
   );

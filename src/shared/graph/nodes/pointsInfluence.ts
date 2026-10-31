@@ -249,6 +249,17 @@ export function sampleInfluences(
   uv: UvSource,
   position?: PositionSource,
 ): Record<number, number> {
+  return sparseInfluences(sampleMapValues(pixels, width, height, uv, position));
+}
+
+/** sampleInfluences' values, one per vertex, before they are made sparse. */
+export function sampleMapValues(
+  pixels: Uint8ClampedArray,
+  width: number,
+  height: number,
+  uv: UvSource,
+  position?: PositionSource,
+): Float32Array {
   const values = sampleMap(pixels, width, height, uv);
 
   if (position && position.count === uv.count) {
@@ -262,7 +273,7 @@ export function sampleInfluences(
     for (let i = 0; i < values.length; i++) values[i] = strongest.get(key(i)) ?? values[i];
   }
 
-  return sparseInfluences(values);
+  return values;
 }
 
 /** The map bilinearly sampled under each UV (V up, as the painter maps it): the gray times its alpha, 0-1. */

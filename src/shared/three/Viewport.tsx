@@ -26,8 +26,7 @@ import { POSE_PROXY_NODES } from "./poseProxyNodes";
 import { createCurvePointHandles } from "./curveHandles";
 import { createPointCloudHandles } from "./pointCloudHandles";
 import { SKELETON_NODE_TYPE } from "../graph/nodes/skeleton";
-import { SKIN_NODE, skinPaintMeshes, skinStoredPaint, skinWeightDab } from "../graph/nodes/skin";
-import type { WeightBrush } from "../graph/ik/weightPaint";
+import { mirrorSkinWeightMaps, SKIN_COMPUTE_ACTION, SKIN_NODE, skinPaintMeshes, skinPaintTargets, skinWeightMap, skinWeightMapsParams } from "../graph/nodes/skin";
 import { SkeletonHud, SkinHud } from "./RigHuds";
 import { BipedHud } from "./BipedHud";
 import { PoseHud } from "./PoseHud";
@@ -363,14 +362,28 @@ import { getTexturePaintState, texturePaintP5Style } from "../graph/nodes/textur
 import { endBrushPaint } from "./brushPaintSession";
 import { getTextureMixPaintState } from "../graph/nodes/textureMixPaint";
 
-/** Nodes painted through Texture Paint's canvas, strokes and save path — Points Influence paints its influence map the same way. */
-function isTexturePaintNode(node: { type: string } | null | undefined): boolean {
-  return node?.type === "texture/paint" || node?.type === POINTS_INFLUENCE_NODE.type;
+/**
+ * Nodes painted through Texture Paint's canvas, strokes and save path —
+ * Points Influence paints its influence map the same way, and a Skin in
+ * Paint mode the map of its selected joint.
+ */
+function isTexturePaintNode(node: { type: string; params?: Record<string, unknown> } | null | undefined): boolean {
+  return node?.type === "texture/paint" || node?.type === POINTS_INFLUENCE_NODE.type || isSkinPaintNode(node);
+}
+
+function isSkinPaintNode(node: { type: string; params?: Record<string, unknown> } | null | undefined): boolean {
+  return node?.type === SKIN_NODE.type && Boolean(node.params?.weightPaintMode) && Math.round(Number(node.params?.selectedJoint ?? -1)) >= 0;
+}
+
+/** Where Texture Paint keeps the canvas a node paints: its own id, or for a Skin the selected joint's map on `skinMesh`. */
+function paintStateKey(node: NodeInstance, skinMesh: number): string {
+  if (node.type !== SKIN_NODE.type) return node.id;
+  return skinWeightMap(node.id, node.params, skinMesh, Math.round(Number(node.params.selectedJoint ?? -1))) ?? node.id;
 }
 
 /** The tool and colour a Texture Paint stroke of this node uses. */
 function texturePaintStroke(node: NodeInstance): { tool: TexturePaintTool; color: string } {
-  if (node.type === POINTS_INFLUENCE_NODE.type) return influenceStroke(node.params);
+  if (node.type === POINTS_INFLUENCE_NODE.type || node.type === SKIN_NODE.type) return influenceStroke(node.params);
   return {
     tool: (node.params.brushTool as TexturePaintTool) || "paint",
     color: String(node.params.brushColor || "#38bdf8"),
@@ -424,6 +437,7 @@ function getTexturePaintMeshesForNode(
 ): THREE.Mesh[] {
   const meshes: THREE.Mesh[] = [];
   const res = latestResults?.get(nodeId);
+  if (graph.nodes.find((n) => n.id === nodeId)?.type === SKIN_NODE.type) return skinPaintTargets(nodeId);
   // Points Influence's points are its first mesh's vertices: that mesh is
   // the whole surface, and a BVH keeps its per-move raycast cheap.
   if (graph.nodes.find((n) => n.id === nodeId)?.type === POINTS_INFLUENCE_NODE.type) {
@@ -1310,6 +1324,8 @@ export function Viewport({
   /** Pending debounced param writes for painted textures, by node id. */
   const textureSnapshotTimersRef = useRef<Map<string, number>>(new Map());
   /** Points Influence's Blur drag: the map as it was when the drag began, and its UV coverage. */
+  /** The mesh of a Skin node whose weight maps are painted and shown: a Skin may bind several, each with its own maps. */
+  const skinPaintMeshRef = useRef(0);
   const influenceBlurRef = useRef<{
     nodeId: string;
     src: ImageData;
@@ -1319,6 +1335,81 @@ export function Viewport({
     radius: number;
     frame: number | null;
   } | null>(null);
+
+  /**
+   * The Blur drag of a painted map (Points Influence's, a Skin joint's): the
+   * map at `radius`, from what it was when the drag started — over the
+   * surface and across seams when `geometry` has UVs, a plain map blur
+   * otherwise. One blur per frame, the latest radius asked for.
+   */
+  const previewMapBlur = (sessionId: string, stateKey: string, geometry: THREE.BufferGeometry | null, radius: number) => {
+    const state = getTexturePaintState(stateKey);
+    const ctx2d = state.canvas?.getContext("2d", { willReadFrequently: true });
+    if (!state.canvas || !ctx2d) return;
+    let session = influenceBlurRef.current;
+    if (!session || session.nodeId !== sessionId) {
+      const uv = geometry?.attributes.uv;
+      const position = geometry?.attributes.position;
+      session = {
+        nodeId: sessionId,
+        src: ctx2d.getImageData(0, 0, state.canvas.width, state.canvas.height),
+        surface: uv && position ? prepareSurfaceBlur(state.canvas.width, state.canvas.height, uv, position, geometry!.index?.array) : null,
+        radius,
+        frame: null,
+      };
+      influenceBlurRef.current = session;
+    }
+    session.radius = radius;
+    if (session.frame !== null) return;
+    const current = session;
+    current.frame = requestAnimationFrame(() => {
+      current.frame = null;
+      if (influenceBlurRef.current !== current) return;
+      const blurred = blurInfluence(current, current.radius);
+      const { src } = current;
+      ctx2d.putImageData(new ImageData(blurred, src.width, src.height), 0, 0);
+      if (state.texture) state.texture.needsUpdate = true;
+    });
+  };
+
+  /**
+   * Ends the Blur drag: keeps what was previewed (returning the map to
+   * store, already marked as restored) or puts the map back (null). Null
+   * too when there was no drag.
+   */
+  const endMapBlur = (sessionId: string, stateKey: string, commit: boolean): string | null => {
+    const session = influenceBlurRef.current;
+    influenceBlurRef.current = null;
+    const state = getTexturePaintState(stateKey);
+    if (!session || session.nodeId !== sessionId || !state.canvas) return null;
+    const ctx2d = state.canvas.getContext("2d", { willReadFrequently: true });
+    if (session.frame !== null) {
+      // Released before the last radius was shown: show it now, so what is kept is what was asked for.
+      cancelAnimationFrame(session.frame);
+      if (commit) {
+        const { src } = session;
+        const blurred = blurInfluence(session, session.radius);
+        ctx2d?.putImageData(new ImageData(blurred, src.width, src.height), 0, 0);
+        if (state.texture) state.texture.needsUpdate = true;
+      }
+    }
+    if (!commit) {
+      ctx2d?.putImageData(session.src, 0, 0);
+      if (state.texture) state.texture.needsUpdate = true;
+      return null;
+    }
+    // The canvas already shows the result: mark it restored so the node
+    // doesn't decode its own PNG back over it, and drop any pending stroke
+    // snapshot this one supersedes.
+    const textureData = serializePaintCanvas(state.canvas);
+    state.lastDataUrl = textureData;
+    const pending = textureSnapshotTimersRef.current.get(sessionId);
+    if (pending !== undefined) {
+      clearTimeout(pending);
+      textureSnapshotTimersRef.current.delete(sessionId);
+    }
+    return textureData;
+  };
   const isTexturePaintingRef = useRef(false);
   const texturePaintLastUvRef = useRef<{ x: number; y: number } | null>(null);
   /** Client-pixel position of the last painted sample — where a stroke resumes from when its UV jumps (see texturePaintSegments). */
@@ -2245,10 +2336,6 @@ export function Viewport({
     const pivotCrossPool: THREE.LineSegments[] = [];
     const terrainBrushGizmo = createTerrainBrushGizmo();
     const sculptBrushGizmo = createTerrainBrushGizmo();
-    // A Skin node's weight brush: the same ring, amber, and the stroke under way.
-    const weightBrushGizmo = createTerrainBrushGizmo();
-    (weightBrushGizmo.material as THREE.LineBasicMaterial).color.set(0xf59e0b);
-    let weightPainting: { nodeId: string; last: THREE.Vector3 | null } | null = null;
     /** Points Influence's Shift-drag gradient: where the line started, in canvas pixels. */
     let influenceGradient: { nodeId: string; start: { x: number; y: number } } | null = null;
     const textureBrushGizmo = createTextureBrushGizmo();
@@ -2270,7 +2357,6 @@ export function Viewport({
       editorUiScene.add(pivotCrossGroup);
       editorUiScene.add(terrainBrushGizmo);
       editorUiScene.add(sculptBrushGizmo);
-      editorUiScene.add(weightBrushGizmo);
       editorUiScene.add(textureBrushGizmo);
       // The face-selection highlight lives in the *main* scene (not the
       // editor overlay, which clears depth and would show every selected face
@@ -3273,7 +3359,10 @@ export function Viewport({
         const node = graphRef.current.nodes.find((n) => n.id === nodeId);
         if (!node) return;
 
-        if (isTexturePaintNode(node)) {
+        if (node.type === SKIN_NODE.type) {
+          const patch = skinWeightMapsParams(nodeId, node.params);
+          if (patch) onParamChangeRef.current?.(patch, undefined, nodeId, { coalesce: false });
+        } else if (isTexturePaintNode(node)) {
           const state = getTexturePaintState(nodeId);
           if (state.canvas) {
             onParamChangeRef.current?.("textureData", serializePaintCanvas(state.canvas), nodeId, { coalesce: false });
@@ -3533,43 +3622,6 @@ export function Viewport({
         : null;
     }
 
-    /** The selected Skin node while its weight brush is on and a joint is picked to paint. */
-    function weightPaintNode() {
-      if (outputMode || elevationView || !selectedNodeIdRef.current) return null;
-      const node = graphRef.current.nodes.find((n) => n.id === selectedNodeIdRef.current && n.type === SKIN_NODE.type);
-      if (!node || !node.params.weightPaintMode) return null;
-      return Math.round(Number(node.params.selectedJoint ?? -1)) >= 0 ? node : null;
-    }
-
-    function weightPaintHit(nodeId: string, e: PointerEvent) {
-      if (!raycaster) return null;
-      const rect = renderer.domElement.getBoundingClientRect();
-      const ndc = new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1);
-      raycaster.setFromCamera(ndc, camera);
-      return raycaster.intersectObjects(skinPaintMeshes(nodeId), false)[0] ?? null;
-    }
-
-    /**
-     * One dab where the brush is, spaced a fifth of its radius from the last
-     * so a slow drag does not paint harder than a fast one. Shift smooths, Alt
-     * turns Add into Subtract and back.
-     */
-    function weightDab(node: { id: string; params: Record<string, unknown> }, point: THREE.Vector3, e: PointerEvent) {
-      const radius = Math.max(0.001, Number(node.params.weightBrushSize) || 0.15);
-      if (weightPainting?.last && weightPainting.last.distanceTo(point) < radius * 0.2) return;
-      const brush = String(node.params.weightBrush ?? "Add") as WeightBrush;
-      const tool: WeightBrush = e.shiftKey ? "Smooth" : e.altKey && brush !== "Smooth" ? (brush === "Add" ? "Subtract" : "Add") : brush;
-      const pressure = e.pointerType === "pen" && e.pressure > 0 ? e.pressure : 1;
-      skinWeightDab(node.id, {
-        joint: Math.round(Number(node.params.selectedJoint)),
-        tool,
-        center: point,
-        radius,
-        strength: (Number(node.params.weightBrushStrength) || 0.3) * pressure,
-      });
-      if (weightPainting) weightPainting.last = point.clone();
-    }
-
     /**
      * Points Influence's gradient: every vertex of its mesh projected to the
      * screen and given its place along the line (1 at the start, 0 at the
@@ -3796,22 +3848,6 @@ export function Viewport({
         }
       }
 
-      // The Skin weight brush; a click on a joint ball still picks the joint.
-      const weightNode = weightPaintNode();
-      if (weightNode && e.button === 0 && !isMarqueeModifier) {
-        const rect = renderer.domElement.getBoundingClientRect();
-        const ndc = new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1);
-        const onJoint = skinJointHandles.count() > 0 && skinJointHandles.pick(ndc, camera, rect.width, rect.height) !== null;
-        const hit = onJoint ? null : weightPaintHit(weightNode.id, e);
-        if (hit) {
-          weightPainting = { nodeId: weightNode.id, last: null };
-          controls.enabled = false;
-          weightDab(weightNode, hit.point, e);
-          e.stopImmediatePropagation();
-          return;
-        }
-      }
-
       const sculptNode = selectedNodeIdRef.current
         ? graphRef.current.nodes.find((n) => n.id === selectedNodeIdRef.current && isSculptNode(n))
         : null;
@@ -3933,7 +3969,15 @@ export function Viewport({
           )
         : null;
 
-      if (texPaintNode && !outputMode && !elevationView && e.button === 0 && !isMarqueeModifier && raycaster) {
+      // A Skin's joint balls sit on the mesh it paints: a click on one still picks the joint.
+      const onSkinJoint = (() => {
+        if (!isSkinPaintNode(texPaintNode) || skinJointHandles.count() === 0) return false;
+        const rect = renderer.domElement.getBoundingClientRect();
+        const ndc = new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1);
+        return skinJointHandles.pick(ndc, camera, rect.width, rect.height) !== null;
+      })();
+
+      if (texPaintNode && !onSkinJoint && !outputMode && !elevationView && e.button === 0 && !isMarqueeModifier && raycaster) {
         const targetMeshes = getTexturePaintMeshesForNode(texPaintNode.id, graphRef.current, latestResultsRef.current);
         if (targetMeshes.length > 0) {
           const rect = renderer.domElement.getBoundingClientRect();
@@ -3948,6 +3992,14 @@ export function Viewport({
             let uv = hit.uv ? { x: hit.uv.x, y: hit.uv.y } : null;
             if (!uv && hit.point) {
               uv = { x: ((hit.point.x % 1) + 1) % 1, y: ((hit.point.z % 1) + 1) % 1 };
+            }
+            if (isSkinPaintNode(texPaintNode)) {
+              // The stroke stays on the mesh it starts on: each has its own maps. No UVs, no map to paint.
+              let picked: THREE.Object3D | null = hit.object;
+              while (picked && !targetMeshes.includes(picked as THREE.Mesh)) picked = picked.parent;
+              skinPaintMeshRef.current = Math.max(0, targetMeshes.indexOf(picked as THREE.Mesh));
+              const joint = Math.round(Number(texPaintNode.params.selectedJoint));
+              if (!hit.uv || !skinWeightMap(texPaintNode.id, texPaintNode.params, skinPaintMeshRef.current, joint, true)) uv = null;
             }
             if (uv) {
               isTexturePaintingRef.current = true;
@@ -3970,7 +4022,7 @@ export function Viewport({
               texturePaintLastPressureRef.current = pressure;
 
               if (isTexturePaintNode(texPaintNode)) {
-                const state = getTexturePaintState(texPaintNode.id);
+                const state = getTexturePaintState(paintStateKey(texPaintNode, skinPaintMeshRef.current));
                 if (state.canvas) {
                   const { tool: brushTool, color: brushColor } = texturePaintStroke(texPaintNode);
                   const brushSize = Number(texPaintNode.params.brushSize) || 24;
@@ -4305,28 +4357,6 @@ export function Viewport({
         terrainBrushGizmo.visible = false;
       }
 
-      const weightMoveNode = weightPaintNode();
-      if (weightMoveNode && raycaster) {
-        const hit = weightPaintHit(weightMoveNode.id, e);
-        if (hit) {
-          const radius = Math.max(0.001, Number(weightMoveNode.params.weightBrushSize) || 0.15);
-          weightBrushGizmo.visible = true;
-          weightBrushGizmo.position.copy(hit.point);
-          if (hit.face) weightBrushGizmo.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), hit.face.normal.clone().transformDirection(hit.object.matrixWorld));
-          weightBrushGizmo.scale.setScalar(radius);
-          if (weightPainting?.nodeId === weightMoveNode.id) weightDab(weightMoveNode, hit.point, e);
-        } else {
-          weightBrushGizmo.visible = false;
-        }
-        // Off the mesh mid-stroke: still the brush's drag, not an orbit.
-        if (weightPainting) {
-          e.stopImmediatePropagation();
-          return;
-        }
-      } else if (weightBrushGizmo.visible) {
-        weightBrushGizmo.visible = false;
-      }
-
       const sculptNode = selectedNodeIdRef.current
         ? graphRef.current.nodes.find((n) => n.id === selectedNodeIdRef.current && isSculptNode(n))
         : null;
@@ -4438,7 +4468,10 @@ export function Viewport({
         : null;
 
       if (texPaintNode && !outputMode && host && raycaster) {
-        const targetMeshes = getTexturePaintMeshesForNode(texPaintNode.id, graphRef.current, latestResultsRef.current);
+        const targetMeshes =
+          isSkinPaintNode(texPaintNode) && isTexturePaintingRef.current
+            ? skinPaintTargets(texPaintNode.id, true).slice(skinPaintMeshRef.current, skinPaintMeshRef.current + 1)
+            : getTexturePaintMeshesForNode(texPaintNode.id, graphRef.current, latestResultsRef.current);
         if (targetMeshes.length > 0) {
           const rect = renderer.domElement.getBoundingClientRect();
           const mouseNorm = new THREE.Vector2(
@@ -4489,7 +4522,7 @@ export function Viewport({
 
             if (isTexturePaintingRef.current && uv) {
               const resPx = isTexturePaintNode(texPaintNode)
-                ? (getTexturePaintState(texPaintNode.id).canvas?.width ?? 1024)
+                ? (getTexturePaintState(paintStateKey(texPaintNode, skinPaintMeshRef.current)).canvas?.width ?? 1024)
                 : (getTextureMixPaintState(texPaintNode.id).outCanvas?.width ?? 1024);
               const segments = texturePaintSegments(
                 texturePaintLastUvRef.current,
@@ -4505,7 +4538,7 @@ export function Viewport({
 
               for (const { uv, prevUv } of segments) {
                 if (isTexturePaintNode(texPaintNode)) {
-                  const state = getTexturePaintState(texPaintNode.id);
+                  const state = getTexturePaintState(paintStateKey(texPaintNode, skinPaintMeshRef.current));
                   if (state.canvas) {
                     const { tool: brushTool, color: brushColor } = texturePaintStroke(texPaintNode);
                     const brushSize = Number(texPaintNode.params.brushSize) || 24;
@@ -4876,15 +4909,6 @@ export function Viewport({
         }
         return;
       }
-      if (weightPainting) {
-        const { nodeId } = weightPainting;
-        weightPainting = null;
-        pointerDownAt = null;
-        controls.enabled = true;
-        const stored = skinStoredPaint(nodeId);
-        if (stored) onParamChangeRef.current?.("weightPaint", stored, nodeId, { coalesce: false });
-        return;
-      }
       if (editMeshPaintDragRef.current) {
         editMeshPaintDragRef.current = false;
         setEditMeshPaintCursor(null);
@@ -4985,7 +5009,7 @@ export function Viewport({
           ? graphRef.current.nodes.find((n) => n.id === selectedNodeIdRef.current)
           : null;
         if (node && isTexturePaintNode(node)) {
-          const paintState = getTexturePaintState(node.id);
+          const paintState = getTexturePaintState(paintStateKey(node, skinPaintMeshRef.current));
           if (paintState.canvas && endBrushPaint(paintState.canvas) && paintState.texture) {
             paintState.texture.needsUpdate = true;
           }
@@ -6458,6 +6482,24 @@ export function Viewport({
           influenceMesh = mesh;
         }
       }
+      // A Skin in Paint mode shows the selected joint's map the same way, on the mesh being painted.
+      const skinPaintNode = !outputMode && !influenceMesh
+        ? graphRef.current.nodes.find((n) => n.id === selectedNodeIdRef.current && isSkinPaintNode(n))
+        : undefined;
+      if (skinPaintNode) {
+        const meshes = skinPaintMeshes(skinPaintNode.id);
+        if (skinPaintMeshRef.current >= meshes.length) skinPaintMeshRef.current = 0;
+        const mesh = meshes[skinPaintMeshRef.current];
+        const key = mesh ? paintStateKey(skinPaintNode, skinPaintMeshRef.current) : null;
+        const mapTexture = key && key !== skinPaintNode.id ? getTexturePaintState(key).texture ?? null : null;
+        if (mesh && mapTexture) {
+          if (influenceHeatmapMaterial.map !== mapTexture) {
+            influenceHeatmapMaterial.map = mapTexture;
+            influenceHeatmapMaterial.needsUpdate = true;
+          }
+          influenceMesh = mesh;
+        }
+      }
 
       // Face Selection editing — the green highlight follows the selected
       // Face Selection node's source geometry. The local pick set is seeded
@@ -7631,7 +7673,6 @@ export function Viewport({
       pivotHandle.clear();
       terrainBrushGizmo.removeFromParent();
       sculptBrushGizmo.removeFromParent();
-      weightBrushGizmo.removeFromParent();
       textureBrushGizmo.removeFromParent();
       textureBrushGizmo.geometry.dispose();
       view2DQuad.geometry.dispose();
@@ -8220,71 +8261,13 @@ export function Viewport({
                 onParamChange?.("textureData", "", infNode.id);
               }}
               onBlurPreview={(radius) => {
-                const state = getTexturePaintState(infNode.id);
-                const ctx2d = state.canvas?.getContext("2d", { willReadFrequently: true });
-                if (!state.canvas || !ctx2d) return;
-                let session = influenceBlurRef.current;
-                if (!session || session.nodeId !== infNode.id) {
-                  const result = latestResultsRef.current?.get(infNode.id);
-                  const mesh = result?.geometry instanceof THREE.Object3D ? findFirstMesh(result.geometry) : null;
-                  const uv = mesh?.geometry.attributes.uv;
-                  const position = mesh?.geometry.attributes.position;
-                  session = {
-                    nodeId: infNode.id,
-                    src: ctx2d.getImageData(0, 0, state.canvas.width, state.canvas.height),
-                    surface:
-                      uv && position
-                        ? prepareSurfaceBlur(state.canvas.width, state.canvas.height, uv, position, mesh.geometry.index?.array)
-                        : null,
-                    radius,
-                    frame: null,
-                  };
-                  influenceBlurRef.current = session;
-                }
-                session.radius = radius;
-                if (session.frame !== null) return;
-                const current = session;
-                current.frame = requestAnimationFrame(() => {
-                  current.frame = null;
-                  if (influenceBlurRef.current !== current) return;
-                  const blurred = blurInfluence(current, current.radius);
-                  const { src } = current;
-                  ctx2d.putImageData(new ImageData(blurred, src.width, src.height), 0, 0);
-                  if (state.texture) state.texture.needsUpdate = true;
-                });
+                const result = latestResultsRef.current?.get(infNode.id);
+                const mesh = result?.geometry instanceof THREE.Object3D ? findFirstMesh(result.geometry) : null;
+                previewMapBlur(infNode.id, infNode.id, mesh?.geometry ?? null, radius);
               }}
               onBlurEnd={(commit) => {
-                const session = influenceBlurRef.current;
-                influenceBlurRef.current = null;
-                const state = getTexturePaintState(infNode.id);
-                if (!session || session.nodeId !== infNode.id || !state.canvas) return;
-                const ctx2d = state.canvas.getContext("2d", { willReadFrequently: true });
-                if (session.frame !== null) {
-                  // Released before the last radius was shown: show it now, so what is kept is what was asked for.
-                  cancelAnimationFrame(session.frame);
-                  if (commit) {
-                    const { src } = session;
-                    const blurred = blurInfluence(session, session.radius);
-                    ctx2d?.putImageData(new ImageData(blurred, src.width, src.height), 0, 0);
-                    if (state.texture) state.texture.needsUpdate = true;
-                  }
-                }
-                if (!commit) {
-                  ctx2d?.putImageData(session.src, 0, 0);
-                  if (state.texture) state.texture.needsUpdate = true;
-                  return;
-                }
-                // The canvas already shows the result: mark it restored so the
-                // node doesn't decode its own PNG back over it, and drop any
-                // pending stroke snapshot this one supersedes.
-                const textureData = serializePaintCanvas(state.canvas);
-                state.lastDataUrl = textureData;
-                const pending = textureSnapshotTimersRef.current.get(infNode.id);
-                if (pending !== undefined) {
-                  clearTimeout(pending);
-                  textureSnapshotTimersRef.current.delete(infNode.id);
-                }
-                onParamChange?.("textureData", textureData, infNode.id, { coalesce: false });
+                const textureData = endMapBlur(infNode.id, infNode.id, commit);
+                if (textureData !== null) onParamChange?.("textureData", textureData, infNode.id, { coalesce: false });
               }}
             />
           );
@@ -9186,6 +9169,29 @@ export function Viewport({
               node={rigNode}
               joints={published ? { names: published.names, count: published.joints.length, mirror: published.mirror } : null}
               onParams={(params, nodeId) => onParamChange?.(params, nodeId)}
+              paint={{
+                levelColors: DISCRETE_LEVEL_HEX,
+                maxRows: hudToolMaxRows,
+                left: hudToolColumnLeft,
+                onBlurPreview: (radius) => {
+                  const mesh = skinPaintMeshRef.current;
+                  const joint = Math.round(Number(rigNode.params.selectedJoint));
+                  // Blurring paints the map: from here on it is the joint's painting.
+                  const key = skinWeightMap(rigNode.id, rigNode.params, mesh, joint, true);
+                  if (key) previewMapBlur(rigNode.id, key, skinPaintMeshes(rigNode.id)[mesh]?.geometry ?? null, radius);
+                },
+                onBlurEnd: (commit) => {
+                  const key = paintStateKey(rigNode, skinPaintMeshRef.current);
+                  if (endMapBlur(rigNode.id, key, commit) === null) return;
+                  const patch = skinWeightMapsParams(rigNode.id, rigNode.params);
+                  if (patch) onParamChange?.(patch, undefined, rigNode.id, { coalesce: false });
+                },
+                onMirror: (from) => {
+                  const patch = mirrorSkinWeightMaps(rigNode.id, rigNode.params, from);
+                  if (patch) onParamChange?.(patch, undefined, rigNode.id, { coalesce: false });
+                },
+                onCompute: () => onParamAction?.(rigNode.id, SKIN_COMPUTE_ACTION),
+              }}
             />
           );
         })()}

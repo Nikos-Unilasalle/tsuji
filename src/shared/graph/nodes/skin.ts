@@ -18,25 +18,13 @@ import {
   SkinWeights,
   skinVertices,
 } from "../ik/skinning";
-import {
-  applyPaintLayer,
-  cloneSkin,
-  Dab,
-  jointWeight,
-  mirrorJoints,
-  mirrorPaint,
-  mirrorSkinWeights,
-  mirrorVertices,
-  paintDab,
-  PaintLayer,
-  PaintNeighbours,
-  paintNeighbours,
-  readPaintLayer,
-  StoredPaint,
-  storePaintLayers,
-  VertexMirror,
-  WEIGHT_BRUSHES,
-} from "../ik/weightPaint";
+import { applyPaintLayer, cloneSkin, jointWeight, mirrorJoints, mirrorSkinWeights, mirrorVertices, PaintLayer, readPaintLayer, VertexMirror } from "../ik/weightPaint";
+import { applyWeightTargets, mapKey, mirrorTargets, parseMapKey, readTargets, StoredTarget, storeTarget, toBytes, WeightTargets } from "../ik/weightMaps";
+import { getTexturePaintState } from "./texturePaint";
+import { rasterizeVertexValues, sampleMapValues } from "./pointsInfluence";
+import { clearPaintCanvas, createPaintCanvas, restorePaintCanvas, serializePaintCanvas } from "../../three/texturePainter";
+import { syncCanvasTexture } from "../../three/layeredTexture";
+import { disposeGeometryBvh, getBoundsTree, initBvhRaycast } from "../../three/bvh";
 
 /**
  * Skin: binds a mesh to any rig and deforms it as the rig moves.
@@ -55,12 +43,15 @@ import {
  * the GPU (a SkinnedMesh: free at any size, but downstream nodes see the rest
  * shape). Auto picks the GPU for big meshes.
  *
- * Weights can be corrected by hand: the viewport's weight brush paints, per
- * joint, offsets from the automatic weights (see weightPaint.ts), kept in
- * `weightPaint`. Changing the paint does not weigh the mesh again. With
- * Left ↔ Right Symmetry on, each stroke is copied across the rig's centre
- * plane (x = 0 in its own space) onto the joint's counterpart — "Left Knee"
- * to "Right Knee" — and so are a joint's Strength, Radius and Clear.
+ * Weights are painted by hand on the surface, like Points Influence: one
+ * grayscale map per joint on the mesh's UVs (`weightMaps`), white all of the
+ * joint, black none, starting from the joint's weights when one begins.
+ * Compute reads the maps under the vertices into `weightTargets`, which is
+ * what skinning uses (see weightMaps.ts); a stroke alone changes nothing
+ * downstream. L → R and R → L copy one side's maps onto the other, joint to
+ * counterpart ("Left Knee" to "Right Knee"), across the rig's centre plane
+ * (x = 0 in its own space). Changing the paint does not weigh the mesh again.
+ * Files painted per vertex before (`weightPaint`) still apply, under the maps.
  */
 
 type Mode = "CPU" | "GPU";
@@ -77,13 +68,12 @@ interface BoundMesh {
   auto: SkinWeights;
   /** What skinning uses: the automatic weights with the paint applied. */
   skin: SkinWeights;
+  /** Per-vertex paint from files of before the weight maps. */
   layer: PaintLayer;
-  /** For the Smooth brush, built on its first dab. */
-  neighbours?: PaintNeighbours;
-  /** Each vertex's counterpart across the rig's centre plane, worked out the first time symmetry paints it. */
+  /** Computed weight maps, joint -> byte per vertex. */
+  targets: WeightTargets;
+  /** Each vertex's counterpart across the rig's centre plane, worked out the first time it is needed. */
   mirror?: VertexMirror;
-  /** Scratch for where the vertices are now, in world space, while painting. */
-  worldPositions?: Float32Array;
   /** Output position/normal versions last synced from the source; the source may be an animated deformer. */
   syncedPosition: number;
   syncedNormal: number;
@@ -94,6 +84,8 @@ interface BoundMesh {
   gpuBones?: THREE.Bone[];
   /** Weight overlay for the selected joint, drawn on top of the skinned mesh while Show Weights is on. */
   heat?: { mesh: THREE.Mesh; joint: number; version: string };
+  /** What the weight brush raycasts: the shape shown, frozen, with its own BVH (see skinPaintTargets). */
+  proxy?: { mesh: THREE.Mesh; stamp: string };
 }
 
 interface SkinState {
@@ -110,12 +102,12 @@ interface SkinState {
   /** The rig object this node hid, to show it again when it is switched back or the node goes. */
   hiddenRig?: THREE.Object3D;
   parents?: number[];
-  /** The `weightPaint` param last applied, by identity. */
+  /** The `weightPaint` and `weightTargets` params last applied, by identity. */
   paintRaw?: unknown;
+  targetsRaw?: unknown;
   /** Bumped whenever the painted weights change, so the overlay redraws. */
   paintVersion?: number;
-  /** Left ↔ Right Symmetry: each joint's counterpart, and the bind space back to the rig's own (where x = 0 is its centre plane). */
-  symmetry?: boolean;
+  /** Each joint's counterpart, and the bind space back to the rig's own (where x = 0 is its centre plane). */
   jointMirror?: number[];
   mirrorSpace?: THREE.Matrix4;
   /** Bind To "connected": the pose taken when the rig was connected, until the node's params carry it. */
@@ -123,6 +115,12 @@ interface SkinState {
   /** The stored `bindPose` last read, by identity, and what it reads as. */
   bindRaw?: unknown;
   bindParsed?: THREE.Vector3[];
+}
+
+function removeProxy(bound: BoundMesh) {
+  if (!bound.proxy) return;
+  disposeGeometryBvh(bound.proxy.mesh.geometry);
+  bound.proxy = undefined;
 }
 
 function removeHeat(bound: BoundMesh) {
@@ -142,6 +140,7 @@ function disposeState(state: SkinState) {
   // Geometries are this node's own clones; materials belong to upstream nodes.
   state.meshes?.forEach((bound) => {
     removeHeat(bound);
+    removeProxy(bound);
     bound.output.geometry.dispose();
     if (bound.output instanceof THREE.SkinnedMesh) bound.output.skeleton.dispose();
   });
@@ -207,6 +206,9 @@ export function consumeSkinBindRequests(): { nodeId: string; params: Record<stri
   bindRequests.clear();
   return out;
 }
+
+/** App.tsx's onAction id for Compute: see computeSkinWeightTargets. */
+export const SKIN_COMPUTE_ACTION = "skin-compute-weights";
 
 /** The Recompute button's action: see skinReweighParams. */
 export const SKIN_REWEIGH_ACTION = "skin-reweigh";
@@ -471,14 +473,20 @@ export const SKIN_NODE: NodeDefinition = {
     bindTo: "rest",
     bindPose: [],
     bindKey: "",
-    // Weight brush, in the viewport: on while weightPaintMode is.
+    // Weight painting, in the viewport, on the selected joint's map: on while weightPaintMode is.
     weightPaintMode: false,
-    weightBrush: "Add",
-    weightBrushSize: 0.15,
-    weightBrushStrength: 0.3,
-    // Paint, Strength and Radius on one side go to the other too, mirrored across the rig's centre plane.
-    symmetry: false,
-    // Painted corrections, one entry per mesh: see weightPaint.ts.
+    brushTool: "paint",
+    brushValue: 1,
+    brushSize: 24,
+    brushOpacity: 1,
+    brushHardness: 0.5,
+    usePressure: true,
+    pressureTarget: "both",
+    resolution: 1024,
+    // "mesh:joint" -> the painted map (PNG data URL), and what Compute read from it: see weightMaps.ts.
+    weightMaps: {},
+    weightTargets: {},
+    // Per-vertex corrections from files of before the maps: see weightPaint.ts.
     weightPaint: [],
     showWeights: false,
     selectedJoint: -1,
@@ -519,11 +527,30 @@ export const SKIN_NODE: NodeDefinition = {
     },
     { id: "reweighButton", label: "Recompute weights", kind: "button", action: SKIN_REWEIGH_ACTION, group: "Weights" },
     { id: "rebind", label: "Re-bind to the current pose (toggle)", kind: "boolean", group: "Weights" },
-    { id: "weightPaintMode", label: "Paint Weights", kind: "boolean", group: "Weight Brush" },
-    { id: "weightBrush", label: "Brush", kind: "select", options: [...WEIGHT_BRUSHES], group: "Weight Brush" },
-    { id: "weightBrushSize", label: "Radius", kind: "number", step: 0.01, group: "Weight Brush" },
-    { id: "weightBrushStrength", label: "Strength", kind: "number", step: 0.05, group: "Weight Brush" },
-    { id: "symmetry", label: "Left ↔ Right Symmetry", kind: "boolean", group: "Weight Brush" },
+    {
+      id: "weightPaintNote",
+      label:
+        "Paint in the viewport (Paint in the Skin bar): each joint has its own map, white all of the joint, black none, starting from its weights. "
+        + "Compute to give the mesh what is painted. The mesh needs UVs.",
+      kind: "note",
+      group: "Weight Paint",
+    },
+    { id: "computeWeights", label: "Compute", kind: "button", action: SKIN_COMPUTE_ACTION, group: "Weight Paint" },
+    { id: "weightPaintMode", label: "Paint Weights", kind: "boolean", group: "Weight Paint" },
+    { id: "resolution", label: "Map Resolution", kind: "select", options: ["512", "1024", "2048"], group: "Weight Paint" },
+    {
+      id: "brushTool",
+      label: "Tool",
+      kind: "select",
+      options: ["paint", "erase", "smooth", "fill"],
+      optionLabels: ["Paint", "Erase", "Smooth", "Fill"],
+      group: "Weight Paint",
+    },
+    { id: "brushValue", label: "Weight", kind: "number", step: 0.05, group: "Weight Paint" },
+    { id: "brushSize", label: "Size (map px)", kind: "number", step: 1, group: "Weight Paint" },
+    { id: "brushOpacity", label: "Opacity", kind: "number", step: 0.05, group: "Weight Paint" },
+    { id: "brushHardness", label: "Hardness", kind: "number", step: 0.05, group: "Weight Paint" },
+    { id: "usePressure", label: "Stylus Pressure", kind: "boolean", group: "Weight Paint" },
   ],
   evaluate: (inputs, params, ctx) => {
     const raw = inputs.geometry;
@@ -610,6 +637,7 @@ export const SKIN_NODE: NodeDefinition = {
           auto,
           skin,
           layer: new Map(),
+          targets: new Map(),
           syncedPosition: (source.geometry.attributes.position as THREE.BufferAttribute).version,
           syncedNormal: (source.geometry.attributes.normal as THREE.BufferAttribute | undefined)?.version ?? 0,
           gpuBones,
@@ -632,23 +660,27 @@ export const SKIN_NODE: NodeDefinition = {
       state.key = key;
       state.parents = rig.parents.slice();
       state.paintRaw = undefined;
+      state.targetsRaw = undefined;
       state.posed = undefined;
       state.bounds = { min: new THREE.Vector3(), max: new THREE.Vector3() };
     }
 
     const { bones, meshes } = state;
-    state.symmetry = toBoolean(params.symmetry);
-    if (state.paintRaw === undefined || state.paintRaw !== params.weightPaint) {
+    if (state.paintRaw === undefined || state.paintRaw !== params.weightPaint || state.targetsRaw !== params.weightTargets) {
       state.paintRaw = params.weightPaint ?? null;
+      state.targetsRaw = params.weightTargets;
       meshes.forEach((bound, i) => {
-        bound.layer = readPaintLayer(params.weightPaint, i, bound.auto.indices.length / bound.auto.influences);
-        bound.skin.indices.set(bound.auto.indices);
-        bound.skin.weights.set(bound.auto.weights);
-        applyPaintLayer(bound.auto, bound.layer, state!.parents!, bound.skin);
+        const vertexCount = bound.auto.indices.length / bound.auto.influences;
+        bound.layer = readPaintLayer(params.weightPaint, i, vertexCount);
+        bound.targets = readTargets(params.weightTargets, i, vertexCount);
+        const painted = cloneSkin(bound.auto);
+        applyPaintLayer(bound.auto, bound.layer, state!.parents!, painted);
+        applyWeightTargets(painted, bound.targets, state!.parents!, bound.skin);
         weightsChanged(bound);
       });
       state.paintVersion = (state.paintVersion ?? 0) + 1;
     }
+    syncWeightMaps(ctx.nodeId, params);
     const bonePose = rigSpace ? rig.pose : rig.pose.map((p) => p.clone().applyMatrix4(rig.matrix));
     const options = { stretch: toBoolean(params.stretch), amount: Math.max(0, Math.min(1, numberInput(inputs.amount, params.amount, 1))) };
     const turns = boneRotations(bones, bonePose, rig.twist);
@@ -740,7 +772,9 @@ export const SKIN_NODE: NodeDefinition = {
     // Joints the viewport lets one pick to edit their influence, where the rig stands now.
     const worldJoints = rig.pose.map((p) => p.clone().applyMatrix4(rig.matrix));
     const selected = Math.round(numberInput(undefined, params.selectedJoint, -1));
-    syncHeat(meshes, toBoolean(params.showWeights) && !ctx.capturing && selected >= 0 && selected < rig.pose.length ? selected : -1, `${state.key}|${state.paintVersion}`);
+    // While painting, the viewport shows the joint's map instead.
+    const heat = toBoolean(params.showWeights) && !toBoolean(params.weightPaintMode) && !ctx.capturing && selected >= 0 && selected < rig.pose.length;
+    syncHeat(meshes, heat ? selected : -1, `${state.key}|${state.paintVersion}`);
     state.object.userData = {
       ...raw.userData,
       nodeId: ctx.nodeId,
@@ -776,62 +810,10 @@ export function withJointInfluence(params: Record<string, unknown>, joint: numbe
   };
 }
 
-/** The meshes a Skin node shows, for the weight brush to hit; empty when it has bound nothing. */
-export function skinPaintMeshes(nodeId: string): THREE.Mesh[] {
-  return skinStates.get(nodeId)?.meshes?.map((bound) => bound.output) ?? [];
-}
 
 const scratch = new THREE.Vector3();
 
-/** Where `bound`'s vertices are now, in world space: what the brush is measured against. */
-function worldPositions(bound: BoundMesh): Float32Array {
-  const { output } = bound;
-  const position = output.geometry.attributes.position as THREE.BufferAttribute;
-  const out = bound.worldPositions?.length === position.count * 3 ? bound.worldPositions : new Float32Array(position.count * 3);
-  bound.worldPositions = out;
-  output.updateMatrixWorld(true);
-  const skinned = output instanceof THREE.SkinnedMesh ? output : null;
-  if (skinned) skinned.skeleton.update();
-  for (let v = 0; v < position.count; v++) {
-    if (skinned) skinned.getVertexPosition(v, scratch);
-    else scratch.fromBufferAttribute(position, v);
-    scratch.applyMatrix4(output.matrixWorld);
-    out[v * 3] = scratch.x;
-    out[v * 3 + 1] = scratch.y;
-    out[v * 3 + 2] = scratch.z;
-  }
-  return out;
-}
-
-/**
- * One dab of the weight brush on a Skin node, centre and radius in world
- * space, on every mesh it binds. Changes what is shown at once; the paint
- * reaches the node's params only through `skinStoredPaint`, at the stroke's
- * end. False when the node has nothing bound.
- */
-export function skinWeightDab(nodeId: string, dab: Dab): boolean {
-  const state = skinStates.get(nodeId);
-  if (!state?.meshes || !state.parents || dab.joint < 0 || dab.joint >= state.parents.length) return false;
-  for (const bound of state.meshes) {
-    if (dab.tool === "Smooth" && !bound.neighbours) {
-      const source = bound.source.geometry;
-      bound.neighbours = paintNeighbours((source.attributes.position as THREE.BufferAttribute).array, source.getIndex()?.array ?? null);
-    }
-    const touched = paintDab(bound.layer, bound.auto, bound.skin, state.parents, worldPositions(bound), bound.neighbours ?? null, dab);
-    if (touched.length > 0) weightsChanged(bound, touched);
-    if (state.symmetry && state.jointMirror && touched.length > 0) {
-      bound.mirror ??= mirrorVertices(bindPositions(bound, state.mirrorSpace));
-      const mirrored = mirrorPaint(bound.layer, dab.joint, touched, bound.mirror, state.jointMirror);
-      if (mirrored.length > 0) {
-        applyPaintLayer(bound.auto, bound.layer, state.parents, bound.skin, mirrored);
-        weightsChanged(bound, mirrored);
-      }
-    }
-  }
-  return true;
-}
-
-/** Where `bound`'s vertices were bound, in the rig's own space: what symmetry mirrors across. */
+/** Where `bound`'s vertices were bound, in the rig's own space: what L → R and R → L mirror across. */
 function bindPositions(bound: BoundMesh, mirrorSpace = new THREE.Matrix4()): Float32Array {
   const position = bound.source.geometry.attributes.position as THREE.BufferAttribute;
   const toRig = mirrorSpace.clone().multiply(bound.frame);
@@ -845,32 +827,290 @@ function bindPositions(bound: BoundMesh, mirrorSpace = new THREE.Matrix4()): Flo
   return out;
 }
 
-/** The paint as it stands on the node now, to store in `weightPaint`. */
-export function skinStoredPaint(nodeId: string): (StoredPaint | null)[] | null {
-  const meshes = skinStates.get(nodeId)?.meshes;
-  if (!meshes) return null;
-  return storePaintLayers(
-    meshes.map((bound) => bound.layer),
-    meshes.map((bound) => bound.auto.indices.length / bound.auto.influences),
-  );
+/** The meshes a Skin node shows, for the weight brush to hit; empty when it has bound nothing. */
+export function skinPaintMeshes(nodeId: string): THREE.Mesh[] {
+  return skinStates.get(nodeId)?.meshes?.map((bound) => bound.output) ?? [];
 }
 
-/** `weightPaint` with one joint's paint (or all of it, joint -1) removed — and its mirror's, when given. */
-export function withoutJointPaint(raw: unknown, joint: number, mirror = -1): (StoredPaint | null)[] {
-  if (!Array.isArray(raw)) return [];
-  const out = raw.map((entry: StoredPaint | null) => {
-    if (!entry || joint < 0) return null;
-    const joints = { ...entry.joints };
-    delete joints[joint];
-    if (mirror >= 0) delete joints[mirror];
-    return Object.keys(joints).length > 0 ? { ...entry, joints } : null;
+/** A cheap fingerprint of the bone pose, so a proxy is rebuilt when the shape shown changed, not every evaluation. */
+function poseStamp(state: SkinState, bound: BoundMesh): string {
+  const pos = state.posed?.pos;
+  let sum = 0;
+  if (pos) for (let i = 0; i < pos.length; i++) sum += pos[i] * ((i % 97) + 1);
+  return `${state.key}|${bound.syncedPosition}|${sum.toFixed(5)}`;
+}
+
+/**
+ * What the weight brush raycasts, one per bound mesh in the same order as
+ * skinPaintMeshes: a mesh with the shape shown now (skinned, on the CPU or
+ * the GPU), its UVs, and a BVH — the brush walks the surface every few
+ * pixels, and a plain raycast of a character costs milliseconds each. A copy,
+ * so the output's own geometry never carries an index that the next pose
+ * would make stale. Rebuilt when the pose changes; with `keep` (mid-stroke)
+ * left as it is.
+ */
+export function skinPaintTargets(nodeId: string, keep = false): THREE.Mesh[] {
+  const state = skinStates.get(nodeId);
+  if (!state?.meshes) return [];
+  // The BVH raycast; the app installs it at start, this only makes sure.
+  initBvhRaycast();
+  return state.meshes.map((bound) => {
+    const { output } = bound;
+    const stamp = poseStamp(state, bound);
+    if (!bound.proxy || (!keep && bound.proxy.stamp !== stamp)) {
+      removeProxy(bound);
+      const shown = output.geometry;
+      const count = shown.attributes.position.count;
+      const positions = new Float32Array(count * 3);
+      const skinned = output instanceof THREE.SkinnedMesh ? output : null;
+      if (skinned) {
+        skinned.skeleton.update();
+        for (let v = 0; v < count; v++) {
+          skinned.getVertexPosition(v, scratch);
+          positions[v * 3] = scratch.x;
+          positions[v * 3 + 1] = scratch.y;
+          positions[v * 3 + 2] = scratch.z;
+        }
+      } else {
+        positions.set(shown.attributes.position.array as Float32Array);
+      }
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+      if (shown.attributes.uv) geometry.setAttribute("uv", shown.attributes.uv);
+      if (shown.index) geometry.setIndex(shown.index);
+      getBoundsTree(geometry);
+      const mesh = new THREE.Mesh(geometry);
+      mesh.matrixAutoUpdate = false;
+      bound.proxy = { mesh, stamp };
+    }
+    const mesh = bound.proxy.mesh;
+    output.updateWorldMatrix(true, false);
+    mesh.matrix.copy(output.matrixWorld);
+    mesh.matrixWorld.copy(output.matrixWorld);
+    return mesh;
   });
-  while (out.length > 0 && out[out.length - 1] === null) out.pop();
+}
+
+// ---------------------------------------------------------------------------
+// Weight maps
+
+/** Where Texture Paint keeps one map's canvas: the node's id and the map's key. */
+export const skinMapStateKey = (nodeId: string, mesh: number, joint: number) => `${nodeId}#${mapKey(mesh, joint)}`;
+
+/** Maps being painted that the params do not carry yet, per node: they must not be redrawn from the weights under the brush. */
+const paintedMaps = new Map<string, Set<string>>();
+/** The weights each map not yet painted was drawn from, so it is drawn again only when they change. */
+const drawnFrom = new Map<string, string>();
+
+const mapResolution = (params: Record<string, unknown>) => Math.max(64, Math.min(4096, Number(params.resolution) || 1024));
+const storedMaps = (params: Record<string, unknown>): Record<string, string> =>
+  params.weightMaps && typeof params.weightMaps === "object" ? (params.weightMaps as Record<string, string>) : {};
+const storedTargets = (params: Record<string, unknown>): Record<string, StoredTarget> =>
+  params.weightTargets && typeof params.weightTargets === "object" ? (params.weightTargets as Record<string, StoredTarget>) : {};
+
+/** The canvas (made or resized as needed) one map is painted on. Null outside a browser. */
+function mapCanvas(stateKey: string, res: number) {
+  if (typeof document === "undefined") return null;
+  const state = getTexturePaintState(stateKey);
+  if (!state.canvas || state.lastRes !== res) {
+    state.canvas = createPaintCanvas(res, res, "#000000");
+    state.lastRes = res;
+    state.lastDataUrl = undefined;
+    drawnFrom.delete(stateKey);
+    // Data, not colour: no sRGB decode, so the shader reads the value painted.
+    state.texture = syncCanvasTexture(state.texture, state.canvas, THREE.NoColorSpace);
+  }
+  return state;
+}
+
+/** Brings the canvases of the stored maps in line with the params: a reload, an undo, a Clear. */
+function syncWeightMaps(nodeId: string, params: Record<string, unknown>) {
+  const maps = storedMaps(params);
+  const res = mapResolution(params);
+  for (const [key, dataUrl] of Object.entries(maps)) {
+    const at = parseMapKey(key);
+    if (!at) continue;
+    const stateKey = skinMapStateKey(nodeId, at.mesh, at.joint);
+    const state = mapCanvas(stateKey, res);
+    if (!state || state.lastDataUrl === dataUrl) continue;
+    state.lastDataUrl = dataUrl;
+    paintedMaps.get(nodeId)?.delete(stateKey);
+    restorePaintCanvas(state.canvas!, dataUrl, () => {
+      if (state.texture) state.texture.needsUpdate = true;
+    });
+  }
+  // A map gone from the params after it was stored (undo, Clear) is drawn from the weights again.
+  const painting = paintedMaps.get(nodeId);
+  if (painting) {
+    for (const stateKey of painting) {
+      const key = stateKey.slice(nodeId.length + 1);
+      if (!(key in maps) && getTexturePaintState(stateKey).lastDataUrl) {
+        painting.delete(stateKey);
+        getTexturePaintState(stateKey).lastDataUrl = undefined;
+        drawnFrom.delete(stateKey);
+      }
+    }
+  }
+}
+
+/** The weights of `joint` on one bound mesh now, per vertex. */
+function jointValues(bound: BoundMesh, joint: number): Float32Array {
+  const count = bound.skin.indices.length / bound.skin.influences;
+  const values = new Float32Array(count);
+  for (let v = 0; v < count; v++) values[v] = jointWeight(bound.skin, v, joint);
+  return values;
+}
+
+function drawValues(stateKey: string, bound: BoundMesh, values: ArrayLike<number>): boolean {
+  const state = getTexturePaintState(stateKey);
+  const uv = bound.source.geometry.attributes.uv;
+  const ctx2d = state.canvas?.getContext("2d", { willReadFrequently: true });
+  if (!state.canvas || !uv || !ctx2d) return false;
+  const image = ctx2d.createImageData(state.canvas.width, state.canvas.height);
+  rasterizeVertexValues(image.data, image.width, image.height, uv, values, bound.source.geometry.getIndex()?.array ?? null);
+  ctx2d.putImageData(image, 0, 0);
+  if (state.texture) state.texture.needsUpdate = true;
+  return true;
+}
+
+/**
+ * The map of `joint` on bound mesh `mesh`, ready to show or paint: its stored
+ * painting, or, for a joint not painted yet, drawn from its weights now. With
+ * `paint`, a stroke is about to land on it: from then on it is the painting.
+ * Returns the Texture Paint key of its canvas; null when the mesh has no UVs.
+ */
+export function skinWeightMap(nodeId: string, params: Record<string, unknown>, mesh: number, joint: number, paint = false): string | null {
+  const skin = skinStates.get(nodeId);
+  const bound = skin?.meshes?.[mesh];
+  if (!skin || !bound || !bound.source.geometry.attributes.uv || joint < 0 || joint >= (skin.parents?.length ?? 0)) return null;
+  const stateKey = skinMapStateKey(nodeId, mesh, joint);
+  const state = mapCanvas(stateKey, mapResolution(params));
+  if (!state) return null;
+  const painting = paintedMaps.get(nodeId) ?? new Set<string>();
+  paintedMaps.set(nodeId, painting);
+  if (!(mapKey(mesh, joint) in storedMaps(params)) && !painting.has(stateKey)) {
+    const from = `${skin.key}|${skin.paintVersion}`;
+    if (drawnFrom.get(stateKey) !== from && drawValues(stateKey, bound, jointValues(bound, joint))) drawnFrom.set(stateKey, from);
+  }
+  if (paint) painting.add(stateKey);
+  return stateKey;
+}
+
+/** `weightMaps` with every map painted since the params last carried it written in. */
+export function skinWeightMapsParams(nodeId: string, params: Record<string, unknown>): Record<string, unknown> | null {
+  const painting = paintedMaps.get(nodeId);
+  if (!painting || painting.size === 0) return null;
+  const maps = { ...storedMaps(params) };
+  for (const stateKey of painting) {
+    const state = getTexturePaintState(stateKey);
+    if (!state.canvas) continue;
+    const dataUrl = serializePaintCanvas(state.canvas);
+    // Already what the canvas shows: no decoding it back over the canvas.
+    state.lastDataUrl = dataUrl;
+    maps[stateKey.slice(nodeId.length + 1)] = dataUrl;
+  }
+  return { weightMaps: maps };
+}
+
+/** What every map of the node reads under the vertices of its mesh. */
+function readMaps(nodeId: string, params: Record<string, unknown>, skin: SkinState): Map<string, Uint8Array> {
+  const out = new Map<string, Uint8Array>();
+  const keys = new Set(Object.keys(storedMaps(params)));
+  for (const stateKey of paintedMaps.get(nodeId) ?? []) keys.add(stateKey.slice(nodeId.length + 1));
+  for (const key of keys) {
+    const at = parseMapKey(key);
+    const bound = at ? skin.meshes?.[at.mesh] : undefined;
+    const canvas = at ? getTexturePaintState(skinMapStateKey(nodeId, at.mesh, at.joint)).canvas : undefined;
+    const geometry = bound?.source.geometry;
+    const ctx2d = canvas?.getContext("2d", { willReadFrequently: true });
+    if (!canvas || !geometry?.attributes.uv || !ctx2d) continue;
+    const { data } = ctx2d.getImageData(0, 0, canvas.width, canvas.height);
+    out.set(key, toBytes(sampleMapValues(data, canvas.width, canvas.height, geometry.attributes.uv, geometry.attributes.position)));
+  }
   return out;
 }
 
-/** Whether a joint (or any, -1) has paint on it. */
-export function hasJointPaint(raw: unknown, joint: number): boolean {
-  if (!Array.isArray(raw)) return false;
-  return raw.some((entry: StoredPaint | null) => !!entry && (joint < 0 ? Object.keys(entry.joints ?? {}).length > 0 : !!entry.joints?.[joint]));
+/** Compute: the maps read into `weightTargets` (and the maps painted since, stored). Null when the node has bound nothing. */
+export function computeSkinWeightTargets(nodeId: string, params: Record<string, unknown>): Record<string, unknown> | null {
+  const skin = skinStates.get(nodeId);
+  if (!skin?.meshes) return null;
+  const targets: Record<string, StoredTarget> = {};
+  for (const [key, bytes] of readMaps(nodeId, params, skin)) targets[key] = storeTarget(bytes);
+  return { ...(skinWeightMapsParams(nodeId, params) ?? {}), weightTargets: targets };
+}
+
+/**
+ * L → R (from "left") or R → L: every painted joint's map copied onto the
+ * other side, mirrored, joint to counterpart — the maps redrawn and computed
+ * at once. Null when the node has bound nothing.
+ */
+export function mirrorSkinWeightMaps(nodeId: string, params: Record<string, unknown>, from: "left" | "right"): Record<string, unknown> | null {
+  const skin = skinStates.get(nodeId);
+  if (!skin?.meshes || !skin.jointMirror) return null;
+  const read = readMaps(nodeId, params, skin);
+  const maps = { ...storedMaps(params) };
+  const targets = { ...storedTargets(params) };
+  skin.meshes.forEach((bound, mesh) => {
+    const own: WeightTargets = new Map();
+    for (const [key, bytes] of read) {
+      const at = parseMapKey(key)!;
+      if (at.mesh === mesh) own.set(at.joint, bytes);
+    }
+    if (own.size === 0) return;
+    const positions = bindPositions(bound, skin.mirrorSpace);
+    bound.mirror ??= mirrorVertices(positions);
+    const mirrored = mirrorTargets(own, (j, v) => jointWeight(bound.skin, v, j), positions, bound.mirror, skin.jointMirror!, from);
+    for (const [joint, bytes] of mirrored) {
+      const key = mapKey(mesh, joint);
+      targets[key] = storeTarget(bytes);
+      const stateKey = skinWeightMap(nodeId, params, mesh, joint);
+      if (!stateKey) continue;
+      const values = Float32Array.from(bytes, (b) => b / 255);
+      if (!drawValues(stateKey, bound, values)) continue;
+      const state = getTexturePaintState(stateKey);
+      const dataUrl = serializePaintCanvas(state.canvas!);
+      state.lastDataUrl = dataUrl;
+      paintedMaps.get(nodeId)?.delete(stateKey);
+      maps[key] = dataUrl;
+    }
+  });
+  return { weightMaps: maps, weightTargets: targets };
+}
+
+/** Whether `joint` (and its counterpart, when given) has a map, painted or computed. */
+export function hasJointMap(params: Record<string, unknown>, joint: number, mirror = -1): boolean {
+  const joints = new Set(mirror >= 0 ? [joint, mirror] : [joint]);
+  return [...Object.keys(storedMaps(params)), ...Object.keys(storedTargets(params))].some((key) => joints.has(parseMapKey(key)?.joint ?? -1));
+}
+
+/**
+ * Clear, in Paint mode: `joint`'s map painted 0 everywhere, on every mesh,
+ * like any stroke — the mesh only gets it at the next Compute.
+ */
+export function clearJointMap(nodeId: string, params: Record<string, unknown>, joint: number): Record<string, unknown> | null {
+  const skin = skinStates.get(nodeId);
+  if (!skin?.meshes || joint < 0) return null;
+  skin.meshes.forEach((_, mesh) => {
+    const stateKey = skinWeightMap(nodeId, params, mesh, joint, true);
+    const state = stateKey ? getTexturePaintState(stateKey) : null;
+    if (!state?.canvas) return;
+    clearPaintCanvas(state.canvas, "#000000");
+    if (state.texture) state.texture.needsUpdate = true;
+  });
+  return skinWeightMapsParams(nodeId, params);
+}
+
+/** `joint` (every joint at -1) back to its automatic weights — its maps and what Compute read from them gone. */
+export function withoutJointMap(nodeId: string, params: Record<string, unknown>, joint: number): Record<string, unknown> {
+  const keep = (key: string) => joint >= 0 && parseMapKey(key)?.joint !== joint;
+  const painting = paintedMaps.get(nodeId);
+  if (painting) {
+    for (const stateKey of [...painting]) if (!keep(stateKey.slice(nodeId.length + 1))) painting.delete(stateKey);
+  }
+  for (const key of Object.keys(storedMaps(params))) if (!keep(key)) drawnFrom.delete(`${nodeId}#${key}`);
+  return {
+    weightMaps: Object.fromEntries(Object.entries(storedMaps(params)).filter(([key]) => keep(key))),
+    weightTargets: Object.fromEntries(Object.entries(storedTargets(params)).filter(([key]) => keep(key))),
+    ...(joint < 0 ? { weightPaint: [] } : {}),
+  };
 }

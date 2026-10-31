@@ -4,7 +4,7 @@ import { buildHumanSkeleton, solveHuman } from "./skeletons";
 import { mirrorJoints, mirrorPaint, mirrorVertices, PaintLayer } from "./weightPaint";
 import { RIG_HUMAN_NODE } from "../nodes/rig";
 import { RIG_BIPED_MOTION_NODE } from "../nodes/bipedMotion";
-import { SKIN_NODE, skinStoredPaint, skinWeightDab, withJointInfluence, withoutJointPaint } from "../nodes/skin";
+import { mirrorTargets, WeightTargets } from "./weightMaps";
 import { EvalContext } from "../types";
 
 const ctx = (nodeId: string): EvalContext => ({ time: 0, step: 0, nodeId });
@@ -69,41 +69,26 @@ describe("left ↔ right symmetry", () => {
     expect(own.get(0)?.get(0)).toBeCloseTo(0.1);
   });
 
-  it("paints both legs from one stroke on a Skin node, and sets and clears both joints", () => {
-    const rig = RIG_HUMAN_NODE.evaluate({}, { ...RIG_HUMAN_NODE.defaultParams }, ctx("sym-rig")).geometry;
-    const legs = new THREE.Mesh(
-      [0.162, -0.162]
-        .map((x) => new THREE.CylinderGeometry(0.06, 0.06, 0.9, 10, 18).translate(x, 0.45, 0))
-        .reduce((a, b) => {
-          const merged = new THREE.BufferGeometry();
-          for (const key of ["position", "normal", "uv"] as const) {
-            const pa = a.attributes[key] as THREE.BufferAttribute;
-            const pb = b.attributes[key] as THREE.BufferAttribute;
-            merged.setAttribute(key, new THREE.BufferAttribute(Float32Array.from([...pa.array, ...pb.array]), pa.itemSize));
-          }
-          const offset = (a.attributes.position as THREE.BufferAttribute).count;
-          merged.setIndex([...Array.from(a.getIndex()!.array), ...Array.from(b.getIndex()!.array, (i) => i + offset)]);
-          return merged as THREE.CylinderGeometry;
-        }),
-      new THREE.MeshStandardMaterial(),
-    );
-    const knee = { left: skeleton.names.indexOf("Left Knee"), right: skeleton.names.indexOf("Right Knee") };
-    const dab = (id: string, symmetry: boolean) => {
-      SKIN_NODE.evaluate({ geometry: legs, rig }, { ...SKIN_NODE.defaultParams, mode: "CPU", symmetry }, ctx(id));
-      const center = skeleton.rig.rest[knee.left];
-      skinWeightDab(id, { joint: knee.left, tool: "Add", center: { x: center.x, y: center.y, z: center.z }, radius: 0.12, strength: 0.6 });
-      return skinStoredPaint(id)![0]!.joints;
-    };
-    const plain = dab("sym-off", false);
-    expect(Object.keys(plain)).toEqual([String(knee.left)]);
-    const both = dab("sym-on", true);
-    expect(Object.keys(both).sort()).toEqual([String(knee.left), String(knee.right)].sort());
-    expect(both[knee.right].length).toBe(both[knee.left].length);
-
-    const params = { ...SKIN_NODE.defaultParams, weightPaint: [{ vertices: 1, joints: both }] };
-    const set = withJointInfluence(params, knee.left, { strength: 0.5 }, knee.right);
-    expect((set.jointStrength as number[])[knee.left]).toBe(0.5);
-    expect((set.jointStrength as number[])[knee.right]).toBe(0.5);
-    expect(withoutJointPaint(params.weightPaint, knee.left, knee.right)).toEqual([]);
-  });
+  it("copies one side's weight maps onto the other, joint to counterpart (L → R, R → L)", () => {
+    // A strip from x = -1 to 1, with a duplicated vertex at x = -0.5 (a seam); left is +x.
+    const xs = [-1, -0.5, 0, 0.5, 1, -0.5];
+    const positions = xs.flatMap((x) => [x, 0, 0]);
+    const mirror = mirrorVertices(positions);
+    // Joint 1 the left knee, 2 the right, 0 the pelvis on the centre line.
+    const jointMirror = [0, 2, 1];
+    const targets: WeightTargets = new Map([
+      [1, Uint8Array.from([0, 0, 50, 200, 255, 0])],
+      [0, Uint8Array.from([10, 20, 30, 40, 50, 20])],
+    ]);
+    const current = (joint: number) => (joint === 2 ? 0.25 : 0);
+    const toRight = mirrorTargets(targets, current, positions, mirror, jointMirror, "left");
+    // The right knee takes the left knee's values, mirrored; on its own left side it keeps its weights.
+    expect(Array.from(toRight.get(2)!)).toEqual([255, 200, 64, 64, 64, 200]);
+    // The left knee keeps its left side and takes the right knee's on the right.
+    expect(Array.from(toRight.get(1)!)).toEqual([64, 64, 50, 200, 255, 64]);
+    // The pelvis maps onto itself: its left half mirrored over its right.
+    expect(Array.from(toRight.get(0)!)).toEqual([50, 40, 30, 40, 50, 40]);
+    const toLeft = mirrorTargets(targets, current, positions, mirror, jointMirror, "right");
+    expect(Array.from(toLeft.get(0)!)).toEqual([10, 20, 30, 20, 10, 20]);
+    });
 });

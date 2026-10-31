@@ -56,7 +56,7 @@ import { rehydrateFileNodesFromDisk } from "./shared/graph/rehydrateFiles";
 import { cloneGraph, cloneParams, cloneParamValue } from "./shared/graph/cloneGraph";
 import { consumeCameraHandoffRequest } from "./shared/graph/cameraHandoffStore";
 import { consumeCanvasSwitchRequest } from "./shared/graph/canvasSwitchStore";
-import { consumeSkinBindRequests, SKIN_REWEIGH_ACTION, skinReweighParams } from "./shared/graph/nodes/skin";
+import { computeSkinWeightTargets, consumeSkinBindRequests, SKIN_COMPUTE_ACTION, SKIN_REWEIGH_ACTION, skinReweighParams } from "./shared/graph/nodes/skin";
 import { isGraphZone } from "./shared/graph/inputZoneStore";
 import { onSimulationReset, resetSimulations } from "./shared/graph/simulationEpoch";
 import {
@@ -1731,6 +1731,12 @@ function MainEditor() {
           if (Array.isArray(derived)) points = derived.map((p) => (p as THREE.Vector3).clone());
         }
         onToggleKeyframe(nodeId, "pointsList", currentFrame, points);
+        return;
+      }
+      if (action === SKIN_COMPUTE_ACTION) {
+        const node = findNodeDeep(graph, nodeId);
+        const patch = node ? computeSkinWeightTargets(nodeId, node.params) : null;
+        if (patch) onParamChange(patch, undefined, nodeId);
         return;
       }
       if (action === SKIN_REWEIGH_ACTION) {

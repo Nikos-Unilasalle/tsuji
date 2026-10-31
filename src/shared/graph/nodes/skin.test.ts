@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import * as THREE from "three";
-import { hasJointPaint, readJointInfluence, SKIN_NODE, skinStoredPaint, skinWeightDab, withJointInfluence, withoutJointPaint } from "./skin";
+import { clearJointMap, hasJointMap, readJointInfluence, SKIN_NODE, skinPaintMeshes, skinPaintTargets, withJointInfluence, withoutJointMap } from "./skin";
+import { mapKey, storeTarget } from "../ik/weightMaps";
 import { RIG_HUMAN_NODE, RIG_POLYPEDE_NODE } from "./rig";
 import { OBJECT_SPHERE_NODE } from "./object";
 import { EvalContext } from "../types";
@@ -276,29 +277,69 @@ describe("Skin node: the mesh keeps its material", () => {
     }
   });
 
-  it("paints weights by hand, keeps them in params, and reads them back without weighing again", () => {
-    const human = (pose?: THREE.Vector3[]) => RIG_HUMAN_NODE.evaluate({}, { ...RIG_HUMAN_NODE.defaultParams, ...(pose ? { pointsList: pose } : {}) }, ctx("skin-paint-human"));
+  it("skins with the computed weight maps, and Clear gives the automatic weights back", () => {
+    const human = (pose?: THREE.Vector3[]) => RIG_HUMAN_NODE.evaluate({}, { ...RIG_HUMAN_NODE.defaultParams, ...(pose ? { pointsList: pose } : {}) }, ctx("skin-maps-human"));
     const controls = (human().__controlPoints as THREE.Vector3[]).map((p) => p.clone());
     controls[2] = new THREE.Vector3(0.9, 1.7, 0.2);
     const posed = human(controls).geometry;
     const mesh = body();
-    const plain = positionsOf(SKIN_NODE.evaluate({ geometry: mesh, rig: posed }, params(), ctx("skin-paint-a")).geometry);
+    const plain = positionsOf(SKIN_NODE.evaluate({ geometry: mesh, rig: posed }, params(), ctx("skin-maps-a")).geometry);
 
-    const outMesh = SKIN_NODE.evaluate({ geometry: mesh, rig: posed }, params(), ctx("skin-paint-b")).geometry as THREE.Mesh;
-    outMesh.updateMatrixWorld(true);
-    const joints = outMesh.userData.skinEdit.joints as THREE.Vector3[];
-    // Pull the whole body onto the root, hard.
-    for (let i = 0; i < 30; i++) expect(skinWeightDab("skin-paint-b", { joint: 0, tool: "Add", center: new THREE.Vector3(0, 0.85, 0), radius: 3, strength: 1 })).toBe(true);
-    const stored = skinStoredPaint("skin-paint-b");
-    expect(hasJointPaint(stored, 0)).toBe(true);
-    expect(joints.length).toBeGreaterThan(1);
-
-    const painted = positionsOf(SKIN_NODE.evaluate({ geometry: mesh, rig: posed }, params({ weightPaint: JSON.parse(JSON.stringify(stored)) }), ctx("skin-paint-c")).geometry);
+    // The whole body painted white on the root: it follows the root alone.
+    const count = mesh.geometry.attributes.position.count;
+    const weightTargets = { [mapKey(0, 0)]: storeTarget(new Uint8Array(count).fill(255)) };
+    const withMaps = params({ weightTargets, weightMaps: { [mapKey(0, 0)]: "data:," } });
+    expect(hasJointMap(withMaps, 0)).toBe(true);
+    const painted = positionsOf(SKIN_NODE.evaluate({ geometry: mesh, rig: posed }, withMaps, ctx("skin-maps-b")).geometry);
     expect(painted.some((value, i) => Math.abs(value - plain[i]) > 0.05)).toBe(true);
-    // Clearing it gives back the automatic result.
-    const cleared = withoutJointPaint(stored, 0);
-    expect(cleared).toEqual([]);
-    const again = positionsOf(SKIN_NODE.evaluate({ geometry: mesh, rig: posed }, params({ weightPaint: cleared }), ctx("skin-paint-c")).geometry);
+    // A target made on another vertex count is not misplaced on this mesh.
+    const stale = params({ weightTargets: { [mapKey(0, 0)]: storeTarget(new Uint8Array(count + 1).fill(255)) } });
+    positionsOf(SKIN_NODE.evaluate({ geometry: mesh, rig: posed }, stale, ctx("skin-maps-b")).geometry).forEach((value, i) => expect(value).toBeCloseTo(plain[i], 4));
+
+    const cleared = withoutJointMap("skin-maps-b", withMaps, 0);
+    expect(cleared).toMatchObject({ weightMaps: {}, weightTargets: {} });
+    const again = positionsOf(SKIN_NODE.evaluate({ geometry: mesh, rig: posed }, params(cleared), ctx("skin-maps-b")).geometry);
     again.forEach((value, i) => expect(value).toBeCloseTo(plain[i], 4));
+  });
+
+  it("still applies the per-vertex paint of files from before the maps", () => {
+    const human = (pose?: THREE.Vector3[]) => RIG_HUMAN_NODE.evaluate({}, { ...RIG_HUMAN_NODE.defaultParams, ...(pose ? { pointsList: pose } : {}) }, ctx("skin-legacy-human"));
+    const controls = (human().__controlPoints as THREE.Vector3[]).map((p) => p.clone());
+    controls[2] = new THREE.Vector3(0.9, 1.7, 0.2);
+    const posed = human(controls).geometry;
+    const mesh = body();
+    const count = mesh.geometry.attributes.position.count;
+    const plain = positionsOf(SKIN_NODE.evaluate({ geometry: mesh, rig: posed }, params(), ctx("skin-legacy-a")).geometry);
+    const flat = Array.from({ length: count }, (_, v) => [v, 1]).flat();
+    const legacy = params({ weightPaint: [{ vertices: count, joints: { 0: flat } }] });
+    const painted = positionsOf(SKIN_NODE.evaluate({ geometry: mesh, rig: posed }, legacy, ctx("skin-legacy-b")).geometry);
+    expect(painted.some((value, i) => Math.abs(value - plain[i]) > 0.05)).toBe(true);
+  });
+  it("gives the weight brush a frozen copy of the shape shown to hit, rebuilt when the pose changes", () => {
+    const human = (pose?: THREE.Vector3[]) => RIG_HUMAN_NODE.evaluate({}, { ...RIG_HUMAN_NODE.defaultParams, ...(pose ? { pointsList: pose } : {}) }, ctx("skin-proxy-human"));
+    const controls = (human().__controlPoints as THREE.Vector3[]).map((p) => p.clone());
+    const mesh = body();
+    SKIN_NODE.evaluate({ geometry: mesh, rig: human().geometry }, params({ mode: "CPU" }), ctx("skin-proxy"));
+    const [first] = skinPaintTargets("skin-proxy");
+    const [shown] = skinPaintMeshes("skin-proxy");
+    expect(first).not.toBe(shown);
+    expect(Array.from(first.geometry.attributes.position.array)).toEqual(Array.from(shown.geometry.attributes.position.array));
+    expect(first.geometry.attributes.uv).toBe(shown.geometry.attributes.uv);
+    expect(skinPaintTargets("skin-proxy")[0]).toBe(first);
+
+    controls[2] = new THREE.Vector3(0.9, 1.7, 0.2);
+    SKIN_NODE.evaluate({ geometry: mesh, rig: human(controls).geometry }, params({ mode: "CPU" }), ctx("skin-proxy"));
+    // Mid-stroke it stays as it was; after, it follows the new pose.
+    expect(skinPaintTargets("skin-proxy", true)[0]).toBe(first);
+    const [next] = skinPaintTargets("skin-proxy");
+    expect(next).not.toBe(first);
+    expect(Array.from(next.geometry.attributes.position.array)).toEqual(Array.from(shown.geometry.attributes.position.array));
+  });
+  it("Clear only paints the map: what the mesh follows waits for Compute", () => {
+    const rig = RIG_HUMAN_NODE.evaluate({}, { ...RIG_HUMAN_NODE.defaultParams }, ctx("skin-clear-human")).geometry;
+    SKIN_NODE.evaluate({ geometry: body(), rig }, params({ mode: "CPU" }), ctx("skin-clear"));
+    const computed = { weightTargets: { [mapKey(0, 0)]: storeTarget(Uint8Array.of(255)) } };
+    const patch = clearJointMap("skin-clear", params(computed), 0);
+    expect(patch?.weightTargets).toBeUndefined();
   });
 });
