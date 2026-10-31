@@ -21,7 +21,16 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { DEFAULT_PICKS } from "../shared/graph/calibration/picks";
-import { getGraphClipboard, setGraphClipboard } from "../shared/graph/clipboard";
+import {
+  freshSubgraph,
+  getGraphClipboard,
+  GraphClipboardData,
+  markOwnClipboardPayload,
+  MAX_SYSTEM_CLIPBOARD_CHARS,
+  resolvePasteClipboard,
+  serializeGraphClipboard,
+  setGraphClipboard,
+} from "../shared/graph/clipboard";
 import { cloneKeyframes, cloneParams, cloneParamValue, newNodeParams } from "../shared/graph/cloneGraph";
 import { groupSelection, materializeNewPort, ungroupNode } from "../shared/graph/groupSelection";
 import {
@@ -39,6 +48,8 @@ import { findCompatibleSocket, segmentIntersectsRect } from "../shared/graph/ins
 import { getInputZone, isGraphZone, isTimelineZone, isViewportZone, setInputZone } from "../shared/graph/inputZoneStore";
 import { isKeyReservedForPlayback } from "../shared/graph/playbackKeys";
 import { randomId } from "../shared/randomId";
+import { isTauri } from "../shared/isTauri";
+import { readClipboardText, writeClipboardText } from "../shared/systemClipboard";
 import { SOCKET_COLOR, SocketDef } from "../shared/graph/sockets";
 import { Connection, ExposedParamRef, Graph, KeyframeStore, Marker, NodeInstance, NodeRegistry } from "../shared/graph/types";
 import { FRAME_TYPE, frameSize } from "../shared/graph/nodes/frame";
@@ -1180,7 +1191,12 @@ function GraphEditorContent({
     return [];
   }, [graph.nodes, nodes, selectedNodeId]);
 
-  const copySelected = useCallback(() => {
+  /**
+   * `toSystem`: also put the nodes on the OS clipboard, for another window,
+   * tab or document to paste. Duplicate keeps it off, so Cmd+D never
+   * clobbers whatever text the user had copied.
+   */
+  const copySelected = useCallback((toSystem = true) => {
     const selected = getSelectedNodeInstances();
     if (selected.length === 0) return;
 
@@ -1189,25 +1205,39 @@ function GraphEditorContent({
       (c) => selectedIds.has(c.fromNode) && selectedIds.has(c.toNode),
     );
 
+    // Nodes inside a copied group keep their keyframes too.
+    const keyframedIds = collectAllNodeIds({ nodes: selected, connections: [] });
     const relevantKeyframes: KeyframeStore = {};
     if (graph.keyframes) {
-      for (const id of selectedIds) {
+      for (const id of keyframedIds) {
         if (graph.keyframes[id]) {
           relevantKeyframes[id] = graph.keyframes[id];
         }
       }
     }
 
-    setGraphClipboard({
+    const data: GraphClipboardData = {
       nodes: selected,
       connections: internalConnections,
       keyframes: relevantKeyframes,
-    });
+    };
+    setGraphClipboard(data);
+
+    if (!toSystem) return;
+    try {
+      const { text, id } = serializeGraphClipboard(data);
+      if (text.length > MAX_SYSTEM_CLIPBOARD_CHARS) return;
+      markOwnClipboardPayload(id);
+      void writeClipboardText(text);
+    } catch (err) {
+      // A param JSON can't carry (a cycle): the copy still pastes in this window.
+      console.warn("tsuji: copied nodes stay in this window only", err);
+    }
   }, [getSelectedNodeInstances, graph.connections, graph.keyframes]);
 
   const pasteClipboard = useCallback(
-    (offset: number | boolean = 30) => {
-      const clip = getGraphClipboard();
+    (offset: number | boolean = 30, source?: GraphClipboardData | null) => {
+      const clip = source ?? getGraphClipboard();
       if (!clip || clip.nodes.length === 0) return;
 
       const { nodes: clipNodes, connections: clipConns, keyframes: clipKeyframes } = clip;
@@ -1222,6 +1252,8 @@ function GraphEditorContent({
           type: n.type,
           position: { x: n.position.x + px, y: n.position.y + px },
           params: cloneParams(n.params),
+          // Fresh ids inside too: interior ids are unique across the document.
+          ...(n.subgraph ? { subgraph: freshSubgraph(n.subgraph, idMap) } : {}),
         };
       });
 
@@ -1316,13 +1348,29 @@ function GraphEditorContent({
       nodes: newInstances,
       connections: newConnections,
       keyframes: clipKeyframes ? Object.fromEntries(
-        newInstances.map((inst) => [inst.id, nextKeyframes[inst.id] ?? {}])
+        [...idMap.values()].filter((id) => nextKeyframes[id]).map((id) => [id, nextKeyframes[id]])
       ) : undefined,
     });
   }, [graph, nodes, onGraphChange, onSelectNode, registry, setEdges, setNodes]);
 
+  /**
+   * Paste whatever the OS clipboard holds if it is nodes copied in another
+   * window or document, else this window's own copy. The desktop app reads
+   * the OS clipboard through its plugin; the browser build passes the text
+   * from a `paste` event when it has one (no permission prompt), and only
+   * falls back to navigator.clipboard (which may prompt) from the menu.
+   */
+  const pasteClipboardRef = useRef(pasteClipboard);
+  pasteClipboardRef.current = pasteClipboard;
+  /** Browser only: whether the Cmd/Ctrl+V just pressed produced a `paste` event. */
+  const pasteEventSeenRef = useRef(true);
+  const pasteFromSystem = useCallback(async (systemText?: string | null) => {
+    const text = systemText !== undefined ? systemText : await readClipboardText();
+    pasteClipboardRef.current(30, resolvePasteClipboard(text));
+  }, []);
+
   const duplicateSelected = useCallback(() => {
-    copySelected();
+    copySelected(false);
     // In front of the original (selected) but nudged down-right so it's visible.
     pasteClipboard(24);
   }, [copySelected, pasteClipboard]);
@@ -1447,8 +1495,17 @@ function GraphEditorContent({
         e.preventDefault();
         copySelected();
       } else if (isCmdOrCtrl && !isShift && code === "KeyV") {
-        e.preventDefault();
-        pasteClipboard();
+        if (isTauri()) {
+          e.preventDefault();
+          void pasteFromSystem();
+        } else {
+          // Left to the `paste` event below, which carries the OS clipboard's
+          // text. Should a browser not fire one here, paste this window's copy.
+          pasteEventSeenRef.current = false;
+          setTimeout(() => {
+            if (!pasteEventSeenRef.current) pasteClipboardRef.current();
+          }, 0);
+        }
       } else if (isCmdOrCtrl && !isShift && e.key.toLowerCase() === "a") {
         if (!isViewportZone()) {
           e.preventDefault();
@@ -1468,10 +1525,30 @@ function GraphEditorContent({
     nodes,
     onEdgesDelete,
     onNodesDelete,
-    pasteClipboard,
+    pasteFromSystem,
     selectedNodeId,
     setNodes,
   ]);
+
+  // Browser build: Cmd/Ctrl+V lands here (see the keydown handler above).
+  useEffect(() => {
+    if (isTauri()) return;
+    const handlePaste = (e: ClipboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)
+      ) {
+        return;
+      }
+      pasteEventSeenRef.current = true;
+      if (isTimelineZone()) return;
+      e.preventDefault();
+      void pasteFromSystem(e.clipboardData?.getData("text/plain") ?? null);
+    };
+    window.addEventListener("paste", handlePaste);
+    return () => window.removeEventListener("paste", handlePaste);
+  }, [pasteFromSystem]);
 
   const { fitView, setCenter, getViewport, setViewport } = useReactFlow();
 
@@ -1965,9 +2042,8 @@ function GraphEditorContent({
                 <button
                   type="button"
                   className="graph-context-menu-item"
-                  disabled={!getGraphClipboard()?.nodes?.length}
                   onClick={() => {
-                    pasteClipboard();
+                    void pasteFromSystem();
                     setContextMenu(null);
                   }}
                 >

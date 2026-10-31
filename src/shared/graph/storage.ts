@@ -101,8 +101,13 @@ const EASING_MODEL = "arrival";
  */
 const ROTATION_MODEL = "modes";
 
+/** The plain-JSON object a saved graph is written as — what serializeGraph stringifies, for embedding in another payload. */
+export function graphToData(graph: Graph): Record<string, unknown> {
+  return { ...cleanGraph(graph), keyframeEasing: EASING_MODEL, rotationModel: ROTATION_MODEL };
+}
+
 export function serializeGraph(graph: Graph): string {
-  return JSON.stringify({ ...cleanGraph(graph), keyframeEasing: EASING_MODEL, rotationModel: ROTATION_MODEL }, null, 2);
+  return JSON.stringify(graphToData(graph), null, 2);
 }
 
 /**
@@ -158,12 +163,16 @@ function validateGraphShape(data: { nodes?: unknown; connections?: unknown }, wh
 }
 
 export function deserializeGraph(jsonString: string, registry: NodeRegistry = DEFAULT_REGISTRY): Graph {
-  const data = JSON.parse(jsonString);
+  return graphFromData(JSON.parse(jsonString), registry);
+}
 
-  if (!data || typeof data !== "object") {
+/** Reads back what graphToData wrote (or any older single-graph file shape). Throws on a malformed graph. */
+export function graphFromData(raw: unknown, registry: NodeRegistry = DEFAULT_REGISTRY): Graph {
+  if (!raw || typeof raw !== "object") {
     throw new Error("Invalid file format: content is not a valid JSON object.");
   }
 
+  const data = raw as Parameters<typeof adoptGraph>[0] & { keyframeEasing?: unknown; rotationModel?: unknown };
   validateGraphShape(data, "");
   return adoptGraph(data, registry, data.keyframeEasing !== EASING_MODEL, data.rotationModel !== ROTATION_MODEL);
 }

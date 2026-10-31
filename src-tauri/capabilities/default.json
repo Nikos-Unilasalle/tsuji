@@ -11,6 +11,8 @@
     "dialog:allow-open",
     "dialog:allow-save",
     "fs:default",
+    "clipboard-manager:allow-read-text",
+    "clipboard-manager:allow-write-text",
     "fs:allow-create",
     {
       "identifier": "fs:allow-read-file",
