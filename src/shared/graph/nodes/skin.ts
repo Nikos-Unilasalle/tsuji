@@ -18,6 +18,7 @@ import {
   SkinWeights,
   skinVertices,
 } from "../ik/skinning";
+import { PosedDualQuats, poseDualQuats, skinVerticesDualQuat } from "../ik/dualQuat";
 import { applyPaintLayer, cloneSkin, jointWeight, mirrorJoints, mirrorSkinWeights, mirrorVertices, PaintLayer, readPaintLayer, VertexMirror } from "../ik/weightPaint";
 import { applyWeightTargets, mapKey, mirrorTargets, parseMapKey, readTargets, StoredTarget, storeTarget, toBytes, WeightTargets } from "../ik/weightMaps";
 import { getTexturePaintState } from "./texturePaint";
@@ -41,7 +42,10 @@ import { disposeGeometryBvh, getBoundsTree, initBvhRaycast } from "../../three/b
  * it stands. Each frame is then just a blend of the bone matrices, either on
  * the CPU (the result is a real, deformed geometry other nodes can read) or on
  * the GPU (a SkinnedMesh: free at any size, but downstream nodes see the rest
- * shape). Auto picks the GPU for big meshes.
+ * shape). Auto picks the GPU for big meshes. Blend picks how a vertex mixes
+ * its bones: Linear (their matrices) or Dual Quaternion (their rigid motions,
+ * which keeps the volume at bent joints and shoulders; see dualQuat.ts) —
+ * on the CPU only for now, so Dual Quaternion skins there whatever Skinning says.
  *
  * Weights are painted by hand on the surface, like Points Influence: one
  * grayscale map per joint on the mesh's UVs (`weightMaps`), white all of the
@@ -95,6 +99,8 @@ interface SkinState {
   bones?: SkinBone[];
   object?: THREE.Object3D;
   posed?: PosedBones;
+  /** Dual Quaternion blend: the bones' rigid motions, posed with the matrices. */
+  dualQuats?: PosedDualQuats;
   bounds?: SkinBounds;
   /** Rest joints taken from the live pose, for rigs given as a plain Joints list. */
   snapshot?: THREE.Vector3[];
@@ -364,9 +370,9 @@ function frameOf(raw: THREE.Object3D, mesh: THREE.Mesh, matrix: unknown): THREE.
 const usesShaderMaterial = (mesh: THREE.Mesh) =>
   (Array.isArray(mesh.material) ? mesh.material : [mesh.material]).some((m) => (m as THREE.ShaderMaterial)?.isShaderMaterial);
 
-function chooseMode(requested: string, sources: THREE.Mesh[]): Mode {
-  // A custom shader knows nothing of skinning: it would draw the rest pose.
-  if (requested === "CPU" || sources.some(usesShaderMaterial)) return "CPU";
+function chooseMode(requested: string, sources: THREE.Mesh[], dualQuat = false): Mode {
+  // A custom shader knows nothing of skinning: it would draw the rest pose. Three's GPU skinning is linear only.
+  if (requested === "CPU" || dualQuat || sources.some(usesShaderMaterial)) return "CPU";
   if (requested === "GPU") return "GPU";
   const vertices = sources.reduce((sum, mesh) => sum + (mesh.geometry.attributes.position?.count ?? 0), 0);
   return vertices >= GPU_VERTICES ? "GPU" : "CPU";
@@ -457,6 +463,7 @@ export const SKIN_NODE: NodeDefinition = {
     amount: 1,
     bindSpace: "Rig",
     mode: "Auto",
+    blend: "linear",
     influences: 4,
     falloff: 4,
     smooth: 2,
@@ -508,6 +515,14 @@ export const SKIN_NODE: NodeDefinition = {
       group: "Skin",
     },
     { id: "mode", label: "Skinning", kind: "select", options: ["Auto", "CPU", "GPU"], group: "Skin" },
+    {
+      id: "blend",
+      label: "Blend",
+      kind: "select",
+      options: ["linear", "dualQuaternion"],
+      optionLabels: ["Linear", "Dual Quaternion (keeps volume, CPU)"],
+      group: "Skin",
+    },
     { id: "stretch", label: "Stretch Bones", kind: "boolean", group: "Skin" },
     { id: "showRig", label: "Show Rig", kind: "boolean", group: "Skin" },
     { id: "showWeights", label: "Show Weights of Joint", kind: "boolean", group: "Weights" },
@@ -587,7 +602,8 @@ export const SKIN_NODE: NodeDefinition = {
     // carries it, so it follows a rig that is moved or walks. World: the mesh
     // is placed over the rig where it stands now, and stays put in the world.
     const rigSpace = String(params.bindSpace ?? "Rig") !== "World";
-    const mode = chooseMode(String(params.mode ?? "Auto"), sources);
+    const dualQuat = params.blend === "dualQuaternion";
+    const mode = chooseMode(String(params.mode ?? "Auto"), sources, dualQuat);
     const influences = Math.max(1, Math.min(8, Math.round(numberInput(undefined, params.influences, 4))));
     const falloff = Math.max(0.1, numberInput(undefined, params.falloff, 4));
     const smooth = Math.max(0, Math.min(20, Math.round(numberInput(undefined, params.smooth, 2))));
@@ -684,6 +700,7 @@ export const SKIN_NODE: NodeDefinition = {
     const bonePose = rigSpace ? rig.pose : rig.pose.map((p) => p.clone().applyMatrix4(rig.matrix));
     const options = { stretch: toBoolean(params.stretch), amount: Math.max(0, Math.min(1, numberInput(inputs.amount, params.amount, 1))) };
     const turns = boneRotations(bones, bonePose, rig.twist);
+    if (dualQuat) state.dualQuats = poseDualQuats(bones, bonePose, options, turns, state.dualQuats);
 
     for (const bound of meshes) {
       const sourcePosition = bound.source.geometry.attributes.position as THREE.BufferAttribute | undefined;
@@ -723,14 +740,26 @@ export const SKIN_NODE: NodeDefinition = {
       state.posed = poseBones(bones, bonePose, bound.frame, options, state.posed, turns);
       if (bound.basePositions) {
         const bounds = state.bounds!;
-        skinVertices(
-          outPosition.array as Float32Array,
-          bound.basePositions,
-          bound.skin,
-          state.posed.pos,
-          outNormal && bound.baseNormals ? { out: outNormal.array as Float32Array, base: bound.baseNormals, mats: state.posed.nrm } : undefined,
-          bounds,
-        );
+        if (dualQuat && state.dualQuats) {
+          skinVerticesDualQuat(
+            outPosition.array as Float32Array,
+            bound.basePositions,
+            bound.skin,
+            state.dualQuats,
+            bound.frame,
+            outNormal && bound.baseNormals ? { out: outNormal.array as Float32Array, base: bound.baseNormals } : undefined,
+            bounds,
+          );
+        } else {
+          skinVertices(
+            outPosition.array as Float32Array,
+            bound.basePositions,
+            bound.skin,
+            state.posed.pos,
+            outNormal && bound.baseNormals ? { out: outNormal.array as Float32Array, base: bound.baseNormals, mats: state.posed.nrm } : undefined,
+            bounds,
+          );
+        }
         outPosition.needsUpdate = true;
         if (outNormal) outNormal.needsUpdate = true;
         // Bounds straight from the skinning pass, no second walk over the vertices.

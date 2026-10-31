@@ -342,4 +342,17 @@ describe("Skin node: the mesh keeps its material", () => {
     const patch = clearJointMap("skin-clear", params(computed), 0);
     expect(patch?.weightTargets).toBeUndefined();
   });
+  it("blends with dual quaternions on the CPU, even for a mesh Auto would skin on the GPU", () => {
+    const human = (pose?: THREE.Vector3[]) => RIG_HUMAN_NODE.evaluate({}, { ...RIG_HUMAN_NODE.defaultParams, ...(pose ? { pointsList: pose } : {}) }, ctx("skin-dq-human"));
+    const controls = (human().__controlPoints as THREE.Vector3[]).map((p) => p.clone());
+    controls[2] = new THREE.Vector3(0.9, 1.7, 0.2);
+    const big = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 1.7, 64, 400).translate(0, 0.85, 0), new THREE.MeshStandardMaterial());
+    const linear = SKIN_NODE.evaluate({ geometry: big, rig: human(controls).geometry }, params({ mode: "CPU" }), ctx("skin-dq-a")).geometry as THREE.Mesh;
+    const dual = SKIN_NODE.evaluate({ geometry: big, rig: human(controls).geometry }, params({ blend: "dualQuaternion" }), ctx("skin-dq-b")).geometry as THREE.Mesh;
+    expect(dual).not.toBeInstanceOf(THREE.SkinnedMesh);
+    const a = positionsOf(linear);
+    const b = positionsOf(dual);
+    expect(b.some((value, i) => Math.abs(value - a[i]) > 1e-3)).toBe(true);
+    expect(b.every(Number.isFinite)).toBe(true);
+  });
 });
