@@ -17,6 +17,7 @@ import {
 import { FmOperatorPatch, FmPatch } from "../../music/dsp/fm";
 import { FM_PRESETS, FM_PRESET_NAMES, fmPreset, fmVoicePreset } from "../../music/dsp/presets";
 import { fmAlgorithm } from "../../music/dsp/algorithms";
+import { GB_DUTIES, GB_PRESET_NAMES, GbChannel, GbPatch, gbPreset } from "../../music/dsp/gameboy";
 import { ARP_MODES, ARP_RATES, ArpMode, ArpRate, ArpSettings, DEFAULT_ARP } from "../../music/seq/arp";
 import { CHORD_NAMES, ChordName } from "../../music/seq/chords";
 import { parsePattern, stepWords } from "../../music/seq/notation";
@@ -27,7 +28,7 @@ import { Cell, Clock, Sequence, notesSoundingAt, notesStartingIn, stepAt, transp
 /**
  * The music nodes (see docs/music-nodes-mvp.md). Every one of them describes; only Music Out plays.
  *
- *   Clock → (Order List) → Pattern → (Arp) → FM Voice / Drum Kit → Music Out
+ *   Clock → (Order List) → Pattern → (Arp) → FM Voice / Game Boy Voice / Drum Kit → Music Out
  *                                      └→ Note Probe → anything in the scene
  *
  * All of them pass one socket type, `music`, carrying a clock, a sequence or a track (description.ts). A node reads
@@ -387,6 +388,117 @@ export const MUSIC_FM_VOICE_NODE: NodeDefinition = {
       kind: "fm",
       voices: clamp(Math.round(Number(params.voices) || 8), 1, 16),
       patch,
+      seq,
+      level: clamp(numberInput(inputs.level, params.level, 0.8), 0, 2),
+      pan: clamp(numberInput(inputs.pan, params.pan, 0), -1, 1),
+      mute: inputs.mute !== undefined ? Number(inputs.mute) > 0 : Boolean(params.mute),
+      ...sendsOf(inputs, params),
+    };
+    return { track };
+  },
+};
+
+// ── Game Boy Voice ─────────────────────────────────────────────────────────
+
+const GB_CHANNELS: GbChannel[] = ["pulse", "wave", "noise", "kit"];
+
+/** Everything a Game Boy preset sets: its patch as flat params, and its voices. */
+function gbPresetParams(name: string): Record<string, unknown> {
+  const { patch, voices } = gbPreset(name);
+  return { ...gbPatchParams(patch), voices };
+}
+
+function gbPatchParams(p: GbPatch): Record<string, unknown> {
+  return {
+    channel: p.channel,
+    duty: String(p.duty * 100),
+    wave: p.wave,
+    noiseShort: p.noiseShort,
+    volume: p.volume,
+    envelope: p.envelope,
+    sweep: p.sweep,
+    sweepShift: p.sweepShift,
+    release: p.release,
+  };
+}
+
+/**
+ * One of the DMG's channels, as LSDJ plays them (dsp/gameboy.ts): two pulses, the wave and the noise — and a kit,
+ * Game Boy drums on the Drum Kit's notes (36 kick, 38 snare, 42 hat…).
+ */
+export const MUSIC_GAMEBOY_NODE: NodeDefinition = {
+  type: "music/gameboy",
+  label: "Game Boy Voice",
+  category: "music",
+  pure: true,
+  inputs: [
+    { id: "sequence", label: "Sequence", type: "music" },
+    { id: "level", label: "Level", type: "value" },
+    { id: "pan", label: "Pan", type: "value" },
+    { id: "duty", label: "Duty (0–3: 12.5 25 50 75 %)", type: "value" },
+    { id: "mute", label: "Mute", type: "value" },
+    ...SEND_INPUTS,
+  ],
+  outputs: [{ id: "track", label: "Track", type: "music" }],
+  defaultParams: { preset: "Pulse 50 · Lead", transpose: 0, level: 0.8, pan: 0, mute: false, delaySend: 0, reverbSend: 0, ...gbPresetParams("Pulse 50 · Lead") },
+  // A voice saved with a preset name and nothing else (a generated file) gets that preset.
+  upgradeParams: (params) => (params.preset !== undefined && params.channel === undefined ? { ...gbPresetParams(String(params.preset)), ...params } : params),
+  paramFields: [
+    {
+      id: "preset",
+      label: "Preset (loads every setting below)",
+      kind: "select",
+      options: GB_PRESET_NAMES,
+      presets: Object.fromEntries(GB_PRESET_NAMES.map((n) => [n, gbPresetParams(n)])),
+    },
+    { id: "level", label: "Level", kind: "number", step: 0.05 },
+    { id: "pan", label: "Pan (−1 left, 1 right)", kind: "number", step: 0.1 },
+    { id: "voices", label: "Voices (1–8; the Game Boy's channels are 1)", kind: "number", step: 1 },
+    { id: "transpose", label: "Transpose (semitones)", kind: "number", step: 1 },
+    { id: "mute", label: "Mute", kind: "boolean" },
+    ...SEND_FIELDS,
+    {
+      id: "channel",
+      label: "Channel",
+      kind: "select",
+      options: GB_CHANNELS,
+      optionLabels: ["Pulse (square, duty, sweep)", "Wave (32 × 4 bits)", "Noise (LFSR)", "Kit (drums: kick snare hat…)"],
+      group: "Sound",
+    },
+    { id: "duty", label: "Duty (pulse)", kind: "select", options: ["12.5", "25", "50", "75"], optionLabels: ["12.5 %", "25 %", "50 %", "75 %"], group: "Sound" },
+    { id: "wave", label: "Wave (32 hex digits, 0 bottom – F top)", kind: "text", group: "Sound" },
+    { id: "noiseShort", label: "Short Noise (7-bit: metallic)", kind: "boolean", group: "Sound" },
+    { id: "volume", label: "Volume (0–15, × velocity)", kind: "number", step: 1, group: "Envelope" },
+    { id: "envelope", label: "Envelope (−7 fade … 0 hold … 7 swell: a step every n/64 s)", kind: "number", step: 1, group: "Envelope" },
+    { id: "release", label: "Release (s, after the note)", kind: "number", step: 0.01, group: "Envelope" },
+    { id: "sweep", label: "Sweep (pulse: −7 down … 7 up, a step every n/128 s; 0 off)", kind: "number", step: 1, group: "Sweep" },
+    { id: "sweepShift", label: "Sweep Shift (1 big – 7 tiny)", kind: "number", step: 1, group: "Sweep" },
+  ],
+  evaluate: (inputs, params, ctx) => {
+    const wired = sequenceOf(inputs.sequence);
+    if (!wired) return { track: null };
+    const seq = transposeSequence(wired, Math.round(Number(params.transpose) || 0));
+    const base = gbPreset(params.preset).patch;
+    const channel = (GB_CHANNELS as string[]).includes(String(params.channel)) ? (params.channel as GbChannel) : base.channel;
+    const dutyIndex = inputs.duty !== undefined ? clamp(Math.round(Number(inputs.duty)), 0, 3) : -1;
+    const duty = dutyIndex >= 0 ? GB_DUTIES[dutyIndex] : (GB_DUTIES as readonly number[]).includes(Number(params.duty) / 100) ? Number(params.duty) / 100 : base.duty;
+    const num = (k: keyof GbPatch, lo: number, hi: number) => clamp(Math.round(numberInput(undefined, params[k], base[k] as number)), lo, hi);
+    const gb: GbPatch = {
+      channel,
+      duty,
+      wave: typeof params.wave === "string" ? params.wave : base.wave,
+      noiseShort: params.noiseShort !== undefined ? Boolean(params.noiseShort) : base.noiseShort,
+      volume: num("volume", 0, 15),
+      envelope: num("envelope", -7, 7),
+      sweep: num("sweep", -7, 7),
+      sweepShift: num("sweepShift", 1, 7),
+      release: clamp(numberInput(undefined, params.release, base.release), 0.001, 4),
+    };
+    const track: TrackDescription = {
+      id: ctx.nodeId,
+      kind: "gb",
+      voices: clamp(Math.round(Number(params.voices) || 1), 1, 8),
+      gb,
       seq,
       level: clamp(numberInput(inputs.level, params.level, 0.8), 0, 2),
       pan: clamp(numberInput(inputs.pan, params.pan, 0), -1, 1),

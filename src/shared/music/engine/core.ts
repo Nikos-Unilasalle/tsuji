@@ -14,11 +14,12 @@
  */
 import { DrumSynth } from "../dsp/drums";
 import { FmSynth } from "../dsp/fm";
+import { GbSynth } from "../dsp/gameboy";
 import { Mixer, MonoSource } from "../dsp/mix";
 import { NoteEvent, Sequence, notesSoundingAt, notesStartingIn } from "../seq/sequencer";
 import { DEFAULT_FX, MusicDescription, PreviewSound, TrackDescription } from "./description";
 
-/** What a track plays through: an FmSynth or a DrumSynth. */
+/** What a track plays through: an FmSynth, a DrumSynth or a GbSynth. */
 interface Instrument extends MonoSource {
   readonly voices: number;
   noteOn(note: number, velocity: number, glide?: { from: number; seconds: number }): number;
@@ -64,6 +65,12 @@ function insertDue(list: Due[], from: number, item: Due): void {
   list.splice(i, 0, item);
 }
 
+function makeInstrument(kind: TrackDescription["kind"], voices: number, sampleRate: number): Instrument {
+  if (kind === "fm") return new FmSynth(voices, sampleRate);
+  if (kind === "gb") return new GbSynth(voices, sampleRate);
+  return new DrumSynth(sampleRate);
+}
+
 export class EngineCore {
   readonly sampleRate: number;
   private mixer: Mixer;
@@ -102,19 +109,20 @@ export class EngineCore {
     const seen = new Set<string>();
     for (const d of desc.tracks) {
       seen.add(d.id);
-      const voices = d.kind === "fm" ? Math.max(1, Math.min(MAX_VOICES, Math.round(d.voices))) : 0;
+      const voices = d.kind === "drums" ? 0 : Math.max(1, Math.min(MAX_VOICES, Math.round(d.voices)));
       let track = this.tracks.get(d.id);
-      if (!track || track.kind !== d.kind || (d.kind === "fm" && track.synth.voices !== voices)) {
+      if (!track || track.kind !== d.kind || (d.kind !== "drums" && track.synth.voices !== voices)) {
         track?.synth.allNotesOff();
-        const synth = d.kind === "fm" ? new FmSynth(voices, this.sampleRate) : new DrumSynth(this.sampleRate);
+        const synth = makeInstrument(d.kind, voices, this.sampleRate);
         track = { id: d.id, kind: d.kind, synth, seq: d.seq, patchKey: "", seqKey: "", offs: [] };
         this.tracks.set(d.id, track);
         // With its own settings from the start: a track that appears muted must not glide down from full level.
         this.mixer.addChannel(d.id, track.synth, channelOf(d));
       }
-      const patchKey = JSON.stringify(d.kind === "fm" ? d.patch : d.drums);
+      const patchKey = JSON.stringify(d.kind === "fm" ? d.patch : d.kind === "gb" ? d.gb : d.drums);
       if (patchKey !== track.patchKey) {
         if (d.kind === "fm") (track.synth as FmSynth).setPatch(d.patch);
+        else if (d.kind === "gb") (track.synth as GbSynth).setPatch(d.gb);
         else (track.synth as DrumSynth).setSettings(d.drums);
         track.patchKey = patchKey;
       }
@@ -161,8 +169,9 @@ export class EngineCore {
   previewNote(sound: PreviewSound, note: number, velocity: number, seconds = 0.35): void {
     const key = JSON.stringify(sound);
     if (!this.preview || this.preview.key !== key) {
-      const synth: Instrument = sound.kind === "fm" ? new FmSynth(4, this.sampleRate) : new DrumSynth(this.sampleRate);
+      const synth = makeInstrument(sound.kind, 4, this.sampleRate);
       if (sound.kind === "fm") (synth as FmSynth).setPatch(sound.patch);
+      else if (sound.kind === "gb") (synth as GbSynth).setPatch(sound.gb);
       else (synth as DrumSynth).setSettings(sound.drums);
       this.preview = { key, synth, offs: [] };
       this.mixer.addChannel(PREVIEW_ID, synth, { level: 0.8, pan: 0, mute: false });

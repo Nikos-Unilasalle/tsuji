@@ -1,8 +1,9 @@
 """mod2tsuji: a tracker module — ProTracker .mod (4 channels) or FastTracker II .xm — → a tsuji project of music nodes.
 
-    python3 tools/mod2tsuji.py song.xm out.tsuji [--map map.json] [--title "Song"]
+    python3 tools/mod2tsuji.py song.xm out.tsuji [--map map.json] [--title "Song"] [--synth gb|fm]
 
-tsuji has no sampler, so the module's samples become FM voices and Drum Kit sounds; everything else — the notes, the
+tsuji has no sampler, and that is on purpose: the module's samples become Game Boy channels (--synth gb, the default:
+pulses, the wave, the DMG drum kit) or FM voices and the Drum Kit (--synth fm); everything else — the notes, the
 timing, the effects — is translated as closely as the music nodes allow. Both formats are read into one shape (a
 song: an order list, patterns of rows of cells, instruments with their PCM) and converted from there:
 
@@ -34,7 +35,11 @@ number (a multi-sample XM instrument: "ins.sample"):
 
     {"7": {"kind": "fm", "preset": "Dub Bass", "voices": 1, "level": 0.8},
      "3": {"kind": "loop"},
-     "14": {"kind": "drum", "drum": "snare"}}
+     "14": {"kind": "drum", "drum": "snare"},
+     "9": {"kind": "gb", "preset": "Wave · Organ", "voices": 2}}
+
+With --synth gb an FM role is played by the Game Boy preset nearest it (a bass on the wave, a pad on a swelling thin
+pulse, a pluck on a decaying 25 % pulse, a lead on the 50 % one) and the drums by the DMG kit.
 
 Nothing of a module is kept in tsuji: this is a converter, the music stays its authors'. Check the module's rights
 before sharing what it makes.
@@ -499,7 +504,7 @@ def convert(song: Song, overrides: dict, title: str) -> dict:
                     st["key"] = (c, inst, False)
                 continue
             close_loop(c, at)
-            key = (c, inst, arp != (0, 0)) if role["kind"] == "fm" else (c, inst, False)
+            key = (c, inst, arp != (0, 0)) if role["kind"] in ("fm", "gb") else (c, inst, False)
             if st["key"] and st["key"] != key:
                 tracks[st["key"]]["words"].setdefault(int(at), "off")
             t = track(key)
@@ -600,7 +605,28 @@ def compact(words: list) -> str:
     return " ".join(out) or "."
 
 
-def project(conv: dict, master: float = 0.8) -> dict:
+def gb_role(role: dict) -> dict:
+    """The Game Boy channel nearest an FM role."""
+    if role["kind"] == "gb":
+        return role
+    p = role.get("preset", "").lower()
+    voices = role.get("voices", 1)
+    if "bass" in p:
+        preset, voices = "Wave · Bass", 1
+    elif "organ" in p:
+        preset, voices = "Wave · Organ", 2
+    elif any(k in p for k in ("pad", "string", "glass", "choir", "brass")):
+        preset, voices = "Pulse 12.5 · Swell", 3
+    elif any(k in p for k in ("rhodes", "piano", "bell", "pluck", "marimba", "guit", "harp", "clav")):
+        preset, voices = "Pulse 25 · Pluck", 2
+    elif "chip" in p:
+        preset = "Pulse 12.5 · Thin"
+    else:
+        preset = "Pulse 50 · Lead"
+    return {**role, "kind": "gb", "preset": preset, "voices": voices}
+
+
+def project(conv: dict, master: float = 0.8, synth: str = "gb") -> dict:
     nodes, links = [], []
 
     def node(node_id, node_type, x, y, **params):
@@ -613,7 +639,7 @@ def project(conv: dict, master: float = 0.8) -> dict:
     all_words = {k: [conv["tracks"][k]["words"].get(i, ".") for i in range(total)] for k in keys}
     keys = [k for k in keys if not all(w in (".", "off") for w in all_words[k])]
     order, numbers, lengths = bank_order(conv, [all_words[k] for k in keys])
-    n_melodic = sum(1 for k in keys if conv["tracks"][k]["role"]["kind"] == "fm")
+    n_melodic = sum(1 for k in keys if conv["tracks"][k]["role"]["kind"] in ("fm", "gb"))
     for i, key in enumerate(keys):
         t = conv["tracks"][key]
         ch, inst, arp = key
@@ -632,7 +658,15 @@ def project(conv: dict, master: float = 0.8) -> dict:
             src = f"arp_{tid}"
         role = t["role"]
         pan = role.get("pan", round((sum(t["pans"]) / len(t["pans"]) - 128) / 128 * 0.8, 2) if t["pans"] else 0)
-        if role["kind"] in ("drum", "loop"):
+        if role["kind"] in ("drum", "loop") and synth == "gb":
+            node(f"voice_{tid}", "music/gameboy", 820, y, preset="Kit · DMG Drums", level=role.get("level", 0.8), pan=pan, reverbSend=role.get("reverbSend", 0.05))
+        elif role["kind"] == "gb" or (role["kind"] == "fm" and synth == "gb"):
+            r = gb_role(role)
+            level = r.get("level", round(0.9 / max(1, n_melodic) ** 0.3, 2))
+            node(f"voice_{tid}", "music/gameboy", 820, y, preset=r["preset"], level=level, pan=pan, reverbSend=r.get("reverbSend", 0.1), voices=r["voices"])
+            if lead_pattern is None:
+                lead_pattern = f"pat_{tid}"
+        elif role["kind"] in ("drum", "loop"):
             node(f"voice_{tid}", "music/drum-kit", 820, y, level=role.get("level", 0.75), pan=pan, reverbSend=role.get("reverbSend", 0.08))
         else:
             # Many channels add up: each a little lower the more there are.
@@ -685,12 +719,13 @@ def main():
     ap.add_argument("--map", help="JSON file: instrument number → role")
     ap.add_argument("--title", default="")
     ap.add_argument("--master", type=float, default=0.8, help="Music Out's master level (lower it for a module with many channels)")
+    ap.add_argument("--synth", choices=["gb", "fm"], default="gb", help="Game Boy channels (default) or FM voices and the Drum Kit")
     args = ap.parse_args()
     data = open(args.module, "rb").read()
     song = read_xm(data) if data[:17] == b"Extended Module: " else read_mod(data)
     overrides = json.load(open(args.map)) if args.map else {}
     conv = convert(song, overrides, args.title)
-    proj = project(conv, args.master)
+    proj = project(conv, args.master, args.synth)
     with open(args.out, "w") as f:
         json.dump(proj, f, indent=1)
         f.write("\n")

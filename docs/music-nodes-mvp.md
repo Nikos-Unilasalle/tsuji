@@ -570,3 +570,27 @@ Le convertisseur garde l'order list du module. Il coupe le morceau à chaque pos
 - Remis bout à bout, chacun redonne **exactement** les mêmes cases, piste par piste, que la conversion d'avant.
 
 **Stop** : quand aucune vue 3D, 2D ou caméra n'est affichée, la Viewport ne calcule plus d'images et Music Out n'est plus évaluée. L'engine continuait donc de jouer, Stop ou non. Play et Stop préviennent maintenant tous les engines directement (`onPlaybackActiveChange`, dans playbackKeys.ts).
+
+### Game Boy Voice : les canaux du DMG, façon LSDJ (2026-10-31)
+
+Pas de sampler : tsuji reste un synthé. Pour les morceaux de tracker (et pour la chiptune en général), il a maintenant les quatre voix de la Game Boy, en DSP (`dsp/gameboy.ts`, node `music/gameboy`) :
+
+- **Pulse** : un carré à 12,5, 25, 50 ou 75 % (entrée `Duty` 0–3, câblable pour un PWM). Avec un **sweep** : toutes les n/128 s, le registre de fréquence 11 bits bouge de lui-même `>> shift`, vers le haut ou vers le bas. Passé 2047, le canal se tait, comme sur la console.
+- **Wave** : 32 pas de 4 bits, écrits en 32 chiffres hexadécimaux, sans lissage.
+- **Noise** : un LFSR 15 bits (souffle) ou 7 bits (métallique), cadencé aux fréquences réelles du DMG (524 288 Hz / r / 2^(s+1)). Une note choisit la fréquence la plus proche de sa hauteur × 32.
+- **Kit** : la batterie Game Boy sur les notes du Drum Kit. Un kick et des toms en pulse à sweep descendant ; la caisse claire, le clap et les hats en noise ; le hat fermé coupe l'ouvert. Le HUD d'une pattern branchée sur un Kit montre la boîte à rythmes.
+- **Ce qui fait le son de la console** : l'**enveloppe de volume** sur 4 bits (0–15, un pas toutes les n/64 s, en montée ou en descente ; à 0 en descente, la note est finie), les hauteurs arrondies au registre 11 bits (sauf sous 64 Hz pour le pulse et 32 Hz pour le wave, que le registre n'atteint pas : la note joue alors sa vraie hauteur) et le passe-haut de sortie de la console (35 Hz), qui ôte aussi le décalage d'un duty fin.
+- **Deux libertés** : une note-off s'éteint en `release` secondes (la console coupe net, ce qui claque), et une piste peut avoir jusqu'à 8 voix, pour les accords.
+- **Pur** : le rendu est par échantillon, sans allocation, et ne dépend pas de la taille des blocs (testé).
+- **16 presets** : Pulse 50 · Lead, Pulse 25 · Pluck, Pulse 12.5 · Swell, Sweep · Laser, Sweep · Rise, Wave · Bass, Sine, Saw, Organ, Square, Noise · Hiss, Metal, Kit · DMG Drums, etc.
+
+**`mod2tsuji.py --synth gb`** (le défaut ; `--synth fm` redonne les voix FM et le Drum Kit) :
+- une basse joue sur le wave ;
+- une nappe sur un pulse fin qui gonfle (3 voix) ;
+- un rhodes ou une guitare sur un pulse 25 % qui décroît ;
+- un lead sur le pulse 50 % ;
+- la batterie et les boucles sur le kit.
+
+Un `--map` peut demander un preset précis : `{"kind": "gb", "preset": "Wave · Organ"}`.
+
+Disco Beef en Game Boy se rend à **3,5 % du temps réel** en Node (contre 19 % en FM), niveau moyen 0,19, crête 0,97 (`--master 0.4`). Cybernoid : niveau moyen 0,17, crête 0,73. Les deux sont dans `music-local/` (`*_gb.tsuji`, avec un WAV du début), à côté des versions FM.

@@ -35,7 +35,7 @@ import { RIG_BIPED_DANCE_NODE, type DanceInfo } from "../graph/nodes/bipedDance"
 import { DanceHud } from "./DanceHud";
 import { PatternHud } from "./PatternHud";
 import { previewNote } from "../music/engine/bridge";
-import { isTrack, sequenceOf, type PreviewSound } from "../music/engine/description";
+import { isTrack, previewSoundOf, sequenceOf, type PreviewSound } from "../music/engine/description";
 import { RIG_HUMAN_NODE } from "../graph/nodes/rig";
 import { RIG_BIPED_MOTION_NODE, type BipedGaitInfo } from "../graph/nodes/bipedMotion";
 import { PointsInfluenceHud } from "./PointsInfluenceHud";
@@ -9062,20 +9062,16 @@ export function Viewport({
           let voice: (typeof graph.nodes)[number] | undefined;
           for (let hops = 0; hops < 6 && frontier.length > 0 && !voice; hops++) {
             const next = frontier.flatMap((n) => downstream(n.id));
-            voice = next.find((n) => n.type === "music/fm-voice" || n.type === "music/drum-kit");
+            voice = next.find((n) => n.type === "music/fm-voice" || n.type === "music/drum-kit" || n.type === "music/gameboy");
             frontier = next.filter((n) => n.type === "music/arp");
           }
           const out = voice ? downstream(voice.id).find((n) => n.type === "music/out") : graph.nodes.find((n) => n.type === "music/out");
           const voiceResult = voice ? latestResultsRef.current?.get(voice.id)?.track : null;
-          const previewSound: PreviewSound | null = isTrack(voiceResult)
-            ? voiceResult.kind === "fm"
-              ? { kind: "fm", patch: voiceResult.patch }
-              : { kind: "drums", drums: voiceResult.drums }
-            : null;
+          const previewSound: PreviewSound | null = isTrack(voiceResult) ? previewSoundOf(voiceResult) : null;
           return (
             <PatternHud
               node={patternNode}
-              drums={voice?.type === "music/drum-kit"}
+              drums={voice?.type === "music/drum-kit" || (voice?.type === "music/gameboy" && voice.params.channel === "kit")}
               readPlayhead={() => {
                 const render = renderNodeIdRef.current ? latestResultsRef.current?.get(renderNodeIdRef.current) : undefined;
                 return { frame: Math.max(0, currentFrameRef.current), fps: typeof render?.fps === "number" ? (render.fps as number) : 30 };

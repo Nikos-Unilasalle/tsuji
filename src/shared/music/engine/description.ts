@@ -4,6 +4,7 @@
  */
 import type { DrumSettings } from "../dsp/drums";
 import type { FmPatch } from "../dsp/fm";
+import type { GbPatch } from "../dsp/gameboy";
 import type { SongOrder } from "../seq/order";
 import type { Sequence } from "../seq/sequencer";
 
@@ -32,10 +33,18 @@ export interface DrumTrackDescription extends TrackBase {
   drums: DrumSettings;
 }
 
-export type TrackDescription = FmTrackDescription | DrumTrackDescription;
+/** A Game Boy channel (dsp/gameboy.ts). */
+export interface GbTrackDescription extends TrackBase {
+  kind: "gb";
+  /** Polyphony, 1–8 (the DMG's channels are mono: 1 is the real thing). */
+  voices: number;
+  gb: GbPatch;
+}
+
+export type TrackDescription = FmTrackDescription | DrumTrackDescription | GbTrackDescription;
 
 /** A sound to audition one note on (the Pattern HUD plays what you type through it). */
-export type PreviewSound = { kind: "fm"; patch: FmPatch } | { kind: "drums"; drums: DrumSettings };
+export type PreviewSound = { kind: "fm"; patch: FmPatch } | { kind: "drums"; drums: DrumSettings } | { kind: "gb"; gb: GbPatch };
 
 /** The send effects (dsp/fx.ts), set on Music Out. */
 export interface MusicFx {
@@ -72,7 +81,7 @@ export type MusicValue =
 
 export function isTrack(v: unknown): v is TrackDescription {
   const k = (v as TrackDescription | null)?.kind;
-  return typeof v === "object" && v !== null && (k === "fm" || k === "drums") && typeof (v as TrackDescription).id === "string";
+  return typeof v === "object" && v !== null && (k === "fm" || k === "drums" || k === "gb") && typeof (v as TrackDescription).id === "string";
 }
 
 /** The sequence a music value carries — a sequence, or a track's. */
@@ -96,4 +105,11 @@ export function orderOf(v: unknown): SongOrder | null {
   if (typeof v !== "object" || v === null) return null;
   const m = v as MusicValue;
   return m.kind === "clock" ? (m.order ?? null) : null;
+}
+
+/** What a track's notes can be auditioned on (the Pattern HUD plays typed notes through it). */
+export function previewSoundOf(track: TrackDescription): PreviewSound {
+  if (track.kind === "fm") return { kind: "fm", patch: track.patch };
+  if (track.kind === "gb") return { kind: "gb", gb: track.gb };
+  return { kind: "drums", drums: track.drums };
 }
