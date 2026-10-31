@@ -19,6 +19,7 @@ import {
   skinVertices,
 } from "../ik/skinning";
 import { PosedDualQuats, poseDualQuats, skinVerticesDualQuat } from "../ik/dualQuat";
+import { importSkinWeights, mapImportedBones, readImportedSkeleton } from "../ik/importedSkin";
 import { applyPaintLayer, cloneSkin, jointWeight, mirrorJoints, mirrorSkinWeights, mirrorVertices, PaintLayer, readPaintLayer, VertexMirror } from "../ik/weightPaint";
 import { applyWeightTargets, mapKey, mirrorTargets, parseMapKey, readTargets, StoredTarget, storeTarget, toBytes, WeightTargets } from "../ik/weightMaps";
 import { getTexturePaintState } from "./texturePaint";
@@ -46,6 +47,10 @@ import { disposeGeometryBvh, getBoundsTree, initBvhRaycast } from "../../three/b
  * its bones: Linear (their matrices) or Dual Quaternion (their rigid motions,
  * which keeps the volume at bent joints and shoulders; see dualQuat.ts) —
  * on the CPU only for now, so Dual Quaternion skins there whatever Skinning says.
+ *
+ * Weights From the model file takes, instead of the automatic weights, the
+ * ones a skinned file (an FBX from Mixamo, Tripo…) carries: each of its bones
+ * handed to the Skin bone that moves the same part (see importedSkin.ts).
  *
  * Weights are painted by hand on the surface, like Points Influence: one
  * grayscale map per joint on the mesh's UVs (`weightMaps`), white all of the
@@ -442,6 +447,18 @@ function makeOutput(source: THREE.Mesh, geometry: THREE.BufferGeometry, mode: Mo
   return { output, gpuBones };
 }
 
+/**
+ * The weights `source` carries from its file, handed to this Skin's bones;
+ * null when it carries none (then the automatic weights stand in).
+ */
+function fileWeights(source: THREE.Mesh, frame: THREE.Matrix4, joints: THREE.Vector3[], rig: ResolvedRig, influences: number): SkinWeights | null {
+  if (!(source instanceof THREE.SkinnedMesh) || !source.skeleton || !source.geometry.attributes.skinIndex) return null;
+  const skeleton = readImportedSkeleton(source);
+  const positions = skeleton.positions.map((p) => p.clone().applyMatrix4(frame));
+  const boneMap = mapImportedBones(skeleton, positions, { parents: rig.parents, joints, names: rig.names });
+  return importSkinWeights(source.geometry, boneMap, influences);
+}
+
 export const SKIN_NODE: NodeDefinition = {
   type: "rig/skin",
   label: "Skin",
@@ -464,6 +481,7 @@ export const SKIN_NODE: NodeDefinition = {
     bindSpace: "Rig",
     mode: "Auto",
     blend: "linear",
+    weightsFrom: "automatic",
     influences: 4,
     falloff: 4,
     smooth: 2,
@@ -525,6 +543,14 @@ export const SKIN_NODE: NodeDefinition = {
     },
     { id: "stretch", label: "Stretch Bones", kind: "boolean", group: "Skin" },
     { id: "showRig", label: "Show Rig", kind: "boolean", group: "Skin" },
+    {
+      id: "weightsFrom",
+      label: "Weights",
+      kind: "select",
+      options: ["automatic", "file"],
+      optionLabels: ["Automatic", "From the model file (its own rig)"],
+      group: "Weights",
+    },
     { id: "showWeights", label: "Show Weights of Joint", kind: "boolean", group: "Weights" },
     { id: "influences", label: "Max Influences", kind: "number", step: 1, group: "Weights" },
     { id: "falloff", label: "Falloff", kind: "number", step: 0.5, group: "Weights" },
@@ -620,13 +646,14 @@ export const SKIN_NODE: NodeDefinition = {
       boneHops: Math.max(0, Math.min(8, Math.round(numberInput(undefined, params.boneHops, 0)))),
     };
     const mirrorWeights = params.mirrorWeights === "left" || params.mirrorWeights === "right" ? params.mirrorWeights : "off";
+    const fromFile = params.weightsFrom === "file";
 
     const key = [
       sources.map((m) => `${m.geometry.uuid}:${m.geometry.attributes.position?.count ?? 0}:${m.geometry.getIndex()?.count ?? -1}`).join("|"),
       rig.parents.join(","),
       keyOf(bind),
       `${rigSpace}|${mode}|${influences}|${falloff}|${smooth}|${toBoolean(params.rebind)}`,
-      JSON.stringify([strength, radius, weightOptions.prune, weightOptions.smoothStrength, weightOptions.boneHops, mirrorWeights, params.reweigh ?? 0]),
+      JSON.stringify([strength, radius, weightOptions.prune, weightOptions.smoothStrength, weightOptions.boneHops, mirrorWeights, params.reweigh ?? 0, fromFile]),
     ].join("#");
 
     if (state.key !== key || !state.meshes || !state.bones) {
@@ -641,7 +668,9 @@ export const SKIN_NODE: NodeDefinition = {
         const geometry = source.geometry.clone();
         const position = geometry.attributes.position as THREE.BufferAttribute;
         const normal = geometry.attributes.normal as THREE.BufferAttribute | undefined;
-        const auto = computeSkinWeights(position.array, source.geometry.getIndex()?.array ?? null, frames[i], bones, weightOptions);
+        const auto =
+          (fromFile && fileWeights(source, frames[i], restInSpace, rig, influences)) ||
+          computeSkinWeights(position.array, source.geometry.getIndex()?.array ?? null, frames[i], bones, weightOptions);
         // The paint goes on below; until then the automatic weights.
         const skin = cloneSkin(auto);
         // Material and shadow flags are taken from the source every frame, below.

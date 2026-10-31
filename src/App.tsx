@@ -57,6 +57,8 @@ import { cloneGraph, cloneParams, cloneParamValue } from "./shared/graph/cloneGr
 import { consumeCameraHandoffRequest } from "./shared/graph/cameraHandoffStore";
 import { consumeCanvasSwitchRequest } from "./shared/graph/canvasSwitchStore";
 import { computeSkinWeightTargets, consumeSkinBindRequests, SKIN_COMPUTE_ACTION, SKIN_REWEIGH_ACTION, skinReweighParams } from "./shared/graph/nodes/skin";
+import { findSkinnedMesh, fitHumanParams, readImportedSkeleton } from "./shared/graph/ik/importedSkin";
+import { RIG_HUMAN_FIT_ACTION } from "./shared/graph/nodes/rig";
 import { isGraphZone } from "./shared/graph/inputZoneStore";
 import { onSimulationReset, resetSimulations } from "./shared/graph/simulationEpoch";
 import {
@@ -1731,6 +1733,22 @@ function MainEditor() {
           if (Array.isArray(derived)) points = derived.map((p) => (p as THREE.Vector3).clone());
         }
         onToggleKeyframe(nodeId, "pointsList", currentFrame, points);
+        return;
+      }
+      if (action === RIG_HUMAN_FIT_ACTION) {
+        const inputs = evaluatedResults?.get(nodeId)?.__evaluatedInputs as Record<string, unknown> | undefined;
+        const mesh = findSkinnedMesh(inputs?.fitTo);
+        if (!mesh) {
+          console.warn("Human Skeleton: wire a rigged model (an FBX with a skeleton) into Fit To first.");
+          return;
+        }
+        mesh.updateMatrixWorld(true);
+        const fit = fitHumanParams(readImportedSkeleton(mesh), mesh.matrixWorld);
+        if (!fit) {
+          console.warn("Human Skeleton: the model's skeleton has no Mixamo-named limbs to fit to.");
+          return;
+        }
+        onParamChange(fit, undefined, nodeId);
         return;
       }
       if (action === SKIN_COMPUTE_ACTION) {

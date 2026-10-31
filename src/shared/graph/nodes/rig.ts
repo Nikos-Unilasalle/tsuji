@@ -199,6 +199,9 @@ const HUMAN_LIMIT_FIELDS: ParamFieldDef[] = [
  * the heel comes up over the ball, the toes left flat on the ground and bent
  * at it (up to Toe Bend); nothing goes under the ground at y = 0.
  */
+/** App.tsx's onAction id for Fit to Skeleton: see fitHumanParams. */
+export const RIG_HUMAN_FIT_ACTION = "rig-human-fit";
+
 export const RIG_HUMAN_NODE: NodeDefinition = {
   type: "rig/human",
   label: "Human Skeleton",
@@ -206,6 +209,8 @@ export const RIG_HUMAN_NODE: NodeDefinition = {
   inputs: [
     { id: "matrix", label: "Matrix", type: "matrix" },
     ...HUMAN_CONTROL_SOCKETS.map((id, i) => ({ id, label: HUMAN_CONTROLS[i], type: "vector" as const })),
+    // A rigged model (FBX from Mixamo, Tripo…): Fit to Skeleton takes its proportions from its bones.
+    { id: "fitTo", label: "Fit To (rigged model)", type: "geometry" },
   ],
   outputs: [
     { id: "geometry", label: "Geometry", type: "geometry" },
@@ -233,6 +238,13 @@ export const RIG_HUMAN_NODE: NodeDefinition = {
   },
   paramFields: [
     ...NATIVE_TRANSFORM_PARAM_FIELDS,
+    {
+      id: "fitNote",
+      label: "Wire a rigged model (an FBX with a Mixamo skeleton) into Fit To, then Fit to Skeleton: the proportions, arm angle and place are taken from its bones. Its Skin can then use Weights: From the model file.",
+      kind: "note",
+      group: "Proportions",
+    },
+    { id: "fitButton", label: "Fit to Skeleton", kind: "button", action: RIG_HUMAN_FIT_ACTION, group: "Proportions" },
     { id: "height", label: "Height", kind: "number", step: 0.05, group: "Proportions" },
     { id: "torso", label: "Torso ×", kind: "number", step: 0.05, group: "Proportions" },
     { id: "torsoForward", label: "Torso Forward (share of height, − back)", kind: "number", step: 0.01, group: "Proportions" },
