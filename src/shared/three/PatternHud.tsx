@@ -87,6 +87,25 @@ function useLiveStep(read: () => number): number {
 
 const MAX_STEPS = 16384;
 
+/**
+ * The pattern Copy took, for Paste — in any Pattern, any numbered pattern of a bank. Kept here (it outlives the HUD,
+ * which comes and goes with the selection); the text also goes to the system clipboard, for a Steps field or a file.
+ */
+let copiedPattern: (Cell | null)[] | null = null;
+
+const COPY_ICON = (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="9" y="9" width="13" height="13" rx="2" />
+    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+  </svg>
+);
+const PASTE_ICON = (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+    <rect x="8" y="2" width="8" height="4" rx="1" />
+  </svg>
+);
+
 /** The pattern's length in bars (16 steps each; a quarter bar is 4 steps), typed: Enter or leaving the field sets it,
  * Esc takes it back. */
 function LengthField({ length, onLength }: { length: number; onLength: (steps: number) => void }) {
@@ -209,6 +228,31 @@ export function PatternHud({
     onParams({ steps: joinBank(all) }, node.id);
   };
   const audition = (note: number, velocity = 0.8) => previewSound && onPreview(previewSound, note, velocity);
+  /** A word on the last copy or paste, for a moment. */
+  const [flash, setFlash] = useState<string | null>(null);
+  const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const say = (text: string) => {
+    setFlash(text);
+    if (flashTimer.current) clearTimeout(flashTimer.current);
+    flashTimer.current = setTimeout(() => setFlash(null), 1400);
+  };
+  useEffect(() => () => void (flashTimer.current && clearTimeout(flashTimer.current)), []);
+  const shownName = bank ? `pattern ${String(number).padStart(2, "0")}` : "the pattern";
+  const copy = () => {
+    copiedPattern = cells.map((c) => (c ? { ...c } : null));
+    navigator.clipboard?.writeText(compactPattern(formatPattern(cells, { drums }))).catch(() => {});
+    say(`Copied ${shownName}`);
+  };
+  /** The copy over the pattern shown, at its length: a longer copy is cut, a shorter one leaves the rest empty. */
+  const paste = () => {
+    if (!copiedPattern) {
+      say("Nothing copied yet");
+      return;
+    }
+    pin();
+    write(resize(copiedPattern, length));
+    say(`Pasted into ${shownName}`);
+  };
   const focusKeys = () => keysRef.current?.focus({ preventScroll: true });
 
 
@@ -264,6 +308,13 @@ export function PatternHud({
       e.preventDefault();
       setCursor(moveCursor(cur, by, length));
     };
+    if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && (key.toLowerCase() === "c" || key.toLowerCase() === "v")) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (key.toLowerCase() === "c") copy();
+      else paste();
+      return;
+    }
     if (e.metaKey || e.ctrlKey) return; // leave the app's shortcuts (undo…) alone
     // Right after a note, or on the note selected: a digit is its octave, # its sharp (C 4, F # 3).
     const target = typed ?? (asNote(cells[cur]) ? cur : null);
@@ -491,6 +542,24 @@ export function PatternHud({
           ) : (
             <LengthField length={length} onLength={(n) => onParams({ length: String(n), steps: formatPattern(resize(cells, n), { drums }) }, node.id)} />
           )}
+          <span style={{ display: "flex", alignItems: "center", gap: 3 }}>
+            <button type="button" className="viewport-hud-button" style={{ width: 24 }} title={`Copy ${shownName} (⌘C)`} aria-label="Copy pattern" onPointerDown={(e) => e.preventDefault()} onClick={copy}>
+              {COPY_ICON}
+            </button>
+            <button
+              type="button"
+              className="viewport-hud-button"
+              style={{ width: 24 }}
+              title={copiedPattern ? `Paste over ${shownName} (⌘V) — at its length` : "Paste (copy a pattern first)"}
+              aria-label="Paste pattern"
+              disabled={!copiedPattern}
+              onPointerDown={(e) => e.preventDefault()}
+              onClick={paste}
+            >
+              {PASTE_ICON}
+            </button>
+            {flash && <span style={{ color: ACCENT, fontSize: 11, whiteSpace: "nowrap" }}>{flash}</span>}
+          </span>
           {!drums && (
             <span style={{ display: "flex", alignItems: "center", gap: 3 }} title={noteCell ? "The selected note's octave: − and + (or [ ]) move it" : "The octave the next notes are written in: − and + (or [ ])"}>
               <button type="button" className="viewport-hud-button" style={{ width: 22 }} onPointerDown={(e) => e.preventDefault()} onClick={() => shiftOctave(-1)}>
