@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { setPlaybackActive } from "../../graph/playbackKeys";
 import { musicEngineFor, releaseMusicEngine } from "./bridge";
 
 describe("music engine registry", () => {
@@ -17,5 +18,15 @@ describe("music engine registry", () => {
     expect(e.available).toBe(false);
     expect(() => e.follow(true, 0, 0)).not.toThrow();
     releaseMusicEngine("headless");
+  });
+
+  it("stops every engine on Stop, even with no frame evaluating Music Out", () => {
+    const e = musicEngineFor("stopped");
+    const follow = vi.spyOn(e, "follow");
+    setPlaybackActive(true);
+    expect(follow).not.toHaveBeenCalled();
+    setPlaybackActive(false);
+    expect(follow).toHaveBeenCalledWith(false, 0, 0);
+    releaseMusicEngine("stopped");
   });
 });

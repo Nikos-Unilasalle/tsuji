@@ -6,6 +6,7 @@
  * transport are kept and sent the moment the node exists — nothing the graph said is lost to the load.
  */
 import { getAudioContext, getAudioOutput } from "../../audio/audioStore";
+import { onPlaybackActiveChange } from "../../graph/playbackKeys";
 import type { MusicDescription, PreviewSound } from "./description";
 import type { EngineMessage, EngineState } from "./engine.worklet";
 
@@ -23,6 +24,14 @@ if (import.meta.env?.DEV && typeof window !== "undefined") {
     engines: [...live].map((h) => h.state),
   });
 }
+
+/**
+ * Stop stops every song, even when nothing is evaluating Music Out to say so: a suspended viewport (no 3D, 2D or camera
+ * view on screen) runs no frames, and the engine would play on to the end from the last "playing" it was told.
+ */
+onPlaybackActiveChange((active) => {
+  if (!active) for (const h of live) h.follow(false, 0, 0);
+});
 
 /** One engine per Music Out node, made on first use. */
 const byNode = new Map<string, MusicEngineHandle>();

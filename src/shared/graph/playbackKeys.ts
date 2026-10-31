@@ -99,8 +99,21 @@ export function getGraphKeyBindings(): ReadonlySet<string> {
   return claimedKeys;
 }
 
+const playbackListeners = new Set<(active: boolean) => void>();
+
 export function setPlaybackActive(active: boolean): void {
+  if (active === playbackActive) return;
   playbackActive = active;
+  for (const listener of playbackListeners) listener(active);
+}
+
+/**
+ * Called on Play and on Stop, whether or not anything is evaluating the graph: a viewport with no 3D, 2D or camera view
+ * on screen is suspended, and what it last told the world (a playing song) would otherwise outlive the Stop.
+ */
+export function onPlaybackActiveChange(listener: (active: boolean) => void): () => void {
+  playbackListeners.add(listener);
+  return () => playbackListeners.delete(listener);
 }
 
 export function isPlaybackActive(): boolean {
