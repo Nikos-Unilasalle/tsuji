@@ -5,6 +5,7 @@
 import type { DrumSettings } from "../dsp/drums";
 import type { FmPatch } from "../dsp/fm";
 import type { GbPatch } from "../dsp/gameboy";
+import type { SidPatch } from "../dsp/sid";
 import type { SongOrder } from "../seq/order";
 import type { Sequence } from "../seq/sequencer";
 
@@ -41,10 +42,18 @@ export interface GbTrackDescription extends TrackBase {
   gb: GbPatch;
 }
 
-export type TrackDescription = FmTrackDescription | DrumTrackDescription | GbTrackDescription;
+/** A C64 SID voice (dsp/sid.ts). */
+export interface SidTrackDescription extends TrackBase {
+  kind: "sid";
+  /** Polyphony, 1–8 (the chip has 3 voices; a track is one of them). */
+  voices: number;
+  sid: SidPatch;
+}
+
+export type TrackDescription = FmTrackDescription | DrumTrackDescription | GbTrackDescription | SidTrackDescription;
 
 /** A sound to audition one note on (the Pattern HUD plays what you type through it). */
-export type PreviewSound = { kind: "fm"; patch: FmPatch } | { kind: "drums"; drums: DrumSettings } | { kind: "gb"; gb: GbPatch };
+export type PreviewSound = { kind: "fm"; patch: FmPatch } | { kind: "drums"; drums: DrumSettings } | { kind: "gb"; gb: GbPatch } | { kind: "sid"; sid: SidPatch };
 
 /** The send effects (dsp/fx.ts), set on Music Out. */
 export interface MusicFx {
@@ -81,7 +90,7 @@ export type MusicValue =
 
 export function isTrack(v: unknown): v is TrackDescription {
   const k = (v as TrackDescription | null)?.kind;
-  return typeof v === "object" && v !== null && (k === "fm" || k === "drums" || k === "gb") && typeof (v as TrackDescription).id === "string";
+  return typeof v === "object" && v !== null && (k === "fm" || k === "drums" || k === "gb" || k === "sid") && typeof (v as TrackDescription).id === "string";
 }
 
 /** The sequence a music value carries — a sequence, or a track's. */
@@ -111,5 +120,6 @@ export function orderOf(v: unknown): SongOrder | null {
 export function previewSoundOf(track: TrackDescription): PreviewSound {
   if (track.kind === "fm") return { kind: "fm", patch: track.patch };
   if (track.kind === "gb") return { kind: "gb", gb: track.gb };
+  if (track.kind === "sid") return { kind: "sid", sid: track.sid };
   return { kind: "drums", drums: track.drums };
 }

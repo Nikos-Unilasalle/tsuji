@@ -611,3 +611,42 @@ Comme la Pattern, l'Order List a sa palette dans la vue 3D (`OrderHud.tsx`) : l'
   - Espace lit à partir d'elle.
 - **La barre du bas** règle la longueur, en pas, du numéro choisi. Elle vaut pour toutes les pistes, et une longueur égale à la longueur par défaut s'efface d'elle-même. Elle porte aussi les boutons Répéter, Nouveau, Retirer et Lire d'ici.
 - Chaque édition réécrit le texte `order` (ou `lengths`) du node, en un seul pas d'annulation. Les fonctions d'édition (`setOrderAt`, `insertOrderAt`, `removeOrderAt`, `unusedPattern`, `setOwnLength`) sont dans `seq/order.ts`, testées.
+
+### Macros et SID Voice (2026-10-31)
+
+**Macros** (`dsp/macros.ts`) : ce qui fait d'un son de puce un instrument de tracker. Une macro est une suite de valeurs, une par tick. Le tick dure 1/60 s par défaut, comme Furnace et DefleMask, ou 1/50 s en PAL. Chaque note relance ses macros. C'est ce que sont les tables de LSDJ, les tables wave et pulse de GoatTracker et les macros de Furnace.
+
+On les écrit en texte, avec les deux repères de Furnace :
+- `|` : la boucle ;
+- `/` : la relâche. Tant que la note est tenue, la macro ne la dépasse pas : elle reboucle si la boucle est avant, sinon elle reste sur sa dernière valeur. La note-off la relance de là jusqu'à la fin.
+
+Exemple : `15 13 11 | 10 9 9 10 / 6 3 0`. Les valeurs sont en décimal, ou en hexa avec `$` ou `0x`.
+
+- **Game Boy Voice**, quatre macros :
+  - volume 0–15, qui remplace l'enveloppe. Avec une relâche, la note-off joue la fin de la macro au lieu du fondu ;
+  - arpège en demi-tons ;
+  - duty 0–3 ;
+  - hauteur en cents.
+  
+  8 presets s'en servent : arpèges majeur, mineur et à l'octave, vibrato, balayage de duty, écho, swell, zap.
+- **Tick Rate** : 50 ou 60 Hz, par voix.
+
+**SID Voice** (`dsp/sid.ts`, node `music/sid`) : une voix du Commodore 64 (MOS 6581 / 8580), façon GoatTracker.
+- **Formes d'onde** : triangle, dent de scie, pulse (largeur 12 bits) et bruit. Le bruit est le LFSR 23 bits, cadencé 16 fois par cycle comme le bit 19 de l'accumulateur. Plusieurs ondes à la fois sont combinées comme sur la puce, en ET sur leurs 12 bits.
+- **Ring et sync** : sur la puce, c'est la voix voisine qui module. Ici, c'est un second oscillateur propre à la voix : `ringRatio` × la hauteur pour le ring ; pour la sync, la voix tourne à `syncRatio` × la note et repart à la hauteur de la note.
+- **ADSR** 0–15 sur les vrais taux de la puce (table de reSID, horloge PAL 985 248 Hz) : attaque de 2 ms à 8 s, decay et release de 6 ms à 24 s, sur la courbe exponentielle par paliers de la puce. Le gate rejoue l'attaque depuis le niveau où l'on est, comme sur la puce.
+- **Filtre** : un state-variable TPT passe-bas / bande / haut, en mélange libre. Cutoff 0–2047, résonance 0–15. La courbe du 8580 est régulière ; le 6581 a une courbe tassée en bas et une saturation avant le filtre.
+- **PWM** : la largeur va et vient seule, `pwSpeed` par tick entre `pwLow` et `pwHigh`.
+- **Macros GoatTracker** :
+  - wave : octets de contrôle en hexa (41 pulse, 21 saw, 11 triangle, 81 bruit, +04 ring, +02 sync ; le bit bas est le gate, donc 40 lâche la note) ;
+  - arpège ;
+  - pulse ;
+  - cutoff ;
+  - hauteur.
+  
+  Une batterie est une macro wave : `81 41 40`, du bruit puis un pulse.
+- **14 presets** : Saw Lead, Pulse PWM, Hubbard Bass, Triangle Flute, Arp Chord, Minor Arp, Ring Bell, Sync Lead, Filter Sweep Pad, 8580 Clean Saw, Kick, Snare, Hat, Noise Zap.
+- Les entrées Cutoff et Pulse Width se câblent, pour un balayage de filtre depuis la scène.
+- **Pur**, comme les autres voix : le rendu ne dépend pas de la taille des blocs (testé).
+
+Pas encore fait : l'import des instruments GoatTracker (`.ins`) et SID-Wizard (`.swi`). Les tables de GoatTracker se traduiront en macros : la table jouée tick par tick jusqu'à ce qu'elle se répète, qui donne la boucle.

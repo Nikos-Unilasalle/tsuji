@@ -18,6 +18,7 @@ import { FmOperatorPatch, FmPatch } from "../../music/dsp/fm";
 import { FM_PRESETS, FM_PRESET_NAMES, fmPreset, fmVoicePreset } from "../../music/dsp/presets";
 import { fmAlgorithm } from "../../music/dsp/algorithms";
 import { GB_DUTIES, GB_PRESET_NAMES, GbChannel, GbPatch, gbPreset } from "../../music/dsp/gameboy";
+import { SID_PRESET_NAMES, SidPatch, sidPreset } from "../../music/dsp/sid";
 import { ARP_MODES, ARP_RATES, ArpMode, ArpRate, ArpSettings, DEFAULT_ARP } from "../../music/seq/arp";
 import { CHORD_NAMES, ChordName } from "../../music/seq/chords";
 import { parsePattern, stepWords } from "../../music/seq/notation";
@@ -28,7 +29,7 @@ import { Cell, Clock, Sequence, notesSoundingAt, notesStartingIn, stepAt, transp
 /**
  * The music nodes (see docs/music-nodes-mvp.md). Every one of them describes; only Music Out plays.
  *
- *   Clock → (Order List) → Pattern → (Arp) → FM Voice / Game Boy Voice / Drum Kit → Music Out
+ *   Clock → (Order List) → Pattern → (Arp) → FM Voice / Game Boy Voice / SID Voice / Drum Kit → Music Out
  *                                      └→ Note Probe → anything in the scene
  *
  * All of them pass one socket type, `music`, carrying a clock, a sequence or a track (description.ts). A node reads
@@ -419,8 +420,16 @@ function gbPatchParams(p: GbPatch): Record<string, unknown> {
     sweep: p.sweep,
     sweepShift: p.sweepShift,
     release: p.release,
+    macroVol: p.macroVol,
+    macroArp: p.macroArp,
+    macroDuty: p.macroDuty,
+    macroPitch: p.macroPitch,
+    tickRate: String(p.tickRate),
   };
 }
+
+/** The Macros group, shared by the chip voices: what each macro sets, with its range. */
+const MACRO_HELP = "one value a tick; | loop · / release (held: stops there; the note-off goes on)";
 
 /**
  * One of the DMG's channels, as LSDJ plays them (dsp/gameboy.ts): two pulses, the wave and the noise — and a kit,
@@ -473,6 +482,11 @@ export const MUSIC_GAMEBOY_NODE: NodeDefinition = {
     { id: "release", label: "Release (s, after the note)", kind: "number", step: 0.01, group: "Envelope" },
     { id: "sweep", label: "Sweep (pulse: −7 down … 7 up, a step every n/128 s; 0 off)", kind: "number", step: 1, group: "Sweep" },
     { id: "sweepShift", label: "Sweep Shift (1 big – 7 tiny)", kind: "number", step: 1, group: "Sweep" },
+    { id: "macroVol", label: `Volume Macro (0–15: replaces the envelope) — ${MACRO_HELP}`, kind: "text", group: "Macros" },
+    { id: "macroArp", label: "Arpeggio Macro (semitones: 0 | 0 4 7 is a major chord)", kind: "text", group: "Macros" },
+    { id: "macroDuty", label: "Duty Macro (pulse: 0–3 = 12.5 25 50 75 %)", kind: "text", group: "Macros" },
+    { id: "macroPitch", label: "Pitch Macro (cents: | 0 10 20 10 0 -10 -20 -10 is a vibrato)", kind: "text", group: "Macros" },
+    { id: "tickRate", label: "Tick Rate", kind: "select", options: ["50", "60"], optionLabels: ["50 Hz (PAL)", "60 Hz (NTSC)"], group: "Macros" },
   ],
   evaluate: (inputs, params, ctx) => {
     const wired = sequenceOf(inputs.sequence);
@@ -493,12 +507,153 @@ export const MUSIC_GAMEBOY_NODE: NodeDefinition = {
       sweep: num("sweep", -7, 7),
       sweepShift: num("sweepShift", 1, 7),
       release: clamp(numberInput(undefined, params.release, base.release), 0.001, 4),
+      macroVol: typeof params.macroVol === "string" ? params.macroVol : base.macroVol,
+      macroArp: typeof params.macroArp === "string" ? params.macroArp : base.macroArp,
+      macroDuty: typeof params.macroDuty === "string" ? params.macroDuty : base.macroDuty,
+      macroPitch: typeof params.macroPitch === "string" ? params.macroPitch : base.macroPitch,
+      tickRate: clamp(Math.round(Number(params.tickRate) || base.tickRate), 10, 1000),
     };
     const track: TrackDescription = {
       id: ctx.nodeId,
       kind: "gb",
       voices: clamp(Math.round(Number(params.voices) || 1), 1, 8),
       gb,
+      seq,
+      level: clamp(numberInput(inputs.level, params.level, 0.8), 0, 2),
+      pan: clamp(numberInput(inputs.pan, params.pan, 0), -1, 1),
+      mute: inputs.mute !== undefined ? Number(inputs.mute) > 0 : Boolean(params.mute),
+      ...sendsOf(inputs, params),
+    };
+    return { track };
+  },
+};
+
+// ── SID Voice ──────────────────────────────────────────────────────────────
+
+const SID_WAVES = [
+  { id: "triangle", bit: 0x10, label: "Triangle" },
+  { id: "saw", bit: 0x20, label: "Sawtooth" },
+  { id: "pulse", bit: 0x40, label: "Pulse" },
+  { id: "noise", bit: 0x80, label: "Noise" },
+  { id: "ring", bit: 0x04, label: "Ring Mod (triangle)" },
+  { id: "sync", bit: 0x02, label: "Hard Sync" },
+] as const;
+
+function sidPresetParams(name: string): Record<string, unknown> {
+  const { patch: p, voices } = sidPreset(name);
+  const out: Record<string, unknown> = { voices };
+  for (const w of SID_WAVES) out[w.id] = (p.waveform & w.bit) !== 0;
+  for (const k of ["pulseWidth", "pwSpeed", "pwLow", "pwHigh", "attack", "decay", "sustain", "release", "ringRatio", "syncRatio", "filter", "lowPass", "bandPass", "highPass", "cutoff", "resonance", "volume", "macroWave", "macroArp", "macroPulse", "macroCutoff", "macroPitch"] as const)
+    out[k] = p[k];
+  out.model = p.model;
+  out.tickRate = String(p.tickRate);
+  return out;
+}
+
+/**
+ * A Commodore 64 SID voice, GoatTracker-style (dsp/sid.ts): the four waveforms (combined as the chip does), ring and
+ * sync, the chip's ADSR rates, PWM, the resonant 6581 / 8580 filter — and macros, GoatTracker's tables.
+ */
+export const MUSIC_SID_NODE: NodeDefinition = {
+  type: "music/sid",
+  label: "SID Voice",
+  category: "music",
+  pure: true,
+  inputs: [
+    { id: "sequence", label: "Sequence", type: "music" },
+    { id: "level", label: "Level", type: "value" },
+    { id: "pan", label: "Pan", type: "value" },
+    { id: "cutoff", label: "Cutoff (0–2047)", type: "value" },
+    { id: "pulseWidth", label: "Pulse Width (0–4095)", type: "value" },
+    { id: "mute", label: "Mute", type: "value" },
+    ...SEND_INPUTS,
+  ],
+  outputs: [{ id: "track", label: "Track", type: "music" }],
+  defaultParams: { preset: "Saw Lead", transpose: 0, level: 0.8, pan: 0, mute: false, delaySend: 0, reverbSend: 0, ...sidPresetParams("Saw Lead") },
+  upgradeParams: (params) => (params.preset !== undefined && params.attack === undefined ? { ...sidPresetParams(String(params.preset)), ...params } : params),
+  paramFields: [
+    {
+      id: "preset",
+      label: "Preset (loads every setting below)",
+      kind: "select",
+      options: SID_PRESET_NAMES,
+      presets: Object.fromEntries(SID_PRESET_NAMES.map((n) => [n, sidPresetParams(n)])),
+    },
+    { id: "level", label: "Level", kind: "number", step: 0.05 },
+    { id: "pan", label: "Pan (−1 left, 1 right)", kind: "number", step: 0.1 },
+    { id: "voices", label: "Voices (1–8; a SID voice is 1)", kind: "number", step: 1 },
+    { id: "transpose", label: "Transpose (semitones)", kind: "number", step: 1 },
+    { id: "mute", label: "Mute", kind: "boolean" },
+    ...SEND_FIELDS,
+    ...SID_WAVES.map((w) => ({ id: w.id, label: w.label, kind: "boolean" as const, group: "Waveform" })),
+    { id: "pulseWidth", label: "Pulse Width (0–4095, 2048 square)", kind: "number", step: 64, group: "Waveform" },
+    { id: "ringRatio", label: "Ring Modulator Pitch (× the note)", kind: "number", step: 0.01, group: "Waveform" },
+    { id: "syncRatio", label: "Sync: Voice Pitch (× the note, above 1)", kind: "number", step: 0.05, group: "Waveform" },
+    { id: "pwSpeed", label: "PWM Speed (width a tick; 0 off)", kind: "number", step: 4, group: "Pulse Modulation" },
+    { id: "pwLow", label: "PWM Low", kind: "number", step: 64, group: "Pulse Modulation" },
+    { id: "pwHigh", label: "PWM High", kind: "number", step: 64, group: "Pulse Modulation" },
+    { id: "attack", label: "Attack (0–15: 2 ms … 8 s)", kind: "number", step: 1, group: "ADSR" },
+    { id: "decay", label: "Decay (0–15: 6 ms … 24 s)", kind: "number", step: 1, group: "ADSR" },
+    { id: "sustain", label: "Sustain (0–15)", kind: "number", step: 1, group: "ADSR" },
+    { id: "release", label: "Release (0–15: 6 ms … 24 s)", kind: "number", step: 1, group: "ADSR" },
+    { id: "filter", label: "Filter On", kind: "boolean", group: "Filter" },
+    { id: "model", label: "Chip", kind: "select", options: ["6581", "8580"], optionLabels: ["6581 (warm, driven)", "8580 (clean, even)"], group: "Filter" },
+    { id: "cutoff", label: "Cutoff (0–2047)", kind: "number", step: 16, group: "Filter" },
+    { id: "resonance", label: "Resonance (0–15)", kind: "number", step: 1, group: "Filter" },
+    { id: "lowPass", label: "Low Pass", kind: "boolean", group: "Filter" },
+    { id: "bandPass", label: "Band Pass", kind: "boolean", group: "Filter" },
+    { id: "highPass", label: "High Pass", kind: "boolean", group: "Filter" },
+    { id: "volume", label: "Volume (0–15)", kind: "number", step: 1, group: "Filter" },
+    { id: "macroWave", label: `Wave Macro (hex control bytes: 41 pulse 21 saw 11 tri 81 noise, +4 ring +2 sync; 40 = gate off) — ${MACRO_HELP}`, kind: "text", group: "Macros" },
+    { id: "macroArp", label: "Arpeggio Macro (semitones)", kind: "text", group: "Macros" },
+    { id: "macroPulse", label: "Pulse Macro (width 0–4095)", kind: "text", group: "Macros" },
+    { id: "macroCutoff", label: "Cutoff Macro (0–2047)", kind: "text", group: "Macros" },
+    { id: "macroPitch", label: "Pitch Macro (cents)", kind: "text", group: "Macros" },
+    { id: "tickRate", label: "Tick Rate", kind: "select", options: ["50", "60"], optionLabels: ["50 Hz (PAL C64)", "60 Hz (NTSC)"], group: "Macros" },
+  ],
+  evaluate: (inputs, params, ctx) => {
+    const wired = sequenceOf(inputs.sequence);
+    if (!wired) return { track: null };
+    const seq = transposeSequence(wired, Math.round(Number(params.transpose) || 0));
+    const base = sidPreset(params.preset).patch;
+    let waveform = 0;
+    for (const w of SID_WAVES) if (params[w.id] !== undefined ? Boolean(params[w.id]) : (base.waveform & w.bit) !== 0) waveform |= w.bit;
+    const num = (k: keyof SidPatch, lo: number, hi: number, input?: unknown) => clamp(numberInput(input, params[k], base[k] as number), lo, hi);
+    const int = (k: keyof SidPatch, lo: number, hi: number) => Math.round(num(k, lo, hi));
+    const bool = (k: keyof SidPatch) => (params[k] !== undefined ? Boolean(params[k]) : (base[k] as boolean));
+    const text = (k: keyof SidPatch) => (typeof params[k] === "string" ? (params[k] as string) : (base[k] as string));
+    const sid: SidPatch = {
+      waveform,
+      pulseWidth: Math.round(num("pulseWidth", 0, 4095, inputs.pulseWidth)),
+      pwSpeed: num("pwSpeed", -4095, 4095),
+      pwLow: int("pwLow", 0, 4095),
+      pwHigh: int("pwHigh", 0, 4095),
+      attack: int("attack", 0, 15),
+      decay: int("decay", 0, 15),
+      sustain: int("sustain", 0, 15),
+      release: int("release", 0, 15),
+      ringRatio: num("ringRatio", 0.01, 16),
+      syncRatio: num("syncRatio", 1, 16),
+      filter: bool("filter"),
+      lowPass: bool("lowPass"),
+      bandPass: bool("bandPass"),
+      highPass: bool("highPass"),
+      cutoff: num("cutoff", 0, 2047, inputs.cutoff),
+      resonance: int("resonance", 0, 15),
+      model: params.model === "8580" ? "8580" : params.model === "6581" ? "6581" : base.model,
+      volume: int("volume", 0, 15),
+      macroWave: text("macroWave"),
+      macroArp: text("macroArp"),
+      macroPulse: text("macroPulse"),
+      macroCutoff: text("macroCutoff"),
+      macroPitch: text("macroPitch"),
+      tickRate: clamp(Math.round(Number(params.tickRate) || base.tickRate), 10, 1000),
+    };
+    const track: TrackDescription = {
+      id: ctx.nodeId,
+      kind: "sid",
+      voices: clamp(Math.round(Number(params.voices) || 1), 1, 8),
+      sid,
       seq,
       level: clamp(numberInput(inputs.level, params.level, 0.8), 0, 2),
       pan: clamp(numberInput(inputs.pan, params.pan, 0), -1, 1),
