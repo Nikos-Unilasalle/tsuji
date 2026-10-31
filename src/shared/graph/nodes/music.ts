@@ -62,15 +62,24 @@ export const MUSIC_CLOCK_NODE: NodeDefinition = {
       id: "stepsPerBeat",
       label: "Steps per Beat",
       kind: "select",
-      options: ["2", "3", "4", "6", "8"],
-      optionLabels: ["2 (eighths)", "3 (eighth triplets)", "4 (sixteenths)", "6 (sixteenth triplets)", "8 (32nds)"],
+      options: ["2", "3", "4", "6", "8", "12", "16", "24"],
+      optionLabels: [
+        "2 (eighths)",
+        "3 (eighth triplets)",
+        "4 (sixteenths)",
+        "6 (sixteenth triplets)",
+        "8 (32nds)",
+        "12 (32nd triplets)",
+        "16 (64ths)",
+        "24 (tracker ticks: a converted .xm / .mod keeps its groove)",
+      ],
     },
   ],
   evaluate: (inputs, params) => {
     const clock: Clock = {
       bpm: clamp(numberInput(inputs.bpm, params.bpm, 120), 20, 400),
       swing: clamp(numberInput(inputs.swing, params.swing, 0), 0, 1),
-      stepsPerBeat: clamp(Math.round(Number(params.stepsPerBeat) || 4), 1, 16),
+      stepsPerBeat: clamp(Math.round(Number(params.stepsPerBeat) || 4), 1, 48),
     };
     const out: MusicValue = { kind: "clock", clock };
     return { clock: out, bpm: clock.bpm };

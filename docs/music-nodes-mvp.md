@@ -535,3 +535,20 @@ Ce qu'il a fallu ajouter :
 
 Pas encore vérifié : l'écoute (le WAV est là pour ça) et le HUD paginé dans l'app (charger le projet aurait remplacé le projet ouvert).
 
+### `mod2tsuji.py` lit aussi le FastTracker II (.xm) (2026-10-31)
+
+Essai sur **« Tony Bassey Disco Beef »** de Ciccilleju (une sortie pour Hugi, FastTracker 2) : **30 canaux**, 35 patterns, 3 712 lignes, des samples 16 bits (boucle de batterie, multi-rhodes, cordes, guitare lead, caisse claire disco, square chip, crash…). Le convertisseur a été refondu :
+
+- **Un format intermédiaire commun** (le morceau : ordre, patterns, instruments avec leur PCM), avec deux lecteurs, `read_mod` et `read_xm`. Toute la conversion est partagée.
+- **XM** : nombre de canaux et de lignes libre ; patterns compressés ; instruments à plusieurs samples (par la keymap) ; samples 16 bits stockés en différences ; note relative et finetune (C-4 joue le sample à 8 363 Hz, et la note relative décale toutes les notes d'autant) ; fréquences linéaires (`1xx` et `2xx` = `xx`/16 de demi-ton par tick) ; **colonne de volume** (volume, panoramique, glissé vers une note) ; key-off (`97`, `Kxx`) ; `EDx` (note retardée, exacte au tick) ; `Bxx` (un saut en arrière termine le morceau) ; `8xx` (le pan de la piste devient sa moyenne).
+- **Le groove de FastTracker** : ce morceau change de vitesse presque à chaque ligne (`F02`, `F03`, `F04`). Le pas devient donc **un tick, 24 par temps**, et le shuffle est gardé. Le **Clock** accepte maintenant 12, 16 et 24 pas par temps (jusqu'à 48 dans un fichier).
+- **Les boucles de batterie transcrites** : un sample qui contient un temps entier (« 12r3.wav », une mesure, rejouée de canal en canal) est analysé sur trois bandes (graves pour le kick, médiums pour la snare, aigus pour le hat). Ses attaques sont **rejouées au Drum Kit**, à la vitesse de lecture du sample, jusqu'à l'événement suivant du canal. Les frappes qui tombent sur le même pas se regroupent avec leurs vélocités propres (`kick+hat@1,0.4`), et une frappe en retard est décalée par `DLY`. Pour Disco Beef, ça donne un four-on-the-floor : 4 kicks et 4 hats par mesure.
+- **Les rôles** sont devinés d'abord d'après le nom (bass, snare, hat, crash, rhodes, string, guit, chip…), puis d'après la forme d'onde. Un fichier `--map` les remplace (instrument `"7"`, ou `"7.2"` pour le 2e sample d'un instrument).
+- **`--master`** règle le master de Music Out. Avec 30 canaux, 0,8 saturait (niveau moyen 0,55, 18 % dans le soft clip) ; 0,3 donne un niveau moyen de 0,22 et une crête de 0,88.
+
+Disco Beef converti : **55 pistes, 9 360 pas, 3 min 07 s**, rendu à **19 % du temps réel** en Node (M1). C'est la plus lourde des conversions. La conversion de Cybernoid redonne les mêmes pistes, les mêmes pas et les mêmes cases, avec des glides plus justes (calculés sur les ticks du portamento et non sur la ligne entière).
+
+Les conversions restent **en local** dans `music-local/` (ignoré par git) : `disco_beef.tsuji`, `disco_beef.map.json` et un WAV des 75 premières secondes. La musique appartient à ses auteurs.
+
+Pas encore vérifié : l'écoute, et le projet ouvert dans l'app (55 pistes, 24 pas par temps, HUD paginé).
+
