@@ -61,6 +61,29 @@ describe("UV Unwrap", () => {
     expect(again).not.toEqual(first);
   });
 
+  it("keeps the layout through setting changes on manual until Unwrap Now bumps the request", () => {
+    const base = new THREE.BoxGeometry(1, 1, 1, 2, 2, 2);
+    const smart = uvsOf(run(base, { update: "manual" }, "uv-manual").mesh);
+    const stillSmart = uvsOf(run(base, { update: "manual", method: "box" }, "uv-manual").mesh);
+    expect(stillSmart).toEqual(smart);
+    const box = uvsOf(run(base, { update: "manual", method: "box", unwrapRequest: 1 }, "uv-manual").mesh);
+    expect(box).not.toEqual(smart);
+    expect(box).toEqual(uvsOf(run(base, { method: "box" }, "uv-manual-ref").mesh));
+  });
+
+  it("shows only the settings the chosen method reads, with its own explanation", () => {
+    const fields = (method: string) => UV_UNWRAP_NODE.dynamicParamFields!({ id: "n", type: UV_UNWRAP_NODE.type, position: { x: 0, y: 0 }, params: { method } } as any);
+    for (const method of UV_METHODS) {
+      const ids = fields(method).map((f) => f.id);
+      expect(ids).toContain("methodNote");
+      expect(ids).toContain("unwrapNow");
+      expect(ids.includes("angleLimit")).toBe(method === "smart");
+      expect(ids.includes("axis")).toBe(method === "cylinder" || method === "sphere");
+    }
+    const notes = new Set(UV_METHODS.map((m) => fields(m).find((f) => f.id === "methodNote")!.label));
+    expect(notes.size).toBe(UV_METHODS.length);
+  });
+
   it("applies scale, rotation and offset about the centre without unwrapping again", () => {
     const raw = new Float32Array([0, 0, 1, 1]);
     expect(Array.from(transformUVs(raw, { scale: 2, rotation: 0, offset: [0, 0] }))).toEqual([-0.5, -0.5, 1.5, 1.5]);

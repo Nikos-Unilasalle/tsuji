@@ -41,6 +41,7 @@ import { smartUnwrap } from "./shared/graph/mesh/unwrap";
 import { extractPointsFromMesh } from "./shared/graph/nodes/pointsGeometry";
 import { findFirstMesh } from "./shared/graph/meshRequired";
 import { computePointInfluences, POINTS_INFLUENCE_COMPUTE_ACTION } from "./shared/graph/nodes/pointsInfluence";
+import { UV_UNWRAP_ACTION } from "./shared/graph/nodes/uvUnwrap";
 import {
   freezeObjectToGeometryData,
   FROZEN_UNWRAP_UVS_ACTION,
@@ -1886,6 +1887,12 @@ function MainEditor() {
         const meshData: QuadMesh = resolveEditMeshData(node, evaluatedResults);
         const unwrapped = boxProjectUVs(meshData);
         onParamChange("meshData", unwrapped, nodeId);
+        return;
+      }
+      if (action === UV_UNWRAP_ACTION) {
+        const node = findNodeDeep(graph, nodeId);
+        if (!node) return;
+        onParamChange("unwrapRequest", (Number(node.params.unwrapRequest) || 0) + 1, nodeId);
         return;
       }
       if (action === POINTS_INFLUENCE_COMPUTE_ACTION) {

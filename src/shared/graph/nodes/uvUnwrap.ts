@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { createNodeCache, disposeObject3D } from "../nodeCaches";
-import { NodeDefinition } from "../types";
+import type { NodeDefinition, ParamFieldDef } from "../types";
 import { clearMeshWarning, findFirstMesh, warnMeshRequired } from "../meshRequired";
 import { createModifierMesh, emitModifiedMesh, numberInput, primitiveOutputs } from "./object";
 import type { QuadMesh } from "../quadMesh";
@@ -23,12 +23,50 @@ import { faceUVIslands, packFaceIslands } from "../mesh/pack";
  * By default the layout is computed once per topology: a mesh that deforms
  * (a Twist, a Wave, a skin) keeps the UVs it had, so the texture stays glued
  * to the surface instead of sliding, and nothing is unwrapped again each
- * frame. "always" redoes it whenever a vertex moves.
+ * frame. "always" redoes it whenever a vertex moves; "manual" keeps it
+ * until the Unwrap Now button, so tuning a heavy mesh's settings doesn't
+ * unwrap it again at every step.
  */
 
 export const UV_METHODS = ["smart", "conformal", "box", "cylinder", "sphere"] as const;
 export type UVMethod = (typeof UV_METHODS)[number];
-export const UV_UPDATE_MODES = ["topology", "always"] as const;
+export const UV_UPDATE_MODES = ["topology", "always", "manual"] as const;
+
+/** App.tsx's onAction id for the Unwrap Now button: bumps `unwrapRequest`, which forces a new layout. */
+export const UV_UNWRAP_ACTION = "uv-unwrap/unwrap-now";
+
+/** What each method does, shown under Method for the one chosen. */
+const METHOD_NOTES: Record<UVMethod, string> = {
+  smart:
+    "Smart: cuts the surface into islands wherever it turns more than the Angle Limit, lays each island flat along its "
+    + "own average direction and packs them into the 0–1 square, all at the same texel density (Blender's Smart UV "
+    + "Project). Lower the angle for more, flatter islands with less stretch; raise it for fewer, larger islands. The safe "
+    + "choice for hard-surface and mixed shapes.",
+  conformal:
+    "Conformal: flattens each connected piece in one go keeping its angles (least-squares conformal maps, Blender's "
+    + "Unwrap), so a texture keeps its shape with as few cuts as possible; sizes may vary across the piece. Best on open "
+    + "surfaces (a cloth, a face, a terrain). This node has no seams to cut along, so a closed shape (a ball, a box) "
+    + "flattens badly: use smart for those.",
+  box:
+    "Box: each face takes its UVs from the side of a cube it faces most (front, back, left, right, top, bottom), at "
+    + "scene scale. Instant, no stretch on boxy shapes, visible seams where the side changes; the classic choice for "
+    + "walls, crates, architecture and tiling textures. Pack fits the islands into 0–1; off, UVs stay in scene units "
+    + "so a tiling texture keeps the same size on every object.",
+  cylinder:
+    "Cylinder: wraps the UVs around the Axis, U going round, V along it, at scene scale. For bottles, trunks, columns, "
+    + "limbs; the caps (faces looking along the axis) come out squeezed. One seam where U wraps. Pack fits the result "
+    + "into 0–1; off, UVs stay in scene units.",
+  sphere:
+    "Sphere: longitude and latitude around the Axis as the pole, like a world map. For balls, planets, heads, eyes; "
+    + "texels bunch up toward the poles. One seam where the longitude wraps. Pack fits the result into 0–1; off, UVs "
+    + "stay in scene units.",
+};
+
+const UPDATE_NOTE =
+  "Recompute — topology: computed again only when the mesh gets a new topology or a setting changes, so a deforming "
+  + "mesh keeps its layout and the texture stays glued to it. always: unwrapped again whenever a vertex moves (slow on "
+  + "a heavy mesh). manual: kept as it is until Unwrap Now, so changing settings on a heavy mesh costs nothing until "
+  + "you ask. Unwrap Now recomputes the layout in any mode.";
 
 interface UVState {
   mesh?: THREE.Mesh;
@@ -38,6 +76,8 @@ interface UVState {
   cornerUVs: Float32Array | null;
   transformKey: string;
   islands: number;
+  /** The Unwrap Now count the layout was computed at. */
+  request?: number;
   /** The source the output was last built from (array identity + version). */
   srcArray?: unknown;
   srcVersion: number;
@@ -186,28 +226,12 @@ export const UV_UNWRAP_NODE: NodeDefinition = {
     offsetU: 0,
     offsetV: 0,
     update: "topology",
+    // Bumped by the Unwrap Now button: a new value forces a new layout.
+    unwrapRequest: 0,
   },
-  paramFields: [
-    { id: "method", label: "Method", kind: "select", options: [...UV_METHODS] },
-    { id: "angleLimit", label: "Angle Limit (°)", kind: "number", step: 1, group: "Smart" },
-    { id: "axis", label: "Axis", kind: "select", options: ["x", "y", "z"], group: "Projection" },
-    { id: "pack", label: "Pack into 0–1", kind: "boolean", group: "Projection" },
-    { id: "margin", label: "Island Margin", kind: "number", step: 0.005, group: "Layout" },
-    { id: "scale", label: "UV Scale", kind: "number", step: 0.1, group: "Layout" },
-    { id: "rotation", label: "UV Rotation (°)", kind: "number", step: 5, group: "Layout" },
-    { id: "offsetU", label: "Offset U", kind: "number", step: 0.05, group: "Layout" },
-    { id: "offsetV", label: "Offset V", kind: "number", step: 0.05, group: "Layout" },
-    { id: "update", label: "Recompute", kind: "select", options: [...UV_UPDATE_MODES], group: "Layout" },
-    {
-      id: "note",
-      label:
-        "smart: islands split where the surface turns more than the angle limit, laid flat and packed "
-        + "(Blender's Smart UV Project). conformal: as few cuts as possible, angles kept (Unwrap). "
-        + "box / cylinder / sphere: projections. Recompute on topology: a deforming mesh keeps its "
-        + "layout, so the texture stays glued to it; always: unwrapped again whenever it moves.",
-      kind: "note",
-    },
-  ],
+  paramFields: uvUnwrapFields("smart"),
+  dynamicParamFields: (instance) =>
+    uvUnwrapFields((UV_METHODS as readonly string[]).includes(String(instance.params.method)) ? (instance.params.method as UVMethod) : "smart"),
   evaluate: (inputs, params, ctx) => {
     const inputObj = inputs.geometry instanceof THREE.Object3D ? inputs.geometry : null;
     if (!inputObj) return { geometry: null, matrix: new THREE.Matrix4(), islands: 0 };
@@ -235,6 +259,8 @@ export const UV_UNWRAP_NODE: NodeDefinition = {
       offset: [numberInput(undefined, params.offsetU, 0), numberInput(undefined, params.offsetV, 0)],
     };
     const always = params.update === "always";
+    const manual = params.update === "manual";
+    const request = Number(params.unwrapRequest) || 0;
 
     let state = uvCache.get(ctx.nodeId);
     if (!state) {
@@ -251,12 +277,18 @@ export const UV_UNWRAP_NODE: NodeDefinition = {
     // The unwrap is the expensive part: only for a new topology or new
     // settings (or any move, on "always"). The transform is cheap, and a
     // moved vertex only needs the shape copied across.
-    const relayout = !state.cornerUVs || layoutKey !== state.layoutKey || (always && sourceChanged);
+    // Manual keeps the layout through setting changes, but not through a new
+    // corner count: last layout's UVs would no longer line up with anything.
+    const stale = manual
+      ? state.cornerUVs?.length !== corners.length * 2
+      : layoutKey !== state.layoutKey || (always && sourceChanged);
+    const relayout = !state.cornerUVs || stale || request !== state.request;
     if (relayout) {
       const { uvs, islands } = layoutUVs(srcGeom, corners, options);
       state.cornerUVs = uvs;
       state.islands = islands;
       state.layoutKey = layoutKey;
+      state.request = request;
     }
     let geometry: THREE.BufferGeometry | undefined;
     if (relayout || sourceChanged || transformKey !== state.transformKey || !state.mesh) {
@@ -273,3 +305,33 @@ export const UV_UNWRAP_NODE: NodeDefinition = {
     return { ...emitModifiedMesh(state.mesh, { inputObj, srcMesh, geometry, nodeId: ctx.nodeId }), islands: state.islands };
   },
 };
+
+/** The parameters for `method`: only the settings it reads, and what it does. */
+function uvUnwrapFields(method: UVMethod): ParamFieldDef[] {
+  const projection = method === "box" || method === "cylinder" || method === "sphere";
+  const fields: ParamFieldDef[] = [
+    { id: "method", label: "Method", kind: "select", options: [...UV_METHODS] },
+    { id: "methodNote", label: METHOD_NOTES[method], kind: "note" },
+    { id: "unwrapNow", label: "Unwrap Now", kind: "button", action: UV_UNWRAP_ACTION },
+  ];
+  if (method === "smart") fields.push({ id: "angleLimit", label: "Angle Limit (°)", kind: "number", step: 1, group: "Smart" });
+  if (method === "cylinder" || method === "sphere") fields.push({ id: "axis", label: "Axis", kind: "select", options: ["x", "y", "z"], group: "Projection" });
+  if (projection) fields.push({ id: "pack", label: "Pack into 0–1", kind: "boolean", group: "Projection" });
+  fields.push(
+    { id: "margin", label: "Island Margin", kind: "number", step: 0.005, group: "Layout" },
+    { id: "scale", label: "UV Scale", kind: "number", step: 0.1, group: "Layout" },
+    { id: "rotation", label: "UV Rotation (°)", kind: "number", step: 5, group: "Layout" },
+    { id: "offsetU", label: "Offset U", kind: "number", step: 0.05, group: "Layout" },
+    { id: "offsetV", label: "Offset V", kind: "number", step: 0.05, group: "Layout" },
+    {
+      id: "update",
+      label: "Recompute",
+      kind: "select",
+      options: [...UV_UPDATE_MODES],
+      optionLabels: ["On topology / settings", "Always", "Manual (Unwrap Now)"],
+      group: "Layout",
+    },
+    { id: "updateNote", label: UPDATE_NOTE, kind: "note", group: "Layout" },
+  );
+  return fields;
+}
