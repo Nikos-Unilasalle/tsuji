@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { MUSIC_ORDER_NODE, MUSIC_PATTERN_NODE, patternCells } from "../../graph/nodes/music";
 import { orderOf, sequenceOf } from "../engine/description";
 import { compactPattern, formatPattern, parsePattern, stepWords } from "./notation";
-import { bankLayout, isBank, joinBank, parseOrder, positionAt, splitBank } from "./order";
+import { bankLayout, formatOrder, insertOrderAt, isBank, joinBank, parseOrder, positionAt, removeOrderAt, setOrderAt, setOwnLength, splitBank, unusedPattern } from "./order";
 import { notesStartingIn } from "./sequencer";
 
 const ORDER = { list: [0, 1, 0, 2], lengths: [], length: 4 };
@@ -66,5 +66,22 @@ describe("order list", () => {
     ]);
     // E4 sounds until C4 comes in.
     expect(notes[0].off).toBe(notes[1].on);
+  });
+});
+
+describe("editing an order", () => {
+  it("sets, inserts and removes positions", () => {
+    expect(formatOrder(setOrderAt([0, 1, 2], 1, 7))).toBe("00 07 02");
+    expect(insertOrderAt([0, 1], 1, 5)).toEqual([0, 5, 1]);
+    expect(insertOrderAt([0, 1], 9, 5)).toEqual([0, 1, 5]);
+    expect(removeOrderAt([0, 1, 2], 0)).toEqual([1, 2]);
+    expect(removeOrderAt([3], 0)).toEqual([3]);
+    expect(unusedPattern([0, 1, 3])).toBe(2);
+  });
+
+  it("writes a pattern's own length, and clears it back to the Pattern Length", () => {
+    expect(setOwnLength("", 2, 32, 16)).toBe("0 0 32");
+    expect(setOwnLength("0 0 32", 2, 16, 16)).toBe("");
+    expect(setOwnLength("24 0 32", 0, 48, 16)).toBe("48 0 32");
   });
 });

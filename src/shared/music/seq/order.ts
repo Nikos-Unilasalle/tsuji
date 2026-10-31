@@ -109,3 +109,51 @@ export function positionAt(layout: BankLayout, step: number): { position: number
   }
   return { position: lo, pattern: layout.list[lo], row: g - layout.starts[lo] };
 }
+
+// ── Editing (the Order List HUD) ───────────────────────────────────────────
+
+/** An order as the node's text: two digits a number, as a tracker shows them. */
+export function formatOrder(list: readonly number[]): string {
+  return list.map((n) => String(n).padStart(2, "0")).join(" ");
+}
+
+/** The order with position i set to `pattern` (kept in 0 … MAX_ORDER − 1). */
+export function setOrderAt(list: readonly number[], i: number, pattern: number): number[] {
+  return list.map((n, k) => (k === i ? Math.min(MAX_ORDER - 1, Math.max(0, Math.round(pattern))) : n));
+}
+
+/** The order with `pattern` inserted at position i (the end, past it). */
+export function insertOrderAt(list: readonly number[], i: number, pattern: number): number[] {
+  if (list.length >= MAX_ORDER) return [...list];
+  const at = Math.min(list.length, Math.max(0, i));
+  return [...list.slice(0, at), Math.min(MAX_ORDER - 1, Math.max(0, Math.round(pattern))), ...list.slice(at)];
+}
+
+/** The order without position i; an order keeps at least one position. */
+export function removeOrderAt(list: readonly number[], i: number): number[] {
+  if (list.length <= 1) return [...list];
+  return list.filter((_, k) => k !== i);
+}
+
+/** The first pattern number the order does not use yet. */
+export function unusedPattern(list: readonly number[]): number {
+  const used = new Set(list);
+  let n = 0;
+  while (used.has(n)) n++;
+  return n;
+}
+
+/**
+ * The Own Lengths text with pattern `pattern`'s length set: `steps` — or cleared back to the Pattern Length when it
+ * equals it (0). Trailing zeros are dropped.
+ */
+export function setOwnLength(lengthsText: string, pattern: number, steps: number, length: number): string {
+  const own = String(lengthsText ?? "")
+    .split(/[\s,;]+/)
+    .filter((w) => w !== "")
+    .map((w) => Math.max(0, Math.round(Number(w) || 0)));
+  while (own.length <= pattern) own.push(0);
+  own[pattern] = steps === length ? 0 : Math.max(1, Math.round(steps));
+  while (own.length > 0 && own[own.length - 1] === 0) own.pop();
+  return own.join(" ");
+}

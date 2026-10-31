@@ -34,8 +34,9 @@ import { RIG_BIPED_POSE_NODE } from "../graph/nodes/bipedPose";
 import { RIG_BIPED_DANCE_NODE, type DanceInfo } from "../graph/nodes/bipedDance";
 import { DanceHud } from "./DanceHud";
 import { PatternHud } from "./PatternHud";
+import { OrderHud } from "./OrderHud";
 import { previewNote } from "../music/engine/bridge";
-import { isTrack, previewSoundOf, sequenceOf, type PreviewSound } from "../music/engine/description";
+import { clockOf, isTrack, previewSoundOf, sequenceOf, type PreviewSound } from "../music/engine/description";
 import { RIG_HUMAN_NODE } from "../graph/nodes/rig";
 import { RIG_BIPED_MOTION_NODE, type BipedGaitInfo } from "../graph/nodes/bipedMotion";
 import { PointsInfluenceHud } from "./PointsInfluenceHud";
@@ -9081,6 +9082,28 @@ export function Viewport({
               previewSound={previewSound}
               onParams={(params, nodeId) => onParamChange?.(params, nodeId)}
               onPreview={(sound, note, velocity) => previewNote(sound, note, velocity)}
+            />
+          );
+        })()}
+      {/* Music: a selected Order List is edited as a tracker's order list (see OrderHud.tsx) */}
+      {!outputMode &&
+        !elevationView &&
+        selectedNodeId &&
+        (() => {
+          const orderNode = graph.nodes.find((n) => n.id === selectedNodeId && n.type === "music/order");
+          if (!orderNode) return null;
+          const out = graph.nodes.find((n) => n.type === "music/out");
+          return (
+            <OrderHud
+              node={orderNode}
+              readClock={() => clockOf(latestResultsRef.current?.get(orderNode.id)?.clock)}
+              readPlayhead={() => {
+                const render = renderNodeIdRef.current ? latestResultsRef.current?.get(renderNodeIdRef.current) : undefined;
+                return { frame: Math.max(0, currentFrameRef.current), fps: typeof render?.fps === "number" ? (render.fps as number) : 30 };
+              }}
+              startFrame={Math.round(Number(out?.params.startFrame ?? 0)) || 0}
+              onParams={(params, nodeId) => onParamChange?.(params, nodeId)}
+              onSeek={(frame) => onFrameChange?.(frame)}
             />
           );
         })()}

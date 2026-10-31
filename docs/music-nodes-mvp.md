@@ -594,3 +594,20 @@ Pas de sampler : tsuji reste un synthé. Pour les morceaux de tracker (et pour l
 Un `--map` peut demander un preset précis : `{"kind": "gb", "preset": "Wave · Organ"}`.
 
 Disco Beef en Game Boy se rend à **3,5 % du temps réel** en Node (contre 19 % en FM), niveau moyen 0,19, crête 0,97 (`--master 0.4`). Cybernoid : niveau moyen 0,17, crête 0,73. Les deux sont dans `music-local/` (`*_gb.tsuji`, avec un WAV du début), à côté des versions FM.
+
+### Le HUD de l'Order List (2026-10-31)
+
+Comme la Pattern, l'Order List a sa palette dans la vue 3D (`OrderHud.tsx`) : l'order list d'un tracker.
+
+- **Une case par position.** Elle porte son numéro de pattern ; un même numéro a toujours la même couleur, ce qui montre les répétitions d'un coup d'œil. La position qui joue s'allume pendant la lecture.
+- **Souris** : un clic choisit une position, un double-clic y met la tête de lecture.
+- **Clavier**, une fois la liste cliquée :
+  - ← → choisit la position ;
+  - ↑ ↓ (ou − +) change le numéro ;
+  - deux chiffres tapés à la suite en font un (0 puis 7 : 07) ;
+  - Entrée répète la position après elle ;
+  - ⌫ la retire ;
+  - N lui donne un numéro qu'aucune position n'utilise ;
+  - Espace lit à partir d'elle.
+- **La barre du bas** règle la longueur, en pas, du numéro choisi. Elle vaut pour toutes les pistes, et une longueur égale à la longueur par défaut s'efface d'elle-même. Elle porte aussi les boutons Répéter, Nouveau, Retirer et Lire d'ici.
+- Chaque édition réécrit le texte `order` (ou `lengths`) du node, en un seul pas d'annulation. Les fonctions d'édition (`setOrderAt`, `insertOrderAt`, `removeOrderAt`, `unusedPattern`, `setOwnLength`) sont dans `seq/order.ts`, testées.
