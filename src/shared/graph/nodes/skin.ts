@@ -498,6 +498,7 @@ export const SKIN_NODE: NodeDefinition = {
     stretch: false,
     rebind: false,
     showRig: true,
+    visible: true,
     // Files from before Bind To bind at the rest pose, as they always did; new nodes at the pose when connected.
     bindTo: "rest",
     bindPose: [],
@@ -547,6 +548,7 @@ export const SKIN_NODE: NodeDefinition = {
     },
     { id: "stretch", label: "Stretch Bones", kind: "boolean", group: "Skin" },
     { id: "showRig", label: "Show Rig", kind: "boolean", group: "Skin" },
+    { id: "visible", label: "Visible", kind: "boolean", group: "Skin" },
     {
       id: "weightsFrom",
       label: "Weights",
@@ -839,6 +841,7 @@ export const SKIN_NODE: NodeDefinition = {
     // While painting, the viewport shows the joint's map instead.
     const heat = toBoolean(params.showWeights) && !toBoolean(params.weightPaintMode) && !ctx.capturing && selected >= 0 && selected < rig.pose.length;
     syncHeat(meshes, heat ? selected : -1, `${state.key}|${state.paintVersion}`);
+    state.object.visible = toBoolean(params.visible ?? true);
     state.object.userData = {
       ...raw.userData,
       nodeId: ctx.nodeId,

@@ -106,7 +106,7 @@ export const VIRTUAL_INTERFACE_NODE: NodeDefinition = {
   category: "io",
   inputs: [],
   outputs: [],
-  defaultParams: { title: "Live", show: true, accent: "theme", size: "M", ranges: {}, linked: {} },
+  defaultParams: { title: "Live", show: true, accent: "theme", size: "M", ranges: {}, linked: {}, names: {}, order: [], placement: {}, sections: [] },
   paramFields: [
     { id: "title", label: "Title", kind: "text" },
     { id: "show", label: "Show in the 3D view (pin params from the panel to add controls)", kind: "boolean" },
@@ -135,4 +135,77 @@ export function linkedVector(start: Record<ViAxis, number>, axis: ViAxis, next: 
   const out = { ...start };
   for (const k of axes) out[k] = k === axis ? next : start[k] + delta;
   return out;
+}
+
+/** The name given to a part or a control in edit mode — keyed by node id for a part, "nodeId:paramId" for a control —
+ * or null when none was set (or it is blank). */
+export function storedName(names: unknown, key: string): string | null {
+  const n = names && typeof names === "object" ? (names as Record<string, unknown>)[key] : undefined;
+  return typeof n === "string" && n.trim() ? n.trim() : null;
+}
+
+/** `keys` in the order saved in `order` (a list of keys); keys it does not list keep their own order, after the listed ones. */
+export function sortByOrder<T>(items: T[], keyOf: (item: T) => string, order: unknown): T[] {
+  const list = Array.isArray(order) ? order.map(String) : [];
+  const rank = (item: T) => {
+    const i = list.indexOf(keyOf(item));
+    return i < 0 ? Infinity : i;
+  };
+  return items
+    .map((item, i) => ({ item, i }))
+    .sort((a, b) => rank(a.item) - rank(b.item) || a.i - b.i)
+    .map((x) => x.item);
+}
+
+/** `keys` with `moved` taken out and put just before `target` (at the end when target is null). */
+export function moveBefore(keys: string[], moved: string, target: string | null): string[] {
+  if (moved === target) return keys;
+  const rest = keys.filter((k) => k !== moved);
+  const at = target === null ? rest.length : rest.indexOf(target);
+  rest.splice(at < 0 ? rest.length : at, 0, moved);
+  return rest;
+}
+
+export interface ViCell {
+  key: string;
+  /** The section it sits in until moved: its own node's. */
+  home: string;
+}
+export interface ViSection {
+  id: string;
+  keys: string[];
+}
+
+/** The sections to draw: a cell sits in the section `placement` gives it (its home when that section is gone), cells
+ * and sections follow `order`. A home section with no cell left disappears; a custom one (`custom`) stays. */
+export function layoutSections(cells: ViCell[], placement: unknown, custom: unknown, order: unknown): ViSection[] {
+  const place = placement && typeof placement === "object" ? (placement as Record<string, unknown>) : {};
+  const customIds = Array.isArray(custom) ? custom.map(String) : [];
+  const valid = new Set([...customIds, ...cells.map((c) => c.home)]);
+  const byId = new Map<string, string[]>(customIds.map((id) => [id, []]));
+  for (const c of cells) {
+    const want = place[c.key];
+    const id = typeof want === "string" && valid.has(want) ? want : c.home;
+    if (!byId.has(id)) byId.set(id, []);
+    byId.get(id)!.push(c.key);
+  }
+  const sections = Array.from(byId.entries()).map(([id, keys]) => ({ id, keys: sortByOrder(keys, (k) => k, order) }));
+  return sortByOrder(sections, (s) => s.id, order);
+}
+
+/** The params a drop changes: `moved` (a control) goes into `section`, just before `before` (the end when null). */
+export function moveControl(
+  cells: ViCell[],
+  params: { placement?: unknown; sections?: unknown; order?: unknown },
+  moved: string,
+  section: string,
+  before: string | null,
+): { placement: Record<string, string>; order: string[] } {
+  const layout = layoutSections(cells, params.placement, params.sections, params.order);
+  const members = (layout.find((s) => s.id === section)?.keys ?? []).filter((k) => k !== moved);
+  const at = before === null ? -1 : members.indexOf(before);
+  members.splice(at < 0 ? members.length : at, 0, moved);
+  const order = (Array.isArray(params.order) ? params.order.map(String) : []).filter((k) => k !== moved && !members.includes(k));
+  const place = params.placement && typeof params.placement === "object" ? (params.placement as Record<string, string>) : {};
+  return { placement: { ...place, [moved]: section }, order: [...order, ...members] };
 }

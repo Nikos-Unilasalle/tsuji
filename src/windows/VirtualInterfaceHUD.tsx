@@ -13,6 +13,11 @@ import {
   ViSize,
   defaultRange,
   linkedVector,
+  ViCell,
+  layoutSections,
+  moveBefore,
+  moveControl,
+  storedName,
   vectorAxisRange,
   rangeKey,
   storedRange,
@@ -22,6 +27,7 @@ import { ColorPickerInput } from "./ColorPickerInput";
 import { Knob, Selector, Switch } from "./LiveControls";
 import "./virtual-interface.css";
 
+type DropAt = { section: string | null; before: string | null };
 type OnParamChange = (paramId: string | Record<string, unknown>, value?: unknown, targetNodeId?: string, options?: { coalesce?: boolean }) => void;
 
 /**
@@ -52,7 +58,7 @@ export function VirtualInterfaceHUD({
   const [editing, setEditing] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
-
+  
   useEffect(() => {
     if (!fullscreen) return;
     const onKey = (e: KeyboardEvent) => {
@@ -73,36 +79,94 @@ export function VirtualInterfaceHUD({
   const setRange = (key: string, r: ViRange) => onParamChange({ ranges: { ...ranges, [key]: r } }, node.id);
   const linked = (p.linked && typeof p.linked === "object" ? p.linked : {}) as Record<string, unknown>;
   const setLinked = (key: string, on: boolean) => onParamChange({ linked: { ...linked, [key]: on } }, node.id);
+  const names = (p.names && typeof p.names === "object" ? p.names : {}) as Record<string, unknown>;
+  const rename = (key: string, text: string) => {
+    const next = { ...names };
+    if (text.trim()) next[key] = text.trim();
+    else delete next[key];
+    onParamChange({ names: next }, node.id);
+  };
+  const order = Array.isArray(p.order) ? p.order.map(String) : [];
+  const customSections = Array.isArray(p.sections) ? p.sections.map(String) : [];
+  // Dragging is by pointer, not HTML5 drag-and-drop, which the desktop webview swallows. `over` is where a drop would land.
+  const [over, setOver] = useState<DropAt | null>(null);
+  const cellsRef = useRef<ViCell[]>([]);
+  const startDrag = (e: React.PointerEvent, moved: string, isSection: boolean) => {
+    e.preventDefault();
+    let at: DropAt | null = null;
+    const find = (ev: PointerEvent): DropAt | null => {
+      const el = document.elementFromPoint(ev.clientX, ev.clientY);
+      if (!el) return null;
+      if (!isSection) {
+        if ((el as HTMLElement).closest("[data-vi-new]")) return { section: null, before: null };
+        const cell = (el as HTMLElement).closest<HTMLElement>("[data-vi-cell]");
+        if (cell && cell.dataset.viCell !== moved) return { section: cell.dataset.viSection!, before: cell.dataset.viCell! };
+      }
+      const sec = (el as HTMLElement).closest<HTMLElement>("[data-vi-group]");
+      if (sec && sec.dataset.viGroup !== moved) return { section: sec.dataset.viGroup!, before: null };
+      return null;
+    };
+    const move = (ev: PointerEvent) => setOver((at = find(ev)));
+    const up = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      setOver(null);
+      if (at) drop(moved, isSection, at);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  };
+  const drop = (moved: string, isSection: boolean, at: DropAt) => {
+    if (isSection) {
+      if (!at.section) return;
+      const ids = layoutSections(cellsRef.current, p.placement, customSections, order).map((s) => s.id);
+      onParamChange({ order: [...order.filter((k) => !ids.includes(k)), ...moveBefore(ids, moved, at.section)] }, node.id);
+    } else if (at.section === null) {
+      const id = `part-${Date.now().toString(36)}`;
+      const moves = moveControl(cellsRef.current, { ...p, sections: [...customSections, id] }, moved, id, null);
+      onParamChange({ sections: [...customSections, id], names: { ...names, [id]: "New part" }, ...moves }, node.id);
+    } else {
+      onParamChange(moveControl(cellsRef.current, p, moved, at.section, at.before), node.id);
+    }
+  };
+  const removeSection = (id: string) => {
+    const { [id]: _gone, ...rest } = names;
+    onParamChange({ sections: customSections.filter((s) => s !== id), names: rest }, node.id);
+  };
+  const grip = (key: string, isSection = false) => (
+    <span className="vi-grip" title="Drag to move" onPointerDown={(e) => startDrag(e, key, isSection)}>
+      ⠿
+    </span>
+  );
   const frame = keyframesEnabled ? currentFrame : undefined;
 
   const refs = graph.exposedParams ?? [];
-  const byNode = new Map<string, typeof refs>();
-  for (const ref of refs) {
-    if (!byNode.has(ref.nodeId)) byNode.set(ref.nodeId, []);
-    byNode.get(ref.nodeId)!.push(ref);
-  }
-
-  const groups = Array.from(byNode.entries()).map(([nodeId, nodeRefs]) => {
+  const homeNames = new Map<string, string>();
+  const cells = (graph.exposedParams ?? []).flatMap((ref) => {
+    const nodeId = ref.nodeId;
     const found = findNodeWithGraph(graph, nodeId);
-    if (!found) return null;
+    if (!found) return [];
     const { instance, graph: owningGraph } = found;
     const def = resolveDefinition(instance, registry);
-    if (!def) return null;
+    if (!def) return [];
     const fields = def.dynamicParamFields
       ? def.dynamicParamFields(instance, owningGraph.connections.filter((c) => c.toNode === nodeId || c.fromNode === nodeId))
       : (def.paramFields ?? []);
     const values = paramPanelValues(owningGraph, instance, def, evaluatedResults, frame);
     const wired = connectedSocketIds(owningGraph, nodeId);
-    const name = String(instance.params.name ?? "") || def.label;
-
-    const controls = nodeRefs.map((ref) => {
+    const homeName = String(instance.params.name ?? "") || def.label;
+    homeNames.set(nodeId, homeName);
+    const nodeRefs = [ref];
+    const sectionOf = (key: string, home: string) => layoutSections([{ key, home }], p.placement, customSections, order)[0]?.id ?? home;
+    return nodeRefs.flatMap((ref) => {
       const field = fields.find((f) => f.id === ref.paramId) as ParamFieldDef | undefined;
-      if (!field) return null;
-      const label = ref.label ?? field.label.replace(/\s*[(—].*$/, "");
+      if (!field) return [];
+      const key = rangeKey(nodeId, field.id);
+      const own = ref.label ?? field.label.replace(/\s*[(—].*$/, "");
+      const label = storedName(names, key) ?? own;
       const disabled = wired.has(field.id);
       const title = `${def.label} · ${field.label}${disabled ? " — wired: the wire sets it" : ""}`;
       const set = (v: unknown) => onParamChange(field.id, v, nodeId);
-      const key = rangeKey(nodeId, field.id);
       const unpin = editing && onUnpin && (
         <button type="button" className="vi-unpin" title="Unpin" onClick={() => onUnpin(nodeId, field.id)}>
           ×
@@ -186,25 +250,44 @@ export function VirtualInterfaceHUD({
         );
       }
       return (
-        <div className="vi-cell" key={field.id}>
+        { key, home: nodeId, homeName, node: (
+        <div className={`vi-cell${over?.before === key ? " vi-over" : ""}`} key={key} data-vi-cell={key} data-vi-section={sectionOf(key, nodeId)}>
           {unpin}
+          {editing && grip(key)}
           {control}
+          {editing && <NameEditor value={label} placeholder={own} onChange={(t) => rename(key, t)} />}
         </div>
+        ) }
       );
     });
-    return (
-      <section className="vi-group" key={nodeId}>
-        <header>{name}</header>
-        <div className="vi-row">{controls}</div>
-      </section>
-    );
   });
+  cellsRef.current = cells;
+  const layout = layoutSections(cells, p.placement, customSections, order);
+  const nodeOf = new Map(cells.map((c) => [c.key, c.node]));
+  const groups = layout.map((sec) => (
+    <section className={`vi-group${over?.section === sec.id && !over.before ? " vi-over" : ""}`} key={sec.id} data-vi-group={sec.id}>
+      <header>
+        {editing && grip(sec.id, true)}
+        {editing ? (
+          <NameEditor value={storedName(names, sec.id) ?? homeNames.get(sec.id) ?? "New part"} placeholder={homeNames.get(sec.id) ?? "New part"} onChange={(t) => rename(sec.id, t)} />
+        ) : (
+          storedName(names, sec.id) ?? homeNames.get(sec.id) ?? "New part"
+        )}
+        {editing && customSections.includes(sec.id) && sec.keys.length === 0 && (
+          <button type="button" className="vi-unpin vi-part-del" title="Remove this part" onClick={() => removeSection(sec.id)}>
+            ×
+          </button>
+        )}
+      </header>
+      <div className="vi-row">{sec.keys.map((k) => nodeOf.get(k))}</div>
+    </section>
+  ));
 
   return (
     <div className={`vi-panel${fullscreen ? " vi-fullscreen" : ""}`} style={{ ["--vi-accent" as string]: accent }}>
       <div className="vi-titlebar">
         <span className="vi-title">{String(p.title ?? "") || "Virtual Interface"}</span>
-        <button type="button" className={editing ? "vi-on" : ""} title="Edit: knob ranges, unpin" onClick={() => setEditing((v) => !v)}>
+        <button type="button" className={editing ? "vi-on" : ""} title="Edit: rename, move, knob ranges, unpin" onClick={() => setEditing((v) => !v)}>
           ✎
         </button>
         <button type="button" title={fullscreen ? "Leave (Esc)" : "Fill the window, for playing live"} onClick={() => setFullscreen((v) => !v)}>
@@ -219,6 +302,11 @@ export function VirtualInterfaceHUD({
       {(!collapsed || fullscreen) && (
         <div className="vi-body">
           {refs.length === 0 ? <p className="vi-empty">Pin params from the param panel (the pin beside each one) to play them here.</p> : groups}
+          {editing && refs.length > 0 && (
+            <div className={`vi-new-part${over && over.section === null ? " vi-over" : ""}`} data-vi-new>
+              Drop here for a new part
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -327,6 +415,24 @@ function VectorModule({
         <span className="vi-label">{label}</span>
       </div>
     </div>
+  );
+}
+
+/** A name to type over: kept on Enter or when it loses focus; blank goes back to the default. */
+function NameEditor({ value, placeholder, onChange }: { value: string; placeholder: string; onChange: (text: string) => void }) {
+  return (
+    <input
+      key={value}
+      className="vi-name"
+      defaultValue={value}
+      placeholder={placeholder}
+      aria-label="Name"
+      onKeyDown={(e) => {
+        e.stopPropagation();
+        if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+      }}
+      onBlur={(e) => e.target.value.trim() !== value && onChange(e.target.value)}
+    />
   );
 }
 

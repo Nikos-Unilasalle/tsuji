@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { defaultRange, dragValue, knobFraction, labelRange, linkedVector, storedRange, vectorAxisRange } from "./virtualInterface";
+import { defaultRange, dragValue, knobFraction, labelRange, linkedVector, moveBefore, sortByOrder, storedName, layoutSections, moveControl, storedRange, vectorAxisRange } from "./virtualInterface";
 
 describe("Virtual Interface knobs", () => {
   it("guesses a range from the value", () => {
@@ -53,5 +53,44 @@ describe("Virtual Interface knobs", () => {
     expect(vectorAxisRange(0, { label: "Location" })).toEqual([-5, 5]);
     expect(vectorAxisRange(12, { label: "Location" })).toEqual([-50, 50]);
     expect(vectorAxisRange(30, { label: "Rotation (°)", degrees: true })).toEqual([-180, 180]);
+  });
+});
+
+describe("Virtual Interface names and order", () => {
+  it("reads a stored name, ignoring blanks", () => {
+    expect(storedName({ a: " Lead " }, "a")).toBe("Lead");
+    expect(storedName({ a: "  " }, "a")).toBeNull();
+    expect(storedName(undefined, "a")).toBeNull();
+  });
+  it("sorts by saved order, unlisted keys last in their own order", () => {
+    expect(sortByOrder(["a", "b", "c", "d"], (k) => k, ["c", "a"])).toEqual(["c", "a", "b", "d"]);
+    expect(sortByOrder(["a", "b"], (k) => k, undefined)).toEqual(["a", "b"]);
+  });
+  it("moves a key before another, or to the end", () => {
+    expect(moveBefore(["a", "b", "c"], "c", "a")).toEqual(["c", "a", "b"]);
+    expect(moveBefore(["a", "b", "c"], "a", null)).toEqual(["b", "c", "a"]);
+  });
+});
+
+describe("Virtual Interface sections", () => {
+  const cells = [
+    { key: "a:x", home: "a" },
+    { key: "a:y", home: "a" },
+    { key: "b:x", home: "b" },
+  ];
+  it("groups by home node by default", () => {
+    expect(layoutSections(cells, {}, [], [])).toEqual([
+      { id: "a", keys: ["a:x", "a:y"] },
+      { id: "b", keys: ["b:x"] },
+    ]);
+  });
+  it("moves a control across sections, before a sibling", () => {
+    const m = moveControl(cells, {}, "b:x", "a", "a:y");
+    expect(layoutSections(cells, m.placement, [], m.order)).toEqual([{ id: "a", keys: ["a:x", "b:x", "a:y"] }]);
+  });
+  it("keeps an empty custom section", () => {
+    expect(layoutSections(cells, {}, ["p1"], [])).toContainEqual({ id: "p1", keys: [] });
+    const m = moveControl(cells, { sections: ["p1"] }, "a:x", "p1", null);
+    expect(layoutSections(cells, m.placement, ["p1"], m.order).find((s) => s.id === "p1")?.keys).toEqual(["a:x"]);
   });
 });

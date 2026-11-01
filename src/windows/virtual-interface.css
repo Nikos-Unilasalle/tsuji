@@ -460,3 +460,61 @@
 .vi-fullscreen .vi-group + .vi-group {
   padding-top: 24px;
 }
+
+/* Edit mode: a grip to drag a part or a control by, a name to type over, and where a drop will land. */
+.vi-grip {
+  cursor: grab;
+  opacity: 0.6;
+  user-select: none;
+  font-size: 11px;
+  line-height: 1;
+  padding: 0 3px;
+}
+
+.vi-grip:hover {
+  opacity: 1;
+}
+
+.vi-name {
+  width: 72px;
+  font: inherit;
+  font-size: 10px;
+  text-align: center;
+  color: var(--vi-text);
+  background: color-mix(in srgb, var(--vi-text) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--vi-text) 20%, transparent);
+  border-radius: 3px;
+  padding: 1px 3px;
+}
+
+.vi-group header .vi-name {
+  width: 140px;
+  text-align: left;
+  text-transform: none;
+  margin-left: 4px;
+}
+
+.vi-over {
+  outline: 1px dashed var(--vi-accent);
+  outline-offset: 2px;
+}
+
+.vi-new-part {
+  margin-top: 8px;
+  padding: 6px;
+  font-size: 10px;
+  text-align: center;
+  color: var(--vi-muted);
+  border: 1px dashed color-mix(in srgb, var(--vi-text) 25%, transparent);
+  border-radius: 4px;
+}
+
+.vi-part-del {
+  position: static;
+  display: inline-block;
+  margin-left: 6px;
+}
+
+.vi-grip {
+  touch-action: none;
+}
