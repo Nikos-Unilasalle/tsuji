@@ -19,7 +19,7 @@ import {
   skinVertices,
 } from "../ik/skinning";
 import { PosedDualQuats, poseDualQuats, skinVerticesDualQuat } from "../ik/dualQuat";
-import { importSkinWeights, mapImportedBones, readImportedSkeleton } from "../ik/importedSkin";
+import { importedPivots, importSkinWeights, mapImportedBones, readImportedSkeleton } from "../ik/importedSkin";
 import { applyPaintLayer, cloneSkin, jointWeight, mirrorJoints, mirrorSkinWeights, mirrorVertices, PaintLayer, readPaintLayer, VertexMirror } from "../ik/weightPaint";
 import { applyWeightTargets, mapKey, mirrorTargets, parseMapKey, readTargets, StoredTarget, storeTarget, toBytes, WeightTargets } from "../ik/weightMaps";
 import { getTexturePaintState } from "./texturePaint";
@@ -104,6 +104,8 @@ interface SkinState {
   bones?: SkinBone[];
   object?: THREE.Object3D;
   posed?: PosedBones;
+  /** Weights From the model file: where its bones turn, at the file's joints (see importedPivots). */
+  pivots?: THREE.Vector3[];
   /** Dual Quaternion blend: the bones' rigid motions, posed with the matrices. */
   dualQuats?: PosedDualQuats;
   bounds?: SkinBounds;
@@ -448,15 +450,17 @@ function makeOutput(source: THREE.Mesh, geometry: THREE.BufferGeometry, mode: Mo
 }
 
 /**
- * The weights `source` carries from its file, handed to this Skin's bones;
- * null when it carries none (then the automatic weights stand in).
+ * The weights `source` carries from its file, handed to this Skin's bones,
+ * and where those bones should turn to match (the file's joints, see
+ * importedPivots); null when it carries none (then the automatic weights stand in).
  */
-function fileWeights(source: THREE.Mesh, frame: THREE.Matrix4, joints: THREE.Vector3[], rig: ResolvedRig, influences: number): SkinWeights | null {
+function fileWeights(source: THREE.Mesh, frame: THREE.Matrix4, joints: THREE.Vector3[], rig: ResolvedRig, influences: number, bones: SkinBone[]): { weights: SkinWeights; pivots: THREE.Vector3[] } | null {
   if (!(source instanceof THREE.SkinnedMesh) || !source.skeleton || !source.geometry.attributes.skinIndex) return null;
   const skeleton = readImportedSkeleton(source);
   const positions = skeleton.positions.map((p) => p.clone().applyMatrix4(frame));
   const boneMap = mapImportedBones(skeleton, positions, { parents: rig.parents, joints, names: rig.names });
-  return importSkinWeights(source.geometry, boneMap, influences);
+  const weights = importSkinWeights(source.geometry, boneMap, influences);
+  return weights ? { weights, pivots: importedPivots(positions, boneMap, bones.map((b) => b.head)) } : null;
 }
 
 export const SKIN_NODE: NodeDefinition = {
@@ -662,15 +666,17 @@ export const SKIN_NODE: NodeDefinition = {
       const bones = buildBones(rig.parents, restInSpace);
       state.bones = bones;
       state.mode = mode;
+      state.pivots = undefined;
       state.jointMirror = mirrorJoints(rig.rest, rig.names);
       state.mirrorSpace = rigSpace ? new THREE.Matrix4() : rig.matrix.clone().invert();
       state.meshes = sources.map((source, i) => {
         const geometry = source.geometry.clone();
         const position = geometry.attributes.position as THREE.BufferAttribute;
         const normal = geometry.attributes.normal as THREE.BufferAttribute | undefined;
-        const auto =
-          (fromFile && fileWeights(source, frames[i], restInSpace, rig, influences)) ||
-          computeSkinWeights(position.array, source.geometry.getIndex()?.array ?? null, frames[i], bones, weightOptions);
+        const imported = fromFile ? fileWeights(source, frames[i], restInSpace, rig, influences, bones) : null;
+        // One rig for every mesh: the first file skeleton sets where the bones turn.
+        if (imported && !state!.pivots) state!.pivots = imported.pivots;
+        const auto = imported?.weights ?? computeSkinWeights(position.array, source.geometry.getIndex()?.array ?? null, frames[i], bones, weightOptions);
         // The paint goes on below; until then the automatic weights.
         const skin = cloneSkin(auto);
         // Material and shadow flags are taken from the source every frame, below.
@@ -727,7 +733,7 @@ export const SKIN_NODE: NodeDefinition = {
     }
     syncWeightMaps(ctx.nodeId, params);
     const bonePose = rigSpace ? rig.pose : rig.pose.map((p) => p.clone().applyMatrix4(rig.matrix));
-    const options = { stretch: toBoolean(params.stretch), amount: Math.max(0, Math.min(1, numberInput(inputs.amount, params.amount, 1))) };
+    const options = { stretch: toBoolean(params.stretch), amount: Math.max(0, Math.min(1, numberInput(inputs.amount, params.amount, 1))), pivots: state.pivots };
     const turns = boneRotations(bones, bonePose, rig.twist);
     if (dualQuat) state.dualQuats = poseDualQuats(bones, bonePose, options, turns, state.dualQuats);
 

@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { BoneRotations, boneRotations, PoseOptions, SkinBone, SkinBounds, SkinWeights } from "./skinning";
+import { BoneRotations, boneRotations, chainPivots, PoseOptions, SkinBone, SkinBounds, SkinWeights } from "./skinning";
 
 /**
  * Dual quaternion skinning: the same bones and weights as linear blend
@@ -37,13 +37,28 @@ export function poseDualQuats(bones: SkinBone[], pose: THREE.Vector3[], options:
   const q = new THREE.Quaternion();
   const head1 = new THREE.Vector3();
   const t = new THREE.Vector3();
+  const turned = bones.map((_, i) => new THREE.Quaternion().copy(IDENTITY).slerp(rotations[i], amount));
+  const posedHeadOf = (i: number) => {
+    const bone = bones[i];
+    return bone.head.clone().lerp(bone.parent >= 0 ? pose[bone.parent] : pose[bone.joint], amount);
+  };
+  // With pivots (a model's own joints): each bone turns about its pivot, carried where its parent bone takes it.
+  const pivots = options.pivots && options.pivots.length === count ? options.pivots : null;
+  const posedPivots = pivots
+    ? chainPivots(
+        bones,
+        pivots,
+        (b, posedPivot, point) => point.clone().sub(pivots[b]).applyQuaternion(turned[b]).add(posedPivot),
+        (b) => pivots[b].clone().sub(bones[b].head).applyQuaternion(turned[b]).add(posedHeadOf(b)),
+      )
+    : null;
 
   bones.forEach((bone, i) => {
-    // Turned about the rest head, which moves to the posed head: x' = R (x - h0) + h1.
-    const posedHead = bone.parent >= 0 ? pose[bone.parent] : pose[bone.joint];
-    q.copy(IDENTITY).slerp(rotations[i], amount);
-    head1.copy(bone.head).lerp(posedHead, amount);
-    t.copy(bone.head).applyQuaternion(q).negate().add(head1);
+    // Turned about the rest pivot (the head, unless pivots say otherwise), which moves to its posed place: x' = R (x - p0) + p1.
+    const from = pivots ? pivots[i] : bone.head;
+    q.copy(turned[i]);
+    head1.copy(posedPivots ? posedPivots[i] : posedHeadOf(i));
+    t.copy(from).applyQuaternion(q).negate().add(head1);
     const o = i * 8;
     out.dq[o] = q.x;
     out.dq[o + 1] = q.y;
@@ -62,9 +77,9 @@ export function poseDualQuats(bones: SkinBone[], pose: THREE.Vector3[], options:
       out.stretch[s + 1] = bone.dir.x;
       out.stretch[s + 2] = bone.dir.y;
       out.stretch[s + 3] = bone.dir.z;
-      out.stretch[s + 4] = bone.head.x;
-      out.stretch[s + 5] = bone.head.y;
-      out.stretch[s + 6] = bone.head.z;
+      out.stretch[s + 4] = from.x;
+      out.stretch[s + 5] = from.y;
+      out.stretch[s + 6] = from.z;
     }
   });
   return out;

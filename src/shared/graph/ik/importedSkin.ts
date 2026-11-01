@@ -286,3 +286,26 @@ export function importSkinWeights(geometry: THREE.BufferGeometry, boneMap: numbe
   }
   return { influences: n, indices, weights };
 }
+
+/**
+ * Where each Skin bone should turn for weights painted on the file's
+ * skeleton: at the file's own joint, the head of the file bone handed to it
+ * (the one starting nearest its head, when several are). The seam between
+ * two bones' weights lies at the file's joint; turning there keeps it joined.
+ * Bones the file gives nothing keep their head.
+ */
+export function importedPivots(filePositions: THREE.Vector3[], boneMap: number[], heads: THREE.Vector3[]): THREE.Vector3[] {
+  return heads.map((head, i) => {
+    let best: THREE.Vector3 | null = null;
+    let bestD = Infinity;
+    boneMap.forEach((to, b) => {
+      if (to !== i) return;
+      const d = filePositions[b].distanceTo(head);
+      if (d < bestD) {
+        bestD = d;
+        best = filePositions[b];
+      }
+    });
+    return (best ?? head).clone();
+  });
+}

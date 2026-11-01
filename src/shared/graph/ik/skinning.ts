@@ -92,6 +92,32 @@ export interface PoseOptions {
   stretch: boolean;
   /** 0 = rest, 1 = fully posed. */
   amount: number;
+  /**
+   * Per bone, where it turns at rest, in the bones' space, when not at its
+   * head: a model's own joints, for weights painted on its own skeleton
+   * (see importedSkin.ts). A bone then turns about its pivot, and the pivot
+   * goes where the parent bone carries it, so the seam between two bones'
+   * weights stays joined however far the joint bends.
+   */
+  pivots?: THREE.Vector3[];
+}
+
+/**
+ * Rest pivot -> posed pivot for each bone with `pivots`: a root's turns about
+ * its head like any bone, a child's goes where its parent bone takes it. `place`
+ * maps a point by a bone, given the bone's posed pivot.
+ */
+export function chainPivots(bones: SkinBone[], pivots: THREE.Vector3[], place: (bone: number, posedPivot: THREE.Vector3, point: THREE.Vector3) => THREE.Vector3, root: (bone: number) => THREE.Vector3): THREE.Vector3[] {
+  const posed: (THREE.Vector3 | undefined)[] = bones.map(() => undefined);
+  const visit = (i: number, depth = 0): THREE.Vector3 => {
+    const done = posed[i];
+    if (done) return done;
+    const p = bones[i].parent;
+    const at = p >= 0 && p !== i && depth < bones.length ? place(p, visit(p, depth + 1), pivots[i]) : root(i);
+    posed[i] = at;
+    return at;
+  };
+  return bones.map((_, i) => visit(i));
 }
 
 /** Per-bone matrices, ready for `applySkin`: 3x4 (row-major) for positions, 3x3 (row-major) for normals. */
@@ -164,24 +190,43 @@ export function poseBones(bones: SkinBone[], pose: THREE.Vector3[], frame: THREE
   const normalMatrix = new THREE.Matrix3();
   const identity = new THREE.Matrix4();
 
-  bones.forEach((bone, i) => {
-    const head1 = bone.parent >= 0 ? pose[bone.parent] : pose[bone.joint];
-    translate.makeTranslation(head1.x, head1.y, head1.z);
-    untranslate.makeTranslation(-bone.head.x, -bone.head.y, -bone.head.z);
-    rotate.makeRotationFromQuaternion(rotations[i]);
-
-    stretch.identity();
+  const stretchOf = (i: number, into: THREE.Matrix4) => {
+    into.identity();
+    const bone = bones[i];
     if (options.stretch && real[i]) {
       const length1 = pose[bone.joint].distanceTo(pose[bone.parent]);
       const k = length1 / bone.length - 1;
       const d = bone.dir;
-      stretch.set(
+      into.set(
         1 + k * d.x * d.x, k * d.x * d.y, k * d.x * d.z, 0,
         k * d.y * d.x, 1 + k * d.y * d.y, k * d.y * d.z, 0,
         k * d.z * d.x, k * d.z * d.y, 1 + k * d.z * d.z, 0,
         0, 0, 0, 1,
       );
     }
+    return into;
+  };
+  // A bone's full motion in the bones' space: turned (and stretched) about its rest pivot, which goes to `to`.
+  const motion = (i: number, from: THREE.Vector3, to: THREE.Vector3, into: THREE.Matrix4) =>
+    into.makeTranslation(to.x, to.y, to.z).multiply(new THREE.Matrix4().makeRotationFromQuaternion(rotations[i])).multiply(stretchOf(i, new THREE.Matrix4())).multiply(new THREE.Matrix4().makeTranslation(-from.x, -from.y, -from.z));
+  const headOf = (i: number) => (bones[i].parent >= 0 ? pose[bones[i].parent] : pose[bones[i].joint]);
+  const pivots = options.pivots && options.pivots.length === count ? options.pivots : null;
+  const posedPivots = pivots
+    ? chainPivots(
+        bones,
+        pivots,
+        (b, posedPivot, point) => point.clone().applyMatrix4(motion(b, pivots[b], posedPivot, new THREE.Matrix4())),
+        (b) => pivots[b].clone().sub(bones[b].head).applyQuaternion(rotations[b]).add(headOf(b)),
+      )
+    : null;
+
+  bones.forEach((bone, i) => {
+    const from = pivots ? pivots[i] : bone.head;
+    const head1 = posedPivots ? posedPivots[i] : headOf(i);
+    translate.makeTranslation(head1.x, head1.y, head1.z);
+    untranslate.makeTranslation(-from.x, -from.y, -from.z);
+    rotate.makeRotationFromQuaternion(rotations[i]);
+    stretchOf(i, stretch);
 
     // Rotation-only version, for normals (a stretch must not skew them).
     turn.copy(translate).multiply(rotate).multiply(untranslate);

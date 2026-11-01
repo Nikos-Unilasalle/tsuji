@@ -112,4 +112,36 @@ describe("dual quaternion skinning", () => {
     const d = Math.hypot(half[0], half[1] - 1, half[2]);
     expect(d).toBeCloseTo(Math.hypot(0.2, 0.5), 5);
   });
+  it("keeps a hard seam joined when the bones turn at the model's own joint (pivots)", () => {
+    // Hard weights split at y = 1.1, not at the rig's elbow (y = 1): the file's elbow sat higher.
+    const seamBelow = Float32Array.of(0.2, 1.1, 0);
+    const seamAbove = Float32Array.of(0.2, 1.1, 0);
+    const onUpper: SkinWeights = { influences: 1, indices: Uint16Array.of(1), weights: Float32Array.of(1) };
+    const onLower: SkinWeights = { influences: 1, indices: Uint16Array.of(2), weights: Float32Array.of(1) };
+    const pose = [rest[0], rest[1], v(0, 1.4, 0.9)];
+    const pivots = [rest[0].clone(), rest[0].clone(), v(0, 1.1, 0)];
+    const gap = (posed: (base: Float32Array, skin: SkinWeights) => Float32Array) => {
+      const a = posed(seamBelow, onUpper);
+      const b = posed(seamAbove, onLower);
+      return Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+    };
+    const lbs = (withPivots: boolean) => (base: Float32Array, skin: SkinWeights) => {
+      const out = new Float32Array(3);
+      skinVertices(out, base, skin, poseBones(bones, pose, new THREE.Matrix4(), { stretch: false, amount: 1, pivots: withPivots ? pivots : undefined }).pos);
+      return out;
+    };
+    const dqs = (withPivots: boolean) => (base: Float32Array, skin: SkinWeights) => {
+      const out = new Float32Array(3);
+      const dq = poseDualQuats(bones, pose, { stretch: false, amount: 1, pivots: withPivots ? pivots : undefined }, boneRotations(bones, pose));
+      skinVerticesDualQuat(out, base, skin, dq, new THREE.Matrix4());
+      return out;
+    };
+    expect(gap(lbs(false))).toBeGreaterThan(0.05);
+    expect(gap(lbs(true))).toBeLessThan(1e-5);
+    expect(gap(dqs(true))).toBeLessThan(1e-5);
+    // At rest, pivots move nothing.
+    const still = new Float32Array(3);
+    skinVertices(still, seamAbove, onLower, poseBones(bones, rest, new THREE.Matrix4(), { stretch: false, amount: 1, pivots }).pos);
+    Array.from(still).forEach((x, i) => expect(x).toBeCloseTo(seamAbove[i], 6));
+  });
 });
