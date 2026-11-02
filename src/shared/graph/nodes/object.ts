@@ -1492,6 +1492,7 @@ export const OBJECT_DISC_NODE: NodeDefinition = {
     { id: "startAngle", label: "Start Angle", type: "value" },
     { id: "arcAngle", label: "Arc Angle", type: "value" },
     { id: "depth", label: "Depth", type: "value" },
+    { id: "segments", label: "Points", type: "value" },
     ...COMMON_PRIMITIVE_INPUTS,
   ],
   outputs: [...COMMON_PRIMITIVE_OUTPUTS],
@@ -1501,6 +1502,7 @@ export const OBJECT_DISC_NODE: NodeDefinition = {
     startAngle: 0,
     arcAngle: Math.PI * 2,
     depth: 0,
+    segments: 64,
     // Spread LAST, as it always was here — which is exactly why the flat
     // default has to be this one and not a leading spread: whatever comes
     // last wins, and COMMON_DEFAULT_PARAMS would put the disc back upright.
@@ -1512,6 +1514,7 @@ export const OBJECT_DISC_NODE: NodeDefinition = {
     { id: "startAngle", label: "Start Angle (°)", kind: "number", step: 1, degrees: true },
     { id: "arcAngle", label: "Arc Angle (°)", kind: "number", step: 1, degrees: true },
     { id: "depth", label: "Depth / Relief", kind: "number", step: 0.05 },
+    { id: "segments", label: "Points (round the edge)", kind: "number", step: 1 },
   ])(),
   dynamicParamFields: buildPrimitiveDynamicParamFields([
     { id: "radius", label: "Radius", kind: "number", step: 0.05 },
@@ -1519,6 +1522,7 @@ export const OBJECT_DISC_NODE: NodeDefinition = {
     { id: "startAngle", label: "Start Angle (°)", kind: "number", step: 1, degrees: true },
     { id: "arcAngle", label: "Arc Angle (°)", kind: "number", step: 1, degrees: true },
     { id: "depth", label: "Depth / Relief", kind: "number", step: 0.05 },
+    { id: "segments", label: "Points (round the edge)", kind: "number", step: 1 },
   ]),
   evaluate: (inputs, params, ctx) => {
     const mesh = discMesh(ctx.nodeId);
@@ -1534,48 +1538,49 @@ export const OBJECT_DISC_NODE: NodeDefinition = {
     const startAngle = degreesInput(inputs, params, "startAngle", ctx, 0);
     const arcAngle = Math.max(0, Math.min(Math.PI * 2, degreesInput(inputs, params, "arcAngle", ctx, Math.PI * 2)));
     const depth = Math.max(0, numberInput(inputs.depth, params.depth, 0));
+    const segments = Math.max(3, Math.min(1024, Math.round(numberInput(inputs.segments, params.segments, 64))));
 
-    const key = `${radius}_${innerRadius}_${startAngle}_${arcAngle}_${depth}`;
+    const key = `${radius}_${innerRadius}_${startAngle}_${arcAngle}_${depth}_${segments}`;
     const lastKey = (mesh as any)._lastDiscKey;
 
     if (lastKey !== key) {
       mesh.geometry.dispose();
       if (depth === 0) {
         if (innerRadius === 0 && startAngle === 0 && arcAngle >= Math.PI * 2 - 1e-4) {
-          mesh.geometry = new THREE.CircleGeometry(radius, 64);
+          mesh.geometry = new THREE.CircleGeometry(radius, segments);
         } else {
-          mesh.geometry = new THREE.RingGeometry(innerRadius, radius, 64, 1, startAngle, arcAngle);
+          mesh.geometry = new THREE.RingGeometry(innerRadius, radius, segments, 1, startAngle, arcAngle);
         }
       } else {
         if (innerRadius === 0 && startAngle === 0 && arcAngle >= Math.PI * 2 - 1e-4) {
-          const cylGeom = new THREE.CylinderGeometry(radius, radius, depth, 64);
+          const cylGeom = new THREE.CylinderGeometry(radius, radius, depth, segments);
           cylGeom.rotateX(Math.PI / 2);
           mesh.geometry = cylGeom;
         } else {
-          const shape = new THREE.Shape();
+          // The outlines are laid point by point rather than with absarc,
+          // whose sampling doubles the count: `segments` spans per arc, as
+          // on the flat disc.
           const endAngle = startAngle + arcAngle;
           const isFullCircle = arcAngle >= Math.PI * 2 - 1e-4;
+          const arc = (r: number, from: number, to: number, closed: boolean): THREE.Vector2[] =>
+            Array.from({ length: closed ? segments : segments + 1 }, (_, k) => {
+              const a = from + ((to - from) * k) / segments;
+              return new THREE.Vector2(Math.cos(a) * r, Math.sin(a) * r);
+            });
 
-          if (innerRadius === 0 && isFullCircle) {
-            shape.absarc(0, 0, radius, 0, Math.PI * 2, false);
-          } else if (innerRadius > 0 && isFullCircle) {
-            shape.absarc(0, 0, radius, 0, Math.PI * 2, false);
-            const holePath = new THREE.Path();
-            holePath.absarc(0, 0, innerRadius, 0, Math.PI * 2, true);
-            shape.holes.push(holePath);
+          let shape: THREE.Shape;
+          if (isFullCircle) {
+            shape = new THREE.Shape(arc(radius, 0, Math.PI * 2, true));
+            if (innerRadius > 0) shape.holes.push(new THREE.Path(arc(innerRadius, Math.PI * 2, 0, true)));
           } else {
-            shape.absarc(0, 0, radius, startAngle, endAngle, false);
-            if (innerRadius > 0) {
-              shape.absarc(0, 0, innerRadius, endAngle, startAngle, true);
-            } else {
-              shape.lineTo(0, 0);
-            }
+            const outline = arc(radius, startAngle, endAngle, false);
+            outline.push(...(innerRadius > 0 ? arc(innerRadius, endAngle, startAngle, false) : [new THREE.Vector2(0, 0)]));
+            shape = new THREE.Shape(outline);
           }
 
           const extrudeGeom = new THREE.ExtrudeGeometry(shape, {
             depth,
             bevelEnabled: false,
-            curveSegments: 64,
           });
           extrudeGeom.translate(0, 0, -depth / 2);
           mesh.geometry = extrudeGeom;

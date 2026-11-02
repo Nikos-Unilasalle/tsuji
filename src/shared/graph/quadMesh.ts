@@ -898,9 +898,11 @@ export function extrudeFaces(
   selectedFaceIndices: number[],
   distance = 0.5,
   direction?: { x: number; y: number; z: number },
+  /** Build the walls even at distance 0 (an extrude cancelled in place). */
+  keepAtZero = false,
 ): { mesh: QuadMesh; newFaces: number[] } {
   const selected = validFaces(mesh, selectedFaceIndices);
-  if (selected.length === 0 || distance === 0) {
+  if (selected.length === 0 || (distance === 0 && !keepAtZero)) {
     return { mesh: cloneQuadMesh(mesh), newFaces: selected };
   }
 

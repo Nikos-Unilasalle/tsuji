@@ -177,10 +177,11 @@ export function extrudeFacesIndividual(
   faces: number[],
   distance: number,
   direction?: { x: number; y: number; z: number },
+  keepAtZero = false,
 ): { mesh: QuadMesh; newFaces: number[] } {
   let current = cloneQuadMesh(mesh);
   const valid = [...new Set(faces)].filter((f) => f >= 0 && f < mesh.faces.length).sort((a, b) => a - b);
-  for (const f of valid) current = extrudeFaces(current, [f], distance, direction).mesh;
+  for (const f of valid) current = extrudeFaces(current, [f], distance, direction, keepAtZero).mesh;
   return { mesh: current, newFaces: valid };
 }
 

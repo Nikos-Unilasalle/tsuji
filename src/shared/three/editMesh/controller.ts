@@ -390,6 +390,12 @@ export function createEditMeshController(ctx: EditMeshControllerContext) {
     centerLocal?: THREE.Vector3;
     /** Extrude's unlocked screen direction (its normal), to go back to. */
     normalAxis?: THREE.Vector2;
+    /**
+     * Cancelling keeps the extruded geometry, left in place, and its
+     * selection, as in Blender (Extrude, and the move after a vertex / edge
+     * extrude); only the amount goes.
+     */
+    keepOnCancel?: boolean;
   }
   let editModal: EditModal | null = null;
 
@@ -467,13 +473,16 @@ export function createEditMeshController(ctx: EditMeshControllerContext) {
     return modal.typed !== "" && Number.isFinite(typed) ? typed : modal.value;
   }
 
-  /** The params the tool would leave at its current amount. */
-  function editModalResult(modal: EditModal): Record<string, unknown> {
+  /** The params the tool would leave at its current amount (`keepAtZero`: a cancelled extrude, kept in place). */
+  function editModalResult(modal: EditModal, keepAtZero = false): Record<string, unknown> {
     const amount = editModalAmount(modal);
     const faces = modal.selection.faces;
     if (modal.kind === "extrude") {
       const dir = lockDirection(modal) ?? undefined;
-      const r = modal.individual ? extrudeFacesIndividual(modal.base, faces, amount, dir) : extrudeFaces(modal.base, faces, amount, dir);
+      const keep = keepAtZero && Boolean(modal.keepOnCancel);
+      const r = modal.individual
+        ? extrudeFacesIndividual(modal.base, faces, amount, dir, keep)
+        : extrudeFaces(modal.base, faces, amount, dir, keep);
       return { meshData: r.mesh, selectMode: "faces", selectedFaces: r.newFaces };
     }
     if (modal.kind === "inset") {
@@ -584,6 +593,7 @@ export function createEditMeshController(ctx: EditMeshControllerContext) {
       segments?: number;
       axis3?: "x" | "y" | "z";
       newFaces?: number[];
+      keepOnCancel?: boolean;
     } = {},
   ): boolean {
     if (target.node.type !== EDIT_MESH_NODE.type || editModal) return false;
@@ -654,6 +664,7 @@ export function createEditMeshController(ctx: EditMeshControllerContext) {
       centerLocal: center.clone(),
       normalAxis: axis.clone(),
       axisLock: null,
+      keepOnCancel: kind === "extrude" || Boolean(opts.keepOnCancel),
     };
     if (kind === "loopslide" && opts.edge) {
       modal.edge = opts.edge;
@@ -756,7 +767,13 @@ export function createEditMeshController(ctx: EditMeshControllerContext) {
   function cancelEditModal() {
     if (!editModal) return;
     if (editModal.kind === "knife") editMeshPreviewLoopRef.current = null;
-    else onTransformChangeRef.current?.(editModal.nodeId, editModal.restore);
+    else if (editModal.keepOnCancel) {
+      editModal.value = 0;
+      editModal.typed = "";
+      editModal.axisLock = null;
+      editModal.moveDelta = new THREE.Vector3();
+      onTransformChangeRef.current?.(editModal.nodeId, editModalResult(editModal, true));
+    } else onTransformChangeRef.current?.(editModal.nodeId, editModal.restore);
     endEditModal();
   }
 
@@ -994,7 +1011,7 @@ export function createEditMeshController(ctx: EditMeshControllerContext) {
   /**
    * E on vertices or edges, as in Blender: vertices sprout a copy joined by an
    * edge, edges a quad each; the copies come back selected and follow the
-   * mouse. Cancelling removes them.
+   * mouse. Cancelling leaves them where they started, still selected.
    */
   function extrudeAndMove(target: EditMeshTarget, clientX: number, clientY: number): boolean {
     if (target.node.type !== EDIT_MESH_NODE.type || target.mode === "faces") return false;
@@ -1011,13 +1028,13 @@ export function createEditMeshController(ctx: EditMeshControllerContext) {
       const r = extrudeVertices(target.quadMesh, target.selection.points);
       const selection = { ...emptySelection(), points: r.newVertices };
       onTransformChangeRef.current?.(node.id, { meshData: r.mesh, selectMode: "points", selectedPoints: r.newVertices });
-      return startEditModal("move", target, clientX, clientY, { base: r.mesh, selection, mode: "points", restore });
+      return startEditModal("move", target, clientX, clientY, { base: r.mesh, selection, mode: "points", restore, keepOnCancel: true });
     }
     if (target.selection.edges.length === 0) return false;
     const r = extrudeEdges(target.quadMesh, target.selection.edges);
     const selection = { ...emptySelection(), edges: r.newEdges };
     onTransformChangeRef.current?.(node.id, { meshData: r.mesh, selectMode: "edges", selectedEdges: r.newEdges });
-    return startEditModal("move", target, clientX, clientY, { base: r.mesh, selection, mode: "edges", restore, newFaces: r.newFaces });
+    return startEditModal("move", target, clientX, clientY, { base: r.mesh, selection, mode: "edges", restore, newFaces: r.newFaces, keepOnCancel: true });
   }
 
   /** The edges Bevel / Spin / Bridge act on in any mode: the selected ones, or those of the selection. */

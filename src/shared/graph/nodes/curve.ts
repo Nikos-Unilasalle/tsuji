@@ -537,6 +537,7 @@ export const CURVE_PRIMITIVE_NODE: NodeDefinition = {
   outputs: [
     { id: "curve", label: "Curve", type: "curve" },
     { id: "geometry", label: "Curve Preview", type: "geometry" },
+    { id: "points", label: "Points", type: "list" },
   ],
   defaultParams: {
     primitiveType: "helix",
@@ -583,6 +584,14 @@ export const CURVE_PRIMITIVE_NODE: NodeDefinition = {
     const poseMatrix = composeNativeMatrix(inputs.matrix, params.location, params.rotation, params.scale, params);
     const localDown = localDownFor(poseMatrix);
 
+    // The points each shape is built through (corners for the straight-edged
+    // ones, the samples for the round ones), kept for the Points output.
+    let shapePoints: THREE.Vector3[] = [];
+    const buildShape = (pts: THREE.Vector3[], type: string, closed: boolean, tension: number, sagAmount: number, down: THREE.Vector3) => {
+      shapePoints = pts;
+      return buildPointsCurve(pts, type, closed, tension, sagAmount, down);
+    };
+
     let curve: THREE.Curve<THREE.Vector3>;
 
     if (shape === "circle") {
@@ -591,7 +600,7 @@ export const CURVE_PRIMITIVE_NODE: NodeDefinition = {
         const theta = (i / steps) * Math.PI * 2;
         pts.push(new THREE.Vector3(Math.cos(theta) * radius, 0, Math.sin(theta) * radius));
       }
-      curve = buildPointsCurve(pts, smoothType, true, 0.5, sag, localDown);
+      curve = buildShape(pts, smoothType, true, 0.5, sag, localDown);
     } else if (shape === "ellipse") {
       const rx = radius;
       const rz = height / 2 || radius;
@@ -600,7 +609,7 @@ export const CURVE_PRIMITIVE_NODE: NodeDefinition = {
         const theta = (i / steps) * Math.PI * 2;
         pts.push(new THREE.Vector3(Math.cos(theta) * rx, 0, Math.sin(theta) * rz));
       }
-      curve = buildPointsCurve(pts, smoothType, true, 0.5, sag, localDown);
+      curve = buildShape(pts, smoothType, true, 0.5, sag, localDown);
     } else if (shape === "heart") {
       const s = radius / 16;
       const pts: THREE.Vector3[] = [];
@@ -610,7 +619,7 @@ export const CURVE_PRIMITIVE_NODE: NodeDefinition = {
         const z = 13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t);
         pts.push(new THREE.Vector3(x * s, 0, z * s));
       }
-      curve = buildPointsCurve(pts, smoothType, true, 0.5, sag, localDown);
+      curve = buildShape(pts, smoothType, true, 0.5, sag, localDown);
     } else if (shape === "star") {
       const points = Math.max(3, Math.round(turns || 5));
       const inner = radius * 0.5;
@@ -620,7 +629,7 @@ export const CURVE_PRIMITIVE_NODE: NodeDefinition = {
         const theta = (i / (points * 2)) * Math.PI * 2 - Math.PI / 2;
         pts.push(new THREE.Vector3(Math.cos(theta) * r, 0, Math.sin(theta) * r));
       }
-      curve = buildPointsCurve(pts, "linear", true, 0.5, sag, localDown);
+      curve = buildShape(pts, "linear", true, 0.5, sag, localDown);
     } else if (shape === "polygon") {
       const sides = Math.max(3, Math.round(turns || 6));
       const pts: THREE.Vector3[] = [];
@@ -628,7 +637,7 @@ export const CURVE_PRIMITIVE_NODE: NodeDefinition = {
         const theta = (i / sides) * Math.PI * 2 - Math.PI / 2;
         pts.push(new THREE.Vector3(Math.cos(theta) * radius, 0, Math.sin(theta) * radius));
       }
-      curve = buildPointsCurve(pts, "linear", true, 0.5, sag, localDown);
+      curve = buildShape(pts, "linear", true, 0.5, sag, localDown);
     } else if (shape === "diamond") {
       const hw = radius;
       const hh = height / 2 || radius;
@@ -638,21 +647,21 @@ export const CURVE_PRIMITIVE_NODE: NodeDefinition = {
         new THREE.Vector3(0, 0, -hh),
         new THREE.Vector3(-hw, 0, 0),
       ];
-      curve = buildPointsCurve(pts, "linear", true, 0.5, sag, localDown);
+      curve = buildShape(pts, "linear", true, 0.5, sag, localDown);
     } else if (shape === "arch") {
       const pts: THREE.Vector3[] = [];
       for (let i = 0; i <= steps; i++) {
         const theta = (i / steps) * Math.PI;
         pts.push(new THREE.Vector3(Math.cos(theta) * radius, 0, Math.sin(theta) * radius));
       }
-      curve = buildPointsCurve(pts, smoothType, false, 0.5, sag, localDown);
+      curve = buildShape(pts, smoothType, false, 0.5, sag, localDown);
     } else if (shape === "line") {
       // Sag droops along -Y, and this segment already runs along Y — so
       // dialling it up here reparametrizes the same straight path instead
       // of bulging it. Left wired up for consistency (every primitive takes
       // the input), it just has nothing to visibly do on this one shape.
       const pts = [new THREE.Vector3(0, -height / 2, 0), new THREE.Vector3(0, height / 2, 0)];
-      curve = buildPointsCurve(pts, "linear", false, 0.5, sag, localDown);
+      curve = buildShape(pts, "linear", false, 0.5, sag, localDown);
     } else if (shape === "wave") {
       const cycles = Math.max(0.5, turns || 2);
       const pts: THREE.Vector3[] = [];
@@ -661,7 +670,7 @@ export const CURVE_PRIMITIVE_NODE: NodeDefinition = {
         const theta = t * cycles * Math.PI * 2;
         pts.push(new THREE.Vector3(Math.sin(theta) * radius, 0, -height / 2 + height * t));
       }
-      curve = buildPointsCurve(pts, smoothType, false, 0.5, sag, localDown);
+      curve = buildShape(pts, smoothType, false, 0.5, sag, localDown);
     } else if (shape === "rectangle") {
       const hw = radius;
       const hh = height / 2 || radius;
@@ -671,7 +680,7 @@ export const CURVE_PRIMITIVE_NODE: NodeDefinition = {
         new THREE.Vector3(hw, 0, hh),
         new THREE.Vector3(-hw, 0, hh),
       ];
-      curve = buildPointsCurve(pts, "linear", true, 0.5, sag, localDown);
+      curve = buildShape(pts, "linear", true, 0.5, sag, localDown);
     } else {
       // Helix / Spiral
       const stepsH = sag > 0 ? Math.max(8, Math.round(turns * 10)) : Math.max(32, Math.round(turns * 32));
@@ -682,7 +691,7 @@ export const CURVE_PRIMITIVE_NODE: NodeDefinition = {
         const y = (t - 0.5) * height;
         pts.push(new THREE.Vector3(Math.cos(theta) * radius, y, Math.sin(theta) * radius));
       }
-      curve = buildPointsCurve(pts, smoothType, false, 0.5, sag, localDown);
+      curve = buildShape(pts, smoothType, false, 0.5, sag, localDown);
     }
 
     const preview = getCurvePreviewLine(getState(ctx.nodeId), ctx.nodeId, curve);
@@ -690,7 +699,11 @@ export const CURVE_PRIMITIVE_NODE: NodeDefinition = {
 
     setCurveNodePose(ctx.nodeId, poseMatrix);
 
-    return { curve, geometry: preview };
+    // A point list carries no matrix of its own, so the gizmo's pose is baked
+    // in, as Curve to Points does.
+    const points = shapePoints.map((p) => p.clone().applyMatrix4(poseMatrix));
+
+    return { curve, geometry: preview, points };
   },
 };
 
