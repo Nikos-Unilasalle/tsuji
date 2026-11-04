@@ -808,6 +808,62 @@ export const MUSIC_ADAPTIVE_JI_NODE: NodeDefinition = {
   },
 };
 
+// ── Sections ───────────────────────────────────────────────────────────────
+
+/** A bar mask (x plays, . rests, x*4 / .*8 for runs) → one boolean per bar. */
+export function parseBars(text: string): boolean[] {
+  const bars: boolean[] = [];
+  for (const w of String(text ?? "").split(/\s+/)) {
+    const m = /^([xX1.\-0_])(?:\*(\d+))?$/.exec(w);
+    if (!m) continue;
+    const on = /[xX1]/.test(m[1]);
+    for (let k = Math.min(4096, m[2] === undefined ? 1 : Number(m[2])); k > 0; k--) bars.push(on);
+  }
+  return bars;
+}
+
+/**
+ * A sequence brought in and out by the bar, so a looping generator can have a form: it plays in the bars marked x and
+ * rests in the others, over a song as long as the mask. With Restart, each entry starts it from its first step.
+ */
+export const MUSIC_SECTIONS_NODE: NodeDefinition = {
+  type: "music/sections",
+  label: "Sections",
+  category: "music",
+  pure: true,
+  inputs: [{ id: "sequence", label: "Sequence", type: "music" }],
+  outputs: [{ id: "sequence", label: "Sequence", type: "music" }],
+  defaultParams: { bars: "x*4 .*4", barLength: 16, restart: true },
+  paramFields: [
+    { id: "bars", label: "Bars — one per bar: x plays, . rests (x*8 .*4 for runs); the song is this long", kind: "text" },
+    { id: "barLength", label: "Bar Length (steps)", kind: "number", step: 4 },
+    { id: "restart", label: "Restart at Each Entry (off: it loops on underneath)", kind: "boolean" },
+  ],
+  evaluate: (inputs, params) => {
+    const seq = sequenceOf(inputs.sequence);
+    if (!seq) return { sequence: null };
+    const bars = parseBars(String(params.bars ?? ""));
+    if (bars.length === 0) return { sequence: seqOut(seq) };
+    const bl = clamp(Math.round(Number(params.barLength) || 16), 1, 256);
+    const restart = params.restart !== false;
+    const L = Math.max(1, seq.pattern.length);
+    const total = Math.min(MAX_STEPS, bars.length * bl);
+    const steps: (Cell | null)[] = new Array(total).fill(null);
+    let entry = 0;
+    for (let i = 0; i < total; i++) {
+      const bar = Math.floor(i / bl);
+      if (!bars[bar]) {
+        // Leaving: whatever was still sounding stops at the section's end.
+        if (i % bl === 0 && bar > 0 && bars[bar - 1]) steps[i] = { note: "off" };
+        continue;
+      }
+      if (i % bl === 0 && (bar === 0 || !bars[bar - 1])) entry = i;
+      steps[i] = seq.pattern.steps[(restart ? i - entry : i) % L] ?? null;
+    }
+    return { sequence: seqOut(withSteps(seq, steps)) };
+  },
+};
+
 export const MUSIC_ALGO_NODES = [
   MUSIC_EUCLID_NODE,
   MUSIC_SHIFT_REGISTER_NODE,
@@ -824,6 +880,7 @@ export const MUSIC_ALGO_NODES = [
   MUSIC_TUNING_NODE,
   MUSIC_ADAPTIVE_JI_NODE,
   MUSIC_CHIP_ECHO_NODE,
+  MUSIC_SECTIONS_NODE,
 ];
 /** The ones that take a sequence and pass it on reworked: the Pattern HUD follows the wires through them to the voice. */
-export const MUSIC_SEQUENCE_PASS_TYPES = ["music/arp", "music/scale", "music/tuning", "music/ornament", "music/euclid", "music/voice-leading", "music/motif", "music/markov", "music/phase", "music/adaptive-ji"];
+export const MUSIC_SEQUENCE_PASS_TYPES = ["music/arp", "music/scale", "music/tuning", "music/ornament", "music/euclid", "music/voice-leading", "music/motif", "music/markov", "music/phase", "music/adaptive-ji", "music/sections"];

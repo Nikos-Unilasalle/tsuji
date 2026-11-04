@@ -13,6 +13,8 @@ import {
   MUSIC_VOICE_LEADING_NODE,
   MUSIC_ORNAMENT_NODE,
   MUSIC_SCALE_NODE,
+  MUSIC_SECTIONS_NODE,
+  parseBars,
   MUSIC_SHIFT_REGISTER_NODE,
   MUSIC_TONNETZ_NODE,
   MUSIC_TUNING_NODE,
@@ -443,5 +445,22 @@ describe("Adaptive JI", () => {
     expect(one.pattern.steps[0].ji).toBeUndefined();
     const dom = run(MUSIC_ADAPTIVE_JI_NODE, { sequence: pattern("G3:7", 1) }, { limit: "7", center: false }).sequence.seq;
     expect(notesOf(dom).map((e) => e.note)).toEqual([55, expect.closeTo(59 - 0.1369, 6), expect.closeTo(62.0196, 6), expect.closeTo(65 - 0.3117, 6)]);
+  });
+});
+
+describe("Sections", () => {
+  it("reads a bar mask, runs spelled out", () => {
+    expect(parseBars("x .*2 x*2 junk")).toEqual([true, false, false, true, true]);
+  });
+  it("plays the line in the marked bars, restarting at each entry, and stops what sounds when a section ends", () => {
+    const line = pattern("C4 D4 E4", 3);
+    const seq = run(MUSIC_SECTIONS_NODE, { sequence: line }, { bars: "x . x", barLength: 4 }).sequence.seq as Sequence;
+    expect(seq.pattern.length).toBe(12);
+    expect(noteList(seq.pattern.steps)).toEqual([60, 62, 64, 60, "off", null, null, null, 60, 62, 64, 60]);
+  });
+  it("without restart, keeps looping underneath", () => {
+    const line = pattern("C4 D4 E4", 3);
+    const seq = run(MUSIC_SECTIONS_NODE, { sequence: line }, { bars: ". x", barLength: 4, restart: false }).sequence.seq as Sequence;
+    expect(noteList(seq.pattern.steps)).toEqual([null, null, null, null, 62, 64, 60, 62]);
   });
 });
