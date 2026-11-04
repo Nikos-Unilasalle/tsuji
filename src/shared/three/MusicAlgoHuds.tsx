@@ -53,7 +53,7 @@ export function songSample(readPlayhead: () => PatternPlayhead, startFrame: numb
 export function Panel({ title, status, children }: { title: string; status: ReactNode; children: ReactNode }) {
   return (
     <div
-      className="viewport-gp-hud"
+      className="viewport-gp-hud music-hud-scroll"
       style={{
         ...HUD_PANEL_STYLE,
         border: "1px solid rgba(217, 70, 239, 0.45)",
