@@ -40,6 +40,7 @@ import {
   MUSIC_PATTERN_NODE,
 } from "./music";
 import { MUSIC_ALGO_NODES } from "./musicAlgo";
+import { withParamInputs } from "./paramInputs";
 import { RANDOM_LIST_NODE, RANDOM_MATRIX_NODE, RANDOM_VALUE_NODE, RANDOM_VECTOR_NODE } from "./random";
 import { KEYBOARD_NODE } from "./keyboard";
 import { VIRTUAL_INTERFACE_NODE } from "./virtualInterface";
@@ -616,6 +617,10 @@ export const STARTER_NODES = [
 
 // Location / Rotation / Scale sockets on every node that owns a pose — see poseSockets.ts.
 for (const def of STARTER_NODES) addPoseSockets(def);
+// Music: any number, on/off or choice param can be opened as an input from the param panel — see paramInputs.ts.
+STARTER_NODES.forEach((def, i) => {
+  if (def.category === "music") STARTER_NODES[i] = withParamInputs(def);
+});
 
 export const DEFAULT_REGISTRY = createRegistry(STARTER_NODES);
 DEFAULT_REGISTRY.set("list/distance-gradient", DISTANCE_GRADIENT_LIST_NODE);

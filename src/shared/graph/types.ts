@@ -405,6 +405,11 @@ export interface NodeDefinition {
    */
   hidden?: boolean;
   /**
+   * Params that can be opened as value inputs from the param panel (see
+   * nodes/paramInputs.ts) — set by withParamInputs, not written by hand.
+   */
+  paramInputs?: readonly string[];
+  /**
    * When present, overrides `inputs` for a specific instance based on its
    * own current connections — for a node like Merge whose socket count
    * grows as wires are added or Logic Bridge whose inputs change socket type.

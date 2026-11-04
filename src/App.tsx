@@ -3205,6 +3205,12 @@ function MainEditor() {
             new Set((graph.exposedParams ?? []).filter((e) => e.nodeId === selectedInstance.id).map((e) => e.paramId))
           }
           onToggleExposed={onToggleExposed}
+          socketable={selectedDef.paramInputs ? new Set(selectedDef.paramInputs) : undefined}
+          socketed={new Set(Array.isArray(selectedInstance.params.paramInputs) ? (selectedInstance.params.paramInputs as string[]) : [])}
+          onToggleSocket={(paramId) => {
+            const open = Array.isArray(selectedInstance.params.paramInputs) ? (selectedInstance.params.paramInputs as string[]) : [];
+            onParamChange("paramInputs", open.includes(paramId) ? open.filter((p) => p !== paramId) : [...open, paramId]);
+          }}
         />
           )}
         </WithEvaluation>
