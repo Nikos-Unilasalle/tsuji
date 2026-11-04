@@ -2,7 +2,12 @@ import { describe, expect, it } from "vitest";
 import { NodeDefinition, EvalContext } from "../types";
 import {
   MUSIC_CHIP_ECHO_NODE,
+  MUSIC_CONTOUR_NODE,
   MUSIC_EUCLID_NODE,
+  MUSIC_MARKOV_NODE,
+  MUSIC_MOTIF_NODE,
+  MUSIC_PROGRESSION_NODE,
+  MUSIC_VOICE_LEADING_NODE,
   MUSIC_ORNAMENT_NODE,
   MUSIC_SCALE_NODE,
   MUSIC_SHIFT_REGISTER_NODE,
@@ -14,7 +19,8 @@ import { euclid, tonnetzMove, voiceTriad } from "../../music/seq/generators";
 import { SCALES, scaleSpec, snapNote, stackedChord } from "../../music/seq/scales";
 import { TUNING_SYSTEMS, parseScala, tunedPitch } from "../../music/seq/tuning";
 import { ornamentParts } from "../../music/seq/ornament";
-import { Sequence, notesStartingIn } from "../../music/seq/sequencer";
+import { Cell, Sequence, notesStartingIn } from "../../music/seq/sequencer";
+import { eventsOf, parseNumeral, randomProgression, stepsOf, transformMotif, voiceChord } from "../../music/seq/compose";
 
 const ctx: EvalContext = { time: 0, step: 0, nodeId: "n1", fps: 30 };
 function run(def: NodeDefinition, inputs: Record<string, unknown> = {}, params: Record<string, unknown> = {}) {
@@ -222,5 +228,138 @@ describe("Chip Echo", () => {
   it("is the line later, softer and a little detuned", () => {
     const echo = run(MUSIC_CHIP_ECHO_NODE, { sequence: pattern("C4@1 . E4 .", 4) }, { delay: 1, level: 0.5, detune: 10 }).echo.seq;
     expect(echo.pattern.steps).toEqual([null, { note: 60.1, velocity: 0.5 }, null, { note: 64.1, velocity: 0.4 }]);
+  });
+});
+
+// ── Lot 2 ──────────────────────────────────────────────────────────────────
+
+
+const noteList = (steps: (Cell | null)[]) => steps.map((c) => (c ? (c.note === "off" ? "off" : c.note) : null));
+
+describe("events", () => {
+  it("read notes and rests with their lengths, and write them back", () => {
+    const steps = pattern("C4 . E4~1 . off . G4 .", 8).seq.pattern.steps;
+    const evs = eventsOf(steps, 8);
+    expect(evs.map((e) => [e.start, e.dur, e.cell ? e.cell.note : "rest"])).toEqual([[0, 2, 60], [2, 1, 64], [3, 3, "rest"], [6, 2, 67]]);
+    expect(noteList(stepsOf(evs, 8))).toEqual([60, null, 64, "off", null, null, 67, null]);
+  });
+});
+
+describe("Motif Transform", () => {
+  const motif = () => pattern("C4 . D4 E4 . . G4 .", 8).seq.pattern.steps;
+  const t = (op: string, extra: Record<string, unknown> = {}) =>
+    transformMotif(motif(), 8, { op: op as never, axis: NaN, repeats: 3, interval: 2, amount: 2, scale: null, ...extra });
+  it("retrograde plays it backwards, durations and all", () => {
+    expect(noteList(t("retrograde"))).toEqual([67, null, 64, null, null, 62, 60, null]);
+  });
+  it("inversion mirrors around the first note, exactly or in the scale", () => {
+    expect(noteList(t("inversion"))).toEqual([60, null, 58, 56, null, null, 53, null]);
+    expect(noteList(t("inversion", { scale: scaleSpec("major", 0) }))).toEqual([60, null, 59, 57, null, null, 53, null]);
+  });
+  it("augments, diminishes and sequences", () => {
+    expect(noteList(t("augmentation")).slice(0, 8)).toEqual([60, null, null, null, 62, null, 64, null]);
+    expect(t("augmentation")).toHaveLength(16);
+    expect(noteList(t("diminution"))).toEqual([60, 62, 64, 67]);
+    const seq = t("sequence", { repeats: 2, interval: 1, scale: scaleSpec("major", 0) });
+    expect(noteList(seq)).toEqual([60, null, 62, 64, null, null, 67, null, 62, null, 64, 65, null, null, 69, null]);
+  });
+  it("node: the motif, then its transform", () => {
+    const seq = run(MUSIC_MOTIF_NODE, { sequence: pattern("C4 D4", 2) }, { op: "retrograde" }).sequence.seq;
+    expect(noteList(seq.pattern.steps)).toEqual([60, 62, 62, 60]);
+  });
+});
+
+describe("Progression", () => {
+  it("reads numerals, qualities, accidentals and secondary dominants", () => {
+    expect(parseNumeral("I", false)).toEqual({ root: 0, chord: "maj", beats: 1 });
+    expect(parseNumeral("vi", false)).toMatchObject({ root: 9, chord: "min" });
+    expect(parseNumeral("ii7", false)).toMatchObject({ root: 2, chord: "min7" });
+    expect(parseNumeral("V7", false)).toMatchObject({ root: 7, chord: "7" });
+    expect(parseNumeral("IVmaj7:2", false)).toMatchObject({ root: 5, chord: "maj7", beats: 2 });
+    expect(parseNumeral("viiø7", false)).toMatchObject({ root: 11, chord: "m7b5" });
+    expect(parseNumeral("bVII", false)).toMatchObject({ root: 10, chord: "maj" });
+    expect(parseNumeral("V7/V", false)).toMatchObject({ root: 2, chord: "7" });
+    expect(parseNumeral("III", true)).toMatchObject({ root: 3, chord: "maj" });
+    expect(parseNumeral("xyz", false)).toBeNull();
+  });
+  it("lays the chords out with a bass", () => {
+    const { chords, bass } = run(MUSIC_PROGRESSION_NODE, {}, { root: "A", mode: "minor", numerals: "i iv V7:2", chordLength: 4 });
+    expect(chords.seq.pattern.length).toBe(16);
+    const at = (i: number) => chords.seq.pattern.steps[i];
+    expect([at(0), at(4), at(8)].map((c: any) => [c.note % 12, c.chord])).toEqual([[9, "min"], [2, "min"], [4, "7"]]);
+    expect(bass.seq.pattern.steps[0].note).toBeLessThan(at(0).note);
+  });
+  it("walks functional harmony, ending V → I", () => {
+    const p = randomProgression(8, false, true, 0.2, true, 4);
+    expect(p).toHaveLength(8);
+    expect(p[0]).toMatchObject({ root: 0, chord: "maj7" });
+    expect(p[6]).toMatchObject({ root: 7, chord: "7" });
+    expect(p[7]).toMatchObject({ root: 0 });
+    expect(randomProgression(8, true, false, 0, true, 1)[6]).toMatchObject({ root: 7, chord: "maj" }); // minor: V from the harmonic minor
+  });
+});
+
+describe("Voice Leading", () => {
+  it("moves each chord the fewest semitones, in range", () => {
+    const s = { voices: 3, low: 52, high: 76 };
+    const c = voiceChord([0, 4, 7], null, s);
+    const f = voiceChord([5, 9, 0], c, s);
+    const moved = f.reduce((a, n, i) => a + Math.abs(n - c[i]), 0);
+    expect(moved).toBeLessThanOrEqual(3); // C → F: two voices up a step or so, the common C kept
+    for (const n of [...c, ...f]) {
+      expect(n).toBeGreaterThanOrEqual(52);
+      expect(n).toBeLessThanOrEqual(76);
+    }
+  });
+  it("thins or doubles to the voice count", () => {
+    expect(voiceChord([0, 4, 7, 10], null, { voices: 3, low: 48, high: 72 }).map((n) => n % 12).sort((a, b) => a - b)).toEqual([0, 4, 10]);
+    expect(voiceChord([0, 4, 7], null, { voices: 4, low: 48, high: 72 })).toHaveLength(4);
+  });
+  it("node: voiced chords as notes, the roots as bass", () => {
+    const prog = run(MUSIC_PROGRESSION_NODE, {}, { numerals: "I IV V I", chordLength: 1 }).chords;
+    const { sequence, bass } = run(MUSIC_VOICE_LEADING_NODE, { sequence: prog }, { voices: 4 });
+    const first = sequence.seq.pattern.steps[0];
+    expect(first.chord).toBeNull();
+    expect(first.add).toHaveLength(3);
+    expect(noteList(bass.seq.pattern.steps).map((n: any) => n % 12)).toEqual([0, 5, 7, 0]);
+  });
+});
+
+describe("Markov", () => {
+  const src = () => pattern("C4 D4 E4 C4 E4 D4 C4 G4", 8);
+  it("only plays what it learned, the same on every run", () => {
+    const a = run(MUSIC_MARKOV_NODE, { source: src() }, { length: 32, seed: 3 }).sequence.seq.pattern.steps;
+    expect(a).toHaveLength(32);
+    for (const c of a) expect([60, 62, 64, 67]).toContain(c.note);
+    expect(run(MUSIC_MARKOV_NODE, { source: src() }, { length: 32, seed: 3 }).sequence.seq.pattern.steps).toEqual(a);
+  });
+  it("order 2 on a loop with no choices replays it", () => {
+    const loop = pattern("C4 D4 E4 F4", 4);
+    const out = noteList(run(MUSIC_MARKOV_NODE, { source: loop }, { order: 2, length: 8, novelty: 0 }).sequence.seq.pattern.steps);
+    expect(out).toEqual([60, 62, 64, 65, 60, 62, 64, 65]);
+  });
+  it("keeps the source's rhythm when it learns notes only", () => {
+    const s = pattern("C4 . . E4 . G4 . .", 8);
+    const out = run(MUSIC_MARKOV_NODE, { source: s }, { learn: "pitch", length: 8, seed: 1 }).sequence.seq.pattern.steps;
+    expect(out.map((c: any) => !!c)).toEqual([true, false, false, true, false, true, false, false]);
+  });
+});
+
+describe("Contour → Melody", () => {
+  it("spreads a list's values over the scale, low to high", () => {
+    const seq = run(MUSIC_CONTOUR_NODE, { values: [0, 1, 2, 3, 4] }, { steps: 5, scale: "major", root: "C", low: 60, range: 4, rhythm: "every" }).sequence.seq;
+    expect(noteList(seq.pattern.steps)).toEqual([60, 62, 64, 65, 67]);
+  });
+  it("reads an axis of points, holds repeated notes", () => {
+    const pts = [0, 0, 1, 1].map((y) => ({ x: 0, y, z: 0 }));
+    const seq = run(MUSIC_CONTOUR_NODE, { values: pts }, { steps: 4, scale: "major", low: 60, range: 7 }).sequence.seq;
+    expect(noteList(seq.pattern.steps)).toEqual([60, null, 72, null]);
+  });
+  it("samples a curve", () => {
+    const curve = { getSpacedPoints: (n: number) => Array.from({ length: n + 1 }, (_, i) => ({ x: 0, y: Math.sin((i / n) * Math.PI), z: 0 })) };
+    const seq = run(MUSIC_CONTOUR_NODE, { curve }, { steps: 9, rhythm: "every", range: 8 }).sequence.seq;
+    const n = noteList(seq.pattern.steps) as number[];
+    expect(n[4]).toBe(Math.max(...n));
+    expect(n[0]).toBe(n[8]);
   });
 });

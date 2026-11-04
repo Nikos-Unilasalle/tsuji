@@ -9,7 +9,7 @@
  *   .*N               N empty steps (a converted song's long silences)
  *   off               ends the note sounding
  *   NOTE[+NOTE…][…]   a note — more joined with + are struck with it (kick+hat) — then any of, in any order:
- *     :CHORD            a chord on it (maj min 7 9 sus dim maj7 min7 sus2 dim7 aug)
+ *     :CHORD            a chord on it (maj min 7 9 sus dim maj7 min7 sus2 dim7 aug m7b5)
  *     /N                inversion N (0–3)
  *     ^                 spread voicing
  *     @V                velocity, 0–1 — or one per note, @V,V,… (kick+hat@1,0.4: a soft hat on a loud kick)

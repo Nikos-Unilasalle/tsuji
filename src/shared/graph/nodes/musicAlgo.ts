@@ -8,6 +8,7 @@ import { parsePattern } from "../../music/seq/notation";
 import { ORNAMENT_TYPES, Ornament, OrnamentType } from "../../music/seq/ornament";
 import { PITCH_CLASSES, SCALE_NAMES, ScaleSpec, SnapMode, degreeNote, degreeOf, inScale, scaleSpec, snapNote, stackedChord } from "../../music/seq/scales";
 import { Cell, Clock, Sequence } from "../../music/seq/sequencer";
+import { MOTIF_OPS, MotifOp, contourMelody, eventsOf, markov, parseProgression, randomProgression, transformMotif, voiceLead } from "../../music/seq/compose";
 import { TUNING_SYSTEMS, TUNING_SYSTEM_NAMES, Tuning, TuningSystem, edoSystem, parseScala } from "../../music/seq/tuning";
 
 /**
@@ -441,6 +442,262 @@ export const MUSIC_CHIP_ECHO_NODE: NodeDefinition = {
   },
 };
 
-export const MUSIC_ALGO_NODES = [MUSIC_EUCLID_NODE, MUSIC_SHIFT_REGISTER_NODE, MUSIC_TONNETZ_NODE, MUSIC_ORNAMENT_NODE, MUSIC_SCALE_NODE, MUSIC_TUNING_NODE, MUSIC_CHIP_ECHO_NODE];
+// ── Progression ────────────────────────────────────────────────────────────
+
+/** The MIDI note of a pitch class near a center: in [center − 6, center + 6). */
+const near = (pc: number, center: number) => pc + 12 * Math.ceil((center - 6 - pc) / 12);
+
+export const MUSIC_PROGRESSION_NODE: NodeDefinition = {
+  type: "music/progression",
+  label: "Progression",
+  category: "music",
+  pure: true,
+  inputs: [
+    { id: "clock", label: "Clock", type: "music" },
+    { id: "seed", label: "Seed", type: "value" },
+  ],
+  outputs: [
+    { id: "chords", label: "Chords", type: "music" },
+    { id: "bass", label: "Bass", type: "music" },
+  ],
+  defaultParams: { root: "C", mode: "major", source: "written", numerals: "I vi ii7 V7", count: 8, sevenths: false, tension: 0.3, cadence: true, seed: 0, chordLength: 16, center: 60, velocity: 0.7 },
+  paramFields: [
+    ROOT_FIELD,
+    { id: "mode", label: "Key", kind: "select", options: ["major", "minor"], optionLabels: ["Major", "Minor"] },
+    { id: "source", label: "Chords", kind: "select", options: ["written", "random"], optionLabels: ["As written (numerals)", "Random walk (functional harmony)"] },
+    { id: "numerals", label: "Numerals — I vi ii7 V7 · IVmaj7 iiø7 V7/V bVII i° · :2 doubles a chord's length", kind: "text" },
+    { id: "count", label: "Chords (random walk)", kind: "number", step: 1 },
+    { id: "sevenths", label: "Sevenths (random walk)", kind: "boolean" },
+    { id: "tension", label: "Tension (random walk: 0 the usual paths · 1 anything goes)", kind: "number", step: 0.05 },
+    { id: "cadence", label: "End V → I (random walk)", kind: "boolean" },
+    { id: "seed", label: "Seed", kind: "number", step: 1 },
+    { id: "chordLength", label: "Chord Length (steps)", kind: "number", step: 4 },
+    { id: "center", label: "Center (MIDI — chord roots near it; a Voice Leading after voices them)", kind: "number", step: 1 },
+    { id: "velocity", label: "Velocity", kind: "number", step: 0.05 },
+  ],
+  evaluate: (inputs, params) => {
+    const clock = clockOf(inputs.clock) ?? DEFAULT_CLOCK;
+    const minor = params.mode === "minor";
+    const key = pcOf(params.root);
+    const chords =
+      params.source === "random"
+        ? randomProgression(clamp(Math.round(Number(params.count) || 8), 1, 256), minor, Boolean(params.sevenths), clamp(numberInput(undefined, params.tension, 0.3), 0, 1), Boolean(params.cadence), Math.round(numberInput(inputs.seed, params.seed, 0)))
+        : parseProgression(String(params.numerals ?? ""), minor);
+    const chordLength = clamp(Math.round(Number(params.chordLength) || 16), 1, 256);
+    const center = clamp(numberInput(undefined, params.center, 60), 24, 100);
+    const velocity = clamp(numberInput(undefined, params.velocity, 0.7), 0, 1);
+    const total = clamp(chords.reduce((a, c) => a + Math.max(1, Math.round(c.beats * chordLength)), 0), 1, MAX_STEPS);
+    const top: (Cell | null)[] = new Array(total).fill(null);
+    const bass: (Cell | null)[] = new Array(total).fill(null);
+    let t = 0;
+    for (const c of chords) {
+      if (t >= total) break;
+      const root = near((key + c.root) % 12, center);
+      top[t] = { note: root, chord: c.chord, velocity };
+      bass[t] = { note: near((key + c.root) % 12, center - 18), velocity };
+      t += Math.max(1, Math.round(c.beats * chordLength));
+    }
+    const seq = (steps: (Cell | null)[]): MusicValue => seqOut({ clock, pattern: { length: total, steps } });
+    return { chords: seq(top), bass: seq(bass) };
+  },
+};
+
+// ── Voice Leading ──────────────────────────────────────────────────────────
+
+export const MUSIC_VOICE_LEADING_NODE: NodeDefinition = {
+  type: "music/voice-leading",
+  label: "Voice Leading",
+  category: "music",
+  pure: true,
+  inputs: [{ id: "sequence", label: "Chords", type: "music" }],
+  outputs: [
+    { id: "sequence", label: "Voiced", type: "music" },
+    { id: "bass", label: "Bass (the roots)", type: "music" },
+  ],
+  defaultParams: { voices: 4, low: 52, high: 76 },
+  paramFields: [
+    { id: "voices", label: "Voices (notes a chord; 0 = as many as it has)", kind: "number", step: 1 },
+    { id: "low", label: "Lowest Note (MIDI)", kind: "number", step: 1 },
+    { id: "high", label: "Highest Note (MIDI)", kind: "number", step: 1 },
+  ],
+  evaluate: (inputs, params) => {
+    const seq = sequenceOf(inputs.sequence);
+    if (!seq) return { sequence: null, bass: null };
+    const { voiced, bass } = voiceLead(seq.pattern.steps, {
+      voices: clamp(Math.round(numberInput(undefined, params.voices, 4)), 0, 6),
+      low: clamp(numberInput(undefined, params.low, 52), 12, 108),
+      high: clamp(numberInput(undefined, params.high, 76), 24, 120),
+    });
+    // The voiced chords keep the source's arp (it walks the voicing); the bass is plain roots.
+    return {
+      sequence: seqOut({ ...seq, pattern: { ...seq.pattern, steps: voiced } }),
+      bass: seqOut({ ...seq, arp: null, pattern: { ...seq.pattern, steps: bass } }),
+    };
+  },
+};
+
+// ── Motif ──────────────────────────────────────────────────────────────────
+
+export const MUSIC_MOTIF_NODE: NodeDefinition = {
+  type: "music/motif",
+  label: "Motif Transform",
+  category: "music",
+  pure: true,
+  inputs: [
+    { id: "sequence", label: "Motif", type: "music" },
+    { id: "interval", label: "Interval", type: "value" },
+  ],
+  outputs: [{ id: "sequence", label: "Sequence", type: "music" }],
+  defaultParams: { op: "retrograde", output: "both", axis: -1, repeats: 3, interval: 2, amount: 2, inScale: false, scale: "major", root: "C" },
+  paramFields: [
+    {
+      id: "op",
+      label: "Transform",
+      kind: "select",
+      options: [...MOTIF_OPS],
+      optionLabels: ["Retrograde (backwards)", "Inversion (upside down)", "Retrograde inversion", "Augmentation (slower)", "Diminution (faster)", "Sequence (repeated, moved each time)", "Rotation (steps later)"],
+    },
+    { id: "output", label: "Output", kind: "select", options: ["both", "transformed"], optionLabels: ["The motif, then the transform", "The transform alone"] },
+    { id: "axis", label: "Inversion Axis (MIDI; −1 = the first note)", kind: "number", step: 1 },
+    { id: "repeats", label: "Sequence: Copies", kind: "number", step: 1 },
+    { id: "interval", label: "Sequence: Interval (semitones, or degrees in the scale)", kind: "number", step: 1 },
+    { id: "amount", label: "Augmentation / Diminution ×, Rotation steps", kind: "number", step: 1 },
+    { id: "inScale", label: "In a Scale (inversion and sequence move by its degrees)", kind: "boolean" },
+    { id: "scale", label: "Scale", kind: "select", options: SCALE_NAMES },
+    ROOT_FIELD,
+  ],
+  evaluate: (inputs, params) => {
+    const seq = sequenceOf(inputs.sequence);
+    if (!seq) return { sequence: null };
+    const L = Math.max(1, seq.pattern.length);
+    const op = (MOTIF_OPS as readonly string[]).includes(String(params.op)) ? (params.op as MotifOp) : "retrograde";
+    const axis = numberInput(undefined, params.axis, -1);
+    const out = transformMotif(seq.pattern.steps, L, {
+      op,
+      axis: axis >= 0 ? axis : NaN,
+      repeats: numberInput(undefined, params.repeats, 3),
+      interval: numberInput(inputs.interval, params.interval, 2),
+      amount: numberInput(undefined, params.amount, 2),
+      scale: params.inScale ? scaleSpec(params.scale, pcOf(params.root)) : null,
+    });
+    const steps = params.output === "transformed" ? out : [...seq.pattern.steps.slice(0, L), ...out].slice(0, MAX_STEPS);
+    return { sequence: seqOut(withSteps(seq, steps)) };
+  },
+};
+
+// ── Markov ─────────────────────────────────────────────────────────────────
+
+export const MUSIC_MARKOV_NODE: NodeDefinition = {
+  type: "music/markov",
+  label: "Markov",
+  category: "music",
+  pure: true,
+  inputs: [
+    { id: "source", label: "Learn From", type: "music" },
+    { id: "source2", label: "Learn From (2)", type: "music" },
+    { id: "novelty", label: "Novelty", type: "value" },
+    { id: "seed", label: "Seed", type: "value" },
+  ],
+  outputs: [{ id: "sequence", label: "Sequence", type: "music" }],
+  defaultParams: { order: 2, length: 64, learn: "both", novelty: 0.1, seed: 0 },
+  paramFields: [
+    { id: "order", label: "Memory (1–4 notes back: higher sounds closer to the source)", kind: "number", step: 1 },
+    { id: "length", label: "Length (steps)", kind: "number", step: 16 },
+    { id: "learn", label: "Learn", kind: "select", options: ["both", "pitch"], optionLabels: ["Notes and rhythm", "Notes only (the source's rhythm kept)"] },
+    { id: "novelty", label: "Novelty (0 faithful – 1 forgetful)", kind: "number", step: 0.05 },
+    { id: "seed", label: "Seed", kind: "number", step: 1 },
+  ],
+  evaluate: (inputs, params) => {
+    const a = sequenceOf(inputs.source);
+    const b = sequenceOf(inputs.source2);
+    const base = a ?? b;
+    if (!base) return { sequence: null };
+    const sources = [a, b].filter((x): x is Sequence => !!x).map((x) => eventsOf(x.pattern.steps, x.pattern.length));
+    const length = clamp(Math.round(Number(params.length) || 64), 1, MAX_STEPS);
+    const steps = markov(sources, {
+      order: numberInput(undefined, params.order, 2),
+      length,
+      learn: params.learn === "pitch" ? "pitch" : "both",
+      novelty: clamp(numberInput(inputs.novelty, params.novelty, 0.1), 0, 1),
+      seed: Math.round(numberInput(inputs.seed, params.seed, 0)),
+    });
+    return { sequence: seqOut(withSteps(base, steps)) };
+  },
+};
+
+// ── Contour → Melody ───────────────────────────────────────────────────────
+
+const AXES = ["x", "y", "z"] as const;
+/** Numbers from a curve (sampled along it), or a list of numbers or points (one axis of each). */
+export function contourValues(curve: unknown, list: unknown, axis: (typeof AXES)[number]): number[] {
+  const pick = (p: unknown) => (typeof p === "number" ? p : p && typeof p === "object" ? Number((p as Record<string, unknown>)[axis]) : NaN);
+  const sampler = curve as { getSpacedPoints?: (n: number) => unknown[] } | null;
+  if (sampler && typeof sampler.getSpacedPoints === "function") return sampler.getSpacedPoints(127).map(pick).filter(Number.isFinite);
+  if (Array.isArray(list)) return list.map(pick).filter(Number.isFinite);
+  return [];
+}
+
+export const MUSIC_CONTOUR_NODE: NodeDefinition = {
+  type: "music/contour",
+  label: "Contour → Melody",
+  category: "music",
+  pure: true,
+  inputs: [
+    { id: "clock", label: "Clock", type: "music" },
+    { id: "curve", label: "Curve", type: "curve" },
+    { id: "values", label: "Values or Points", type: "list" },
+    { id: "velocities", label: "Velocities (0–1)", type: "list" },
+  ],
+  outputs: [{ id: "sequence", label: "Sequence", type: "music" }],
+  defaultParams: { axis: "y", steps: 16, scale: "major pentatonic", root: "C", low: 60, range: 10, rhythm: "change", invert: false, velocity: 0.8, gate: 0 },
+  paramFields: [
+    { id: "axis", label: "Axis (of a curve or points)", kind: "select", options: [...AXES] },
+    { id: "steps", label: "Steps (the contour resampled to)", kind: "number", step: 4 },
+    { id: "scale", label: "Scale", kind: "select", options: SCALE_NAMES },
+    ROOT_FIELD,
+    { id: "low", label: "Lowest Note (MIDI — the lowest value)", kind: "number", step: 1 },
+    { id: "range", label: "Range (scale degrees up to the highest value)", kind: "number", step: 1 },
+    { id: "rhythm", label: "Rhythm", kind: "select", options: ["change", "every"], optionLabels: ["A note when the pitch changes", "A note every step"] },
+    { id: "invert", label: "Upside Down", kind: "boolean" },
+    { id: "velocity", label: "Velocity (when no list is wired)", kind: "number", step: 0.05 },
+    { id: "gate", label: "Gate (steps; 0 = until the next note)", kind: "number", step: 1 },
+  ],
+  evaluate: (inputs, params) => {
+    const axis = (AXES as readonly string[]).includes(String(params.axis)) ? (params.axis as (typeof AXES)[number]) : "y";
+    const values = contourValues(inputs.curve, inputs.values, axis);
+    const velocities = Array.isArray(inputs.velocities) ? (inputs.velocities as unknown[]).map(Number).filter(Number.isFinite) : undefined;
+    const length = clamp(Math.round(Number(params.steps) || 16), 1, MAX_STEPS);
+    const gate = Math.max(0, numberInput(undefined, params.gate, 0));
+    const steps = contourMelody(
+      values,
+      {
+        steps: length,
+        scale: scaleSpec(params.scale, pcOf(params.root)),
+        low: clamp(numberInput(undefined, params.low, 60), 0, 120),
+        range: clamp(numberInput(undefined, params.range, 10), 0, 48),
+        rhythm: params.rhythm === "every" ? "every" : "change",
+        invert: Boolean(params.invert),
+        velocity: clamp(numberInput(undefined, params.velocity, 0.8), 0, 1),
+      },
+      velocities,
+    ).map((c) => (c && gate > 0 ? { ...c, length: gate } : c));
+    return { sequence: seqOut({ clock: clockOf(inputs.clock) ?? DEFAULT_CLOCK, pattern: { length, steps } }) };
+  },
+};
+
+export const MUSIC_ALGO_NODES = [
+  MUSIC_EUCLID_NODE,
+  MUSIC_SHIFT_REGISTER_NODE,
+  MUSIC_CONTOUR_NODE,
+  MUSIC_MARKOV_NODE,
+  MUSIC_TONNETZ_NODE,
+  MUSIC_PROGRESSION_NODE,
+  MUSIC_VOICE_LEADING_NODE,
+  MUSIC_MOTIF_NODE,
+  MUSIC_ORNAMENT_NODE,
+  MUSIC_SCALE_NODE,
+  MUSIC_TUNING_NODE,
+  MUSIC_CHIP_ECHO_NODE,
+];
 /** The ones that take a sequence and pass it on reworked: the Pattern HUD follows the wires through them to the voice. */
-export const MUSIC_SEQUENCE_PASS_TYPES = ["music/arp", "music/scale", "music/tuning", "music/ornament", "music/euclid"];
+export const MUSIC_SEQUENCE_PASS_TYPES = ["music/arp", "music/scale", "music/tuning", "music/ornament", "music/euclid", "music/voice-leading", "music/motif", "music/markov"];

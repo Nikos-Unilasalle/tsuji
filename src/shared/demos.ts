@@ -718,6 +718,11 @@ export const DEMO_CATALOG: DemoCategory[] = [
         label: "Algorithms",
         description: "Music made by rules: a Tonnetz Walk's chords and bass in just intonation, a Shift Register melody ornamented and snapped to A minor pentatonic with a Chip Echo on a second Game Boy channel, and Euclidean drums in 3/8, 2/16 and 5/7 — press Play.",
       },
+      {
+        file: "demo_music_composer.tsuji",
+        label: "Composer",
+        description: "A song written by rules: Roman numerals voice-led into keys and bass, a melody read off the curve on screen and sequenced down the scale, a Markov counter-melody that learned it, Euclidean drums — press Play.",
+      },
     ],
   },
   {

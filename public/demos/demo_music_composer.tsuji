@@ -1,0 +1,480 @@
+{
+ "canvases": [
+  {
+   "nodes": [
+    {
+     "id": "clock",
+     "type": "music/clock",
+     "position": {
+      "x": 40,
+      "y": 400
+     },
+     "params": {
+      "bpm": 96,
+      "swing": 0.12,
+      "stepsPerBeat": "4"
+     }
+    },
+    {
+     "id": "prog",
+     "type": "music/progression",
+     "position": {
+      "x": 300,
+      "y": 40
+     },
+     "params": {
+      "root": "C",
+      "mode": "major",
+      "source": "written",
+      "numerals": "I vi IV V7 iii vi ii7 V7",
+      "count": 8,
+      "sevenths": true,
+      "tension": 0.3,
+      "cadence": true,
+      "seed": 0,
+      "chordLength": 16,
+      "center": 60,
+      "velocity": 0.55
+     }
+    },
+    {
+     "id": "vl",
+     "type": "music/voice-leading",
+     "position": {
+      "x": 560,
+      "y": 40
+     },
+     "params": {
+      "voices": 4,
+      "low": 52,
+      "high": 74
+     }
+    },
+    {
+     "id": "keys",
+     "type": "music/fm-voice",
+     "position": {
+      "x": 820,
+      "y": 0
+     },
+     "params": {
+      "preset": "SLOOP · RHODES",
+      "level": 0.5,
+      "pan": -0.2,
+      "reverbSend": 0.3
+     }
+    },
+    {
+     "id": "bass",
+     "type": "music/fm-voice",
+     "position": {
+      "x": 820,
+      "y": 200
+     },
+     "params": {
+      "preset": "Bass",
+      "level": 0.8,
+      "pan": 0
+     }
+    },
+    {
+     "id": "curve",
+     "type": "math/function-curve",
+     "position": {
+      "x": 40,
+      "y": 620
+     },
+     "params": {
+      "mode": "function",
+      "formula": "sin(x) + 0.5 * sin(2.3 * x)",
+      "from": -5,
+      "to": 5,
+      "samples": 200,
+      "yMin": -3,
+      "yMax": 3,
+      "progress": 1,
+      "width": 4,
+      "visible": true
+     }
+    },
+    {
+     "id": "contour",
+     "type": "music/contour",
+     "position": {
+      "x": 300,
+      "y": 420
+     },
+     "params": {
+      "axis": "y",
+      "steps": 32,
+      "scale": "major pentatonic",
+      "root": "C",
+      "low": 67,
+      "range": 8,
+      "rhythm": "change",
+      "invert": false,
+      "velocity": 0.75,
+      "gate": 0
+     }
+    },
+    {
+     "id": "motif",
+     "type": "music/motif",
+     "position": {
+      "x": 560,
+      "y": 400
+     },
+     "params": {
+      "op": "sequence",
+      "output": "transformed",
+      "axis": -1,
+      "repeats": 4,
+      "interval": -1,
+      "amount": 2,
+      "inScale": true,
+      "scale": "major",
+      "root": "C"
+     }
+    },
+    {
+     "id": "lead",
+     "type": "music/gameboy",
+     "position": {
+      "x": 820,
+      "y": 400
+     },
+     "params": {
+      "preset": "Pulse 50 · Lead",
+      "level": 0.45,
+      "pan": 0.25,
+      "delaySend": 0.25
+     }
+    },
+    {
+     "id": "markov",
+     "type": "music/markov",
+     "position": {
+      "x": 560,
+      "y": 600
+     },
+     "params": {
+      "order": 2,
+      "length": 128,
+      "learn": "both",
+      "novelty": 0.15,
+      "seed": 2
+     }
+    },
+    {
+     "id": "counter",
+     "type": "music/fm-voice",
+     "position": {
+      "x": 820,
+      "y": 600
+     },
+     "params": {
+      "preset": "SLOOP · MUSIC BOX",
+      "level": 0.35,
+      "pan": -0.4,
+      "reverbSend": 0.4
+     }
+    },
+    {
+     "id": "kick",
+     "type": "music/euclid",
+     "position": {
+      "x": 300,
+      "y": 820
+     },
+     "params": {
+      "pulses": 4,
+      "steps": 16,
+      "rotation": 0,
+      "notes": "kick",
+      "gate": 0,
+      "velocity": 0.9,
+      "accent": 0
+     }
+    },
+    {
+     "id": "snare",
+     "type": "music/euclid",
+     "position": {
+      "x": 300,
+      "y": 980
+     },
+     "params": {
+      "pulses": 2,
+      "steps": 16,
+      "rotation": 4,
+      "notes": "snare@0.7 clap@0.6",
+      "gate": 0,
+      "velocity": 0.7,
+      "accent": 0
+     }
+    },
+    {
+     "id": "hats",
+     "type": "music/euclid",
+     "position": {
+      "x": 300,
+      "y": 1140
+     },
+     "params": {
+      "pulses": 7,
+      "steps": 16,
+      "rotation": 1,
+      "notes": "hat@0.45 hat@0.25",
+      "gate": 0,
+      "velocity": 0.4,
+      "accent": 0
+     }
+    },
+    {
+     "id": "kit_kick",
+     "type": "music/drum-kit",
+     "position": {
+      "x": 560,
+      "y": 820
+     },
+     "params": {
+      "level": 0.75
+     }
+    },
+    {
+     "id": "kit_snare",
+     "type": "music/drum-kit",
+     "position": {
+      "x": 560,
+      "y": 980
+     },
+     "params": {
+      "level": 0.75
+     }
+    },
+    {
+     "id": "kit_hats",
+     "type": "music/drum-kit",
+     "position": {
+      "x": 560,
+      "y": 1140
+     },
+     "params": {
+      "level": 0.75
+     }
+    },
+    {
+     "id": "out",
+     "type": "music/out",
+     "position": {
+      "x": 1100,
+      "y": 400
+     },
+     "params": {
+      "master": 0.8,
+      "startFrame": 0
+     }
+    },
+    {
+     "id": "env",
+     "type": "lighting/environment",
+     "position": {
+      "x": 1100,
+      "y": 700
+     },
+     "params": {
+      "color": 4147542,
+      "intensity": 1,
+      "background": 1,
+      "ambientIntensity": 0.6,
+      "sunIntensity": 1.2
+     }
+    },
+    {
+     "id": "render",
+     "type": "render",
+     "position": {
+      "x": 1100,
+      "y": 900
+     },
+     "params": {
+      "frameCount": 600,
+      "fps": 30,
+      "motionBlur": 0,
+      "resolutionPreset": "16:9 (1920x1080)",
+      "width": 1920,
+      "height": 1080,
+      "holdout": false
+     }
+    }
+   ],
+   "connections": [
+    {
+     "id": "c0",
+     "fromNode": "clock",
+     "fromSocket": "clock",
+     "toNode": "prog",
+     "toSocket": "clock"
+    },
+    {
+     "id": "c1",
+     "fromNode": "prog",
+     "fromSocket": "chords",
+     "toNode": "vl",
+     "toSocket": "sequence"
+    },
+    {
+     "id": "c2",
+     "fromNode": "vl",
+     "fromSocket": "sequence",
+     "toNode": "keys",
+     "toSocket": "sequence"
+    },
+    {
+     "id": "c3",
+     "fromNode": "vl",
+     "fromSocket": "bass",
+     "toNode": "bass",
+     "toSocket": "sequence"
+    },
+    {
+     "id": "c4",
+     "fromNode": "clock",
+     "fromSocket": "clock",
+     "toNode": "contour",
+     "toSocket": "clock"
+    },
+    {
+     "id": "c5",
+     "fromNode": "curve",
+     "fromSocket": "curve",
+     "toNode": "contour",
+     "toSocket": "curve"
+    },
+    {
+     "id": "c6",
+     "fromNode": "contour",
+     "fromSocket": "sequence",
+     "toNode": "motif",
+     "toSocket": "sequence"
+    },
+    {
+     "id": "c7",
+     "fromNode": "motif",
+     "fromSocket": "sequence",
+     "toNode": "lead",
+     "toSocket": "sequence"
+    },
+    {
+     "id": "c8",
+     "fromNode": "contour",
+     "fromSocket": "sequence",
+     "toNode": "markov",
+     "toSocket": "source"
+    },
+    {
+     "id": "c9",
+     "fromNode": "markov",
+     "fromSocket": "sequence",
+     "toNode": "counter",
+     "toSocket": "sequence"
+    },
+    {
+     "id": "c10",
+     "fromNode": "clock",
+     "fromSocket": "clock",
+     "toNode": "kick",
+     "toSocket": "input"
+    },
+    {
+     "id": "c11",
+     "fromNode": "kick",
+     "fromSocket": "sequence",
+     "toNode": "kit_kick",
+     "toSocket": "sequence"
+    },
+    {
+     "id": "c12",
+     "fromNode": "clock",
+     "fromSocket": "clock",
+     "toNode": "snare",
+     "toSocket": "input"
+    },
+    {
+     "id": "c13",
+     "fromNode": "snare",
+     "fromSocket": "sequence",
+     "toNode": "kit_snare",
+     "toSocket": "sequence"
+    },
+    {
+     "id": "c14",
+     "fromNode": "clock",
+     "fromSocket": "clock",
+     "toNode": "hats",
+     "toSocket": "input"
+    },
+    {
+     "id": "c15",
+     "fromNode": "hats",
+     "fromSocket": "sequence",
+     "toNode": "kit_hats",
+     "toSocket": "sequence"
+    },
+    {
+     "id": "c16",
+     "fromNode": "keys",
+     "fromSocket": "track",
+     "toNode": "out",
+     "toSocket": "track0"
+    },
+    {
+     "id": "c17",
+     "fromNode": "bass",
+     "fromSocket": "track",
+     "toNode": "out",
+     "toSocket": "track1"
+    },
+    {
+     "id": "c18",
+     "fromNode": "lead",
+     "fromSocket": "track",
+     "toNode": "out",
+     "toSocket": "track2"
+    },
+    {
+     "id": "c19",
+     "fromNode": "counter",
+     "fromSocket": "track",
+     "toNode": "out",
+     "toSocket": "track3"
+    },
+    {
+     "id": "c20",
+     "fromNode": "kit_kick",
+     "fromSocket": "track",
+     "toNode": "out",
+     "toSocket": "track4"
+    },
+    {
+     "id": "c21",
+     "fromNode": "kit_snare",
+     "fromSocket": "track",
+     "toNode": "out",
+     "toSocket": "track5"
+    },
+    {
+     "id": "c22",
+     "fromNode": "kit_hats",
+     "fromSocket": "track",
+     "toNode": "out",
+     "toSocket": "track6"
+    }
+   ],
+   "keyframes": {},
+   "markers": [],
+   "exposedParams": []
+  }
+ ],
+ "activeCanvas": 0
+}
