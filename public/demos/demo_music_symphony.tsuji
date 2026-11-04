@@ -43,7 +43,7 @@
       "y": 0
      },
      "params": {
-      "name": "pad I · bars 0–11",
+      "name": "pad I · bars 1–12",
       "bars": "x*12 .*56",
       "barLength": 16,
       "restart": true
@@ -84,7 +84,7 @@
       "y": 160
      },
      "params": {
-      "name": "bass I · bars 0–11",
+      "name": "bass I · bars 1–12",
       "bars": "x*12 .*56",
       "barLength": 16,
       "restart": true
@@ -128,7 +128,7 @@
       "y": 320
      },
      "params": {
-      "name": "arp I · bars 4–11",
+      "name": "arp I · bars 5–12",
       "bars": ".*4 x*8 .*56",
       "barLength": 16,
       "restart": false
@@ -217,7 +217,7 @@
       "y": 800
      },
      "params": {
-      "name": "strings · bars 12–19, 44–65",
+      "name": "strings · bars 13–20, 45–66",
       "bars": ".*12 x*8 .*24 x*22 .*2",
       "barLength": 16,
       "restart": false
@@ -258,7 +258,7 @@
       "y": 960
      },
      "params": {
-      "name": "bass · bars 12–19, 44–65",
+      "name": "bass · bars 13–20, 45–66",
       "bars": ".*12 x*8 .*24 x*22 .*2",
       "barLength": 16,
       "restart": false
@@ -301,7 +301,7 @@
       "y": 1120
      },
      "params": {
-      "name": "scherzo bass · bars 28–43",
+      "name": "scherzo bass · bars 29–44",
       "bars": ".*28 x*16 .*24",
       "barLength": 16,
       "restart": false
@@ -344,7 +344,7 @@
       "y": 1280
      },
      "params": {
-      "name": "scherzo chords · bars 28–43",
+      "name": "scherzo chords · bars 29–44",
       "bars": ".*28 x*16 .*24",
       "barLength": 16,
       "restart": false
@@ -415,7 +415,7 @@
       "y": 1500
      },
      "params": {
-      "name": "theme · bars 12–19",
+      "name": "theme · bars 13–20",
       "bars": ".*12 x*8 .*48",
       "barLength": 16,
       "restart": true
@@ -455,7 +455,7 @@
       "y": 1700
      },
      "params": {
-      "name": "cantus · bars 20–27",
+      "name": "cantus · bars 21–28",
       "bars": ".*20 x*8 .*40",
       "barLength": 16,
       "restart": true
@@ -501,7 +501,7 @@
       "y": 1860
      },
      "params": {
-      "name": "counterpoint · bars 20–27",
+      "name": "counterpoint · bars 21–28",
       "bars": ".*20 x*8 .*40",
       "barLength": 16,
       "restart": true
@@ -566,7 +566,7 @@
       "y": 2100
      },
      "params": {
-      "name": "shift register · bars 28–35",
+      "name": "shift register · bars 29–36",
       "bars": ".*28 x*8 .*32",
       "barLength": 16,
       "restart": true
@@ -650,7 +650,7 @@
       "y": 2420
      },
      "params": {
-      "name": "markov · bars 36–43",
+      "name": "markov · bars 37–44",
       "bars": ".*36 x*8 .*24",
       "barLength": 16,
       "restart": true
@@ -694,7 +694,7 @@
       "y": 2650
      },
      "params": {
-      "name": "kick · bars 28–63",
+      "name": "kick · bars 29–64",
       "bars": ".*28 x*36 .*4",
       "barLength": 16,
       "restart": true
@@ -736,7 +736,7 @@
       "y": 2810
      },
      "params": {
-      "name": "snare · bars 32–43, 52–63",
+      "name": "snare · bars 33–44, 53–64",
       "bars": ".*32 x*12 .*8 x*12 .*4",
       "barLength": 16,
       "restart": true
@@ -778,7 +778,7 @@
       "y": 2970
      },
      "params": {
-      "name": "hats · bars 28–43, 56–63",
+      "name": "hats · bars 29–44, 57–64",
       "bars": ".*28 x*16 .*12 x*8 .*4",
       "barLength": 16,
       "restart": true
@@ -854,7 +854,7 @@
       "y": 3200
      },
      "params": {
-      "name": "theme augmented · bars 44–59",
+      "name": "theme augmented · bars 45–60",
       "bars": ".*44 x*16 .*8",
       "barLength": 16,
       "restart": true
@@ -908,7 +908,7 @@
       "y": 3400
      },
      "params": {
-      "name": "phase A · bars 44–63",
+      "name": "phase A · bars 45–64",
       "bars": ".*44 x*20 .*4",
       "barLength": 16,
       "restart": true
@@ -922,7 +922,7 @@
       "y": 3560
      },
      "params": {
-      "name": "phase B · bars 44–63",
+      "name": "phase B · bars 45–64",
       "bars": ".*44 x*20 .*4",
       "barLength": 16,
       "restart": true
@@ -1002,7 +1002,7 @@
       "y": 3760
      },
      "params": {
-      "name": "descant · bars 44–55, 60–63",
+      "name": "descant · bars 45–56, 61–64",
       "bars": ".*44 x*12 .*4 x*4 .*4",
       "barLength": 16,
       "restart": true

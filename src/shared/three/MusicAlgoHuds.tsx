@@ -27,7 +27,7 @@ type OnParams = (params: Record<string, unknown>, nodeId: string) => void;
 const ACCENT = "#d946ef"; // the Music category
 const RATE = 48_000;
 
-function useLive<T>(read: () => T): T {
+export function useLive<T>(read: () => T): T {
   const readRef = useRef(read);
   readRef.current = read;
   const [value, setValue] = useState(() => read());
@@ -44,13 +44,13 @@ function useLive<T>(read: () => T): T {
 }
 
 /** The song sample under the playhead, or −1 before the song's start. */
-function songSample(readPlayhead: () => PatternPlayhead, startFrame: number): number {
+export function songSample(readPlayhead: () => PatternPlayhead, startFrame: number): number {
   const { frame, fps } = readPlayhead();
   const t = (frame - startFrame) / Math.max(1, fps);
   return t < 0 ? -1 : Math.round(t * RATE);
 }
 
-function Panel({ title, status, children }: { title: string; status: ReactNode; children: ReactNode }) {
+export function Panel({ title, status, children }: { title: string; status: ReactNode; children: ReactNode }) {
   return (
     <div
       className="viewport-gp-hud"
@@ -85,7 +85,7 @@ function Panel({ title, status, children }: { title: string; status: ReactNode; 
   );
 }
 
-function HudButton({ label, title, onClick, disabled = false, active = false }: { label: string; title: string; onClick: () => void; disabled?: boolean; active?: boolean }) {
+export function HudButton({ label, title, onClick, disabled = false, active = false }: { label: string; title: string; onClick: () => void; disabled?: boolean; active?: boolean }) {
   return (
     <button
       type="button"
@@ -102,7 +102,7 @@ function HudButton({ label, title, onClick, disabled = false, active = false }: 
 }
 
 /** A number with − and + on either side. */
-function Stepper({ label, value, title, onChange, min, max, wired }: { label: string; value: number; title: string; onChange: (v: number) => void; min: number; max: number; wired?: boolean }) {
+export function Stepper({ label, value, title, onChange, min, max, wired }: { label: string; value: number; title: string; onChange: (v: number) => void; min: number; max: number; wired?: boolean }) {
   return (
     <span style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: 11, color: "#94a3b8" }} title={wired ? `${title} — wired: the wire wins` : title}>
       {label}

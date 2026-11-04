@@ -14,6 +14,7 @@ import {
   MUSIC_ORNAMENT_NODE,
   MUSIC_SCALE_NODE,
   MUSIC_SECTIONS_NODE,
+  formatBars,
   parseBars,
   MUSIC_SHIFT_REGISTER_NODE,
   MUSIC_TONNETZ_NODE,
@@ -451,6 +452,10 @@ describe("Adaptive JI", () => {
 describe("Sections", () => {
   it("reads a bar mask, runs spelled out", () => {
     expect(parseBars("x .*2 x*2 junk")).toEqual([true, false, false, true, true]);
+  });
+  it("writes a bar mask back, runs folded", () => {
+    expect(formatBars([true, false, false, true, true])).toBe("x .*2 x*2");
+    expect(parseBars(formatBars([false, true, true, true]))).toEqual([false, true, true, true]);
   });
   it("plays the line in the marked bars, restarting at each entry, and stops what sounds when a section ends", () => {
     const line = pattern("C4 D4 E4", 3);

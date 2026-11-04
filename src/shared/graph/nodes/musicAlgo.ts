@@ -822,6 +822,18 @@ export function parseBars(text: string): boolean[] {
   return bars;
 }
 
+/** The inverse of parseBars: runs written x*N / .*N. */
+export function formatBars(bars: readonly boolean[]): string {
+  const out: string[] = [];
+  for (let i = 0; i < bars.length; ) {
+    let j = i;
+    while (j < bars.length && bars[j] === bars[i]) j++;
+    out.push((bars[i] ? "x" : ".") + (j - i > 1 ? `*${j - i}` : ""));
+    i = j;
+  }
+  return out.join(" ");
+}
+
 /**
  * A sequence brought in and out by the bar, so a looping generator can have a form: it plays in the bars marked x and
  * rests in the others, over a song as long as the mask. With Restart, each entry starts it from its first step.

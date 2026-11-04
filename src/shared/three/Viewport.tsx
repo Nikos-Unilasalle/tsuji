@@ -36,6 +36,7 @@ import { DanceHud } from "./DanceHud";
 import { PatternHud } from "./PatternHud";
 import { OrderHud } from "./OrderHud";
 import { EuclidHud, TuningHud } from "./MusicAlgoHuds";
+import { SectionsHud } from "./SectionsHud";
 import { previewNote } from "../music/engine/bridge";
 import { MUSIC_SEQUENCE_PASS_TYPES } from "../graph/nodes/musicAlgo";
 import { clockOf, isTrack, previewSoundOf, sequenceOf, type PreviewSound } from "../music/engine/description";
@@ -9136,6 +9137,43 @@ export function Viewport({
               previewSound={isTrack(voiceResult) ? previewSoundOf(voiceResult) : null}
               onParams={(params, nodeId) => onParamChange?.(params, nodeId)}
               onPreview={(sound, note, velocity) => previewNote(sound, note, velocity)}
+            />
+          );
+        })()}
+      {/* Music: a selected Sections shows the arrangement — every Sections of the graph, bar by bar (see SectionsHud.tsx) */}
+      {!outputMode &&
+        !elevationView &&
+        selectedNodeId &&
+        (() => {
+          const selected = graph.nodes.find((n) => n.id === selectedNodeId && n.type === "music/sections");
+          if (!selected) return null;
+          const downstream = (id: string) => graph.connections.filter((c) => c.fromNode === id).map((c) => graph.nodes.find((n) => n.id === c.toNode)).filter((n): n is NonNullable<typeof n> => !!n);
+          const isVoice = (n: (typeof graph.nodes)[number]) => n.type === "music/fm-voice" || n.type === "music/drum-kit" || n.type === "music/gameboy" || n.type === "music/sid";
+          const voiceOf = (start: (typeof graph.nodes)[number]) => {
+            let frontier = [start];
+            for (let hops = 0; hops < 6 && frontier.length > 0; hops++) {
+              const next = frontier.flatMap((n) => downstream(n.id));
+              const v = next.find(isVoice);
+              if (v) return v;
+              frontier = next.filter((n) => MUSIC_SEQUENCE_PASS_TYPES.includes(n.type) || n.type === "music/chip-echo");
+            }
+            return undefined;
+          };
+          const lanes = graph.nodes.filter((n) => n.type === "music/sections").map((node) => ({ node, voice: voiceOf(node) }));
+          const voice = voiceOf(selected);
+          const out = voice ? downstream(voice.id).find((n) => n.type === "music/out") : graph.nodes.find((n) => n.type === "music/out");
+          return (
+            <SectionsHud
+              lanes={lanes}
+              selectedId={selected.id}
+              readSequence={(id) => sequenceOf(latestResultsRef.current?.get(id)?.sequence)}
+              readPlayhead={() => {
+                const render = renderNodeIdRef.current ? latestResultsRef.current?.get(renderNodeIdRef.current) : undefined;
+                return { frame: Math.max(0, currentFrameRef.current), fps: typeof render?.fps === "number" ? (render.fps as number) : 30 };
+              }}
+              startFrame={Math.round(Number(out?.params.startFrame ?? 0)) || 0}
+              onParams={(params, nodeId) => onParamChange?.(params, nodeId)}
+              onSelect={(id) => onSelectNode?.(id)}
             />
           );
         })()}
