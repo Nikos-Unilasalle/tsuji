@@ -115,6 +115,10 @@ interface ParamPanelProps {
   /** paramIds of *this* node currently pinned to the viewport HUD — for the pin button's active state. */
   exposedKeys?: Set<string>;
   onToggleExposed?: (nodeId: string, paramId: string) => void;
+  /** Params that can be opened as an input socket (see paramInputs.ts), and those open now. */
+  socketable?: ReadonlySet<string>;
+  socketed?: ReadonlySet<string>;
+  onToggleSocket?: (paramId: string) => void;
 }
 
 export type KeyframeStatus = "none" | "exact" | "interpolated";
@@ -491,6 +495,9 @@ export function ParamPanel({
   connectedSockets,
   exposedKeys,
   onToggleExposed,
+  socketable,
+  socketed,
+  onToggleSocket,
 }: ParamPanelProps) {
   const categoryColor = category ? CATEGORY_COLOR[category] : UNKNOWN_CATEGORY_COLOR;
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({ Transform: true });
@@ -764,6 +771,32 @@ export function ParamPanel({
                           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                             <line x1="12" y1="17" x2="12" y2="22" />
                             <path d="M5 17h14l-1.4-1.4A2 2 0 0 1 17 14.2V9a5 5 0 0 0-10 0v5.2a2 2 0 0 1-.6 1.4L5 17z" />
+                          </svg>
+                        </button>
+                      )}
+                      {socketable?.has(field.id) && onToggleSocket && (
+                        <button
+                          type="button"
+                          className={"param-pin-btn" + (socketed?.has(field.id) ? " param-pin-btn-active" : "")}
+                          disabled={isDriven}
+                          title={
+                            isDriven
+                              ? "An input — a wire is plugged in: unplug it to close the input"
+                              : socketed?.has(field.id)
+                                ? "Close the input on the node"
+                                : field.kind === "select"
+                                  ? "Open as an input on the node — a number picks the choice (0 the first, wrapping)"
+                                  : field.kind === "boolean"
+                                    ? "Open as an input on the node — above 0 is on"
+                                    : "Open as an input on the node, to drive it with a wire"
+                          }
+                          onClick={() => onToggleSocket(field.id)}
+                        >
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <circle cx="5" cy="12" r="3" />
+                            <line x1="8" y1="12" x2="21" y2="12" />
+                            <line x1="17" y1="8" x2="21" y2="12" />
+                            <line x1="17" y1="16" x2="21" y2="12" />
                           </svg>
                         </button>
                       )}

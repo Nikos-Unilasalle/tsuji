@@ -1,14 +1,17 @@
 import React, { useEffect, useRef, useState } from "react";
 import "./share-menu.css";
 
-/** What an export captures: the Render node's 3D frame, or the 2D Render node's texture at its native size. */
-export type ExportSource = "3d" | "2d";
+/** What an export captures: the Render node's 3D frame, the 2D Render node's texture at its native size, or the Music
+ * Viewer drawn full frame at the Render node's size. */
+export type ExportSource = "3d" | "2d" | "music";
 
 export interface ShareMenuProps {
   isOutputOpen: boolean;
   onToggleOutput: () => void;
   /** Only shown when the graph has a `view2d` node — nothing for that window to display otherwise. */
   hasView2DNode?: boolean;
+  /** The graph has a Music Viewer: it can be filmed instead of the 3D view. */
+  hasMusicViewer?: boolean;
   isView2DOpen?: boolean;
   onToggleView2D?: () => void;
   /** Absent hides the row entirely — e.g. no Render node to read frame count/fps from. */
@@ -36,6 +39,7 @@ export const ShareMenu: React.FC<ShareMenuProps> = ({
   isOutputOpen,
   onToggleOutput,
   hasView2DNode = false,
+  hasMusicViewer = false,
   isView2DOpen = false,
   onToggleView2D,
   onExportVideo,
@@ -47,7 +51,8 @@ export const ShareMenu: React.FC<ShareMenuProps> = ({
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [source, setSource] = useState<ExportSource>("3d");
-  const activeSource: ExportSource = hasView2DNode ? source : "3d";
+  const sources: ExportSource[] = ["3d", ...(hasView2DNode ? (["2d"] as const) : []), ...(hasMusicViewer ? (["music"] as const) : [])];
+  const activeSource: ExportSource = sources.includes(source) ? source : "3d";
   const [panelPos, setPanelPos] = useState<{ top: number; right: number } | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
 
@@ -136,11 +141,11 @@ export const ShareMenu: React.FC<ShareMenuProps> = ({
             </button>
           )}
 
-          {hasView2DNode && (onExportVideo || onExportSequence) && (
+          {sources.length > 1 && (onExportVideo || onExportSequence) && (
             <div className="share-menu-source" role="radiogroup" aria-label="Export source">
               <span className="share-menu-source-label">Export source</span>
               <div className="share-menu-source-options">
-                {(["3d", "2d"] as const).map((value) => (
+                {sources.map((value) => (
                   <button
                     key={value}
                     type="button"
@@ -150,7 +155,7 @@ export const ShareMenu: React.FC<ShareMenuProps> = ({
                     disabled={isExporting}
                     onClick={() => setSource(value)}
                   >
-                    {value === "3d" ? "3D Render" : "2D Render"}
+                    {value === "3d" ? "3D Render" : value === "2d" ? "2D Render" : "Music Viewer"}
                   </button>
                 ))}
               </div>
@@ -171,7 +176,9 @@ export const ShareMenu: React.FC<ShareMenuProps> = ({
                 {isExporting && exportMode === "video" ? `Exporting Video… ${Math.round(exportProgress * 100)}%` : "Export Video"}
               </span>
               <span className="share-menu-item-desc">
-                Render the timeline frame-by-frame (MP4, fallback to WebM).
+                {activeSource === "music"
+                  ? "The Music Viewer full frame with the song, frame by frame (MP4, fallback to WebM)."
+                  : "Render the timeline frame-by-frame (MP4, fallback to WebM)."}
               </span>
             </button>
           )}

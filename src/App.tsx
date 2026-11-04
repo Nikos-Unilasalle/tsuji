@@ -104,6 +104,7 @@ import { broadcastCamera, broadcastGraph, maximizeMainWindow, PreviewCameraPose,
 import { createCanvasTour, type CanvasTour } from "./shared/export/canvasTour";
 import { exportVideo, mimeToExtension, saveVideoBlob } from "./shared/export/videoExport";
 import { exportVideoWebCodecs, supportsWebCodecsExport } from "./shared/export/webCodecsExport";
+import { musicViewerExportHandle } from "./shared/music/viewer/exportHandle";
 import { exportPngSequence, saveZipBlob } from "./shared/export/imageSequenceExport";
 import { renderGraphToSvg, saveGraphSvg } from "./shared/export/graphSvg";
 import { TransformPatch, Viewport, ViewportExportHandle } from "./shared/three/Viewport";
@@ -633,17 +634,20 @@ function MainEditor() {
         onProgress: tour.onProgress,
         isCancelled: tour.isCancelled,
       };
+      // The Music Viewer filmed instead of the 3D view: the export view still steps the frames (and records the song).
+      const title = currentFilename.replace(/\.[^.]+$/, "");
+      const filmed = (h: ViewportExportHandle) => (source === "music" ? musicViewerExportHandle(h, graph, DEFAULT_REGISTRY, exportWidth, exportHeight, title) : h);
       // Frame-exact WebCodecs encode first; MediaRecorder only where the webview can't encode any codec at this size.
-      const exact = supportsWebCodecsExport() ? await exportVideoWebCodecs(tour.handle, videoOpts) : null;
+      const exact = supportsWebCodecsExport() ? await exportVideoWebCodecs(filmed(tour.handle), videoOpts) : null;
       let blob = exact;
       console.info(`Video export: ${exact ? "WebCodecs (frame-exact)" : "MediaRecorder fallback"}`);
       if (!blob) {
         // A fresh tour: the probe above already advanced the first one.
         const retry = startCanvasTour(handle);
-        blob = await exportVideo(retry.handle, { ...videoOpts, totalFrames: retry.totalFrames, onProgress: retry.onProgress, isCancelled: retry.isCancelled });
+        blob = await exportVideo(filmed(retry.handle), { ...videoOpts, totalFrames: retry.totalFrames, onProgress: retry.onProgress, isCancelled: retry.isCancelled });
       }
 
-      const base = (currentFilename.replace(/\.[^.]+$/, "") || "export") + (source === "2d" ? "_2d" : "");
+      const base = (currentFilename.replace(/\.[^.]+$/, "") || "export") + (source === "2d" ? "_2d" : source === "music" ? "_viewer" : "");
       const suggested = `${base}.${mimeToExtension(blob.type)}`;
       await saveVideoBlob(blob, suggested);
     } catch (err) {
@@ -657,7 +661,7 @@ function MainEditor() {
       setIsExporting(false);
       setExportMode(null);
     }
-  }, [beginExport, startCanvasTour, exportFps, currentFilename, waitForExportHandle]);
+  }, [beginExport, startCanvasTour, exportFps, currentFilename, waitForExportHandle, graph, exportWidth, exportHeight]);
 
   const handleExportSequence = useCallback(async (source: ExportSource = "3d") => {
     if (!beginExport("sequence", source)) return;
@@ -666,14 +670,15 @@ function MainEditor() {
       const handle = await waitForExportHandle();
 
       const tour = startCanvasTour(handle);
-      const blob = await exportPngSequence(tour.handle, {
+      const filmed = source === "music" ? musicViewerExportHandle(tour.handle, graph, DEFAULT_REGISTRY, exportWidth, exportHeight, currentFilename.replace(/\.[^.]+$/, "")) : tour.handle;
+      const blob = await exportPngSequence(filmed, {
         totalFrames: tour.totalFrames,
         fps: exportFps,
         onProgress: tour.onProgress,
         isCancelled: tour.isCancelled,
       });
 
-      const base = (currentFilename.replace(/\.[^.]+$/, "") || "export") + (source === "2d" ? "_2d" : "");
+      const base = (currentFilename.replace(/\.[^.]+$/, "") || "export") + (source === "2d" ? "_2d" : source === "music" ? "_viewer" : "");
       const suggested = `${base}_frames.zip`;
       await saveZipBlob(blob, suggested);
     } catch (err) {
@@ -684,7 +689,7 @@ function MainEditor() {
       setIsExporting(false);
       setExportMode(null);
     }
-  }, [beginExport, startCanvasTour, exportFps, currentFilename, waitForExportHandle]);
+  }, [beginExport, startCanvasTour, exportFps, currentFilename, waitForExportHandle, graph, exportWidth, exportHeight]);
 
   const handleExportGraphSvg = useCallback(async () => {
     if (graph.nodes.length === 0) {
@@ -3016,6 +3021,7 @@ function MainEditor() {
         is2DMode={is2DMode}
         onToggle2DMode={toggle2DMode}
         hasView2DNode={!!findView2DNodeId(graph)}
+        hasMusicViewer={graph.nodes.some((n) => n.type === "music/viewer")}
         isPlaying={isPlaying}
         onTogglePlay={() => setIsPlaying((p) => !p)}
         onResetSimulations={handleResetSimulations}
@@ -3205,6 +3211,12 @@ function MainEditor() {
             new Set((graph.exposedParams ?? []).filter((e) => e.nodeId === selectedInstance.id).map((e) => e.paramId))
           }
           onToggleExposed={onToggleExposed}
+          socketable={selectedDef.paramInputs ? new Set(selectedDef.paramInputs) : undefined}
+          socketed={new Set(Array.isArray(selectedInstance.params.paramInputs) ? (selectedInstance.params.paramInputs as string[]) : [])}
+          onToggleSocket={(paramId) => {
+            const open = Array.isArray(selectedInstance.params.paramInputs) ? (selectedInstance.params.paramInputs as string[]) : [];
+            onParamChange("paramInputs", open.includes(paramId) ? open.filter((p) => p !== paramId) : [...open, paramId]);
+          }}
         />
           )}
         </WithEvaluation>

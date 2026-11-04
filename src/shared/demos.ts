@@ -713,6 +713,26 @@ export const DEMO_CATALOG: DemoCategory[] = [
         label: "Dub Dancer",
         description: "The music drives the scene: a dancer swaying on the Clock's tempo, waving with the sirens and cheering for the melodica, stage lights and orbs struck by the drums, the skank and the bass, a camera circling — press Play.",
       },
+      {
+        file: "demo_music_algorithms.tsuji",
+        label: "Algorithms",
+        description: "Music made by rules: a Tonnetz Walk's chords and bass in just intonation, a Shift Register melody ornamented and snapped to A minor pentatonic with a Chip Echo on a second Game Boy channel, and Euclidean drums in 3/8, 2/16 and 5/7 — press Play.",
+      },
+      {
+        file: "demo_music_composer.tsuji",
+        label: "Composer",
+        description: "A song written by rules: Roman numerals voice-led into keys and bass, a melody read off the curve on screen and sequenced down the scale, a Markov counter-melody that learned it, Euclidean drums — press Play.",
+      },
+      {
+        file: "demo_music_studies.tsuji",
+        label: "Studies",
+        description: "Three studies at once: a twelve-note line phasing against itself a step at a time, a second-species counterpoint written over a cantus firmus, and voice-led chords in adaptive 7-limit just intonation — press Play.",
+      },
+      {
+        file: "demo_music_symphony.tsuji",
+        label: "Symphony",
+        description: "A chip symphony in D minor, in four movements, every part made by a rule and brought in and out by Sections: I a Tonnetz nocturne in just intonation, arpeggiated with an echo; II a chorale with an ornamented theme, then a fugato in second-species counterpoint; III a Euclidean scherzo with a shift register in Pythagorean tuning and a Markov chain that learned the themes; IV the theme augmented over phasing pulses and a descant drawn from a curve, ending on a Picardy third. A Music Viewer draws it all as light over the 3D view (full screen from its button, or filmed with the song from Share › Export Video › Music Viewer) — press Play.",
+      },
     ],
   },
   {

@@ -35,7 +35,13 @@ import { RIG_BIPED_DANCE_NODE, type DanceInfo } from "../graph/nodes/bipedDance"
 import { DanceHud } from "./DanceHud";
 import { PatternHud } from "./PatternHud";
 import { OrderHud } from "./OrderHud";
+import { EuclidHud, TuningHud } from "./MusicAlgoHuds";
+import { SectionsHud } from "./SectionsHud";
+import { ProgressionHud } from "./ProgressionHud";
+import { MusicViewerOverlay } from "./MusicViewerOverlay";
+import { scoreCache } from "../music/viewer/fromGraph";
 import { previewNote } from "../music/engine/bridge";
+import { MUSIC_SEQUENCE_PASS_TYPES } from "../graph/nodes/musicAlgo";
 import { clockOf, isTrack, previewSoundOf, sequenceOf, type PreviewSound } from "../music/engine/description";
 import { RIG_HUMAN_NODE } from "../graph/nodes/rig";
 import { RIG_BIPED_MOTION_NODE, type BipedGaitInfo } from "../graph/nodes/bipedMotion";
@@ -1534,6 +1540,8 @@ export function Viewport({
   const selectedNodeIdRef = useRef(selectedNodeId);
   selectedNodeIdRef.current = selectedNodeId;
   const onSelectNodeRef = useRef(onSelectNode);
+  /** The Music Viewer's score, built again only when the song changes. */
+  const viewerScoreRef = useRef(scoreCache());
   onSelectNodeRef.current = onSelectNode;
   const onTransformChangeRef = useRef(onTransformChange);
   onTransformChangeRef.current = onTransformChange;
@@ -9064,7 +9072,7 @@ export function Viewport({
           for (let hops = 0; hops < 6 && frontier.length > 0 && !voice; hops++) {
             const next = frontier.flatMap((n) => downstream(n.id));
             voice = next.find((n) => n.type === "music/fm-voice" || n.type === "music/drum-kit" || n.type === "music/gameboy" || n.type === "music/sid");
-            frontier = next.filter((n) => n.type === "music/arp");
+            frontier = next.filter((n) => MUSIC_SEQUENCE_PASS_TYPES.includes(n.type));
           }
           const out = voice ? downstream(voice.id).find((n) => n.type === "music/out") : graph.nodes.find((n) => n.type === "music/out");
           const voiceResult = voice ? latestResultsRef.current?.get(voice.id)?.track : null;
@@ -9080,6 +9088,132 @@ export function Viewport({
               readSequence={() => sequenceOf(latestResultsRef.current?.get(patternNode.id)?.sequence)}
               startFrame={Math.round(Number(out?.params.startFrame ?? 0)) || 0}
               previewSound={previewSound}
+              onParams={(params, nodeId) => onParamChange?.(params, nodeId)}
+              onPreview={(sound, note, velocity) => previewNote(sound, note, velocity)}
+            />
+          );
+        })()}
+      {/* Music: a selected Euclid or Tuning gets its palette (see MusicAlgoHuds.tsx) */}
+      {!outputMode &&
+        !elevationView &&
+        selectedNodeId &&
+        (() => {
+          const algoNode = graph.nodes.find((n) => n.id === selectedNodeId && (n.type === "music/euclid" || n.type === "music/tuning"));
+          if (!algoNode) return null;
+          // The voice it plays on, downstream through the nodes that pass a sequence on, and that voice's Music Out.
+          const downstream = (id: string) => graph.connections.filter((c) => c.fromNode === id).map((c) => graph.nodes.find((n) => n.id === c.toNode)).filter((n): n is NonNullable<typeof n> => !!n);
+          let frontier = [algoNode];
+          let voice: (typeof graph.nodes)[number] | undefined;
+          for (let hops = 0; hops < 6 && frontier.length > 0 && !voice; hops++) {
+            const next = frontier.flatMap((n) => downstream(n.id));
+            voice = next.find((n) => n.type === "music/fm-voice" || n.type === "music/drum-kit" || n.type === "music/gameboy" || n.type === "music/sid");
+            frontier = next.filter((n) => MUSIC_SEQUENCE_PASS_TYPES.includes(n.type));
+          }
+          const out = voice ? downstream(voice.id).find((n) => n.type === "music/out") : graph.nodes.find((n) => n.type === "music/out");
+          const readPlayhead = () => {
+            const render = renderNodeIdRef.current ? latestResultsRef.current?.get(renderNodeIdRef.current) : undefined;
+            return { frame: Math.max(0, currentFrameRef.current), fps: typeof render?.fps === "number" ? (render.fps as number) : 30 };
+          };
+          const readSequence = () => sequenceOf(latestResultsRef.current?.get(algoNode.id)?.sequence);
+          const startFrame = Math.round(Number(out?.params.startFrame ?? 0)) || 0;
+          const incoming = graph.connections.filter((c) => c.toNode === algoNode.id);
+          if (algoNode.type === "music/euclid") {
+            const inputWire = incoming.find((c) => c.toSocket === "input");
+            const inputValue = inputWire ? latestResultsRef.current?.get(inputWire.fromNode)?.[inputWire.fromSocket] : undefined;
+            return (
+              <EuclidHud
+                node={algoNode}
+                wired={new Set(incoming.map((c) => c.toSocket))}
+                restrike={!!inputValue && (inputValue as { kind?: string }).kind !== "clock" && !!sequenceOf(inputValue)}
+                readSequence={readSequence}
+                readPlayhead={readPlayhead}
+                startFrame={startFrame}
+                onParams={(params, nodeId) => onParamChange?.(params, nodeId)}
+              />
+            );
+          }
+          const voiceResult = voice ? latestResultsRef.current?.get(voice.id)?.track : null;
+          return (
+            <TuningHud
+              node={algoNode}
+              readSequence={readSequence}
+              readPlayhead={readPlayhead}
+              startFrame={startFrame}
+              previewSound={isTrack(voiceResult) ? previewSoundOf(voiceResult) : null}
+              onParams={(params, nodeId) => onParamChange?.(params, nodeId)}
+              onPreview={(sound, note, velocity) => previewNote(sound, note, velocity)}
+            />
+          );
+        })()}
+      {/* Music: a selected Sections shows the arrangement — every Sections of the graph, bar by bar (see SectionsHud.tsx) */}
+      {!outputMode &&
+        !elevationView &&
+        selectedNodeId &&
+        (() => {
+          const selected = graph.nodes.find((n) => n.id === selectedNodeId && n.type === "music/sections");
+          if (!selected) return null;
+          const downstream = (id: string) => graph.connections.filter((c) => c.fromNode === id).map((c) => graph.nodes.find((n) => n.id === c.toNode)).filter((n): n is NonNullable<typeof n> => !!n);
+          const isVoice = (n: (typeof graph.nodes)[number]) => n.type === "music/fm-voice" || n.type === "music/drum-kit" || n.type === "music/gameboy" || n.type === "music/sid";
+          const voiceOf = (start: (typeof graph.nodes)[number]) => {
+            let frontier = [start];
+            for (let hops = 0; hops < 6 && frontier.length > 0; hops++) {
+              const next = frontier.flatMap((n) => downstream(n.id));
+              const v = next.find(isVoice);
+              if (v) return v;
+              frontier = next.filter((n) => MUSIC_SEQUENCE_PASS_TYPES.includes(n.type) || n.type === "music/chip-echo");
+            }
+            return undefined;
+          };
+          const lanes = graph.nodes.filter((n) => n.type === "music/sections").map((node) => ({ node, voice: voiceOf(node) }));
+          const voice = voiceOf(selected);
+          const out = voice ? downstream(voice.id).find((n) => n.type === "music/out") : graph.nodes.find((n) => n.type === "music/out");
+          return (
+            <SectionsHud
+              lanes={lanes}
+              selectedId={selected.id}
+              readSequence={(id) => sequenceOf(latestResultsRef.current?.get(id)?.sequence)}
+              readPlayhead={() => {
+                const render = renderNodeIdRef.current ? latestResultsRef.current?.get(renderNodeIdRef.current) : undefined;
+                return { frame: Math.max(0, currentFrameRef.current), fps: typeof render?.fps === "number" ? (render.fps as number) : 30 };
+              }}
+              startFrame={Math.round(Number(out?.params.startFrame ?? 0)) || 0}
+              onParams={(params, nodeId) => onParamChange?.(params, nodeId)}
+              onSelect={(id) => onSelectNode?.(id)}
+            />
+          );
+        })()}
+      {/* Music: a selected Progression is written on a timeline from a chord palette (see ProgressionHud.tsx) */}
+      {!outputMode &&
+        !elevationView &&
+        selectedNodeId &&
+        (() => {
+          const prog = graph.nodes.find((n) => n.id === selectedNodeId && n.type === "music/progression");
+          if (!prog) return null;
+          // The voice its chords play on: down the Chords wire, through the nodes that pass a sequence on.
+          const downstream = (id: string, socket?: string) =>
+            graph.connections
+              .filter((c) => c.fromNode === id && (!socket || c.fromSocket === socket))
+              .map((c) => graph.nodes.find((n) => n.id === c.toNode))
+              .filter((n): n is NonNullable<typeof n> => !!n);
+          const isVoice = (n: (typeof graph.nodes)[number]) => n.type === "music/fm-voice" || n.type === "music/gameboy" || n.type === "music/sid";
+          let frontier = downstream(prog.id, "chords");
+          let voice = frontier.find(isVoice);
+          for (let hops = 0; hops < 6 && frontier.length > 0 && !voice; hops++) {
+            frontier = frontier.filter((n) => MUSIC_SEQUENCE_PASS_TYPES.includes(n.type)).flatMap((n) => downstream(n.id));
+            voice = frontier.find(isVoice);
+          }
+          const out = voice ? downstream(voice.id).find((n) => n.type === "music/out") : graph.nodes.find((n) => n.type === "music/out");
+          const voiceResult = voice ? latestResultsRef.current?.get(voice.id)?.track : null;
+          return (
+            <ProgressionHud
+              node={prog}
+              readSequence={() => sequenceOf(latestResultsRef.current?.get(prog.id)?.chords)}
+              readPlayhead={() => {
+                const render = renderNodeIdRef.current ? latestResultsRef.current?.get(renderNodeIdRef.current) : undefined;
+                return { frame: Math.max(0, currentFrameRef.current), fps: typeof render?.fps === "number" ? (render.fps as number) : 30 };
+              }}
+              startFrame={Math.round(Number(out?.params.startFrame ?? 0)) || 0}
+              previewSound={isTrack(voiceResult) ? previewSoundOf(voiceResult) : null}
               onParams={(params, nodeId) => onParamChange?.(params, nodeId)}
               onPreview={(sound, note, velocity) => previewNote(sound, note, velocity)}
             />
@@ -10796,6 +10930,26 @@ export function Viewport({
           just that pane's bounds (absolute within .viewport-container) and
           naturally unmounted whenever this pane isn't on screen at all
           (full-canvas Graph view). */}
+      {/* A shown Music Viewer draws the song as light over the view (see MusicViewerOverlay.tsx). */}
+      {!outputMode &&
+        (() => {
+          const viewer = graph.nodes.find((n) => n.type === "music/viewer" && n.params.show !== false);
+          if (!viewer) return null;
+          const out = graph.nodes.find((n) => n.type === "music/out");
+          const render = graph.nodes.find((n) => n.type === "render");
+          const fps = Number(render?.params.fps) || 30;
+          const seconds = Math.max(1, (Number(render?.params.frameCount) || 600) / fps);
+          const startFrame = Math.round(Number(out?.params.startFrame ?? 0)) || 0;
+          return (
+            <MusicViewerOverlay
+              node={viewer}
+              title="tsuji"
+              readScore={() => viewerScoreRef.current(graphRef.current, latestResultsRef.current, seconds)}
+              readTime={() => (Math.max(0, currentFrameRef.current) - startFrame) / fps}
+              onHide={() => onParamChange?.({ show: false }, viewer.id)}
+            />
+          );
+        })()}
       {/* A shown Virtual Interface plays the pinned params as knobs, switches and selectors, in place of the list. */}
       {!outputMode && onParamChange && virtualInterfaceNode && (
         <VirtualInterfaceHUD

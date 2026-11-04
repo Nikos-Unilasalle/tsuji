@@ -1,0 +1,1841 @@
+{
+ "canvases": [
+  {
+   "nodes": [
+    {
+     "id": "clock",
+     "type": "music/clock",
+     "position": {
+      "x": -300,
+      "y": 900
+     },
+     "params": {
+      "bpm": 96,
+      "swing": 0,
+      "stepsPerBeat": "4"
+     }
+    },
+    {
+     "id": "tonnetz",
+     "type": "music/tonnetz",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "params": {
+      "root": "D",
+      "quality": "min",
+      "path": "R L R L L R L R",
+      "random": false,
+      "count": 8,
+      "seed": 0,
+      "chordLength": 24,
+      "center": 62,
+      "voicing": "lead",
+      "velocity": 0.5
+     }
+    },
+    {
+     "id": "sec_tz",
+     "type": "music/sections",
+     "position": {
+      "x": 260,
+      "y": 0
+     },
+     "params": {
+      "name": "pad I · bars 1–12",
+      "bars": "x*12 .*56",
+      "barLength": 16,
+      "restart": true
+     }
+    },
+    {
+     "id": "ji_tz",
+     "type": "music/adaptive-ji",
+     "position": {
+      "x": 520,
+      "y": 0
+     },
+     "params": {
+      "limit": "5",
+      "center": true,
+      "root": "auto"
+     }
+    },
+    {
+     "id": "pad_I",
+     "type": "music/fm-voice",
+     "position": {
+      "x": 780,
+      "y": 0
+     },
+     "params": {
+      "preset": "SLOOP · GLASS PAD",
+      "level": 0.38,
+      "pan": -0.2,
+      "reverbSend": 0.45,
+      "name": "I · Tonnetz pad"
+     }
+    },
+    {
+     "id": "sec_tzb",
+     "type": "music/sections",
+     "position": {
+      "x": 260,
+      "y": 160
+     },
+     "params": {
+      "name": "bass I · bars 1–12",
+      "bars": "x*12 .*56",
+      "barLength": 16,
+      "restart": true
+     }
+    },
+    {
+     "id": "bass_I",
+     "type": "music/fm-voice",
+     "position": {
+      "x": 780,
+      "y": 160
+     },
+     "params": {
+      "preset": "SLOOP · FM BASS",
+      "level": 0.4,
+      "pan": 0,
+      "name": "I · Bass"
+     }
+    },
+    {
+     "id": "arp_I",
+     "type": "music/arp",
+     "position": {
+      "x": 520,
+      "y": 320
+     },
+     "params": {
+      "on": true,
+      "mode": "updown",
+      "rate": "1/16",
+      "triplet": false,
+      "octaves": 2,
+      "gate": 0.5,
+      "sync": "grid"
+     }
+    },
+    {
+     "id": "sec_arp",
+     "type": "music/sections",
+     "position": {
+      "x": 780,
+      "y": 320
+     },
+     "params": {
+      "name": "arp I · bars 5–12",
+      "bars": ".*4 x*8 .*56",
+      "barLength": 16,
+      "restart": false
+     }
+    },
+    {
+     "id": "arp_v",
+     "type": "music/gameboy",
+     "position": {
+      "x": 1300,
+      "y": 320
+     },
+     "params": {
+      "preset": "Pulse 25 · Pluck",
+      "level": 0.16,
+      "pan": -0.5,
+      "name": "I · Arpeggio"
+     }
+    },
+    {
+     "id": "echo_I",
+     "type": "music/chip-echo",
+     "position": {
+      "x": 1040,
+      "y": 480
+     },
+     "params": {
+      "delay": 3,
+      "level": 0.5,
+      "transpose": 12,
+      "detune": 8
+     }
+    },
+    {
+     "id": "echo_v",
+     "type": "music/gameboy",
+     "position": {
+      "x": 1300,
+      "y": 480
+     },
+     "params": {
+      "preset": "Pulse 12.5 · Thin",
+      "level": 0.12,
+      "pan": 0.5,
+      "name": "I · Chip echo"
+     }
+    },
+    {
+     "id": "prog",
+     "type": "music/progression",
+     "position": {
+      "x": 0,
+      "y": 800
+     },
+     "params": {
+      "root": "D",
+      "mode": "minor",
+      "source": "written",
+      "numerals": "i:12 i iv VII III VI iiø7 V7 i i:8 i VII VI VII i VII VI VII i VII VI VII iv VI VII:2 i:2 iv:2 VII:2 III:2 VI:2 iiø7:2 V7:2 i:2 VI:2 VII:2 I:2 i:2",
+      "count": 8,
+      "sevenths": false,
+      "tension": 0.3,
+      "cadence": true,
+      "seed": 0,
+      "chordLength": 16,
+      "center": 60,
+      "velocity": 0.5
+     }
+    },
+    {
+     "id": "vl",
+     "type": "music/voice-leading",
+     "position": {
+      "x": 260,
+      "y": 800
+     },
+     "params": {
+      "voices": 4,
+      "low": 53,
+      "high": 74
+     }
+    },
+    {
+     "id": "sec_str",
+     "type": "music/sections",
+     "position": {
+      "x": 520,
+      "y": 800
+     },
+     "params": {
+      "name": "strings · bars 13–20, 45–66",
+      "bars": ".*12 x*8 .*24 x*22 .*2",
+      "barLength": 16,
+      "restart": false
+     }
+    },
+    {
+     "id": "ji_str",
+     "type": "music/adaptive-ji",
+     "position": {
+      "x": 780,
+      "y": 800
+     },
+     "params": {
+      "limit": "5",
+      "center": true,
+      "root": "auto"
+     }
+    },
+    {
+     "id": "strings",
+     "type": "music/fm-voice",
+     "position": {
+      "x": 1040,
+      "y": 800
+     },
+     "params": {
+      "preset": "Felucca · PAD",
+      "level": 0.3,
+      "pan": 0.1,
+      "reverbSend": 0.35,
+      "name": "Strings (JI)"
+     }
+    },
+    {
+     "id": "sec_bass",
+     "type": "music/sections",
+     "position": {
+      "x": 520,
+      "y": 960
+     },
+     "params": {
+      "name": "bass · bars 13–20, 45–66",
+      "bars": ".*12 x*8 .*24 x*22 .*2",
+      "barLength": 16,
+      "restart": false
+     }
+    },
+    {
+     "id": "bass_II",
+     "type": "music/fm-voice",
+     "position": {
+      "x": 1040,
+      "y": 960
+     },
+     "params": {
+      "preset": "Felucca · BASS",
+      "level": 0.42,
+      "name": "Bass"
+     }
+    },
+    {
+     "id": "eu_bass",
+     "type": "music/euclid",
+     "position": {
+      "x": 520,
+      "y": 1120
+     },
+     "params": {
+      "pulses": 5,
+      "steps": 8,
+      "rotation": 0,
+      "notes": "C4",
+      "gate": 1,
+      "velocity": 0.8,
+      "accent": 0
+     }
+    },
+    {
+     "id": "sec_eub",
+     "type": "music/sections",
+     "position": {
+      "x": 780,
+      "y": 1120
+     },
+     "params": {
+      "name": "scherzo bass · bars 29–44",
+      "bars": ".*28 x*16 .*24",
+      "barLength": 16,
+      "restart": false
+     }
+    },
+    {
+     "id": "sch_bass",
+     "type": "music/gameboy",
+     "position": {
+      "x": 1040,
+      "y": 1120
+     },
+     "params": {
+      "preset": "Wave · Bass",
+      "level": 0.3,
+      "name": "III · Euclid bass"
+     }
+    },
+    {
+     "id": "eu_stab",
+     "type": "music/euclid",
+     "position": {
+      "x": 520,
+      "y": 1280
+     },
+     "params": {
+      "pulses": 3,
+      "steps": 8,
+      "rotation": 1,
+      "notes": "C4",
+      "gate": 1,
+      "velocity": 0.6,
+      "accent": 0
+     }
+    },
+    {
+     "id": "sec_stab",
+     "type": "music/sections",
+     "position": {
+      "x": 780,
+      "y": 1280
+     },
+     "params": {
+      "name": "scherzo chords · bars 29–44",
+      "bars": ".*28 x*16 .*24",
+      "barLength": 16,
+      "restart": false
+     }
+    },
+    {
+     "id": "stabs",
+     "type": "music/fm-voice",
+     "position": {
+      "x": 1040,
+      "y": 1280
+     },
+     "params": {
+      "preset": "SLOOP · FM PLUCK",
+      "level": 0.22,
+      "pan": -0.25,
+      "name": "III · Euclid chords"
+     }
+    },
+    {
+     "id": "theme",
+     "type": "music/pattern",
+     "position": {
+      "x": 0,
+      "y": 1500
+     },
+     "params": {
+      "steps": "A4 . . . D5 . . . F5 . E5 . D5 . . . D5 . . . Bb4 . . . G4 . A4 . Bb4 . . . C5 . . . E5 . . . G5 . F5 . E5 . . . F5 . . . . . . . C5 . . . A4 . . . D5 . . . Bb4 . . . F4 . G4 . A4 . Bb4 . G4 . . . Bb4 . . . E5 . . . D5 . . . E5 . . . G5 . . . A4 . . . E5 . . . D5 . . . . . . . . . . . off . . .",
+      "length": "128"
+     }
+    },
+    {
+     "id": "orn",
+     "type": "music/ornament",
+     "position": {
+      "x": 260,
+      "y": 1500
+     },
+     "params": {
+      "type": "mix",
+      "chance": 0.4,
+      "minSteps": 4,
+      "rate": "1/32",
+      "up": 2,
+      "down": 1,
+      "seed": 3
+     }
+    },
+    {
+     "id": "scale_t",
+     "type": "music/scale",
+     "position": {
+      "x": 520,
+      "y": 1500
+     },
+     "params": {
+      "root": "D",
+      "scale": "minor",
+      "snap": "nearest",
+      "outside": "snap",
+      "chords": "keep"
+     }
+    },
+    {
+     "id": "sec_theme",
+     "type": "music/sections",
+     "position": {
+      "x": 780,
+      "y": 1500
+     },
+     "params": {
+      "name": "theme · bars 13–20",
+      "bars": ".*12 x*8 .*48",
+      "barLength": 16,
+      "restart": true
+     }
+    },
+    {
+     "id": "lead",
+     "type": "music/fm-voice",
+     "position": {
+      "x": 1040,
+      "y": 1500
+     },
+     "params": {
+      "preset": "Melodica",
+      "level": 0.36,
+      "pan": 0.15,
+      "reverbSend": 0.25,
+      "name": "II · Theme"
+     }
+    },
+    {
+     "id": "cantus",
+     "type": "music/pattern",
+     "position": {
+      "x": 0,
+      "y": 1700
+     },
+     "params": {
+      "steps": "D3@0.7 . . . . . . . . . . . . . . . F3@0.7 . . . . . . . . . . . . . . . E3@0.7 . . . . . . . . . . . . . . . G3@0.7 . . . . . . . . . . . . . . . F3@0.7 . . . . . . . . . . . . . . . A3@0.7 . . . . . . . . . . . . . . . E3@0.7 . . . . . . . . . . . . . . . D3@0.7 . . . . . . . . . . . . . . .",
+      "length": "128"
+     }
+    },
+    {
+     "id": "sec_cf",
+     "type": "music/sections",
+     "position": {
+      "x": 520,
+      "y": 1700
+     },
+     "params": {
+      "name": "cantus · bars 21–28",
+      "bars": ".*20 x*8 .*40",
+      "barLength": 16,
+      "restart": true
+     }
+    },
+    {
+     "id": "cantus_v",
+     "type": "music/fm-voice",
+     "position": {
+      "x": 1040,
+      "y": 1700
+     },
+     "params": {
+      "preset": "Felucca · ORGAN",
+      "level": 0.55,
+      "pan": -0.2,
+      "reverbSend": 0.2,
+      "name": "II · Cantus firmus"
+     }
+    },
+    {
+     "id": "cp",
+     "type": "music/counterpoint",
+     "position": {
+      "x": 260,
+      "y": 1860
+     },
+     "params": {
+      "species": "2",
+      "position": "above",
+      "scale": "minor",
+      "root": "D",
+      "low": 62,
+      "high": 79,
+      "velocity": 0.65,
+      "seed": 1
+     }
+    },
+    {
+     "id": "sec_cp",
+     "type": "music/sections",
+     "position": {
+      "x": 520,
+      "y": 1860
+     },
+     "params": {
+      "name": "counterpoint · bars 21–28",
+      "bars": ".*20 x*8 .*40",
+      "barLength": 16,
+      "restart": true
+     }
+    },
+    {
+     "id": "cp_v",
+     "type": "music/fm-voice",
+     "position": {
+      "x": 1040,
+      "y": 1860
+     },
+     "params": {
+      "preset": "SLOOP · HARP",
+      "level": 0.7,
+      "pan": 0.3,
+      "reverbSend": 0.25,
+      "name": "II · Counterpoint"
+     }
+    },
+    {
+     "id": "sr",
+     "type": "music/shift-register",
+     "position": {
+      "x": 0,
+      "y": 2100
+     },
+     "params": {
+      "bits": 8,
+      "change": 0.12,
+      "density": 0.7,
+      "length": 128,
+      "scale": "minor",
+      "root": "D",
+      "low": 62,
+      "range": 9,
+      "gate": 1,
+      "velocity": 0.7,
+      "seed": 4
+     }
+    },
+    {
+     "id": "pyth",
+     "type": "music/tuning",
+     "position": {
+      "x": 260,
+      "y": 2100
+     },
+     "params": {
+      "system": "Pythagorean",
+      "edo": 19,
+      "custom": "",
+      "map": "auto",
+      "root": "D",
+      "offset": 0
+     }
+    },
+    {
+     "id": "sec_sr",
+     "type": "music/sections",
+     "position": {
+      "x": 520,
+      "y": 2100
+     },
+     "params": {
+      "name": "shift register · bars 29–36",
+      "bars": ".*28 x*8 .*32",
+      "barLength": 16,
+      "restart": true
+     }
+    },
+    {
+     "id": "sr_v",
+     "type": "music/gameboy",
+     "position": {
+      "x": 1040,
+      "y": 2100
+     },
+     "params": {
+      "preset": "Pulse 25 · Lead",
+      "level": 0.2,
+      "pan": -0.3,
+      "name": "III · Shift register"
+     }
+    },
+    {
+     "id": "sr_echo",
+     "type": "music/chip-echo",
+     "position": {
+      "x": 780,
+      "y": 2260
+     },
+     "params": {
+      "delay": 3,
+      "level": 0.45,
+      "transpose": 0,
+      "detune": 8
+     }
+    },
+    {
+     "id": "sr_echo_v",
+     "type": "music/gameboy",
+     "position": {
+      "x": 1040,
+      "y": 2260
+     },
+     "params": {
+      "preset": "Pulse 12.5 · Thin",
+      "level": 0.14,
+      "pan": 0.45,
+      "name": "III · Echo"
+     }
+    },
+    {
+     "id": "markov",
+     "type": "music/markov",
+     "position": {
+      "x": 260,
+      "y": 2420
+     },
+     "params": {
+      "order": 2,
+      "length": 128,
+      "learn": "both",
+      "novelty": 0.3,
+      "seed": 5
+     }
+    },
+    {
+     "id": "markov_up",
+     "type": "music/scale",
+     "position": {
+      "x": 520,
+      "y": 2420
+     },
+     "params": {
+      "root": "D",
+      "scale": "minor",
+      "snap": "nearest",
+      "outside": "snap",
+      "chords": "keep"
+     }
+    },
+    {
+     "id": "sec_mk",
+     "type": "music/sections",
+     "position": {
+      "x": 780,
+      "y": 2420
+     },
+     "params": {
+      "name": "markov · bars 37–44",
+      "bars": ".*36 x*8 .*24",
+      "barLength": 16,
+      "restart": true
+     }
+    },
+    {
+     "id": "markov_v",
+     "type": "music/gameboy",
+     "position": {
+      "x": 1040,
+      "y": 2420
+     },
+     "params": {
+      "preset": "Macro · Vibrato Lead",
+      "level": 0.2,
+      "pan": 0.1,
+      "name": "III · Markov"
+     }
+    },
+    {
+     "id": "eu_kick",
+     "type": "music/euclid",
+     "position": {
+      "x": 0,
+      "y": 2650
+     },
+     "params": {
+      "pulses": 3,
+      "steps": 8,
+      "rotation": 0,
+      "notes": "kick",
+      "gate": 0,
+      "velocity": 0.85,
+      "accent": 0
+     }
+    },
+    {
+     "id": "sec_kick",
+     "type": "music/sections",
+     "position": {
+      "x": 520,
+      "y": 2650
+     },
+     "params": {
+      "name": "kick · bars 29–64",
+      "bars": ".*28 x*36 .*4",
+      "barLength": 16,
+      "restart": true
+     }
+    },
+    {
+     "id": "kit_kick",
+     "type": "music/drum-kit",
+     "position": {
+      "x": 1040,
+      "y": 2650
+     },
+     "params": {
+      "level": 0.6,
+      "name": "Kick"
+     }
+    },
+    {
+     "id": "eu_snare",
+     "type": "music/euclid",
+     "position": {
+      "x": 0,
+      "y": 2810
+     },
+     "params": {
+      "pulses": 2,
+      "steps": 16,
+      "rotation": 4,
+      "notes": "snare",
+      "gate": 0,
+      "velocity": 0.7,
+      "accent": 0
+     }
+    },
+    {
+     "id": "sec_snare",
+     "type": "music/sections",
+     "position": {
+      "x": 520,
+      "y": 2810
+     },
+     "params": {
+      "name": "snare · bars 33–44, 53–64",
+      "bars": ".*32 x*12 .*8 x*12 .*4",
+      "barLength": 16,
+      "restart": true
+     }
+    },
+    {
+     "id": "kit_snare",
+     "type": "music/drum-kit",
+     "position": {
+      "x": 1040,
+      "y": 2810
+     },
+     "params": {
+      "level": 0.6,
+      "name": "Snare"
+     }
+    },
+    {
+     "id": "eu_hats",
+     "type": "music/euclid",
+     "position": {
+      "x": 0,
+      "y": 2970
+     },
+     "params": {
+      "pulses": 7,
+      "steps": 12,
+      "rotation": 0,
+      "notes": "hat",
+      "gate": 0,
+      "velocity": 0.35,
+      "accent": 0.55
+     }
+    },
+    {
+     "id": "sec_hats",
+     "type": "music/sections",
+     "position": {
+      "x": 520,
+      "y": 2970
+     },
+     "params": {
+      "name": "hats · bars 29–44, 57–64",
+      "bars": ".*28 x*16 .*12 x*8 .*4",
+      "barLength": 16,
+      "restart": true
+     }
+    },
+    {
+     "id": "kit_hats",
+     "type": "music/drum-kit",
+     "position": {
+      "x": 1040,
+      "y": 2970
+     },
+     "params": {
+      "level": 0.6,
+      "name": "Hats"
+     }
+    },
+    {
+     "id": "aug",
+     "type": "music/motif",
+     "position": {
+      "x": 260,
+      "y": 3200
+     },
+     "params": {
+      "op": "augmentation",
+      "output": "transformed",
+      "axis": -1,
+      "repeats": 3,
+      "interval": 2,
+      "amount": 2,
+      "inScale": false,
+      "scale": "minor",
+      "root": "D"
+     }
+    },
+    {
+     "id": "trill",
+     "type": "music/ornament",
+     "position": {
+      "x": 520,
+      "y": 3200
+     },
+     "params": {
+      "type": "trill",
+      "chance": 0.3,
+      "minSteps": 8,
+      "rate": "1/32",
+      "up": 2,
+      "down": 1,
+      "seed": 7
+     }
+    },
+    {
+     "id": "scale_f",
+     "type": "music/scale",
+     "position": {
+      "x": 780,
+      "y": 3200
+     },
+     "params": {
+      "root": "D",
+      "scale": "minor",
+      "snap": "nearest",
+      "outside": "snap",
+      "chords": "keep"
+     }
+    },
+    {
+     "id": "sec_aug",
+     "type": "music/sections",
+     "position": {
+      "x": 1040,
+      "y": 3200
+     },
+     "params": {
+      "name": "theme augmented · bars 45–60",
+      "bars": ".*44 x*16 .*8",
+      "barLength": 16,
+      "restart": true
+     }
+    },
+    {
+     "id": "brass",
+     "type": "music/fm-voice",
+     "position": {
+      "x": 1300,
+      "y": 3200
+     },
+     "params": {
+      "preset": "Felucca · BRASS",
+      "level": 0.34,
+      "pan": -0.1,
+      "reverbSend": 0.3,
+      "name": "IV · Theme augmented"
+     }
+    },
+    {
+     "id": "phase_m",
+     "type": "music/pattern",
+     "position": {
+      "x": 0,
+      "y": 3400
+     },
+     "params": {
+      "steps": "D5 A4 F5 A4 E5 A4 D5 A4 G5 A4 E5 A4",
+      "length": "12"
+     }
+    },
+    {
+     "id": "phase",
+     "type": "music/phase",
+     "position": {
+      "x": 260,
+      "y": 3400
+     },
+     "params": {
+      "mode": "steps",
+      "loops": 2,
+      "direction": "ahead",
+      "drift": 1
+     }
+    },
+    {
+     "id": "sec_pa",
+     "type": "music/sections",
+     "position": {
+      "x": 520,
+      "y": 3400
+     },
+     "params": {
+      "name": "phase A · bars 45–64",
+      "bars": ".*44 x*20 .*4",
+      "barLength": 16,
+      "restart": true
+     }
+    },
+    {
+     "id": "sec_pb",
+     "type": "music/sections",
+     "position": {
+      "x": 520,
+      "y": 3560
+     },
+     "params": {
+      "name": "phase B · bars 45–64",
+      "bars": ".*44 x*20 .*4",
+      "barLength": 16,
+      "restart": true
+     }
+    },
+    {
+     "id": "phase_a",
+     "type": "music/gameboy",
+     "position": {
+      "x": 1040,
+      "y": 3400
+     },
+     "params": {
+      "preset": "Pulse 25 · Pluck",
+      "level": 0.12,
+      "pan": -0.65,
+      "name": "IV · Phase A"
+     }
+    },
+    {
+     "id": "phase_b",
+     "type": "music/gameboy",
+     "position": {
+      "x": 1040,
+      "y": 3560
+     },
+     "params": {
+      "preset": "Pulse 25 · Pluck",
+      "level": 0.12,
+      "pan": 0.65,
+      "name": "IV · Phase B"
+     }
+    },
+    {
+     "id": "curve",
+     "type": "math/function-curve",
+     "position": {
+      "x": 0,
+      "y": 3760
+     },
+     "params": {
+      "mode": "function",
+      "formula": "sin(x) + 0.4 * sin(3 * x)",
+      "from": -3.2,
+      "to": 3.2,
+      "samples": 200,
+      "yMin": -2,
+      "yMax": 2,
+      "progress": 1,
+      "width": 4,
+      "visible": false
+     }
+    },
+    {
+     "id": "contour",
+     "type": "music/contour",
+     "position": {
+      "x": 260,
+      "y": 3760
+     },
+     "params": {
+      "axis": "y",
+      "steps": 64,
+      "scale": "minor pentatonic",
+      "root": "D",
+      "low": 74,
+      "range": 6,
+      "rhythm": "change",
+      "invert": false,
+      "velocity": 0.45,
+      "gate": 0
+     }
+    },
+    {
+     "id": "sec_ct",
+     "type": "music/sections",
+     "position": {
+      "x": 520,
+      "y": 3760
+     },
+     "params": {
+      "name": "descant · bars 45–56, 61–64",
+      "bars": ".*44 x*12 .*4 x*4 .*4",
+      "barLength": 16,
+      "restart": true
+     }
+    },
+    {
+     "id": "celesta",
+     "type": "music/fm-voice",
+     "position": {
+      "x": 1040,
+      "y": 3760
+     },
+     "params": {
+      "preset": "SLOOP · CELESTA",
+      "level": 0.26,
+      "pan": -0.35,
+      "reverbSend": 0.45,
+      "name": "IV · Descant"
+     }
+    },
+    {
+     "id": "out",
+     "type": "music/out",
+     "position": {
+      "x": 1900,
+      "y": 1600
+     },
+     "params": {
+      "master": 0.8,
+      "startFrame": 0
+     }
+    },
+    {
+     "id": "viewer",
+     "type": "music/viewer",
+     "position": {
+      "x": 1900,
+      "y": 1300
+     },
+     "params": {
+      "title": "Chip Symphony in D minor",
+      "show": true,
+      "style": "galaxy",
+      "palette": "neon",
+      "intensity": 1,
+      "ahead": 6,
+      "legend": true
+     }
+    },
+    {
+     "id": "env",
+     "type": "lighting/environment",
+     "position": {
+      "x": 1900,
+      "y": 1900
+     },
+     "params": {
+      "color": 4147798,
+      "intensity": 1,
+      "background": 1,
+      "ambientIntensity": 0.6,
+      "sunIntensity": 1.2
+     }
+    },
+    {
+     "id": "render",
+     "type": "render",
+     "position": {
+      "x": 1900,
+      "y": 2100
+     },
+     "params": {
+      "frameCount": 5100,
+      "fps": 30,
+      "motionBlur": 0,
+      "resolutionPreset": "16:9 (1920x1080)",
+      "width": 1920,
+      "height": 1080,
+      "holdout": false
+     }
+    },
+    {
+     "id": "probe",
+     "type": "music/note-probe",
+     "position": {
+      "x": 2200,
+      "y": 1200
+     },
+     "params": {
+      "decay": 0.25
+     }
+    },
+    {
+     "id": "pulse",
+     "type": "math/expression",
+     "position": {
+      "x": 2440,
+      "y": 1200
+     },
+     "params": {
+      "formula": "0.7 + 0.6 * x"
+     }
+    },
+    {
+     "id": "to_vec",
+     "type": "converter/value-to-vector",
+     "position": {
+      "x": 2680,
+      "y": 1200
+     },
+     "params": {}
+    },
+    {
+     "id": "xform",
+     "type": "transform/matrix-transform",
+     "position": {
+      "x": 2920,
+      "y": 1200
+     },
+     "params": {}
+    },
+    {
+     "id": "sphere",
+     "type": "object/sphere",
+     "position": {
+      "x": 3160,
+      "y": 1200
+     },
+     "params": {
+      "color": 14239471,
+      "emissive": 3868516,
+      "emissiveIntensity": 1.0
+     }
+    }
+   ],
+   "connections": [
+    {
+     "id": "c0",
+     "fromNode": "clock",
+     "fromSocket": "clock",
+     "toNode": "tonnetz",
+     "toSocket": "clock"
+    },
+    {
+     "id": "c1",
+     "fromNode": "tonnetz",
+     "fromSocket": "chords",
+     "toNode": "sec_tz",
+     "toSocket": "sequence"
+    },
+    {
+     "id": "c2",
+     "fromNode": "sec_tz",
+     "fromSocket": "sequence",
+     "toNode": "ji_tz",
+     "toSocket": "sequence"
+    },
+    {
+     "id": "c3",
+     "fromNode": "ji_tz",
+     "fromSocket": "sequence",
+     "toNode": "pad_I",
+     "toSocket": "sequence"
+    },
+    {
+     "id": "c4",
+     "fromNode": "tonnetz",
+     "fromSocket": "bass",
+     "toNode": "sec_tzb",
+     "toSocket": "sequence"
+    },
+    {
+     "id": "c5",
+     "fromNode": "sec_tzb",
+     "fromSocket": "sequence",
+     "toNode": "bass_I",
+     "toSocket": "sequence"
+    },
+    {
+     "id": "c6",
+     "fromNode": "sec_tz",
+     "fromSocket": "sequence",
+     "toNode": "arp_I",
+     "toSocket": "sequence"
+    },
+    {
+     "id": "c7",
+     "fromNode": "arp_I",
+     "fromSocket": "sequence",
+     "toNode": "sec_arp",
+     "toSocket": "sequence"
+    },
+    {
+     "id": "c8",
+     "fromNode": "sec_arp",
+     "fromSocket": "sequence",
+     "toNode": "arp_v",
+     "toSocket": "sequence"
+    },
+    {
+     "id": "c9",
+     "fromNode": "sec_arp",
+     "fromSocket": "sequence",
+     "toNode": "echo_I",
+     "toSocket": "sequence"
+    },
+    {
+     "id": "c10",
+     "fromNode": "echo_I",
+     "fromSocket": "echo",
+     "toNode": "echo_v",
+     "toSocket": "sequence"
+    },
+    {
+     "id": "c11",
+     "fromNode": "clock",
+     "fromSocket": "clock",
+     "toNode": "prog",
+     "toSocket": "clock"
+    },
+    {
+     "id": "c12",
+     "fromNode": "prog",
+     "fromSocket": "chords",
+     "toNode": "vl",
+     "toSocket": "sequence"
+    },
+    {
+     "id": "c13",
+     "fromNode": "vl",
+     "fromSocket": "sequence",
+     "toNode": "sec_str",
+     "toSocket": "sequence"
+    },
+    {
+     "id": "c14",
+     "fromNode": "sec_str",
+     "fromSocket": "sequence",
+     "toNode": "ji_str",
+     "toSocket": "sequence"
+    },
+    {
+     "id": "c15",
+     "fromNode": "ji_str",
+     "fromSocket": "sequence",
+     "toNode": "strings",
+     "toSocket": "sequence"
+    },
+    {
+     "id": "c16",
+     "fromNode": "vl",
+     "fromSocket": "bass",
+     "toNode": "sec_bass",
+     "toSocket": "sequence"
+    },
+    {
+     "id": "c17",
+     "fromNode": "sec_bass",
+     "fromSocket": "sequence",
+     "toNode": "bass_II",
+     "toSocket": "sequence"
+    },
+    {
+     "id": "c18",
+     "fromNode": "vl",
+     "fromSocket": "bass",
+     "toNode": "eu_bass",
+     "toSocket": "input"
+    },
+    {
+     "id": "c19",
+     "fromNode": "eu_bass",
+     "fromSocket": "sequence",
+     "toNode": "sec_eub",
+     "toSocket": "sequence"
+    },
+    {
+     "id": "c20",
+     "fromNode": "sec_eub",
+     "fromSocket": "sequence",
+     "toNode": "sch_bass",
+     "toSocket": "sequence"
+    },
+    {
+     "id": "c21",
+     "fromNode": "vl",
+     "fromSocket": "sequence",
+     "toNode": "eu_stab",
+     "toSocket": "input"
+    },
+    {
+     "id": "c22",
+     "fromNode": "eu_stab",
+     "fromSocket": "sequence",
+     "toNode": "sec_stab",
+     "toSocket": "sequence"
+    },
+    {
+     "id": "c23",
+     "fromNode": "sec_stab",
+     "fromSocket": "sequence",
+     "toNode": "stabs",
+     "toSocket": "sequence"
+    },
+    {
+     "id": "c24",
+     "fromNode": "clock",
+     "fromSocket": "clock",
+     "toNode": "theme",
+     "toSocket": "clock"
+    },
+    {
+     "id": "c25",
+     "fromNode": "theme",
+     "fromSocket": "sequence",
+     "toNode": "orn",
+     "toSocket": "sequence"
+    },
+    {
+     "id": "c26",
+     "fromNode": "orn",
+     "fromSocket": "sequence",
+     "toNode": "scale_t",
+     "toSocket": "sequence"
+    },
+    {
+     "id": "c27",
+     "fromNode": "scale_t",
+     "fromSocket": "sequence",
+     "toNode": "sec_theme",
+     "toSocket": "sequence"
+    },
+    {
+     "id": "c28",
+     "fromNode": "sec_theme",
+     "fromSocket": "sequence",
+     "toNode": "lead",
+     "toSocket": "sequence"
+    },
+    {
+     "id": "c29",
+     "fromNode": "clock",
+     "fromSocket": "clock",
+     "toNode": "cantus",
+     "toSocket": "clock"
+    },
+    {
+     "id": "c30",
+     "fromNode": "cantus",
+     "fromSocket": "sequence",
+     "toNode": "sec_cf",
+     "toSocket": "sequence"
+    },
+    {
+     "id": "c31",
+     "fromNode": "sec_cf",
+     "fromSocket": "sequence",
+     "toNode": "cantus_v",
+     "toSocket": "sequence"
+    },
+    {
+     "id": "c32",
+     "fromNode": "cantus",
+     "fromSocket": "sequence",
+     "toNode": "cp",
+     "toSocket": "sequence"
+    },
+    {
+     "id": "c33",
+     "fromNode": "cp",
+     "fromSocket": "sequence",
+     "toNode": "sec_cp",
+     "toSocket": "sequence"
+    },
+    {
+     "id": "c34",
+     "fromNode": "sec_cp",
+     "fromSocket": "sequence",
+     "toNode": "cp_v",
+     "toSocket": "sequence"
+    },
+    {
+     "id": "c35",
+     "fromNode": "clock",
+     "fromSocket": "clock",
+     "toNode": "sr",
+     "toSocket": "clock"
+    },
+    {
+     "id": "c36",
+     "fromNode": "sr",
+     "fromSocket": "sequence",
+     "toNode": "pyth",
+     "toSocket": "sequence"
+    },
+    {
+     "id": "c37",
+     "fromNode": "pyth",
+     "fromSocket": "sequence",
+     "toNode": "sec_sr",
+     "toSocket": "sequence"
+    },
+    {
+     "id": "c38",
+     "fromNode": "sec_sr",
+     "fromSocket": "sequence",
+     "toNode": "sr_v",
+     "toSocket": "sequence"
+    },
+    {
+     "id": "c39",
+     "fromNode": "sec_sr",
+     "fromSocket": "sequence",
+     "toNode": "sr_echo",
+     "toSocket": "sequence"
+    },
+    {
+     "id": "c40",
+     "fromNode": "sr_echo",
+     "fromSocket": "echo",
+     "toNode": "sr_echo_v",
+     "toSocket": "sequence"
+    },
+    {
+     "id": "c41",
+     "fromNode": "theme",
+     "fromSocket": "sequence",
+     "toNode": "markov",
+     "toSocket": "source"
+    },
+    {
+     "id": "c42",
+     "fromNode": "cp",
+     "fromSocket": "sequence",
+     "toNode": "markov",
+     "toSocket": "source2"
+    },
+    {
+     "id": "c43",
+     "fromNode": "markov",
+     "fromSocket": "sequence",
+     "toNode": "markov_up",
+     "toSocket": "sequence"
+    },
+    {
+     "id": "c44",
+     "fromNode": "markov_up",
+     "fromSocket": "sequence",
+     "toNode": "sec_mk",
+     "toSocket": "sequence"
+    },
+    {
+     "id": "c45",
+     "fromNode": "sec_mk",
+     "fromSocket": "sequence",
+     "toNode": "markov_v",
+     "toSocket": "sequence"
+    },
+    {
+     "id": "c46",
+     "fromNode": "clock",
+     "fromSocket": "clock",
+     "toNode": "eu_kick",
+     "toSocket": "input"
+    },
+    {
+     "id": "c47",
+     "fromNode": "eu_kick",
+     "fromSocket": "sequence",
+     "toNode": "sec_kick",
+     "toSocket": "sequence"
+    },
+    {
+     "id": "c48",
+     "fromNode": "sec_kick",
+     "fromSocket": "sequence",
+     "toNode": "kit_kick",
+     "toSocket": "sequence"
+    },
+    {
+     "id": "c49",
+     "fromNode": "clock",
+     "fromSocket": "clock",
+     "toNode": "eu_snare",
+     "toSocket": "input"
+    },
+    {
+     "id": "c50",
+     "fromNode": "eu_snare",
+     "fromSocket": "sequence",
+     "toNode": "sec_snare",
+     "toSocket": "sequence"
+    },
+    {
+     "id": "c51",
+     "fromNode": "sec_snare",
+     "fromSocket": "sequence",
+     "toNode": "kit_snare",
+     "toSocket": "sequence"
+    },
+    {
+     "id": "c52",
+     "fromNode": "clock",
+     "fromSocket": "clock",
+     "toNode": "eu_hats",
+     "toSocket": "input"
+    },
+    {
+     "id": "c53",
+     "fromNode": "eu_hats",
+     "fromSocket": "sequence",
+     "toNode": "sec_hats",
+     "toSocket": "sequence"
+    },
+    {
+     "id": "c54",
+     "fromNode": "sec_hats",
+     "fromSocket": "sequence",
+     "toNode": "kit_hats",
+     "toSocket": "sequence"
+    },
+    {
+     "id": "c55",
+     "fromNode": "theme",
+     "fromSocket": "sequence",
+     "toNode": "aug",
+     "toSocket": "sequence"
+    },
+    {
+     "id": "c56",
+     "fromNode": "aug",
+     "fromSocket": "sequence",
+     "toNode": "trill",
+     "toSocket": "sequence"
+    },
+    {
+     "id": "c57",
+     "fromNode": "trill",
+     "fromSocket": "sequence",
+     "toNode": "scale_f",
+     "toSocket": "sequence"
+    },
+    {
+     "id": "c58",
+     "fromNode": "scale_f",
+     "fromSocket": "sequence",
+     "toNode": "sec_aug",
+     "toSocket": "sequence"
+    },
+    {
+     "id": "c59",
+     "fromNode": "sec_aug",
+     "fromSocket": "sequence",
+     "toNode": "brass",
+     "toSocket": "sequence"
+    },
+    {
+     "id": "c60",
+     "fromNode": "clock",
+     "fromSocket": "clock",
+     "toNode": "phase_m",
+     "toSocket": "clock"
+    },
+    {
+     "id": "c61",
+     "fromNode": "phase_m",
+     "fromSocket": "sequence",
+     "toNode": "phase",
+     "toSocket": "sequence"
+    },
+    {
+     "id": "c62",
+     "fromNode": "phase",
+     "fromSocket": "a",
+     "toNode": "sec_pa",
+     "toSocket": "sequence"
+    },
+    {
+     "id": "c63",
+     "fromNode": "phase",
+     "fromSocket": "b",
+     "toNode": "sec_pb",
+     "toSocket": "sequence"
+    },
+    {
+     "id": "c64",
+     "fromNode": "sec_pa",
+     "fromSocket": "sequence",
+     "toNode": "phase_a",
+     "toSocket": "sequence"
+    },
+    {
+     "id": "c65",
+     "fromNode": "sec_pb",
+     "fromSocket": "sequence",
+     "toNode": "phase_b",
+     "toSocket": "sequence"
+    },
+    {
+     "id": "c66",
+     "fromNode": "curve",
+     "fromSocket": "curve",
+     "toNode": "contour",
+     "toSocket": "curve"
+    },
+    {
+     "id": "c67",
+     "fromNode": "clock",
+     "fromSocket": "clock",
+     "toNode": "contour",
+     "toSocket": "clock"
+    },
+    {
+     "id": "c68",
+     "fromNode": "contour",
+     "fromSocket": "sequence",
+     "toNode": "sec_ct",
+     "toSocket": "sequence"
+    },
+    {
+     "id": "c69",
+     "fromNode": "sec_ct",
+     "fromSocket": "sequence",
+     "toNode": "celesta",
+     "toSocket": "sequence"
+    },
+    {
+     "id": "c70",
+     "fromNode": "pad_I",
+     "fromSocket": "track",
+     "toNode": "out",
+     "toSocket": "track0"
+    },
+    {
+     "id": "c71",
+     "fromNode": "bass_I",
+     "fromSocket": "track",
+     "toNode": "out",
+     "toSocket": "track1"
+    },
+    {
+     "id": "c72",
+     "fromNode": "arp_v",
+     "fromSocket": "track",
+     "toNode": "out",
+     "toSocket": "track2"
+    },
+    {
+     "id": "c73",
+     "fromNode": "echo_v",
+     "fromSocket": "track",
+     "toNode": "out",
+     "toSocket": "track3"
+    },
+    {
+     "id": "c74",
+     "fromNode": "strings",
+     "fromSocket": "track",
+     "toNode": "out",
+     "toSocket": "track4"
+    },
+    {
+     "id": "c75",
+     "fromNode": "bass_II",
+     "fromSocket": "track",
+     "toNode": "out",
+     "toSocket": "track5"
+    },
+    {
+     "id": "c76",
+     "fromNode": "sch_bass",
+     "fromSocket": "track",
+     "toNode": "out",
+     "toSocket": "track6"
+    },
+    {
+     "id": "c77",
+     "fromNode": "stabs",
+     "fromSocket": "track",
+     "toNode": "out",
+     "toSocket": "track7"
+    },
+    {
+     "id": "c78",
+     "fromNode": "lead",
+     "fromSocket": "track",
+     "toNode": "out",
+     "toSocket": "track8"
+    },
+    {
+     "id": "c79",
+     "fromNode": "cantus_v",
+     "fromSocket": "track",
+     "toNode": "out",
+     "toSocket": "track9"
+    },
+    {
+     "id": "c80",
+     "fromNode": "cp_v",
+     "fromSocket": "track",
+     "toNode": "out",
+     "toSocket": "track10"
+    },
+    {
+     "id": "c81",
+     "fromNode": "sr_v",
+     "fromSocket": "track",
+     "toNode": "out",
+     "toSocket": "track11"
+    },
+    {
+     "id": "c82",
+     "fromNode": "sr_echo_v",
+     "fromSocket": "track",
+     "toNode": "out",
+     "toSocket": "track12"
+    },
+    {
+     "id": "c83",
+     "fromNode": "markov_v",
+     "fromSocket": "track",
+     "toNode": "out",
+     "toSocket": "track13"
+    },
+    {
+     "id": "c84",
+     "fromNode": "kit_kick",
+     "fromSocket": "track",
+     "toNode": "out",
+     "toSocket": "track14"
+    },
+    {
+     "id": "c85",
+     "fromNode": "kit_snare",
+     "fromSocket": "track",
+     "toNode": "out",
+     "toSocket": "track15"
+    },
+    {
+     "id": "c86",
+     "fromNode": "kit_hats",
+     "fromSocket": "track",
+     "toNode": "out",
+     "toSocket": "track16"
+    },
+    {
+     "id": "c87",
+     "fromNode": "brass",
+     "fromSocket": "track",
+     "toNode": "out",
+     "toSocket": "track17"
+    },
+    {
+     "id": "c88",
+     "fromNode": "phase_a",
+     "fromSocket": "track",
+     "toNode": "out",
+     "toSocket": "track18"
+    },
+    {
+     "id": "c89",
+     "fromNode": "phase_b",
+     "fromSocket": "track",
+     "toNode": "out",
+     "toSocket": "track19"
+    },
+    {
+     "id": "c90",
+     "fromNode": "celesta",
+     "fromSocket": "track",
+     "toNode": "out",
+     "toSocket": "track20"
+    },
+    {
+     "id": "c91",
+     "fromNode": "sec_kick",
+     "fromSocket": "sequence",
+     "toNode": "probe",
+     "toSocket": "music"
+    },
+    {
+     "id": "c92",
+     "fromNode": "probe",
+     "fromSocket": "envelope",
+     "toNode": "pulse",
+     "toSocket": "x"
+    },
+    {
+     "id": "c93",
+     "fromNode": "pulse",
+     "fromSocket": "value",
+     "toNode": "to_vec",
+     "toSocket": "value"
+    },
+    {
+     "id": "c94",
+     "fromNode": "to_vec",
+     "fromSocket": "vector",
+     "toNode": "xform",
+     "toSocket": "scale"
+    },
+    {
+     "id": "c95",
+     "fromNode": "xform",
+     "fromSocket": "matrix",
+     "toNode": "sphere",
+     "toSocket": "matrix"
+    }
+   ],
+   "keyframes": {},
+   "markers": [],
+   "exposedParams": []
+  }
+ ],
+ "activeCanvas": 0
+}
