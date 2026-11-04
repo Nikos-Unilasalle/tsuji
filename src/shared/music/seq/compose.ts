@@ -312,6 +312,44 @@ export function parseNumeral(word: string, minor: boolean): ProgressionChord | n
   return { root: ((root % 12) + 12) % 12, chord, beats };
 }
 
+const ROMAN = ["i", "ii", "iii", "iv", "v", "vi", "vii"];
+const LOWER_CHORDS = new Set(["min", "min7", "dim", "dim7", "m7b5"]);
+const SUFFIX: Partial<Record<ChordName, string>> = { dim: "°", dim7: "°7", m7b5: "ø7", maj7: "maj7", "7": "7", min7: "7", aug: "+", "9": "9", sus: "sus", sus2: "sus2" };
+
+/**
+ * A chord as a numeral in the key (the inverse of parseNumeral, length aside): its degree in the key's scale — or the
+ * one above, flattened, for a chromatic root (bVI, bII) — upper case for a major-third chord, with its suffix. Null for
+ * a chord no numeral says (a minor 7th on an upper-case numeral, say).
+ */
+export function numeralOf(root: number, chord: ChordName, minor: boolean): string | null {
+  const degrees = minor ? MINOR_DEGREES : MAJOR_DEGREES;
+  const pc = ((Math.round(root) % 12) + 12) % 12;
+  let d = degrees.indexOf(pc);
+  let acc = "";
+  if (d < 0) {
+    d = degrees.findIndex((x) => x === pc + 1);
+    acc = "b";
+    if (d < 0) {
+      d = degrees.findIndex((x) => x === pc - 1);
+      acc = "#";
+    }
+    if (d < 0) return null;
+  }
+  const upper = !LOWER_CHORDS.has(chord);
+  const word = `${acc}${upper ? ROMAN[d].toUpperCase() : ROMAN[d]}${SUFFIX[chord] ?? ""}`;
+  const back = parseNumeral(word, minor);
+  return back && back.root === pc && back.chord === chord ? word : null;
+}
+
+/** A numeral's degree in the key (0 = I … 6 = vii), and whether it is chromatic (an accidental or a /target). */
+export function numeralDegree(word: string): { degree: number; chromatic: boolean } | null {
+  const w = word.trim().replace(/:\d+(?:\.\d+)?$/, "");
+  const [main, target] = w.split("/");
+  const m = /^([b#♭♯]*)([ivIV]+)/.exec(main);
+  if (!m || !(m[2].toLowerCase() in NUMERAL_DEGREE)) return null;
+  return { degree: NUMERAL_DEGREE[m[2].toLowerCase()], chromatic: m[1] !== "" || target !== undefined };
+}
+
 export function parseProgression(text: string, minor: boolean): ProgressionChord[] {
   return text
     .split(/[\s,|\-–]+/)
@@ -321,7 +359,7 @@ export function parseProgression(text: string, minor: boolean): ProgressionChord
 }
 
 /** Where each degree tends to go (classical practice: tonic → predominant → dominant → tonic), with weights. */
-const FUNCTION_MOVES: Record<number, Record<number, number>> = {
+export const FUNCTION_MOVES: Record<number, Record<number, number>> = {
   0: { 3: 3, 4: 3, 5: 2, 1: 2, 2: 1 },
   1: { 4: 4, 6: 1, 3: 1 },
   2: { 5: 3, 3: 2 },
