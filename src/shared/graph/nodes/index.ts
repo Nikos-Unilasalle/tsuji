@@ -39,6 +39,7 @@ import {
   MUSIC_OUT_NODE,
   MUSIC_PATTERN_NODE,
 } from "./music";
+import { MUSIC_ALGO_NODES } from "./musicAlgo";
 import { RANDOM_LIST_NODE, RANDOM_MATRIX_NODE, RANDOM_VALUE_NODE, RANDOM_VECTOR_NODE } from "./random";
 import { KEYBOARD_NODE } from "./keyboard";
 import { VIRTUAL_INTERFACE_NODE } from "./virtualInterface";
@@ -422,6 +423,7 @@ export const STARTER_NODES = [
   MUSIC_SID_NODE,
   MUSIC_DRUM_KIT_NODE,
   MUSIC_NOTE_PROBE_NODE,
+  ...MUSIC_ALGO_NODES,
   MUSIC_OUT_NODE,
   RANDOM_VALUE_NODE,
   RANDOM_VECTOR_NODE,

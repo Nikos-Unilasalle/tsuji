@@ -17,6 +17,8 @@ import { ArpSettings, arpNote, arpPool, arpStepBeats } from "./arp";
 import { ChordName, chordNotes } from "./chords";
 import { hash01 } from "./hash";
 import type { BankLayout } from "./order";
+import { Ornament, ornamentParts } from "./ornament";
+import { Tuning, tunedPitch } from "./tuning";
 
 export interface Clock {
   bpm: number;
@@ -51,6 +53,8 @@ export interface Cell {
   /** In steps. When left out, the note lasts until the next note or OFF. */
   length?: number;
   fx?: CellFx | null;
+  /** A trill, mordent, turn… played inside the note's time (ornament.ts). An arp or a ratchet takes precedence. */
+  orn?: Ornament | null;
 }
 
 export interface Pattern {
@@ -69,6 +73,8 @@ export interface Sequence {
   /** A bank of patterns laid end to end along an order list (order.ts): `pattern` is the whole song; this says which
    * numbered pattern is where. The sequencer does not read it. */
   bank?: BankLayout;
+  /** How the keys are heard (tuning.ts): every emitted note — and glide start — goes through it. None: 12-TET. */
+  tuning?: Tuning | null;
 }
 
 export interface NoteEvent {
@@ -247,13 +253,16 @@ export function expandStep(seq: Sequence, sampleRate: number, g0: number, from =
   const onT = stepTime(clock, sampleRate, g0) + delayOf(seq, sampleRate, cell);
   const offT = endTime(seq, sampleRate, g0);
   const out: NoteEvent[] = [];
-  const emit = (onX: number, offX: number, note: number, glide?: { from: number; seconds: number }) => {
+  const tuning = seq.tuning ?? null;
+  // `key` the written note: its velocity is looked up by it; `offset` an ornament's step away from it.
+  const emit = (onX: number, offX: number, key: number, glide?: { from: number; seconds: number }, offset = 0) => {
     const on = Math.round(onX);
     const off = Math.round(offX);
     if (off <= on || on < from || on >= to) return;
-    const e: NoteEvent = { on, off, note, velocity: velocityOf(note), step: g0 };
+    const note = tunedPitch(tuning, key + offset);
+    const e: NoteEvent = { on, off, note, velocity: velocityOf(key), step: g0 };
     if (glide) {
-      e.glideFrom = glide.from;
+      e.glideFrom = tunedPitch(tuning, glide.from);
       e.glideSeconds = glide.seconds;
     }
     out.push(e);
@@ -289,6 +298,18 @@ export function expandStep(seq: Sequence, sampleRate: number, g0: number, from =
       const on = onT + j * d;
       const off = j === n - 1 ? offT : on + RATCHET_GATE * d;
       for (const note of notes) emit(on, off, note);
+    }
+    return out;
+  }
+
+  // Ornament: the figure around each note of the chord, in parallel.
+  if (cell.orn) {
+    const unit = Math.max(1, cell.orn.beats * (60 / Math.max(1, clock.bpm)) * sampleRate);
+    for (const p of ornamentParts(cell.orn, onT, offT, unit, sampleRate)) {
+      for (const note of notes) {
+        const glide = p.glideFrom === undefined ? undefined : { from: note + p.glideFrom, seconds: p.glideSeconds ?? 0 };
+        emit(p.on, p.off, note, glide, p.offset);
+      }
     }
     return out;
   }

@@ -36,6 +36,7 @@ import { DanceHud } from "./DanceHud";
 import { PatternHud } from "./PatternHud";
 import { OrderHud } from "./OrderHud";
 import { previewNote } from "../music/engine/bridge";
+import { MUSIC_SEQUENCE_PASS_TYPES } from "../graph/nodes/musicAlgo";
 import { clockOf, isTrack, previewSoundOf, sequenceOf, type PreviewSound } from "../music/engine/description";
 import { RIG_HUMAN_NODE } from "../graph/nodes/rig";
 import { RIG_BIPED_MOTION_NODE, type BipedGaitInfo } from "../graph/nodes/bipedMotion";
@@ -9064,7 +9065,7 @@ export function Viewport({
           for (let hops = 0; hops < 6 && frontier.length > 0 && !voice; hops++) {
             const next = frontier.flatMap((n) => downstream(n.id));
             voice = next.find((n) => n.type === "music/fm-voice" || n.type === "music/drum-kit" || n.type === "music/gameboy" || n.type === "music/sid");
-            frontier = next.filter((n) => n.type === "music/arp");
+            frontier = next.filter((n) => MUSIC_SEQUENCE_PASS_TYPES.includes(n.type));
           }
           const out = voice ? downstream(voice.id).find((n) => n.type === "music/out") : graph.nodes.find((n) => n.type === "music/out");
           const voiceResult = voice ? latestResultsRef.current?.get(voice.id)?.track : null;

@@ -713,6 +713,11 @@ export const DEMO_CATALOG: DemoCategory[] = [
         label: "Dub Dancer",
         description: "The music drives the scene: a dancer swaying on the Clock's tempo, waving with the sirens and cheering for the melodica, stage lights and orbs struck by the drums, the skank and the bass, a camera circling — press Play.",
       },
+      {
+        file: "demo_music_algorithms.tsuji",
+        label: "Algorithms",
+        description: "Music made by rules: a Tonnetz Walk's chords and bass in just intonation, a Shift Register melody ornamented and snapped to A minor pentatonic with a Chip Echo on a second Game Boy channel, and Euclidean drums in 3/8, 2/16 and 5/7 — press Play.",
+      },
     ],
   },
   {
