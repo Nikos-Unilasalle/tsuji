@@ -38,6 +38,8 @@ import { OrderHud } from "./OrderHud";
 import { EuclidHud, TuningHud } from "./MusicAlgoHuds";
 import { SectionsHud } from "./SectionsHud";
 import { ProgressionHud } from "./ProgressionHud";
+import { MusicViewerOverlay } from "./MusicViewerOverlay";
+import { scoreCache } from "../music/viewer/fromGraph";
 import { previewNote } from "../music/engine/bridge";
 import { MUSIC_SEQUENCE_PASS_TYPES } from "../graph/nodes/musicAlgo";
 import { clockOf, isTrack, previewSoundOf, sequenceOf, type PreviewSound } from "../music/engine/description";
@@ -1538,6 +1540,8 @@ export function Viewport({
   const selectedNodeIdRef = useRef(selectedNodeId);
   selectedNodeIdRef.current = selectedNodeId;
   const onSelectNodeRef = useRef(onSelectNode);
+  /** The Music Viewer's score, built again only when the song changes. */
+  const viewerScoreRef = useRef(scoreCache());
   onSelectNodeRef.current = onSelectNode;
   const onTransformChangeRef = useRef(onTransformChange);
   onTransformChangeRef.current = onTransformChange;
@@ -10926,6 +10930,26 @@ export function Viewport({
           just that pane's bounds (absolute within .viewport-container) and
           naturally unmounted whenever this pane isn't on screen at all
           (full-canvas Graph view). */}
+      {/* A shown Music Viewer draws the song as light over the view (see MusicViewerOverlay.tsx). */}
+      {!outputMode &&
+        (() => {
+          const viewer = graph.nodes.find((n) => n.type === "music/viewer" && n.params.show !== false);
+          if (!viewer) return null;
+          const out = graph.nodes.find((n) => n.type === "music/out");
+          const render = graph.nodes.find((n) => n.type === "render");
+          const fps = Number(render?.params.fps) || 30;
+          const seconds = Math.max(1, (Number(render?.params.frameCount) || 600) / fps);
+          const startFrame = Math.round(Number(out?.params.startFrame ?? 0)) || 0;
+          return (
+            <MusicViewerOverlay
+              node={viewer}
+              title="tsuji"
+              readScore={() => viewerScoreRef.current(graphRef.current, latestResultsRef.current, seconds)}
+              readTime={() => (Math.max(0, currentFrameRef.current) - startFrame) / fps}
+              onHide={() => onParamChange?.({ show: false }, viewer.id)}
+            />
+          );
+        })()}
       {/* A shown Virtual Interface plays the pinned params as knobs, switches and selectors, in place of the list. */}
       {!outputMode && onParamChange && virtualInterfaceNode && (
         <VirtualInterfaceHUD

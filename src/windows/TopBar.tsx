@@ -56,6 +56,7 @@ export interface TopBarProps {
   onToggle2DMode?: () => void;
   /** Gates the Share menu's "2D Render" row — true when the graph has a `view2d` node for that window to display. */
   hasView2DNode?: boolean;
+  hasMusicViewer?: boolean;
   isPlaying?: boolean;
   onTogglePlay?: () => void;
   /** Discards every simulation's accumulated state and returns to frame 0. */
@@ -86,6 +87,7 @@ export const TopBar: React.FC<TopBarProps> = ({
   is2DMode = false,
   onToggle2DMode,
   hasView2DNode = false,
+  hasMusicViewer = false,
   isPlaying = false,
   onTogglePlay,
   onResetSimulations,
@@ -647,6 +649,7 @@ export const TopBar: React.FC<TopBarProps> = ({
           isOutputOpen={isOutputOpen}
           onToggleOutput={handleToggleOutput}
           hasView2DNode={hasView2DNode}
+          hasMusicViewer={hasMusicViewer}
           isView2DOpen={isView2DOpen}
           onToggleView2D={handleToggleView2D}
           onExportVideo={onExportVideo}

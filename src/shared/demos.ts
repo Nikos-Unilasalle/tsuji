@@ -731,7 +731,7 @@ export const DEMO_CATALOG: DemoCategory[] = [
       {
         file: "demo_music_symphony.tsuji",
         label: "Symphony",
-        description: "A chip symphony in D minor, in four movements, every part made by a rule and brought in and out by Sections: I a Tonnetz nocturne in just intonation, arpeggiated with an echo; II a chorale with an ornamented theme, then a fugato in second-species counterpoint; III a Euclidean scherzo with a shift register in Pythagorean tuning and a Markov chain that learned the themes; IV the theme augmented over phasing pulses and a descant drawn from a curve, ending on a Picardy third — press Play.",
+        description: "A chip symphony in D minor, in four movements, every part made by a rule and brought in and out by Sections: I a Tonnetz nocturne in just intonation, arpeggiated with an echo; II a chorale with an ornamented theme, then a fugato in second-species counterpoint; III a Euclidean scherzo with a shift register in Pythagorean tuning and a Markov chain that learned the themes; IV the theme augmented over phasing pulses and a descant drawn from a curve, ending on a Picardy third. A Music Viewer draws it all as light over the 3D view (full screen from its button, or filmed with the song from Share › Export Video › Music Viewer) — press Play.",
       },
     ],
   },

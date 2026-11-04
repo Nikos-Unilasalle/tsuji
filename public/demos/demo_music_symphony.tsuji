@@ -73,7 +73,8 @@
       "preset": "SLOOP · GLASS PAD",
       "level": 0.38,
       "pan": -0.2,
-      "reverbSend": 0.45
+      "reverbSend": 0.45,
+      "name": "I · Tonnetz pad"
      }
     },
     {
@@ -100,7 +101,8 @@
      "params": {
       "preset": "SLOOP · FM BASS",
       "level": 0.4,
-      "pan": 0
+      "pan": 0,
+      "name": "I · Bass"
      }
     },
     {
@@ -144,7 +146,8 @@
      "params": {
       "preset": "Pulse 25 · Pluck",
       "level": 0.16,
-      "pan": -0.5
+      "pan": -0.5,
+      "name": "I · Arpeggio"
      }
     },
     {
@@ -171,7 +174,8 @@
      "params": {
       "preset": "Pulse 12.5 · Thin",
       "level": 0.12,
-      "pan": 0.5
+      "pan": 0.5,
+      "name": "I · Chip echo"
      }
     },
     {
@@ -247,7 +251,8 @@
       "preset": "Felucca · PAD",
       "level": 0.3,
       "pan": 0.1,
-      "reverbSend": 0.35
+      "reverbSend": 0.35,
+      "name": "Strings (JI)"
      }
     },
     {
@@ -273,7 +278,8 @@
      },
      "params": {
       "preset": "Felucca · BASS",
-      "level": 0.42
+      "level": 0.42,
+      "name": "Bass"
      }
     },
     {
@@ -316,7 +322,8 @@
      },
      "params": {
       "preset": "Wave · Bass",
-      "level": 0.3
+      "level": 0.3,
+      "name": "III · Euclid bass"
      }
     },
     {
@@ -360,7 +367,8 @@
      "params": {
       "preset": "SLOOP · FM PLUCK",
       "level": 0.22,
-      "pan": -0.25
+      "pan": -0.25,
+      "name": "III · Euclid chords"
      }
     },
     {
@@ -432,7 +440,8 @@
       "preset": "Melodica",
       "level": 0.36,
       "pan": 0.15,
-      "reverbSend": 0.25
+      "reverbSend": 0.25,
+      "name": "II · Theme"
      }
     },
     {
@@ -472,7 +481,8 @@
       "preset": "Felucca · ORGAN",
       "level": 0.55,
       "pan": -0.2,
-      "reverbSend": 0.2
+      "reverbSend": 0.2,
+      "name": "II · Cantus firmus"
      }
     },
     {
@@ -518,7 +528,8 @@
       "preset": "SLOOP · HARP",
       "level": 0.7,
       "pan": 0.3,
-      "reverbSend": 0.25
+      "reverbSend": 0.25,
+      "name": "II · Counterpoint"
      }
     },
     {
@@ -582,7 +593,8 @@
      "params": {
       "preset": "Pulse 25 · Lead",
       "level": 0.2,
-      "pan": -0.3
+      "pan": -0.3,
+      "name": "III · Shift register"
      }
     },
     {
@@ -609,7 +621,8 @@
      "params": {
       "preset": "Pulse 12.5 · Thin",
       "level": 0.14,
-      "pan": 0.45
+      "pan": 0.45,
+      "name": "III · Echo"
      }
     },
     {
@@ -666,7 +679,8 @@
      "params": {
       "preset": "Macro · Vibrato Lead",
       "level": 0.2,
-      "pan": 0.1
+      "pan": 0.1,
+      "name": "III · Markov"
      }
     },
     {
@@ -708,7 +722,8 @@
       "y": 2650
      },
      "params": {
-      "level": 0.6
+      "level": 0.6,
+      "name": "Kick"
      }
     },
     {
@@ -750,7 +765,8 @@
       "y": 2810
      },
      "params": {
-      "level": 0.6
+      "level": 0.6,
+      "name": "Snare"
      }
     },
     {
@@ -792,7 +808,8 @@
       "y": 2970
      },
      "params": {
-      "level": 0.6
+      "level": 0.6,
+      "name": "Hats"
      }
     },
     {
@@ -871,7 +888,8 @@
       "preset": "Felucca · BRASS",
       "level": 0.34,
       "pan": -0.1,
-      "reverbSend": 0.3
+      "reverbSend": 0.3,
+      "name": "IV · Theme augmented"
      }
     },
     {
@@ -938,7 +956,8 @@
      "params": {
       "preset": "Pulse 25 · Pluck",
       "level": 0.12,
-      "pan": -0.65
+      "pan": -0.65,
+      "name": "IV · Phase A"
      }
     },
     {
@@ -951,7 +970,8 @@
      "params": {
       "preset": "Pulse 25 · Pluck",
       "level": 0.12,
-      "pan": 0.65
+      "pan": 0.65,
+      "name": "IV · Phase B"
      }
     },
     {
@@ -1019,7 +1039,8 @@
       "preset": "SLOOP · CELESTA",
       "level": 0.26,
       "pan": -0.35,
-      "reverbSend": 0.45
+      "reverbSend": 0.45,
+      "name": "IV · Descant"
      }
     },
     {
@@ -1032,6 +1053,23 @@
      "params": {
       "master": 0.8,
       "startFrame": 0
+     }
+    },
+    {
+     "id": "viewer",
+     "type": "music/viewer",
+     "position": {
+      "x": 1900,
+      "y": 1300
+     },
+     "params": {
+      "title": "Chip Symphony in D minor",
+      "show": true,
+      "style": "galaxy",
+      "palette": "neon",
+      "intensity": 1,
+      "ahead": 6,
+      "legend": true
      }
     },
     {

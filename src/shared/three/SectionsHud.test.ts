@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { songForm } from "./SectionsHud";
+import { songForm } from "../music/seq/form";
 
 const lane = (s: string) => [...s].map((c) => c === "x");
 
