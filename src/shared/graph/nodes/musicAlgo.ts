@@ -120,6 +120,14 @@ export function tuningSystemOf(params: Record<string, unknown>): TuningSystem {
   return TUNING_SYSTEMS[name] ?? TUNING_SYSTEMS["12-TET"];
 }
 
+/** The Tuning a Tuning node's params (and a wired detune) describe. */
+export function tuningOf(params: Record<string, unknown>, offsetInput?: unknown): Tuning {
+  const sys = tuningSystemOf(params);
+  const twelve = sys.steps.length === 12 && Math.abs(sys.period - 1200) < 1e-6;
+  const map = params.map === "retune" || params.map === "steps" ? params.map : twelve ? "retune" : "steps";
+  return { steps: sys.steps, period: sys.period, map, root: 60 + pcOf(params.root), offset: clamp(numberInput(offsetInput, params.offset, 0), -1200, 1200) };
+}
+
 export const MUSIC_TUNING_NODE: NodeDefinition = {
   type: "music/tuning",
   label: "Tuning",
@@ -148,11 +156,7 @@ export const MUSIC_TUNING_NODE: NodeDefinition = {
   evaluate: (inputs, params) => {
     const seq = sequenceOf(inputs.sequence);
     if (!seq) return { sequence: null };
-    const sys = tuningSystemOf(params);
-    const twelve = sys.steps.length === 12 && Math.abs(sys.period - 1200) < 1e-6;
-    const map = params.map === "retune" || params.map === "steps" ? params.map : twelve ? "retune" : "steps";
-    const tuning: Tuning = { steps: sys.steps, period: sys.period, map, root: 60 + pcOf(params.root), offset: clamp(numberInput(inputs.offset, params.offset, 0), -1200, 1200) };
-    return { sequence: seqOut({ ...seq, tuning }) };
+    return { sequence: seqOut({ ...seq, tuning: tuningOf(params, inputs.offset) }) };
   },
 };
 

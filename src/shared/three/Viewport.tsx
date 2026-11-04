@@ -35,6 +35,7 @@ import { RIG_BIPED_DANCE_NODE, type DanceInfo } from "../graph/nodes/bipedDance"
 import { DanceHud } from "./DanceHud";
 import { PatternHud } from "./PatternHud";
 import { OrderHud } from "./OrderHud";
+import { EuclidHud, TuningHud } from "./MusicAlgoHuds";
 import { previewNote } from "../music/engine/bridge";
 import { MUSIC_SEQUENCE_PASS_TYPES } from "../graph/nodes/musicAlgo";
 import { clockOf, isTrack, previewSoundOf, sequenceOf, type PreviewSound } from "../music/engine/description";
@@ -9081,6 +9082,58 @@ export function Viewport({
               readSequence={() => sequenceOf(latestResultsRef.current?.get(patternNode.id)?.sequence)}
               startFrame={Math.round(Number(out?.params.startFrame ?? 0)) || 0}
               previewSound={previewSound}
+              onParams={(params, nodeId) => onParamChange?.(params, nodeId)}
+              onPreview={(sound, note, velocity) => previewNote(sound, note, velocity)}
+            />
+          );
+        })()}
+      {/* Music: a selected Euclid or Tuning gets its palette (see MusicAlgoHuds.tsx) */}
+      {!outputMode &&
+        !elevationView &&
+        selectedNodeId &&
+        (() => {
+          const algoNode = graph.nodes.find((n) => n.id === selectedNodeId && (n.type === "music/euclid" || n.type === "music/tuning"));
+          if (!algoNode) return null;
+          // The voice it plays on, downstream through the nodes that pass a sequence on, and that voice's Music Out.
+          const downstream = (id: string) => graph.connections.filter((c) => c.fromNode === id).map((c) => graph.nodes.find((n) => n.id === c.toNode)).filter((n): n is NonNullable<typeof n> => !!n);
+          let frontier = [algoNode];
+          let voice: (typeof graph.nodes)[number] | undefined;
+          for (let hops = 0; hops < 6 && frontier.length > 0 && !voice; hops++) {
+            const next = frontier.flatMap((n) => downstream(n.id));
+            voice = next.find((n) => n.type === "music/fm-voice" || n.type === "music/drum-kit" || n.type === "music/gameboy" || n.type === "music/sid");
+            frontier = next.filter((n) => MUSIC_SEQUENCE_PASS_TYPES.includes(n.type));
+          }
+          const out = voice ? downstream(voice.id).find((n) => n.type === "music/out") : graph.nodes.find((n) => n.type === "music/out");
+          const readPlayhead = () => {
+            const render = renderNodeIdRef.current ? latestResultsRef.current?.get(renderNodeIdRef.current) : undefined;
+            return { frame: Math.max(0, currentFrameRef.current), fps: typeof render?.fps === "number" ? (render.fps as number) : 30 };
+          };
+          const readSequence = () => sequenceOf(latestResultsRef.current?.get(algoNode.id)?.sequence);
+          const startFrame = Math.round(Number(out?.params.startFrame ?? 0)) || 0;
+          const incoming = graph.connections.filter((c) => c.toNode === algoNode.id);
+          if (algoNode.type === "music/euclid") {
+            const inputWire = incoming.find((c) => c.toSocket === "input");
+            const inputValue = inputWire ? latestResultsRef.current?.get(inputWire.fromNode)?.[inputWire.fromSocket] : undefined;
+            return (
+              <EuclidHud
+                node={algoNode}
+                wired={new Set(incoming.map((c) => c.toSocket))}
+                restrike={!!inputValue && (inputValue as { kind?: string }).kind !== "clock" && !!sequenceOf(inputValue)}
+                readSequence={readSequence}
+                readPlayhead={readPlayhead}
+                startFrame={startFrame}
+                onParams={(params, nodeId) => onParamChange?.(params, nodeId)}
+              />
+            );
+          }
+          const voiceResult = voice ? latestResultsRef.current?.get(voice.id)?.track : null;
+          return (
+            <TuningHud
+              node={algoNode}
+              readSequence={readSequence}
+              readPlayhead={readPlayhead}
+              startFrame={startFrame}
+              previewSound={isTrack(voiceResult) ? previewSoundOf(voiceResult) : null}
               onParams={(params, nodeId) => onParamChange?.(params, nodeId)}
               onPreview={(sound, note, velocity) => previewNote(sound, note, velocity)}
             />
