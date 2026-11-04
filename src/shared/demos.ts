@@ -723,6 +723,11 @@ export const DEMO_CATALOG: DemoCategory[] = [
         label: "Composer",
         description: "A song written by rules: Roman numerals voice-led into keys and bass, a melody read off the curve on screen and sequenced down the scale, a Markov counter-melody that learned it, Euclidean drums — press Play.",
       },
+      {
+        file: "demo_music_studies.tsuji",
+        label: "Studies",
+        description: "Three studies at once: a twelve-note line phasing against itself a step at a time, a second-species counterpoint written over a cantus firmus, and voice-led chords in adaptive 7-limit just intonation — press Play.",
+      },
     ],
   },
   {

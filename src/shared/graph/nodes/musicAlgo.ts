@@ -9,6 +9,8 @@ import { ORNAMENT_TYPES, Ornament, OrnamentType } from "../../music/seq/ornament
 import { PITCH_CLASSES, SCALE_NAMES, ScaleSpec, SnapMode, degreeNote, degreeOf, inScale, scaleSpec, snapNote, stackedChord } from "../../music/seq/scales";
 import { Cell, Clock, Sequence } from "../../music/seq/sequencer";
 import { MOTIF_OPS, MotifOp, contourMelody, eventsOf, markov, parseProgression, randomProgression, transformMotif, voiceLead } from "../../music/seq/compose";
+import { counterpoint } from "../../music/seq/counterpoint";
+import { bestRoot } from "../../music/seq/justIntonation";
 import { TUNING_SYSTEMS, TUNING_SYSTEM_NAMES, Tuning, TuningSystem, edoSystem, parseScala } from "../../music/seq/tuning";
 
 /**
@@ -685,6 +687,127 @@ export const MUSIC_CONTOUR_NODE: NodeDefinition = {
   },
 };
 
+// ── Phase ──────────────────────────────────────────────────────────────────
+
+/**
+ * Steve Reich's phasing: the same line twice, one copy slipping against the other. "steps" (Piano Phase): the copy is
+ * a step further on every few loops, until it comes round; "tempo" (It's Gonna Rain): the copy runs a little faster,
+ * and drifts continuously.
+ */
+export const MUSIC_PHASE_NODE: NodeDefinition = {
+  type: "music/phase",
+  label: "Phase",
+  category: "music",
+  pure: true,
+  inputs: [
+    { id: "sequence", label: "Sequence", type: "music" },
+    { id: "drift", label: "Drift (%)", type: "value" },
+  ],
+  outputs: [
+    { id: "a", label: "A (as it is)", type: "music" },
+    { id: "b", label: "B (phasing)", type: "music" },
+  ],
+  defaultParams: { mode: "steps", loops: 4, direction: "ahead", drift: 1 },
+  paramFields: [
+    { id: "mode", label: "Mode", kind: "select", options: ["steps", "tempo"], optionLabels: ["Step by step (Piano Phase)", "Tempo drift (It's Gonna Rain)"] },
+    { id: "loops", label: "Loops Before Each Step", kind: "number", step: 1 },
+    { id: "direction", label: "Direction", kind: "select", options: ["ahead", "behind"], optionLabels: ["B gets ahead", "B falls behind"] },
+    { id: "drift", label: "Tempo Drift (% faster)", kind: "number", step: 0.25 },
+  ],
+  evaluate: (inputs, params) => {
+    const seq = sequenceOf(inputs.sequence);
+    if (!seq) return { a: null, b: null };
+    const a = seqOut(seq);
+    if (params.mode === "tempo") {
+      const drift = clamp(numberInput(inputs.drift, params.drift, 1), -50, 50);
+      return { a, b: seqOut({ ...seq, clock: { ...seq.clock, bpm: seq.clock.bpm * (1 + drift / 100) } }) };
+    }
+    const L = Math.max(1, seq.pattern.length);
+    const loops = clamp(Math.round(numberInput(undefined, params.loops, 4)), 1, 64);
+    const dir = params.direction === "behind" ? -1 : 1;
+    // The whole process: every shift from 0 to L − 1, `loops` times each (as much of it as fits).
+    const shifts = Math.max(1, Math.min(L, Math.floor(MAX_STEPS / (L * loops))));
+    const steps: (Cell | null)[] = [];
+    for (let k = 0; k < shifts * loops; k++) {
+      const shift = Math.floor(k / loops) * dir;
+      for (let i = 0; i < L; i++) steps.push(seq.pattern.steps[(((i + shift) % L) + L) % L] ?? null);
+    }
+    return { a, b: seqOut(withSteps(seq, steps)) };
+  },
+};
+
+// ── Counterpoint ───────────────────────────────────────────────────────────
+
+export const MUSIC_COUNTERPOINT_NODE: NodeDefinition = {
+  type: "music/counterpoint",
+  label: "Counterpoint",
+  category: "music",
+  pure: true,
+  inputs: [
+    { id: "sequence", label: "Cantus Firmus", type: "music" },
+    { id: "seed", label: "Seed", type: "value" },
+  ],
+  outputs: [{ id: "sequence", label: "Counter-voice", type: "music" }],
+  defaultParams: { species: "1", position: "above", scale: "major", root: "C", low: 60, high: 79, velocity: 0.75, seed: 0 },
+  paramFields: [
+    { id: "species", label: "Species", kind: "select", options: ["1", "2"], optionLabels: ["First — note against note", "Second — two notes against one (passing notes)"] },
+    { id: "position", label: "Voice", kind: "select", options: ["above", "below"], optionLabels: ["Above the cantus", "Below the cantus"] },
+    { id: "scale", label: "Scale", kind: "select", options: SCALE_NAMES },
+    ROOT_FIELD,
+    { id: "low", label: "Lowest Note (MIDI)", kind: "number", step: 1 },
+    { id: "high", label: "Highest Note (MIDI)", kind: "number", step: 1 },
+    { id: "velocity", label: "Velocity", kind: "number", step: 0.05 },
+    { id: "seed", label: "Seed (another line, as correct)", kind: "number", step: 1 },
+  ],
+  evaluate: (inputs, params) => {
+    const seq = sequenceOf(inputs.sequence);
+    if (!seq) return { sequence: null };
+    const L = Math.max(1, seq.pattern.length);
+    const steps = counterpoint(eventsOf(seq.pattern.steps, L), L, {
+      species: params.species === "2" ? 2 : 1,
+      above: params.position !== "below",
+      scale: scaleSpec(params.scale, pcOf(params.root)),
+      low: clamp(numberInput(undefined, params.low, 60), 0, 127),
+      high: clamp(numberInput(undefined, params.high, 79), 0, 127),
+      velocity: clamp(numberInput(undefined, params.velocity, 0.75), 0, 1),
+      seed: Math.round(numberInput(inputs.seed, params.seed, 0)),
+    });
+    return { sequence: seqOut({ ...withSteps(seq, steps), arp: null }) };
+  },
+};
+
+// ── Adaptive JI ────────────────────────────────────────────────────────────
+
+export const MUSIC_ADAPTIVE_JI_NODE: NodeDefinition = {
+  type: "music/adaptive-ji",
+  label: "Adaptive Just Intonation",
+  category: "music",
+  pure: true,
+  inputs: [{ id: "sequence", label: "Sequence", type: "music" }],
+  outputs: [{ id: "sequence", label: "Sequence", type: "music" }],
+  defaultParams: { limit: "5", center: true, root: "auto" },
+  paramFields: [
+    { id: "limit", label: "Ratios", kind: "select", options: ["5", "7"], optionLabels: ["5-limit (pure 3rds and 5ths)", "7-limit (the harmonic 7th too: barbershop)"] },
+    { id: "center", label: "Centred (each chord stays where 12-TET has it: no drift)", kind: "boolean" },
+    { id: "root", label: "Root", kind: "select", options: ["auto", "written"], optionLabels: ["Found in each chord (its simplest ratios)", "As written (the cell's note)"] },
+    { id: "help", label: "Retunes chords (cells of two notes or more) while they sound. Instead of a Tuning node, not after one.", kind: "note" },
+  ],
+  evaluate: (inputs, params) => {
+    const seq = sequenceOf(inputs.sequence);
+    if (!seq) return { sequence: null };
+    const limit = params.limit === "7" ? 7 : 5;
+    const center = params.center !== false;
+    const steps = seq.pattern.steps.map((c): Cell | null => {
+      if (!c || c.note === "off") return c;
+      const tones = [...chordNotes(c.note, c.chord, 0, false), ...(c.add ?? [])];
+      if (tones.length < 2) return c;
+      const root = params.root === "written" ? ((Math.round(c.note) % 12) + 12) % 12 : bestRoot(tones.map((n) => ((Math.round(n) % 12) + 12) % 12));
+      return { ...c, ji: { root, limit, center } };
+    });
+    return { sequence: seqOut({ ...seq, pattern: { ...seq.pattern, steps } }) };
+  },
+};
+
 export const MUSIC_ALGO_NODES = [
   MUSIC_EUCLID_NODE,
   MUSIC_SHIFT_REGISTER_NODE,
@@ -694,10 +817,13 @@ export const MUSIC_ALGO_NODES = [
   MUSIC_PROGRESSION_NODE,
   MUSIC_VOICE_LEADING_NODE,
   MUSIC_MOTIF_NODE,
+  MUSIC_COUNTERPOINT_NODE,
+  MUSIC_PHASE_NODE,
   MUSIC_ORNAMENT_NODE,
   MUSIC_SCALE_NODE,
   MUSIC_TUNING_NODE,
+  MUSIC_ADAPTIVE_JI_NODE,
   MUSIC_CHIP_ECHO_NODE,
 ];
 /** The ones that take a sequence and pass it on reworked: the Pattern HUD follows the wires through them to the voice. */
-export const MUSIC_SEQUENCE_PASS_TYPES = ["music/arp", "music/scale", "music/tuning", "music/ornament", "music/euclid", "music/voice-leading", "music/motif", "music/markov"];
+export const MUSIC_SEQUENCE_PASS_TYPES = ["music/arp", "music/scale", "music/tuning", "music/ornament", "music/euclid", "music/voice-leading", "music/motif", "music/markov", "music/phase", "music/adaptive-ji"];

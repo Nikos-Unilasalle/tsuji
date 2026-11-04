@@ -19,6 +19,7 @@ import { hash01 } from "./hash";
 import type { BankLayout } from "./order";
 import { Ornament, ornamentParts } from "./ornament";
 import { Tuning, tunedPitch } from "./tuning";
+import { AdaptiveJi, jiCents } from "./justIntonation";
 
 export interface Clock {
   bpm: number;
@@ -55,6 +56,8 @@ export interface Cell {
   fx?: CellFx | null;
   /** A trill, mordent, turn… played inside the note's time (ornament.ts). An arp or a ratchet takes precedence. */
   orn?: Ornament | null;
+  /** Adaptive just intonation (justIntonation.ts): the chord's notes moved to pure ratios over this root. */
+  ji?: AdaptiveJi | null;
 }
 
 export interface Pattern {
@@ -254,15 +257,19 @@ export function expandStep(seq: Sequence, sampleRate: number, g0: number, from =
   const offT = endTime(seq, sampleRate, g0);
   const out: NoteEvent[] = [];
   const tuning = seq.tuning ?? null;
+  // Adaptive JI: each note to its pure ratio over the cell's root, centred on the chord's notes when asked.
+  const ji = cell.ji ?? null;
+  const jiMean = ji?.center ? notes.reduce((a, n) => a + jiCents(ji, n), 0) / Math.max(1, notes.length) : 0;
+  const jiShift = (n: number) => (ji ? (jiCents(ji, n) - jiMean) / 100 : 0);
   // `key` the written note: its velocity is looked up by it; `offset` an ornament's step away from it.
   const emit = (onX: number, offX: number, key: number, glide?: { from: number; seconds: number }, offset = 0) => {
     const on = Math.round(onX);
     const off = Math.round(offX);
     if (off <= on || on < from || on >= to) return;
-    const note = tunedPitch(tuning, key + offset);
+    const note = tunedPitch(tuning, key + offset + jiShift(key + offset));
     const e: NoteEvent = { on, off, note, velocity: velocityOf(key), step: g0 };
     if (glide) {
-      e.glideFrom = tunedPitch(tuning, glide.from);
+      e.glideFrom = tunedPitch(tuning, glide.from + jiShift(glide.from));
       e.glideSeconds = glide.seconds;
     }
     out.push(e);

@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { NodeDefinition, EvalContext } from "../types";
 import {
+  MUSIC_ADAPTIVE_JI_NODE,
   MUSIC_CHIP_ECHO_NODE,
   MUSIC_CONTOUR_NODE,
+  MUSIC_COUNTERPOINT_NODE,
+  MUSIC_PHASE_NODE,
   MUSIC_EUCLID_NODE,
   MUSIC_MARKOV_NODE,
   MUSIC_MOTIF_NODE,
@@ -361,5 +364,84 @@ describe("Contour → Melody", () => {
     const n = noteList(seq.pattern.steps) as number[];
     expect(n[4]).toBe(Math.max(...n));
     expect(n[0]).toBe(n[8]);
+  });
+});
+
+// ── Lot 3 ──────────────────────────────────────────────────────────────────
+
+describe("Phase", () => {
+  it("steps: B a step further every few loops, until it comes round", () => {
+    const { a, b } = run(MUSIC_PHASE_NODE, { sequence: pattern("C4 D4 E4", 3) }, { loops: 2 });
+    expect(noteList(a.seq.pattern.steps)).toEqual([60, 62, 64]);
+    expect(noteList(b.seq.pattern.steps)).toEqual([60, 62, 64, 60, 62, 64, 62, 64, 60, 62, 64, 60, 64, 60, 62, 64, 60, 62]);
+  });
+  it("tempo: B runs a little faster", () => {
+    const { b } = run(MUSIC_PHASE_NODE, { sequence: pattern("C4", 4) }, { mode: "tempo", drift: 2 });
+    expect(b.seq.clock.bpm).toBeCloseTo(122.4, 6);
+  });
+});
+
+describe("Counterpoint", () => {
+  // Fux's cantus firmus in D dorian.
+  const cantus = () => pattern("D4 F4 E4 D4 G4 F4 A4 G4 F4 E4 D4", 11);
+  const mod = (n: number) => ((n % 12) + 12) % 12;
+  const check = (cf: number[], cp: number[], above: boolean) => {
+    const iv = cp.map((n, i) => (above ? n - cf[i] : cf[i] - n));
+    for (const i of iv) {
+      expect(i).toBeGreaterThanOrEqual(0);
+      expect([0, 3, 4, 7, 8, 9]).toContain(mod(i)); // consonances only
+    }
+    expect([0, 7]).toContain(mod(iv[0]));
+    expect(mod(iv[iv.length - 1])).toBe(0);
+    for (let k = 1; k < iv.length; k++) {
+      const parallel = [0, 7].includes(mod(iv[k])) && mod(iv[k]) === mod(iv[k - 1]) && cp[k] !== cp[k - 1] && cf[k] !== cf[k - 1];
+      expect(parallel).toBe(false);
+      expect([6, 10, 11]).not.toContain(Math.abs(cp[k] - cp[k - 1]));
+      expect(Math.abs(cp[k] - cp[k - 1])).toBeLessThanOrEqual(12);
+    }
+  };
+  it("writes a first-species line above and below, by the rules", () => {
+    const cf = noteList(cantus().seq.pattern.steps) as number[];
+    for (const position of ["above", "below"]) {
+      for (const seed of [0, 1, 2]) {
+        const params = position === "above" ? { position, seed, scale: "dorian", root: "D", low: 62, high: 81 } : { position, seed, scale: "dorian", root: "D", low: 45, high: 64 };
+        const cp = noteList(run(MUSIC_COUNTERPOINT_NODE, { sequence: cantus() }, params).sequence.seq.pattern.steps) as number[];
+        check(cf, cp, position === "above");
+      }
+    }
+  });
+  it("second species: consonant downbeats, offbeats passing by step", () => {
+    const cf = pattern("D4 . F4 . E4 . D4 . G4 . F4 . E4 . D4 .", 16);
+    const cp = noteList(run(MUSIC_COUNTERPOINT_NODE, { sequence: cf }, { species: "2", scale: "dorian", root: "D", low: 62, high: 81 }).sequence.seq.pattern.steps) as number[];
+    const cfn = [62, 62, 65, 65, 64, 64, 62, 62, 67, 67, 65, 65, 64, 64, 62, 62];
+    expect(cp[15]).toBeNull(); // the last note whole
+    cp.slice(0, 15).forEach((n, i) => {
+      const iv = n - cfn[i];
+      if (i % 2 === 0) expect([0, 3, 4, 7, 8, 9]).toContain(mod(iv));
+      else if (![0, 3, 4, 7, 8, 9].includes(mod(iv))) {
+        expect(Math.abs(n - cp[i - 1])).toBeLessThanOrEqual(2);
+        expect(Math.sign(cp[i + 1] - n)).toBe(Math.sign(n - cp[i - 1]));
+      }
+    });
+    expect(mod(cp[14] - 62)).toBe(0); // ending on the octave
+  });
+});
+
+describe("Adaptive JI", () => {
+  it("finds the chord's root and plays it pure, centred on 12-TET", () => {
+    const seq = run(MUSIC_ADAPTIVE_JI_NODE, { sequence: pattern("E4+G4+C5", 1) }, {}).sequence.seq;
+    expect(seq.pattern.steps[0].ji).toEqual({ root: 0, limit: 5, center: true });
+    const notes = notesOf(seq).map((e) => e.note);
+    // C–E a pure major third (386.3¢), C–G a pure fifth (702¢), the three averaging their 12-TET pitches.
+    const [e, g, c] = notes;
+    expect((e - (c - 12)) * 100).toBeCloseTo(386.31, 1);
+    expect((g - (c - 12)) * 100).toBeCloseTo(701.96, 1);
+    expect((e + g + c) / 3).toBeCloseTo((64 + 67 + 72) / 3, 9);
+  });
+  it("leaves single notes alone; 7-limit tunes the dominant seventh's 7th low", () => {
+    const one = run(MUSIC_ADAPTIVE_JI_NODE, { sequence: pattern("C4", 1) }).sequence.seq;
+    expect(one.pattern.steps[0].ji).toBeUndefined();
+    const dom = run(MUSIC_ADAPTIVE_JI_NODE, { sequence: pattern("G3:7", 1) }, { limit: "7", center: false }).sequence.seq;
+    expect(notesOf(dom).map((e) => e.note)).toEqual([55, expect.closeTo(59 - 0.1369, 6), expect.closeTo(62.0196, 6), expect.closeTo(65 - 0.3117, 6)]);
   });
 });
