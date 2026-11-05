@@ -10,7 +10,7 @@
       "y": 700
      },
      "params": {
-      "bpm": 152,
+      "bpm": 100,
       "swing": 0,
       "stepsPerBeat": "4"
      }
@@ -23,18 +23,17 @@
       "y": 0
      },
      "params": {
-      "name": "ōdō shinkō — the royal road",
-      "root": "A",
+      "root": "C",
       "mode": "major",
       "source": "written",
-      "numerals": "I vi IV V I iii IV V I vi ii V IV V iii vi IVmaj7 V7 iii7 vi7 IVmaj7 V7 I I vi IV I V vi IV ii V IVmaj7 V7 iii7 vi7 IVmaj7 V7 I I IV V I:2",
+      "numerals": "I vi IV V I vi IV V I vi ii:0.5 V:0.5 I IV V iii vi IV V I I vi IV I V vi IV ii:0.5 V:0.5 V I vi IV V I vi ii:0.5 V:0.5 I IV V iii vi IV V I I IV V I:2",
       "count": 8,
       "sevenths": false,
       "tension": 0.3,
       "cadence": true,
       "seed": 0,
       "chordLength": 16,
-      "center": 62,
+      "center": 60,
       "velocity": 0.6
      }
     },
@@ -47,8 +46,8 @@
      },
      "params": {
       "voices": 3,
-      "low": 57,
-      "high": 76
+      "low": 55,
+      "high": 67
      }
     },
     {
@@ -60,11 +59,11 @@
      },
      "params": {
       "on": true,
-      "mode": "up",
-      "rate": "1/16",
+      "mode": "updown",
+      "rate": "1/8",
       "triplet": false,
       "octaves": 1,
-      "gate": 0.45,
+      "gate": 0.8,
       "sync": "grid"
      }
     },
@@ -76,8 +75,8 @@
       "y": 0
      },
      "params": {
-      "name": "arpeggio · bars 1–44",
-      "bars": "x*44",
+      "name": "broken chords · bars 1–48",
+      "bars": "x*48",
       "barLength": 16,
       "restart": false
      }
@@ -90,10 +89,10 @@
       "y": 0
      },
      "params": {
-      "name": "Arpeggio",
-      "preset": "Pulse 12.5 · Thin",
-      "level": 0.16,
-      "pan": -0.35
+      "name": "Broken chords",
+      "preset": "Wave · Sine",
+      "level": 0.3,
+      "pan": -0.25
      }
     },
     {
@@ -106,10 +105,10 @@
      "params": {
       "on": true,
       "mode": "up",
-      "rate": "1/8",
+      "rate": "1/4",
       "triplet": false,
-      "octaves": 2,
-      "gate": 0.7,
+      "octaves": 1,
+      "gate": 0.85,
       "sync": "grid"
      }
     },
@@ -121,8 +120,8 @@
       "y": 160
      },
      "params": {
-      "name": "bass · bars 1–44",
-      "bars": "x*44",
+      "name": "bass · bars 3–46",
+      "bars": ".*2 x*44 .*2",
       "barLength": 16,
       "restart": false
      }
@@ -135,480 +134,295 @@
       "y": 160
      },
      "params": {
-      "name": "Octave bass",
+      "name": "Bass",
       "preset": "Wave · Bass",
-      "level": 0.3,
-      "pan": 0
+      "level": 0.45,
+      "pan": 0,
+      "transpose": 12
      }
     },
     {
-     "id": "curve_v",
-     "type": "math/function-curve",
+     "id": "theme_a",
+     "type": "music/pattern",
      "position": {
       "x": 0,
-      "y": 400
+      "y": 420
      },
      "params": {
-      "mode": "function",
-      "formula": "sin(a*x) + b*sin(c*x + d)",
-      "a": 1.5,
-      "b": 0.5,
-      "c": 5,
-      "d": 2.4,
-      "from": -4,
-      "to": 4,
-      "samples": 200,
-      "yMin": -2,
-      "yMax": 2,
-      "progress": 1,
-      "width": 3,
-      "visible": false
+      "name": "Theme A (written)",
+      "steps": "E4 . . . G4 . C5 . B4 . . . G4 . . . A4 . . . . . C5 . E5 . . . D5 . C5 . C5 . . . A4 . . . F4 . G4 . A4 . . . G4 . . . . . . . D4 . E4 . F4 . G4 . E4 . . . G4 . C5 . E5 . . . D5 . C5 . C5 . . . B4 . A4 . E4 . . . A4 . . . F4 . . . A4 . D5 . B4 . . . D5 . . . C5 . . . . . . . . . . . off . . .",
+      "length": "128"
      }
     },
     {
-     "id": "contour_v",
-     "type": "music/contour",
+     "id": "theme_b",
+     "type": "music/pattern",
      "position": {
-      "x": 260,
-      "y": 400
+      "x": 0,
+      "y": 620
      },
      "params": {
-      "axis": "y",
-      "steps": 64,
-      "scale": "major pentatonic",
-      "root": "A",
-      "low": 71,
-      "range": 6,
-      "rhythm": "change",
-      "invert": false,
-      "velocity": 0.8,
-      "gate": 0
+      "name": "Theme B (written)",
+      "steps": "A4 . . . C5 . . . F5 . . . E5 . D5 . D5 . . . . . B4 . G4 . . . . . . . G4 . . . B4 . . . E5 . . . D5 . B4 . C5 . . . . . . . A4 . . . . . . . A4 . . . C5 . F5 . E5 . . . D5 . C5 . D5 . . . . . E5 . D5 . . . B4 . G4 . C5 . . . . . . . E4 . . . G4 . . . C5 . . . . . . . . . . . off . . .",
+      "length": "128"
      }
     },
     {
-     "id": "orn_v",
-     "type": "music/ornament",
-     "position": {
-      "x": 520,
-      "y": 400
-     },
-     "params": {
-      "type": "mordent",
-      "chance": 0.2,
-      "minSteps": 2,
-      "rate": "1/32",
-      "up": 2,
-      "down": 1,
-      "seed": 2
-     }
-    },
-    {
-     "id": "scale_v",
-     "type": "music/scale",
+     "id": "sec_a",
+     "type": "music/sections",
      "position": {
       "x": 780,
-      "y": 400
+      "y": 420
      },
      "params": {
-      "root": "A",
-      "scale": "major",
-      "snap": "nearest",
-      "outside": "snap",
-      "chords": "keep"
-     }
-    },
-    {
-     "id": "sec_verse",
-     "type": "music/sections",
-     "position": {
-      "x": 1040,
-      "y": 400
-     },
-     "params": {
-      "name": "verse melody · bars 5–12",
-      "bars": ".*4 x*8 .*32",
+      "name": "theme A · bars 5–12, 29–36",
+      "bars": ".*4 x*8 .*16 x*8 .*12",
       "barLength": 16,
       "restart": true
      }
     },
     {
-     "id": "verse_v",
-     "type": "music/gameboy",
-     "position": {
-      "x": 1300,
-      "y": 400
-     },
-     "params": {
-      "name": "Verse lead",
-      "preset": "Pulse 25 · Lead",
-      "level": 0.22,
-      "pan": 0.1
-     }
-    },
-    {
-     "id": "echo_v",
-     "type": "music/chip-echo",
-     "position": {
-      "x": 1300,
-      "y": 560
-     },
-     "params": {
-      "delay": 3,
-      "level": 0.4,
-      "transpose": 0,
-      "detune": 6
-     }
-    },
-    {
-     "id": "verse_echo",
-     "type": "music/gameboy",
-     "position": {
-      "x": 1560,
-      "y": 560
-     },
-     "params": {
-      "name": "Verse echo",
-      "preset": "Pulse 12.5 · Thin",
-      "level": 0.11,
-      "pan": 0.5
-     }
-    },
-    {
-     "id": "sr",
-     "type": "music/shift-register",
-     "position": {
-      "x": 0,
-      "y": 760
-     },
-     "params": {
-      "bits": 8,
-      "change": 0.02,
-      "density": 0.6,
-      "length": 64,
-      "scale": "major pentatonic",
-      "root": "A",
-      "low": 69,
-      "range": 7,
-      "gate": 1,
-      "velocity": 0.7,
-      "seed": 179
-     }
-    },
-    {
-     "id": "sec_sr",
+     "id": "sec_b",
      "type": "music/sections",
-     "position": {
-      "x": 1040,
-      "y": 760
-     },
-     "params": {
-      "name": "riff · bars 13–16",
-      "bars": ".*12 x*4 .*28",
-      "barLength": 16,
-      "restart": true
-     }
-    },
-    {
-     "id": "riff_v",
-     "type": "music/gameboy",
-     "position": {
-      "x": 1300,
-      "y": 760
-     },
-     "params": {
-      "name": "Pre-chorus riff",
-      "preset": "Pulse 50 · Lead",
-      "level": 0.17,
-      "pan": -0.1
-     }
-    },
-    {
-     "id": "curve_c",
-     "type": "math/function-curve",
-     "position": {
-      "x": 0,
-      "y": 960
-     },
-     "params": {
-      "mode": "function",
-      "formula": "sin(a*x) + b*sin(c*x + d)",
-      "a": 0.5,
-      "b": 0.35,
-      "c": 6,
-      "d": 0,
-      "from": -2.25,
-      "to": 2.25,
-      "samples": 200,
-      "yMin": -2,
-      "yMax": 2,
-      "progress": 1,
-      "width": 3,
-      "visible": false
-     }
-    },
-    {
-     "id": "contour_c",
-     "type": "music/contour",
-     "position": {
-      "x": 260,
-      "y": 960
-     },
-     "params": {
-      "axis": "y",
-      "steps": 64,
-      "scale": "major pentatonic",
-      "root": "A",
-      "low": 66,
-      "range": 5,
-      "rhythm": "change",
-      "invert": false,
-      "velocity": 0.85,
-      "gate": 0
-     }
-    },
-    {
-     "id": "orn_c",
-     "type": "music/ornament",
-     "position": {
-      "x": 520,
-      "y": 960
-     },
-     "params": {
-      "type": "grace below",
-      "chance": 0.35,
-      "minSteps": 4,
-      "rate": "1/32",
-      "up": 2,
-      "down": 1,
-      "seed": 5
-     }
-    },
-    {
-     "id": "scale_c",
-     "type": "music/scale",
      "position": {
       "x": 780,
-      "y": 960
+      "y": 620
      },
      "params": {
-      "root": "A",
-      "scale": "major",
-      "snap": "nearest",
-      "outside": "snap",
-      "chords": "keep"
-     }
-    },
-    {
-     "id": "sec_hook",
-     "type": "music/sections",
-     "position": {
-      "x": 1040,
-      "y": 960
-     },
-     "params": {
-      "name": "hook · bars 17–24, 33–40",
-      "bars": ".*16 x*8 .*8 x*8 .*4",
+      "name": "theme B · bars 13–20, 37–44",
+      "bars": ".*12 x*8 .*16 x*8 .*4",
       "barLength": 16,
       "restart": true
      }
     },
     {
-     "id": "hook_v",
+     "id": "lead_a",
      "type": "music/gameboy",
      "position": {
-      "x": 1300,
-      "y": 960
+      "x": 1040,
+      "y": 420
      },
      "params": {
-      "name": "Chorus hook",
+      "name": "Lead · A",
       "preset": "Macro · Vibrato Lead",
-      "level": 0.22,
-      "pan": 0.05,
-      "transpose": 12
+      "level": 0.38,
+      "pan": 0.05
      }
     },
     {
-     "id": "echo_c",
+     "id": "lead_b",
+     "type": "music/gameboy",
+     "position": {
+      "x": 1040,
+      "y": 620
+     },
+     "params": {
+      "name": "Lead · B",
+      "preset": "Macro · Vibrato Lead",
+      "level": 0.38,
+      "pan": 0.05
+     }
+    },
+    {
+     "id": "echo_a",
      "type": "music/chip-echo",
      "position": {
-      "x": 1300,
-      "y": 1120
+      "x": 1040,
+      "y": 500
      },
      "params": {
       "delay": 3,
-      "level": 0.4,
+      "level": 0.35,
       "transpose": 0,
-      "detune": 6
+      "detune": 4
      }
     },
     {
-     "id": "hook_echo",
+     "id": "echo_b",
+     "type": "music/chip-echo",
+     "position": {
+      "x": 1040,
+      "y": 700
+     },
+     "params": {
+      "delay": 3,
+      "level": 0.35,
+      "transpose": 0,
+      "detune": 4
+     }
+    },
+    {
+     "id": "sec_echo_a",
+     "type": "music/sections",
+     "position": {
+      "x": 1300,
+      "y": 500
+     },
+     "params": {
+      "name": "echo A · bars 29–36",
+      "bars": ".*28 x*8 .*12",
+      "barLength": 16,
+      "restart": false
+     }
+    },
+    {
+     "id": "sec_echo_b",
+     "type": "music/sections",
+     "position": {
+      "x": 1300,
+      "y": 700
+     },
+     "params": {
+      "name": "echo B · bars 37–44",
+      "bars": ".*36 x*8 .*4",
+      "barLength": 16,
+      "restart": false
+     }
+    },
+    {
+     "id": "echo_a_v",
      "type": "music/gameboy",
      "position": {
       "x": 1560,
-      "y": 1120
+      "y": 500
      },
      "params": {
-      "name": "Hook echo",
-      "preset": "Pulse 12.5 · Thin",
-      "level": 0.1,
-      "pan": 0.5,
-      "transpose": 12
+      "name": "Echo · A",
+      "preset": "Pulse 50 · Lead",
+      "level": 0.22,
+      "pan": 0.45
      }
     },
     {
-     "id": "cp",
+     "id": "echo_b_v",
+     "type": "music/gameboy",
+     "position": {
+      "x": 1560,
+      "y": 700
+     },
+     "params": {
+      "name": "Echo · B",
+      "preset": "Pulse 50 · Lead",
+      "level": 0.22,
+      "pan": 0.45
+     }
+    },
+    {
+     "id": "cp_a",
      "type": "music/counterpoint",
      "position": {
-      "x": 520,
-      "y": 1280
+      "x": 260,
+      "y": 900
      },
      "params": {
       "species": "2",
       "position": "below",
       "scale": "major",
-      "root": "A",
-      "low": 54,
-      "high": 66,
-      "velocity": 0.7,
-      "seed": 42
+      "root": "C",
+      "low": 50,
+      "high": 62,
+      "velocity": 0.6,
+      "seed": 22
      }
     },
     {
-     "id": "sec_cp",
-     "type": "music/sections",
-     "position": {
-      "x": 1040,
-      "y": 1280
-     },
-     "params": {
-      "name": "counter-voice · bars 17–24, 33–40",
-      "bars": ".*16 x*8 .*8 x*8 .*4",
-      "barLength": 16,
-      "restart": true
-     }
-    },
-    {
-     "id": "cp_v",
-     "type": "music/gameboy",
-     "position": {
-      "x": 1300,
-      "y": 1280
-     },
-     "params": {
-      "name": "Counter-voice",
-      "preset": "Pulse 25 · Pluck",
-      "level": 0.15,
-      "pan": -0.4,
-      "transpose": 12
-     }
-    },
-    {
-     "id": "phase_m",
-     "type": "music/pattern",
-     "position": {
-      "x": 0,
-      "y": 1500
-     },
-     "params": {
-      "steps": "A5 E5 C#6 E5 B5 E5 A5 E5 F#5 E5 B5 E5",
-      "length": "12"
-     }
-    },
-    {
-     "id": "phase",
-     "type": "music/phase",
+     "id": "cp_b",
+     "type": "music/counterpoint",
      "position": {
       "x": 260,
-      "y": 1500
+      "y": 1060
      },
      "params": {
-      "mode": "steps",
-      "loops": 2,
-      "direction": "ahead",
-      "drift": 1
+      "species": "2",
+      "position": "below",
+      "scale": "major",
+      "root": "C",
+      "low": 50,
+      "high": 62,
+      "velocity": 0.6,
+      "seed": 327
      }
     },
     {
-     "id": "sec_pa",
+     "id": "sec_cp_a",
      "type": "music/sections",
      "position": {
-      "x": 1040,
-      "y": 1500
+      "x": 780,
+      "y": 900
      },
      "params": {
-      "name": "phase A · bars 25–32",
-      "bars": ".*24 x*8 .*12",
+      "name": "counter-melody A · bars 29–36",
+      "bars": ".*28 x*8 .*12",
       "barLength": 16,
       "restart": true
      }
     },
     {
-     "id": "sec_pb",
+     "id": "sec_cp_b",
      "type": "music/sections",
      "position": {
-      "x": 1040,
-      "y": 1660
+      "x": 780,
+      "y": 1060
      },
      "params": {
-      "name": "phase B · bars 25–32",
-      "bars": ".*24 x*8 .*12",
+      "name": "counter-melody B · bars 37–44",
+      "bars": ".*36 x*8 .*4",
       "barLength": 16,
       "restart": true
      }
     },
     {
-     "id": "phase_a",
+     "id": "cp_a_v",
      "type": "music/gameboy",
      "position": {
-      "x": 1300,
-      "y": 1500
+      "x": 1040,
+      "y": 900
      },
      "params": {
-      "name": "Phase A",
-      "preset": "Pulse 25 · Pluck",
-      "level": 0.11,
-      "pan": -0.65
+      "name": "Counter · A",
+      "preset": "Pulse 50 · Lead",
+      "level": 0.18,
+      "pan": -0.4
      }
     },
     {
-     "id": "phase_b",
+     "id": "cp_b_v",
      "type": "music/gameboy",
      "position": {
-      "x": 1300,
-      "y": 1660
+      "x": 1040,
+      "y": 1060
      },
      "params": {
-      "name": "Phase B",
-      "preset": "Pulse 25 · Pluck",
-      "level": 0.11,
-      "pan": 0.65
+      "name": "Counter · B",
+      "preset": "Pulse 50 · Lead",
+      "level": 0.18,
+      "pan": -0.4
      }
     },
     {
      "id": "markov",
      "type": "music/markov",
      "position": {
-      "x": 520,
-      "y": 1820
+      "x": 260,
+      "y": 1260
      },
      "params": {
       "order": 2,
-      "length": 64,
+      "length": 128,
       "learn": "both",
-      "novelty": 0.25,
-      "seed": 304
+      "novelty": 0.15,
+      "seed": 312
      }
     },
     {
      "id": "scale_m",
      "type": "music/scale",
      "position": {
-      "x": 780,
-      "y": 1820
+      "x": 520,
+      "y": 1260
      },
      "params": {
-      "root": "A",
+      "root": "C",
       "scale": "major",
       "snap": "nearest",
       "outside": "snap",
@@ -619,12 +433,12 @@
      "id": "sec_mk",
      "type": "music/sections",
      "position": {
-      "x": 1040,
-      "y": 1820
+      "x": 780,
+      "y": 1260
      },
      "params": {
-      "name": "markov · bars 29–32",
-      "bars": ".*28 x*4 .*12",
+      "name": "bridge tune · bars 21–28",
+      "bars": ".*20 x*8 .*20",
       "barLength": 16,
       "restart": true
      }
@@ -633,14 +447,14 @@
      "id": "markov_v",
      "type": "music/gameboy",
      "position": {
-      "x": 1300,
-      "y": 1820
+      "x": 1040,
+      "y": 1260
      },
      "params": {
-      "name": "Markov lead",
-      "preset": "Pulse 50 · Lead",
-      "level": 0.18,
-      "pan": 0.15
+      "name": "Bridge · Markov",
+      "preset": "Macro · Vibrato Lead",
+      "level": 0.34,
+      "pan": -0.05
      }
     },
     {
@@ -648,15 +462,15 @@
      "type": "music/euclid",
      "position": {
       "x": 0,
-      "y": 2100
+      "y": 1500
      },
      "params": {
-      "pulses": 3,
-      "steps": 8,
+      "pulses": 2,
+      "steps": 16,
       "rotation": 0,
       "notes": "kick",
       "gate": 0,
-      "velocity": 0.9,
+      "velocity": 0.8,
       "accent": 0
      }
     },
@@ -664,12 +478,12 @@
      "id": "sec_kick",
      "type": "music/sections",
      "position": {
-      "x": 1040,
-      "y": 2100
+      "x": 780,
+      "y": 1500
      },
      "params": {
-      "name": "kick · bars 5–24, 29–40",
-      "bars": ".*4 x*20 .*4 x*12 .*4",
+      "name": "kick · bars 5–44",
+      "bars": ".*4 x*40 .*4",
       "barLength": 16,
       "restart": true
      }
@@ -678,13 +492,13 @@
      "id": "kit_kick",
      "type": "music/gameboy",
      "position": {
-      "x": 1300,
-      "y": 2100
+      "x": 1040,
+      "y": 1500
      },
      "params": {
       "name": "Kick",
       "preset": "Kit · DMG Drums",
-      "level": 0.5,
+      "level": 0.36,
       "pan": 0
      }
     },
@@ -693,7 +507,7 @@
      "type": "music/euclid",
      "position": {
       "x": 0,
-      "y": 2260
+      "y": 1660
      },
      "params": {
       "pulses": 2,
@@ -701,7 +515,7 @@
       "rotation": 4,
       "notes": "snare",
       "gate": 0,
-      "velocity": 0.75,
+      "velocity": 0.55,
       "accent": 0
      }
     },
@@ -709,12 +523,12 @@
      "id": "sec_snare",
      "type": "music/sections",
      "position": {
-      "x": 1040,
-      "y": 2260
+      "x": 780,
+      "y": 1660
      },
      "params": {
-      "name": "snare · bars 13–24, 33–40",
-      "bars": ".*12 x*12 .*8 x*8 .*4",
+      "name": "snare · bars 13–20, 29–44",
+      "bars": ".*12 x*8 .*8 x*16 .*4",
       "barLength": 16,
       "restart": true
      }
@@ -723,13 +537,13 @@
      "id": "kit_snare",
      "type": "music/gameboy",
      "position": {
-      "x": 1300,
-      "y": 2260
+      "x": 1040,
+      "y": 1660
      },
      "params": {
       "name": "Snare",
       "preset": "Kit · DMG Drums",
-      "level": 0.5,
+      "level": 0.3,
       "pan": 0
      }
     },
@@ -738,28 +552,28 @@
      "type": "music/euclid",
      "position": {
       "x": 0,
-      "y": 2420
+      "y": 1820
      },
      "params": {
-      "pulses": 7,
+      "pulses": 4,
       "steps": 16,
-      "rotation": 1,
+      "rotation": 2,
       "notes": "hat",
       "gate": 0,
-      "velocity": 0.45,
-      "accent": 0.65
+      "velocity": 0.35,
+      "accent": 0
      }
     },
     {
      "id": "sec_hats",
      "type": "music/sections",
      "position": {
-      "x": 1040,
-      "y": 2420
+      "x": 780,
+      "y": 1820
      },
      "params": {
-      "name": "hats · bars 1–40",
-      "bars": "x*40 .*4",
+      "name": "hats · bars 13–20, 37–44",
+      "bars": ".*12 x*8 .*16 x*8 .*4",
       "barLength": 16,
       "restart": true
      }
@@ -768,13 +582,13 @@
      "id": "kit_hats",
      "type": "music/gameboy",
      "position": {
-      "x": 1300,
-      "y": 2420
+      "x": 1040,
+      "y": 1820
      },
      "params": {
       "name": "Hats",
       "preset": "Kit · DMG Drums",
-      "level": 0.5,
+      "level": 0.3,
       "pan": 0
      }
     },
@@ -798,11 +612,11 @@
       "y": 800
      },
      "params": {
-      "title": "ポケットの星 · Pocket Star",
+      "title": "Pocket Star",
       "show": true,
       "style": "galaxy",
       "palette": "chip",
-      "intensity": 1.1,
+      "intensity": 0.9,
       "ahead": 5,
       "legend": true
      }
@@ -830,13 +644,66 @@
       "y": 1600
      },
      "params": {
-      "frameCount": 2084,
+      "frameCount": 3456,
       "fps": 30,
       "motionBlur": 0,
       "resolutionPreset": "16:9 (1920x1080)",
       "width": 1920,
       "height": 1080,
       "holdout": false
+     }
+    },
+    {
+     "id": "probe",
+     "type": "music/note-probe",
+     "position": {
+      "x": 2200,
+      "y": 1100
+     },
+     "params": {
+      "decay": 0.3
+     }
+    },
+    {
+     "id": "pulse",
+     "type": "math/expression",
+     "position": {
+      "x": 2440,
+      "y": 1100
+     },
+     "params": {
+      "formula": "0.7 + 0.5 * x"
+     }
+    },
+    {
+     "id": "to_vec",
+     "type": "converter/value-to-vector",
+     "position": {
+      "x": 2680,
+      "y": 1100
+     },
+     "params": {}
+    },
+    {
+     "id": "xform",
+     "type": "transform/matrix-transform",
+     "position": {
+      "x": 2920,
+      "y": 1100
+     },
+     "params": {}
+    },
+    {
+     "id": "sphere",
+     "type": "object/sphere",
+     "position": {
+      "x": 3160,
+      "y": 1100
+     },
+     "params": {
+      "color": 10206223,
+      "emissive": 1980943,
+      "emissiveIntensity": 1.0
      }
     }
    ],
@@ -899,395 +766,346 @@
     },
     {
      "id": "c8",
-     "fromNode": "curve_v",
-     "fromSocket": "curve",
-     "toNode": "contour_v",
-     "toSocket": "curve"
+     "fromNode": "clock",
+     "fromSocket": "clock",
+     "toNode": "theme_a",
+     "toSocket": "clock"
     },
     {
      "id": "c9",
      "fromNode": "clock",
      "fromSocket": "clock",
-     "toNode": "contour_v",
+     "toNode": "theme_b",
      "toSocket": "clock"
     },
     {
      "id": "c10",
-     "fromNode": "contour_v",
+     "fromNode": "theme_a",
      "fromSocket": "sequence",
-     "toNode": "orn_v",
+     "toNode": "sec_a",
      "toSocket": "sequence"
     },
     {
      "id": "c11",
-     "fromNode": "orn_v",
+     "fromNode": "theme_b",
      "fromSocket": "sequence",
-     "toNode": "scale_v",
+     "toNode": "sec_b",
      "toSocket": "sequence"
     },
     {
      "id": "c12",
-     "fromNode": "scale_v",
+     "fromNode": "sec_a",
      "fromSocket": "sequence",
-     "toNode": "sec_verse",
+     "toNode": "lead_a",
      "toSocket": "sequence"
     },
     {
      "id": "c13",
-     "fromNode": "sec_verse",
+     "fromNode": "sec_b",
      "fromSocket": "sequence",
-     "toNode": "verse_v",
+     "toNode": "lead_b",
      "toSocket": "sequence"
     },
     {
      "id": "c14",
-     "fromNode": "sec_verse",
+     "fromNode": "sec_a",
      "fromSocket": "sequence",
-     "toNode": "echo_v",
+     "toNode": "echo_a",
      "toSocket": "sequence"
     },
     {
      "id": "c15",
-     "fromNode": "echo_v",
-     "fromSocket": "echo",
-     "toNode": "verse_echo",
+     "fromNode": "sec_b",
+     "fromSocket": "sequence",
+     "toNode": "echo_b",
      "toSocket": "sequence"
     },
     {
      "id": "c16",
-     "fromNode": "clock",
-     "fromSocket": "clock",
-     "toNode": "sr",
-     "toSocket": "clock"
+     "fromNode": "echo_a",
+     "fromSocket": "echo",
+     "toNode": "sec_echo_a",
+     "toSocket": "sequence"
     },
     {
      "id": "c17",
-     "fromNode": "sr",
-     "fromSocket": "sequence",
-     "toNode": "sec_sr",
+     "fromNode": "echo_b",
+     "fromSocket": "echo",
+     "toNode": "sec_echo_b",
      "toSocket": "sequence"
     },
     {
      "id": "c18",
-     "fromNode": "sec_sr",
+     "fromNode": "sec_echo_a",
      "fromSocket": "sequence",
-     "toNode": "riff_v",
+     "toNode": "echo_a_v",
      "toSocket": "sequence"
     },
     {
      "id": "c19",
-     "fromNode": "curve_c",
-     "fromSocket": "curve",
-     "toNode": "contour_c",
-     "toSocket": "curve"
+     "fromNode": "sec_echo_b",
+     "fromSocket": "sequence",
+     "toNode": "echo_b_v",
+     "toSocket": "sequence"
     },
     {
      "id": "c20",
-     "fromNode": "clock",
-     "fromSocket": "clock",
-     "toNode": "contour_c",
-     "toSocket": "clock"
+     "fromNode": "theme_a",
+     "fromSocket": "sequence",
+     "toNode": "cp_a",
+     "toSocket": "sequence"
     },
     {
      "id": "c21",
-     "fromNode": "contour_c",
+     "fromNode": "theme_b",
      "fromSocket": "sequence",
-     "toNode": "orn_c",
+     "toNode": "cp_b",
      "toSocket": "sequence"
     },
     {
      "id": "c22",
-     "fromNode": "orn_c",
+     "fromNode": "cp_a",
      "fromSocket": "sequence",
-     "toNode": "scale_c",
+     "toNode": "sec_cp_a",
      "toSocket": "sequence"
     },
     {
      "id": "c23",
-     "fromNode": "scale_c",
+     "fromNode": "cp_b",
      "fromSocket": "sequence",
-     "toNode": "sec_hook",
+     "toNode": "sec_cp_b",
      "toSocket": "sequence"
     },
     {
      "id": "c24",
-     "fromNode": "sec_hook",
+     "fromNode": "sec_cp_a",
      "fromSocket": "sequence",
-     "toNode": "hook_v",
+     "toNode": "cp_a_v",
      "toSocket": "sequence"
     },
     {
      "id": "c25",
-     "fromNode": "sec_hook",
+     "fromNode": "sec_cp_b",
      "fromSocket": "sequence",
-     "toNode": "echo_c",
+     "toNode": "cp_b_v",
      "toSocket": "sequence"
     },
     {
      "id": "c26",
-     "fromNode": "echo_c",
-     "fromSocket": "echo",
-     "toNode": "hook_echo",
-     "toSocket": "sequence"
-    },
-    {
-     "id": "c27",
-     "fromNode": "contour_c",
-     "fromSocket": "sequence",
-     "toNode": "cp",
-     "toSocket": "sequence"
-    },
-    {
-     "id": "c28",
-     "fromNode": "cp",
-     "fromSocket": "sequence",
-     "toNode": "sec_cp",
-     "toSocket": "sequence"
-    },
-    {
-     "id": "c29",
-     "fromNode": "sec_cp",
-     "fromSocket": "sequence",
-     "toNode": "cp_v",
-     "toSocket": "sequence"
-    },
-    {
-     "id": "c30",
-     "fromNode": "clock",
-     "fromSocket": "clock",
-     "toNode": "phase_m",
-     "toSocket": "clock"
-    },
-    {
-     "id": "c31",
-     "fromNode": "phase_m",
-     "fromSocket": "sequence",
-     "toNode": "phase",
-     "toSocket": "sequence"
-    },
-    {
-     "id": "c32",
-     "fromNode": "phase",
-     "fromSocket": "a",
-     "toNode": "sec_pa",
-     "toSocket": "sequence"
-    },
-    {
-     "id": "c33",
-     "fromNode": "phase",
-     "fromSocket": "b",
-     "toNode": "sec_pb",
-     "toSocket": "sequence"
-    },
-    {
-     "id": "c34",
-     "fromNode": "sec_pa",
-     "fromSocket": "sequence",
-     "toNode": "phase_a",
-     "toSocket": "sequence"
-    },
-    {
-     "id": "c35",
-     "fromNode": "sec_pb",
-     "fromSocket": "sequence",
-     "toNode": "phase_b",
-     "toSocket": "sequence"
-    },
-    {
-     "id": "c36",
-     "fromNode": "scale_v",
+     "fromNode": "theme_a",
      "fromSocket": "sequence",
      "toNode": "markov",
      "toSocket": "source"
     },
     {
-     "id": "c37",
-     "fromNode": "scale_c",
+     "id": "c27",
+     "fromNode": "theme_b",
      "fromSocket": "sequence",
      "toNode": "markov",
      "toSocket": "source2"
     },
     {
-     "id": "c38",
+     "id": "c28",
      "fromNode": "markov",
      "fromSocket": "sequence",
      "toNode": "scale_m",
      "toSocket": "sequence"
     },
     {
-     "id": "c39",
+     "id": "c29",
      "fromNode": "scale_m",
      "fromSocket": "sequence",
      "toNode": "sec_mk",
      "toSocket": "sequence"
     },
     {
-     "id": "c40",
+     "id": "c30",
      "fromNode": "sec_mk",
      "fromSocket": "sequence",
      "toNode": "markov_v",
      "toSocket": "sequence"
     },
     {
-     "id": "c41",
+     "id": "c31",
      "fromNode": "clock",
      "fromSocket": "clock",
      "toNode": "eu_kick",
      "toSocket": "input"
     },
     {
-     "id": "c42",
+     "id": "c32",
      "fromNode": "eu_kick",
      "fromSocket": "sequence",
      "toNode": "sec_kick",
      "toSocket": "sequence"
     },
     {
-     "id": "c43",
+     "id": "c33",
      "fromNode": "sec_kick",
      "fromSocket": "sequence",
      "toNode": "kit_kick",
      "toSocket": "sequence"
     },
     {
-     "id": "c44",
+     "id": "c34",
      "fromNode": "clock",
      "fromSocket": "clock",
      "toNode": "eu_snare",
      "toSocket": "input"
     },
     {
-     "id": "c45",
+     "id": "c35",
      "fromNode": "eu_snare",
      "fromSocket": "sequence",
      "toNode": "sec_snare",
      "toSocket": "sequence"
     },
     {
-     "id": "c46",
+     "id": "c36",
      "fromNode": "sec_snare",
      "fromSocket": "sequence",
      "toNode": "kit_snare",
      "toSocket": "sequence"
     },
     {
-     "id": "c47",
+     "id": "c37",
      "fromNode": "clock",
      "fromSocket": "clock",
      "toNode": "eu_hats",
      "toSocket": "input"
     },
     {
-     "id": "c48",
+     "id": "c38",
      "fromNode": "eu_hats",
      "fromSocket": "sequence",
      "toNode": "sec_hats",
      "toSocket": "sequence"
     },
     {
-     "id": "c49",
+     "id": "c39",
      "fromNode": "sec_hats",
      "fromSocket": "sequence",
      "toNode": "kit_hats",
      "toSocket": "sequence"
     },
     {
-     "id": "c50",
+     "id": "c40",
      "fromNode": "arp_v",
      "fromSocket": "track",
      "toNode": "out",
      "toSocket": "track0"
     },
     {
-     "id": "c51",
+     "id": "c41",
      "fromNode": "bass_v",
      "fromSocket": "track",
      "toNode": "out",
      "toSocket": "track1"
     },
     {
-     "id": "c52",
-     "fromNode": "verse_v",
+     "id": "c42",
+     "fromNode": "lead_a",
      "fromSocket": "track",
      "toNode": "out",
      "toSocket": "track2"
     },
     {
-     "id": "c53",
-     "fromNode": "verse_echo",
+     "id": "c43",
+     "fromNode": "lead_b",
      "fromSocket": "track",
      "toNode": "out",
      "toSocket": "track3"
     },
     {
-     "id": "c54",
-     "fromNode": "riff_v",
+     "id": "c44",
+     "fromNode": "echo_a_v",
      "fromSocket": "track",
      "toNode": "out",
      "toSocket": "track4"
     },
     {
-     "id": "c55",
-     "fromNode": "hook_v",
+     "id": "c45",
+     "fromNode": "echo_b_v",
      "fromSocket": "track",
      "toNode": "out",
      "toSocket": "track5"
     },
     {
-     "id": "c56",
-     "fromNode": "hook_echo",
+     "id": "c46",
+     "fromNode": "cp_a_v",
      "fromSocket": "track",
      "toNode": "out",
      "toSocket": "track6"
     },
     {
-     "id": "c57",
-     "fromNode": "cp_v",
+     "id": "c47",
+     "fromNode": "cp_b_v",
      "fromSocket": "track",
      "toNode": "out",
      "toSocket": "track7"
     },
     {
-     "id": "c58",
-     "fromNode": "phase_a",
+     "id": "c48",
+     "fromNode": "markov_v",
      "fromSocket": "track",
      "toNode": "out",
      "toSocket": "track8"
     },
     {
-     "id": "c59",
-     "fromNode": "phase_b",
+     "id": "c49",
+     "fromNode": "kit_kick",
      "fromSocket": "track",
      "toNode": "out",
      "toSocket": "track9"
     },
     {
-     "id": "c60",
-     "fromNode": "markov_v",
+     "id": "c50",
+     "fromNode": "kit_snare",
      "fromSocket": "track",
      "toNode": "out",
      "toSocket": "track10"
     },
     {
-     "id": "c61",
-     "fromNode": "kit_kick",
+     "id": "c51",
+     "fromNode": "kit_hats",
      "fromSocket": "track",
      "toNode": "out",
      "toSocket": "track11"
     },
     {
-     "id": "c62",
-     "fromNode": "kit_snare",
-     "fromSocket": "track",
-     "toNode": "out",
-     "toSocket": "track12"
+     "id": "c52",
+     "fromNode": "sec_kick",
+     "fromSocket": "sequence",
+     "toNode": "probe",
+     "toSocket": "music"
     },
     {
-     "id": "c63",
-     "fromNode": "kit_hats",
-     "fromSocket": "track",
-     "toNode": "out",
-     "toSocket": "track13"
+     "id": "c53",
+     "fromNode": "probe",
+     "fromSocket": "envelope",
+     "toNode": "pulse",
+     "toSocket": "x"
+    },
+    {
+     "id": "c54",
+     "fromNode": "pulse",
+     "fromSocket": "value",
+     "toNode": "to_vec",
+     "toSocket": "value"
+    },
+    {
+     "id": "c55",
+     "fromNode": "to_vec",
+     "fromSocket": "vector",
+     "toNode": "xform",
+     "toSocket": "scale"
+    },
+    {
+     "id": "c56",
+     "fromNode": "xform",
+     "fromSocket": "matrix",
+     "toNode": "sphere",
+     "toSocket": "matrix"
     }
    ],
    "keyframes": {},

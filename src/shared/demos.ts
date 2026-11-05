@@ -701,7 +701,7 @@ export const DEMO_CATALOG: DemoCategory[] = [
       {
         file: "demo_music_pocket_star.tsuji",
         label: "Pocket Star",
-        description: "A Japanese Game Boy–style song made by rules, every part a Game Boy channel: the royal-road chords arpeggiated, an octave-bouncing wave bass, verse and chorus melodies read off curves with a chip echo and a counterpoint, a shift-register riff, phasing pulses and a Markov solo in the bridge, the DMG kit on Euclidean rhythms — press Play.",
+        description: "A soft, melodic chiptune on Game Boy channels: two written tunes, and around them broken chords on the wave channel, a round bass, counter-melodies by counterpoint, a soft chip echo, a bridge tune improvised by a Markov chain that learned both themes, and a gentle DMG kit on Euclidean rhythms — press Play.",
       },
       {
         file: "demo_music_kawa_quest.tsuji",
