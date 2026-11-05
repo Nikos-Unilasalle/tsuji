@@ -699,9 +699,9 @@ export const DEMO_CATALOG: DemoCategory[] = [
     title: "Music",
     demos: [
       {
-        file: "demo_music_band.tsuji",
-        label: "Band",
-        description: "Clock, three patterns, an arpeggio, two FM voices and a drum kit into Music Out — press Play.",
+        file: "demo_music_pocket_star.tsuji",
+        label: "Pocket Star",
+        description: "A Japanese Game Boy–style song made by rules, every part a Game Boy channel: the royal-road chords arpeggiated, an octave-bouncing wave bass, verse and chorus melodies read off curves with a chip echo and a counterpoint, a shift-register riff, phasing pulses and a Markov solo in the bridge, the DMG kit on Euclidean rhythms — press Play.",
       },
       {
         file: "demo_music_kawa_quest.tsuji",
