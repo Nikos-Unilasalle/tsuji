@@ -8,7 +8,7 @@
 import { getAudioContext, getAudioOutput } from "../../audio/audioStore";
 import { onPlaybackActiveChange } from "../../graph/playbackKeys";
 import type { MusicDescription, PreviewSound } from "./description";
-import type { EngineMessage, EngineState } from "./engine.worklet";
+import type { EngineMessage, EngineMeters, EngineState } from "./engine.worklet";
 
 const modules = new WeakMap<BaseAudioContext, Promise<void>>();
 
@@ -21,7 +21,7 @@ if (import.meta.env?.DEV && typeof window !== "undefined") {
   (window as unknown as { __tsujiMusic?: () => unknown }).__tsujiMusic = () => ({
     now: getAudioContext()?.currentTime ?? 0,
     sampleRate: getAudioContext()?.sampleRate ?? 0,
-    engines: [...live].map((h) => h.state),
+    engines: [...live].map((h) => ({ ...h.state, meters: h.meters })),
   });
 }
 
@@ -43,6 +43,19 @@ export function musicEngineFor(nodeId: string): MusicEngineHandle {
     byNode.set(nodeId, engine);
   }
   return engine;
+}
+
+/** The meters of a Music Out's engine, when it has one — never makes an engine (the Mixing Console only reads). */
+export function musicMetersOf(nodeId: string): EngineMeters | null {
+  return byNode.get(nodeId)?.meters ?? null;
+}
+
+/**
+ * The two sides of a Music Out's output, as AnalyserNodes (made with the engine, fed in parallel with the speakers):
+ * the Mixing Console's spectrum and goniometer read them. Null until the engine's worklet has loaded.
+ */
+export function musicAnalysersOf(nodeId: string): { left: AnalyserNode; right: AnalyserNode } | null {
+  return byNode.get(nodeId)?.analysers ?? null;
 }
 
 /** The node is gone: its engine lets its notes ring out, then disconnects. */
@@ -81,6 +94,9 @@ export class MusicEngineHandle {
   private pendingFollow: Extract<EngineMessage, { type: "follow" }> | null = null;
   /** The engine's last report, for the node's outputs. */
   state: EngineState = { type: "state", playing: false, position: 0, at: 0, voices: 0, jumps: 0 };
+  /** The engine's last meter reading (a few dozen a second), for the Mixing Console. */
+  meters: EngineMeters | null = null;
+  analysers: { left: AnalyserNode; right: AnalyserNode } | null = null;
 
   constructor() {
     live.add(this);
@@ -93,10 +109,25 @@ export class MusicEngineHandle {
       .then(() => {
         if (this.disposed) return;
         const node = new AudioWorkletNode(ctx, "tsuji-music-engine", { numberOfInputs: 0, outputChannelCount: [2] });
-        node.port.onmessage = (e: MessageEvent<EngineState>) => {
+        node.port.onmessage = (e: MessageEvent<EngineState | EngineMeters>) => {
           if (e.data?.type === "state") this.state = e.data;
+          else if (e.data?.type === "meters") this.meters = e.data;
         };
         node.connect(getAudioOutput() ?? ctx.destination);
+        // A tap for the console's analysis: each side to its own analyser, which outputs nothing.
+        const split = ctx.createChannelSplitter(2);
+        const analyser = () => {
+          const a = ctx.createAnalyser();
+          a.fftSize = 2048;
+          a.smoothingTimeConstant = 0.6;
+          return a;
+        };
+        const left = analyser();
+        const right = analyser();
+        node.connect(split);
+        split.connect(left, 0);
+        split.connect(right, 1);
+        this.analysers = { left, right };
         this.node = node;
         if (this.pendingDesc) this.post({ type: "describe", desc: this.pendingDesc });
         if (this.pendingFollow) this.post(this.pendingFollow);
@@ -147,6 +178,7 @@ export class MusicEngineHandle {
     this.post({ type: "follow", playing: false, wanted: 0, at: 0, tolerance: 0 });
     const node = this.node;
     this.node = null;
+    this.analysers = null;
     // Let the released notes ring out before the node goes.
     setTimeout(() => {
       node.port.close();

@@ -42,6 +42,7 @@ import {
 import { MUSIC_ALGO_NODES } from "./musicAlgo";
 import { withParamInputs } from "./paramInputs";
 import { MUSIC_VIEWER_NODE } from "./musicViewer";
+import { MIXING_CONSOLE_NODE } from "./mixingConsole";
 import { RANDOM_LIST_NODE, RANDOM_MATRIX_NODE, RANDOM_VALUE_NODE, RANDOM_VECTOR_NODE } from "./random";
 import { KEYBOARD_NODE } from "./keyboard";
 import { VIRTUAL_INTERFACE_NODE } from "./virtualInterface";
@@ -428,6 +429,7 @@ export const STARTER_NODES = [
   MUSIC_NOTE_PROBE_NODE,
   ...MUSIC_ALGO_NODES,
   MUSIC_VIEWER_NODE,
+  MIXING_CONSOLE_NODE,
   MUSIC_OUT_NODE,
   RANDOM_VALUE_NODE,
   RANDOM_VECTOR_NODE,
@@ -622,7 +624,7 @@ export const STARTER_NODES = [
 for (const def of STARTER_NODES) addPoseSockets(def);
 // Music: any number, on/off or choice param can be opened as an input from the param panel — see paramInputs.ts.
 STARTER_NODES.forEach((def, i) => {
-  if (def.category === "music" && def.type !== "music/viewer") STARTER_NODES[i] = withParamInputs(def);
+  if (def.category === "music" && def.type !== "music/viewer" && def.type !== "music/mixing-console") STARTER_NODES[i] = withParamInputs(def);
 });
 
 export const DEFAULT_REGISTRY = createRegistry(STARTER_NODES);

@@ -244,3 +244,19 @@ describe("EngineCore — descriptions", () => {
     expect(run(e, 2 * STEP).every((x) => x === 0)).toBe(true);
   });
 });
+
+describe("EngineCore — solo", () => {
+  it("silences every track but the soloed ones while any is soloed", () => {
+    const e = new EngineCore(SR);
+    const seq = seqOf({ 0: { note: 69, length: 16 } });
+    e.describe(desc(track("a", seq), track("b", seq, SINE, { solo: true })));
+    e.play(0);
+    run(e, 4 * STEP);
+    const m = e.takeMeters();
+    expect(m.channels.a.peak).toBe(0);
+    expect(m.channels.b.peak).toBeGreaterThan(0.1);
+    e.describe(desc(track("a", seq), track("b", seq)));
+    run(e, 4 * STEP);
+    expect(e.takeMeters().channels.a.peak).toBeGreaterThan(0.1);
+  });
+});

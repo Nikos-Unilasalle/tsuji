@@ -39,6 +39,7 @@ import { EuclidHud, TuningHud } from "./MusicAlgoHuds";
 import { SectionsHud } from "./SectionsHud";
 import { ProgressionHud } from "./ProgressionHud";
 import { MusicViewerOverlay } from "./MusicViewerOverlay";
+import { MixingConsoleOverlay } from "./MixingConsoleOverlay";
 import { scoreCache } from "../music/viewer/fromGraph";
 import { previewNote } from "../music/engine/bridge";
 import { MUSIC_SEQUENCE_PASS_TYPES } from "../graph/nodes/musicAlgo";
@@ -986,6 +987,8 @@ interface ViewportProps {
     options?: { coalesce?: boolean },
   ) => void;
   onParamAction?: (nodeId: string, action: string) => void;
+  /** Edits the graph's keyframes (the Mixing Console's automation); `coalesceKey` makes one undo step of a gesture. */
+  onKeyframesEdit?: (edit: (store: KeyframeStore) => KeyframeStore, coalesceKey?: string) => void;
   onUnpinParam?: (nodeId: string, paramId: string) => void;
   onRenameExposedParam?: (nodeId: string, paramId: string, label: string) => void;
   mode2D?: boolean;
@@ -1038,6 +1041,7 @@ export function Viewport({
   keyframesEnabled = true,
   onParamChange,
   onParamAction,
+  onKeyframesEdit,
   onUnpinParam,
   onRenameExposedParam,
   mode2D = false,
@@ -10947,6 +10951,30 @@ export function Viewport({
               readScore={() => viewerScoreRef.current(graphRef.current, latestResultsRef.current, seconds)}
               readTime={() => (Math.max(0, currentFrameRef.current) - startFrame) / fps}
               onHide={() => onParamChange?.({ show: false }, viewer.id)}
+            />
+          );
+        })()}
+      {/* A shown Mixing Console: the song's desk over the view, its controls the voices' params (see MixingConsoleOverlay.tsx). */}
+      {!outputMode &&
+        onParamChange &&
+        (() => {
+          const desk = graph.nodes.find((n) => n.type === "music/mixing-console" && n.params.show !== false);
+          if (!desk) return null;
+          const out = graph.nodes.find((n) => n.type === "music/out");
+          const render = graph.nodes.find((n) => n.type === "render");
+          const fps = Number(render?.params.fps) || 30;
+          const startFrame = Math.round(Number(out?.params.startFrame ?? 0)) || 0;
+          return (
+            <MixingConsoleOverlay
+              node={desk}
+              graph={graph}
+              readResults={() => latestResultsRef.current}
+              readTime={() => (Math.max(0, currentFrameRef.current) - startFrame) / fps}
+              readFrame={() => currentFrameRef.current}
+              canAutomate={!!keyframesEnabled && !!onKeyframesEdit}
+              onKeyframes={(edit, key) => onKeyframesEdit?.(edit, key)}
+              onParams={(params, nodeId) => onParamChange(params, nodeId)}
+              onHide={() => onParamChange({ show: false }, desk.id)}
             />
           );
         })()}

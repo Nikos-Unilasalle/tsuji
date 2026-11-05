@@ -16,7 +16,7 @@ import { DrumSynth } from "../dsp/drums";
 import { FmSynth } from "../dsp/fm";
 import { GbSynth } from "../dsp/gameboy";
 import { SidSynth } from "../dsp/sid";
-import { Mixer, MonoSource } from "../dsp/mix";
+import { Mixer, MixerMeters, MonoSource } from "../dsp/mix";
 import { NoteEvent, Sequence, notesSoundingAt, notesStartingIn } from "../seq/sequencer";
 import { DEFAULT_FX, MusicDescription, PreviewSound, TrackDescription } from "./description";
 
@@ -53,7 +53,14 @@ interface Due {
 const MAX_VOICES = 16;
 const PREVIEW_ID = "__preview";
 
-const channelOf = (d: TrackDescription) => ({ level: d.level, pan: d.pan, mute: d.mute, delaySend: d.delaySend ?? 0, reverbSend: d.reverbSend ?? 0 });
+/** A track's channel; `soloing`: some track of the song is soloed, so the others fall silent. */
+const channelOf = (d: TrackDescription, soloing = false) => ({
+  level: d.level,
+  pan: d.pan,
+  mute: d.mute || (soloing && !d.solo),
+  delaySend: d.delaySend ?? 0,
+  reverbSend: d.reverbSend ?? 0,
+});
 
 function glideOf(e: NoteEvent): { from: number; seconds: number } | undefined {
   return e.glideFrom === undefined ? undefined : { from: e.glideFrom, seconds: e.glideSeconds ?? 0 };
@@ -106,9 +113,15 @@ export class EngineCore {
     return n;
   }
 
+  /** The meters since the last reading (see Mixer.takeMeters). */
+  takeMeters(): MixerMeters {
+    return this.mixer.takeMeters();
+  }
+
   /** Applies a description; tracks are matched by id, and only what changed is touched. */
   describe(desc: MusicDescription): void {
     const seen = new Set<string>();
+    const soloing = desc.tracks.some((d) => d.solo === true);
     for (const d of desc.tracks) {
       seen.add(d.id);
       const voices = d.kind === "drums" ? 0 : Math.max(1, Math.min(MAX_VOICES, Math.round(d.voices)));
@@ -119,7 +132,7 @@ export class EngineCore {
         track = { id: d.id, kind: d.kind, synth, seq: d.seq, patchKey: "", seqKey: "", offs: [] };
         this.tracks.set(d.id, track);
         // With its own settings from the start: a track that appears muted must not glide down from full level.
-        this.mixer.addChannel(d.id, track.synth, channelOf(d));
+        this.mixer.addChannel(d.id, track.synth, channelOf(d, soloing));
       }
       const patchKey = JSON.stringify(d.kind === "fm" ? d.patch : d.kind === "gb" ? d.gb : d.kind === "sid" ? d.sid : d.drums);
       if (patchKey !== track.patchKey) {
@@ -136,7 +149,7 @@ export class EngineCore {
         track.seqKey = seqKey;
         if (!first) this.releaseWhatTheNewSequenceDoesNotHold(track);
       }
-      this.mixer.setChannel(d.id, channelOf(d));
+      this.mixer.setChannel(d.id, channelOf(d, soloing));
     }
     for (const [id, track] of this.tracks) {
       if (seen.has(id)) continue;

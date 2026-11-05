@@ -58,6 +58,8 @@ interface SplitViewportProps {
     options?: { coalesce?: boolean },
   ) => void;
   onParamAction?: (nodeId: string, action: string) => void;
+  /** Edits the graph's keyframes (the Mixing Console's automation); `coalesceKey` makes one undo step of a gesture. */
+  onKeyframesEdit?: (edit: (store: KeyframeStore) => KeyframeStore, coalesceKey?: string) => void;
   onUnpinParam?: (nodeId: string, paramId: string) => void;
   onRenameExposedParam?: (nodeId: string, paramId: string, label: string) => void;
   mode2D?: boolean;
@@ -97,6 +99,7 @@ export function SplitViewport({
   keyframesEnabled,
   onParamChange,
   onParamAction,
+  onKeyframesEdit,
   onUnpinParam,
   onRenameExposedParam,
   mode2D = false,
@@ -385,6 +388,7 @@ export function SplitViewport({
           keyframesEnabled={keyframesEnabled}
                     onParamChange={onParamChange}
           onParamAction={onParamAction}
+          onKeyframesEdit={onKeyframesEdit}
           onUnpinParam={onUnpinParam}
           onRenameExposedParam={onRenameExposedParam}
           gpTool={gpTool}

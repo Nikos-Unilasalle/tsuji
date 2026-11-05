@@ -50,6 +50,25 @@ interface Channel {
   targetReverb: number;
   nowDelay: number;
   nowReverb: number;
+  /** Metering since the last takeMeters(): the loudest post-fader sample, and the sum of squares over `count` samples. */
+  peak: number;
+  sumSq: number;
+  count: number;
+}
+
+/** A channel's (or one side of the master's) level since the last reading: linear peak and RMS. */
+export interface MeterReading {
+  peak: number;
+  rms: number;
+}
+
+export interface MixerMeters {
+  channels: Record<string, MeterReading>;
+  /** After the master level and the soft clip. */
+  left: MeterReading;
+  right: MeterReading;
+  /** Samples the master pushed past ±1 before the soft clip bent them: the console's CLIP lamp. */
+  clipped: number;
 }
 
 /** Constant-power pan: the centre is −3 dB on each side, a hard pan full on one side and silent on the other. */
@@ -83,6 +102,7 @@ export class Mixer {
   private reverb: Reverb;
   private delayBus = new Float32Array(CHUNK);
   private reverbBus = new Float32Array(CHUNK);
+  private master = { peakL: 0, peakR: 0, sumL: 0, sumR: 0, count: 0, clipped: 0 };
 
   constructor(sampleRate: number) {
     this.smooth = 1 - Math.exp(-4.6 / Math.max(1, SMOOTH_SECONDS * sampleRate));
@@ -101,7 +121,7 @@ export class Mixer {
     const [l, r] = this.gainsOf(settings);
     const d = sendOf(settings.delaySend);
     const v = sendOf(settings.reverbSend);
-    this.channels.set(id, { source, targetL: l, targetR: r, nowL: l, nowR: r, targetDelay: d, targetReverb: v, nowDelay: d, nowReverb: v });
+    this.channels.set(id, { source, targetL: l, targetR: r, nowL: l, nowR: r, targetDelay: d, targetReverb: v, nowDelay: d, nowReverb: v, peak: 0, sumSq: 0, count: 0 });
   }
 
   setChannel(id: string, settings: ChannelSettings): void {
@@ -118,6 +138,25 @@ export class Mixer {
 
   hasChannel(id: string): boolean {
     return this.channels.has(id);
+  }
+
+  /**
+   * What each channel and the master played since the last call (then starts over): for the Mixing Console's meters.
+   * Channels are metered post-fader and pan-independent (constant power), so a muted channel reads silence.
+   */
+  takeMeters(): MixerMeters {
+    const channels: Record<string, MeterReading> = {};
+    for (const [id, ch] of this.channels) {
+      channels[id] = { peak: ch.peak, rms: ch.count > 0 ? Math.sqrt(ch.sumSq / ch.count) : 0 };
+      ch.peak = 0;
+      ch.sumSq = 0;
+      ch.count = 0;
+    }
+    const m = this.master;
+    const n = Math.max(1, m.count);
+    const out: MixerMeters = { channels, left: { peak: m.peakL, rms: Math.sqrt(m.sumL / n) }, right: { peak: m.peakR, rms: Math.sqrt(m.sumR / n) }, clipped: m.clipped };
+    this.master = { peakL: 0, peakR: 0, sumL: 0, sumR: 0, count: 0, clipped: 0 };
+    return out;
   }
 
   setMaster(level: number): void {
@@ -147,10 +186,15 @@ export class Mixer {
       let gd = ch.nowDelay;
       let gv = ch.nowReverb;
       const sends = gd !== 0 || gv !== 0 || ch.targetDelay !== 0 || ch.targetReverb !== 0;
+      let peak = 0;
+      let sumSq = 0;
       for (let i = 0; i < m; i++) {
         gl = glide(gl, ch.targetL, sc);
         gr = glide(gr, ch.targetR, sc);
         const x = this.mono[i];
+        const a = x < 0 ? -x : x;
+        if (a > peak) peak = a;
+        sumSq += x * x;
         left[s0 + i] += x * gl;
         right[s0 + i] += x * gr;
         if (sends) {
@@ -162,6 +206,12 @@ export class Mixer {
           this.reverbBus[i] += post * gv;
         }
       }
+      // The meter, post-fader at the chunk's gain (constant power, whatever the pan): cheap, and within a chunk of exact.
+      const g2 = gl * gl + gr * gr;
+      const gm = Math.sqrt(g2);
+      if (peak * gm > ch.peak) ch.peak = peak * gm;
+      ch.sumSq += sumSq * g2;
+      ch.count += m;
       ch.nowL = gl;
       ch.nowR = gr;
       ch.nowDelay = gd;
@@ -171,11 +221,24 @@ export class Mixer {
     this.delay.process(this.delayBus, left, right, s0, m);
     this.reverb.process(this.reverbBus, left, right, s0, m);
     let g = this.masterNow;
+    const mt = this.master;
     for (let i = 0; i < m; i++) {
       g = glide(g, this.masterTarget, sc);
-      left[s0 + i] = softClip(left[s0 + i] * g);
-      right[s0 + i] = softClip(right[s0 + i] * g);
+      const xl = left[s0 + i] * g;
+      const xr = right[s0 + i] * g;
+      if (xl > 1 || xl < -1 || xr > 1 || xr < -1) mt.clipped++;
+      const l = softClip(xl);
+      const r = softClip(xr);
+      left[s0 + i] = l;
+      right[s0 + i] = r;
+      const al = l < 0 ? -l : l;
+      const ar = r < 0 ? -r : r;
+      if (al > mt.peakL) mt.peakL = al;
+      if (ar > mt.peakR) mt.peakR = ar;
+      mt.sumL += l * l;
+      mt.sumR += r * r;
     }
+    mt.count += m;
     this.masterNow = g;
   }
 }

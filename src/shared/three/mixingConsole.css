@@ -1,0 +1,578 @@
+/* The Mixing Console (MixingConsoleOverlay.tsx), in the music HUDs' style: the raised chrome panel, the category's
+   magenta, the voices' colours, slate greys and tabular numbers. Each strip sets --mx-color to its voice's colour. */
+
+.mx-panel {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 8px 10px;
+  user-select: none;
+  -webkit-user-select: none;
+  font-family: system-ui, -apple-system, sans-serif;
+}
+
+.mx-zoom {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+  min-height: 0;
+}
+
+/* ── Header ─────────────────────────────────────────────────────────────── */
+
+.mx-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 11px;
+  min-width: 0;
+}
+
+.mx-title {
+  font-weight: 600;
+  font-size: 12px;
+  color: #d946ef;
+  white-space: nowrap;
+}
+
+.mx-status {
+  color: #94a3b8;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.mx-solo-note {
+  color: #f59e0b;
+}
+
+.mx-dot {
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.15);
+  transition:
+    background 0.15s,
+    box-shadow 0.15s;
+}
+
+.mx-dot.mx-on {
+  background: #84cc16;
+  box-shadow: 0 0 8px rgba(132, 204, 22, 0.7);
+}
+
+.mx-header-gap {
+  flex: 1;
+}
+
+.mx-text-button,
+.mx-rec {
+  width: auto !important;
+  height: 24px !important;
+  padding: 0 8px !important;
+  gap: 5px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.mx-rec-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.mx-rec.mx-on,
+.mx-rec.mx-on:hover {
+  color: #ef4444;
+}
+
+.mx-rec.mx-on .mx-rec-dot {
+  animation: mx-pulse 1s ease-in-out infinite;
+}
+
+@keyframes mx-pulse {
+  50% {
+    opacity: 0.25;
+  }
+}
+
+.mx-pill {
+  padding: 2px 7px;
+  border-radius: 10px;
+  font-size: 10px;
+  color: #64748b;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  white-space: nowrap;
+}
+
+.mx-pill.mx-on {
+  color: #38bdf8;
+  border-color: rgba(56, 189, 248, 0.5);
+  background: rgba(56, 189, 248, 0.1);
+}
+
+/* ── Deck ───────────────────────────────────────────────────────────────── */
+
+.mx-deck {
+  flex: 1;
+  display: flex;
+  gap: 10px;
+  min-height: 0;
+}
+
+.mx-strips {
+  flex: 1;
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  min-width: 0;
+  scrollbar-width: thin;
+}
+
+.mx-empty {
+  margin: auto;
+  font-size: 11px;
+  color: #64748b;
+}
+
+.mx-strip,
+.mx-master-strip {
+  flex: 0 0 64px;
+  width: 64px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 4px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.03);
+  border-top: 2px solid var(--mx-color);
+  min-height: 0;
+  box-sizing: border-box;
+  transition: opacity 0.15s;
+}
+
+.mx-strip.mx-dimmed {
+  opacity: 0.4;
+}
+
+.mx-strip-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  font-size: 10px;
+}
+
+.mx-strip-num {
+  color: #64748b;
+  font-variant-numeric: tabular-nums;
+}
+
+.mx-kind {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  color: var(--mx-color);
+}
+
+.mx-badge {
+  margin-left: auto;
+  min-width: 12px;
+  padding: 0 3px;
+  border-radius: 3px;
+  font-size: 9px;
+  font-weight: 600;
+  text-align: center;
+  color: #94a3b8;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.mx-badge + .mx-badge {
+  margin-left: 0;
+}
+
+.mx-auto {
+  color: #38bdf8;
+  background: rgba(56, 189, 248, 0.15);
+  cursor: help;
+}
+
+.mx-auto.mx-writing {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.15);
+}
+
+.mx-name {
+  width: 100%;
+  font-size: 11px;
+  color: #cbd5e1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: center;
+}
+
+.mx-notes {
+  height: 13px;
+  font-size: 10px;
+  color: #94a3b8;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.mx-spark {
+  width: 100%;
+  height: 18px;
+  flex: 0 0 auto;
+}
+
+/* Knobs: an arc in the strip's colour */
+
+.mx-knob-row {
+  display: flex;
+  gap: 2px;
+}
+
+.mx-knob {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.mx-knob svg {
+  width: 28px;
+  height: 28px;
+  cursor: ns-resize;
+  touch-action: none;
+  overflow: visible;
+}
+
+.mx-knob-track,
+.mx-knob-value {
+  fill: none;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+}
+
+.mx-knob-track {
+  stroke: rgba(255, 255, 255, 0.1);
+}
+
+.mx-knob-cap {
+  fill: rgba(255, 255, 255, 0.06);
+}
+
+.mx-knob-line {
+  stroke: #e2e8f0;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+}
+
+.mx-knob-label {
+  margin-top: -1px;
+  font-size: 9px;
+  color: #64748b;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Solo / mute */
+
+.mx-toggles {
+  display: flex;
+  gap: 4px;
+}
+
+.mx-toggle {
+  width: 22px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  font:
+    600 10px/1 system-ui,
+    -apple-system,
+    sans-serif;
+  color: #94a3b8;
+  background: rgba(255, 255, 255, 0.07);
+  cursor: pointer;
+  transition:
+    background 0.12s,
+    color 0.12s;
+}
+
+.mx-toggle:hover {
+  background: rgba(255, 255, 255, 0.14);
+  color: #f1f5f9;
+}
+
+.mx-solo.mx-on,
+.mx-solo.mx-on:hover {
+  background: #f59e0b;
+  color: #1c1305;
+}
+
+.mx-mute.mx-on,
+.mx-mute.mx-on:hover {
+  background: #ef4444;
+  color: #fff;
+}
+
+/* Fader and meter */
+
+.mx-fader-row {
+  flex: 1;
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  min-height: 60px;
+  width: 100%;
+}
+
+.mx-fader {
+  position: relative;
+  width: 22px;
+  height: 100%;
+  cursor: ns-resize;
+  touch-action: none;
+}
+
+.mx-fader-track,
+.mx-fader-fill {
+  position: absolute;
+  left: 50%;
+  width: 4px;
+  transform: translateX(-50%);
+  border-radius: 2px;
+  pointer-events: none;
+}
+
+.mx-fader-track {
+  top: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.mx-fader-fill {
+  bottom: 0;
+  opacity: 0.7;
+}
+
+.mx-fader-mark {
+  position: absolute;
+  left: 2px;
+  right: 2px;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.08);
+  pointer-events: none;
+}
+
+.mx-fader-mark.mx-unity {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.mx-fader-thumb {
+  position: absolute;
+  left: 0;
+  width: 22px;
+  height: 12px;
+  border-radius: 6px;
+  background: #e2e8f0;
+  box-shadow:
+    0 1px 4px rgba(0, 0, 0, 0.55),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.15);
+}
+
+.mx-fader-thumb::after {
+  content: "";
+  position: absolute;
+  left: 5px;
+  right: 5px;
+  top: 5px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--mx-color);
+}
+
+.mx-meter {
+  width: 5px;
+  height: 100%;
+}
+
+.mx-meter-stereo {
+  width: 12px;
+}
+
+.mx-db {
+  font-size: 10px;
+  color: #cbd5e1;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Master: analysis, returns, master fader ────────────────────────────── */
+
+.mx-master {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 8px;
+  min-height: 0;
+}
+
+.mx-analysis {
+  /* A fixed width: its canvases size to their box, and a box sized by its content would grow with them. */
+  width: 300px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.mx-section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.03);
+  min-width: 0;
+}
+
+.mx-section-head {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #cbd5e1;
+}
+
+.mx-section-note {
+  font-weight: 400;
+  font-size: 10px;
+  color: #64748b;
+}
+
+.mx-spectrum {
+  display: block;
+  width: 100%;
+  height: 90px;
+}
+
+.mx-analysis-row {
+  display: flex;
+  gap: 8px;
+}
+
+.mx-scope-box {
+  flex: 0 0 110px;
+  width: 110px;
+  box-sizing: border-box;
+}
+
+.mx-scope {
+  display: block;
+  width: 94px;
+  height: 94px;
+}
+
+.mx-gauge {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  height: 5px;
+}
+
+.mx-scale {
+  position: relative;
+  display: flex;
+  justify-content: space-between;
+  height: 11px;
+  font-size: 9px;
+  color: #64748b;
+  font-variant-numeric: tabular-nums;
+}
+
+.mx-scale-abs span {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+}
+
+.mx-scale-abs span:first-child {
+  transform: none;
+}
+
+.mx-scale-abs span:last-child {
+  transform: translateX(-100%);
+}
+
+.mx-lufs {
+  flex: 1;
+  min-width: 0;
+}
+
+.mx-lufs-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.mx-lufs-label {
+  font-size: 10px;
+  color: #94a3b8;
+}
+
+.mx-lufs-value {
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+}
+
+.mx-returns {
+  display: flex;
+  justify-content: space-around;
+}
+
+.mx-master-strip {
+  flex-basis: 72px;
+  width: 72px;
+}
+
+.mx-master-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: #d946ef;
+}
+
+.mx-clip {
+  margin-left: auto;
+  padding: 0 4px;
+  border-radius: 3px;
+  font-size: 9px;
+  font-weight: 600;
+  color: #64748b;
+  background: rgba(255, 255, 255, 0.06);
+  transition:
+    background 0.1s,
+    color 0.1s;
+}
+
+.mx-clip.mx-on {
+  color: #fff;
+  background: #ef4444;
+}
+
+.mx-locked {
+  cursor: not-allowed !important;
+  opacity: 0.45;
+}

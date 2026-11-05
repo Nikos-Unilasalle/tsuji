@@ -16,6 +16,8 @@ interface TrackBase {
   level: number;
   pan: number;
   mute: boolean;
+  /** Soloed: when any track is, only the soloed ones are heard (left out = false). */
+  solo?: boolean;
   /** 0–1: to the dub delay (left out = 0). */
   delaySend?: number;
   /** 0–1: to the reverb (left out = 0). */

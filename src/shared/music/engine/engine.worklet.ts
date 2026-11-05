@@ -6,6 +6,7 @@
  * Loaded with `?worker&url` (see bridge.ts), so Vite bundles it and the DSP core into one script.
  */
 import { EngineCore } from "./core";
+import { LoudnessMeter } from "../dsp/loudness";
 import type { MusicDescription, PreviewSound } from "./description";
 
 // The AudioWorkletGlobalScope, which TypeScript's DOM lib leaves out.
@@ -37,11 +38,30 @@ export interface EngineState {
   jumps: number;
 }
 
+/** The meters, fast enough for a needle to move (see the Mixing Console). */
+export interface EngineMeters {
+  type: "meters";
+  /** Context time of the reading. */
+  at: number;
+  /** Per track id: [peak, rms], linear, post-fader. */
+  channels: Record<string, [number, number]>;
+  /** The master after the soft clip: [peakL, peakR, rmsL, rmsR]. */
+  master: [number, number, number, number];
+  /** Samples the master pushed past ±1 since the last reading. */
+  clipped: number;
+  /** BS.1770 loudness of the master, in LUFS: momentary, short-term, integrated (since the transport last started). */
+  lufs: [number, number, number];
+}
+
 const REPORT_SECONDS = 0.25;
+const METER_SECONDS = 1 / 40;
 
 class MusicEngineProcessor extends AudioWorkletProcessor {
   private core = new EngineCore(sampleRate);
   private lastReport = -Infinity;
+  private lastMeters = -Infinity;
+  private loudness = new LoudnessMeter(sampleRate);
+  private wasPlaying = false;
 
   constructor() {
     super();
@@ -61,6 +81,26 @@ class MusicEngineProcessor extends AudioWorkletProcessor {
     if (!left) return true;
     const r = right ?? new Float32Array(left.length);
     this.core.render(left, r, 0, left.length);
+    // A new run measures from scratch: the integrated loudness is the song's from where Play was pressed.
+    if (this.core.isPlaying && !this.wasPlaying) this.loudness.reset();
+    this.wasPlaying = this.core.isPlaying;
+    if (this.core.isPlaying) this.loudness.process(left, r, 0, left.length);
+    if (currentTime - this.lastMeters >= METER_SECONDS) {
+      this.lastMeters = currentTime;
+      const m = this.core.takeMeters();
+      const channels: Record<string, [number, number]> = {};
+      for (const id in m.channels) channels[id] = [m.channels[id].peak, m.channels[id].rms];
+      const l = this.loudness.reading();
+      const meters: EngineMeters = {
+        type: "meters",
+        at: currentTime,
+        channels,
+        master: [m.left.peak, m.right.peak, m.left.rms, m.right.rms],
+        clipped: m.clipped,
+        lufs: [l.momentary, l.shortTerm, l.integrated],
+      };
+      this.port.postMessage(meters);
+    }
     if (currentTime - this.lastReport >= REPORT_SECONDS) {
       this.lastReport = currentTime;
       const state: EngineState = { type: "state", playing: this.core.isPlaying, position: this.core.position, at: currentTime, voices: this.core.activeVoices(), jumps: this.core.jumps };

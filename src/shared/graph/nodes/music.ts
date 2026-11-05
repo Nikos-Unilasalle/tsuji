@@ -279,12 +279,15 @@ const SEND_FIELDS: ParamFieldDef[] = [
   { id: "delaySend", label: "Delay Send (dub echo, set on Music Out)", kind: "number", step: 0.05, group: "Sends" },
   { id: "reverbSend", label: "Reverb Send", kind: "number", step: 0.05, group: "Sends" },
 ];
+/** The sends, and the solo (left out of the description unless on, so a song without one describes as before). */
 function sendsOf(inputs: Record<string, unknown>, params: Record<string, unknown>) {
   return {
     delaySend: clamp(numberInput(inputs.delaySend, params.delaySend, 0), 0, 1),
     reverbSend: clamp(numberInput(inputs.reverbSend, params.reverbSend, 0), 0, 1),
+    ...(params.solo === true ? { solo: true } : {}),
   };
 }
+const SOLO_FIELD: ParamFieldDef = { id: "solo", label: "Solo (when any voice is soloed, only the soloed ones play)", kind: "boolean" };
 
 // ── FM Voice ───────────────────────────────────────────────────────────────
 
@@ -343,7 +346,7 @@ export const MUSIC_FM_VOICE_NODE: NodeDefinition = {
     ...SEND_INPUTS,
   ],
   outputs: [{ id: "track", label: "Track", type: "music" }],
-  defaultParams: { preset: "E. Piano", voices: 8, transpose: 0, level: 0.8, pan: 0, brightness: 1, mute: false, delaySend: 0, reverbSend: 0, ...patchParams(FM_PRESETS["E. Piano"]) },
+  defaultParams: { preset: "E. Piano", voices: 8, transpose: 0, level: 0.8, pan: 0, brightness: 1, mute: false, solo: false, delaySend: 0, reverbSend: 0, ...patchParams(FM_PRESETS["E. Piano"]) },
   // A voice saved with a preset name but no operator settings (a hand-written or generated file) gets that preset's
   // settings, not the E. Piano defaults the missing keys would otherwise be filled with.
   upgradeParams: (params) => (params.preset !== undefined && params.op1_ratio === undefined ? { ...presetParams(String(params.preset)), ...params } : params),
@@ -361,6 +364,7 @@ export const MUSIC_FM_VOICE_NODE: NodeDefinition = {
     { id: "voices", label: "Voices (1–16, 1 = mono)", kind: "number", step: 1 },
     { id: "transpose", label: "Transpose (semitones)", kind: "number", step: 1 },
     { id: "mute", label: "Mute", kind: "boolean" },
+    SOLO_FIELD,
     ...SEND_FIELDS,
     {
       id: "algorithm",
@@ -449,7 +453,7 @@ export const MUSIC_GAMEBOY_NODE: NodeDefinition = {
     ...SEND_INPUTS,
   ],
   outputs: [{ id: "track", label: "Track", type: "music" }],
-  defaultParams: { preset: "Pulse 50 · Lead", transpose: 0, level: 0.8, pan: 0, mute: false, delaySend: 0, reverbSend: 0, ...gbPresetParams("Pulse 50 · Lead") },
+  defaultParams: { preset: "Pulse 50 · Lead", transpose: 0, level: 0.8, pan: 0, mute: false, solo: false, delaySend: 0, reverbSend: 0, ...gbPresetParams("Pulse 50 · Lead") },
   // A voice saved with a preset name and nothing else (a generated file) gets that preset.
   upgradeParams: (params) => (params.preset !== undefined && params.channel === undefined ? { ...gbPresetParams(String(params.preset)), ...params } : params),
   paramFields: [
@@ -465,6 +469,7 @@ export const MUSIC_GAMEBOY_NODE: NodeDefinition = {
     { id: "voices", label: "Voices (1–8; the Game Boy's channels are 1)", kind: "number", step: 1 },
     { id: "transpose", label: "Transpose (semitones)", kind: "number", step: 1 },
     { id: "mute", label: "Mute", kind: "boolean" },
+    SOLO_FIELD,
     ...SEND_FIELDS,
     {
       id: "channel",
@@ -569,7 +574,7 @@ export const MUSIC_SID_NODE: NodeDefinition = {
     ...SEND_INPUTS,
   ],
   outputs: [{ id: "track", label: "Track", type: "music" }],
-  defaultParams: { preset: "Saw Lead", transpose: 0, level: 0.8, pan: 0, mute: false, delaySend: 0, reverbSend: 0, ...sidPresetParams("Saw Lead") },
+  defaultParams: { preset: "Saw Lead", transpose: 0, level: 0.8, pan: 0, mute: false, solo: false, delaySend: 0, reverbSend: 0, ...sidPresetParams("Saw Lead") },
   upgradeParams: (params) => (params.preset !== undefined && params.attack === undefined ? { ...sidPresetParams(String(params.preset)), ...params } : params),
   paramFields: [
     {
@@ -584,6 +589,7 @@ export const MUSIC_SID_NODE: NodeDefinition = {
     { id: "voices", label: "Voices (1–8; a SID voice is 1)", kind: "number", step: 1 },
     { id: "transpose", label: "Transpose (semitones)", kind: "number", step: 1 },
     { id: "mute", label: "Mute", kind: "boolean" },
+    SOLO_FIELD,
     ...SEND_FIELDS,
     ...SID_WAVES.map((w) => ({ id: w.id, label: w.label, kind: "boolean" as const, group: "Waveform" })),
     { id: "pulseWidth", label: "Pulse Width (0–4095, 2048 square)", kind: "number", step: 64, group: "Waveform" },
@@ -681,7 +687,7 @@ export const MUSIC_DRUM_KIT_NODE: NodeDefinition = {
     ...SEND_INPUTS,
   ],
   outputs: [{ id: "track", label: "Track", type: "music" }],
-  defaultParams: { level: 0.9, pan: 0, tune: 0, decay: 1, mute: false, delaySend: 0, reverbSend: 0 },
+  defaultParams: { level: 0.9, pan: 0, tune: 0, decay: 1, mute: false, solo: false, delaySend: 0, reverbSend: 0 },
   paramFields: [
     {
       id: "help",
@@ -693,6 +699,7 @@ export const MUSIC_DRUM_KIT_NODE: NodeDefinition = {
     { id: "tune", label: "Tune (semitones)", kind: "number", step: 1 },
     { id: "decay", label: "Decay ×", kind: "number", step: 0.1 },
     { id: "mute", label: "Mute", kind: "boolean" },
+    SOLO_FIELD,
     ...SEND_FIELDS,
   ],
   evaluate: (inputs, params, ctx) => {

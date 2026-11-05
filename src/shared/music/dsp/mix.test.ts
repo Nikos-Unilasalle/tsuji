@@ -98,3 +98,29 @@ describe("Mixer", () => {
     expect(run(500)).toEqual(ref);
   });
 });
+
+describe("Mixer — meters", () => {
+  it("reads each channel post-fader and pan-independent, then starts over", () => {
+    const m = new Mixer(SR);
+    m.addChannel("a", dc(0.5), { level: 0.5, pan: -1, mute: false });
+    m.addChannel("b", dc(0.5), { level: 1, pan: 0, mute: true });
+    renderStereo(m, 1024);
+    const r = m.takeMeters();
+    expect(r.channels.a.peak).toBeCloseTo(0.25, 6);
+    expect(r.channels.a.rms).toBeCloseTo(0.25, 6);
+    expect(r.channels.b.peak).toBe(0);
+    expect(r.left.peak).toBeCloseTo(0.25, 6);
+    expect(r.right.peak).toBe(0);
+    expect(r.clipped).toBe(0);
+    expect(m.takeMeters().channels.a.peak).toBe(0);
+  });
+
+  it("counts the samples the master pushes past full scale", () => {
+    const m = new Mixer(SR);
+    m.addChannel("a", dc(2), { level: 1, pan: -1, mute: false });
+    renderStereo(m, 256);
+    const r = m.takeMeters();
+    expect(r.clipped).toBe(256);
+    expect(r.left.peak).toBeLessThanOrEqual(1);
+  });
+});

@@ -1500,6 +1500,10 @@ function MainEditor() {
     setCurrentFilePath(path);
   };
 
+  /** The Mixing Console's automation writes keyframes directly; a gesture's writes share one undo step. */
+  const onKeyframesEdit = (edit: (store: KeyframeStore) => KeyframeStore, coalesceKey?: string) =>
+    setGraphWithHistory((prev) => ({ ...prev, keyframes: edit(prev.keyframes ?? {}) }), coalesceKey);
+
   const onParamChange = (
     paramId: string | Record<string, unknown>,
     value?: unknown,
@@ -3101,6 +3105,7 @@ function MainEditor() {
             keyframesEnabled={keyframesEnabled}
             onParamChange={onParamChange}
             onParamAction={onParamAction}
+            onKeyframesEdit={onKeyframesEdit}
             onUnpinParam={onToggleExposed}
             onRenameExposedParam={onRenameExposed}
             mode2D={is2DMode}

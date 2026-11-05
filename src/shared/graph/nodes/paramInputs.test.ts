@@ -8,8 +8,8 @@ const def = (type: string) => DEFAULT_REGISTRY.get(type)!;
 describe("params opened as inputs", () => {
   it("every music node can open its number, on/off and choice params — none it already has a socket for, nor its preset", () => {
     for (const d of DEFAULT_REGISTRY.values()) {
-      // The Music Viewer evaluates nothing: it draws from its params, so it has none to open.
-      if (d.category !== "music" || d.type === "music/viewer") continue;
+      // The Music Viewer and the Mixing Console evaluate nothing: they draw from their params, so they have none to open.
+      if (d.category !== "music" || d.type === "music/viewer" || d.type === "music/mixing-console") continue;
       const ids = d.paramInputs ?? [];
       const own = new Set(d.inputs.map((s) => s.id));
       for (const f of d.paramFields ?? []) {
