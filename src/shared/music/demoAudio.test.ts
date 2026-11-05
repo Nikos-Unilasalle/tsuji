@@ -53,6 +53,7 @@ describe("music demos", () => {
       expect(finite).toBe(true);
       expect(peak).toBeGreaterThan(0.05);
       expect(peak).toBeLessThan(1);
-    });
+      // A minute of a full arrangement takes ~5 s alone, and three times that when the whole suite runs alongside.
+    }, 60_000);
   }
 });
