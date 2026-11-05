@@ -13,6 +13,9 @@ music nodes:
 Sounds stay soft and in the middle of the range: the lead a 50 % pulse with a late vibrato, nothing above F5. The
 counterpoint and Markov seeds were picked by search, scoring how their notes sit on the chords.
 
+The shipped file was then tuned by hand in the app (the levels, the B counter-melody in first species, the bridge's
+Markov chain at order 4 snapped up, timeline markers): running this script writes the version before those touches.
+
 Run: python3 tools/gen_music_demo.py
 """
 from pathlib import Path
