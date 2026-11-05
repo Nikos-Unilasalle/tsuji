@@ -704,6 +704,11 @@ export const DEMO_CATALOG: DemoCategory[] = [
         description: "A soft, melodic chiptune on Game Boy channels: two written tunes, and around them broken chords on the wave channel, a round bass, counter-melodies by counterpoint, a soft chip echo, a bridge tune improvised by a Markov chain that learned both themes, and a gentle DMG kit on Euclidean rhythms — press Play.",
       },
       {
+        file: "demo_music_yaolanyao_arrangement.tsuji",
+        label: "Yáolán Yáo",
+        description: "摇篮谣, a Chinese lullaby, converted from a two-hand piano MIDI and arranged by the music nodes: its harmony as one Progression (with the modal bridge, bVI bII bV) voice-led into a glass pad, a bowed bass and a harp; a kalimba counter-melody by Counterpoint; a celesta echoing the tune; bells on the bridge, a whispered shaker — brought in and out by Sections, so the piano stays in front — press Play.",
+      },
+      {
         file: "demo_music_kawa_quest.tsuji",
         label: "KAWA QUEST",
         description: "The demo song of the KAWA tracker for the FM-1, by Omnipotard (GPL-3.0): overworld, dungeon, boss, victory — 52 s on six tracks.",
