@@ -276,7 +276,7 @@ Autres ajouts :
 - Le moteur joue des pistes FM et des pistes de batterie, à travers une interface `Instrument` commune.
 - **Brightness** multiplie les niveaux des modulateurs seulement : le timbre change, pas le volume. C'est une bonne prise pour les visuels.
 - **Pattern** peut transposer, forcer un accord et changer la vélocité depuis des fils : ce sont les visuels qui pilotent la musique.
-- **La case « Demo » de Music Out est retirée.** Elle est remplacée par une vraie démo dans le menu : **Démos → Music → Band** (`public/demos/demo_music_band.tsuji`, générée par `tools/gen_music_demo.py`). Elle contient Clock, trois patterns de 64 pas, un arpège, deux FM Voice (E. Piano, Bass), un Drum Kit, Music Out et une Note Probe, sur 240 frames à 30 fps, soit les 8 s du morceau.
+- **La case « Demo » de Music Out est retirée.** Elle est remplacée par une vraie démo dans le menu : **Démos → Music → Band** (`public/demos/demo_music_band.tsuji`, générée par `tools/gen_music_demo.py`). Elle contient Clock, trois patterns de 64 pas, un arpège, deux FM Voice (E. Piano, Bass), un Drum Kit, Music Out et une Note Probe, sur 240 frames à 30 fps, soit les 8 s du morceau. *(Depuis remplacée par **Pocket Star**, `public/demos/demo_music_pocket_star.tsuji`, que le même script écrit désormais.)*
 
 Vérifié dans l'app (Chrome, panneau visible) : la démo Band se charge et joue. La boucle de 8 s tombe sur celle de la timeline, avec un seul recalage par tour (à la boucle) en 20 s, et 12 à 13 voix.
 
