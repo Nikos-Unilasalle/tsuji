@@ -27,6 +27,8 @@ import {
 } from "../music/seq/patternEdit";
 import { Cell, CellFx, Sequence, stepAt } from "../music/seq/sequencer";
 import type { NodeInstance } from "../graph/types";
+import { MidiEvent, subscribeMidi, subscribeMidiPorts } from "../graph/midiRuntime";
+import { CHORD_WINDOW_MS, EntryGroup, applyGroup, drumForMidi, melodicPadAction, padIndex } from "../music/seq/midiEntry";
 
 /**
  * Pattern's palette in the 3D view (see docs/music-nodes-mvp.md, step 5): the pattern as a tracker grid — a cell per
@@ -43,6 +45,12 @@ import type { NodeInstance } from "../graph/types";
  * A pattern feeding a Drum Kit shows as a drum machine instead: a lane per sound; a click on an empty cell adds a hit, on
  * a hit selects it (the bar's Vel is then that hit's alone, not the whole step's), Shift-click takes it away; each
  * sound's initial — K S C H O L T: kick, snare, clap, hat, open hat, low and top tom — strikes it at the cursor.
+ *
+ * A MIDI keyboard types too (midiEntry.ts), whenever the palette is shown and MIDI is armed (the chip in its top bar):
+ * a key writes its note at the cursor, at the velocity played, and moves the cursor on; keys struck together are one
+ * step, the chord they spell (C E G → `C-4 maj`) or the voicing as played. The pads (channel 10): 1 an OFF, 2 a rest,
+ * 3 clears the step, 4 steps back. On the drum machine pads 1–7 strike kick … high tom, pad 8 is a rest, and the keys
+ * strike their General MIDI drum.
  *
  * Every edit writes the node's `steps` text (notation.ts) in one undo step: the HUD and the text field are the same
  * pattern.
@@ -92,6 +100,8 @@ const MAX_STEPS = 16384;
  * which comes and goes with the selection); the text also goes to the system clipboard, for a Steps field or a file.
  */
 let copiedPattern: (Cell | null)[] | null = null;
+/** MIDI writes into the pattern; kept here so it outlives the HUD, as the copy does. */
+let midiArmed = true;
 
 const COPY_ICON = (
   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -219,6 +229,9 @@ export function PatternHud({
   const [drag, setDrag] = useState<{ from: number; to: number } | null>(null);
   const dragRef = useRef<{ from: number; to: number; moved: boolean } | null>(null);
   const cur = Math.min(cursor, length - 1);
+  // MIDI arrives between renders, notes of one chord a few ms apart: it reads and writes these, not the render's own.
+  const curRef = useRef(cur);
+  curRef.current = cur;
 
   const write = (next: (Cell | null)[]) => {
     if (!sections) return onParams({ steps: formatPattern(next, { drums }) }, node.id);
@@ -226,6 +239,16 @@ export function PatternHud({
     while (all.length <= number) all.push("");
     all[number] = compactPattern(formatPattern(next, { drums }));
     onParams({ steps: joinBank(all) }, node.id);
+  };
+  const cellsRef = useRef<(Cell | null)[]>([]);
+  /** Writes `next` and keeps it for the next MIDI note, which may come before the render showing it. */
+  const commit = (next: (Cell | null)[]) => {
+    cellsRef.current = next;
+    write(next);
+  };
+  const goTo = (step: number) => {
+    curRef.current = step;
+    setCursor(step);
   };
   const audition = (note: number, velocity = 0.8) => previewSound && onPreview(previewSound, note, velocity);
   /** A word on the last copy or paste, for a moment. */
@@ -464,6 +487,64 @@ export function PatternHud({
   };
   const held = drums ? [] : heldBy(cells);
 
+  // MIDI: the inputs open, whether MIDI writes, and the notes of the step being struck.
+  const [midiPorts, setMidiPorts] = useState<string[]>([]);
+  const [armed, setArmed] = useState(midiArmed);
+  const groupRef = useRef<EntryGroup | null>(null);
+  cellsRef.current = cells;
+  const onMidi = (e: MidiEvent) => {
+    if (!midiArmed || e.type !== "noteon") return;
+    const now = e.time;
+    const g = groupRef.current;
+    const joining = g !== null && g.step < length && now - g.startedAt <= CHORD_WINDOW_MS;
+    const here = curRef.current;
+    const next = () => goTo(moveCursor(here, advance, length));
+    const start = (): EntryGroup => {
+      pin();
+      const group: EntryGroup = { step: here, base: cellsRef.current, notes: [], velocity: 0, hits: [], startedAt: now };
+      groupRef.current = group;
+      next();
+      return group;
+    };
+    if (drums) {
+      const drum = drumForMidi(e.channel, e.note);
+      if (!drum) return;
+      if (drum === "rest") {
+        groupRef.current = null;
+        return next();
+      }
+      const group = joining ? g! : start();
+      if (group.hits.some(([d]) => d === drum)) return;
+      group.hits.push([drum, e.velocity]);
+      commit(applyGroup(group, brush, true));
+      audition(DRUM_NOTES[drum], e.velocity);
+      return;
+    }
+    const pad = padIndex(e.channel, e.note);
+    if (pad !== null) {
+      groupRef.current = null;
+      const action = melodicPadAction(pad);
+      if (action === "back") return goTo(moveCursor(here, -Math.max(1, advance), length));
+      if (action === "off" || action === "clear") commit(setCell(cellsRef.current, here, action === "off" ? { note: "off" } : null));
+      if (action) next();
+      return;
+    }
+    const group = joining ? g! : start();
+    if (!group.notes.includes(e.note)) group.notes.push(e.note);
+    group.velocity = Math.max(group.velocity, e.velocity);
+    commit(applyGroup(group, brush, false));
+    audition(e.note, e.velocity);
+    remember(Math.min(...group.notes));
+  };
+  const onMidiRef = useRef(onMidi);
+  onMidiRef.current = onMidi;
+  useEffect(() => subscribeMidi((e) => onMidiRef.current(e)), []);
+  useEffect(() => subscribeMidiPorts(setMidiPorts), []);
+  const toggleArmed = () => {
+    midiArmed = !midiArmed;
+    setArmed(midiArmed);
+  };
+
   const fx = shown.fx ?? null;
   const fxRange = { GLD: { min: 1, max: 50, step: 1, label: "Glide ×10 ms" }, RTG: { min: 2, max: 8, step: 1, label: "Strikes" }, CHN: { min: 0, max: 100, step: 5, label: "Chance %" }, DLY: { min: 1, max: 15, step: 1, label: "Late /16 step" } } as const;
 
@@ -578,6 +659,18 @@ export function PatternHud({
               </option>
             ))}
           </select>
+          {midiPorts.length > 0 && (
+            <button
+              type="button"
+              className="viewport-hud-button"
+              style={{ ...wide, color: armed ? "#0f172a" : undefined, background: armed ? ACCENT : undefined }}
+              title={`MIDI in from ${midiPorts.join(", ")}: ${armed ? "keys and pads write at the cursor — click to stop" : "off — click for the keys and pads to write at the cursor"}`}
+              onPointerDown={(e) => e.preventDefault()}
+              onClick={toggleArmed}
+            >
+              MIDI {armed ? "●" : "○"}
+            </button>
+          )}
           <button type="button" className="viewport-hud-button" style={wide} onClick={() => write(cells.map(() => null))} disabled={cells.every((c) => c === null)} title="Empty every step (undo to get them back)">
             Clear
           </button>

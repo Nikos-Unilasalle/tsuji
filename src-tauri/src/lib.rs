@@ -5,6 +5,7 @@ fn greet(name: &str) -> String {
 }
 
 mod gamepad;
+mod midi;
 mod monitors;
 mod output_window;
 mod view2d_window;
@@ -19,6 +20,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             greet,
             gamepad::list_gamepads,
+            midi::list_midi_inputs,
             monitors::list_monitors,
             output_window::open_output_window,
             output_window::close_output_window,
@@ -27,6 +29,7 @@ pub fn run() {
         ])
         .setup(|app| {
             gamepad::init(app);
+            midi::init(app);
             Ok(())
         })
         .run(tauri::generate_context!())
