@@ -3,6 +3,8 @@ import * as THREE from "three";
 import { CAMERA_FLY_TO_NODE, CAMERA_NODE } from "./shared/graph/nodes/camera";
 import { asVector3, composeTransform } from "./shared/graph/nodes/transform";
 import { DEFAULT_REGISTRY } from "./shared/graph/nodes";
+import { useHeadlessMusic } from "./shared/graph/headlessMusic";
+import { IDLE_PLAYHEAD, advancePlayhead } from "./shared/three/playhead";
 import { toBoolean } from "./shared/graph/sockets";
 import { BAKE_INSTANCES_ACTION, bakeInstancesToGeometryData } from "./shared/graph/nodes/particleInstances";
 import { EXPLODE_GLTF_ACTION, ExplodedTexture, explodeGltfToMeshData, GLTF_CHOOSE_FOLDER_ACTION, gltfSourceDirectory } from "./shared/graph/nodes/gltfLoader";
@@ -866,12 +868,36 @@ function MainEditor() {
    */
   useEffect(() => {
     if (!keyframesEnabled || !isPlaying || totalFrames <= 0) return;
+    // On the wall clock at the Render node's fps, as the viewport does (advancePlayhead): a frame per tick ran the
+    // timeline — and a song following it with every view closed — at 60 / fps times its speed.
+    let state = IDLE_PLAYHEAD;
     const interval = setInterval(() => {
-      if (Date.now() - viewportDrivenAtRef.current < 200) return;
-      setCurrentFrame((prev) => (prev + 1) % totalFrames);
+      if (Date.now() - viewportDrivenAtRef.current < 200) {
+        state = IDLE_PLAYHEAD;
+        return;
+      }
+      const stepped = advancePlayhead(state, {
+        driving: true,
+        playing: true,
+        totalFrames,
+        incomingFrame: getPlayheadFrame(activeCanvasRef.current),
+        fps: exportFps,
+        clockTime: performance.now() / 1000,
+      });
+      state = stepped.state;
+      setCurrentFrame(stepped.frame);
     }, 1000 / 60);
     return () => clearInterval(interval);
-  }, [keyframesEnabled, isPlaying, totalFrames, setCurrentFrame]);
+  }, [keyframesEnabled, isPlaying, totalFrames, exportFps, setCurrentFrame]);
+
+  useHeadlessMusic({
+    active: !isExporting && !spaces.view3D && !spaces.camera && !spaces.view2D,
+    graph,
+    registry: DEFAULT_REGISTRY,
+    isPlaying,
+    frame: () => getPlayheadFrame(activeCanvasRef.current),
+    fps: exportFps,
+  });
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
