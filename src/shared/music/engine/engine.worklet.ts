@@ -24,7 +24,9 @@ export type EngineMessage =
    * arrive, so the frame loop's latency does not count as drift.
    */
   | { type: "follow"; playing: boolean; wanted: number; at: number; tolerance: number }
-  | { type: "preview"; sound: PreviewSound; note: number; velocity: number };
+  | { type: "preview"; sound: PreviewSound; note: number; velocity: number }
+  /** A MIDI key on a track played live: velocity 0 lets it go. */
+  | { type: "live"; track: string; note: number; velocity: number };
 
 export interface EngineState {
   type: "state";
@@ -69,6 +71,7 @@ class MusicEngineProcessor extends AudioWorkletProcessor {
       const m = e.data;
       if (m.type === "describe") this.core.describe(m.desc);
       else if (m.type === "preview") this.core.previewNote(m.sound, m.note, m.velocity);
+      else if (m.type === "live") this.core.liveNote(m.track, m.note, m.velocity);
       else if (m.type === "follow") {
         const late = m.playing ? Math.max(0, currentTime - m.at) * sampleRate : 0;
         this.core.follow(m.playing, m.wanted + late, m.tolerance);

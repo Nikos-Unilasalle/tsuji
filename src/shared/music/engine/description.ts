@@ -22,6 +22,11 @@ interface TrackBase {
   delaySend?: number;
   /** 0–1: to the reverb (left out = 0). */
   reverbSend?: number;
+  /**
+   * Played from a MIDI keyboard as well as by its sequence: the page sends the keys to this track's instrument as
+   * they are struck (bridge.ts). `transpose`: the voice's own, which its sequence already has. Left out: not played.
+   */
+  live?: { transpose: number };
 }
 
 export interface FmTrackDescription extends TrackBase {

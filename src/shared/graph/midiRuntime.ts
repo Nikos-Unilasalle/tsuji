@@ -56,10 +56,50 @@ const portListeners = new Set<PortsListener>();
 let ports: string[] = [];
 let started = false;
 
+/**
+ * The latest messages, numbered, for the readers that poll once a frame (the MIDI In node): each keeps the number it
+ * read up to and takes what came since — so a note struck and let go between two frames is still seen. A ring: a
+ * reader that falls further behind than its size (a viewport left suspended) has missed some, and is told so.
+ */
+const LOG_SIZE = 1024;
+const log: (MidiEvent | undefined)[] = new Array(LOG_SIZE);
+let logged = 0;
+
+export interface MidiSince {
+  events: MidiEvent[];
+  /** The number to ask from next time. */
+  next: number;
+  /** Some were lost: the reader fell further behind than the log keeps. */
+  missed: boolean;
+}
+
+/** The messages after number `from` (0: from the start), and where to read from next. */
+export function readMidiSince(from: number): MidiSince {
+  start();
+  const first = Math.max(from, logged - LOG_SIZE);
+  const events: MidiEvent[] = [];
+  for (let i = first; i < logged; i++) events.push(log[i % LOG_SIZE]!);
+  return { events, next: logged, missed: first > from };
+}
+
+/** How many messages have come in: where a new reader starts, to take nothing from before it. */
+export function midiCount(): number {
+  start();
+  return logged;
+}
+
+/** The inputs open now. */
+export function midiPorts(): string[] {
+  start();
+  return ports;
+}
+
 /** Hands a message to every listener — what the bridges call, and tests. */
 export function dispatchMidi(bytes: ArrayLike<number>, port = "", time = performance.now()): void {
   const event = decodeMidi(bytes, port, time);
   if (!event) return;
+  log[logged % LOG_SIZE] = event;
+  logged++;
   for (const l of listeners) {
     try {
       l(event);

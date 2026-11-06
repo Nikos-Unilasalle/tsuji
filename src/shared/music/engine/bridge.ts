@@ -9,6 +9,8 @@ import { getAudioContext, getAudioOutput } from "../../audio/audioStore";
 import { onPlaybackActiveChange } from "../../graph/playbackKeys";
 import type { MusicDescription, PreviewSound } from "./description";
 import type { EngineMessage, EngineMeters, EngineState } from "./engine.worklet";
+import { subscribeMidi } from "../../graph/midiRuntime";
+import { LiveRouter, LiveTrack, liveTracksOf } from "./live";
 
 const modules = new WeakMap<BaseAudioContext, Promise<void>>();
 
@@ -21,7 +23,8 @@ if (import.meta.env?.DEV && typeof window !== "undefined") {
   (window as unknown as { __tsujiMusic?: () => unknown }).__tsujiMusic = () => ({
     now: getAudioContext()?.currentTime ?? 0,
     sampleRate: getAudioContext()?.sampleRate ?? 0,
-    engines: [...live].map((h) => ({ ...h.state, meters: h.meters })),
+    engines: [...live].map((h) => ({ ...h.state, meters: h.meters, tracks: h.trackSummary(), liveTracks: h.liveTracks, liveSent: h.liveSent, worklet: h.loaded })),
+    midiSeen: liveMidiSeen,
   });
 }
 
@@ -74,6 +77,35 @@ export function previewNote(sound: PreviewSound, note: number, velocity = 0.8): 
   engine?.preview(sound, note, velocity);
 }
 
+/**
+ * The MIDI keyboard, played on every voice with MIDI Play on (live.ts). Listened to from the first description that
+ * has one, and from then on: a listener with nothing to play costs a lookup a message.
+ */
+const router = new LiveRouter();
+let liveListening = false;
+/** MIDI messages the live router was handed (dev diagnostics). */
+let liveMidiSeen = 0;
+
+function listenLive(): void {
+  if (liveListening) return;
+  liveListening = true;
+  subscribeMidi((e) => {
+    liveMidiSeen++;
+    for (const h of live) {
+      if (h.liveTracks.length === 0) continue;
+      const notes = router.route(e, h.liveTracks);
+      if (notes.length > 0) getAudioContext()?.resume().catch(() => {});
+      for (const n of notes) h.playLive(n.track, n.note, n.velocity);
+    }
+  });
+}
+
+/** Whether some voice is played from the keyboard now — the Pattern HUD then lets it sound the keys, not an audition. */
+export function livePlayActive(): boolean {
+  for (const h of live) if (h.liveTracks.length > 0) return true;
+  return false;
+}
+
 function loadModule(ctx: AudioContext): Promise<void> {
   let p = modules.get(ctx);
   if (!p) {
@@ -97,6 +129,10 @@ export class MusicEngineHandle {
   /** The engine's last meter reading (a few dozen a second), for the Mixing Console. */
   meters: EngineMeters | null = null;
   analysers: { left: AnalyserNode; right: AnalyserNode } | null = null;
+  /** The tracks of the last description played from the MIDI keyboard. */
+  liveTracks: LiveTrack[] = [];
+  /** Live notes posted to the worklet (dev diagnostics). */
+  liveSent = 0;
 
   constructor() {
     live.add(this);
@@ -152,6 +188,8 @@ export class MusicEngineHandle {
     if (key === this.descKey) return;
     this.descKey = key;
     this.pendingDesc = desc;
+    this.liveTracks = liveTracksOf(desc.tracks);
+    if (this.liveTracks.length > 0) listenLive();
     this.post({ type: "describe", desc });
   }
 
@@ -165,6 +203,20 @@ export class MusicEngineHandle {
 
   preview(sound: PreviewSound, note: number, velocity: number): void {
     this.post({ type: "preview", sound, note, velocity });
+  }
+
+  playLive(track: string, note: number, velocity: number): void {
+    this.liveSent++;
+    this.post({ type: "live", track, note, velocity });
+  }
+
+  /** The tracks last described, by id and kind, and whether each is played live (dev diagnostics). */
+  trackSummary(): string[] {
+    return (this.pendingDesc?.tracks ?? []).map((t) => `${t.id} ${t.kind}${t.live ? " LIVE" : ""}`);
+  }
+
+  get loaded(): boolean {
+    return this.node !== null;
   }
 
   get sampleRate(): number {

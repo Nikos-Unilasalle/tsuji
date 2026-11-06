@@ -260,3 +260,40 @@ describe("EngineCore — solo", () => {
     expect(e.takeMeters().channels.a.peak).toBeGreaterThan(0.1);
   });
 });
+
+describe("EngineCore — played live", () => {
+  const peak = (x: Float32Array) => x.reduce((m, v) => Math.max(m, Math.abs(v)), 0);
+  const live = track("a", seqOf({}), SINE, { live: { transpose: 0 } });
+
+  it("a key sounds at once, transport stopped, until it is let go", () => {
+    const e = new EngineCore(SR);
+    e.describe(desc(live));
+    e.liveNote("a", 69, 1);
+    expect(peak(run(e, 2048))).toBeGreaterThan(0.1);
+    e.liveNote("a", 69, 0);
+    run(e, SR / 10);
+    expect(peak(run(e, 2048))).toBe(0);
+  });
+
+  it("a held key outlasts a seek, a loop or a pause of the song", () => {
+    const e = new EngineCore(SR);
+    e.describe(desc(live));
+    e.play(0);
+    e.liveNote("a", 69, 1);
+    run(e, 2048);
+    e.seek(0);
+    e.pause();
+    run(e, SR / 10);
+    expect(peak(run(e, 2048))).toBeGreaterThan(0.1);
+  });
+
+  it("MIDI Play turned off lets its keys go", () => {
+    const e = new EngineCore(SR);
+    e.describe(desc(live));
+    e.liveNote("a", 69, 1);
+    run(e, 2048);
+    e.describe(desc(track("a", seqOf({}))));
+    run(e, SR / 10);
+    expect(peak(run(e, 2048))).toBe(0);
+  });
+});

@@ -169,3 +169,24 @@ describe("Music Out", () => {
     expect(run(MUSIC_OUT_NODE, { track0: voice }, { startFrame: 30 }, ctx({ currentFrame: 10, isPlaying: true })).playing).toBe(0);
   });
 });
+
+describe("MIDI Play and Solo", () => {
+  // The panel's checkbox writes 1 and 0, not true and false.
+  it("a switch ticked in the panel (1) plays the voice from the keyboard, with its transpose", () => {
+    const fm = run(MUSIC_FM_VOICE_NODE, {}, { live: 1, transpose: -12 }).track as FmTrackDescription;
+    expect(fm.live).toEqual({ transpose: -12 });
+    const kit = run(MUSIC_DRUM_KIT_NODE, {}, { live: true }).track as DrumTrackDescription;
+    expect(kit.live).toEqual({ transpose: 0 });
+  });
+
+  it("with nothing wired, only MIDI Play gives the voice a track", () => {
+    expect(run(MUSIC_FM_VOICE_NODE, {}, { live: 0 }).track).toBe(null);
+    expect(run(MUSIC_FM_VOICE_NODE, {}, { live: 1 }).track.seq.pattern.steps).toEqual([]);
+  });
+
+  it("Solo ticked in the panel solos", () => {
+    const seq = run(MUSIC_PATTERN_NODE, {}, { steps: "C4", length: "16" }).sequence;
+    expect(run(MUSIC_FM_VOICE_NODE, { sequence: seq }, { solo: 1 }).track.solo).toBe(true);
+    expect(run(MUSIC_FM_VOICE_NODE, { sequence: seq }, { solo: 0 }).track.solo).toBeUndefined();
+  });
+});

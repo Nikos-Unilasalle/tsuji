@@ -16,6 +16,9 @@ import {
   getGamepadSnapshot,
   maxButton,
 } from "../gamepadRuntime";
+import { midiCount, midiPorts, readMidiSince } from "../midiRuntime";
+import { emptyMidiIn, stepMidiIn, type MidiInFilter, type MidiInState } from "../midiIn";
+import { CC_MODE_LABELS } from "../midiBinding";
 
 /* -------------------------------------------------------------------------- */
 /* Gamepad                                                                    */
@@ -119,6 +122,87 @@ export const GAMEPAD_NODE: NodeDefinition = {
       start: button("start"),
       anyButton: maxButton(pad),
       buttons: Object.keys(STANDARD_BUTTONS).map((name) => buttonValue(pad, name as StandardButton)),
+    };
+  },
+};
+
+/* -------------------------------------------------------------------------- */
+/* MIDI In                                                                    */
+/* -------------------------------------------------------------------------- */
+
+const midiInCache = createNodeCache<{ cursor: number; state: MidiInState }>();
+
+const MIDI_CC_MODES = ["abs", "rel64", "rel2c", "relsign"] as const;
+
+/**
+ * MIDI In — a keyboard or controller (an Arturia MiniLab…) as values for the graph: what is held, what was just
+ * struck, the wheels and one knob.
+ *
+ * Read like the Gamepad, once a frame — but MIDI comes as messages, not a state to poll, so the node takes every one
+ * that came in since its last frame from the runtime's log: a note struck and let go between two frames still fires
+ * Trigger. Live, like the Gamepad: nothing here is in an export.
+ */
+export const MIDI_IN_NODE: NodeDefinition = {
+  type: "io/midi-in",
+  label: "MIDI In",
+  category: "io",
+  inputs: [],
+  outputs: [
+    { id: "connected", label: "Connected", type: "value" },
+    { id: "gate", label: "Gate (a key held)", type: "value" },
+    { id: "trigger", label: "Trigger (a key struck this frame)", type: "value" },
+    { id: "note", label: "Note (MIDI, the last struck)", type: "value" },
+    { id: "velocity", label: "Velocity", type: "value" },
+    { id: "notes", label: "Held Notes", type: "list" },
+    { id: "count", label: "Held Count", type: "value" },
+    { id: "pitchBend", label: "Pitch Bend", type: "value" },
+    { id: "modWheel", label: "Mod Wheel", type: "value" },
+    { id: "cc", label: "CC", type: "value" },
+  ],
+  defaultParams: { port: "", channel: 0, cc: 74, ccMode: "abs" },
+  paramFields: [
+    { id: "port", label: "Input (part of its name — blank: every input)", kind: "text" },
+    { id: "channel", label: "Channel (1–16, 0 = all)", kind: "number", step: 1 },
+    { id: "cc", label: "CC Number (the CC output)", kind: "number", step: 1 },
+    {
+      id: "ccMode",
+      label: "CC Mode (an endless encoder sends steps: relative)",
+      kind: "select",
+      options: [...MIDI_CC_MODES],
+      optionLabels: MIDI_CC_MODES.map((m) => CC_MODE_LABELS[m]),
+    },
+  ],
+  evaluate: (_inputs, params, ctx) => {
+    const ccMode = (MIDI_CC_MODES as readonly string[]).includes(String(params.ccMode)) ? (params.ccMode as MidiInFilter["ccMode"]) : "abs";
+    const filter: MidiInFilter = {
+      port: typeof params.port === "string" ? params.port : "",
+      channel: Math.max(0, Math.min(16, Math.round(Number(params.channel) || 0))),
+      cc: Math.max(0, Math.min(127, Math.round(Number(params.cc) || 0))),
+      ccMode,
+    };
+    let entry = midiInCache.get(ctx.nodeId);
+    // A new node starts from now: what was played before it existed is not its business.
+    if (!entry) midiInCache.set(ctx.nodeId, (entry = { cursor: midiCount(), state: emptyMidiIn() }));
+    const read = readMidiSince(entry.cursor);
+    entry.cursor = read.next;
+    // Fallen behind the log: the note-offs may be among what was lost, so nothing is held any more.
+    if (read.missed) entry.state.held.clear();
+    const struck = stepMidiIn(entry.state, read.events, filter);
+    const s = entry.state;
+    const port = filter.port.trim().toLowerCase();
+    const connected = midiPorts().some((p) => !port || p.toLowerCase().includes(port));
+    const notes = [...s.held.keys()].sort((a, b) => a - b);
+    return {
+      connected: fromBoolean(connected),
+      gate: fromBoolean(s.held.size > 0),
+      trigger: fromBoolean(struck > 0),
+      note: s.note,
+      velocity: s.velocity,
+      notes,
+      count: notes.length,
+      pitchBend: s.pitchBend,
+      modWheel: s.modWheel,
+      cc: s.cc,
     };
   },
 };

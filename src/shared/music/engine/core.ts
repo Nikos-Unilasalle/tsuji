@@ -39,6 +39,8 @@ interface Track {
   seqKey: string;
   /** Notes started and not yet ended, with their note-off as a song sample. */
   offs: { at: number; note: number }[];
+  /** Keys held on the MIDI keyboard (liveNote): a seek or a loop of the song must not let them go. */
+  held: Set<number>;
 }
 
 interface Due {
@@ -129,7 +131,7 @@ export class EngineCore {
       if (!track || track.kind !== d.kind || (d.kind !== "drums" && track.synth.voices !== voices)) {
         track?.synth.allNotesOff();
         const synth = makeInstrument(d.kind, voices, this.sampleRate);
-        track = { id: d.id, kind: d.kind, synth, seq: d.seq, patchKey: "", seqKey: "", offs: [] };
+        track = { id: d.id, kind: d.kind, synth, seq: d.seq, patchKey: "", seqKey: "", offs: [], held: new Set() };
         this.tracks.set(d.id, track);
         // With its own settings from the start: a track that appears muted must not glide down from full level.
         this.mixer.addChannel(d.id, track.synth, channelOf(d, soloing));
@@ -150,6 +152,8 @@ export class EngineCore {
         if (!first) this.releaseWhatTheNewSequenceDoesNotHold(track);
       }
       this.mixer.setChannel(d.id, channelOf(d, soloing));
+      // No longer played from the keyboard: its held keys are let go.
+      if (!d.live) this.releaseHeld(track);
     }
     for (const [id, track] of this.tracks) {
       if (seen.has(id)) continue;
@@ -195,6 +199,26 @@ export class EngineCore {
     }
     this.preview.synth.noteOn(note, velocity);
     this.preview.offs.push({ left: Math.round(seconds * this.sampleRate), note });
+  }
+
+  /**
+   * A key struck (velocity > 0) or let go (0) on the MIDI keyboard, played at once on a track's instrument, whether
+   * the song plays or not. Not sample-exact: it is heard at the start of the next block, as a live key is.
+   */
+  liveNote(trackId: string, note: number, velocity: number): void {
+    const track = this.tracks.get(trackId);
+    if (!track) return;
+    if (velocity > 0) {
+      track.synth.noteOn(note, velocity);
+      track.held.add(note);
+    } else if (track.held.delete(note)) {
+      track.synth.noteOff(note);
+    }
+  }
+
+  private releaseHeld(track: Track): void {
+    for (const note of track.held) track.synth.noteOff(note);
+    track.held.clear();
   }
 
   /** Lets the audition's notes go once their time is up (to the block: an audition needs no sample accuracy). */
@@ -243,9 +267,11 @@ export class EngineCore {
     }
   }
 
+  /** The song's notes let go — the keys held on the keyboard, when there are any, keep sounding. */
   private releaseAll(): void {
     for (const t of this.tracks.values()) {
-      t.synth.allNotesOff();
+      if (t.held.size === 0) t.synth.allNotesOff();
+      else for (const o of t.offs) if (!t.held.has(o.note)) t.synth.noteOff(o.note);
       t.offs = [];
     }
   }

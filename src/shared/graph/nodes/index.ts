@@ -238,7 +238,7 @@ import {
 import { TEXTURE_TILEABLE_NOISE_NODE, TEXTURE_TILEABLE_VOLUME_NODE } from "./tileableNoise";
 import { VOLUME_CLOUDS_NODE } from "./volumeClouds";
 import { WIND_FIELD_NODE, GRASS_FIELD_NODE, TREE_NODE, WIND_SWAY_NODE, INTERACTION_MAP_NODE } from "./vegetation";
-import { GAMEPAD_NODE, ACTION_MAP_NODE, MOVE_INPUT_NODE } from "./input";
+import { GAMEPAD_NODE, MIDI_IN_NODE, ACTION_MAP_NODE, MOVE_INPUT_NODE } from "./input";
 import { INTEGRATE_NODE, INTEGRATE_VECTOR_NODE } from "./integrate";
 import { CAPSULE_CONTROLLER_NODE } from "./character";
 import { CLOTH_NODE } from "./cloth";
@@ -599,6 +599,7 @@ export const STARTER_NODES = [
   WIND_SWAY_NODE,
   INTERACTION_MAP_NODE,
   GAMEPAD_NODE,
+  MIDI_IN_NODE,
   ACTION_MAP_NODE,
   MOVE_INPUT_NODE,
   INTEGRATE_NODE,

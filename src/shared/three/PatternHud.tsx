@@ -28,6 +28,7 @@ import {
 import { Cell, CellFx, Sequence, stepAt } from "../music/seq/sequencer";
 import type { NodeInstance } from "../graph/types";
 import { MidiEvent, subscribeMidi, subscribeMidiPorts } from "../graph/midiRuntime";
+import { livePlayActive } from "../music/engine/bridge";
 import { CHORD_WINDOW_MS, EntryGroup, applyGroup, drumForMidi, melodicPadAction, padIndex } from "../music/seq/midiEntry";
 
 /**
@@ -517,7 +518,7 @@ export function PatternHud({
       if (group.hits.some(([d]) => d === drum)) return;
       group.hits.push([drum, e.velocity]);
       commit(applyGroup(group, brush, true));
-      audition(DRUM_NOTES[drum], e.velocity);
+      if (!livePlayActive()) audition(DRUM_NOTES[drum], e.velocity);
       return;
     }
     const pad = padIndex(e.channel, e.note);
@@ -533,7 +534,8 @@ export function PatternHud({
     if (!group.notes.includes(e.note)) group.notes.push(e.note);
     group.velocity = Math.max(group.velocity, e.velocity);
     commit(applyGroup(group, brush, false));
-    audition(e.note, e.velocity);
+    // A voice with MIDI Play on already sounds the key, held as long as it is: no audition on top.
+    if (!livePlayActive()) audition(e.note, e.velocity);
     remember(Math.min(...group.notes));
   };
   const onMidiRef = useRef(onMidi);
