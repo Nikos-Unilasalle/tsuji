@@ -81,7 +81,12 @@ function cleanGraph(graph: Graph): Graph {
       ? graph.markers.map((m) => ({ frame: m.frame, ...(m.label ? { label: m.label } : {}) }))
       : [],
     exposedParams: Array.isArray(graph.exposedParams)
-      ? graph.exposedParams.map((e) => ({ nodeId: e.nodeId, paramId: e.paramId, ...(e.label ? { label: e.label } : {}) }))
+      ? graph.exposedParams.map((e) => ({
+          nodeId: e.nodeId,
+          paramId: e.paramId,
+          ...(e.label ? { label: e.label } : {}),
+          ...(e.midi ? { midi: { ...e.midi } } : {}),
+        }))
       : [],
   };
 }

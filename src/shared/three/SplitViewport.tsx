@@ -3,6 +3,7 @@ import { GpToolMode, TransformGizmoMode, TransformPatch, Viewport } from "./View
 import { Graph, KeyframeStore, NodeRegistry } from "../graph/types";
 import type { PreviewCameraPose } from "../ipc";
 import "./viewport.css";
+import type { MidiBinding } from "../graph/midiBinding";
 
 
 /**
@@ -62,6 +63,7 @@ interface SplitViewportProps {
   onKeyframesEdit?: (edit: (store: KeyframeStore) => KeyframeStore, coalesceKey?: string) => void;
   onUnpinParam?: (nodeId: string, paramId: string) => void;
   onRenameExposedParam?: (nodeId: string, paramId: string, label: string) => void;
+  onBindExposedMidi?: (nodeId: string, paramId: string, midi: MidiBinding | undefined) => void;
   mode2D?: boolean;
   snapElevation?: boolean;
   onToggleSnapElevation?: () => void;
@@ -102,6 +104,7 @@ export function SplitViewport({
   onKeyframesEdit,
   onUnpinParam,
   onRenameExposedParam,
+  onBindExposedMidi,
   mode2D = false,
   snapElevation = false,
   onToggleSnapElevation,
@@ -391,6 +394,7 @@ export function SplitViewport({
           onKeyframesEdit={onKeyframesEdit}
           onUnpinParam={onUnpinParam}
           onRenameExposedParam={onRenameExposedParam}
+          onBindExposedMidi={onBindExposedMidi}
           gpTool={gpTool}
           onGpToolChange={handleGpToolChange}
           transformMode={transformMode}

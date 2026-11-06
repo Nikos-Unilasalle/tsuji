@@ -612,6 +612,7 @@ import { VolumetricPass, findVolumetricSettings, LAYER_VOLUMETRIC } from "./volu
 import { advancePlayhead, IDLE_PLAYHEAD, PlayheadState } from "./playhead";
 import { PostProcessConfig } from "../graph/nodes/postprocessing";
 import { Graph, KeyframeStore, NodeInstance, NodeRegistry } from "../graph/types";
+import type { MidiBinding } from "../graph/midiBinding";
 import { isViewportZone, setInputZone } from "../graph/inputZoneStore";
 import { isKeyReservedForPlayback } from "../graph/playbackKeys";
 import { isTauri } from "../ipc";
@@ -991,6 +992,7 @@ interface ViewportProps {
   onKeyframesEdit?: (edit: (store: KeyframeStore) => KeyframeStore, coalesceKey?: string) => void;
   onUnpinParam?: (nodeId: string, paramId: string) => void;
   onRenameExposedParam?: (nodeId: string, paramId: string, label: string) => void;
+  onBindExposedMidi?: (nodeId: string, paramId: string, midi: MidiBinding | undefined) => void;
   mode2D?: boolean;
   elevationView?: boolean;
   snapElevation?: boolean;
@@ -1044,6 +1046,7 @@ export function Viewport({
   onKeyframesEdit,
   onUnpinParam,
   onRenameExposedParam,
+  onBindExposedMidi,
   mode2D = false,
   elevationView = false,
   snapElevation = false,
@@ -11000,6 +11003,7 @@ export function Viewport({
           onChange={onParamChange}
           onUnpin={onUnpinParam}
           onRename={onRenameExposedParam}
+          onBindMidi={onBindExposedMidi}
         />
       )}
 

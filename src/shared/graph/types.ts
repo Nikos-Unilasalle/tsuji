@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { NodeCategory } from "./categories";
 import { SocketDef } from "./sockets";
+import type { MidiBinding } from "./midiBinding";
 
 /** Read-only context every node's evaluate function receives — the only source of "now." */
 export interface EvalContext {
@@ -510,6 +511,8 @@ export interface ExposedParamRef {
   paramId: string;
   /** Overrides field.label for the HUD row; falls back to the field's own label when absent. */
   label?: string;
+  /** A MIDI controller's knob, fader or button driving it (midiBinding.ts). */
+  midi?: MidiBinding;
 }
 
 /** A timeline marker — a labeled point in time, à la After Effects layer markers. */

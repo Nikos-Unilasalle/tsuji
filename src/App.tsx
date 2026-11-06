@@ -94,6 +94,7 @@ import {
   ParamFieldDef,
   Project,
 } from "./shared/graph/types";
+import type { MidiBinding } from "./shared/graph/midiBinding";
 import {
   TOPOGRAPHY_BAKE_ACTION,
   TOPOGRAPHY_PRESETS,
@@ -1710,6 +1711,23 @@ function MainEditor() {
     [setGraphWithHistory],
   );
 
+  // A knob learned for a pinned param (or forgotten: undefined). One control drives one param: learning it here
+  // takes it from any other pin it drove.
+  const onBindExposedMidi = useCallback(
+    (nodeId: string, paramId: string, midi: MidiBinding | undefined) => {
+      setGraphWithHistory((prevGraph) => {
+        const existing = prevGraph.exposedParams ?? [];
+        const next = existing.map((e) => {
+          if (e.nodeId === nodeId && e.paramId === paramId) return { ...e, midi };
+          const taken = midi && e.midi && e.midi.channel === midi.channel && e.midi.cc === midi.cc && (e.midi.port ?? "") === (midi.port ?? "");
+          return taken ? { ...e, midi: undefined } : e;
+        });
+        return { ...prevGraph, exposedParams: next };
+      }, `exposeMidi:${nodeId}:${paramId}`);
+    },
+    [setGraphWithHistory],
+  );
+
   // Tab toggles the selected object's own Visible param — only while the
   // mouse is over the node graph canvas (isGraphZone), since the 3D
   // viewport already binds plain Tab to its own UI-overlay toggle (see
@@ -3134,6 +3152,7 @@ function MainEditor() {
             onKeyframesEdit={onKeyframesEdit}
             onUnpinParam={onToggleExposed}
             onRenameExposedParam={onRenameExposed}
+            onBindExposedMidi={onBindExposedMidi}
             mode2D={is2DMode}
             snapElevation={snapElevation}
             onToggleSnapElevation={toggleSnapElevation}

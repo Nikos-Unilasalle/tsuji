@@ -58,7 +58,10 @@ describe("storage utilities", () => {
           },
         },
         markers: [{ frame: 12 }, { frame: 45, label: "Drop" }, { frame: 90 }],
-        exposedParams: [{ nodeId: "1", paramId: "seconds", label: "Time (s)" }],
+        exposedParams: [
+          { nodeId: "1", paramId: "seconds", label: "Time (s)" },
+          { nodeId: "1", paramId: "speed", midi: { channel: 0, cc: 74, mode: "rel64", min: 0, max: 10 } },
+        ],
       };
 
       const json = serializeGraph(graph);
