@@ -10,6 +10,7 @@ import { PITCH_CLASSES, SCALE_NAMES, ScaleSpec, SnapMode, degreeNote, degreeOf, 
 import { Cell, Clock, Sequence } from "../../music/seq/sequencer";
 import { MOTIF_OPS, MotifOp, contourMelody, eventsOf, markov, parseProgression, randomProgression, transformMotif, voiceLead } from "../../music/seq/compose";
 import { counterpoint } from "../../music/seq/counterpoint";
+import { FitMode, PassingNotes, chordTimeline, fitToChords } from "../../music/seq/chordFit";
 import { bestRoot } from "../../music/seq/justIntonation";
 import { TUNING_SYSTEMS, TUNING_SYSTEM_NAMES, Tuning, TuningSystem, edoSystem, parseScala } from "../../music/seq/tuning";
 
@@ -111,6 +112,78 @@ export const MUSIC_SCALE_NODE: NodeDefinition = {
     const chords = CHORD_MODES.includes(String(params.chords)) ? String(params.chords) : "keep";
     const steps = seq.pattern.steps.map((c) => (c ? scaleCell(c, s, snap, drop, chords) : c));
     return { sequence: seqOut({ ...seq, pattern: { ...seq.pattern, steps } }) };
+  },
+};
+
+// ── Fit to Chords ──────────────────────────────────────────────────────────
+
+const FIT_MODES: FitMode[] = ["strong", "tones", "scale"];
+const PASSING: PassingNotes[] = ["pentatonic", "modes", "chromatic"];
+
+/**
+ * A Scale that follows the harmony: each note of a melody moved onto the chord sounding under it (Tonnetz Walk,
+ * Progression, Voice Leading…). The two are lined up by beats; the melody can be looped along the whole chord grid so
+ * each pass meets its own chords.
+ */
+export const MUSIC_FIT_CHORDS_NODE: NodeDefinition = {
+  type: "music/fit-chords",
+  label: "Fit to Chords",
+  category: "music",
+  pure: true,
+  inputs: [
+    { id: "sequence", label: "Melody", type: "music" },
+    { id: "chords", label: "Chords", type: "music" },
+  ],
+  outputs: [{ id: "sequence", label: "Sequence", type: "music" }],
+  defaultParams: { mode: "strong", passing: "pentatonic", snap: "nearest", strongEvery: 4, length: "chords", tieRepeats: false },
+  paramFields: [
+    {
+      id: "mode",
+      label: "Fit",
+      kind: "select",
+      options: FIT_MODES,
+      optionLabels: ["Strong steps on chord tones, the others in the chord's scale", "Every note on a chord tone", "Every note in the chord's scale"],
+    },
+    {
+      id: "passing",
+      label: "Chord's Scale (passing notes)",
+      kind: "select",
+      options: PASSING,
+      optionLabels: ["Its pentatonic (no clash)", "Its mode (maj → ionian, min → dorian, 7 → mixolydian…)", "Chromatic (any note)"],
+    },
+    { id: "snap", label: "Snap", kind: "select", options: ["nearest", "up", "down"], optionLabels: ["To the nearest", "Up", "Down"] },
+    { id: "strongEvery", label: "Strong Every (melody steps; 0 = only the first note under each chord)", kind: "number", step: 1 },
+    {
+      id: "length",
+      label: "Length",
+      kind: "select",
+      options: ["chords", "melody", "lcm"],
+      optionLabels: ["The chord grid's (the melody loops along it)", "The melody's", "Both, until they meet again"],
+    },
+    { id: "tieRepeats", label: "Tie Repeats (a note the same as the last one holds it)", kind: "boolean" },
+  ],
+  evaluate: (inputs, params) => {
+    const seq = sequenceOf(inputs.sequence);
+    if (!seq) return { sequence: null };
+    const grid = sequenceOf(inputs.chords);
+    if (!grid || grid.pattern.length === 0) return { sequence: seqOut(seq) };
+    const passing = PASSING.includes(params.passing as PassingNotes) ? (params.passing as PassingNotes) : "pentatonic";
+    const timeline = chordTimeline(grid.pattern.steps.slice(0, grid.pattern.length), passing);
+    const Lm = Math.max(1, seq.pattern.length);
+    const Lc = grid.pattern.length;
+    // The grid's steps per melody step (both in beats), and the grid's length in melody steps.
+    const ratio = grid.clock.stepsPerBeat / Math.max(1e-9, seq.clock.stepsPerBeat);
+    const gridLen = Math.max(1, Math.round(Lc / ratio));
+    const length = Math.min(MAX_STEPS, params.length === "melody" ? Lm : params.length === "lcm" ? lcm(Lm, gridLen) : gridLen);
+    const melody = Array.from({ length }, (_, i) => seq.pattern.steps[i % Lm] ?? null);
+    const steps = fitToChords(melody, (i) => timeline[Math.floor(i * ratio + 1e-9) % Lc], {
+      mode: FIT_MODES.includes(params.mode as FitMode) ? (params.mode as FitMode) : "strong",
+      passing,
+      snap: (["nearest", "up", "down"] as const).includes(params.snap as SnapMode) ? (params.snap as SnapMode) : "nearest",
+      strongEvery: clamp(Math.round(numberInput(undefined, params.strongEvery, 4)), 0, 256),
+      tieRepeats: Boolean(params.tieRepeats),
+    });
+    return { sequence: seqOut(withSteps(seq, steps)) };
   },
 };
 
@@ -889,10 +962,11 @@ export const MUSIC_ALGO_NODES = [
   MUSIC_PHASE_NODE,
   MUSIC_ORNAMENT_NODE,
   MUSIC_SCALE_NODE,
+  MUSIC_FIT_CHORDS_NODE,
   MUSIC_TUNING_NODE,
   MUSIC_ADAPTIVE_JI_NODE,
   MUSIC_CHIP_ECHO_NODE,
   MUSIC_SECTIONS_NODE,
 ];
 /** The ones that take a sequence and pass it on reworked: the Pattern HUD follows the wires through them to the voice. */
-export const MUSIC_SEQUENCE_PASS_TYPES = ["music/arp", "music/scale", "music/tuning", "music/ornament", "music/euclid", "music/voice-leading", "music/motif", "music/markov", "music/phase", "music/adaptive-ji", "music/sections"];
+export const MUSIC_SEQUENCE_PASS_TYPES = ["music/arp", "music/scale", "music/fit-chords", "music/tuning", "music/ornament", "music/euclid", "music/voice-leading", "music/motif", "music/markov", "music/phase", "music/adaptive-ji", "music/sections"];

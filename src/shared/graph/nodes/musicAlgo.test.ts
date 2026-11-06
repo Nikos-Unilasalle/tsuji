@@ -7,6 +7,7 @@ import {
   MUSIC_COUNTERPOINT_NODE,
   MUSIC_PHASE_NODE,
   MUSIC_EUCLID_NODE,
+  MUSIC_FIT_CHORDS_NODE,
   MUSIC_MARKOV_NODE,
   MUSIC_MOTIF_NODE,
   MUSIC_PROGRESSION_NODE,
@@ -467,5 +468,47 @@ describe("Sections", () => {
     const line = pattern("C4 D4 E4", 3);
     const seq = run(MUSIC_SECTIONS_NODE, { sequence: line }, { bars: ". x", barLength: 4, restart: false }).sequence.seq as Sequence;
     expect(noteList(seq.pattern.steps)).toEqual([null, null, null, null, 62, 64, 60, 62]);
+  });
+});
+
+describe("Fit to Chords", () => {
+  const notes = (seq: Sequence) => seq.pattern.steps.map((c) => (c && c.note !== "off" ? c.note : null));
+  // C maj on steps 0–3, A min on 4–7.
+  const chords = () => pattern("C4:maj . . . A3:min . . .", 8);
+  it("puts every note on a tone of the chord under it", () => {
+    const seq = run(MUSIC_FIT_CHORDS_NODE, { sequence: pattern("D4 F4 B4 D5 D4 F4 B4 D5", 8), chords: chords() }, { mode: "tones" }).sequence.seq as Sequence;
+    // C maj (C E G): D→C (a tie goes down), F→E, B→C, D→C. A min (A C E): D→C, F→E, B→C, D→C.
+    expect(notes(seq)).toEqual([60, 64, 72, 72, 60, 64, 72, 72]);
+  });
+  it("keeps passing notes in the chord's pentatonic off the strong steps", () => {
+    const seq = run(MUSIC_FIT_CHORDS_NODE, { sequence: pattern("F4 F4 F4 F4 F4 F4 F4 F4", 8), chords: chords() }, { strongEvery: 2 }).sequence.seq as Sequence;
+    // Strong (0, 2, 4, 6): F→E (C) / F→E (Am). Weak: C major pentatonic C D E G A → F→E; A minor pentatonic A C D E G → F→E.
+    expect(notes(seq)).toEqual([64, 64, 64, 64, 64, 64, 64, 64]);
+    const modes = run(MUSIC_FIT_CHORDS_NODE, { sequence: pattern("F4 F4 F4 F4 F4 F4 F4 F4", 8), chords: chords() }, { strongEvery: 2, passing: "modes" }).sequence.seq as Sequence;
+    // C ionian holds F on the weak steps; A dorian (A B C D E F# G) has no F: it goes down to E.
+    expect(notes(modes)).toEqual([64, 65, 64, 65, 64, 64, 64, 64]);
+  });
+  it("lines the two up by beats", () => {
+    // Chords in quarter notes (1 step a beat): C maj, A min. A melody in 16ths: 8 steps over the two.
+    const quarters = { kind: "sequence", seq: { ...(chords().seq as Sequence), clock: { bpm: 120, swing: 0, stepsPerBeat: 1 }, pattern: { length: 2, steps: (pattern("C4:maj A3:min", 2).seq as Sequence).pattern.steps } } };
+    const seq = run(MUSIC_FIT_CHORDS_NODE, { sequence: pattern("G#4", 1), chords: quarters }, { mode: "tones" }).sequence.seq as Sequence;
+    expect(notes(seq)).toEqual([67, 67, 67, 67, 69, 69, 69, 69]);
+  });
+  it("loops the melody along the chord grid", () => {
+    const grid = run(MUSIC_TONNETZ_NODE, {}, { path: "R", chordLength: 4 }).chords; // C maj, A min: 8 steps
+    const seq = run(MUSIC_FIT_CHORDS_NODE, { sequence: pattern("G#4", 1), chords: grid }, { mode: "tones" }).sequence.seq as Sequence;
+    expect(seq.pattern.length).toBe(8);
+    expect(notes(seq)).toEqual([67, 67, 67, 67, 69, 69, 69, 69]); // G♯ → G over C, → A over A min
+    const own = run(MUSIC_FIT_CHORDS_NODE, { sequence: pattern("B4", 1), chords: grid }, { mode: "tones", length: "melody" }).sequence.seq as Sequence;
+    expect(own.pattern.length).toBe(1);
+  });
+  it("finds the root of a voiced chord and ties repeats", () => {
+    // E G C (C major, first inversion, written as notes): B → C.
+    const seq = run(MUSIC_FIT_CHORDS_NODE, { sequence: pattern("B4 C5 D5 .", 4), chords: pattern("E4+G4+C5 . . .", 4) }, { mode: "tones", tieRepeats: true }).sequence.seq as Sequence;
+    expect(notes(seq)).toEqual([72, null, null, null]);
+  });
+  it("passes the melody through without chords", () => {
+    const line = pattern("D4 F4", 2);
+    expect(run(MUSIC_FIT_CHORDS_NODE, { sequence: line }).sequence).toEqual(line);
   });
 });
