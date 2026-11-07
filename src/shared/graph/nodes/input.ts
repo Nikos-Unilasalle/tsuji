@@ -17,7 +17,8 @@ import {
   maxButton,
 } from "../gamepadRuntime";
 import { midiCount, midiPorts, readMidiSince } from "../midiRuntime";
-import { emptyMidiIn, stepMidiIn, type MidiInFilter, type MidiInState } from "../midiIn";
+import { emptyMidiIn, emptyMidiKey, stepMidiIn, stepMidiKey, type MidiInFilter, type MidiInState, type MidiKeyState } from "../midiIn";
+import { parseNote } from "../../music/seq/notation";
 import { CC_MODE_LABELS } from "../midiBinding";
 
 /* -------------------------------------------------------------------------- */
@@ -203,6 +204,64 @@ export const MIDI_IN_NODE: NodeDefinition = {
       pitchBend: s.pitchBend,
       modWheel: s.modWheel,
       cc: s.cc,
+    };
+  },
+};
+
+/* -------------------------------------------------------------------------- */
+/* MIDI Key                                                                   */
+/* -------------------------------------------------------------------------- */
+
+/** The param panel's Learn button: the app sets the node's Note to the next key struck. */
+export const MIDI_KEY_LEARN_ACTION = "midi-key-learn";
+
+const midiKeyCache = createNodeCache<{ cursor: number; note: number; state: MidiKeyState }>();
+
+/**
+ * MIDI Key — one key of a MIDI keyboard, as the Keyboard node is one key of the computer's: held or not, struck
+ * this frame, and how hard. The Note is a name (C4 = 60, A0 the lowest key of a piano, F#3, Bb2) or a MIDI number;
+ * Learn takes it from the next key struck. Live, like MIDI In.
+ */
+export const MIDI_KEY_NODE: NodeDefinition = {
+  type: "io/midi-key",
+  label: "MIDI Key",
+  category: "io",
+  inputs: [{ id: "note", label: "Note", type: "text" }],
+  outputs: [
+    { id: "isDown", label: "Is Down", type: "value" },
+    { id: "pressed", label: "Pressed", type: "value" },
+    { id: "velocity", label: "Velocity (0–1, 0 once let go)", type: "value" },
+  ],
+  defaultParams: { note: "C4", port: "", channel: 0 },
+  paramFields: [
+    { id: "note", label: "Note (C4, A0, F#3… or a MIDI number)", kind: "text" },
+    { id: "learn", label: "Learn (strike a key)", kind: "button", action: MIDI_KEY_LEARN_ACTION },
+    { id: "port", label: "Input (part of its name — blank: every input)", kind: "text" },
+    { id: "channel", label: "Channel (1–16, 0 = all)", kind: "number", step: 1 },
+  ],
+  evaluate: (inputs, params, ctx) => {
+    const raw = inputs.note !== undefined ? inputs.note : params.note;
+    const note = typeof raw === "number" ? Math.round(raw) : parseNote(String(raw ?? "")) ?? -1;
+    const filter = {
+      port: typeof params.port === "string" ? params.port : "",
+      channel: Math.max(0, Math.min(16, Math.round(Number(params.channel) || 0))),
+    };
+    let entry = midiKeyCache.get(ctx.nodeId);
+    if (!entry) midiKeyCache.set(ctx.nodeId, (entry = { cursor: midiCount(), note, state: emptyMidiKey() }));
+    // Another key chosen: the old one's state is not this one's.
+    if (entry.note !== note) {
+      entry.note = note;
+      entry.state = emptyMidiKey();
+    }
+    const read = readMidiSince(entry.cursor);
+    entry.cursor = read.next;
+    // Fallen behind the log: its note off may be among what was lost.
+    if (read.missed) entry.state = emptyMidiKey();
+    const struck = note >= 0 && stepMidiKey(entry.state, read.events, filter, note);
+    return {
+      isDown: fromBoolean(entry.state.down),
+      pressed: fromBoolean(struck),
+      velocity: entry.state.velocity,
     };
   },
 };

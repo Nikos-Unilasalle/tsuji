@@ -44,6 +44,9 @@ import { extractPointsFromMesh } from "./shared/graph/nodes/pointsGeometry";
 import { findFirstMesh } from "./shared/graph/meshRequired";
 import { computePointInfluences, POINTS_INFLUENCE_COMPUTE_ACTION } from "./shared/graph/nodes/pointsInfluence";
 import { UV_UNWRAP_ACTION } from "./shared/graph/nodes/uvUnwrap";
+import { MIDI_KEY_LEARN_ACTION } from "./shared/graph/nodes/input";
+import { learnMidiNote } from "./shared/graph/midiRuntime";
+import { noteName } from "./shared/music/seq/notation";
 import {
   freezeObjectToGeometryData,
   FROZEN_UNWRAP_UVS_ACTION,
@@ -1944,6 +1947,10 @@ function MainEditor() {
           connections: [...prev.connections, ...carriedConnections],
         }));
         setSelectedNodeId(mixNode.id);
+        return;
+      }
+      if (action === MIDI_KEY_LEARN_ACTION) {
+        learnMidiNote((note) => onParamChange("note", noteName(note), nodeId));
         return;
       }
       if (action === WORN_BAKE_ACTION) {

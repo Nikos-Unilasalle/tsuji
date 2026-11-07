@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { decodeMidi, dispatchMidi, midiCount, readMidiSince, type MidiEvent } from "./midiRuntime";
-import { emptyMidiIn, stepMidiIn, type MidiInFilter } from "./midiIn";
-import { MIDI_IN_NODE } from "./nodes/input";
+import { decodeMidi, dispatchMidi, learnMidiNote, midiCount, readMidiSince, type MidiEvent } from "./midiRuntime";
+import { emptyMidiIn, emptyMidiKey, stepMidiIn, stepMidiKey, type MidiInFilter } from "./midiIn";
+import { MIDI_IN_NODE, MIDI_KEY_NODE } from "./nodes/input";
 
 const ev = (bytes: number[], port = "MiniLab"): MidiEvent => decodeMidi(bytes, port)!;
 const all: MidiInFilter = { port: "", channel: 0, cc: 74, ccMode: "abs" };
@@ -90,5 +90,61 @@ describe("MIDI In node", () => {
     const b = evaluate("m1");
     expect(b.trigger).toBe(0);
     expect(b.gate).toBe(1);
+  });
+});
+
+describe("stepMidiKey", () => {
+  it("follows its one key: held, struck, velocity, 0 once let go", () => {
+    const s = emptyMidiKey();
+    expect(stepMidiKey(s, [ev([0x90, 64, 127]), ev([0x90, 60, 100])], all, 60)).toBe(true);
+    expect(s.down).toBe(true);
+    expect(s.velocity).toBeCloseTo(100 / 127);
+    // Another key let go: nothing to it.
+    expect(stepMidiKey(s, [ev([0x80, 64, 0])], all, 60)).toBe(false);
+    expect(s.down).toBe(true);
+    expect(stepMidiKey(s, [ev([0x80, 60, 0])], all, 60)).toBe(false);
+    expect(s).toEqual({ down: false, velocity: 0 });
+  });
+
+  it("a strike let go within the frame still counts, and the filter applies", () => {
+    const s = emptyMidiKey();
+    expect(stepMidiKey(s, [ev([0x90, 60, 100]), ev([0x90, 60, 0])], all, 60)).toBe(true);
+    expect(s.down).toBe(false);
+    expect(stepMidiKey(s, [ev([0x91, 60, 100])], { ...all, channel: 1 }, 60)).toBe(false);
+    expect(stepMidiKey(s, [ev([0x90, 60, 100], "Other")], { ...all, port: "mini" }, 60)).toBe(false);
+  });
+
+  it("All Notes Off lets go", () => {
+    const s = emptyMidiKey();
+    stepMidiKey(s, [ev([0x90, 60, 100]), ev([0xb0, 123, 0])], all, 60);
+    expect(s.down).toBe(false);
+  });
+});
+
+describe("MIDI Key node", () => {
+  const ctx = (nodeId: string) => ({ nodeId, time: 0, frame: 0 }) as never;
+  it("reads the named key from the live log, by name or number", () => {
+    const params = { ...MIDI_KEY_NODE.defaultParams, note: "A0" };
+    expect(MIDI_KEY_NODE.evaluate!({}, params, ctx("mk1"))).toEqual({ isDown: 0, pressed: 0, velocity: 0 });
+    dispatchMidi([0x90, 21, 127], "MiniLab");
+    expect(MIDI_KEY_NODE.evaluate!({}, params, ctx("mk1"))).toEqual({ isDown: 1, pressed: 1, velocity: 1 });
+    expect(MIDI_KEY_NODE.evaluate!({}, params, ctx("mk1"))).toEqual({ isDown: 1, pressed: 0, velocity: 1 });
+    dispatchMidi([0x80, 21, 0], "MiniLab");
+    expect(MIDI_KEY_NODE.evaluate!({}, params, ctx("mk1"))).toEqual({ isDown: 0, pressed: 0, velocity: 0 });
+    // A number wired into Note.
+    MIDI_KEY_NODE.evaluate!({ note: 62 }, params, ctx("mk2"));
+    dispatchMidi([0x90, 62, 127], "MiniLab");
+    expect((MIDI_KEY_NODE.evaluate!({ note: 62 }, params, ctx("mk2")) as Record<string, unknown>).isDown).toBe(1);
+  });
+});
+
+describe("learnMidiNote", () => {
+  it("takes the next key struck, once", () => {
+    const got: number[] = [];
+    learnMidiNote((n) => got.push(n));
+    dispatchMidi([0xb0, 1, 64]);
+    dispatchMidi([0x90, 48, 90]);
+    dispatchMidi([0x90, 50, 90]);
+    expect(got).toEqual([48]);
   });
 });

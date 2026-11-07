@@ -161,3 +161,25 @@ export function subscribeMidiPorts(listener: PortsListener): () => void {
   listener(ports);
   return () => void portListeners.delete(listener);
 }
+
+let cancelLearn: (() => void) | null = null;
+
+/**
+ * Hands the next key struck, on any input, to `onNote` — once; then stops listening. A second call replaces the
+ * first (one Learn at a time), and after `timeoutMs` with no key it gives up.
+ */
+export function learnMidiNote(onNote: (note: number) => void, timeoutMs = 15000): void {
+  cancelLearn?.();
+  const stop = () => {
+    unsubscribe();
+    clearTimeout(timer);
+    if (cancelLearn === stop) cancelLearn = null;
+  };
+  const unsubscribe = subscribeMidi((e) => {
+    if (e.type !== "noteon") return;
+    stop();
+    onNote(e.note);
+  });
+  const timer = setTimeout(stop, timeoutMs);
+  cancelLearn = stop;
+}

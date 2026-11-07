@@ -33,7 +33,7 @@ export interface MidiInFilter {
   ccMode: Exclude<CcMode, "toggle">;
 }
 
-export function midiInAccepts(filter: MidiInFilter, e: MidiEvent): boolean {
+export function midiInAccepts(filter: Pick<MidiInFilter, "port" | "channel">, e: MidiEvent): boolean {
   if (filter.channel > 0 && e.channel !== filter.channel - 1) return false;
   const port = filter.port.trim().toLowerCase();
   return !port || e.port.toLowerCase().includes(port);
@@ -68,6 +68,40 @@ export function stepMidiIn(state: MidiInState, events: readonly MidiEvent[], fil
         // All Notes Off / All Sound Off: a panic button lets go of everything.
         if (e.controller === 123 || e.controller === 120) state.held.clear();
         break;
+    }
+  }
+  return struck;
+}
+
+/** What the MIDI Key node knows of its one key: held or not, and how hard it was struck. */
+export interface MidiKeyState {
+  down: boolean;
+  /** 0–1 while held, 0 once let go. */
+  velocity: number;
+}
+
+export function emptyMidiKey(): MidiKeyState {
+  return { down: false, velocity: 0 };
+}
+
+/**
+ * Moves one key's state on by the messages that came in; returns whether it was struck among them — even if let go
+ * again before the frame, as the MIDI In node's Trigger does.
+ */
+export function stepMidiKey(state: MidiKeyState, events: readonly MidiEvent[], filter: Pick<MidiInFilter, "port" | "channel">, note: number): boolean {
+  let struck = false;
+  for (const e of events) {
+    if (!midiInAccepts(filter, e)) continue;
+    if (e.type === "noteon" && e.note === note) {
+      state.down = true;
+      state.velocity = e.velocity;
+      struck = true;
+    } else if (e.type === "noteoff" && e.note === note) {
+      state.down = false;
+      state.velocity = 0;
+    } else if (e.type === "cc" && (e.controller === 123 || e.controller === 120)) {
+      state.down = false;
+      state.velocity = 0;
     }
   }
   return struck;
