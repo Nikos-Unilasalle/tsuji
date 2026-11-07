@@ -244,3 +244,30 @@
 .viewport-param-hud-midi-monitor .ignored {
   opacity: 0.5;
 }
+
+/* Closes the settings: top right, over the control's name (which leaves it room). */
+.viewport-param-hud-midi-settings {
+  position: relative;
+}
+
+.viewport-param-hud-midi-settings .viewport-param-hud-midi-name {
+  flex: 1 0 100%;
+  padding-right: 16px;
+  box-sizing: border-box;
+}
+
+.viewport-param-hud-midi-settings .viewport-param-hud-midi-close {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  padding: 0 5px;
+  line-height: 14px;
+  font-size: 13px;
+  background: none;
+  border-color: transparent;
+  color: var(--chrome-text-muted);
+}
+
+.viewport-param-hud-midi-settings .viewport-param-hud-midi-close:hover {
+  color: var(--chrome-text);
+}

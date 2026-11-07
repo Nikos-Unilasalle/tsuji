@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { useEvaluatedResults } from "../shared/graph/playheadStore";
+import { readComponent, resolveExposedField } from "../shared/graph/exposedComponent";
 import { findNodeWithGraph, resolveDefinition } from "../shared/graph/groups";
 import { connectedSocketIds, paramPanelValues } from "../shared/graph/paramPanelValues";
 import { Graph, NodeInstance, NodeRegistry, ParamFieldDef } from "../shared/graph/types";
@@ -25,6 +26,8 @@ import {
 import { parseVector3, selectChange, toDisplayUnit, toStoredUnit } from "./ParamPanel";
 import { ColorPickerInput } from "./ColorPickerInput";
 import { Knob, Selector, Switch } from "./LiveControls";
+import { MidiBinding, isBindable } from "../shared/graph/midiBinding";
+import { MidiCcButton, MidiSettings, PinMidiRow, usePinMidi } from "./PinMidi";
 import "./virtual-interface.css";
 
 type DropAt = { section: string | null; before: string | null };
@@ -36,6 +39,9 @@ type OnParamChange = (paramId: string | Record<string, unknown>, value?: unknown
  * axis — tinted X red, Y green, Z blue as the gizmo is — with a link that turns them together. A wired param is shown but
  * dimmed: the wire is in charge of it. ✎ shows each knob's range to edit and the pins to take away; ⛶ fills the
  * window with the controls, bigger, for playing live (Esc to come back).
+ *
+ * It is the digital twin of the controller on the desk: a knob learned for a pin (✎, then its CC button) turns the
+ * param and the knob here with it — the same bindings as the pinned-param list's, which this panel stands in for.
  */
 export function VirtualInterfaceHUD({
   graph,
@@ -45,6 +51,7 @@ export function VirtualInterfaceHUD({
   keyframesEnabled,
   onParamChange,
   onUnpin,
+  onBindMidi,
 }: {
   graph: Graph;
   registry: NodeRegistry;
@@ -53,6 +60,8 @@ export function VirtualInterfaceHUD({
   keyframesEnabled: boolean;
   onParamChange: OnParamChange;
   onUnpin?: (nodeId: string, paramId: string) => void;
+  /** Learns (or forgets, undefined) the MIDI control driving a pin. */
+  onBindMidi?: (nodeId: string, paramId: string, midi: MidiBinding | undefined) => void;
 }) {
   const evaluatedResults = useEvaluatedResults();
   const [editing, setEditing] = useState(false);
@@ -141,6 +150,9 @@ export function VirtualInterfaceHUD({
   const frame = keyframesEnabled ? currentFrame : undefined;
 
   const refs = graph.exposedParams ?? [];
+  const midiRows: PinMidiRow[] = [];
+  // Called on every render, before any early return: the hook's state must not come and go.
+  const pin = usePinMidi(midiRows, (id, v, nodeId) => onParamChange(id, v, nodeId), onBindMidi);
   const homeNames = new Map<string, string>();
   const cells = (graph.exposedParams ?? []).flatMap((ref) => {
     const nodeId = ref.nodeId;
@@ -159,14 +171,34 @@ export function VirtualInterfaceHUD({
     const nodeRefs = [ref];
     const sectionOf = (key: string, home: string) => layoutSections([{ key, home }], p.placement, customSections, order)[0]?.id ?? home;
     return nodeRefs.flatMap((ref) => {
-      const field = fields.find((f) => f.id === ref.paramId) as ParamFieldDef | undefined;
-      if (!field) return [];
+      const resolved = resolveExposedField(fields, values, ref.paramId);
+      if (!resolved) return [];
+      // A vector's axis pinned alone ("position.y") resolves to a number field: a knob of its own.
+      const field: ParamFieldDef = resolved.field;
+      const pinned = resolved.value;
       const key = rangeKey(nodeId, field.id);
       const own = ref.label ?? field.label.replace(/\s*[(—].*$/, "");
       const label = storedName(names, key) ?? own;
-      const disabled = wired.has(field.id);
+      const disabled = wired.has(resolved.baseId);
       const title = `${def.label} · ${field.label}${disabled ? " — wired: the wire sets it" : ""}`;
-      const set = (v: unknown) => onParamChange(field.id, v, nodeId);
+      const set = (v: unknown) => onParamChange(resolved.baseId, resolved.toStored(v), nodeId);
+      const bindable = onBindMidi && isBindable(field) ? field : null;
+      if (bindable) {
+        midiRows.push({
+          key,
+          nodeId,
+          paramId: ref.paramId,
+          field: bindable,
+          baseId: resolved.baseId,
+          value: pinned,
+          toStored: resolved.toStored,
+          midi: ref.midi,
+        });
+      }
+      // Shown while editing, and whenever it is learning or learned — a bound knob says which control drives it.
+      const cc = bindable && (editing || ref.midi || pin.learning === key) && (
+        <MidiCcButton pin={pin} rowKey={key} midi={ref.midi} className="vi-cc" />
+      );
       const unpin = editing && onUnpin && (
         <button type="button" className="vi-unpin" title="Unpin" onClick={() => onUnpin(nodeId, field.id)}>
           ×
@@ -175,9 +207,10 @@ export function VirtualInterfaceHUD({
 
       let control: React.ReactNode = null;
       if (field.kind === "number") {
-        const value = toDisplayUnit(Number(values[field.id]) || 0, field.degrees, field.percent);
+        const value = toDisplayUnit(Number(pinned) || 0, field.degrees, field.percent);
         const range = storedRange(ranges, key) ?? defaultRange(value, field);
-        const fallback = def.defaultParams[field.id];
+        const fallbackParam = def.defaultParams[resolved.baseId];
+        const fallback = resolved.axis ? readComponent(fallbackParam, resolved.axis) : fallbackParam;
         control = (
           <>
             <Knob
@@ -197,11 +230,11 @@ export function VirtualInterfaceHUD({
           </>
         );
       } else if (field.kind === "boolean") {
-        control = <Switch on={!!values[field.id]} accent={accent} label={label} disabled={disabled} title={title} onChange={(on) => set(on ? 1 : 0)} />;
+        control = <Switch on={!!pinned} accent={accent} label={label} disabled={disabled} title={title} onChange={(on) => set(on ? 1 : 0)} />;
       } else if (field.kind === "select") {
         control = (
           <Selector
-            value={String(values[field.id])}
+            value={String(pinned)}
             options={field.options}
             labels={field.optionLabels}
             accent={accent}
@@ -218,7 +251,7 @@ export function VirtualInterfaceHUD({
       } else if (field.kind === "color") {
         control = (
           <div className={`vi-control vi-color${disabled ? " vi-disabled" : ""}`} title={title}>
-            <ColorPickerInput value={values[field.id]} onChange={set} />
+            <ColorPickerInput value={pinned} onChange={set} />
             <span className="vi-label">{label}</span>
           </div>
         );
@@ -226,7 +259,7 @@ export function VirtualInterfaceHUD({
         control = (
           <VectorModule
             field={field}
-            value={values[field.id]}
+            value={pinned}
             fallback={def.defaultParams[field.id]}
             rangeKeyBase={key}
             ranges={ranges}
@@ -253,6 +286,7 @@ export function VirtualInterfaceHUD({
         { key, home: nodeId, homeName, node: (
         <div className={`vi-cell${over?.before === key ? " vi-over" : ""}`} key={key} data-vi-cell={key} data-vi-section={sectionOf(key, nodeId)}>
           {unpin}
+          {cc}
           {editing && grip(key)}
           {control}
           {editing && <NameEditor value={label} placeholder={own} onChange={(t) => rename(key, t)} />}
@@ -283,6 +317,8 @@ export function VirtualInterfaceHUD({
     </section>
   ));
 
+  const openMidi = pin.midiOpen ? midiRows.find((r) => r.key === pin.midiOpen) : undefined;
+
   return (
     <div className={`vi-panel${fullscreen ? " vi-fullscreen" : ""}`} style={{ ["--vi-accent" as string]: accent }}>
       <div className="vi-titlebar">
@@ -302,6 +338,16 @@ export function VirtualInterfaceHUD({
       {(!collapsed || fullscreen) && (
         <div className="vi-body">
           {refs.length === 0 ? <p className="vi-empty">Pin params from the param panel (the pin beside each one) to play them here.</p> : groups}
+          {openMidi?.midi && (
+            <MidiSettings
+              pin={pin}
+              rowKey={openMidi.key}
+              field={openMidi.field}
+              midi={openMidi.midi}
+              value={openMidi.value}
+              onBind={(m) => onBindMidi?.(openMidi.nodeId, openMidi.paramId, m)}
+            />
+          )}
           {editing && refs.length > 0 && (
             <div className={`vi-new-part${over && over.section === null ? " vi-over" : ""}`} data-vi-new>
               Drop here for a new part

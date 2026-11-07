@@ -10998,6 +10998,7 @@ export function Viewport({
           keyframesEnabled={keyframesEnabled}
           onParamChange={onParamChange}
           onUnpin={onUnpinParam}
+          onBindMidi={onBindExposedMidi}
         />
       )}
       {!outputMode && onParamChange && onUnpinParam && !virtualInterfaceNode && (graph.exposedParams?.length ?? 0) > 0 && (

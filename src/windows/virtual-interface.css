@@ -518,3 +518,20 @@
 .vi-grip {
   touch-action: none;
 }
+
+/* The MIDI CC badge: top-left of a control, opposite the unpin — the controller's knob number it answers to. */
+.vi-cell .vi-cc {
+  position: absolute;
+  top: -4px;
+  left: -4px;
+  z-index: 1;
+  margin: 0;
+}
+
+.vi-body .viewport-param-hud-midi-settings {
+  margin-top: 6px;
+}
+
+.vi-cell .vi-cc:not(.bound) {
+  background: var(--vi-surface);
+}

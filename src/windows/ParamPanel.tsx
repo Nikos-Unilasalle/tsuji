@@ -1,5 +1,6 @@
 import { isKeyReservedForPlayback } from "../shared/graph/playbackKeys";
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
+import { vectorAxes } from "../shared/graph/exposedComponent";
 import { open } from "@tauri-apps/plugin-dialog";
 import { readFile, readTextFile } from "@tauri-apps/plugin-fs";
 import * as THREE from "three";
@@ -503,6 +504,8 @@ export function ParamPanel({
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({ Transform: true });
   const [hoveredParamKey, setHoveredParamKey] = useState<string | null>(null);
   const [numContextMenu, setNumContextMenu] = useState<{ x: number; y: number; paramKey: string } | null>(null);
+  /** The vector whose pin was clicked: its row shows which of it to pin — the whole, or an axis alone. */
+  const [axisPinFor, setAxisPinFor] = useState<string | null>(null);
 
   const valueToStoreForKey = (paramKey: string): any => {
     if (paramKey.includes(".")) {
@@ -736,15 +739,18 @@ export function ParamPanel({
                   // squeezed beside a label column it loses half its width and
                   // the label ends up ellipsed to one letter.
                   const isWideEditor = field.kind === "topography_bands";
+                  const axes = field.kind === "vector" ? vectorAxes(params[field.id]) : [];
+                  const pinnedAxes = axes.filter((a) => exposedKeys?.has(`${field.id}.${a}`));
+                  const isExposed = !!exposedKeys?.has(field.id) || pinnedAxes.length > 0;
 
                   return (
+                    <Fragment key={field.id}>
                     <div
                       className={
                         "param-row" +
                         (isDriven ? " param-row-driven" : "") +
                         (isWideEditor ? " param-row-wide" : "")
                       }
-                      key={field.id}
                       title={isDriven ? `${field.label} comes from the wire plugged into this node — unplug it to set a value here` : undefined}
                     >
                       <label style={{ display: "flex", alignItems: "center", gap: "6px", minWidth: 0 }}>
@@ -764,9 +770,19 @@ export function ParamPanel({
                       {EXPOSABLE_KINDS.has(field.kind) && onToggleExposed && (
                         <button
                           type="button"
-                          className={"param-pin-btn" + (exposedKeys?.has(field.id) ? " param-pin-btn-active" : "")}
-                          title={exposedKeys?.has(field.id) ? "Unpin from viewport HUD" : "Pin to viewport HUD"}
-                          onClick={() => onToggleExposed(nodeId, field.id)}
+                          className={"param-pin-btn" + (isExposed ? " param-pin-btn-active" : "")}
+                          title={
+                            field.kind === "vector"
+                              ? "Pin to viewport HUD — the whole vector, or one axis alone (a number a MIDI knob can drive)"
+                              : isExposed
+                                ? "Unpin from viewport HUD"
+                                : "Pin to viewport HUD"
+                          }
+                          onClick={() =>
+                            field.kind === "vector"
+                              ? setAxisPinFor((f) => (f === field.id ? null : field.id))
+                              : onToggleExposed(nodeId, field.id)
+                          }
                         >
                           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                             <line x1="12" y1="17" x2="12" y2="22" />
@@ -871,6 +887,27 @@ export function ParamPanel({
                         </button>
                       )}
                     </div>
+                    {field.kind === "vector" && onToggleExposed && axisPinFor === field.id && (
+                      <div className="param-pin-axes">
+                        <span>Pin</span>
+                        {[null, ...axes].map((axis) => {
+                          const id = axis ? `${field.id}.${axis}` : field.id;
+                          const on = !!exposedKeys?.has(id);
+                          return (
+                            <button
+                              type="button"
+                              key={id}
+                              className={on ? "active" : undefined}
+                              title={`${on ? "Unpin" : "Pin"} ${axis ? `${field.label} ${axis.toUpperCase()} alone` : `all of ${field.label}`}`}
+                              onClick={() => onToggleExposed(nodeId, id)}
+                            >
+                              {axis ? axis.toUpperCase() : axes.map((a) => a.toUpperCase()).join("")}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                    </Fragment>
                   );
                 })}
               </div>

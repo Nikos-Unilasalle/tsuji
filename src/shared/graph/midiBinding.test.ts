@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { applyCc, bindingMatches, defaultRange, detectMode, learnBinding, relativeDelta, type BindableField, type MidiBinding } from "./midiBinding";
+import { applyCc, bindingMatches, bindingStep, defaultStep, detectMode, learnBinding, relativeDelta, type BindableField, type MidiBinding } from "./midiBinding";
 
 const num: BindableField = { id: "x", label: "X", kind: "number" };
 const bool: BindableField = { id: "b", label: "B", kind: "boolean" };
 const sel: BindableField = { id: "s", label: "S", kind: "select", options: ["a", "b", "c", "d"] };
-const bind = (over: Partial<MidiBinding> = {}): MidiBinding => ({ channel: 0, cc: 74, mode: "abs", min: 0, max: 10, ...over });
+const bind = (over: Partial<MidiBinding> = {}): MidiBinding => ({ channel: 0, cc: 74, mode: "rel64", step: 0.1, ...over });
 
 describe("relativeDelta", () => {
   it("decodes the three encoder codings", () => {
@@ -15,45 +15,54 @@ describe("relativeDelta", () => {
   });
 });
 
-describe("defaultRange", () => {
-  it("takes a fraction for a percent, ±180° for an angle", () => {
-    expect(defaultRange({ ...num, percent: true }, 0.3)).toEqual([0, 1]);
-    expect(defaultRange({ ...num, degrees: true }, 0)).toEqual([-Math.PI, Math.PI]);
+describe("defaultStep", () => {
+  it("takes the field's step, a degree for an angle, a percent for a fraction", () => {
+    expect(defaultStep({ ...num, step: 0.5 }, 3)).toBe(0.5);
+    expect(defaultStep({ ...num, degrees: true }, 0)).toBeCloseTo(Math.PI / 180);
+    expect(defaultStep({ ...num, percent: true }, 0.3)).toBe(0.01);
   });
 
-  it("else rounds up past twice the value, both ways when negative", () => {
-    expect(defaultRange(num, 0.4)).toEqual([0, 1]);
-    expect(defaultRange(num, 5)).toEqual([0, 10]);
-    expect(defaultRange(num, 120)).toEqual([0, 500]);
-    expect(defaultRange(num, -3)).toEqual([-10, 10]);
+  it("else a hundredth of the value's order of magnitude", () => {
+    expect(defaultStep(num, 0)).toBe(0.01);
+    expect(defaultStep(num, 0.95)).toBe(0.01);
+    expect(defaultStep(num, 5)).toBe(0.01);
+    expect(defaultStep(num, 120)).toBe(1);
+    expect(defaultStep(num, -3000)).toBe(10);
   });
 });
 
 describe("learnBinding", () => {
-  it("a number gets a range, a boolean toggles", () => {
-    expect(learnBinding(num, 2, 10, 5)).toEqual({ channel: 2, cc: 10, mode: "abs", min: 0, max: 10 });
+  it("a number gets a step and is endless, a boolean toggles", () => {
+    expect(learnBinding(num, 2, 10, 5)).toEqual({ channel: 2, cc: 10, mode: "rel64", step: 0.01 });
     expect(learnBinding(bool, 0, 20, false)).toEqual({ channel: 0, cc: 20, mode: "toggle" });
   });
 });
 
 describe("applyCc", () => {
-  it("an absolute knob puts a number across its range", () => {
-    expect(applyCc(num, bind(), 0, 3)).toBe(0);
-    expect(applyCc(num, bind(), 127, 3)).toBe(10);
-    expect(applyCc(num, bind(), 64, 3)).toBe(5.04);
-    expect(applyCc({ ...num, step: 1 }, bind(), 64, 3)).toBe(5);
+  it("each notch adds the step one way and takes it off the other, from where the value is", () => {
+    expect(applyCc(num, bind(), 65, 3)).toBe(3.1);
+    expect(applyCc(num, bind(), 63, 3)).toBe(2.9);
+    expect(applyCc(num, bind(), 67, 3)).toBe(3.3);
+    expect(applyCc(num, bind({ mode: "rel2c" }), 127, 3)).toBe(2.9);
+    expect(applyCc(num, bind({ mode: "relsign" }), 65, 3)).toBe(2.9);
+    expect(applyCc(num, bind(), 64, 3)).toBe(undefined);
   });
 
-  it("an encoder moves a number from where it is, a 127th of the range a step", () => {
-    expect(applyCc(num, bind({ mode: "rel64" }), 65, 3)).toBe(3.08);
-    expect(applyCc(num, bind({ mode: "rel2c" }), 127, 3)).toBe(2.92);
-    expect(applyCc(num, bind({ mode: "rel64" }), 64, 3)).toBe(undefined);
+  it("has no ends", () => {
+    expect(applyCc(num, bind(), 65, 1000)).toBe(1000.1);
+    expect(applyCc(num, bind(), 63, -1000)).toBe(-1000.1);
   });
 
-  it("an encoder stops at the range's ends, but leaves a value already past one alone", () => {
-    expect(applyCc(num, bind({ mode: "rel64" }), 127, 9.9)).toBe(10);
-    expect(applyCc(num, bind({ mode: "rel64" }), 65, 50)).toBe(50);
-    expect(applyCc(num, bind({ mode: "rel64" }), 63, 50)).toBe(49.92);
+  it("adds without float noise", () => {
+    let v: unknown = 0;
+    for (let i = 0; i < 3; i++) v = applyCc(num, bind(), 65, v);
+    expect(v).toBe(0.3);
+  });
+
+  it("reads a binding from before — absolute, with a range — as 64±, at the default step", () => {
+    const old = bind({ mode: "abs", step: undefined, min: 0, max: 12.7 });
+    expect(bindingStep(num, old, 1)).toBe(0.01);
+    expect(applyCc(num, old, 65, 1)).toBe(1.01);
   });
 
   it("a toggle flips on the press only", () => {
@@ -64,16 +73,15 @@ describe("applyCc", () => {
   });
 
   it("an absolute button on a boolean follows it", () => {
-    expect(applyCc(bool, bind(), 127, false)).toBe(true);
-    expect(applyCc(bool, bind(), 0, true)).toBe(false);
+    expect(applyCc(bool, bind({ mode: "abs" }), 127, false)).toBe(true);
+    expect(applyCc(bool, bind({ mode: "abs" }), 0, true)).toBe(false);
   });
 
-  it("a select picks across its options, or steps through them", () => {
-    expect(applyCc(sel, bind(), 0, "c")).toBe("a");
-    expect(applyCc(sel, bind(), 127, "a")).toBe("d");
-    expect(applyCc(sel, bind(), 127, "d")).toBe(undefined);
-    expect(applyCc(sel, bind({ mode: "rel64" }), 66, "b")).toBe("c");
-    expect(applyCc(sel, bind({ mode: "rel64" }), 60, "a")).toBe(undefined);
+  it("a select steps through its options, stopping at the ends", () => {
+    expect(applyCc(sel, bind(), 66, "b")).toBe("c");
+    expect(applyCc(sel, bind(), 60, "b")).toBe("a");
+    expect(applyCc(sel, bind(), 60, "a")).toBe(undefined);
+    expect(applyCc(sel, bind(), 66, "d")).toBe(undefined);
   });
 });
 
@@ -121,14 +129,6 @@ describe("detectMode", () => {
   });
 });
 
-describe("coarse steps", () => {
-  it("an encoder step is at least the field's step, so a coarse field still moves", () => {
-    const coarse: BindableField = { ...num, step: 0.05 };
-    expect(applyCc(coarse, bind({ mode: "rel64", min: 0, max: 1 }), 65, 0.45)).toBe(0.5);
-    expect(applyCc(coarse, bind({ mode: "rel64", min: 0, max: 1 }), 62, 0.45)).toBe(0.35);
-  });
-});
-
 describe("the MiniLab's encoder, end to end", () => {
   it("64 65 64 65… climbs steadily, never back", () => {
     const sent = [64, 65, 64, 65, 64, 65, 64, 65];
@@ -141,6 +141,6 @@ describe("the MiniLab's encoder, end to end", () => {
       seen.push(value as number);
     }
     expect(b.mode).toBe("rel64");
-    expect(seen).toEqual([5, 5.08, 5.08, 5.16, 5.16, 5.24, 5.24, 5.32]);
+    expect(seen).toEqual([5, 5.01, 5.01, 5.02, 5.02, 5.03, 5.03, 5.04]);
   });
 });

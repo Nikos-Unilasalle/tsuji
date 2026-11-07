@@ -473,3 +473,34 @@
   text-transform: uppercase;
   color: var(--chrome-text-muted, #b3bdc9);
 }
+
+/* Which of a vector to pin: all of it, or one axis alone (a number row, MIDI-bindable). */
+.param-pin-axes {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  padding: 2px 0 4px;
+  font-size: 11px;
+  color: var(--chrome-text-muted);
+}
+
+.param-pin-axes button {
+  min-width: 22px;
+  padding: 1px 6px;
+  border: 1px solid var(--chrome-border);
+  border-radius: 4px;
+  background: var(--chrome-bg);
+  color: var(--chrome-text-muted);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.param-pin-axes button:hover {
+  color: var(--chrome-text);
+}
+
+.param-pin-axes button.active {
+  border-color: var(--accent-color, #38bdf8);
+  color: var(--accent-color, #38bdf8);
+}
