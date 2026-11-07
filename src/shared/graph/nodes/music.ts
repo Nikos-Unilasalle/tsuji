@@ -9,6 +9,7 @@ import {
   MusicDescription,
   MusicValue,
   TrackDescription,
+  alignSections,
   clockOf,
   isTrack,
   orderOf,
@@ -852,7 +853,7 @@ export function gatherTracks(inputs: Record<string, unknown>, nodeId = "out"): T
       tracks.push(n === 0 ? t : { ...t, id: `${t.id}#${n + 1}` });
     }
   }
-  return tracks;
+  return alignSections(tracks);
 }
 
 /** What a Music Out hands its engine, from its inputs and params: the tracks, the master and the send effects. */

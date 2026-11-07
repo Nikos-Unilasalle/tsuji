@@ -7,7 +7,7 @@ import type { FmPatch } from "../dsp/fm";
 import type { GbPatch } from "../dsp/gameboy";
 import type { SidPatch } from "../dsp/sid";
 import type { SongOrder } from "../seq/order";
-import type { Sequence } from "../seq/sequencer";
+import type { Cell, Sequence } from "../seq/sequencer";
 
 interface TrackBase {
   /** Stable across frames: the engine keeps a track's voices (and their ringing tails) for as long as its id lives. */
@@ -107,6 +107,31 @@ export function sequenceOf(v: unknown): Sequence | null {
   if (m.kind === "sequence") return m.seq;
   if (isTrack(m)) return m.seq;
   return null;
+}
+
+const aligned = new WeakMap<TrackDescription, { steps: number; track: TrackDescription }>();
+
+/**
+ * The tracks a Sections node shaped, every one as long as the longest of them: the shorter forms end in rests instead
+ * of looping back early, so the song is the longest form — as the Sections HUD draws it. Others are left alone.
+ * Remembered per track, so the same input gives the same objects.
+ */
+export function alignSections<T extends TrackDescription>(tracks: readonly T[]): T[] {
+  const sectioned = tracks.filter((t) => t.seq.sections);
+  if (sectioned.length < 2) return [...tracks];
+  const steps = Math.max(...sectioned.map((t) => t.seq.pattern.length));
+  return tracks.map((t) => {
+    const p = t.seq.pattern;
+    if (!t.seq.sections || p.length >= steps) return t;
+    const memo = aligned.get(t);
+    if (memo && memo.steps === steps) return memo.track as T;
+    const padded: (Cell | null)[] = Array.from({ length: steps }, (_, i) => (i < p.length ? (p.steps[i] ?? null) : null));
+    // Whatever still sounds at the form's end stops there, as at any section's end.
+    padded[p.length] = { note: "off" };
+    const track = { ...t, seq: { ...t.seq, pattern: { length: steps, steps: padded } } } as T;
+    aligned.set(t, { steps, track });
+    return track;
+  });
 }
 
 export function clockOf(v: unknown): Sequence["clock"] | null {

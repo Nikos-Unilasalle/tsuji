@@ -1,6 +1,6 @@
 import { NodeDefinition } from "../types";
 import { numberInput } from "./object";
-import { MusicValue, clockOf, sequenceOf } from "../../music/engine/description";
+import { MusicValue, clockOf, isTrack, sequenceOf } from "../../music/engine/description";
 import { chordNotes } from "../../music/seq/chords";
 import { euclid, lcm, parseTonnetzPath, randomTonnetzPath, shiftRegister, tonnetzMove, voiceTriad, Triad } from "../../music/seq/generators";
 import { hash01 } from "../../music/seq/hash";
@@ -910,6 +910,7 @@ export function formatBars(bars: readonly boolean[]): string {
 /**
  * A sequence brought in and out by the bar, so a looping generator can have a form: it plays in the bars marked x and
  * rests in the others, over a song as long as the mask. With Restart, each entry starts it from its first step.
+ * Before a voice or after it (a track keeps its instrument); shorter masks rest out to the longest (alignSections).
  */
 export const MUSIC_SECTIONS_NODE: NodeDefinition = {
   type: "music/sections",
@@ -928,7 +929,7 @@ export const MUSIC_SECTIONS_NODE: NodeDefinition = {
     const seq = sequenceOf(inputs.sequence);
     if (!seq) return { sequence: null };
     const bars = parseBars(String(params.bars ?? ""));
-    if (bars.length === 0) return { sequence: seqOut(seq) };
+    if (bars.length === 0) return { sequence: inputs.sequence as MusicValue };
     const bl = clamp(Math.round(Number(params.barLength) || 16), 1, 256);
     const restart = params.restart !== false;
     const L = Math.max(1, seq.pattern.length);
@@ -945,7 +946,9 @@ export const MUSIC_SECTIONS_NODE: NodeDefinition = {
       if (i % bl === 0 && (bar === 0 || !bars[bar - 1])) entry = i;
       steps[i] = seq.pattern.steps[(restart ? i - entry : i) % L] ?? null;
     }
-    return { sequence: seqOut(withSteps(seq, steps)) };
+    const out: Sequence = { ...withSteps(seq, steps), sections: true };
+    // After a voice: the track goes on with its instrument, only its notes shaped.
+    return { sequence: isTrack(inputs.sequence) ? { ...inputs.sequence, seq: out } : seqOut(out) };
   },
 };
 

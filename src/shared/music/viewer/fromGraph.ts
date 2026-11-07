@@ -3,7 +3,7 @@
  * the song's form read off its Sections nodes (when it has any).
  */
 import type { Graph } from "../../graph/types";
-import { isTrack, type TrackDescription } from "../engine/description";
+import { alignSections, isTrack, type TrackDescription } from "../engine/description";
 import { parseBars } from "../../graph/nodes/musicAlgo";
 import { songForm } from "../seq/form";
 import { buildScore, type ViewerScore, type ViewerSection } from "./score";
@@ -21,11 +21,17 @@ export function viewerTracks(graph: Graph, results: Results): { desc: TrackDescr
   for (const c of wires) {
     const v = results.get(c.fromNode)?.[c.fromSocket];
     if (!isTrack(v)) continue;
-    const voice = graph.nodes.find((n) => n.id === c.fromNode);
+    let voice = graph.nodes.find((n) => n.id === c.fromNode);
+    // A Sections after the voice: named after the voice behind it.
+    for (let hops = 0; hops < 8 && voice?.type === "music/sections" && !String(voice.params.name ?? "").trim(); hops++) {
+      const into = graph.connections.find((w) => w.toNode === voice!.id && w.toSocket === "sequence");
+      voice = into ? graph.nodes.find((n) => n.id === into.fromNode) : undefined;
+    }
     const name = String(voice?.params.name ?? "").trim() || String(voice?.params.preset ?? "").trim() || (v.kind === "drums" ? "Drums" : voice?.id ?? v.id);
     tracks.push({ desc: v, name });
   }
-  return tracks;
+  const descs = alignSections(tracks.map((t) => t.desc));
+  return tracks.map((t, i) => ({ ...t, desc: descs[i] }));
 }
 
 /** The song's form in seconds, from every Sections node's bars. */

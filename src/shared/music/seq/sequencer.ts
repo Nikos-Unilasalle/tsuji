@@ -78,6 +78,9 @@ export interface Sequence {
   bank?: BankLayout;
   /** How the keys are heard (tuning.ts): every emitted note — and glide start — goes through it. None: 12-TET. */
   tuning?: Tuning | null;
+  /** Brought in and out by a Sections node: `pattern` is the song's form, bar by bar. Beside longer forms it is padded
+   * with rests to the longest (alignSections), so every part loops with the song, not on its own. */
+  sections?: boolean;
 }
 
 export interface NoteEvent {

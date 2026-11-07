@@ -9169,11 +9169,18 @@ export function Viewport({
               if (v) return v;
               frontier = next.filter((n) => MUSIC_SEQUENCE_PASS_TYPES.includes(n.type) || n.type === "music/chip-echo");
             }
+            // A Sections after its voice (voice → Sections → Music Out): the voice is upstream.
+            let at: (typeof graph.nodes)[number] | undefined = start;
+            for (let hops = 0; hops < 6 && at; hops++) {
+              const into = graph.connections.find((c) => c.toNode === at!.id && c.toSocket === "sequence");
+              at = into ? graph.nodes.find((n) => n.id === into.fromNode) : undefined;
+              if (at && isVoice(at)) return at;
+            }
             return undefined;
           };
           const lanes = graph.nodes.filter((n) => n.type === "music/sections").map((node) => ({ node, voice: voiceOf(node) }));
           const voice = voiceOf(selected);
-          const out = voice ? downstream(voice.id).find((n) => n.type === "music/out") : graph.nodes.find((n) => n.type === "music/out");
+          const out = (voice ? downstream(voice.id).find((n) => n.type === "music/out") : undefined) ?? graph.nodes.find((n) => n.type === "music/out");
           return (
             <SectionsHud
               lanes={lanes}

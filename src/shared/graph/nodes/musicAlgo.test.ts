@@ -22,6 +22,7 @@ import {
   MUSIC_TUNING_NODE,
 } from "./musicAlgo";
 import { MUSIC_PATTERN_NODE } from "./music";
+import { TrackDescription, alignSections, isTrack } from "../../music/engine/description";
 import { euclid, tonnetzMove, voiceTriad } from "../../music/seq/generators";
 import { SCALES, scaleSpec, snapNote, stackedChord } from "../../music/seq/scales";
 import { TUNING_SYSTEMS, parseScala, tunedPitch } from "../../music/seq/tuning";
@@ -468,6 +469,22 @@ describe("Sections", () => {
     const line = pattern("C4 D4 E4", 3);
     const seq = run(MUSIC_SECTIONS_NODE, { sequence: line }, { bars: ". x", barLength: 4, restart: false }).sequence.seq as Sequence;
     expect(noteList(seq.pattern.steps)).toEqual([null, null, null, null, 62, 64, 60, 62]);
+  });
+  it("after a voice, passes the track on with its instrument", () => {
+    const track = { id: "gb1", kind: "gb", voices: 1, gb: { channel: "wave" }, seq: (pattern("C4 D4", 2) as { seq: Sequence }).seq, level: 0.5, pan: 0, mute: false };
+    const out = run(MUSIC_SECTIONS_NODE, { sequence: track }, { bars: ". x", barLength: 2 }).sequence;
+    expect(isTrack(out)).toBe(true);
+    expect(out).toMatchObject({ id: "gb1", kind: "gb", level: 0.5, gb: { channel: "wave" } });
+    expect(noteList(out.seq.pattern.steps)).toEqual([null, null, 60, 62]);
+  });
+  it("rests the shorter forms out to the longest, so the parts loop together", () => {
+    const track = (id: string, bars: string) => ({ id, kind: "gb", voices: 1, gb: {}, seq: run(MUSIC_SECTIONS_NODE, { sequence: pattern("C4", 1) }, { bars, barLength: 2 }).sequence.seq, level: 1, pan: 0, mute: false }) as TrackDescription;
+    const plain = { ...track("plain", "x"), seq: (pattern("E4", 1) as { seq: Sequence }).seq };
+    const [a, b, c] = alignSections([track("a", "x"), track("b", ". x x"), plain]);
+    expect(noteList(a.seq.pattern.steps)).toEqual([60, 60, "off", null, null, null]);
+    expect(b.seq.pattern.length).toBe(6);
+    expect(c).toBe(plain);
+    expect(alignSections([track("a", "x")])[0].seq.pattern.length).toBe(2);
   });
 });
 
