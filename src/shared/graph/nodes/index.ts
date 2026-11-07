@@ -228,6 +228,7 @@ import { POINTS_SELECTION_NODE } from "./pointsSelection";
 import { POINTS_INFLUENCE_NODE } from "./pointsInfluence";
 import { HEX_GRID_NODE } from "./hexGrid";
 import { SAMPLE_TEXTURE_NODE } from "./sampleTexture";
+import { TEXTURE_VALUE_NODE } from "./textureValue";
 import {
   CURL_NOISE_FIELD_3D_NODE,
   MESH_FLUID_EMITTER_NODE,
@@ -587,6 +588,7 @@ export const STARTER_NODES = [
   DISTANCES_NODE,
   HEX_GRID_NODE,
   SAMPLE_TEXTURE_NODE,
+  TEXTURE_VALUE_NODE,
   CURL_NOISE_FIELD_3D_NODE,
   MESH_FLUID_EMITTER_NODE,
   FLUID_SOLVER_3D_NODE,

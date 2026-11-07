@@ -4,7 +4,7 @@ import { createNodeCache } from "../nodeCaches";
 import { extractPositionFromInput } from "./transform";
 import { getDrawableImage, textureRevision } from "../gpuTexture";
 
-interface TextureSampleState {
+export interface TextureSampleState {
   canvas?: HTMLCanvasElement;
   lastTexture?: THREE.Texture;
   lastRevision?: string;
@@ -38,7 +38,7 @@ function asVector3(v: unknown, fallback: THREE.Vector3): THREE.Vector3 {
   return fallback;
 }
 
-function getPixelBuffer(state: TextureSampleState, texture: THREE.Texture): { data: Uint8ClampedArray | Uint8Array | Float32Array; width: number; height: number } | null {
+export function getPixelBuffer(state: TextureSampleState, texture: THREE.Texture): { data: Uint8ClampedArray | Uint8Array | Float32Array; width: number; height: number } | null {
   const revision = textureRevision(texture);
   if (state.lastTexture === texture && state.lastRevision === revision && state.pixelData && state.width && state.height) {
     return { data: state.pixelData, width: state.width, height: state.height };
