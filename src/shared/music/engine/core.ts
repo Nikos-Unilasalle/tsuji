@@ -16,6 +16,8 @@ import { DrumSynth } from "../dsp/drums";
 import { FmSynth } from "../dsp/fm";
 import { GbSynth } from "../dsp/gameboy";
 import { SidSynth } from "../dsp/sid";
+import { WavetableSynth } from "../dsp/wavetable";
+import { GranularSynth } from "../dsp/granular";
 import { Mixer, MixerMeters, MonoSource } from "../dsp/mix";
 import { NoteEvent, Sequence, notesSoundingAt, notesStartingIn } from "../seq/sequencer";
 import { DEFAULT_FX, MusicDescription, PreviewSound, TrackDescription } from "./description";
@@ -79,6 +81,8 @@ function makeInstrument(kind: TrackDescription["kind"], voices: number, sampleRa
   if (kind === "fm") return new FmSynth(voices, sampleRate);
   if (kind === "gb") return new GbSynth(voices, sampleRate);
   if (kind === "sid") return new SidSynth(voices, sampleRate);
+  if (kind === "wavetable") return new WavetableSynth(voices, sampleRate);
+  if (kind === "granular") return new GranularSynth(voices, sampleRate);
   return new DrumSynth(sampleRate);
 }
 
@@ -136,11 +140,25 @@ export class EngineCore {
         // With its own settings from the start: a track that appears muted must not glide down from full level.
         this.mixer.addChannel(d.id, track.synth, channelOf(d, soloing));
       }
-      const patchKey = JSON.stringify(d.kind === "fm" ? d.patch : d.kind === "gb" ? d.gb : d.kind === "sid" ? d.sid : d.drums);
+      const patchKey = JSON.stringify(
+        d.kind === "fm"
+          ? d.patch
+          : d.kind === "gb"
+          ? d.gb
+          : d.kind === "sid"
+          ? d.sid
+          : d.kind === "wavetable"
+          ? d.wavetable
+          : d.kind === "granular"
+          ? d.granular
+          : d.drums
+      );
       if (patchKey !== track.patchKey) {
         if (d.kind === "fm") (track.synth as FmSynth).setPatch(d.patch);
         else if (d.kind === "gb") (track.synth as GbSynth).setPatch(d.gb);
         else if (d.kind === "sid") (track.synth as SidSynth).setPatch(d.sid);
+        else if (d.kind === "wavetable") (track.synth as WavetableSynth).setPatch(d.wavetable);
+        else if (d.kind === "granular") (track.synth as GranularSynth).setPatch(d.granular);
         else (track.synth as DrumSynth).setSettings(d.drums);
         track.patchKey = patchKey;
       }
@@ -193,6 +211,8 @@ export class EngineCore {
       if (sound.kind === "fm") (synth as FmSynth).setPatch(sound.patch);
       else if (sound.kind === "gb") (synth as GbSynth).setPatch(sound.gb);
       else if (sound.kind === "sid") (synth as SidSynth).setPatch(sound.sid);
+      else if (sound.kind === "wavetable") (synth as WavetableSynth).setPatch(sound.wavetable);
+      else if (sound.kind === "granular") (synth as GranularSynth).setPatch(sound.granular);
       else (synth as DrumSynth).setSettings(sound.drums);
       this.preview = { key, synth, offs: [] };
       this.mixer.addChannel(PREVIEW_ID, synth, { level: 0.8, pan: 0, mute: false });

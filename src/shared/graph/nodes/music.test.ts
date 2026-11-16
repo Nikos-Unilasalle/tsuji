@@ -4,6 +4,8 @@ import {
   MUSIC_CLOCK_NODE,
   MUSIC_DRUM_KIT_NODE,
   MUSIC_FM_VOICE_NODE,
+  MUSIC_WAVETABLE_NODE,
+  MUSIC_GRANULAR_NODE,
   MUSIC_NOTE_PROBE_NODE,
   MUSIC_OUT_NODE,
   MUSIC_PATTERN_NODE,
@@ -11,7 +13,7 @@ import {
 } from "./music";
 import { EvalContext, NodeDefinition } from "../types";
 import { FM_PRESETS } from "../../music/dsp/presets";
-import type { DrumTrackDescription, FmTrackDescription, MusicValue } from "../../music/engine/description";
+import type { DrumTrackDescription, FmTrackDescription, GranularTrackDescription, MusicValue, WavetableTrackDescription } from "../../music/engine/description";
 
 const ctx = (extra: Partial<EvalContext> = {}): EvalContext => ({ time: 0, step: 0, nodeId: "n1", fps: 30, ...extra });
 
@@ -119,6 +121,43 @@ describe("Drum Kit", () => {
     expect(track.seq.arp).toBe(null);
     expect(track.drums).toEqual({ tune: 3, decay: 1 });
     expect(track.seq.pattern.steps[0]).toEqual({ note: 36 });
+  });
+});
+
+describe("Wavetable Voice", () => {
+  const seq = () => run(MUSIC_PATTERN_NODE, {}, { steps: "C4:maj7 . . .", length: "16" }).sequence;
+
+  it("turns a sequence into a wavetable track with its preset patch", () => {
+    const up = MUSIC_WAVETABLE_NODE.upgradeParams!({ preset: "Shrub Saw" });
+    const track = run(MUSIC_WAVETABLE_NODE, { sequence: seq() }, up).track as WavetableTrackDescription;
+    expect(track.kind).toBe("wavetable");
+    expect(track.wavetable.table).toBe("analog");
+    expect(track.wavetable.unison).toBe(5);
+    expect(track.wavetable.filterType).toBe("lowpass");
+  });
+
+  it("modulates WT position and cutoff from input sockets", () => {
+    const track = run(MUSIC_WAVETABLE_NODE, { sequence: seq(), wtPos: 0.9, cutoff: 1200 }, { preset: "Deep Sub" }).track as WavetableTrackDescription;
+    expect(track.wavetable.wtPos).toBe(0.9);
+    expect(track.wavetable.cutoff).toBe(1200);
+  });
+});
+
+describe("Granular Voice", () => {
+  const seq = () => run(MUSIC_PATTERN_NODE, {}, { steps: "A3 . . .", length: "16" }).sequence;
+
+  it("turns a sequence into a granular track with cloud parameters", () => {
+    const up = MUSIC_GRANULAR_NODE.upgradeParams!({ preset: "Abyssal Drone" });
+    const track = run(MUSIC_GRANULAR_NODE, { sequence: seq() }, up).track as GranularTrackDescription;
+    expect(track.kind).toBe("granular");
+    expect(track.granular.grainSource).toBe("chirp");
+    expect(track.granular.subLevel).toBe(0.85);
+  });
+
+  it("modulates density and spray from input sockets", () => {
+    const track = run(MUSIC_GRANULAR_NODE, { sequence: seq(), density: 250, spray: 0.95 }).track as GranularTrackDescription;
+    expect(track.granular.density).toBe(250);
+    expect(track.granular.spray).toBe(0.95);
   });
 });
 

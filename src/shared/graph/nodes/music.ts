@@ -20,6 +20,8 @@ import { FM_PRESETS, FM_PRESET_NAMES, fmPreset, fmVoicePreset } from "../../musi
 import { fmAlgorithm } from "../../music/dsp/algorithms";
 import { GB_DUTIES, GB_PRESET_NAMES, GbChannel, GbPatch, gbPreset } from "../../music/dsp/gameboy";
 import { SID_PRESET_NAMES, SidPatch, sidPreset } from "../../music/dsp/sid";
+import { WAVETABLE_PRESETS, WAVETABLE_PRESET_NAMES, WavetablePatch, WavetableType, FilterType as WtFilterType } from "../../music/dsp/wavetable";
+import { GRANULAR_PRESETS, GRANULAR_PRESET_NAMES, GranularPatch, GrainSource, GranularFilterType } from "../../music/dsp/granular";
 import { ARP_MODES, ARP_RATES, ArpMode, ArpRate, ArpSettings, DEFAULT_ARP } from "../../music/seq/arp";
 import { CHORD_NAMES, ChordName } from "../../music/seq/chords";
 import { parsePattern, stepWords } from "../../music/seq/notation";
@@ -726,6 +728,269 @@ export const MUSIC_DRUM_KIT_NODE: NodeDefinition = {
       seq: { ...seq, arp: null },
       drums: { tune: clamp(numberInput(inputs.tune, params.tune, 0), -24, 24), decay: clamp(numberInput(inputs.decay, params.decay, 1), 0.1, 4) },
       level: clamp(numberInput(inputs.level, params.level, 0.9), 0, 2),
+      pan: clamp(numberInput(inputs.pan, params.pan, 0), -1, 1),
+      mute: inputs.mute !== undefined ? Number(inputs.mute) > 0 : Boolean(params.mute),
+      ...sendsOf(inputs, params),
+    };
+    return { track };
+  },
+};
+
+// ── Wavetable Voice (Shrub-style) ──────────────────────────────────────────
+
+const WT_TABLES: WavetableType[] = ["analog", "formant", "spectral", "sub_crush"];
+const WT_FILTER_TYPES: WtFilterType[] = ["lowpass", "bandpass", "highpass", "off"];
+
+function wtPresetParams(name: string): Record<string, unknown> {
+  const patch = WAVETABLE_PRESETS[name] ?? WAVETABLE_PRESETS["Deep Sub"];
+  return { ...patch };
+}
+
+export const MUSIC_WAVETABLE_NODE: NodeDefinition = {
+  type: "music/wavetable-voice",
+  label: "Wavetable Voice",
+  category: "music",
+  pure: true,
+  inputs: [
+    { id: "sequence", label: "Sequence", type: "music" },
+    { id: "wtPos", label: "WT Pos", type: "value" },
+    { id: "sub", label: "Sub Level", type: "value" },
+    { id: "cutoff", label: "Cutoff", type: "value" },
+    { id: "resonance", label: "Resonance", type: "value" },
+    { id: "drive", label: "Drive", type: "value" },
+    { id: "level", label: "Level", type: "value" },
+    { id: "pan", label: "Pan", type: "value" },
+    { id: "mute", label: "Mute", type: "value" },
+    ...SEND_INPUTS,
+  ],
+  outputs: [{ id: "track", label: "Track", type: "music" }],
+  defaultParams: {
+    preset: "Deep Sub",
+    voices: 8,
+    transpose: 0,
+    level: 0.8,
+    pan: 0,
+    mute: false,
+    solo: false,
+    live: false,
+    delaySend: 0,
+    reverbSend: 0,
+    ...WAVETABLE_PRESETS["Deep Sub"],
+  },
+  upgradeParams: (params) =>
+    params.preset !== undefined && params.wtPos === undefined ? { ...wtPresetParams(String(params.preset)), ...params } : params,
+  paramFields: [
+    {
+      id: "preset",
+      label: "Preset (loads patch settings below)",
+      kind: "select",
+      options: WAVETABLE_PRESET_NAMES,
+      presets: Object.fromEntries(WAVETABLE_PRESET_NAMES.map((n) => [n, wtPresetParams(n)])),
+    },
+    { id: "level", label: "Level", kind: "number", step: 0.05 },
+    { id: "pan", label: "Pan (−1 left, 1 right)", kind: "number", step: 0.1 },
+    { id: "voices", label: "Voices (1–16)", kind: "number", step: 1 },
+    { id: "transpose", label: "Transpose (semitones)", kind: "number", step: 1 },
+    { id: "mute", label: "Mute", kind: "boolean" },
+    SOLO_FIELD,
+    LIVE_FIELD,
+    ...SEND_FIELDS,
+    {
+      id: "table",
+      label: "Wavetable",
+      kind: "select",
+      options: WT_TABLES,
+      optionLabels: ["Analog (Sine → Tri → Saw → Pulse)", "Formant (Vowels A → O → U → E → I)", "Spectral (Inharmonic Chime / Metal)", "Sub Crush (Saturated Foldback Bass)"],
+      group: "Oscillators",
+    },
+    { id: "wtPos", label: "WT Position (0–1 morph)", kind: "number", step: 0.05, group: "Oscillators" },
+    { id: "sub", label: "Sub-Oscillator Level", kind: "number", step: 0.05, group: "Oscillators" },
+    { id: "subOctave", label: "Sub Octave Down", kind: "select", options: ["1", "2"], optionLabels: ["−1 Octave", "−2 Octaves"], group: "Oscillators" },
+    { id: "unison", label: "Unison (1–7 detuned)", kind: "number", step: 1, group: "Oscillators" },
+    { id: "detune", label: "Detune (cents)", kind: "number", step: 1, group: "Oscillators" },
+    {
+      id: "filterType",
+      label: "Filter Type",
+      kind: "select",
+      options: WT_FILTER_TYPES,
+      optionLabels: ["Lowpass (24 dB SVF)", "Bandpass", "Highpass", "Bypass (Off)"],
+      group: "Filter & Drive",
+    },
+    { id: "cutoff", label: "Cutoff (Hz)", kind: "number", step: 50, group: "Filter & Drive" },
+    { id: "resonance", label: "Resonance (0–0.98)", kind: "number", step: 0.02, group: "Filter & Drive" },
+    { id: "drive", label: "Drive / Analog Saturation (0–3)", kind: "number", step: 0.1, group: "Filter & Drive" },
+    { id: "filterEnv", label: "Filter Env Amount (−1 to 1)", kind: "number", step: 0.05, group: "Filter & Drive" },
+    { id: "attack", label: "Attack (s)", kind: "number", step: 0.01, group: "Envelope" },
+    { id: "decay", label: "Decay (s)", kind: "number", step: 0.05, group: "Envelope" },
+    { id: "sustain", label: "Sustain (0–1)", kind: "number", step: 0.05, group: "Envelope" },
+    { id: "release", label: "Release (s)", kind: "number", step: 0.05, group: "Envelope" },
+  ],
+  evaluate: (inputs, params, ctx) => {
+    const wired = sequenceOf(inputs.sequence) ?? liveOnly(params);
+    if (!wired) return { track: null };
+    const seq = transposeSequence(wired, Math.round(Number(params.transpose) || 0));
+    const base = WAVETABLE_PRESETS[String(params.preset)] ?? WAVETABLE_PRESETS["Deep Sub"];
+    const table = WT_TABLES.includes(params.table as WavetableType) ? (params.table as WavetableType) : base.table;
+    const filterType = WT_FILTER_TYPES.includes(params.filterType as WtFilterType) ? (params.filterType as WtFilterType) : base.filterType;
+    const subOctave = params.subOctave === "2" || params.subOctave === 2 ? 2 : 1;
+
+    const wavetable: WavetablePatch = {
+      table,
+      wtPos: clamp(numberInput(inputs.wtPos, params.wtPos, base.wtPos), 0, 1),
+      sub: clamp(numberInput(inputs.sub, params.sub, base.sub), 0, 1),
+      subOctave,
+      unison: clamp(Math.round(numberInput(undefined, params.unison, base.unison)), 1, 7),
+      detune: clamp(numberInput(undefined, params.detune, base.detune), 0, 50),
+      filterType,
+      cutoff: clamp(numberInput(inputs.cutoff, params.cutoff, base.cutoff), 20, 20000),
+      resonance: clamp(numberInput(inputs.resonance, params.resonance, base.resonance), 0, 0.98),
+      drive: clamp(numberInput(inputs.drive, params.drive, base.drive), 0, 3),
+      filterEnv: clamp(numberInput(undefined, params.filterEnv, base.filterEnv), -1, 1),
+      attack: clamp(numberInput(undefined, params.attack, base.attack), 0.001, 4),
+      decay: clamp(numberInput(undefined, params.decay, base.decay), 0.001, 4),
+      sustain: clamp(numberInput(undefined, params.sustain, base.sustain), 0, 1),
+      release: clamp(numberInput(undefined, params.release, base.release), 0.001, 4),
+    };
+
+    const track: TrackDescription = {
+      id: ctx.nodeId,
+      kind: "wavetable",
+      voices: clamp(Math.round(Number(params.voices) || 8), 1, 16),
+      wavetable,
+      seq,
+      level: clamp(numberInput(inputs.level, params.level, 0.8), 0, 2),
+      pan: clamp(numberInput(inputs.pan, params.pan, 0), -1, 1),
+      mute: inputs.mute !== undefined ? Number(inputs.mute) > 0 : Boolean(params.mute),
+      ...sendsOf(inputs, params),
+    };
+    return { track };
+  },
+};
+
+// ── Granular Voice (Pure Generative Clouds) ────────────────────────────────
+
+const GRANULAR_SOURCES: GrainSource[] = ["pulsar", "chirp", "formant", "micro_fm", "noise"];
+const GRANULAR_FILTER_TYPES: GranularFilterType[] = ["lowpass", "bandpass", "highpass", "off"];
+
+function granularPresetParams(name: string): Record<string, unknown> {
+  const patch = GRANULAR_PRESETS[name] ?? GRANULAR_PRESETS["Abyssal Drone"];
+  return { ...patch };
+}
+
+export const MUSIC_GRANULAR_NODE: NodeDefinition = {
+  type: "music/granular-voice",
+  label: "Granular Voice",
+  category: "music",
+  pure: true,
+  inputs: [
+    { id: "sequence", label: "Sequence", type: "music" },
+    { id: "density", label: "Density", type: "value" },
+    { id: "grainSize", label: "Grain Size", type: "value" },
+    { id: "spray", label: "Spray", type: "value" },
+    { id: "pitchSpray", label: "Pitch Spray", type: "value" },
+    { id: "subLevel", label: "Sub Drone", type: "value" },
+    { id: "cutoff", label: "Cutoff", type: "value" },
+    { id: "resonance", label: "Resonance", type: "value" },
+    { id: "level", label: "Level", type: "value" },
+    { id: "pan", label: "Pan", type: "value" },
+    { id: "mute", label: "Mute", type: "value" },
+    ...SEND_INPUTS,
+  ],
+  outputs: [{ id: "track", label: "Track", type: "music" }],
+  defaultParams: {
+    preset: "Abyssal Drone",
+    voices: 4,
+    transpose: 0,
+    level: 0.8,
+    pan: 0,
+    mute: false,
+    solo: false,
+    live: false,
+    delaySend: 0,
+    reverbSend: 0,
+    ...GRANULAR_PRESETS["Abyssal Drone"],
+  },
+  upgradeParams: (params) =>
+    params.preset !== undefined && params.density === undefined ? { ...granularPresetParams(String(params.preset)), ...params } : params,
+  paramFields: [
+    {
+      id: "preset",
+      label: "Preset (loads patch settings below)",
+      kind: "select",
+      options: GRANULAR_PRESET_NAMES,
+      presets: Object.fromEntries(GRANULAR_PRESET_NAMES.map((n) => [n, granularPresetParams(n)])),
+    },
+    { id: "level", label: "Level", kind: "number", step: 0.05 },
+    { id: "pan", label: "Pan (−1 left, 1 right)", kind: "number", step: 0.1 },
+    { id: "voices", label: "Voices (1–8)", kind: "number", step: 1 },
+    { id: "transpose", label: "Transpose (semitones)", kind: "number", step: 1 },
+    { id: "mute", label: "Mute", kind: "boolean" },
+    SOLO_FIELD,
+    LIVE_FIELD,
+    ...SEND_FIELDS,
+    {
+      id: "grainSource",
+      label: "Grain Waveform",
+      kind: "select",
+      options: GRANULAR_SOURCES,
+      optionLabels: ["Pulsar (Sine Micro-burst)", "Chirp (Frequency Sweep)", "Formant (Resonant Acoustic Pulse)", "Micro FM (2-Op Mineral Burst)", "Noise Burst"],
+      group: "Grain Cloud",
+    },
+    { id: "density", label: "Density (grains/s)", kind: "number", step: 5, group: "Grain Cloud" },
+    { id: "grainSize", label: "Grain Size (s)", kind: "number", step: 0.01, group: "Grain Cloud" },
+    { id: "spray", label: "Time Spray (0 steady – 1 stochastic)", kind: "number", step: 0.05, group: "Grain Cloud" },
+    { id: "pitchSpray", label: "Pitch Scatter (cents)", kind: "number", step: 1, group: "Grain Cloud" },
+    { id: "formantFreq", label: "Formant / Resonance Freq (Hz)", kind: "number", step: 50, group: "Grain Cloud" },
+    { id: "subLevel", label: "Sub Drone (oceanic fundamental)", kind: "number", step: 0.05, group: "Grain Cloud" },
+    {
+      id: "filterType",
+      label: "Filter Type",
+      kind: "select",
+      options: GRANULAR_FILTER_TYPES,
+      optionLabels: ["Lowpass (24 dB SVF)", "Bandpass", "Highpass", "Bypass (Off)"],
+      group: "Filter",
+    },
+    { id: "cutoff", label: "Cutoff (Hz)", kind: "number", step: 50, group: "Filter" },
+    { id: "resonance", label: "Resonance (0–0.98)", kind: "number", step: 0.02, group: "Filter" },
+    { id: "filterEnv", label: "Filter Env Amount (−1 to 1)", kind: "number", step: 0.05, group: "Filter" },
+    { id: "attack", label: "Attack (s)", kind: "number", step: 0.05, group: "Envelope" },
+    { id: "decay", label: "Decay (s)", kind: "number", step: 0.05, group: "Envelope" },
+    { id: "sustain", label: "Sustain (0–1)", kind: "number", step: 0.05, group: "Envelope" },
+    { id: "release", label: "Release (s)", kind: "number", step: 0.05, group: "Envelope" },
+  ],
+  evaluate: (inputs, params, ctx) => {
+    const wired = sequenceOf(inputs.sequence) ?? liveOnly(params);
+    if (!wired) return { track: null };
+    const seq = transposeSequence(wired, Math.round(Number(params.transpose) || 0));
+    const base = GRANULAR_PRESETS[String(params.preset)] ?? GRANULAR_PRESETS["Abyssal Drone"];
+    const grainSource = GRANULAR_SOURCES.includes(params.grainSource as GrainSource) ? (params.grainSource as GrainSource) : base.grainSource;
+    const filterType = GRANULAR_FILTER_TYPES.includes(params.filterType as GranularFilterType) ? (params.filterType as GranularFilterType) : base.filterType;
+
+    const granular: GranularPatch = {
+      grainSource,
+      density: clamp(numberInput(inputs.density, params.density, base.density), 2, 350),
+      grainSize: clamp(numberInput(inputs.grainSize, params.grainSize, base.grainSize), 0.005, 0.3),
+      spray: clamp(numberInput(inputs.spray, params.spray, base.spray), 0, 1),
+      pitchSpray: clamp(numberInput(inputs.pitchSpray, params.pitchSpray, base.pitchSpray), 0, 120),
+      formantFreq: clamp(numberInput(undefined, params.formantFreq, base.formantFreq), 100, 6000),
+      subLevel: clamp(numberInput(inputs.subLevel, params.subLevel, base.subLevel), 0, 1),
+      filterType,
+      cutoff: clamp(numberInput(inputs.cutoff, params.cutoff, base.cutoff), 20, 20000),
+      resonance: clamp(numberInput(inputs.resonance, params.resonance, base.resonance), 0, 0.98),
+      filterEnv: clamp(numberInput(undefined, params.filterEnv, base.filterEnv), -1, 1),
+      attack: clamp(numberInput(undefined, params.attack, base.attack), 0.001, 4),
+      decay: clamp(numberInput(undefined, params.decay, base.decay), 0.001, 4),
+      sustain: clamp(numberInput(undefined, params.sustain, base.sustain), 0, 1),
+      release: clamp(numberInput(undefined, params.release, base.release), 0.001, 4),
+    };
+
+    const track: TrackDescription = {
+      id: ctx.nodeId,
+      kind: "granular",
+      voices: clamp(Math.round(Number(params.voices) || 4), 1, 8),
+      granular,
+      seq,
+      level: clamp(numberInput(inputs.level, params.level, 0.8), 0, 2),
       pan: clamp(numberInput(inputs.pan, params.pan, 0), -1, 1),
       mute: inputs.mute !== undefined ? Number(inputs.mute) > 0 : Boolean(params.mute),
       ...sendsOf(inputs, params),

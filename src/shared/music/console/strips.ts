@@ -9,7 +9,14 @@ import { isTrack, type TrackDescription } from "../engine/description";
 type Results = { get(id: string): Record<string, unknown> | undefined } | null | undefined;
 
 /** The voice nodes a strip can edit; any other source of a track (a hand-built one) is shown, not edited. */
-export const CONSOLE_VOICE_TYPES = ["music/fm-voice", "music/gameboy", "music/sid", "music/drum-kit"] as const;
+export const CONSOLE_VOICE_TYPES = [
+  "music/fm-voice",
+  "music/gameboy",
+  "music/sid",
+  "music/drum-kit",
+  "music/wavetable-voice",
+  "music/granular-voice",
+] as const;
 
 /** The params a strip plays, which a wire into the voice can take over. */
 export const STRIP_PARAMS = ["level", "pan", "mute", "solo", "delaySend", "reverbSend"] as const;
@@ -22,13 +29,20 @@ export interface ConsoleStrip {
   node: NodeInstance | null;
   name: string;
   /** Four letters for the strip's badge. */
-  kind: "FM" | "GB" | "SID" | "DRUM";
+  kind: "FM" | "GB" | "SID" | "DRUM" | "WAVE" | "GRAN";
   desc: TrackDescription;
   /** The params a wire drives: the strip shows them, locked. */
   wired: ReadonlySet<StripParam>;
 }
 
-const KIND: Record<TrackDescription["kind"], ConsoleStrip["kind"]> = { fm: "FM", gb: "GB", sid: "SID", drums: "DRUM" };
+const KIND: Record<TrackDescription["kind"], ConsoleStrip["kind"]> = {
+  fm: "FM",
+  gb: "GB",
+  sid: "SID",
+  drums: "DRUM",
+  wavetable: "WAVE",
+  granular: "GRAN",
+};
 
 /** The strips, in Music Out's socket order; `out` is the Music Out they mix through. */
 export function consoleStrips(graph: Graph, results: Results): { out: NodeInstance | null; strips: ConsoleStrip[] } {

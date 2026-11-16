@@ -6,6 +6,8 @@ import type { DrumSettings } from "../dsp/drums";
 import type { FmPatch } from "../dsp/fm";
 import type { GbPatch } from "../dsp/gameboy";
 import type { SidPatch } from "../dsp/sid";
+import type { WavetablePatch } from "../dsp/wavetable";
+import type { GranularPatch } from "../dsp/granular";
 import type { SongOrder } from "../seq/order";
 import type { Cell, Sequence } from "../seq/sequencer";
 
@@ -57,10 +59,38 @@ export interface SidTrackDescription extends TrackBase {
   sid: SidPatch;
 }
 
-export type TrackDescription = FmTrackDescription | DrumTrackDescription | GbTrackDescription | SidTrackDescription;
+/** A Shrub-style wavetable voice (dsp/wavetable.ts). */
+export interface WavetableTrackDescription extends TrackBase {
+  kind: "wavetable";
+  /** Polyphony, 1–16. */
+  voices: number;
+  wavetable: WavetablePatch;
+}
+
+/** A pure generative granular voice (dsp/granular.ts). */
+export interface GranularTrackDescription extends TrackBase {
+  kind: "granular";
+  /** Polyphony, 1–8. */
+  voices: number;
+  granular: GranularPatch;
+}
+
+export type TrackDescription =
+  | FmTrackDescription
+  | DrumTrackDescription
+  | GbTrackDescription
+  | SidTrackDescription
+  | WavetableTrackDescription
+  | GranularTrackDescription;
 
 /** A sound to audition one note on (the Pattern HUD plays what you type through it). */
-export type PreviewSound = { kind: "fm"; patch: FmPatch } | { kind: "drums"; drums: DrumSettings } | { kind: "gb"; gb: GbPatch } | { kind: "sid"; sid: SidPatch };
+export type PreviewSound =
+  | { kind: "fm"; patch: FmPatch }
+  | { kind: "drums"; drums: DrumSettings }
+  | { kind: "gb"; gb: GbPatch }
+  | { kind: "sid"; sid: SidPatch }
+  | { kind: "wavetable"; wavetable: WavetablePatch }
+  | { kind: "granular"; granular: GranularPatch };
 
 /** The send effects (dsp/fx.ts), set on Music Out. */
 export interface MusicFx {
@@ -97,7 +127,12 @@ export type MusicValue =
 
 export function isTrack(v: unknown): v is TrackDescription {
   const k = (v as TrackDescription | null)?.kind;
-  return typeof v === "object" && v !== null && (k === "fm" || k === "drums" || k === "gb" || k === "sid") && typeof (v as TrackDescription).id === "string";
+  return (
+    typeof v === "object" &&
+    v !== null &&
+    (k === "fm" || k === "drums" || k === "gb" || k === "sid" || k === "wavetable" || k === "granular") &&
+    typeof (v as TrackDescription).id === "string"
+  );
 }
 
 /** The sequence a music value carries — a sequence, or a track's. */
@@ -153,5 +188,7 @@ export function previewSoundOf(track: TrackDescription): PreviewSound {
   if (track.kind === "fm") return { kind: "fm", patch: track.patch };
   if (track.kind === "gb") return { kind: "gb", gb: track.gb };
   if (track.kind === "sid") return { kind: "sid", sid: track.sid };
+  if (track.kind === "wavetable") return { kind: "wavetable", wavetable: track.wavetable };
+  if (track.kind === "granular") return { kind: "granular", granular: track.granular };
   return { kind: "drums", drums: track.drums };
 }

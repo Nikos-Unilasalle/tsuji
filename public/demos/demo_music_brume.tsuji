@@ -1,0 +1,2310 @@
+{
+ "canvases": [
+  {
+   "nodes": [
+    {
+     "id": "tex_perlin",
+     "type": "texture/procedural",
+     "position": {
+      "x": -900,
+      "y": 300
+     },
+     "params": {
+      "colorA": 16777215,
+      "colorB": 0,
+      "size": "512 × 512",
+      "uvScaleX": 1,
+      "uvScaleY": 1,
+      "uvOffsetX": 0,
+      "uvOffsetY": 0,
+      "type": "perlin",
+      "scale": 3,
+      "seed": 7,
+      "octaves": 4
+     }
+    },
+    {
+     "id": "tex_voronoi",
+     "type": "texture/procedural",
+     "position": {
+      "x": -900,
+      "y": 900
+     },
+     "params": {
+      "colorA": 16777215,
+      "colorB": 0,
+      "size": "512 × 512",
+      "uvScaleX": 1,
+      "uvScaleY": 1,
+      "uvOffsetX": 0,
+      "uvOffsetY": 0,
+      "type": "voronoi",
+      "scale": 5,
+      "seed": 2,
+      "octaves": 3
+     }
+    },
+    {
+     "id": "tex_turb",
+     "type": "texture/procedural",
+     "position": {
+      "x": -900,
+      "y": 1500
+     },
+     "params": {
+      "colorA": 16777215,
+      "colorB": 0,
+      "size": "512 × 512",
+      "uvScaleX": 1,
+      "uvScaleY": 1,
+      "uvOffsetX": 0,
+      "uvOffsetY": 0,
+      "type": "turbulence",
+      "scale": 4,
+      "seed": 11,
+      "octaves": 5
+     }
+    },
+    {
+     "id": "clock",
+     "type": "music/clock",
+     "position": {
+      "x": -300,
+      "y": -200
+     },
+     "params": {
+      "bpm": 94,
+      "swing": 0.14,
+      "stepsPerBeat": "4"
+     }
+    },
+    {
+     "id": "prog",
+     "type": "music/progression",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "params": {
+      "root": "A",
+      "mode": "minor",
+      "source": "written",
+      "numerals": "i7 VImaj7 IIImaj7 VII i7 VImaj7 iv7 V7 VImaj7 VII i7 IIImaj7 iv7 i7 VImaj7:0.5 VII:0.5 V7",
+      "count": 16,
+      "sevenths": true,
+      "tension": 0.3,
+      "cadence": true,
+      "seed": 0,
+      "chordLength": 16,
+      "center": 60,
+      "velocity": 0.6
+     }
+    },
+    {
+     "id": "vl",
+     "type": "music/voice-leading",
+     "position": {
+      "x": 260,
+      "y": 0
+     },
+     "params": {
+      "voices": 4,
+      "low": 53,
+      "high": 72
+     }
+    },
+    {
+     "id": "sec_pad",
+     "type": "music/sections",
+     "position": {
+      "x": 520,
+      "y": 0
+     },
+     "params": {
+      "name": "pad · bars 1–40",
+      "bars": "x*40",
+      "barLength": 16,
+      "restart": false
+     }
+    },
+    {
+     "id": "pad",
+     "type": "music/fm-voice",
+     "position": {
+      "x": 1100,
+      "y": 0
+     },
+     "params": {
+      "preset": "SLOOP · GLASS PAD",
+      "level": 0.4,
+      "pan": 0,
+      "reverbSend": 0.5,
+      "delaySend": 0.05
+     }
+    },
+    {
+     "id": "m_pad_level",
+     "type": "math/texture-value",
+     "position": {
+      "x": 780,
+      "y": -260
+     },
+     "params": {
+      "path": "circle",
+      "speed": 0.02448,
+      "radius": 0.3,
+      "row": 0.5,
+      "channel": "luminance",
+      "multiply": 1.0628,
+      "offset": -0.4002,
+      "clamp": true,
+      "name": "perlin → 0.28–0.5, 16 bars"
+     }
+    },
+    {
+     "id": "m_pad_bright",
+     "type": "math/texture-value",
+     "position": {
+      "x": 780,
+      "y": -130
+     },
+     "params": {
+      "path": "circle",
+      "speed": 0.04896,
+      "radius": 0.22,
+      "row": 0.5,
+      "channel": "luminance",
+      "multiply": 1.7021,
+      "offset": 0.1568,
+      "clamp": false,
+      "name": "turb → 0.55–1.35, 8 bars"
+     }
+    },
+    {
+     "id": "m_pad_pan",
+     "type": "math/texture-value",
+     "position": {
+      "x": 780,
+      "y": 0
+     },
+     "params": {
+      "path": "circle",
+      "speed": 0.03264,
+      "radius": 0.38,
+      "row": 0.5,
+      "channel": "luminance",
+      "multiply": 3.3816,
+      "offset": -2.5143,
+      "clamp": false,
+      "name": "perlin → -0.35–0.35, 12 bars"
+     }
+    },
+    {
+     "id": "sec_sid",
+     "type": "music/sections",
+     "position": {
+      "x": 520,
+      "y": 200
+     },
+     "params": {
+      "name": "SID filter drone · intro, break, outro",
+      "bars": "x*4 .*16 x*4 .*12 x*4",
+      "barLength": 16,
+      "restart": false
+     }
+    },
+    {
+     "id": "sid",
+     "type": "music/sid",
+     "position": {
+      "x": 1100,
+      "y": 200
+     },
+     "params": {
+      "preset": "Filter Sweep Pad",
+      "transpose": 12,
+      "level": 0.32,
+      "pan": 0.15,
+      "reverbSend": 0.45,
+      "delaySend": 0.15
+     }
+    },
+    {
+     "id": "m_sid_cutoff",
+     "type": "math/texture-value",
+     "position": {
+      "x": 780,
+      "y": 200
+     },
+     "params": {
+      "path": "circle",
+      "speed": 0.09792,
+      "radius": 0.33,
+      "row": 0.5,
+      "channel": "luminance",
+      "multiply": 3085.1064,
+      "offset": -462.6596,
+      "clamp": false,
+      "name": "turb → 250–1700, 4 bars"
+     }
+    },
+    {
+     "id": "m_sid_pw",
+     "type": "math/texture-value",
+     "position": {
+      "x": 780,
+      "y": 330
+     },
+     "params": {
+      "path": "circle",
+      "speed": 0.06528,
+      "radius": 0.3,
+      "row": 0.5,
+      "channel": "luminance",
+      "multiply": 4431.5992,
+      "offset": 452.4085,
+      "clamp": false,
+      "name": "voronoi → 900–3200, 6 bars"
+     }
+    },
+    {
+     "id": "arp",
+     "type": "music/arp",
+     "position": {
+      "x": 260,
+      "y": 500
+     },
+     "params": {
+      "on": true,
+      "mode": "updown",
+      "rate": "1/16",
+      "triplet": false,
+      "octaves": 2,
+      "gate": 0.6,
+      "sync": "grid"
+     }
+    },
+    {
+     "id": "m_arp_oct",
+     "type": "math/texture-value",
+     "position": {
+      "x": 0,
+      "y": 420
+     },
+     "params": {
+      "path": "circle",
+      "speed": 0.04896,
+      "radius": 0.3,
+      "row": 0.5,
+      "channel": "luminance",
+      "multiply": 4.0462,
+      "offset": 0.8913,
+      "clamp": false,
+      "name": "voronoi → 1.3–3.4, 8 bars"
+     }
+    },
+    {
+     "id": "m_arp_gate",
+     "type": "math/texture-value",
+     "position": {
+      "x": 0,
+      "y": 560
+     },
+     "params": {
+      "path": "circle",
+      "speed": 0.09792,
+      "radius": 0.25,
+      "row": 0.5,
+      "channel": "luminance",
+      "multiply": 3.1401,
+      "offset": -1.7597,
+      "clamp": true,
+      "name": "perlin → 0.25–0.9, 4 bars"
+     }
+    },
+    {
+     "id": "sec_arp",
+     "type": "music/sections",
+     "position": {
+      "x": 520,
+      "y": 500
+     },
+     "params": {
+      "name": "arp · bars 3–20, 23–40",
+      "bars": ".*2 x*18 .*2 x*14 x*4",
+      "barLength": 16,
+      "restart": false
+     }
+    },
+    {
+     "id": "pluck",
+     "type": "music/fm-voice",
+     "position": {
+      "x": 1100,
+      "y": 500
+     },
+     "params": {
+      "preset": "SLOOP · FM PLUCK",
+      "level": 0.36,
+      "pan": 0,
+      "reverbSend": 0.25,
+      "delaySend": 0.25
+     }
+    },
+    {
+     "id": "m_pluck_pan",
+     "type": "math/texture-value",
+     "position": {
+      "x": 780,
+      "y": 430
+     },
+     "params": {
+      "path": "circle",
+      "speed": 0.13056,
+      "radius": 0.35,
+      "row": 0.5,
+      "channel": "luminance",
+      "multiply": 2.766,
+      "offset": -1.2889,
+      "clamp": false,
+      "name": "turb → -0.65–0.65, 3 bars"
+     }
+    },
+    {
+     "id": "m_pluck_bright",
+     "type": "math/texture-value",
+     "position": {
+      "x": 780,
+      "y": 560
+     },
+     "params": {
+      "path": "circle",
+      "speed": 0.07833,
+      "radius": 0.3,
+      "row": 0.5,
+      "channel": "luminance",
+      "multiply": 4.8309,
+      "offset": -2.5918,
+      "clamp": false,
+      "name": "perlin → 0.5–1.5, 5 bars"
+     }
+    },
+    {
+     "id": "m_pluck_delay",
+     "type": "math/texture-value",
+     "position": {
+      "x": 780,
+      "y": 690
+     },
+     "params": {
+      "path": "circle",
+      "speed": 0.05595,
+      "radius": 0.3,
+      "row": 0.5,
+      "channel": "luminance",
+      "multiply": 0.9634,
+      "offset": -0.0473,
+      "clamp": true,
+      "name": "voronoi → 0.05–0.55, 7 bars"
+     }
+    },
+    {
+     "id": "m_pluck_level",
+     "type": "math/texture-value",
+     "position": {
+      "x": 780,
+      "y": 820
+     },
+     "params": {
+      "path": "circle",
+      "speed": 0.01958,
+      "radius": 0.4,
+      "row": 0.5,
+      "channel": "luminance",
+      "multiply": 0.9662,
+      "offset": -0.3984,
+      "clamp": true,
+      "name": "perlin → 0.22–0.42, 20 bars"
+     }
+    },
+    {
+     "id": "bass_arp",
+     "type": "music/arp",
+     "position": {
+      "x": 260,
+      "y": 1000
+     },
+     "params": {
+      "on": true,
+      "mode": "up",
+      "rate": "1/8",
+      "triplet": false,
+      "octaves": 2,
+      "gate": 0.55,
+      "sync": "grid"
+     }
+    },
+    {
+     "id": "m_bass_gate",
+     "type": "math/texture-value",
+     "position": {
+      "x": 0,
+      "y": 1000
+     },
+     "params": {
+      "path": "circle",
+      "speed": 0.09792,
+      "radius": 0.2,
+      "row": 0.5,
+      "channel": "luminance",
+      "multiply": 1.1946,
+      "offset": 0.1793,
+      "clamp": true,
+      "name": "voronoi → 0.3–0.92, 4 bars"
+     }
+    },
+    {
+     "id": "sec_bass",
+     "type": "music/sections",
+     "position": {
+      "x": 520,
+      "y": 1000
+     },
+     "params": {
+      "name": "bass · bars 5–20, 25–36",
+      "bars": ".*4 x*16 .*4 x*12 .*4",
+      "barLength": 16,
+      "restart": false
+     }
+    },
+    {
+     "id": "bass",
+     "type": "music/fm-voice",
+     "position": {
+      "x": 1100,
+      "y": 1000
+     },
+     "params": {
+      "preset": "SLOOP · FM BASS",
+      "voices": 1,
+      "transpose": -12,
+      "level": 0.72,
+      "pan": 0
+     }
+    },
+    {
+     "id": "m_bass_bright",
+     "type": "math/texture-value",
+     "position": {
+      "x": 780,
+      "y": 1000
+     },
+     "params": {
+      "path": "circle",
+      "speed": 0.19583,
+      "radius": 0.2,
+      "row": 0.5,
+      "channel": "luminance",
+      "multiply": 1.4894,
+      "offset": 0.256,
+      "clamp": false,
+      "name": "turb → 0.6–1.3, 2 bars"
+     }
+    },
+    {
+     "id": "shift",
+     "type": "music/shift-register",
+     "position": {
+      "x": 0,
+      "y": 1500
+     },
+     "params": {
+      "bits": 8,
+      "change": 0.08,
+      "density": 0.55,
+      "length": 128,
+      "scale": "minor pentatonic",
+      "root": "A",
+      "low": 64,
+      "range": 9,
+      "gate": 0,
+      "velocity": 0.8,
+      "seed": 5
+     }
+    },
+    {
+     "id": "m_lead_change",
+     "type": "math/texture-value",
+     "position": {
+      "x": -300,
+      "y": 1450
+     },
+     "params": {
+      "path": "circle",
+      "speed": 0.02448,
+      "radius": 0.32,
+      "row": 0.5,
+      "channel": "luminance",
+      "multiply": 0.4239,
+      "offset": -0.0428,
+      "clamp": true,
+      "name": "voronoi → 0.0–0.22, 16 bars"
+     }
+    },
+    {
+     "id": "m_lead_density",
+     "type": "math/texture-value",
+     "position": {
+      "x": -300,
+      "y": 1580
+     },
+     "params": {
+      "path": "circle",
+      "speed": 0.04896,
+      "radius": 0.3,
+      "row": 0.5,
+      "channel": "luminance",
+      "multiply": 2.1739,
+      "offset": -1.0413,
+      "clamp": true,
+      "name": "perlin → 0.35–0.8, 8 bars"
+     }
+    },
+    {
+     "id": "fit",
+     "type": "music/fit-chords",
+     "position": {
+      "x": 260,
+      "y": 1500
+     },
+     "params": {
+      "mode": "strong",
+      "passing": "pentatonic",
+      "snap": "nearest",
+      "strongEvery": 4,
+      "length": "chords",
+      "tieRepeats": true
+     }
+    },
+    {
+     "id": "orn",
+     "type": "music/ornament",
+     "position": {
+      "x": 520,
+      "y": 1500
+     },
+     "params": {
+      "type": "mix",
+      "chance": 0.3,
+      "minSteps": 2,
+      "rate": "1/32",
+      "up": 2,
+      "down": 1,
+      "seed": 3
+     }
+    },
+    {
+     "id": "m_orn_chance",
+     "type": "math/texture-value",
+     "position": {
+      "x": 260,
+      "y": 1650
+     },
+     "params": {
+      "path": "circle",
+      "speed": 0.06528,
+      "radius": 0.3,
+      "row": 0.5,
+      "channel": "luminance",
+      "multiply": 1.4894,
+      "offset": -0.344,
+      "clamp": true,
+      "name": "turb → 0.0–0.7, 6 bars"
+     }
+    },
+    {
+     "id": "sec_lead",
+     "type": "music/sections",
+     "position": {
+      "x": 780,
+      "y": 1500
+     },
+     "params": {
+      "name": "lead · bars 13–20, 25–36",
+      "bars": ".*12 x*8 .*4 x*12 .*4",
+      "barLength": 16,
+      "restart": false
+     }
+    },
+    {
+     "id": "lead",
+     "type": "music/gameboy",
+     "position": {
+      "x": 1100,
+      "y": 1500
+     },
+     "params": {
+      "preset": "Pulse 25 · Lead",
+      "level": 0.38,
+      "pan": 0.12,
+      "delaySend": 0.2,
+      "reverbSend": 0.3
+     }
+    },
+    {
+     "id": "m_lead_duty",
+     "type": "math/texture-value",
+     "position": {
+      "x": 780,
+      "y": 1650
+     },
+     "params": {
+      "path": "circle",
+      "speed": 0.07833,
+      "radius": 0.25,
+      "row": 0.5,
+      "channel": "luminance",
+      "multiply": 4.4316,
+      "offset": -0.1476,
+      "clamp": false,
+      "name": "voronoi → 0.3–2.6, 5 bars"
+     }
+    },
+    {
+     "id": "echo",
+     "type": "music/chip-echo",
+     "position": {
+      "x": 1100,
+      "y": 1700
+     },
+     "params": {
+      "delay": 3,
+      "level": 0.4,
+      "transpose": 0,
+      "detune": 6
+     }
+    },
+    {
+     "id": "m_echo_level",
+     "type": "math/texture-value",
+     "position": {
+      "x": 780,
+      "y": 1800
+     },
+     "params": {
+      "path": "circle",
+      "speed": 0.06528,
+      "radius": 0.35,
+      "row": 0.5,
+      "channel": "luminance",
+      "multiply": 2.1739,
+      "offset": -1.2413,
+      "clamp": true,
+      "name": "perlin → 0.15–0.6, 6 bars"
+     }
+    },
+    {
+     "id": "lead_echo",
+     "type": "music/gameboy",
+     "position": {
+      "x": 1400,
+      "y": 1700
+     },
+     "params": {
+      "preset": "Pulse 12.5 · Thin",
+      "level": 0.3,
+      "pan": -0.45,
+      "reverbSend": 0.4
+     }
+    },
+    {
+     "id": "cp",
+     "type": "music/counterpoint",
+     "position": {
+      "x": 520,
+      "y": 1950
+     },
+     "params": {
+      "species": "2",
+      "position": "below",
+      "scale": "minor",
+      "root": "A",
+      "low": 52,
+      "high": 64,
+      "velocity": 0.55,
+      "seed": 9
+     }
+    },
+    {
+     "id": "sec_cp",
+     "type": "music/sections",
+     "position": {
+      "x": 780,
+      "y": 1950
+     },
+     "params": {
+      "name": "counter-melody · bars 29–36",
+      "bars": ".*28 x*8 .*4",
+      "barLength": 16,
+      "restart": false
+     }
+    },
+    {
+     "id": "kalimba",
+     "type": "music/fm-voice",
+     "position": {
+      "x": 1100,
+      "y": 1950
+     },
+     "params": {
+      "preset": "SLOOP · KALIMBA",
+      "level": 0.4,
+      "pan": -0.3,
+      "reverbSend": 0.35
+     }
+    },
+    {
+     "id": "m_kal_pan",
+     "type": "math/texture-value",
+     "position": {
+      "x": 780,
+      "y": 2080
+     },
+     "params": {
+      "path": "circle",
+      "speed": 0.04352,
+      "radius": 0.3,
+      "row": 0.5,
+      "channel": "luminance",
+      "multiply": 1.2766,
+      "offset": -0.7949,
+      "clamp": false,
+      "name": "turb → -0.5–0.1, 9 bars"
+     }
+    },
+    {
+     "id": "markov",
+     "type": "music/markov",
+     "position": {
+      "x": 260,
+      "y": 2250
+     },
+     "params": {
+      "order": 2,
+      "length": 64,
+      "learn": "both",
+      "novelty": 0.2,
+      "seed": 4
+     }
+    },
+    {
+     "id": "m_markov_nov",
+     "type": "math/texture-value",
+     "position": {
+      "x": 0,
+      "y": 2250
+     },
+     "params": {
+      "path": "circle",
+      "speed": 0.09792,
+      "radius": 0.3,
+      "row": 0.5,
+      "channel": "luminance",
+      "multiply": 2.1739,
+      "offset": -1.3413,
+      "clamp": true,
+      "name": "perlin → 0.05–0.5, 4 bars"
+     }
+    },
+    {
+     "id": "mk_scale",
+     "type": "music/scale",
+     "position": {
+      "x": 520,
+      "y": 2250
+     },
+     "params": {
+      "root": "A",
+      "scale": "minor pentatonic",
+      "snap": "nearest",
+      "outside": "snap",
+      "chords": "keep"
+     }
+    },
+    {
+     "id": "sec_mk",
+     "type": "music/sections",
+     "position": {
+      "x": 780,
+      "y": 2250
+     },
+     "params": {
+      "name": "music box · break 21–24, outro 37–40",
+      "bars": ".*20 x*4 .*12 x*4",
+      "barLength": 16,
+      "restart": true
+     }
+    },
+    {
+     "id": "musicbox",
+     "type": "music/fm-voice",
+     "position": {
+      "x": 1100,
+      "y": 2250
+     },
+     "params": {
+      "preset": "SLOOP · MUSIC BOX",
+      "transpose": 12,
+      "level": 0.32,
+      "pan": 0.25,
+      "reverbSend": 0.55,
+      "delaySend": 0.3
+     }
+    },
+    {
+     "id": "pat_kick",
+     "type": "music/pattern",
+     "position": {
+      "x": 0,
+      "y": 2600
+     },
+     "params": {
+      "name": "kick (2 bars)",
+      "steps": "kick@0.95 . . . . . . kick@0.6 . . kick@0.85 . . . . . kick@0.95 . . . . . . . . . kick@0.8 . . . kick@0.4 .",
+      "length": "32",
+      "transpose": 0,
+      "chord": "as written",
+      "velocity": 1,
+      "seed": 0
+     }
+    },
+    {
+     "id": "sec_kick",
+     "type": "music/sections",
+     "position": {
+      "x": 780,
+      "y": 2600
+     },
+     "params": {
+      "name": "kick · bars 5–20, 25–36",
+      "bars": ".*4 x*16 .*4 x*12 .*4",
+      "barLength": 16,
+      "restart": true
+     }
+    },
+    {
+     "id": "kit_kick",
+     "type": "music/drum-kit",
+     "position": {
+      "x": 1100,
+      "y": 2600
+     },
+     "params": {
+      "level": 0.85,
+      "pan": 0,
+      "tune": -1,
+      "decay": 1.0
+     }
+    },
+    {
+     "id": "pat_snare",
+     "type": "music/pattern",
+     "position": {
+      "x": 0,
+      "y": 2760
+     },
+     "params": {
+      "name": "snare + clap",
+      "steps": ". . . . snare+clap@0.85 . . . . . . . snare+clap@0.85 . . .",
+      "length": "16",
+      "transpose": 0,
+      "chord": "as written",
+      "velocity": 1,
+      "seed": 0
+     }
+    },
+    {
+     "id": "sec_snare",
+     "type": "music/sections",
+     "position": {
+      "x": 780,
+      "y": 2760
+     },
+     "params": {
+      "name": "snare · bars 13–20, 25–36",
+      "bars": ".*12 x*8 .*4 x*12 .*4",
+      "barLength": 16,
+      "restart": true
+     }
+    },
+    {
+     "id": "kit_snare",
+     "type": "music/drum-kit",
+     "position": {
+      "x": 1100,
+      "y": 2760
+     },
+     "params": {
+      "level": 0.6,
+      "pan": 0.05,
+      "tune": 0,
+      "decay": 0.9,
+      "reverbSend": 0.22
+     }
+    },
+    {
+     "id": "m_snare_decay",
+     "type": "math/texture-value",
+     "position": {
+      "x": 780,
+      "y": 2900
+     },
+     "params": {
+      "path": "circle",
+      "speed": 0.09792,
+      "radius": 0.3,
+      "row": 0.5,
+      "channel": "luminance",
+      "multiply": 1.9149,
+      "offset": 0.1577,
+      "clamp": false,
+      "name": "turb → 0.6–1.5, 4 bars"
+     }
+    },
+    {
+     "id": "m_snare_tune",
+     "type": "math/texture-value",
+     "position": {
+      "x": 780,
+      "y": 3020
+     },
+     "params": {
+      "path": "circle",
+      "speed": 0.04896,
+      "radius": 0.3,
+      "row": 0.5,
+      "channel": "luminance",
+      "multiply": 11.5607,
+      "offset": -4.1676,
+      "clamp": false,
+      "name": "voronoi → -3–3, 8 bars"
+     }
+    },
+    {
+     "id": "eu_ghost",
+     "type": "music/euclid",
+     "position": {
+      "x": 0,
+      "y": 2920
+     },
+     "params": {
+      "pulses": 3,
+      "steps": 16,
+      "rotation": 3,
+      "notes": "snare@0.22 snare@0.14",
+      "gate": 0,
+      "velocity": 0.5,
+      "accent": 0
+     }
+    },
+    {
+     "id": "m_ghost_pulses",
+     "type": "math/texture-value",
+     "position": {
+      "x": -300,
+      "y": 2920
+     },
+     "params": {
+      "path": "circle",
+      "speed": 0.09792,
+      "radius": 0.36,
+      "row": 0.5,
+      "channel": "luminance",
+      "multiply": 11.368,
+      "offset": -1.1482,
+      "clamp": false,
+      "name": "voronoi → 0–5.9, 4 bars"
+     }
+    },
+    {
+     "id": "sec_ghost",
+     "type": "music/sections",
+     "position": {
+      "x": 520,
+      "y": 2920
+     },
+     "params": {
+      "name": "ghost snares",
+      "bars": ".*12 x*8 .*4 x*12 .*4",
+      "barLength": 16,
+      "restart": true
+     }
+    },
+    {
+     "id": "kit_ghost",
+     "type": "music/drum-kit",
+     "position": {
+      "x": 1100,
+      "y": 2920
+     },
+     "params": {
+      "level": 0.45,
+      "pan": -0.15,
+      "tune": 2,
+      "decay": 0.6,
+      "delaySend": 0.15
+     }
+    },
+    {
+     "id": "eu_hats",
+     "type": "music/euclid",
+     "position": {
+      "x": 0,
+      "y": 3100
+     },
+     "params": {
+      "pulses": 7,
+      "steps": 16,
+      "rotation": 1,
+      "notes": "hat@0.5 hat@0.28 hat@0.36 openhat@0.3",
+      "gate": 0,
+      "velocity": 0.45,
+      "accent": 0
+     }
+    },
+    {
+     "id": "m_hat_pulses",
+     "type": "math/texture-value",
+     "position": {
+      "x": -300,
+      "y": 3100
+     },
+     "params": {
+      "path": "circle",
+      "speed": 0.04896,
+      "radius": 0.33,
+      "row": 0.5,
+      "channel": "luminance",
+      "multiply": 42.9952,
+      "offset": -23.5169,
+      "clamp": false,
+      "name": "perlin → 4–12.9, 8 bars"
+     }
+    },
+    {
+     "id": "m_hat_rot",
+     "type": "math/texture-value",
+     "position": {
+      "x": -300,
+      "y": 3230
+     },
+     "params": {
+      "path": "circle",
+      "speed": 0.02448,
+      "radius": 0.3,
+      "row": 0.5,
+      "channel": "luminance",
+      "multiply": 8.2979,
+      "offset": -1.9168,
+      "clamp": false,
+      "name": "turb → 0–3.9, 16 bars"
+     }
+    },
+    {
+     "id": "sec_hats",
+     "type": "music/sections",
+     "position": {
+      "x": 520,
+      "y": 3100
+     },
+     "params": {
+      "name": "hats · bars 5–20, 25–36",
+      "bars": ".*4 x*16 .*4 x*12 .*4",
+      "barLength": 16,
+      "restart": true
+     }
+    },
+    {
+     "id": "kit_hats",
+     "type": "music/drum-kit",
+     "position": {
+      "x": 1100,
+      "y": 3100
+     },
+     "params": {
+      "level": 0.42,
+      "pan": 0.25,
+      "tune": 4,
+      "decay": 0.8
+     }
+    },
+    {
+     "id": "m_hat_decay",
+     "type": "math/texture-value",
+     "position": {
+      "x": 780,
+      "y": 3230
+     },
+     "params": {
+      "path": "circle",
+      "speed": 0.13056,
+      "radius": 0.25,
+      "row": 0.5,
+      "channel": "luminance",
+      "multiply": 4.3478,
+      "offset": -2.3826,
+      "clamp": false,
+      "name": "perlin → 0.4–1.3, 3 bars"
+     }
+    },
+    {
+     "id": "m_hat_pan",
+     "type": "math/texture-value",
+     "position": {
+      "x": 780,
+      "y": 3360
+     },
+     "params": {
+      "path": "circle",
+      "speed": 0.07833,
+      "radius": 0.35,
+      "row": 0.5,
+      "channel": "luminance",
+      "multiply": 1.9149,
+      "offset": -0.8423,
+      "clamp": false,
+      "name": "turb → -0.4–0.5, 5 bars"
+     }
+    },
+    {
+     "id": "out",
+     "type": "music/out",
+     "position": {
+      "x": 1800,
+      "y": 1500
+     },
+     "params": {
+      "master": 0.7,
+      "startFrame": 0,
+      "delayBeats": "0.75",
+      "delayFeedback": 0.45,
+      "delayTone": 0.4,
+      "delayLevel": 0.6,
+      "reverbSize": 0.72,
+      "reverbDamp": 0.45,
+      "reverbLevel": 0.45
+     }
+    },
+    {
+     "id": "viewer",
+     "type": "music/viewer",
+     "position": {
+      "x": 1800,
+      "y": 1200
+     },
+     "params": {
+      "title": "Brume",
+      "show": true,
+      "style": "river",
+      "palette": "aurora",
+      "intensity": 0.9,
+      "ahead": 5,
+      "legend": true
+     }
+    },
+    {
+     "id": "console",
+     "type": "music/mixing-console",
+     "position": {
+      "x": 1800,
+      "y": 1050
+     },
+     "params": {
+      "show": false,
+      "scale": 1,
+      "height": 1
+     }
+    },
+    {
+     "id": "probe0",
+     "type": "music/note-probe",
+     "position": {
+      "x": 1800,
+      "y": 2300
+     },
+     "params": {
+      "decay": 0.35
+     }
+    },
+    {
+     "id": "pulse0",
+     "type": "math/expression",
+     "position": {
+      "x": 2050,
+      "y": 2300
+     },
+     "params": {
+      "formula": "0.55 + 0.6 * x"
+     }
+    },
+    {
+     "id": "vec0",
+     "type": "converter/value-to-vector",
+     "position": {
+      "x": 2250,
+      "y": 2300
+     },
+     "params": {}
+    },
+    {
+     "id": "xf0",
+     "type": "transform/matrix-transform",
+     "position": {
+      "x": 2450,
+      "y": 2300
+     },
+     "params": {
+      "rotationMode": "ZYX",
+      "location": {
+       "x": -2.2,
+       "y": 1.2,
+       "z": 0
+      }
+     }
+    },
+    {
+     "id": "orb0",
+     "type": "object/sphere",
+     "position": {
+      "x": 2650,
+      "y": 2300
+     },
+     "params": {
+      "color": 5995770,
+      "emissive": 1780352,
+      "emissiveIntensity": 1.4,
+      "rotationMode": "ZYX"
+     }
+    },
+    {
+     "id": "probe1",
+     "type": "music/note-probe",
+     "position": {
+      "x": 1800,
+      "y": 2450
+     },
+     "params": {
+      "decay": 0.35
+     }
+    },
+    {
+     "id": "pulse1",
+     "type": "math/expression",
+     "position": {
+      "x": 2050,
+      "y": 2450
+     },
+     "params": {
+      "formula": "0.55 + 0.6 * x"
+     }
+    },
+    {
+     "id": "vec1",
+     "type": "converter/value-to-vector",
+     "position": {
+      "x": 2250,
+      "y": 2450
+     },
+     "params": {}
+    },
+    {
+     "id": "xf1",
+     "type": "transform/matrix-transform",
+     "position": {
+      "x": 2450,
+      "y": 2450
+     },
+     "params": {
+      "rotationMode": "ZYX",
+      "location": {
+       "x": 0.0,
+       "y": 1.2,
+       "z": 0
+      }
+     }
+    },
+    {
+     "id": "orb1",
+     "type": "object/sphere",
+     "position": {
+      "x": 2650,
+      "y": 2450
+     },
+     "params": {
+      "color": 8381385,
+      "emissive": 2059098,
+      "emissiveIntensity": 1.4,
+      "rotationMode": "ZYX"
+     }
+    },
+    {
+     "id": "probe2",
+     "type": "music/note-probe",
+     "position": {
+      "x": 1800,
+      "y": 2600
+     },
+     "params": {
+      "decay": 0.35
+     }
+    },
+    {
+     "id": "pulse2",
+     "type": "math/expression",
+     "position": {
+      "x": 2050,
+      "y": 2600
+     },
+     "params": {
+      "formula": "0.55 + 0.6 * x"
+     }
+    },
+    {
+     "id": "vec2",
+     "type": "converter/value-to-vector",
+     "position": {
+      "x": 2250,
+      "y": 2600
+     },
+     "params": {}
+    },
+    {
+     "id": "xf2",
+     "type": "transform/matrix-transform",
+     "position": {
+      "x": 2450,
+      "y": 2600
+     },
+     "params": {
+      "rotationMode": "ZYX",
+      "location": {
+       "x": 2.2,
+       "y": 1.2,
+       "z": 0
+      }
+     }
+    },
+    {
+     "id": "orb2",
+     "type": "object/sphere",
+     "position": {
+      "x": 2650,
+      "y": 2600
+     },
+     "params": {
+      "color": 15902424,
+      "emissive": 7020373,
+      "emissiveIntensity": 1.4,
+      "rotationMode": "ZYX"
+     }
+    },
+    {
+     "id": "env",
+     "type": "lighting/environment",
+     "position": {
+      "x": 1800,
+      "y": 1900
+     },
+     "params": {
+      "color": 724762,
+      "intensity": 1,
+      "background": 1,
+      "ambientIntensity": 0.4,
+      "sunIntensity": 0.6
+     }
+    },
+    {
+     "id": "render",
+     "type": "render",
+     "position": {
+      "x": 1800,
+      "y": 2050
+     },
+     "params": {
+      "frameCount": 3154,
+      "fps": 30,
+      "motionBlur": 0,
+      "resolutionPreset": "16:9 (1920x1080)",
+      "width": 1920,
+      "height": 1080,
+      "holdout": false
+     }
+    }
+   ],
+   "connections": [
+    {
+     "id": "c0",
+     "fromNode": "clock",
+     "fromSocket": "clock",
+     "toNode": "prog",
+     "toSocket": "clock"
+    },
+    {
+     "id": "c1",
+     "fromNode": "prog",
+     "fromSocket": "chords",
+     "toNode": "vl",
+     "toSocket": "sequence"
+    },
+    {
+     "id": "c2",
+     "fromNode": "vl",
+     "fromSocket": "sequence",
+     "toNode": "sec_pad",
+     "toSocket": "sequence"
+    },
+    {
+     "id": "c3",
+     "fromNode": "sec_pad",
+     "fromSocket": "sequence",
+     "toNode": "pad",
+     "toSocket": "sequence"
+    },
+    {
+     "id": "c4",
+     "fromNode": "tex_perlin",
+     "fromSocket": "texture",
+     "toNode": "m_pad_level",
+     "toSocket": "texture"
+    },
+    {
+     "id": "c5",
+     "fromNode": "m_pad_level",
+     "fromSocket": "value",
+     "toNode": "pad",
+     "toSocket": "level"
+    },
+    {
+     "id": "c6",
+     "fromNode": "tex_turb",
+     "fromSocket": "texture",
+     "toNode": "m_pad_bright",
+     "toSocket": "texture"
+    },
+    {
+     "id": "c7",
+     "fromNode": "m_pad_bright",
+     "fromSocket": "value",
+     "toNode": "pad",
+     "toSocket": "brightness"
+    },
+    {
+     "id": "c8",
+     "fromNode": "tex_perlin",
+     "fromSocket": "texture",
+     "toNode": "m_pad_pan",
+     "toSocket": "texture"
+    },
+    {
+     "id": "c9",
+     "fromNode": "m_pad_pan",
+     "fromSocket": "value",
+     "toNode": "pad",
+     "toSocket": "pan"
+    },
+    {
+     "id": "c10",
+     "fromNode": "prog",
+     "fromSocket": "bass",
+     "toNode": "sec_sid",
+     "toSocket": "sequence"
+    },
+    {
+     "id": "c11",
+     "fromNode": "sec_sid",
+     "fromSocket": "sequence",
+     "toNode": "sid",
+     "toSocket": "sequence"
+    },
+    {
+     "id": "c12",
+     "fromNode": "tex_turb",
+     "fromSocket": "texture",
+     "toNode": "m_sid_cutoff",
+     "toSocket": "texture"
+    },
+    {
+     "id": "c13",
+     "fromNode": "m_sid_cutoff",
+     "fromSocket": "value",
+     "toNode": "sid",
+     "toSocket": "cutoff"
+    },
+    {
+     "id": "c14",
+     "fromNode": "tex_voronoi",
+     "fromSocket": "texture",
+     "toNode": "m_sid_pw",
+     "toSocket": "texture"
+    },
+    {
+     "id": "c15",
+     "fromNode": "m_sid_pw",
+     "fromSocket": "value",
+     "toNode": "sid",
+     "toSocket": "pulseWidth"
+    },
+    {
+     "id": "c16",
+     "fromNode": "vl",
+     "fromSocket": "sequence",
+     "toNode": "arp",
+     "toSocket": "sequence"
+    },
+    {
+     "id": "c17",
+     "fromNode": "tex_voronoi",
+     "fromSocket": "texture",
+     "toNode": "m_arp_oct",
+     "toSocket": "texture"
+    },
+    {
+     "id": "c18",
+     "fromNode": "m_arp_oct",
+     "fromSocket": "value",
+     "toNode": "arp",
+     "toSocket": "octaves"
+    },
+    {
+     "id": "c19",
+     "fromNode": "tex_perlin",
+     "fromSocket": "texture",
+     "toNode": "m_arp_gate",
+     "toSocket": "texture"
+    },
+    {
+     "id": "c20",
+     "fromNode": "m_arp_gate",
+     "fromSocket": "value",
+     "toNode": "arp",
+     "toSocket": "gate"
+    },
+    {
+     "id": "c21",
+     "fromNode": "arp",
+     "fromSocket": "sequence",
+     "toNode": "sec_arp",
+     "toSocket": "sequence"
+    },
+    {
+     "id": "c22",
+     "fromNode": "sec_arp",
+     "fromSocket": "sequence",
+     "toNode": "pluck",
+     "toSocket": "sequence"
+    },
+    {
+     "id": "c23",
+     "fromNode": "tex_turb",
+     "fromSocket": "texture",
+     "toNode": "m_pluck_pan",
+     "toSocket": "texture"
+    },
+    {
+     "id": "c24",
+     "fromNode": "m_pluck_pan",
+     "fromSocket": "value",
+     "toNode": "pluck",
+     "toSocket": "pan"
+    },
+    {
+     "id": "c25",
+     "fromNode": "tex_perlin",
+     "fromSocket": "texture",
+     "toNode": "m_pluck_bright",
+     "toSocket": "texture"
+    },
+    {
+     "id": "c26",
+     "fromNode": "m_pluck_bright",
+     "fromSocket": "value",
+     "toNode": "pluck",
+     "toSocket": "brightness"
+    },
+    {
+     "id": "c27",
+     "fromNode": "tex_voronoi",
+     "fromSocket": "texture",
+     "toNode": "m_pluck_delay",
+     "toSocket": "texture"
+    },
+    {
+     "id": "c28",
+     "fromNode": "m_pluck_delay",
+     "fromSocket": "value",
+     "toNode": "pluck",
+     "toSocket": "delaySend"
+    },
+    {
+     "id": "c29",
+     "fromNode": "tex_perlin",
+     "fromSocket": "texture",
+     "toNode": "m_pluck_level",
+     "toSocket": "texture"
+    },
+    {
+     "id": "c30",
+     "fromNode": "m_pluck_level",
+     "fromSocket": "value",
+     "toNode": "pluck",
+     "toSocket": "level"
+    },
+    {
+     "id": "c31",
+     "fromNode": "prog",
+     "fromSocket": "bass",
+     "toNode": "bass_arp",
+     "toSocket": "sequence"
+    },
+    {
+     "id": "c32",
+     "fromNode": "tex_voronoi",
+     "fromSocket": "texture",
+     "toNode": "m_bass_gate",
+     "toSocket": "texture"
+    },
+    {
+     "id": "c33",
+     "fromNode": "m_bass_gate",
+     "fromSocket": "value",
+     "toNode": "bass_arp",
+     "toSocket": "gate"
+    },
+    {
+     "id": "c34",
+     "fromNode": "bass_arp",
+     "fromSocket": "sequence",
+     "toNode": "sec_bass",
+     "toSocket": "sequence"
+    },
+    {
+     "id": "c35",
+     "fromNode": "sec_bass",
+     "fromSocket": "sequence",
+     "toNode": "bass",
+     "toSocket": "sequence"
+    },
+    {
+     "id": "c36",
+     "fromNode": "tex_turb",
+     "fromSocket": "texture",
+     "toNode": "m_bass_bright",
+     "toSocket": "texture"
+    },
+    {
+     "id": "c37",
+     "fromNode": "m_bass_bright",
+     "fromSocket": "value",
+     "toNode": "bass",
+     "toSocket": "brightness"
+    },
+    {
+     "id": "c38",
+     "fromNode": "clock",
+     "fromSocket": "clock",
+     "toNode": "shift",
+     "toSocket": "clock"
+    },
+    {
+     "id": "c39",
+     "fromNode": "tex_voronoi",
+     "fromSocket": "texture",
+     "toNode": "m_lead_change",
+     "toSocket": "texture"
+    },
+    {
+     "id": "c40",
+     "fromNode": "m_lead_change",
+     "fromSocket": "value",
+     "toNode": "shift",
+     "toSocket": "change"
+    },
+    {
+     "id": "c41",
+     "fromNode": "tex_perlin",
+     "fromSocket": "texture",
+     "toNode": "m_lead_density",
+     "toSocket": "texture"
+    },
+    {
+     "id": "c42",
+     "fromNode": "m_lead_density",
+     "fromSocket": "value",
+     "toNode": "shift",
+     "toSocket": "density"
+    },
+    {
+     "id": "c43",
+     "fromNode": "shift",
+     "fromSocket": "sequence",
+     "toNode": "fit",
+     "toSocket": "sequence"
+    },
+    {
+     "id": "c44",
+     "fromNode": "prog",
+     "fromSocket": "chords",
+     "toNode": "fit",
+     "toSocket": "chords"
+    },
+    {
+     "id": "c45",
+     "fromNode": "fit",
+     "fromSocket": "sequence",
+     "toNode": "orn",
+     "toSocket": "sequence"
+    },
+    {
+     "id": "c46",
+     "fromNode": "tex_turb",
+     "fromSocket": "texture",
+     "toNode": "m_orn_chance",
+     "toSocket": "texture"
+    },
+    {
+     "id": "c47",
+     "fromNode": "m_orn_chance",
+     "fromSocket": "value",
+     "toNode": "orn",
+     "toSocket": "chance"
+    },
+    {
+     "id": "c48",
+     "fromNode": "orn",
+     "fromSocket": "sequence",
+     "toNode": "sec_lead",
+     "toSocket": "sequence"
+    },
+    {
+     "id": "c49",
+     "fromNode": "sec_lead",
+     "fromSocket": "sequence",
+     "toNode": "lead",
+     "toSocket": "sequence"
+    },
+    {
+     "id": "c50",
+     "fromNode": "tex_voronoi",
+     "fromSocket": "texture",
+     "toNode": "m_lead_duty",
+     "toSocket": "texture"
+    },
+    {
+     "id": "c51",
+     "fromNode": "m_lead_duty",
+     "fromSocket": "value",
+     "toNode": "lead",
+     "toSocket": "duty"
+    },
+    {
+     "id": "c52",
+     "fromNode": "sec_lead",
+     "fromSocket": "sequence",
+     "toNode": "echo",
+     "toSocket": "sequence"
+    },
+    {
+     "id": "c53",
+     "fromNode": "tex_perlin",
+     "fromSocket": "texture",
+     "toNode": "m_echo_level",
+     "toSocket": "texture"
+    },
+    {
+     "id": "c54",
+     "fromNode": "m_echo_level",
+     "fromSocket": "value",
+     "toNode": "echo",
+     "toSocket": "level"
+    },
+    {
+     "id": "c55",
+     "fromNode": "echo",
+     "fromSocket": "echo",
+     "toNode": "lead_echo",
+     "toSocket": "sequence"
+    },
+    {
+     "id": "c56",
+     "fromNode": "fit",
+     "fromSocket": "sequence",
+     "toNode": "cp",
+     "toSocket": "sequence"
+    },
+    {
+     "id": "c57",
+     "fromNode": "cp",
+     "fromSocket": "sequence",
+     "toNode": "sec_cp",
+     "toSocket": "sequence"
+    },
+    {
+     "id": "c58",
+     "fromNode": "sec_cp",
+     "fromSocket": "sequence",
+     "toNode": "kalimba",
+     "toSocket": "sequence"
+    },
+    {
+     "id": "c59",
+     "fromNode": "tex_turb",
+     "fromSocket": "texture",
+     "toNode": "m_kal_pan",
+     "toSocket": "texture"
+    },
+    {
+     "id": "c60",
+     "fromNode": "m_kal_pan",
+     "fromSocket": "value",
+     "toNode": "kalimba",
+     "toSocket": "pan"
+    },
+    {
+     "id": "c61",
+     "fromNode": "fit",
+     "fromSocket": "sequence",
+     "toNode": "markov",
+     "toSocket": "source"
+    },
+    {
+     "id": "c62",
+     "fromNode": "tex_perlin",
+     "fromSocket": "texture",
+     "toNode": "m_markov_nov",
+     "toSocket": "texture"
+    },
+    {
+     "id": "c63",
+     "fromNode": "m_markov_nov",
+     "fromSocket": "value",
+     "toNode": "markov",
+     "toSocket": "novelty"
+    },
+    {
+     "id": "c64",
+     "fromNode": "markov",
+     "fromSocket": "sequence",
+     "toNode": "mk_scale",
+     "toSocket": "sequence"
+    },
+    {
+     "id": "c65",
+     "fromNode": "mk_scale",
+     "fromSocket": "sequence",
+     "toNode": "sec_mk",
+     "toSocket": "sequence"
+    },
+    {
+     "id": "c66",
+     "fromNode": "sec_mk",
+     "fromSocket": "sequence",
+     "toNode": "musicbox",
+     "toSocket": "sequence"
+    },
+    {
+     "id": "c67",
+     "fromNode": "clock",
+     "fromSocket": "clock",
+     "toNode": "pat_kick",
+     "toSocket": "clock"
+    },
+    {
+     "id": "c68",
+     "fromNode": "pat_kick",
+     "fromSocket": "sequence",
+     "toNode": "sec_kick",
+     "toSocket": "sequence"
+    },
+    {
+     "id": "c69",
+     "fromNode": "sec_kick",
+     "fromSocket": "sequence",
+     "toNode": "kit_kick",
+     "toSocket": "sequence"
+    },
+    {
+     "id": "c70",
+     "fromNode": "clock",
+     "fromSocket": "clock",
+     "toNode": "pat_snare",
+     "toSocket": "clock"
+    },
+    {
+     "id": "c71",
+     "fromNode": "pat_snare",
+     "fromSocket": "sequence",
+     "toNode": "sec_snare",
+     "toSocket": "sequence"
+    },
+    {
+     "id": "c72",
+     "fromNode": "sec_snare",
+     "fromSocket": "sequence",
+     "toNode": "kit_snare",
+     "toSocket": "sequence"
+    },
+    {
+     "id": "c73",
+     "fromNode": "tex_turb",
+     "fromSocket": "texture",
+     "toNode": "m_snare_decay",
+     "toSocket": "texture"
+    },
+    {
+     "id": "c74",
+     "fromNode": "m_snare_decay",
+     "fromSocket": "value",
+     "toNode": "kit_snare",
+     "toSocket": "decay"
+    },
+    {
+     "id": "c75",
+     "fromNode": "tex_voronoi",
+     "fromSocket": "texture",
+     "toNode": "m_snare_tune",
+     "toSocket": "texture"
+    },
+    {
+     "id": "c76",
+     "fromNode": "m_snare_tune",
+     "fromSocket": "value",
+     "toNode": "kit_snare",
+     "toSocket": "tune"
+    },
+    {
+     "id": "c77",
+     "fromNode": "clock",
+     "fromSocket": "clock",
+     "toNode": "eu_ghost",
+     "toSocket": "input"
+    },
+    {
+     "id": "c78",
+     "fromNode": "tex_voronoi",
+     "fromSocket": "texture",
+     "toNode": "m_ghost_pulses",
+     "toSocket": "texture"
+    },
+    {
+     "id": "c79",
+     "fromNode": "m_ghost_pulses",
+     "fromSocket": "value",
+     "toNode": "eu_ghost",
+     "toSocket": "pulses"
+    },
+    {
+     "id": "c80",
+     "fromNode": "eu_ghost",
+     "fromSocket": "sequence",
+     "toNode": "sec_ghost",
+     "toSocket": "sequence"
+    },
+    {
+     "id": "c81",
+     "fromNode": "sec_ghost",
+     "fromSocket": "sequence",
+     "toNode": "kit_ghost",
+     "toSocket": "sequence"
+    },
+    {
+     "id": "c82",
+     "fromNode": "clock",
+     "fromSocket": "clock",
+     "toNode": "eu_hats",
+     "toSocket": "input"
+    },
+    {
+     "id": "c83",
+     "fromNode": "tex_perlin",
+     "fromSocket": "texture",
+     "toNode": "m_hat_pulses",
+     "toSocket": "texture"
+    },
+    {
+     "id": "c84",
+     "fromNode": "m_hat_pulses",
+     "fromSocket": "value",
+     "toNode": "eu_hats",
+     "toSocket": "pulses"
+    },
+    {
+     "id": "c85",
+     "fromNode": "tex_turb",
+     "fromSocket": "texture",
+     "toNode": "m_hat_rot",
+     "toSocket": "texture"
+    },
+    {
+     "id": "c86",
+     "fromNode": "m_hat_rot",
+     "fromSocket": "value",
+     "toNode": "eu_hats",
+     "toSocket": "rotation"
+    },
+    {
+     "id": "c87",
+     "fromNode": "eu_hats",
+     "fromSocket": "sequence",
+     "toNode": "sec_hats",
+     "toSocket": "sequence"
+    },
+    {
+     "id": "c88",
+     "fromNode": "sec_hats",
+     "fromSocket": "sequence",
+     "toNode": "kit_hats",
+     "toSocket": "sequence"
+    },
+    {
+     "id": "c89",
+     "fromNode": "tex_perlin",
+     "fromSocket": "texture",
+     "toNode": "m_hat_decay",
+     "toSocket": "texture"
+    },
+    {
+     "id": "c90",
+     "fromNode": "m_hat_decay",
+     "fromSocket": "value",
+     "toNode": "kit_hats",
+     "toSocket": "decay"
+    },
+    {
+     "id": "c91",
+     "fromNode": "tex_turb",
+     "fromSocket": "texture",
+     "toNode": "m_hat_pan",
+     "toSocket": "texture"
+    },
+    {
+     "id": "c92",
+     "fromNode": "m_hat_pan",
+     "fromSocket": "value",
+     "toNode": "kit_hats",
+     "toSocket": "pan"
+    },
+    {
+     "id": "c93",
+     "fromNode": "pad",
+     "fromSocket": "track",
+     "toNode": "out",
+     "toSocket": "track0"
+    },
+    {
+     "id": "c94",
+     "fromNode": "sid",
+     "fromSocket": "track",
+     "toNode": "out",
+     "toSocket": "track1"
+    },
+    {
+     "id": "c95",
+     "fromNode": "pluck",
+     "fromSocket": "track",
+     "toNode": "out",
+     "toSocket": "track2"
+    },
+    {
+     "id": "c96",
+     "fromNode": "bass",
+     "fromSocket": "track",
+     "toNode": "out",
+     "toSocket": "track3"
+    },
+    {
+     "id": "c97",
+     "fromNode": "lead",
+     "fromSocket": "track",
+     "toNode": "out",
+     "toSocket": "track4"
+    },
+    {
+     "id": "c98",
+     "fromNode": "lead_echo",
+     "fromSocket": "track",
+     "toNode": "out",
+     "toSocket": "track5"
+    },
+    {
+     "id": "c99",
+     "fromNode": "kalimba",
+     "fromSocket": "track",
+     "toNode": "out",
+     "toSocket": "track6"
+    },
+    {
+     "id": "c100",
+     "fromNode": "musicbox",
+     "fromSocket": "track",
+     "toNode": "out",
+     "toSocket": "track7"
+    },
+    {
+     "id": "c101",
+     "fromNode": "kit_kick",
+     "fromSocket": "track",
+     "toNode": "out",
+     "toSocket": "track8"
+    },
+    {
+     "id": "c102",
+     "fromNode": "kit_snare",
+     "fromSocket": "track",
+     "toNode": "out",
+     "toSocket": "track9"
+    },
+    {
+     "id": "c103",
+     "fromNode": "kit_ghost",
+     "fromSocket": "track",
+     "toNode": "out",
+     "toSocket": "track10"
+    },
+    {
+     "id": "c104",
+     "fromNode": "kit_hats",
+     "fromSocket": "track",
+     "toNode": "out",
+     "toSocket": "track11"
+    },
+    {
+     "id": "c105",
+     "fromNode": "sec_kick",
+     "fromSocket": "sequence",
+     "toNode": "probe0",
+     "toSocket": "music"
+    },
+    {
+     "id": "c106",
+     "fromNode": "probe0",
+     "fromSocket": "envelope",
+     "toNode": "pulse0",
+     "toSocket": "x"
+    },
+    {
+     "id": "c107",
+     "fromNode": "pulse0",
+     "fromSocket": "value",
+     "toNode": "vec0",
+     "toSocket": "value"
+    },
+    {
+     "id": "c108",
+     "fromNode": "vec0",
+     "fromSocket": "vector",
+     "toNode": "xf0",
+     "toSocket": "scale"
+    },
+    {
+     "id": "c109",
+     "fromNode": "xf0",
+     "fromSocket": "matrix",
+     "toNode": "orb0",
+     "toSocket": "matrix"
+    },
+    {
+     "id": "c110",
+     "fromNode": "sec_arp",
+     "fromSocket": "sequence",
+     "toNode": "probe1",
+     "toSocket": "music"
+    },
+    {
+     "id": "c111",
+     "fromNode": "probe1",
+     "fromSocket": "envelope",
+     "toNode": "pulse1",
+     "toSocket": "x"
+    },
+    {
+     "id": "c112",
+     "fromNode": "pulse1",
+     "fromSocket": "value",
+     "toNode": "vec1",
+     "toSocket": "value"
+    },
+    {
+     "id": "c113",
+     "fromNode": "vec1",
+     "fromSocket": "vector",
+     "toNode": "xf1",
+     "toSocket": "scale"
+    },
+    {
+     "id": "c114",
+     "fromNode": "xf1",
+     "fromSocket": "matrix",
+     "toNode": "orb1",
+     "toSocket": "matrix"
+    },
+    {
+     "id": "c115",
+     "fromNode": "sec_lead",
+     "fromSocket": "sequence",
+     "toNode": "probe2",
+     "toSocket": "music"
+    },
+    {
+     "id": "c116",
+     "fromNode": "probe2",
+     "fromSocket": "envelope",
+     "toNode": "pulse2",
+     "toSocket": "x"
+    },
+    {
+     "id": "c117",
+     "fromNode": "pulse2",
+     "fromSocket": "value",
+     "toNode": "vec2",
+     "toSocket": "value"
+    },
+    {
+     "id": "c118",
+     "fromNode": "vec2",
+     "fromSocket": "vector",
+     "toNode": "xf2",
+     "toSocket": "scale"
+    },
+    {
+     "id": "c119",
+     "fromNode": "xf2",
+     "fromSocket": "matrix",
+     "toNode": "orb2",
+     "toSocket": "matrix"
+    }
+   ],
+   "keyframes": {},
+   "markers": [
+    {
+     "frame": 306
+    },
+    {
+     "frame": 919
+    },
+    {
+     "frame": 1532
+    },
+    {
+     "frame": 1838
+    },
+    {
+     "frame": 2757
+    }
+   ],
+   "exposedParams": []
+  }
+ ],
+ "activeCanvas": 0,
+ "keyframeEasing": "arrival",
+ "rotationModel": "modes"
+}

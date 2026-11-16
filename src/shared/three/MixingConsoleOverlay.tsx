@@ -35,7 +35,14 @@ const C = {
   track: "rgba(255,255,255,0.08)",
   grid: "rgba(255,255,255,0.06)",
 };
-const KIND_COLORS: Record<ConsoleStrip["kind"], string> = { FM: C.accent, GB: C.green, DRUM: C.amber, SID: C.sky };
+const KIND_COLORS: Record<ConsoleStrip["kind"], string> = {
+  FM: C.accent,
+  GB: C.green,
+  DRUM: C.amber,
+  SID: C.sky,
+  WAVE: "#a855f7",
+  GRAN: "#14b8a6",
+};
 
 const RATE = 48_000;
 /** The meters' scale, in dBFS. */

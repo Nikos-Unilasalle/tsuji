@@ -699,6 +699,16 @@ export const DEMO_CATALOG: DemoCategory[] = [
     title: "Music",
     demos: [
       {
+        file: "demo_music_latent_bloom.tsuji",
+        label: "Latent Bloom",
+        description: "An evocative cinematic electronica piece composed in F# minor at 90 BPM, marrying pure generative granular synthesis and morphing wavetables: an abyssal stochastic grain cloud with chirp pulses, a tectonic Reese sub-bass with analog drive, a formant vowel pad, crystalline FM bell arpeggios, a high Game Boy melody, and Euclidean downtempo drums pulsing a central 3D core — press Play.",
+      },
+      {
+        file: "demo_music_brume.tsuji",
+        label: "Brume",
+        description: "A mostly procedural track: only the chords and the kick and snare are written. A mutating shift-register lead, a Markov music box, Euclidean hats and chord-following arps and bass do the rest. To keep it from sounding mechanical, 27 Texture → Value nodes read three noise textures (perlin glides, voronoi holds then jumps, turbulence jitters), each looping over 2 to 20 bars, and drive hat density, lead mutation and ornaments, arp range and note length, bass staccato, pad and filter brightness. Deterministic, yet it never quite repeats — press Play.",
+      },
+      {
         file: "demo_music_pocket_star.tsuji",
         label: "Pocket Star",
         description: "A soft, melodic chiptune on Game Boy channels: two written tunes, and around them broken chords on the wave channel, a round bass, counter-melodies by counterpoint, a soft chip echo, a bridge tune improvised by a Markov chain that learned both themes, and a gentle DMG kit on Euclidean rhythms — press Play.",
