@@ -357,3 +357,11 @@ describe("METABALLS_NODE", () => {
     }
   });
 });
+
+describe("Metaballs material", () => {
+  test("has no Material input: the blobs keep their own material", () => {
+    expect(METABALLS_NODE.inputs.some((s) => s.id === "material")).toBe(false);
+    // Its own material settings are still there.
+    expect(METABALLS_NODE.defaultParams).toHaveProperty("color");
+  });
+});

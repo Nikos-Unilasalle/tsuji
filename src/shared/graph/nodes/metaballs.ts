@@ -327,7 +327,7 @@ function metaballParamFields(mesher: Mesher): ParamFieldDef[] {
       },
       {
         id: "displayNote",
-        label: "Raymarched (experimental) draws the field on the GPU: no mesh, no resolution, no worker. Costs more GPU than the mesh (point-light shadows especially). Falls back to the mesh when the Geometry output is wired or a custom Material is used.",
+        label: "Raymarched (experimental) draws the field on the GPU: no mesh, no resolution, no worker. Costs more GPU than the mesh (point-light shadows especially). Falls back to the mesh when the Geometry output is wired.",
         kind: "note",
         group: "Metaballs",
       },
@@ -447,9 +447,9 @@ function evaluateRaymarch(nodeId: string, mesh: THREE.Mesh, inputs: Record<strin
   return count;
 }
 
-/** Raymarched only where it can stand in for the mesh: Surface Nets, nothing reading the geometry downstream, no custom material. */
-function wantsRaymarch(params: Record<string, unknown>, ctx: { connectedOutputs?: ReadonlySet<string> }, customMaterial: unknown): boolean {
-  return params.display === "raymarch" && mesherOf(params) === "surfaceNets" && !ctx.connectedOutputs?.has("geometry") && !customMaterial;
+/** Raymarched only where it can stand in for the mesh: Surface Nets, nothing reading the geometry downstream. */
+function wantsRaymarch(params: Record<string, unknown>, ctx: { connectedOutputs?: ReadonlySet<string> }): boolean {
+  return params.display === "raymarch" && mesherOf(params) === "surfaceNets" && !ctx.connectedOutputs?.has("geometry");
 }
 
 /**
@@ -487,7 +487,9 @@ export const METABALLS_NODE: NodeDefinition = {
     { id: "carveStrength", label: "Carve Strength", type: "value" },
     { id: "carveRadius", label: "Carve Radius", type: "value" },
     { id: "carveColor", label: "Carve Color", type: "color" },
-    ...COMMON_PRIMITIVE_INPUTS,
+    // No Material input: the blobs draw with their own material, the one
+    // their per-element colours and the raymarched display are built on.
+    ...COMMON_PRIMITIVE_INPUTS.filter((s) => s.id !== "material"),
   ],
   outputs: [...COMMON_PRIMITIVE_OUTPUTS, { id: "count", label: "Ball Count", type: "value" }],
   defaultParams: {
@@ -521,7 +523,7 @@ export const METABALLS_NODE: NodeDefinition = {
     const smooth = Math.min(4, Math.max(1.05, numberInput(inputs.smooth, params.smooth, 1.6)));
     const capturing = ctx.capturing === true;
     const matParams = extractMaterialParams(inputs, params);
-    const raymarch = wantsRaymarch(p, ctx, matParams.customMaterial);
+    const raymarch = wantsRaymarch(p, ctx);
     let count: number;
     if (raymarch) {
       count = evaluateRaymarch(ctx.nodeId, mesh, inputs, p, radius, smooth);
@@ -546,7 +548,7 @@ export const METABALLS_NODE: NodeDefinition = {
     const texParams = extractTextureParams(inputs, params, ctx.nodeId);
     // The proxy box is drawn from inside out, so the camera can sit inside it.
     applyMaterialParams(mesh, matParams, raymarch ? THREE.BackSide : THREE.FrontSide, texParams);
-    const ownMaterial = !matParams.customMaterial && !Array.isArray(mesh.material) ? (mesh.material as THREE.Material) : null;
+    const ownMaterial = !Array.isArray(mesh.material) ? (mesh.material as THREE.Material) : null;
     // Once a node has raymarched, its state stays (and stays bound, carrying
     // its uniforms) while it shows the mesh — see bindRaymarch for why.
     const state = raymarchCache.get(ctx.nodeId);
@@ -558,7 +560,7 @@ export const METABALLS_NODE: NodeDefinition = {
     // Blended element colours ride in a vertex attribute; the material's own colour tints them.
     const wantsVertexColors = mesh.geometry.getAttribute("color") !== undefined;
     const material = mesh.material as THREE.MeshStandardMaterial;
-    if (!matParams.customMaterial && !Array.isArray(material) && material.vertexColors !== wantsVertexColors) {
+    if (!Array.isArray(material) && material.vertexColors !== wantsVertexColors) {
       material.vertexColors = wantsVertexColors;
       material.needsUpdate = true;
     }
