@@ -32,7 +32,8 @@ describe("GEOMETRY_TWIST_BEND_TAPER_NODE", () => {
     expect(res.geometry).toBeInstanceOf(THREE.Mesh);
     const mesh = res.geometry as THREE.Mesh;
     expect(mesh).not.toBe(box.geometry);
-    expect(mesh.geometry.attributes.position.count).toBe(
+    // Cut finer first, so the twist curves the faces instead of leaving them flat.
+    expect(mesh.geometry.attributes.position.count).toBeGreaterThan(
       (box.geometry as THREE.Mesh).geometry.attributes.position.count,
     );
     // Matrix must match the object's position (10, 5, 2)
@@ -277,5 +278,33 @@ describe("Bend axes", () => {
     const a = bent(bar(), { axis: "x", bendToward: "x" }, "bend-same");
     const b = bent(bar(), { axis: "x" }, "bend-same-auto");
     expect(a.equals(b)).toBe(true);
+  });
+});
+
+describe("Bend wraps without chords", () => {
+  it("cuts long triangles first, so a line wrapped right round stays on the circle", () => {
+    // One long strip: two triangles 4 long. Bent 360° toward Z it should be a ring of radius 4/2π.
+    const strip = new THREE.Mesh(new THREE.PlaneGeometry(4, 0.4, 1, 1));
+    strip.matrixAutoUpdate = false;
+    const out = GEOMETRY_TWIST_BEND_TAPER_NODE.evaluate(
+      { geometry: strip },
+      { ...GEOMETRY_TWIST_BEND_TAPER_NODE.defaultParams, bend: 360, axis: "x", bendToward: "z" },
+      { ...CTX, nodeId: "bend-wrap" },
+    ).geometry as THREE.Mesh;
+    const pos = out.geometry.attributes.position as THREE.BufferAttribute;
+    const r = 4 / (2 * Math.PI);
+    // Every edge midpoint is near the ring: no chord cuts across it.
+    let worst = 0;
+    const a = new THREE.Vector3();
+    const b = new THREE.Vector3();
+    for (let i = 0; i < pos.count; i += 3) {
+      for (const [j, k] of [[0, 1], [1, 2], [2, 0]]) {
+        a.fromBufferAttribute(pos, i + j);
+        b.fromBufferAttribute(pos, i + k);
+        const m = a.clone().add(b).multiplyScalar(0.5);
+        worst = Math.max(worst, Math.abs(Math.hypot(m.x, m.z - r) - r));
+      }
+    }
+    expect(worst).toBeLessThan(0.01);
   });
 });

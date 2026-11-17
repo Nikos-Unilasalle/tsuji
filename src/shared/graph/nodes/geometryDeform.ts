@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { TessellateModifier } from "three/examples/jsm/modifiers/TessellateModifier.js";
 import { createNodeCache } from "../nodeCaches";
 import { NodeDefinition } from "../types";
 import { clearMeshWarning, collectMeshes, warnMeshRequired } from "../meshRequired";
@@ -62,13 +63,15 @@ function reuseDeformTargets(
   state: DeformState,
   meshes: THREE.Mesh[],
   nonIndexed: boolean,
+  maxEdge = 0,
 ): DeformTarget[] {
-  const signature = meshes
-    .map((mesh) => {
-      const geometry = mesh.geometry;
-      return `${geometry.uuid}:${geometry.attributes.position?.count ?? 0}:${geometry.getIndex()?.count ?? -1}`;
-    })
-    .join("|");
+  const signature =
+    meshes
+      .map((mesh) => {
+        const geometry = mesh.geometry;
+        return `${geometry.uuid}:${geometry.attributes.position?.count ?? 0}:${geometry.getIndex()?.count ?? -1}`;
+      })
+      .join("|") + `|edge:${maxEdge}`;
 
   if (state.targets && state.signature === signature) {
     for (const target of state.targets) {
@@ -96,7 +99,12 @@ function reuseDeformTargets(
   state.object = undefined;
 
   state.targets = meshes.map((source) => {
-    const geometry = nonIndexed && source.geometry.index ? source.geometry.toNonIndexed() : source.geometry.clone();
+    const geometry =
+      maxEdge > 0
+        ? new TessellateModifier(maxEdge, 12).modify(source.geometry)
+        : nonIndexed && source.geometry.index
+          ? source.geometry.toNonIndexed()
+          : source.geometry.clone();
     const output = new THREE.Mesh(geometry, source.material);
     output.castShadow = source.castShadow;
     output.receiveShadow = source.receiveShadow;
@@ -241,13 +249,6 @@ export const GEOMETRY_TWIST_BEND_TAPER_NODE: NodeDefinition = {
       return { geometry: raw, matrix: objMatrix };
     }
 
-    let state = twistCache.get(ctx.nodeId);
-    if (!state) {
-      state = {};
-      twistCache.set(ctx.nodeId, state);
-    }
-    const targets = reuseDeformTargets(state, meshes, false);
-
     const twistRad = (twistDeg * Math.PI) / 180;
     const bendRad = (bendDeg * Math.PI) / 180;
 
@@ -300,6 +301,21 @@ export const GEOMETRY_TWIST_BEND_TAPER_NODE: NodeDefinition = {
     }
     const diff = maxAxis - minAxis;
     const height = Math.max(1e-4, diff);
+
+    let state = twistCache.get(ctx.nodeId);
+    if (!state) {
+      state = {};
+      twistCache.set(ctx.nodeId, state);
+    }
+    // A bend or twist moves each vertex on its own, and a triangle in between
+    // stays flat: a letter's long straight strokes (one triangle can span a
+    // third of a word) cut across the curve as chords, and text wrapped right
+    // round an axis came out as a broken polygon. So the shape is first cut
+    // into triangles no longer than 1/48 of its length. A power of two, so a
+    // length that drifts frame to frame does not re-cut it every frame.
+    const curves = Math.abs(bendRad) > 1e-4 || Math.abs(twistRad) > 1e-4;
+    const maxEdge = curves && diff > 1e-6 ? Math.pow(2, Math.floor(Math.log2(height / 48))) : 0;
+    const targets = reuseDeformTargets(state, meshes, false, maxEdge);
 
     function deformMesh(target: DeformTarget): THREE.Mesh {
       const geom = target.output.geometry;
