@@ -359,9 +359,10 @@ describe("METABALLS_NODE", () => {
 });
 
 describe("Metaballs material", () => {
-  test("has no Material input: the blobs keep their own material", () => {
+  test("has no Material input and no Material group: the blobs keep their own material", () => {
     expect(METABALLS_NODE.inputs.some((s) => s.id === "material")).toBe(false);
-    // Its own material settings are still there.
-    expect(METABALLS_NODE.defaultParams).toHaveProperty("color");
+    const fields = METABALLS_NODE.dynamicParamFields!({ id: "m", type: METABALLS_NODE.type, position: { x: 0, y: 0 }, params: METABALLS_NODE.defaultParams });
+    expect(fields.some((f) => "group" in f && f.group === "Material")).toBe(false);
+    expect(fields.some((f) => f.id === "roughness" || f.id === "color")).toBe(false);
   });
 });

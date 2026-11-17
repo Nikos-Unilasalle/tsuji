@@ -447,6 +447,18 @@ function evaluateRaymarch(nodeId: string, mesh: THREE.Mesh, inputs: Record<strin
   return count;
 }
 
+/**
+ * The blobs draw with a material of their own: the per-element Colors and
+ * the raymarched display are built on it. So there is no Material group in
+ * their panel and no Material input; whatever an older file stored there
+ * (colour, roughness, glass…) is left aside. Colour comes from Colors.
+ */
+const OWN_MATERIAL: Record<string, unknown> = { ...COMMON_DEFAULT_PARAMS };
+
+function withoutMaterialFields(fields: ParamFieldDef[]): ParamFieldDef[] {
+  return fields.filter((f) => !("group" in f && f.group === "Material"));
+}
+
 /** Raymarched only where it can stand in for the mesh: Surface Nets, nothing reading the geometry downstream. */
 function wantsRaymarch(params: Record<string, unknown>, ctx: { connectedOutputs?: ReadonlySet<string> }): boolean {
   return params.display === "raymarch" && mesherOf(params) === "surfaceNets" && !ctx.connectedOutputs?.has("geometry");
@@ -512,8 +524,9 @@ export const METABALLS_NODE: NodeDefinition = {
   // (their marker objects are often scaled without meaning the blobs to follow);
   // on for a Metaballs node made now.
   newNodeParams: { instanceShape: true, inheritColors: true, carveTint: true },
-  paramFields: buildPrimitiveDynamicParamFields(metaballParamFields("surfaceNets"))(),
-  dynamicParamFields: (instance) => buildPrimitiveDynamicParamFields(metaballParamFields(mesherOf(instance.params)))(),
+  paramFields: withoutMaterialFields(buildPrimitiveDynamicParamFields(metaballParamFields("surfaceNets"))()),
+  dynamicParamFields: (instance) =>
+    withoutMaterialFields(buildPrimitiveDynamicParamFields(metaballParamFields(mesherOf(instance.params)))()),
   evaluate: (inputs, params, ctx) => {
     const mesh = getMesh(ctx.nodeId);
     const p = params as Record<string, unknown>;
@@ -522,7 +535,8 @@ export const METABALLS_NODE: NodeDefinition = {
     // makes `subtract` negative and the field never fall off.
     const smooth = Math.min(4, Math.max(1.05, numberInput(inputs.smooth, params.smooth, 1.6)));
     const capturing = ctx.capturing === true;
-    const matParams = extractMaterialParams(inputs, params);
+    // Always the blobs' own material — see OWN_MATERIAL.
+    const matParams = extractMaterialParams({}, OWN_MATERIAL);
     const raymarch = wantsRaymarch(p, ctx);
     let count: number;
     if (raymarch) {
