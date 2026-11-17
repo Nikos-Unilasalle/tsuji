@@ -220,3 +220,62 @@ describe("GEOMETRY_FACET_EXPLODE_NODE", () => {
     expect(mesh.geometry.index).toBeNull();
   });
 });
+
+describe("Bend axes", () => {
+  /** A long thin bar along X, like a line of text: 4 long, 0.1 deep, many slices. */
+  function bar(matrix = new THREE.Matrix4()): THREE.Mesh {
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(4, 0.6, 0.1, 40, 1, 1));
+    mesh.matrixAutoUpdate = false;
+    mesh.matrix.copy(matrix);
+    return mesh;
+  }
+
+  function bent(mesh: THREE.Mesh, params: Record<string, unknown>, id: string): THREE.Box3 {
+    const out = GEOMETRY_TWIST_BEND_TAPER_NODE.evaluate(
+      { geometry: mesh },
+      { ...GEOMETRY_TWIST_BEND_TAPER_NODE.defaultParams, bend: 90, ...params },
+      { ...CTX, nodeId: id },
+    ).geometry as THREE.Mesh;
+    // Measured on screen: the deformed geometry under the object's own turn.
+    const pos = out.geometry.attributes.position as THREE.BufferAttribute;
+    const rot = new THREE.Quaternion();
+    mesh.matrix.decompose(new THREE.Vector3(), rot, new THREE.Vector3());
+    const box = new THREE.Box3();
+    const v = new THREE.Vector3();
+    for (let i = 0; i < pos.count; i++) box.expandByPoint(v.fromBufferAttribute(pos, i).applyQuaternion(rot));
+    return box;
+  }
+
+  it("bends a line along X toward Z, out of its own plane", () => {
+    const box = bent(bar(), { axis: "x", bendToward: "z" }, "bend-text-z");
+    // 0.1 deep at rest; bent 90° about its middle, the ends come 0.75 forward.
+    expect(box.max.z - box.min.z).toBeGreaterThan(0.8);
+    expect(box.max.y - box.min.y).toBeCloseTo(0.6, 6);
+  });
+
+  it("keeps the old direction by default: along X curls toward Y", () => {
+    const box = bent(bar(), { axis: "x" }, "bend-text-auto");
+    expect(box.max.y - box.min.y).toBeGreaterThan(1.3);
+    expect(box.max.z - box.min.z).toBeCloseTo(0.1, 6);
+  });
+
+  it("reads the axes on screen, not the object's own: a bar turned to lie along Z bends along Z", () => {
+    const along = new THREE.Matrix4().makeRotationY(-Math.PI / 2); // the bar's X now points along screen Z
+    const box = bent(bar(along), { axis: "z", bendToward: "y" }, "bend-turned");
+    expect(box.max.y - box.min.y).toBeGreaterThan(1.3);
+  });
+
+  it("bends a lying Plane along screen Z when told to curl up", () => {
+    const plane = OBJECT_PLANE_NODE.evaluate({}, OBJECT_PLANE_NODE.defaultParams, { ...CTX, nodeId: "bend-plane-src" }).geometry as THREE.Mesh;
+    plane.geometry = new THREE.PlaneGeometry(1, 1, 1, 20);
+    const box = bent(plane, { axis: "z", bendToward: "y" }, "bend-plane");
+    // Flat at rest (0 thick); before, Z on a lying Plane was its normal and nothing moved.
+    expect(box.max.y - box.min.y).toBeGreaterThan(0.15);
+  });
+
+  it("ignores a Toward equal to the Along axis", () => {
+    const a = bent(bar(), { axis: "x", bendToward: "x" }, "bend-same");
+    const b = bent(bar(), { axis: "x" }, "bend-same-auto");
+    expect(a.equals(b)).toBe(true);
+  });
+});

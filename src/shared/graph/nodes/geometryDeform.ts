@@ -192,6 +192,7 @@ export const GEOMETRY_TWIST_BEND_TAPER_NODE: NodeDefinition = {
     bend: 0,
     taper: 0,
     axis: "y",
+    bendToward: "auto",
   },
   paramFields: [
     { id: "twist", label: "Twist (°)", kind: "number", step: 5.0 },
@@ -199,9 +200,21 @@ export const GEOMETRY_TWIST_BEND_TAPER_NODE: NodeDefinition = {
     { id: "taper", label: "Taper", kind: "number", step: 0.1 },
     {
       id: "axis",
-      label: "Deform Axis",
+      label: "Along Axis",
       kind: "select",
       options: ["y", "x", "z"],
+    },
+    {
+      id: "bendToward",
+      label: "Bend Toward",
+      kind: "select",
+      options: ["auto", "x", "y", "z"],
+      optionLabels: ["Auto (next axis)", "X", "Y", "Z"],
+    },
+    {
+      id: "axesNote",
+      label: "Axes are the ones on screen, whatever way the object is turned. Along: the length the shape is deformed over. Bend Toward: the way it curls — a line of text along X bends toward the viewer with Toward Z.",
+      kind: "note",
     },
   ],
   evaluate: (inputs, params, ctx) => {
@@ -239,14 +252,31 @@ export const GEOMETRY_TWIST_BEND_TAPER_NODE: NodeDefinition = {
     const bendRad = (bendDeg * Math.PI) / 180;
 
     const axisIdx = axis === "x" ? 0 : axis === "z" ? 2 : 1;
-    const uIdx = (axisIdx + 1) % 3;
-    const vIdx = (axisIdx + 2) % 3;
+    // u is the way the bend curls, v the remaining axis. "auto" keeps the
+    // fixed next-axis choice this node always made, so older scenes bend as
+    // they did; naming one lets a line of text along X curl toward Z.
+    const towardRaw = String(params.bendToward ?? "auto").toLowerCase();
+    const towardIdx = towardRaw === "x" ? 0 : towardRaw === "y" ? 1 : towardRaw === "z" ? 2 : -1;
+    const uIdx = towardIdx >= 0 && towardIdx !== axisIdx ? towardIdx : (axisIdx + 1) % 3;
+    const vIdx = 3 - axisIdx - uIdx;
+
+    // The axes are the ones on screen: the vertices are turned by the
+    // object's own rotation before deforming and turned back after. In the
+    // geometry's own axes, "Z" on a Plane (lying down by a -90° X turn) was
+    // its normal, and on a Text its 0.14-thick depth — the bend ran along
+    // something with next to no length and did nothing visible.
+    const toScreen = new THREE.Quaternion();
+    objMatrix.decompose(new THREE.Vector3(), toScreen, new THREE.Vector3());
+    const fromScreen = toScreen.clone().invert();
+    const turned = toScreen.lengthSq() > 0 && Math.abs(Math.abs(toScreen.w) - 1) > 1e-9;
+    const scratch = new THREE.Vector3();
 
     // Twist/taper rotate and scale the cross-section around the u/v origin —
     // which is the object's local origin unless a pivot says otherwise. The
     // pivot lives in the same local/geometry space as the vertices (see
-    // composeNativeMatrixWithPivot), so it's a direct offset here too.
-    const pivot = getSourcePivot(raw);
+    // composeNativeMatrixWithPivot), so it is turned the same way.
+    const pivot = getSourcePivot(raw).clone();
+    if (turned) pivot.applyQuaternion(toScreen);
     const pivotU = pivot.getComponent(uIdx);
     const pivotV = pivot.getComponent(vIdx);
     const pivotH = pivot.getComponent(axisIdx);
@@ -258,7 +288,9 @@ export const GEOMETRY_TWIST_BEND_TAPER_NODE: NodeDefinition = {
       const pos = mesh.geometry?.attributes?.position;
       if (!pos) continue;
       for (let i = 0; i < pos.count; i++) {
-        const val = pos.getComponent(i, axisIdx);
+        scratch.fromBufferAttribute(pos, i);
+        if (turned) scratch.applyQuaternion(toScreen);
+        const val = scratch.getComponent(axisIdx);
         if (val < minAxis) minAxis = val;
         if (val > maxAxis) maxAxis = val;
       }
@@ -275,9 +307,11 @@ export const GEOMETRY_TWIST_BEND_TAPER_NODE: NodeDefinition = {
       const count = pos.count;
 
       for (let i = 0; i < count; i++) {
-        let hVal = pos.getComponent(i, axisIdx);
-        let uVal = pos.getComponent(i, uIdx) - pivotU;
-        let vVal = pos.getComponent(i, vIdx) - pivotV;
+        scratch.fromBufferAttribute(pos, i);
+        if (turned) scratch.applyQuaternion(toScreen);
+        let hVal = scratch.getComponent(axisIdx);
+        let uVal = scratch.getComponent(uIdx) - pivotU;
+        let vVal = scratch.getComponent(vIdx) - pivotV;
 
         const normH = diff > 1e-6 ? (hVal - minAxis) / height : 0.5;
 
@@ -313,9 +347,11 @@ export const GEOMETRY_TWIST_BEND_TAPER_NODE: NodeDefinition = {
         if (!Number.isFinite(uVal)) uVal = 0;
         if (!Number.isFinite(vVal)) vVal = 0;
 
-        pos.setComponent(i, axisIdx, hVal);
-        pos.setComponent(i, uIdx, uVal + pivotU);
-        pos.setComponent(i, vIdx, vVal + pivotV);
+        scratch.setComponent(axisIdx, hVal);
+        scratch.setComponent(uIdx, uVal + pivotU);
+        scratch.setComponent(vIdx, vVal + pivotV);
+        if (turned) scratch.applyQuaternion(fromScreen);
+        pos.setXYZ(i, scratch.x, scratch.y, scratch.z);
       }
 
       pos.needsUpdate = true;
