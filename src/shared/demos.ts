@@ -420,6 +420,18 @@ export const DEMO_CATALOG: DemoCategory[] = [
         description: "Mic spectrum driving a bar graph (enable the mic).",
       },
       {
+        file: "demo_sound_lipsync_muppet.tsuji",
+        label: "Lip Sync — Metaball Muppet",
+        description:
+          "Talk into the mic (allow it when asked): Lip Sync reads your mouth shapes live, and its Open / Wide / Round stretch a flattened sphere carving the mouth into a fuzzy metaball muppet, while Open lifts the head off the jaw.",
+      },
+      {
+        file: "demo_sound_lipsync_morph.tsuji",
+        label: "Lip Sync — Morph Targets",
+        description:
+          "Talk into the mic (allow it when asked): Lip Sync's 15 viseme weights drive the matching shape keys of a cartoon glTF head through Morph Targets, so its lips, teeth, tongue, jaw and brows mouth along with you.",
+      },
+      {
         file: "demo_io_move_input.tsuji",
         label: "Move Input",
         description: "A whole control scheme in one node: ZQSD, arrows and a gamepad stick driving an object. Four nodes end to end.",

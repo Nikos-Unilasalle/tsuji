@@ -1482,6 +1482,92 @@ def _():
     return n, c
 
 
+# ---------------------------------------------------------------- Sound
+
+
+@demo("sound_lipsync_muppet")
+def _():
+    """A metaball muppet that talks with the microphone: Lip Sync's Open / Wide /
+    Round stretch a flattened sphere carving the mouth into the head, and Open
+    lifts the head off the jaw the way a puppeteer's hand does."""
+    FUR, HAIR, CHIN = 0xF29A2E, 0x8E44AD, 0xE8862A
+    # Laid out at a comfortable unit size, then shrunk onto the floor (y = -0.5) to fit the default camera.
+    S, FLOOR = 0.85, -0.55
+    at = lambda x, y, z: v3(x * S, (y - FLOOR) * S + FLOOR, z * S)
+    ball = lambda nid, px, py, loc, scl, color, rot=(0, 0, 0): node(
+        nid, "object/sphere", px, py, location=at(*loc), rotation=v3(*rot), scale=v3(*(k * S for k in scl)), color=color, roughness=0.9
+    )
+    shiny = lambda nid, px, py, loc, r, color: node(
+        nid, "object/sphere", px, py, location=at(*loc), scale=v3(r * S, r * S, r * S), color=color, roughness=0.15
+    )
+    n = [
+        node("mic", "sound/microphone", -1500, 200, enable=1, gain=1.5),
+        node("lips", "sound/lipsync", -1250, 200, attack=0.035, release=0.1),
+        # Wide stretches the slot, Round pinches it into an O, Open drops it.
+        node("mouthShape", "math/expression", -1000, 120,
+             formula="(1.5 + 0.7*b - 0.65*c, 0.1 + 1.05*a + 0.3*c, 1.4)",
+             **dict(zip("abc", map(float, os.environ.get("MUPPET_POSE", "0,0,0").split(","))))),
+        node("headLift", "math/expression", -1000, 360, formula=f"(0, {0.16 * S:.3f}*a, 0)", a=0),
+        node("idle", "animation/wiggle", -1000, 560, speed=0.45, amplitude=1.0, seed=7,
+             amplitudeVector=v3(0.02, 0.012, 0.012), rotationAmplitude=v3(2.5, 4, 2.5), scaleAmplitude=v3(0, 0, 0)),
+        node("liftT", "transform", -760, 360),
+        node("headM", "matrix/math", -520, 420, op="multiply"),
+        node("mouthT", "transform", -760, 120, location=at(0, 1.62, 1.12)),
+        node("mouthM", "matrix/math", -520, 160, op="multiply"),
+        node("mouth", "object/sphere", -280, 160, color=0x3A0A10),
+        # Fused blobs: body, chin and arms stay put; head and hair ride on headM.
+        ball("body", -280, 520, (0, 0.45, 0), (2.2, 2.0, 1.8), FUR),
+        ball("armL", -280, 640, (-1.15, 0.55, 0.15), (0.6, 1.6, 0.6), FUR, (0, 0, -0.4)),
+        ball("armR", -280, 760, (1.15, 0.55, 0.15), (0.6, 1.6, 0.6), FUR, (0, 0, 0.4)),
+        ball("chin", -280, 880, (0, 1.3, 0.45), (2.2, 1.0, 1.8), CHIN),
+        ball("head", -280, 1000, (0, 1.9, 0.05), (2.8, 2.0, 2.3), FUR),
+        ball("hair0", -280, 1120, (-0.4, 2.8, -0.15), (0.8, 0.9, 0.8), HAIR),
+        ball("hair1", -280, 1240, (0.0, 2.98, -0.05), (0.9, 1.0, 0.9), HAIR),
+        ball("hair2", -280, 1360, (0.4, 2.8, -0.15), (0.8, 0.9, 0.8), HAIR),
+        ball("hair3", -280, 1480, (0.1, 2.72, -0.5), (0.8, 0.8, 0.8), HAIR),
+        node("blobs", "structure/merge", 0, 800),
+        node("muppet", "object/metaballs", 260, 600, radius=0.5 * S, smooth=1.3 * S, resolution=96,
+             location=v3(), rotation=v3(), scale=v3(1, 1, 1), color=0xFFFFFF, emissive=0, emissiveIntensity=0,
+             roughness=0.85, metalness=0.0, opacity=1, shadeless=0, wireframe=0, mesher="surfaceNets",
+             instanceShape=True, inheritColors=True, carveStrength=1.6, carveRadius=0.5 * S, display="mesh",
+             carveTint=True, carveColor=0x3A0A10),
+        # Ping-pong eyes and a nose: real spheres, crisp next to the fur.
+        shiny("eyeL", 0, 1700, (-0.42, 2.62, 0.78), 0.62, 0xFFFFFF),
+        shiny("eyeR", 0, 1820, (0.42, 2.62, 0.78), 0.62, 0xFFFFFF),
+        shiny("pupilL", 0, 1940, (-0.38, 2.64, 1.06), 0.16, 0x111111),
+        shiny("pupilR", 0, 2060, (0.38, 2.64, 1.06), 0.16, 0x111111),
+        shiny("nose", 0, 2180, (0, 2.12, 1.22), 0.42, 0xE0365A),
+        node("face", "structure/merge", 260, 1900),
+    ]
+    c = [
+        wire("mic", "audio", "lips", "audio"),
+        wire("lips", "open", "headLift", "a"),
+        wire("headLift", "vector", "liftT", "location"),
+    ] + ([] if os.environ.get("MUPPET_POSE") else [
+        wire("lips", "open", "mouthShape", "a"),
+        wire("lips", "wide", "mouthShape", "b"),
+        wire("lips", "round", "mouthShape", "c"),
+    ]) + [
+        wire("idle", "matrix", "headM", "a"),
+        wire("liftT", "matrix", "headM", "b"),
+        wire("mouthShape", "vector", "mouthT", "scale"),
+        wire("headM", "out", "mouthM", "a"),
+        wire("mouthT", "matrix", "mouthM", "b"),
+        wire("mouthM", "out", "mouth", "matrix"),
+        wire("mouth", "geometry", "muppet", "carveGeometry"),
+        wire("blobs", "geometry", "muppet", "geometry"),
+    ]
+    for i, part in enumerate(["body", "armL", "armR", "chin", "head", "hair0", "hair1", "hair2", "hair3"]):
+        c.append(wire(part, "geometry", "blobs", f"in{i}"))
+    for part in ["head", "hair0", "hair1", "hair2", "hair3"]:
+        c.append(wire("headM", "out", part, "matrix"))
+    c.append(wire("idle", "matrix", "chin", "matrix"))
+    for i, part in enumerate(["eyeL", "eyeR", "pupilL", "pupilR", "nose"]):
+        c.append(wire("headM", "out", part, "matrix"))
+        c.append(wire(part, "geometry", "face", f"in{i}"))
+    return n, c
+
+
 def main(only=None):
     names = [only] if only else list(DEMOS_SPEC)
     for name in names:
