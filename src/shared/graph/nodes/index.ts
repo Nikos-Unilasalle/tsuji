@@ -27,6 +27,7 @@ import { CSV_READER_NODE } from "./csv";
 import { COLOR_PALETTE_LIST_NODE, COMBINE_VECTOR_LISTS_NODE, DISTANCE_GRADIENT_LIST_NODE, GENERATE_LIST_NODE, GET_LIST_ITEM_NODE, GRADIENT_LIST_NODE, LIST_COMBINE_MATH_NODE, LIST_HISTOGRAM_NODE, LIST_LENGTH_NODE, LIST_MAP_RANGE_NODE, LIST_MATH_NODE, LIST_STATISTICS_NODE, RANDOM_SAMPLE_LIST_NODE, SLICE_LIST_NODE, SPLIT_VECTOR_LIST_NODE } from "./list";
 import { INSPECTOR_NODE } from "./inspector";
 import { AUDIO_PEAK_DETECTOR_NODE, AUDIO_PLAYER_NODE, AUDIO_SPECTRUM_NODE, AUDIO_SYNTH_NODE, MICROPHONE_INPUT_NODE } from "./sound";
+import { LIPSYNC_NODE, MORPH_TARGETS_NODE } from "./lipsync";
 import {
   MUSIC_ARP_NODE,
   MUSIC_CLOCK_NODE,
@@ -419,6 +420,8 @@ export const STARTER_NODES = [
   AUDIO_PLAYER_NODE,
   AUDIO_SPECTRUM_NODE,
   MICROPHONE_INPUT_NODE,
+  LIPSYNC_NODE,
+  MORPH_TARGETS_NODE,
   AUDIO_PEAK_DETECTOR_NODE,
   AUDIO_SYNTH_NODE,
   MUSIC_CLOCK_NODE,
@@ -657,6 +660,7 @@ export * from "./csv";
 export * from "./list";
 export * from "./inspector";
 export * from "./sound";
+export * from "./lipsync";
 export * from "./random";
 export * from "./text";
 export * from "./keyboard";

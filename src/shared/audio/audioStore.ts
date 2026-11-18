@@ -348,6 +348,9 @@ export interface MicState {
   stream?: MediaStream;
   sourceNode?: MediaStreamAudioSourceNode;
   gainNode?: GainNode;
+  /** Taps the gain for the node's own Volume output; connected nowhere else, so the mic is never played back. */
+  levelAnalyser?: AnalyserNode;
+  levelData?: Float32Array<ArrayBuffer>;
 }
 
 const micCache = createNodeCache<MicState>((state) => {
@@ -356,6 +359,9 @@ const micCache = createNodeCache<MicState>((state) => {
   } catch {}
   try {
     state.gainNode?.disconnect();
+  } catch {}
+  try {
+    state.levelAnalyser?.disconnect();
   } catch {}
   if (state.stream) state.stream.getTracks().forEach((track) => track.stop());
 });
@@ -383,12 +389,25 @@ export function enableMicrophone(nodeId: string): Promise<MicState> {
       state.sourceNode = ctx.createMediaStreamSource(stream);
       state.gainNode = ctx.createGain();
       state.sourceNode.connect(state.gainNode);
+      state.levelAnalyser = ctx.createAnalyser();
+      state.levelAnalyser.fftSize = 1024;
+      state.levelData = new Float32Array(state.levelAnalyser.fftSize);
+      state.gainNode.connect(state.levelAnalyser);
       return state;
     })
     .catch((err) => {
       console.warn("Microphone access denied or error:", err);
       return state;
     });
+}
+
+/** The microphone's RMS level after gain, 0..1 (speech sits around 0.05–0.3). */
+export function micLevel(state: MicState): number {
+  if (!state.levelAnalyser || !state.levelData) return 0;
+  state.levelAnalyser.getFloatTimeDomainData(state.levelData);
+  let sum = 0;
+  for (let i = 0; i < state.levelData.length; i++) sum += state.levelData[i] * state.levelData[i];
+  return Math.min(1, Math.sqrt(sum / state.levelData.length));
 }
 
 export interface SynthState {

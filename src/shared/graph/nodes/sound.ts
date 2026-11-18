@@ -9,6 +9,7 @@ import {
   getOrCreatePeakDetector,
   getOrCreatePlayer,
   getOrCreateSynth,
+  micLevel,
   requestPause,
   requestPlay,
   stopClip,
@@ -452,7 +453,7 @@ export const MICROPHONE_INPUT_NODE: NodeDefinition = {
 
     return {
       audio: micState,
-      volume: enable ? 1 : 0,
+      volume: enable ? micLevel(micState) : 0,
     };
   },
 };
