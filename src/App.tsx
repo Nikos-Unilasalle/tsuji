@@ -11,6 +11,7 @@ import { EXPLODE_GLTF_ACTION, ExplodedTexture, explodeGltfToMeshData, GLTF_CHOOS
 import { addBrowserFiles, filesFromDrop, requestProjectFolder } from "./shared/graph/browserFiles";
 import { isTauri } from "./shared/isTauri";
 import { TOGGLE_POINTS_KEYFRAME_ACTION } from "./shared/graph/nodes/curve";
+import { getCurveInputPoints } from "./shared/graph/curvePoseStore";
 import { EDIT_MESH_POINTS_NODE, RESEED_MESH_POINTS_ACTION } from "./shared/graph/nodes/editMeshPoints";
 import { isIkControlNode } from "./shared/graph/curveLookup";
 import {
@@ -1771,6 +1772,11 @@ function MainEditor() {
       if (action === TOGGLE_POINTS_KEYFRAME_ACTION) {
         const node = findNodeDeep(graph, nodeId);
         if (!node || currentFrame < 0) return;
+        // Wired Curve from Points: what the handles edit is the offsets.
+        if (getCurveInputPoints(nodeId)) {
+          onToggleKeyframe(nodeId, "pointOffsets", currentFrame, node.params.pointOffsets ?? []);
+          return;
+        }
         let points = node.params.pointsList;
         if (node.type === EDIT_MESH_POINTS_NODE.type && (!Array.isArray(points) || points.length === 0)) {
           const inputs = evaluatedResults?.get(nodeId)?.__evaluatedInputs as Record<string, unknown> | undefined;

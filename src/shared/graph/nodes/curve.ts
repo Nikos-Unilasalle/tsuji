@@ -16,7 +16,8 @@ import {
   recentreGeometry,
 } from "./object";
 import { DEFAULT_PROFILE_POINTS, ProfilePoint } from "../profileCurve";
-import { setCurveNodePose, getCurveNodePose } from "../curvePoseStore";
+import { setCurveNodePose, getCurveNodePose, setCurveInputPoints } from "../curvePoseStore";
+import { offsetCurvePoints } from "../curvePoints";
 import { canRebuildCurve, RadialOffsetCurve3, SaggedLineCurve3, WORLD_DOWN } from "../curveClasses";
 import { requestJob } from "../offthread/jobs";
 import { geometryFromTubeBuffers } from "../offthread/curveTube";
@@ -460,7 +461,7 @@ export const CURVE_FROM_POINTS_NODE: NodeDefinition = {
     { id: "curve", label: "Curve", type: "curve" },
     { id: "geometry", label: "Curve Preview", type: "geometry" },
   ],
-  reset: { params: ["pointsList"] },
+  reset: { params: ["pointsList", "pointOffsets"] },
   defaultParams: {
     type: "catmull",
     closed: false,
@@ -470,6 +471,8 @@ export const CURVE_FROM_POINTS_NODE: NodeDefinition = {
     // through the points on their own.
     sag: 0,
     pointsList: defaultCurvePoints(),
+    // The handles' edits while Points is wired — see offsetCurvePoints.
+    pointOffsets: [],
     ...CURVE_TRANSFORM_DEFAULTS,
   },
   dynamicParamFields: () => [
@@ -487,13 +490,17 @@ export const CURVE_FROM_POINTS_NODE: NodeDefinition = {
   ],
   evaluate: (inputs, params, ctx) => {
     let pts: THREE.Vector3[] = [];
-    if (Array.isArray(inputs.points) && inputs.points.length >= 2) {
-      pts = inputs.points.map((p) => asVector3(p, new THREE.Vector3()));
+    const wired = Array.isArray(inputs.points) && inputs.points.length >= 2;
+    if (wired) {
+      const base = (inputs.points as unknown[]).map((p) => asVector3(p, new THREE.Vector3()).clone());
+      setCurveInputPoints(ctx.nodeId, base);
+      pts = offsetCurvePoints(base, params.pointOffsets);
     } else if (Array.isArray(params.pointsList) && params.pointsList.length >= 2) {
       pts = (params.pointsList as unknown[]).map((p) => asVector3(p, new THREE.Vector3()));
     } else {
       pts = defaultCurvePoints();
     }
+    if (!wired) setCurveInputPoints(ctx.nodeId, null);
 
     const closed = inputs.closed !== undefined ? Boolean(inputs.closed) : Boolean(params.closed);
     const tension = inputs.tension !== undefined ? asNumber(inputs.tension, 0.5) : asNumber(params.tension, 0.5);

@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { describe, expect, test } from "vitest";
-import { insertCurvePointAfter, removeCurvePoint, toPointVectors } from "./curvePoints";
+import { insertCurvePointAfter, offsetCurvePoints, offsetsForMovedPoints, removeCurvePoint, toPointVectors } from "./curvePoints";
+import { CURVE_FROM_POINTS_NODE } from "./nodes/curve";
 
 const LINE = [new THREE.Vector3(0, 0, 0), new THREE.Vector3(2, 0, 0), new THREE.Vector3(4, 0, 0)];
 
@@ -78,5 +79,31 @@ describe("removeCurvePoint", () => {
 
   test("an index outside the list is rejected", () => {
     expect(removeCurvePoint(LINE, 3)).toBeNull();
+  });
+});
+
+describe("wired points offsets", () => {
+  test("a dragged point keeps its offset when the incoming points change", () => {
+    const offsets = offsetsForMovedPoints(LINE, [], new Map([[1, new THREE.Vector3(2, 1, 0)]]));
+    expect(offsets.map((o) => o.toArray())).toEqual([[0, 0, 0], [0, 1, 0], [0, 0, 0]]);
+
+    const scaled = LINE.map((p) => p.clone().multiplyScalar(2));
+    expect(offsetCurvePoints(scaled, offsets)[1].toArray()).toEqual([4, 1, 0]);
+  });
+
+  test("missing offsets leave the points where they came in", () => {
+    expect(offsetCurvePoints(LINE, [{ x: 0, y: 0, z: 1 }]).map((p) => p.toArray())).toEqual([[0, 0, 1], [2, 0, 0], [4, 0, 0]]);
+  });
+
+  test("Curve from Points applies them to its wired Points", () => {
+    const out = CURVE_FROM_POINTS_NODE.evaluate!(
+      { points: LINE },
+      { ...CURVE_FROM_POINTS_NODE.defaultParams, type: "linear", pointOffsets: [new THREE.Vector3(), new THREE.Vector3(0, 1, 0)] },
+      { nodeId: "wired-offsets", time: 0, frame: 0 } as never,
+    ) as { curve: THREE.Curve<THREE.Vector3> };
+    const mid = out.curve.getPoint(0.5);
+    expect(mid.x).toBeCloseTo(2);
+    expect(mid.y).toBeCloseTo(1);
+    expect(mid.z).toBeCloseTo(0);
   });
 });

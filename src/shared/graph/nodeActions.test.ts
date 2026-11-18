@@ -20,7 +20,7 @@ describe("node Reset", () => {
     expect(nodeResetPatch(sculpt)).toEqual({ sculptMesh: null });
     const curve = DEFAULT_REGISTRY.get("curve/from_points")!;
     const patch = nodeResetPatch(curve)!;
-    expect(Object.keys(patch)).toEqual(["pointsList"]);
+    expect(Object.keys(patch)).toEqual(["pointsList", "pointOffsets"]);
     // A fresh copy, not the definition's own array.
     expect(patch.pointsList).not.toBe(curve.defaultParams.pointsList);
     expect(patch.pointsList).toEqual(curve.defaultParams.pointsList);

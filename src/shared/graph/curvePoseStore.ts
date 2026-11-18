@@ -18,3 +18,19 @@ export function setCurveNodePose(nodeId: string, matrix: THREE.Matrix4): void {
 export function getCurveNodePose(nodeId: string): THREE.Matrix4 | undefined {
   return poses.get(nodeId);
 }
+
+/**
+ * The points wired into a Curve from Points' Points input (before its
+ * `pointOffsets`), keyed by node id, or none when the input is free: the
+ * viewport draws and drags that node's handles from these.
+ */
+const inputPoints = new Map<string, THREE.Vector3[]>();
+
+export function setCurveInputPoints(nodeId: string, points: THREE.Vector3[] | null): void {
+  if (points) inputPoints.set(nodeId, points.map((p) => p.clone()));
+  else inputPoints.delete(nodeId);
+}
+
+export function getCurveInputPoints(nodeId: string): THREE.Vector3[] | undefined {
+  return inputPoints.get(nodeId);
+}

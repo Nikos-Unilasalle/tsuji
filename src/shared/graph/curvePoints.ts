@@ -54,3 +54,28 @@ export function removeCurvePoint(rawPoints: unknown, index: number): THREE.Vecto
   if (points.length <= MIN_CURVE_POINTS) return null;
   return points.filter((_, idx) => idx !== index);
 }
+
+/**
+ * Curve from Points with its Points input wired: the handles edit offsets
+ * on top of the incoming points (`pointOffsets`, one per point, missing ones
+ * zero) rather than `pointsList`, so whatever feeds the input — a Curve
+ * Primitive whose radius changes, say — still drives the curve.
+ */
+export function offsetCurvePoints(base: THREE.Vector3[], rawOffsets: unknown): THREE.Vector3[] {
+  const offsets = toPointVectors(rawOffsets);
+  return base.map((p, i) => (offsets[i] ? p.clone().add(offsets[i]) : p.clone()));
+}
+
+/** The offsets that put each moved point where it was dropped, the others kept. */
+export function offsetsForMovedPoints(
+  base: THREE.Vector3[],
+  rawOffsets: unknown,
+  moves: Map<number, THREE.Vector3>,
+): THREE.Vector3[] {
+  const offsets = toPointVectors(rawOffsets);
+  return base.map((p, i) => {
+    const moved = moves.get(i);
+    if (moved) return moved.clone().sub(p);
+    return offsets[i] ?? new THREE.Vector3();
+  });
+}

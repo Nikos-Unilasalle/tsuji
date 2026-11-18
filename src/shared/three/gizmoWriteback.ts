@@ -18,6 +18,8 @@ export interface TransformPatch {
   rotationAngle?: number;
   scale?: THREE.Vector3;
   pointsList?: unknown[];
+  /** Curve from Points' handle edits while its Points input is wired (see offsetCurvePoints). */
+  pointOffsets?: THREE.Vector3[];
   /** Pivot Transform's own pivot point — written directly by its dedicated viewport marker, not through computeGizmoWriteback (see Viewport.tsx). */
   pivot?: THREE.Vector3;
   /** Points Selection's picked indices — written directly by its viewport click/marquee handling, not through computeGizmoWriteback. */

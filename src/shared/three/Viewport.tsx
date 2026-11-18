@@ -18,7 +18,8 @@ import { isIkControlNode, resolveCurveEditTarget } from "../graph/curveLookup";
 import { resolveSceneRoots } from "../graph/sceneRoots";
 import { findFirstMesh } from "../graph/meshRequired";
 import { getBoundsTree } from "./bvh";
-import { insertCurvePointAfter, removeCurvePoint } from "../graph/curvePoints";
+import { insertCurvePointAfter, offsetCurvePoints, offsetsForMovedPoints, removeCurvePoint } from "../graph/curvePoints";
+import { getCurveInputPoints } from "../graph/curvePoseStore";
 import { GizmoTarget, resolveGizmoTarget } from "../graph/transformLookup";
 import { CLIP_BOX_NODE, VISUAL_SLICE_NODE } from "../graph/nodes/visualSlice";
 import { DECAL_NODE } from "../graph/nodes/decal";
@@ -2496,6 +2497,8 @@ export function Viewport({
       // source mesh's own vertex index for writePointsToMesh's write-back to
       // mean anything — unlike a curve, there is no legal insert/remove here.
       if (node.type === EDIT_MESH_POINTS_NODE.type || isIkControlNode(node) || hasParamHandles(node)) return false;
+      // Wired points: their count is the input's, the handles only offset them.
+      if (getCurveInputPoints(node.id)) return false;
 
       const index = Array.from(selectedPointIndices)[0];
       const nextPoints =
@@ -3099,6 +3102,13 @@ export function Viewport({
             if (patch) onTransformChangeRef.current(node.id, patch);
             return;
           }
+          const wiredBase = getCurveInputPoints(node.id);
+          if (wiredBase) {
+            if (pointIdx < 0 || pointIdx >= wiredBase.length) return;
+            const pointOffsets = offsetsForMovedPoints(wiredBase, node.params.pointOffsets, new Map([[pointIdx, object.position.clone()]]));
+            onTransformChangeRef.current(node.id, { pointOffsets });
+            return;
+          }
           let rawList = Array.isArray(node.params.pointsList) ? [...node.params.pointsList] : [];
           if (rawList.length === 0 && (node.type === EDIT_MESH_POINTS_NODE.type || isIkControlNode(node))) {
             rawList = [];
@@ -3136,7 +3146,8 @@ export function Viewport({
           if (!node || !onTransformChangeRef.current) return;
           // Param handles each mean something different: there is no moving several at once.
           if (hasParamHandles(node)) return;
-          let rawList = Array.isArray(node.params.pointsList) ? [...node.params.pointsList] : [];
+          const wiredBase = getCurveInputPoints(node.id);
+          let rawList: unknown[] = wiredBase ? [...wiredBase] : Array.isArray(node.params.pointsList) ? [...node.params.pointsList] : [];
           if (rawList.length === 0 && (node.type === EDIT_MESH_POINTS_NODE.type || isIkControlNode(node))) {
             rawList = [];
             for (let i = 0; i < curveHandles.count(); i++) {
@@ -3169,6 +3180,10 @@ export function Viewport({
 
           if (node.type === EDIT_MESH_POINTS_NODE.type) {
             onTransformChangeRef.current(node.id, { pointsList: applyWeldedPointMoves(rawList, moves) });
+            return;
+          }
+          if (wiredBase) {
+            onTransformChangeRef.current(node.id, { pointOffsets: offsetsForMovedPoints(wiredBase, node.params.pointOffsets, moves) });
             return;
           }
 
@@ -6305,8 +6320,13 @@ export function Viewport({
       const isEditMeshPointsNode = curveNode?.type === EDIT_MESH_POINTS_NODE.type;
       const rawStoredPoints = Array.isArray(curveNode?.params.pointsList) ? curveNode.params.pointsList : [];
 
+      // Curve from Points with its Points input wired: the incoming points plus the handles' offsets.
+      const wiredCurvePoints = curveNode ? getCurveInputPoints(curveNode.id) : undefined;
+
       let curvePoints: THREE.Vector3[];
-      if (isLatticeNode) {
+      if (wiredCurvePoints) {
+        curvePoints = offsetCurvePoints(wiredCurvePoints, curveNode!.params.pointOffsets);
+      } else if (isLatticeNode) {
         curvePoints = latticeEvaluatedPoints(curveNode!.params);
       } else if (isEditMeshPointsNode && rawStoredPoints.length === 0) {
         const spaceObj = curveTarget ? results.get(curveTarget.spaceNodeId)?.geometry : undefined;
