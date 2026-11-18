@@ -28,6 +28,7 @@ import { COLOR_PALETTE_LIST_NODE, COMBINE_VECTOR_LISTS_NODE, DISTANCE_GRADIENT_L
 import { INSPECTOR_NODE } from "./inspector";
 import { AUDIO_PEAK_DETECTOR_NODE, AUDIO_PLAYER_NODE, AUDIO_SPECTRUM_NODE, AUDIO_SYNTH_NODE, MICROPHONE_INPUT_NODE } from "./sound";
 import { LIPSYNC_NODE, MORPH_TARGETS_NODE } from "./lipsync";
+import { MAKE_MORPH_TARGETS_NODE } from "./makeMorphTargets";
 import {
   MUSIC_ARP_NODE,
   MUSIC_CLOCK_NODE,
@@ -158,6 +159,7 @@ import { NOISE_PEAKS_NODE, SCATTER_AROUND_NODE } from "./noisePeaks";
 import { CURVE_SHAPE_KEY_NODE, MESH_SHAPE_KEY_NODE } from "./shapeKey";
 import { LATTICE_DEFORM_NODE } from "./lattice";
 import { METABALLS_NODE } from "./metaballs";
+import { METABALL_ATTRIBUTES_NODE } from "./metaballAttributes";
 import { BLOB_FIELD_COMBINE_NODE, BLOB_FIELD_POINTS_NODE, BLOB_FIELD_POLYLINE_NODE } from "./blobField";
 import { BOOLEAN_NODE } from "./boolean";
 import { FRACTURE_NODE } from "./fracture";
@@ -422,6 +424,7 @@ export const STARTER_NODES = [
   MICROPHONE_INPUT_NODE,
   LIPSYNC_NODE,
   MORPH_TARGETS_NODE,
+  MAKE_MORPH_TARGETS_NODE,
   AUDIO_PEAK_DETECTOR_NODE,
   AUDIO_SYNTH_NODE,
   MUSIC_CLOCK_NODE,
@@ -509,6 +512,7 @@ export const STARTER_NODES = [
   SCATTER_AROUND_NODE,
   LATTICE_DEFORM_NODE,
   METABALLS_NODE,
+  METABALL_ATTRIBUTES_NODE,
   BLOB_FIELD_POINTS_NODE,
   BLOB_FIELD_POLYLINE_NODE,
   BLOB_FIELD_COMBINE_NODE,
@@ -661,6 +665,7 @@ export * from "./list";
 export * from "./inspector";
 export * from "./sound";
 export * from "./lipsync";
+export * from "./makeMorphTargets";
 export * from "./random";
 export * from "./text";
 export * from "./keyboard";
@@ -692,6 +697,7 @@ export * from "./shapeKey";
 export * from "./curveFromPointLists";
 export * from "./lattice";
 export * from "./metaballs";
+export * from "./metaballAttributes";
 export * from "./blobField";
 export * from "./weld";
 export * from "./contourScan";

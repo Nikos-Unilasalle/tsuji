@@ -17,6 +17,12 @@ describe("EXPRESSION_NODE", () => {
     expect(EXPRESSION_NODE.evaluate({ t: 10 }, params("2t"), ctx(1.5, ["t"])).value).toBe(20);
   });
 
+  test("f is the timeline frame, or the clock counted in frames with no timeline", () => {
+    expect(EXPRESSION_NODE.evaluate({}, params("f"), { ...ctx(2), currentFrame: 17 }).value).toBe(17);
+    expect(EXPRESSION_NODE.evaluate({}, params("f"), { ...ctx(2), fps: 24 }).value).toBe(48);
+    expect(EXPRESSION_NODE.evaluate({ f: 5 }, params("f + 1"), ctx(2, ["f"])).value).toBe(6);
+  });
+
   test("a comma list gives a vector", () => {
     const out = EXPRESSION_NODE.evaluate({}, params("(1, 2x, 3)", { x: 2 }), ctx());
     expect(out.vector).toEqual(new THREE.Vector3(1, 4, 3));

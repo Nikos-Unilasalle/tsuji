@@ -5679,6 +5679,8 @@ export function Viewport({
     const backgroundBlur = createBackgroundBlur(renderer);
 
     let clock: ClockState = createClock(epochMs ?? Date.now());
+    // The playhead frame last seen while paused, so a scrub can be told from simply sitting still.
+    let pausedFrame: number | null = null;
     let frameId = 0;
 
     // Restarts the deterministic clock at "now" and drops every cached GPU
@@ -5933,6 +5935,20 @@ export function Viewport({
           // nothing was ever reported — leaving the 60 Hz timer in charge of
           // a 30 fps timeline, and the animation and its sound at double speed.
           onFrameChangeRef.current?.(timelineFrame);
+        }
+
+        // A scrub while paused moves time with it: whatever runs on time (Expression's t, a Time node,
+        // a wiggle) shows the instant under the playhead, as an export of that frame would. Only an
+        // actual move re-anchors — pausing itself keeps the running clock, or every pause would read as
+        // a rewind and reset the simulations (see the paused branch above). Play then carries on from here.
+        if (!capture && !isPlayingRef.current && timelineFrame >= 0) {
+          if (pausedFrame !== null && timelineFrame !== pausedFrame) {
+            const time = timelineFrame / (renderFps ?? 30);
+            clock = { epochMs: Date.now() - time * 1000, step: Math.round(time / STEP_SECONDS), time };
+          }
+          pausedFrame = timelineFrame;
+        } else {
+          pausedFrame = null;
         }
 
         if (isPlayingRef.current) simulationRunRef.current = true;

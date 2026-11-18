@@ -23,9 +23,38 @@ const tmpMatrix = new THREE.Matrix4();
 const tmpInstance = new THREE.Matrix4();
 const tmpColor = new THREE.Color();
 
+/**
+ * Metaball settings carried by a source object (set by the Metaball Attributes node), overriding
+ * the consuming node's own for the blobs that object makes. Absent fields fall back to the node.
+ */
+export interface BlobAttributes {
+  radius?: number;
+  /** Blend reach, as a multiple of the radius (> 1). */
+  smooth?: number;
+  /** Field strength; on a carver, how hard it carves. */
+  weight?: number;
+  /** Grid cells along the mesh's longest side — one grid per mesh, so the finest asked for wins. */
+  resolution?: number;
+}
+
+/** Where on an object's userData its BlobAttributes live. */
+export const BLOB_ATTRIBUTES_KEY = "metaball";
+
+/** The attributes of the nearest tagged object from `object` up to `root`, so tagging a group covers its children. */
+export function blobAttributesOf(object: THREE.Object3D, root: THREE.Object3D): BlobAttributes | undefined {
+  for (let o: THREE.Object3D | null = object; o; o = o.parent) {
+    const tag = o.userData?.[BLOB_ATTRIBUTES_KEY] as BlobAttributes | undefined;
+    if (tag && typeof tag === "object") return tag;
+    if (o === root) break;
+  }
+  return undefined;
+}
+
 /** A ball centre plus what its source object says about it. */
 export interface Centre {
   point: THREE.Vector3;
+  /** Per-object metaball settings, from the Metaball Attributes node. */
+  blob?: BlobAttributes;
   /** Row-major 3×3 of the source's rotation × scale, relative to the wired root. */
   shape?: number[];
   /** Instance colour, or the source mesh's material colour. */
@@ -74,6 +103,7 @@ export function centresFromObject(object: THREE.Object3D, out: Centre[], frame?:
     if (instanced.isInstancedMesh) {
       const childWorld = worldMatrixOf(child, tmpMatrix).clone();
       const fallback = materialColor(child);
+      const blob = blobAttributesOf(child, object);
       for (let i = 0; i < instanced.count; i++) {
         instanced.getMatrixAt(i, tmpInstance);
         tmpInstance.premultiply(childWorld).premultiply(rootInverse);
@@ -82,13 +112,18 @@ export function centresFromObject(object: THREE.Object3D, out: Centre[], frame?:
           instanced.getColorAt(i, tmpColor);
           color = [tmpColor.r, tmpColor.g, tmpColor.b];
         }
-        out.push({ point: new THREE.Vector3().setFromMatrixPosition(tmpInstance), shape: shapeOf(tmpInstance), color });
+        out.push({ point: new THREE.Vector3().setFromMatrixPosition(tmpInstance), shape: shapeOf(tmpInstance), color, blob });
       }
       return;
     }
     if (!(child as THREE.Mesh).isMesh && !(child as THREE.Points).isPoints) return;
     const local = worldMatrixOf(child, tmpMatrix).clone().premultiply(rootInverse);
-    out.push({ point: new THREE.Vector3().setFromMatrixPosition(local), shape: shapeOf(local), color: materialColor(child) });
+    out.push({
+      point: new THREE.Vector3().setFromMatrixPosition(local),
+      shape: shapeOf(local),
+      color: materialColor(child),
+      blob: blobAttributesOf(child, object),
+    });
   });
 }
 

@@ -4,7 +4,13 @@ import { clockInput, numberInput } from "./object";
 import { CompiledExpression, compileExpression, ExpressionError } from "../../math/expression";
 
 /** The names a formula can read: each one a socket of the Expression node. */
-export const EXPRESSION_VARIABLES = ["x", "y", "z", "t", "a", "b", "c", "d"] as const;
+export const EXPRESSION_VARIABLES = ["x", "y", "z", "t", "f", "a", "b", "c", "d"] as const;
+
+/** The timeline frame under the playhead; with keyframes off, the clock counted in the render's frames. */
+function frameOf(ctx: { time: number; fps?: number; currentFrame?: number }): number {
+  if (typeof ctx.currentFrame === "number" && ctx.currentFrame >= 0) return ctx.currentFrame;
+  return Math.floor(ctx.time * (ctx.fps ?? 30) + 1e-6);
+}
 
 const compiled = new Map<string, CompiledExpression | ExpressionError>();
 
@@ -51,8 +57,8 @@ const BASE_FIELDS: ParamFieldDef[] = [
  * surfaces, fields), and useful on its own anywhere a number has a rule:
  * `0.5 + 0.5 sin(2πt)` to pulse a light, `a x² + b` to place a point.
  *
- * Unwired, a–d and x–z read their panel values (sliders to scrub) and t
- * reads the timeline. Wire a list into any letter and the formula runs once
+ * Unwired, a–d and x–z read their panel values (sliders to scrub), t reads
+ * the time in seconds and f the timeline frame. Wire a list into any letter and the formula runs once
  * per item, so `x²` over a list of x gives the list of squares.
  */
 export const EXPRESSION_NODE: NodeDefinition = {
@@ -77,7 +83,9 @@ export const EXPRESSION_NODE: NodeDefinition = {
     for (const v of EXPRESSION_VARIABLES) {
       const raw = inputs[v];
       if (Array.isArray(raw)) length = Math.max(length, raw.length);
-      else scope[v] = v === "t" ? clockInput(inputs, params, ctx, "t") : numberInput(raw, params[v], 0);
+      else if (v === "t") scope[v] = clockInput(inputs, params, ctx, "t");
+      else if (v === "f") scope[v] = raw !== undefined ? numberInput(raw, 0, 0) : frameOf(ctx);
+      else scope[v] = numberInput(raw, params[v], 0);
     }
 
     const toVector = (r: number[]) => new THREE.Vector3(r[0] ?? 0, r[1] ?? 0, r[2] ?? 0);

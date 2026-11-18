@@ -62,8 +62,8 @@ export const BLOB_FIELD_POINTS_NODE: NodeDefinition = {
     const weight = numberInput(inputs.weight, params.weight, 1);
     const elements: BlobFieldElement[] = [];
     collectCentres(inputs.points, inputs.geometry, WORLD).forEach((centre, i) => {
-      const r = finiteAt(inputs.radii, i, radius);
-      const w = finiteAt(inputs.weights, i, 1) * weight;
+      const r = finiteAt(inputs.radii, i, centre.blob?.radius ?? radius);
+      const w = finiteAt(inputs.weights, i, 1) * (centre.blob?.weight ?? weight);
       if (!(r > 0) || !Number.isFinite(w) || w === 0) return;
       elements.push({
         kind: 0,

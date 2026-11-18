@@ -6,7 +6,7 @@ import { BALL_STRIDE, MeshBuffers, MetaballsJob } from "../offthread/marchingCub
 import { BLOB_POINT, BLOB_SEGMENT, BLOB_STRIDE, blobIso, BlobsJob, writeBlobElement } from "../offthread/surfaceNets";
 import { requestJob } from "../offthread/jobs";
 import { worldMatrixOf } from "../objectPosition";
-import { asRgb, Centre, collectCentres, collectSegments, finiteAt, isBlobField, listAt } from "./blobElements";
+import { asRgb, BlobAttributes, Centre, collectCentres, collectSegments, finiteAt, isBlobField, listAt } from "./blobElements";
 import {
   applyMaterialParams,
   buildPrimitiveDynamicParamFields,
@@ -144,6 +144,33 @@ function geometryFrame(geometry: unknown): THREE.Matrix4 {
   return worldMatrixOf(geometry, new THREE.Matrix4()).invert();
 }
 
+/** An object's own Smooth when it gives a usable one (a reach past its radius), else the node's. */
+function ownSmooth(blob: BlobAttributes | undefined, fallback: number): number {
+  const s = Number(blob?.smooth);
+  return Number.isFinite(s) && s > 1.01 ? Math.min(s, 8) : fallback;
+}
+
+/**
+ * The surface is extracted at one iso level, set by the node's Smooth so a lone ball's surface sits
+ * at its radius. A ball with a reach of its own peaks differently at its radius; scaling its weight by
+ * the ratio of the two levels puts its lone surface back at the radius — only how far it blends changes.
+ */
+function smoothCompensation(smooth: number, nodeSmooth: number): number {
+  return smooth === nodeSmooth ? 1 : blobIso(nodeSmooth) / blobIso(smooth);
+}
+
+/** One grid meshes the whole field, so an object asking for a finer one refines it all. */
+function finestResolution(resolution: number, ...groups: Centre[][]): number {
+  let finest = resolution;
+  for (const group of groups) {
+    for (const c of group) {
+      const r = Number(c.blob?.resolution);
+      if (Number.isFinite(r) && r > finest) finest = r;
+    }
+  }
+  return Math.min(256, Math.max(8, Math.round(finest)));
+}
+
 /**
  * Every element the Surface Nets kernel sees: the centres (point list first,
  * then the geometry wire's) with their per-ball radius / weight / colour, then
@@ -169,15 +196,17 @@ function blobsJobFor(inputs: Record<string, unknown>, centres: Centre[], setting
   const elements = new Float64Array((centres.length + segments.length + fieldElements.length + carvers.length) * BLOB_STRIDE);
   let n = 0;
   centres.forEach((centre, i) => {
-    const radius = finiteAt(inputs.radii, i, settings.radius);
+    // A per-element list wins over the object's own attributes, which win over this node's.
+    const radius = finiteAt(inputs.radii, i, centre.blob?.radius ?? settings.radius);
     if (!(radius > 0)) return;
     const color = asRgb(listAt(inputs.colors, i)) ?? (settings.inheritColors ? centre.color : undefined);
+    const smooth = ownSmooth(centre.blob, settings.smooth);
     const ok = writeBlobElement(elements, n, {
       kind: BLOB_POINT,
       a: [centre.point.x, centre.point.y, centre.point.z],
       radius,
-      smooth: settings.smooth,
-      weight: finiteAt(inputs.weights, i, 1),
+      smooth,
+      weight: finiteAt(inputs.weights, i, centre.blob?.weight ?? 1) * smoothCompensation(smooth, settings.smooth),
       color,
       shape: settings.instanceShape ? centre.shape : undefined,
     });
@@ -218,12 +247,14 @@ function blobsJobFor(inputs: Record<string, unknown>, centres: Centre[], setting
       const color = settings.carveMaterial
         ? (carver.color ?? settings.carveTint ?? undefined)
         : (settings.carveTint ?? undefined);
+      const smooth = ownSmooth(carver.blob, settings.smooth);
+      const strength = carver.blob?.weight !== undefined ? Math.min(10, Math.abs(carver.blob.weight)) : settings.carveStrength;
       const ok = writeBlobElement(elements, n, {
         kind: BLOB_POINT,
         a: [carver.point.x, carver.point.y, carver.point.z],
-        radius: settings.carveRadius,
-        smooth: settings.smooth,
-        weight: -settings.carveStrength,
+        radius: carver.blob?.radius ?? settings.carveRadius,
+        smooth,
+        weight: -strength * smoothCompensation(smooth, settings.smooth),
         color,
         shape: settings.instanceShape ? carver.shape : undefined,
       });
@@ -235,7 +266,7 @@ function blobsJobFor(inputs: Record<string, unknown>, centres: Centre[], setting
     job: {
       elements: elements.subarray(0, n * BLOB_STRIDE),
       iso: blobIso(settings.smooth),
-      resolution: settings.resolution,
+      resolution: finestResolution(settings.resolution, centres, carvers),
       maxVertices: SN_MAX_VERTICES,
       maxIndices: SN_MAX_INDICES,
       colors,
