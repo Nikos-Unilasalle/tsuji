@@ -249,6 +249,101 @@ describe("METABALLS_NODE", () => {
     expect(box.min.y).toBeCloseTo(-1, 1);
   });
 
+  test("carve works for spheres as for boxes at arbitrary positions", () => {
+    // Case 1: sphere centres carved by sphere carver
+    const ballSphere = new THREE.Mesh(new THREE.SphereGeometry(0.5), new THREE.MeshStandardMaterial());
+    ballSphere.position.set(3, 0, 0);
+    ballSphere.updateMatrixWorld(true);
+
+    const holeSphere = new THREE.Mesh(new THREE.SphereGeometry(0.5), new THREE.MeshStandardMaterial());
+    holeSphere.position.set(3.5, 0, 0);
+    holeSphere.updateMatrixWorld(true);
+
+    const outSphereCarve = run({ geometry: ballSphere, carveGeometry: holeSphere }, "mb-carve-s-s", { radius: 1, carveRadius: 0.6 });
+    expect(bounds(outSphereCarve).max.x).toBeLessThan(3.8);
+    expect(bounds(outSphereCarve).max.x).toBeGreaterThan(3.2);
+
+    // Case 2: sphere centres carved by box carver
+    const holeBox = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial());
+    holeBox.position.set(3.5, 0, 0);
+    holeBox.updateMatrixWorld(true);
+
+    const outBoxCarve = run({ geometry: ballSphere, carveGeometry: holeBox }, "mb-carve-s-b", { radius: 1, carveRadius: 0.6 });
+    expect(bounds(outBoxCarve).max.x).toBeLessThan(3.8);
+    expect(bounds(outBoxCarve).max.x).toBeGreaterThan(3.2);
+
+    // Case 3: box centres carved by box carver
+    const ballBox = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial());
+    ballBox.position.set(3, 0, 0);
+    ballBox.updateMatrixWorld(true);
+
+    const outBoxBox = run({ geometry: ballBox, carveGeometry: holeBox }, "mb-carve-b-b", { radius: 1, carveRadius: 0.6 });
+    expect(bounds(outBoxBox).max.x).toBeLessThan(3.8);
+    expect(bounds(outBoxBox).max.x).toBeGreaterThan(3.2);
+
+    // Case 4: box centres carved by sphere carver
+    const outBoxSphere = run({ geometry: ballBox, carveGeometry: holeSphere }, "mb-carve-b-s", { radius: 1, carveRadius: 0.6 });
+    expect(bounds(outBoxSphere).max.x).toBeLessThan(3.8);
+    expect(bounds(outBoxSphere).max.x).toBeGreaterThan(3.2);
+  });
+
+  test("carveMaterial option uses the carve object's own material color", () => {
+    // Blue carver sphere
+    const holeBlue = new THREE.Mesh(new THREE.SphereGeometry(0.5), new THREE.MeshStandardMaterial({ color: 0x0000ff }));
+    holeBlue.position.set(1, 0, 0);
+    holeBlue.updateMatrixWorld(true);
+
+    const out = run(
+      { points: [new THREE.Vector3(0, 0, 0)], carveGeometry: holeBlue },
+      "mb-carve-mat",
+      {
+        radius: 1,
+        carveRadius: 0.6,
+        carveMaterial: true,
+        carveColor: new THREE.Color(1, 0, 0), // red fallback, which should NOT be used
+      },
+    );
+    const geometry = meshOf(out).geometry;
+    const color = geometry.getAttribute("color") as THREE.BufferAttribute;
+    const position = geometry.getAttribute("position") as THREE.BufferAttribute;
+    let minRed = 1;
+    let farRed = 0;
+    for (let i = 0; i < color.count; i++) {
+      const x = position.getX(i);
+      if (x > 0.6) minRed = Math.min(minRed, color.getX(i));
+      if (x < -0.8) farRed = Math.max(farRed, color.getX(i));
+    }
+    expect(minRed).toBeLessThan(0.6); // blued inside the cut (red drops from base white)
+    expect(farRed).toBeCloseTo(1, 3); // untouched on far side
+
+    // Box carver with green material
+    const boxGreen = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial({ color: 0x00ff00 }));
+    boxGreen.position.set(1, 0, 0);
+    boxGreen.updateMatrixWorld(true);
+
+    const outBox = run(
+      { points: [new THREE.Vector3(0, 0, 0)], carveGeometry: boxGreen },
+      "mb-carve-mat-box",
+      {
+        radius: 1,
+        carveRadius: 0.6,
+        carveMaterial: true,
+      },
+    );
+    const geomBox = meshOf(outBox).geometry;
+    const colorBox = geomBox.getAttribute("color") as THREE.BufferAttribute;
+    const posBox = geomBox.getAttribute("position") as THREE.BufferAttribute;
+    let boxMinRed = 1;
+    let boxFarRed = 0;
+    for (let i = 0; i < colorBox.count; i++) {
+      const x = posBox.getX(i);
+      if (x > 0.6) boxMinRed = Math.min(boxMinRed, colorBox.getX(i));
+      if (x < -0.8) boxFarRed = Math.max(boxFarRed, colorBox.getX(i));
+    }
+    expect(boxMinRed).toBeLessThan(0.6); // greened inside the cut (red drops from base white)
+    expect(boxFarRed).toBeCloseTo(1, 3);
+  });
+
   test("Carve Strength scales the cut, 0 turns it off", () => {
     const points = [new THREE.Vector3(0, 0, 0)];
     const carvePoints = [new THREE.Vector3(1.2, 0, 0)];

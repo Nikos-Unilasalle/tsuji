@@ -122,15 +122,26 @@ interface BlobSettings {
   carveStrength: number;
   /**
    * Colour the carvers give the surface they cut, or null to leave it alone.
-   * Always Carve Color — not the carver object's own colour, even with Inherit
-   * Source Colors: a fresh sphere is white, which silently overrode the colour
-   * picked here. Per-hole colours: negative Blob Field elements with Colors.
+   * Carve Color fallback — or the carver object's own colour when carveMaterial is on.
    */
   carveTint: [number, number, number] | null;
+  /** Whether to use the carver object's own material color for the cut surface. */
+  carveMaterial: boolean;
   smooth: number;
   resolution: number;
   instanceShape: boolean;
   inheritColors: boolean;
+}
+
+function geometryFrame(geometry: unknown): THREE.Matrix4 {
+  if (!(geometry instanceof THREE.Object3D)) return new THREE.Matrix4();
+  const lone =
+    ((geometry as THREE.Mesh).isMesh || (geometry as THREE.Points).isPoints) &&
+    !(geometry as THREE.InstancedMesh).isInstancedMesh;
+  if (lone) {
+    return geometry.parent ? worldMatrixOf(geometry.parent, new THREE.Matrix4()).invert() : new THREE.Matrix4();
+  }
+  return worldMatrixOf(geometry, new THREE.Matrix4()).invert();
 }
 
 /**
@@ -144,7 +155,7 @@ function blobsJobFor(inputs: Record<string, unknown>, centres: Centre[], setting
   // They are placed where they are in the scene, in the same space as the
   // centres (the centres wire's root, or the world without one) — not in
   // their own root's space, which would pin a lone carver object to the origin.
-  const frame = inputs.geometry instanceof THREE.Object3D ? worldMatrixOf(inputs.geometry, new THREE.Matrix4()).invert() : new THREE.Matrix4();
+  const frame = geometryFrame(inputs.geometry);
   const carvers = collectCentres(inputs.carvePoints, inputs.carveGeometry, frame);
   // A wired Blob Field: its own radii, weights and colours, meshed with this node's Smooth.
   const fieldElements = isBlobField(inputs.field) ? inputs.field.elements : [];
@@ -153,7 +164,8 @@ function blobsJobFor(inputs: Record<string, unknown>, centres: Centre[], setting
     explicitColors ||
     (settings.inheritColors && centres.some((c) => c.color)) ||
     fieldElements.some((e) => e.color) ||
-    (settings.carveTint !== null && carvers.length > 0);
+    (settings.carveTint !== null && carvers.length > 0) ||
+    (settings.carveMaterial && carvers.some((c) => c.color));
   const elements = new Float64Array((centres.length + segments.length + fieldElements.length + carvers.length) * BLOB_STRIDE);
   let n = 0;
   centres.forEach((centre, i) => {
@@ -203,13 +215,16 @@ function blobsJobFor(inputs: Record<string, unknown>, centres: Centre[], setting
   }
   if (settings.carveStrength > 0 && settings.carveRadius > 0) {
     for (const carver of carvers) {
+      const color = settings.carveMaterial
+        ? (carver.color ?? settings.carveTint ?? undefined)
+        : (settings.carveTint ?? undefined);
       const ok = writeBlobElement(elements, n, {
         kind: BLOB_POINT,
         a: [carver.point.x, carver.point.y, carver.point.z],
         radius: settings.carveRadius,
         smooth: settings.smooth,
         weight: -settings.carveStrength,
-        color: settings.carveTint ?? undefined,
+        color,
         shape: settings.instanceShape ? carver.shape : undefined,
       });
       if (ok) n++;
@@ -350,6 +365,7 @@ function metaballParamFields(mesher: Mesher): ParamFieldDef[] {
       { id: "inheritColors", label: "Inherit Source Colors", kind: "boolean", group: "Metaballs" },
       { id: "carveStrength", label: "Carve Strength", kind: "number", step: 0.1, group: "Metaballs" },
       { id: "carveRadius", label: "Carve Radius (0 = Radius)", kind: "number", step: 0.05, group: "Metaballs" },
+      { id: "carveMaterial", label: "Use Carver Material", kind: "boolean", group: "Metaballs" },
       { id: "carveTint", label: "Tint Carved Surface", kind: "boolean", group: "Metaballs" },
       { id: "carveColor", label: "Carve Color", kind: "color", group: "Metaballs" },
     );
@@ -378,12 +394,17 @@ function evaluateLegacy(nodeId: string, inputs: Record<string, unknown>, params:
 function blobsPayload(inputs: Record<string, unknown>, params: Record<string, unknown>, radius: number, smooth: number) {
   const resolution = Math.min(256, Math.max(8, Math.round(numberInput(undefined, params.resolution, 64))));
   const carveRadius = numberInput(inputs.carveRadius, params.carveRadius, 0);
+  const carveMaterial =
+    inputs.carveMaterial !== undefined
+      ? Boolean(inputs.carveMaterial)
+      : params.carveMaterial === true || params.useCarverMaterial === true;
   return blobsJobFor(inputs, collectCentres(inputs.points, inputs.geometry), {
     radius,
     // 0 (the default) means "same as Radius".
     carveRadius: carveRadius > 0 ? carveRadius : radius,
     carveStrength: Math.min(10, Math.max(0, numberInput(inputs.carveStrength, params.carveStrength, 1))),
     carveTint: params.carveTint === true ? asRgb(inputs.carveColor ?? params.carveColor) ?? [0.6, 0.15, 0.15] : null,
+    carveMaterial,
     smooth,
     resolution,
     instanceShape: params.instanceShape === true,
@@ -499,6 +520,7 @@ export const METABALLS_NODE: NodeDefinition = {
     { id: "carveStrength", label: "Carve Strength", type: "value" },
     { id: "carveRadius", label: "Carve Radius", type: "value" },
     { id: "carveColor", label: "Carve Color", type: "color" },
+    { id: "carveMaterial", label: "Use Carver Material", type: "value" },
     // No Material input: the blobs draw with their own material, the one
     // their per-element colours and the raymarched display are built on.
     ...COMMON_PRIMITIVE_INPUTS.filter((s) => s.id !== "material"),
@@ -517,6 +539,7 @@ export const METABALLS_NODE: NodeDefinition = {
     inheritColors: false,
     carveStrength: 1,
     carveRadius: 0,
+    carveMaterial: false,
     carveTint: false,
     carveColor: new THREE.Color(0x9b2c2c),
   },
