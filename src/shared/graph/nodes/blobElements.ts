@@ -35,6 +35,10 @@ export interface BlobAttributes {
   weight?: number;
   /** Grid cells along the mesh's longest side — one grid per mesh, so the finest asked for wins. */
   resolution?: number;
+  /** Point: one blob at the object's origin. Volume: the object's own shape, filled. Absent: the node decides. */
+  shape?: "point" | "volume";
+  /** For a volume: how round its edges come out and how far it reaches to melt into others (world units). */
+  softness?: number;
 }
 
 /** Where on an object's userData its BlobAttributes live. */
@@ -55,6 +59,8 @@ export interface Centre {
   point: THREE.Vector3;
   /** Per-object metaball settings, from the Metaball Attributes node. */
   blob?: BlobAttributes;
+  /** Set when the object is to be filled rather than reduced to its centre: its mesh and where it sits. */
+  volume?: { geometry: THREE.BufferGeometry; matrix: THREE.Matrix4 };
   /** Row-major 3×3 of the source's rotation × scale, relative to the wired root. */
   shape?: number[];
   /** Instance colour, or the source mesh's material colour. */
@@ -83,7 +89,7 @@ export function materialColor(object: THREE.Object3D): [number, number, number] 
  * by default, since scenes often scale their marker objects without meaning
  * the blobs to follow) and colour.
  */
-export function centresFromObject(object: THREE.Object3D, out: Centre[], frame?: THREE.Matrix4): void {
+export function centresFromObject(object: THREE.Object3D, out: Centre[], frame?: THREE.Matrix4, volumes = false): void {
   // `frame` (world → the space to express centres in) defaults to the wired
   // root's own space — a Merge / Group is a container whose children are the
   // centres. A lone mesh wired straight in is the centre itself, though: its
@@ -112,23 +118,28 @@ export function centresFromObject(object: THREE.Object3D, out: Centre[], frame?:
           instanced.getColorAt(i, tmpColor);
           color = [tmpColor.r, tmpColor.g, tmpColor.b];
         }
-        out.push({ point: new THREE.Vector3().setFromMatrixPosition(tmpInstance), shape: shapeOf(tmpInstance), color, blob });
+        const centre: Centre = { point: new THREE.Vector3().setFromMatrixPosition(tmpInstance), shape: shapeOf(tmpInstance), color, blob };
+        if (asVolume(blob, volumes)) centre.volume = { geometry: instanced.geometry, matrix: tmpInstance.clone() };
+        out.push(centre);
       }
       return;
     }
     if (!(child as THREE.Mesh).isMesh && !(child as THREE.Points).isPoints) return;
     const local = worldMatrixOf(child, tmpMatrix).clone().premultiply(rootInverse);
-    out.push({
-      point: new THREE.Vector3().setFromMatrixPosition(local),
-      shape: shapeOf(local),
-      color: materialColor(child),
-      blob: blobAttributesOf(child, object),
-    });
+    const blob = blobAttributesOf(child, object);
+    const centre: Centre = { point: new THREE.Vector3().setFromMatrixPosition(local), shape: shapeOf(local), color: materialColor(child), blob };
+    const geometry = (child as THREE.Mesh).geometry;
+    if ((child as THREE.Mesh).isMesh && geometry?.attributes.position && asVolume(blob, volumes)) centre.volume = { geometry, matrix: local };
+    out.push(centre);
   });
 }
 
-/** Centres from a point list and a geometry wire, in that order. */
-export function collectCentres(points: unknown, geometry: unknown, frame?: THREE.Matrix4): Centre[] {
+function asVolume(blob: BlobAttributes | undefined, volumes: boolean): boolean {
+  return blob?.shape ? blob.shape === "volume" : volumes;
+}
+
+/** Centres from a point list and a geometry wire, in that order. With `volumes`, meshes are marked to be filled. */
+export function collectCentres(points: unknown, geometry: unknown, frame?: THREE.Matrix4, volumes = false): Centre[] {
   const centres: Centre[] = [];
   if (Array.isArray(points)) {
     for (const entry of points) {
@@ -136,7 +147,7 @@ export function collectCentres(points: unknown, geometry: unknown, frame?: THREE
       if (point) centres.push({ point });
     }
   }
-  if (geometry instanceof THREE.Object3D) centresFromObject(geometry, centres, frame);
+  if (geometry instanceof THREE.Object3D) centresFromObject(geometry, centres, frame, volumes);
   return centres;
 }
 

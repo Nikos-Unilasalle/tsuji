@@ -1485,6 +1485,39 @@ def _():
 # ---------------------------------------------------------------- Sound
 
 
+@demo("object_metaballs_volumes")
+def _():
+    """Everything is a metaball: with Objects as Volumes, Metaballs fills each wired
+    mesh with its own shape — a word standing on a plinth, a cone — so they come out
+    rounded and melt into one another within Softness. A sphere on an orbit flows
+    through them, and a box wired to Carve cuts its own shape out as it passes."""
+    ORANGE, GREEN = 0xF29A2E, 0x84CC16
+    # The sources are hidden: only their metaball shows.
+    n = [
+        node("word", "object/text", -1300, -120, text="tsuji", depth=0.35, location=v3(-1.15, 0.05, -0.2), scale=v3(1.45, 1.45, 1), color=ORANGE, visible=0),
+        node("plinth", "object/box", -1300, 140, location=v3(0, -0.2, 0), scale=v3(3.2, 0.5, 1.0), color=BLUE, visible=0),
+        node("cone", "object/cone", -1300, 400, location=v3(1.2, 0.15, 1.15), scale=v3(0.6, 1.0, 0.6), color=GREEN, visible=0),
+        node("orbit", "transform/orbit", -1560, 660, radius=1.65, speed=45, height=0.3),
+        node("drop", "object/sphere", -1300, 660, scale=v3(0.42, 0.42, 0.42), color=PINK, visible=0),
+        node("all", "structure/merge", -1000, 300),
+        node("cutOrbit", "transform/orbit", -1560, 920, radius=1.3, speed=-30, height=-0.15),
+        node("cutter", "object/box", -1300, 920, scale=v3(0.45, 0.45, 0.45), color=MID, visible=0),
+        node("mb", "object/metaballs", -700, 400, volumes=True, softness=0.12, resolution=96,
+             instanceShape=True, inheritColors=True, carveTint=True, carveColor=0x3B0764, roughness=0.35),
+    ]
+    c = [
+        wire("word", "geometry", "all", "in0"),
+        wire("plinth", "geometry", "all", "in1"),
+        wire("cone", "geometry", "all", "in2"),
+        wire("orbit", "matrix", "drop", "matrix"),
+        wire("drop", "geometry", "all", "in3"),
+        wire("all", "geometry", "mb", "geometry"),
+        wire("cutOrbit", "matrix", "cutter", "matrix"),
+        wire("cutter", "geometry", "mb", "carveGeometry"),
+    ]
+    return n, c
+
+
 @demo("sound_lipsync_muppet")
 def _():
     """A metaball muppet that talks with the microphone: Lip Sync's Open / Wide /

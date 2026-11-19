@@ -65,6 +65,11 @@ export const DEMO_CATALOG: DemoCategory[] = [
         description: "A particle fountain meshed as one liquid surface: Particle Simulate → Particles to Points → Metaballs.",
       },
       {
+        file: "demo_object_metaballs_volumes.tsuji",
+        label: "Metaballs — Everything Melts",
+        description: "Objects as Volumes: a word, its plinth and a cone each become a metaball of their own shape, rounded by Softness. An orbiting sphere melts through them and a box on Carve cuts its shape out as it passes.",
+      },
+      {
         file: "demo_object_metaballs_fields.tsuji",
         label: "Metaballs — Blob Fields",
         description: "A figure composed from Blob Fields: a body (Points), a ring around it (Polyline from a circle) and eyes subtracted from the head (Combine → Subtract).",

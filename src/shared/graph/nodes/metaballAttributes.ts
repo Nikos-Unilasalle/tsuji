@@ -36,6 +36,9 @@ function poseKey(root: THREE.Object3D): string {
  * Resolution: Metaballs meshes the whole field on one grid, so this can only refine the whole mesh —
  *   the finest asked for wins (0 = Metaballs' Resolution).
  *
+ * Shape: Point keeps the object a single blob at its centre; Volume fills its whole shape (a box stays
+ *   a box, rounded by its Softness). As Metaballs says: the Metaballs node's Objects as Volumes.
+ *
  * Per-element lists wired into Metaballs (Radii, Weights) still win over these.
  *
  * Tags a shallow copy (geometry and material shared), never the incoming object: that one belongs
@@ -51,10 +54,19 @@ export const METABALL_ATTRIBUTES_NODE: NodeDefinition = {
     { id: "smooth", label: "Smooth", type: "value" },
     { id: "weight", label: "Weight", type: "value" },
     { id: "resolution", label: "Resolution", type: "value" },
+    { id: "softness", label: "Softness", type: "value" },
   ],
   outputs: [{ id: "geometry", label: "Geometry", type: "geometry" }],
-  defaultParams: { radius: 0, smooth: 0, weight: 1, resolution: 0 },
+  defaultParams: { shape: "inherit", radius: 0, smooth: 0, weight: 1, resolution: 0, softness: 0 },
   paramFields: [
+    {
+      id: "shape",
+      label: "Shape",
+      kind: "select",
+      options: ["inherit", "point", "volume"],
+      optionLabels: ["As Metaballs says", "Point (a blob at its centre)", "Volume (its own shape)"],
+    },
+    { id: "softness", label: "Softness — volume edge rounding and melt reach (0 = Metaballs')", kind: "number", step: 0.01 },
     { id: "radius", label: "Radius (0 = Metaballs')", kind: "number", step: 0.05 },
     { id: "smooth", label: "Smooth — blend reach (0 = Metaballs')", kind: "number", step: 0.05 },
     { id: "weight", label: "Weight (<0 carves)", kind: "number", step: 0.1 },
@@ -72,6 +84,9 @@ export const METABALL_ATTRIBUTES_NODE: NodeDefinition = {
     if (radius > 0) attributes.radius = radius;
     if (smooth > 0) attributes.smooth = smooth;
     if (resolution > 0) attributes.resolution = resolution;
+    const softness = numberInput(inputs.softness, params.softness, 0);
+    if (softness > 0) attributes.softness = softness;
+    if (params.shape === "point" || params.shape === "volume") attributes.shape = params.shape;
 
     const key = `${JSON.stringify(attributes)}|${poseKey(root)}`;
     const cached = taggedCache.get(ctx.nodeId);

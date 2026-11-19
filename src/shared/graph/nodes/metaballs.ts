@@ -6,6 +6,7 @@ import { BALL_STRIDE, MeshBuffers, MetaballsJob } from "../offthread/marchingCub
 import { BLOB_POINT, BLOB_SEGMENT, BLOB_STRIDE, blobIso, BlobsJob, writeBlobElement } from "../offthread/surfaceNets";
 import { requestJob } from "../offthread/jobs";
 import { worldMatrixOf } from "../objectPosition";
+import { cachedVolumeBlobs, VolumeBlobs } from "./blobVolume";
 import { asRgb, BlobAttributes, Centre, collectCentres, collectSegments, finiteAt, isBlobField, listAt } from "./blobElements";
 import {
   applyMaterialParams,
@@ -131,6 +132,10 @@ interface BlobSettings {
   resolution: number;
   instanceShape: boolean;
   inheritColors: boolean;
+  /** Meshes wired in are filled as volumes rather than reduced to their centre. */
+  volumes: boolean;
+  /** A volume's blend reach: edge rounding and how far it melts into others. */
+  softness: number;
 }
 
 function geometryFrame(geometry: unknown): THREE.Matrix4 {
@@ -142,6 +147,12 @@ function geometryFrame(geometry: unknown): THREE.Matrix4 {
     return geometry.parent ? worldMatrixOf(geometry.parent, new THREE.Matrix4()).invert() : new THREE.Matrix4();
   }
   return worldMatrixOf(geometry, new THREE.Matrix4()).invert();
+}
+
+/** An object's own Softness when it gives one, else the node's. */
+function softnessOf(blob: BlobAttributes | undefined, fallback: number): number {
+  const s = Number(blob?.softness);
+  return Number.isFinite(s) && s > 0 ? s : fallback;
 }
 
 /** An object's own Smooth when it gives a usable one (a reach past its radius), else the node's. */
@@ -183,7 +194,7 @@ function blobsJobFor(inputs: Record<string, unknown>, centres: Centre[], setting
   // centres (the centres wire's root, or the world without one) — not in
   // their own root's space, which would pin a lone carver object to the origin.
   const frame = geometryFrame(inputs.geometry);
-  const carvers = collectCentres(inputs.carvePoints, inputs.carveGeometry, frame);
+  const carvers = collectCentres(inputs.carvePoints, inputs.carveGeometry, frame, settings.volumes);
   // A wired Blob Field: its own radii, weights and colours, meshed with this node's Smooth.
   const fieldElements = isBlobField(inputs.field) ? inputs.field.elements : [];
   const explicitColors = Array.isArray(inputs.colors) && inputs.colors.length > 0;
@@ -193,9 +204,36 @@ function blobsJobFor(inputs: Record<string, unknown>, centres: Centre[], setting
     fieldElements.some((e) => e.color) ||
     (settings.carveTint !== null && carvers.length > 0) ||
     (settings.carveMaterial && carvers.some((c) => c.color));
-  const elements = new Float64Array((centres.length + segments.length + fieldElements.length + carvers.length) * BLOB_STRIDE);
+  // Objects filled as volumes become many elements each: expanded (and voxelized, cached) up front to size the array.
+  const volumeOf = (c: Centre) =>
+    c.volume ? cachedVolumeBlobs(c.volume.geometry, c.volume.matrix, softnessOf(c.blob, settings.softness)) : null;
+  const centreVolumes = centres.map(volumeOf);
+  const carverVolumes = carvers.map(volumeOf);
+  const extra = [...centreVolumes, ...carverVolumes].reduce((sum, v) => sum + (v ? v.count - 1 : 0), 0);
+  const elements = new Float64Array((centres.length + segments.length + fieldElements.length + carvers.length + extra) * BLOB_STRIDE);
   let n = 0;
+  const iso = blobIso(settings.smooth);
+  // Each bump of a volume: the calibrated weight puts the surface on the shape's flat faces at this node's iso.
+  const writeVolume = (v: VolumeBlobs, scale: number, color: [number, number, number] | undefined) => {
+    for (let b = 0; b < v.count; b++) {
+      const ok = writeBlobElement(elements, n, {
+        kind: BLOB_POINT,
+        a: [v.points[b * 3], v.points[b * 3 + 1], v.points[b * 3 + 2]],
+        radius: v.reach / 2,
+        smooth: 2,
+        weight: v.fill[b] * v.unitWeight * iso * scale,
+        color,
+      });
+      if (ok) n++;
+    }
+  };
   centres.forEach((centre, i) => {
+    const volume = centreVolumes[i];
+    if (volume) {
+      const color = asRgb(listAt(inputs.colors, i)) ?? (settings.inheritColors ? centre.color : undefined);
+      writeVolume(volume, finiteAt(inputs.weights, i, centre.blob?.weight ?? 1), color);
+      return;
+    }
     // A per-element list wins over the object's own attributes, which win over this node's.
     const radius = finiteAt(inputs.radii, i, centre.blob?.radius ?? settings.radius);
     if (!(radius > 0)) return;
@@ -243,12 +281,18 @@ function blobsJobFor(inputs: Record<string, unknown>, centres: Centre[], setting
     if (ok) n++;
   }
   if (settings.carveStrength > 0 && settings.carveRadius > 0) {
-    for (const carver of carvers) {
+    for (let ci = 0; ci < carvers.length; ci++) {
+      const carver = carvers[ci];
       const color = settings.carveMaterial
         ? (carver.color ?? settings.carveTint ?? undefined)
         : (settings.carveTint ?? undefined);
-      const smooth = ownSmooth(carver.blob, settings.smooth);
       const strength = carver.blob?.weight !== undefined ? Math.min(10, Math.abs(carver.blob.weight)) : settings.carveStrength;
+      const volume = carverVolumes[ci];
+      if (volume) {
+        writeVolume(volume, -strength, color);
+        continue;
+      }
+      const smooth = ownSmooth(carver.blob, settings.smooth);
       const ok = writeBlobElement(elements, n, {
         kind: BLOB_POINT,
         a: [carver.point.x, carver.point.y, carver.point.z],
@@ -391,6 +435,10 @@ function metaballParamFields(mesher: Mesher): ParamFieldDef[] {
       },
     );
   } else {
+    fields.unshift(
+      { id: "volumes", label: "Objects as Volumes — any shape becomes a metaball", kind: "boolean", group: "Metaballs" },
+      { id: "softness", label: "Softness (volumes: edge rounding and melt reach)", kind: "number", step: 0.01, group: "Metaballs" },
+    );
     fields.push(
       { id: "instanceShape", label: "Instance Shape (ellipsoids)", kind: "boolean", group: "Metaballs" },
       { id: "inheritColors", label: "Inherit Source Colors", kind: "boolean", group: "Metaballs" },
@@ -429,7 +477,10 @@ function blobsPayload(inputs: Record<string, unknown>, params: Record<string, un
     inputs.carveMaterial !== undefined
       ? Boolean(inputs.carveMaterial)
       : params.carveMaterial === true || params.useCarverMaterial === true;
-  return blobsJobFor(inputs, collectCentres(inputs.points, inputs.geometry), {
+  const volumes = inputs.volumes !== undefined ? Boolean(inputs.volumes) : params.volumes === true;
+  return blobsJobFor(inputs, collectCentres(inputs.points, inputs.geometry, undefined, volumes), {
+    volumes,
+    softness: Math.max(0.005, numberInput(inputs.softness, params.softness, 0.15)),
     radius,
     // 0 (the default) means "same as Radius".
     carveRadius: carveRadius > 0 ? carveRadius : radius,
@@ -513,7 +564,8 @@ function withoutMaterialFields(fields: ParamFieldDef[]): ParamFieldDef[] {
 
 /** Raymarched only where it can stand in for the mesh: Surface Nets, nothing reading the geometry downstream. */
 function wantsRaymarch(params: Record<string, unknown>, ctx: { connectedOutputs?: ReadonlySet<string> }): boolean {
-  return params.display === "raymarch" && mesherOf(params) === "surfaceNets" && !ctx.connectedOutputs?.has("geometry");
+  // A volume packs dozens of overlapping bumps along any ray, past what the raymarcher can track.
+  return params.display === "raymarch" && mesherOf(params) === "surfaceNets" && !ctx.connectedOutputs?.has("geometry") && params.volumes !== true;
 }
 
 /**
@@ -527,6 +579,11 @@ function wantsRaymarch(params: Record<string, unknown>, ctx: { connectedOutputs?
  * dents without lining up a Weights list. A Blob Field (Blob Field: Points /
  * Polyline / Combine) adds its elements as they are, radii and weights
  * included; only this node's Smooth applies to them.
+ *
+ * Objects as Volumes: every mesh wired to Centres or Carve is filled as its own
+ * shape instead of standing for one ball at its origin — a box, a letter, a
+ * model become metaballs, rounded and melting into each other within Softness
+ * (see blobVolume.ts). Metaball Attributes switches one object either way.
  *
  * Surface Nets (default): compact field, sparse grid fitted to the elements,
  * indexed smooth-shaded mesh. Marching Cubes: the original mesher, kept so a
@@ -552,6 +609,8 @@ export const METABALLS_NODE: NodeDefinition = {
     { id: "carveRadius", label: "Carve Radius", type: "value" },
     { id: "carveColor", label: "Carve Color", type: "color" },
     { id: "carveMaterial", label: "Use Carver Material", type: "value" },
+    { id: "volumes", label: "Objects as Volumes", type: "value" },
+    { id: "softness", label: "Softness", type: "value" },
     // No Material input: the blobs draw with their own material, the one
     // their per-element colours and the raymarched display are built on.
     ...COMMON_PRIMITIVE_INPUTS.filter((s) => s.id !== "material"),
@@ -573,6 +632,8 @@ export const METABALLS_NODE: NodeDefinition = {
     carveMaterial: false,
     carveTint: false,
     carveColor: new THREE.Color(0x9b2c2c),
+    volumes: false,
+    softness: 0.15,
   },
   // Off in defaultParams so scenes saved before these options keep their look
   // (their marker objects are often scaled without meaning the blobs to follow);
