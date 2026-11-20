@@ -152,6 +152,9 @@ import { CURVE_TO_POINTS_NODE } from "./curveToPoints";
 import { SCATTER_ON_CURVES_NODE, STRATA_HATCH_NODE } from "./strata";
 import { RIDGE_LAYERS_NODE } from "./silhouetteLayers";
 import { CURVE_FILL_NODE, INK_STROKE_NODE } from "./ink";
+import { VORONOI_2D_NODE } from "./voronoi2d";
+import { POISSON_DISK_2D_NODE } from "./poissonDisk2d";
+import { HEIGHT_FROM_LINES_NODE } from "./heightFromLines";
 import { INSTANCE_ON_POINTS_NODE } from "./instanceOnPoints";
 import { WRITE_ON_NODE } from "./writeOn";
 import { STROKE_OUTLINE_NODE, STROKE_STYLE_NODE } from "./strokePaint";
@@ -504,6 +507,9 @@ export const STARTER_NODES = [
   SCATTER_ON_CURVES_NODE,
   INK_STROKE_NODE,
   CURVE_FILL_NODE,
+  VORONOI_2D_NODE,
+  POISSON_DISK_2D_NODE,
+  HEIGHT_FROM_LINES_NODE,
   INSTANCE_ON_POINTS_NODE,
   WRITE_ON_NODE,
   STROKE_OUTLINE_NODE,
@@ -646,6 +652,9 @@ export const DEFAULT_REGISTRY = createRegistry(STARTER_NODES);
 DEFAULT_REGISTRY.set("list/distance-gradient", DISTANCE_GRADIENT_LIST_NODE);
 
 export * from "./time";
+export * from "./voronoi2d";
+export * from "./poissonDisk2d";
+export * from "./heightFromLines";
 export * from "./marker";
 export * from "./valueMath";
 export * from "./vector";

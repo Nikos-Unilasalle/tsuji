@@ -234,6 +234,7 @@ describe("GIZMO_SELECTABLE_TYPES", () => {
       "object/ply_point_cloud",
       "curve/from_point_lists",
       "curve/profiled-tubes",
+      "curve/voronoi-2d",
       "physics/ripple-field",
       "math/axes",
       "math/latex",

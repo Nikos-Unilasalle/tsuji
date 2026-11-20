@@ -255,6 +255,12 @@ export const DEMO_CATALOG: DemoCategory[] = [
     title: "Curves",
     demos: [
       {
+        file: "demo_dragonfly_wing.tsuji",
+        label: "Dragonfly Wing (Voronoi 2D)",
+        description:
+          "A parametric dragonfly forewing, 1 unit = 1 cm: primary veins drawn as curves, Poisson Disk 2D scatters cell centres denser toward the tip and trailing edge, Voronoi 2D cuts the wing into cells lined up on the veins (the cross veins), and Height from Lines folds membrane and veins into the wing's corrugation.",
+      },
+      {
         file: "demo_curve_spine_koi.tsuji",
         label: "Spine Chain (Koi Pond)",
         description: "Flock steers, Spine Chain swims, Profiled Tubes gives them bodies: each koi trails its head and beats its tail harder as it speeds up, skinned with the Koi shape and Koi patches, leaving wakes in a Ripple Field and swimming around rocks the ripples bounce off, under lily pads that drift and tilt on the waves. Click to call them (and drop a ripple), s to scatter.",
