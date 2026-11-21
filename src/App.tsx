@@ -13,6 +13,7 @@ import { isTauri } from "./shared/isTauri";
 import { TOGGLE_POINTS_KEYFRAME_ACTION } from "./shared/graph/nodes/curve";
 import { getCurveInputPoints } from "./shared/graph/curvePoseStore";
 import { EDIT_MESH_POINTS_NODE, RESEED_MESH_POINTS_ACTION } from "./shared/graph/nodes/editMeshPoints";
+import { WIND_TUNNEL_COMPUTE_ACTION, WIND_TUNNEL_COMPUTE_ALL_ACTION, WIND_TUNNEL_2D_NODE } from "./shared/graph/nodes/windTunnel2d";
 import { isIkControlNode } from "./shared/graph/curveLookup";
 import {
   EDIT_MESH_NODE,
@@ -1817,6 +1818,29 @@ function MainEditor() {
         const node = findNodeDeep(graph, nodeId);
         const patch = node ? computeSkinWeightTargets(nodeId, node.params) : null;
         if (patch) onParamChange(patch, undefined, nodeId);
+        return;
+      }
+      if (action === WIND_TUNNEL_COMPUTE_ACTION) {
+        // A counter rather than a flag: the node computes whenever it changes.
+        const node = findNodeDeep(graph, nodeId);
+        if (node) onParamChange({ computeRequest: (Number(node.params.computeRequest) || 0) + 1 }, nodeId);
+        return;
+      }
+      if (action === WIND_TUNNEL_COMPUTE_ALL_ACTION) {
+        // One history step for all of them.
+        setGraphWithHistory((prev) => {
+          let next = prev;
+          const bump = (nodes: typeof prev.nodes) => {
+            for (const n of nodes) {
+              if (n.type === WIND_TUNNEL_2D_NODE.type) {
+                next = updateNodeDeep(next, n.id, (m) => ({ ...m, params: { ...m.params, computeRequest: (Number(m.params.computeRequest) || 0) + 1 } }));
+              }
+              if (n.subgraph) bump(n.subgraph.nodes);
+            }
+          };
+          bump(prev.nodes);
+          return next;
+        });
         return;
       }
       if (action === SKIN_REWEIGH_ACTION) {

@@ -258,7 +258,7 @@ export const DEMO_CATALOG: DemoCategory[] = [
         file: "demo_dragonfly_wing.tsuji",
         label: "Dragonfly Wing (Voronoi 2D)",
         description:
-          "A parametric dragonfly forewing, 1 unit = 1 cm: primary veins drawn as curves, Poisson Disk 2D scatters cell centres denser toward the tip and trailing edge, Voronoi 2D cuts the wing into cells lined up on the veins (the cross veins), and Height from Lines folds membrane and veins into the wing's corrugation.",
+          "A parametric dragonfly wing built with Voronoi patterns, folded into its natural pleats, then tested in a 2D wind tunnel: select the wind tunnel node and press Compute to see the airflow, pressure and lift.",
       },
       {
         file: "demo_curve_spine_koi.tsuji",

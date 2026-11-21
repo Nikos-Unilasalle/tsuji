@@ -204,13 +204,112 @@
           }
         },
         {
+          "id": "f_drawn",
+          "type": "utility/frame",
+          "position": {
+            "x": -3700,
+            "y": -600
+          },
+          "params": {
+            "title": "1 \u00b7 Anatomie dessin\u00e9e \u2014 contour, costa, Sc, R1, nodus, pt\u00e9rostigma (murs)",
+            "color": 9071162,
+            "width": 660,
+            "height": 1040
+          }
+        },
+        {
+          "id": "f_traced",
+          "type": "utility/frame",
+          "position": {
+            "x": -3000,
+            "y": -600
+          },
+          "params": {
+            "title": "2 \u00b7 Veines relev\u00e9es (cach\u00e9es) \u2014 guident l'\u00e9tirement et la corrugation",
+            "color": 7041664,
+            "width": 660,
+            "height": 1040
+          }
+        },
+        {
+          "id": "f_long",
+          "type": "utility/frame",
+          "position": {
+            "x": -2300,
+            "y": -600
+          },
+          "params": {
+            "title": "3 \u00b7 Nervures longitudinales \u2014 Voronoi l\u00e2che, \u00e9tir\u00e9 le long des veines",
+            "color": 3900150,
+            "width": 870,
+            "height": 500
+          }
+        },
+        {
+          "id": "f_cells",
+          "type": "utility/frame",
+          "position": {
+            "x": -2300,
+            "y": -60
+          },
+          "params": {
+            "title": "4 \u00b7 Cellules + nervures transverses \u2014 Voronoi dense, panneau par panneau",
+            "color": 1096065,
+            "width": 870,
+            "height": 500
+          }
+        },
+        {
+          "id": "f_fold",
+          "type": "utility/frame",
+          "position": {
+            "x": -1390,
+            "y": -600
+          },
+          "params": {
+            "title": "5 \u00b7 Corrugation \u2014 cr\u00eates (+) et vall\u00e9es (\u2212)",
+            "color": 11032055,
+            "width": 780,
+            "height": 820
+          }
+        },
+        {
+          "id": "f_tubes",
+          "type": "utility/frame",
+          "position": {
+            "x": -570,
+            "y": -600
+          },
+          "params": {
+            "title": "6 \u00b7 Tubes (rayons en cm) et pt\u00e9rostigma",
+            "color": 15680580,
+            "width": 500,
+            "height": 1240
+          }
+        },
+        {
+          "id": "f_tunnel",
+          "type": "utility/frame",
+          "position": {
+            "x": -2300,
+            "y": 700
+          },
+          "params": {
+            "title": "7 \u00b7 Soufflerie 2D \u2014 7 coupes le long de l'envergure (bouton Compute)",
+            "color": 959977,
+            "width": 870,
+            "height": 420
+          }
+        },
+        {
           "id": "outline",
           "type": "curve/from_points",
           "position": {
-            "x": -1900,
-            "y": -300
+            "x": -3670,
+            "y": -550
           },
           "params": {
+            "name": "Contour de l'aile",
             "type": "catmull",
             "closed": true,
             "tension": 0.5,
@@ -232,9 +331,19 @@
                 "z": -0.256
               },
               {
+                "x": -0.285,
+                "y": 0.45,
+                "z": -0.322
+              },
+              {
                 "x": -0.165,
                 "y": 0.45,
-                "z": -0.337
+                "z": -0.302
+              },
+              {
+                "x": -0.065,
+                "y": 0.45,
+                "z": -0.358
               },
               {
                 "x": 0.324,
@@ -343,10 +452,11 @@
           "id": "costa",
           "type": "curve/from_points",
           "position": {
-            "x": -1900,
-            "y": -150
+            "x": -3670,
+            "y": -305
           },
           "params": {
+            "name": "C \u2014 costa (bord d'attaque)",
             "type": "catmull",
             "closed": false,
             "tension": 0.5,
@@ -370,17 +480,17 @@
               {
                 "x": -1.0,
                 "y": 0.47713,
-                "z": -0.25048
+                "z": -0.25008
               },
               {
                 "x": -0.5,
                 "y": 0.4745,
-                "z": -0.29512
+                "z": -0.29202
               },
               {
                 "x": -0.1,
                 "y": 0.4724,
-                "z": -0.34021
+                "z": -0.32649
               },
               {
                 "x": 0.4,
@@ -400,12 +510,113 @@
               {
                 "x": 1.9,
                 "y": 0.4619,
-                "z": -0.62259
+                "z": -0.63067
               },
               {
                 "x": 2.3,
                 "y": 0.4598,
-                "z": -0.61569
+                "z": -0.63249
+              }
+            ]
+          }
+        },
+        {
+          "id": "nodus",
+          "type": "curve/from_points",
+          "position": {
+            "x": -3455,
+            "y": -550
+          },
+          "params": {
+            "name": "Nodus \u2014 nervure nodale (C \u2192 Sc \u2192 R1)",
+            "type": "linear",
+            "closed": false,
+            "tension": 0.5,
+            "visible": 0,
+            "pointsList": [
+              {
+                "x": -0.165,
+                "y": 0.45,
+                "z": -0.302
+              },
+              {
+                "x": -0.15,
+                "y": 0.45,
+                "z": -0.25224
+              },
+              {
+                "x": -0.135,
+                "y": 0.45,
+                "z": -0.20654
+              }
+            ]
+          }
+        },
+        {
+          "id": "subnodus",
+          "type": "curve/from_points",
+          "position": {
+            "x": -3455,
+            "y": -305
+          },
+          "params": {
+            "name": "Subnodus (R1 \u2192 RP)",
+            "type": "linear",
+            "closed": false,
+            "tension": 0.5,
+            "visible": 0,
+            "pointsList": [
+              {
+                "x": -0.135,
+                "y": 0.45,
+                "z": -0.20654
+              },
+              {
+                "x": -0.005,
+                "y": 0.45,
+                "z": -0.16924
+              }
+            ]
+          }
+        },
+        {
+          "id": "pterostigma",
+          "type": "curve/from_points",
+          "position": {
+            "x": -3455,
+            "y": -60
+          },
+          "params": {
+            "name": "Pt\u00e9rostigma",
+            "type": "linear",
+            "closed": false,
+            "tension": 0.5,
+            "visible": 0,
+            "pointsList": [
+              {
+                "x": 1.5,
+                "y": 0.4556,
+                "z": -0.60535
+              },
+              {
+                "x": 2.12,
+                "y": 0.4543,
+                "z": -0.61105
+              },
+              {
+                "x": 2.12,
+                "y": 0.4543,
+                "z": -0.52097
+              },
+              {
+                "x": 1.5,
+                "y": 0.4556,
+                "z": -0.53383
+              },
+              {
+                "x": 1.5,
+                "y": 0.4556,
+                "z": -0.60535
               }
             ]
           }
@@ -414,10 +625,11 @@
           "id": "vein_0",
           "type": "curve/from_points",
           "position": {
-            "x": -1900,
-            "y": 0
+            "x": -3670,
+            "y": -60
           },
           "params": {
+            "name": "Sc \u2014 sous-costale (finit au nodus)",
             "type": "catmull",
             "closed": false,
             "tension": 0.5,
@@ -436,17 +648,17 @@
               {
                 "x": -0.9,
                 "y": 0.4234,
-                "z": -0.22088
+                "z": -0.21997
               },
               {
                 "x": -0.2,
                 "y": 0.42707,
-                "z": -0.33388
+                "z": -0.30783
               },
               {
                 "x": -0.14,
                 "y": 0.42739,
-                "z": -0.3729
+                "z": -0.34522
               }
             ]
           }
@@ -455,10 +667,11 @@
           "id": "vein_1",
           "type": "curve/from_points",
           "position": {
-            "x": -1900,
-            "y": 110
+            "x": -3670,
+            "y": 185
           },
           "params": {
+            "name": "R1 \u2014 radiale 1 (jusqu'\u00e0 l'apex)",
             "type": "catmull",
             "closed": false,
             "tension": 0.5,
@@ -477,12 +690,12 @@
               {
                 "x": -0.9,
                 "y": 0.4766,
-                "z": -0.1499
+                "z": -0.14906
               },
               {
                 "x": -0.1,
                 "y": 0.4724,
-                "z": -0.25169
+                "z": -0.23919
               },
               {
                 "x": 0.8,
@@ -497,17 +710,17 @@
               {
                 "x": 2.1,
                 "y": 0.46085,
-                "z": -0.47748
+                "z": -0.48832
               },
               {
                 "x": 2.4,
                 "y": 0.45927,
-                "z": -0.3842
+                "z": -0.3927
               },
               {
                 "x": 2.53,
                 "y": 0.45875,
-                "z": -0.24035
+                "z": -0.2429
               }
             ]
           }
@@ -516,10 +729,11 @@
           "id": "vein_2",
           "type": "curve/from_points",
           "position": {
-            "x": -1900,
-            "y": 220
+            "x": -2970,
+            "y": -550
           },
           "params": {
+            "name": "RP / R2 \u2014 radiale post\u00e9rieure",
             "type": "catmull",
             "closed": false,
             "tension": 0.5,
@@ -538,12 +752,12 @@
               {
                 "x": -0.6,
                 "y": 0.42497,
-                "z": -0.09688
+                "z": -0.0948
               },
               {
                 "x": -0.1,
                 "y": 0.4276,
-                "z": -0.17121
+                "z": -0.15982
               },
               {
                 "x": 0.7,
@@ -558,17 +772,17 @@
               {
                 "x": 2.1,
                 "y": 0.43915,
-                "z": -0.33023
+                "z": -0.33765
               },
               {
                 "x": 2.4,
                 "y": 0.44073,
-                "z": -0.21774
+                "z": -0.22029
               },
               {
                 "x": 2.48,
                 "y": 0.44115,
-                "z": -0.15953
+                "z": -0.15902
               }
             ]
           }
@@ -577,10 +791,11 @@
           "id": "vein_3",
           "type": "curve/from_points",
           "position": {
-            "x": -1900,
-            "y": 330
+            "x": -2970,
+            "y": -305
           },
           "params": {
+            "name": "IR2 \u2014 intercalaire radiale 2",
             "type": "catmull",
             "closed": false,
             "tension": 0.5,
@@ -589,7 +804,7 @@
               {
                 "x": 0.0,
                 "y": 0.47187,
-                "z": -0.11084
+                "z": -0.10929
               },
               {
                 "x": 0.8,
@@ -604,12 +819,12 @@
               {
                 "x": 2.0,
                 "y": 0.46138,
-                "z": -0.19895
+                "z": -0.20277
               },
               {
                 "x": 2.25,
                 "y": 0.46006,
-                "z": -0.05459
+                "z": -0.05408
               }
             ]
           }
@@ -618,10 +833,11 @@
           "id": "vein_4",
           "type": "curve/from_points",
           "position": {
-            "x": -1900,
-            "y": 440
+            "x": -2970,
+            "y": -60
           },
           "params": {
+            "name": "R3 \u2014 radiale 3",
             "type": "catmull",
             "closed": false,
             "tension": 0.5,
@@ -630,7 +846,7 @@
               {
                 "x": -0.25,
                 "y": 0.42681,
-                "z": -0.10968
+                "z": -0.09933
               },
               {
                 "x": 0.5,
@@ -645,12 +861,12 @@
               {
                 "x": 1.7,
                 "y": 0.43705,
-                "z": -0.0515
+                "z": -0.05201
               },
               {
                 "x": 1.92,
                 "y": 0.43821,
-                "z": 0.06882
+                "z": 0.06909
               }
             ]
           }
@@ -659,10 +875,11 @@
           "id": "vein_5",
           "type": "curve/from_points",
           "position": {
-            "x": -1900,
-            "y": 550
+            "x": -2970,
+            "y": 185
           },
           "params": {
+            "name": "IR3 \u2014 intercalaire radiale 3",
             "type": "catmull",
             "closed": false,
             "tension": 0.5,
@@ -671,12 +888,12 @@
               {
                 "x": -0.4,
                 "y": 0.47398,
-                "z": 0.00468
+                "z": 0.00719
               },
               {
                 "x": 0.3,
                 "y": 0.4703,
-                "z": 0.02558
+                "z": 0.02566
               },
               {
                 "x": 1.0,
@@ -695,10 +912,11 @@
           "id": "vein_6",
           "type": "curve/from_points",
           "position": {
-            "x": -1900,
-            "y": 660
+            "x": -2755,
+            "y": -550
           },
           "params": {
+            "name": "R4 \u2014 radiale 4",
             "type": "catmull",
             "closed": false,
             "tension": 0.5,
@@ -717,12 +935,12 @@
               {
                 "x": -0.5,
                 "y": 0.4255,
-                "z": 0.11479
+                "z": 0.11661
               },
               {
                 "x": 0.3,
                 "y": 0.4297,
-                "z": 0.18289
+                "z": 0.18295
               },
               {
                 "x": 0.8,
@@ -741,10 +959,11 @@
           "id": "vein_7",
           "type": "curve/from_points",
           "position": {
-            "x": -1900,
-            "y": 770
+            "x": -2755,
+            "y": -305
           },
           "params": {
+            "name": "MA \u2014 m\u00e9diane ant\u00e9rieure",
             "type": "catmull",
             "closed": false,
             "tension": 0.5,
@@ -763,12 +982,12 @@
               {
                 "x": -0.5,
                 "y": 0.4745,
-                "z": 0.19517
+                "z": 0.19674
               },
               {
                 "x": 0.2,
                 "y": 0.47082,
-                "z": 0.28542
+                "z": 0.28567
               },
               {
                 "x": 0.67,
@@ -782,10 +1001,11 @@
           "id": "vein_8",
           "type": "curve/from_points",
           "position": {
-            "x": -1900,
-            "y": 880
+            "x": -2755,
+            "y": -60
           },
           "params": {
+            "name": "CuA \u2014 cubitale ant\u00e9rieure",
             "type": "catmull",
             "closed": false,
             "tension": 0.5,
@@ -799,17 +1019,17 @@
               {
                 "x": -0.9,
                 "y": 0.4234,
-                "z": 0.40779
+                "z": 0.4081
               },
               {
                 "x": -0.2,
                 "y": 0.42707,
-                "z": 0.46454
+                "z": 0.46975
               },
               {
                 "x": 0.28,
                 "y": 0.4296,
-                "z": 0.63707
+                "z": 0.63706
               }
             ]
           }
@@ -818,10 +1038,11 @@
           "id": "vein_9",
           "type": "curve/from_points",
           "position": {
-            "x": -1900,
-            "y": 990
+            "x": -2755,
+            "y": 185
           },
           "params": {
+            "name": "A1 \u2014 anale",
             "type": "catmull",
             "closed": false,
             "tension": 0.5,
@@ -850,48 +1071,7 @@
               {
                 "x": -0.9,
                 "y": 0.4766,
-                "z": 0.77282
-              }
-            ]
-          }
-        },
-        {
-          "id": "pterostigma",
-          "type": "curve/from_points",
-          "position": {
-            "x": -1900,
-            "y": 1150
-          },
-          "params": {
-            "type": "linear",
-            "closed": false,
-            "tension": 0.5,
-            "visible": 0,
-            "pointsList": [
-              {
-                "x": 1.5,
-                "y": 0.4556,
-                "z": -0.60535
-              },
-              {
-                "x": 2.12,
-                "y": 0.4543,
-                "z": -0.59684
-              },
-              {
-                "x": 2.12,
-                "y": 0.4543,
-                "z": -0.50893
-              },
-              {
-                "x": 1.5,
-                "y": 0.4556,
-                "z": -0.53383
-              },
-              {
-                "x": 1.5,
-                "y": 0.4556,
-                "z": -0.60535
+                "z": 0.77279
               }
             ]
           }
@@ -900,28 +1080,33 @@
           "id": "leading",
           "type": "list/group",
           "position": {
-            "x": -1600,
-            "y": 300
+            "x": -3240,
+            "y": -550
           },
-          "params": {}
+          "params": {
+            "name": "Murs : Sc, R1, nodus, pt\u00e9rostigma"
+          }
         },
         {
           "id": "flow",
           "type": "list/group",
           "position": {
-            "x": -1600,
-            "y": 700
+            "x": -2540,
+            "y": -550
           },
-          "params": {}
+          "params": {
+            "name": "Guides : \u00e9coulement + signes de corrugation"
+          }
         },
         {
           "id": "vein_seeds",
           "type": "list/poisson-disk-2d",
           "position": {
-            "x": -1300,
-            "y": -300
+            "x": -2270,
+            "y": -550
           },
           "params": {
+            "name": "Graines des nervures longitudinales",
             "plane": "XZ",
             "spacing": 0.12,
             "formula": "s * (0.7 + 0.5 * v)",
@@ -935,10 +1120,11 @@
           "id": "veins",
           "type": "curve/voronoi-2d",
           "position": {
-            "x": -1000,
-            "y": -300
+            "x": -1930,
+            "y": -550
           },
           "params": {
+            "name": "Nervures longitudinales (panneaux)",
             "plane": "XZ",
             "relax": 1,
             "stretch": 6.0,
@@ -953,13 +1139,14 @@
           "id": "centres",
           "type": "list/poisson-disk-2d",
           "position": {
-            "x": -1000,
-            "y": 100
+            "x": -2270,
+            "y": -10
           },
           "params": {
+            "name": "Centres des cellules (gradient de densit\u00e9)",
             "plane": "XZ",
             "spacing": 0.05,
-            "formula": "s * (1.8 - 1.1 * v) * (1.1 - 0.3 * u)",
+            "formula": "s * (0.5 + 2.5 * (1 - v)) * (1.1 - 0.3 * u)",
             "seed": 7,
             "maxPoints": 8000
           }
@@ -968,10 +1155,11 @@
           "id": "cells",
           "type": "curve/voronoi-2d",
           "position": {
-            "x": -700,
-            "y": 0
+            "x": -1930,
+            "y": -10
           },
           "params": {
+            "name": "Cellules alaires (membrane)",
             "plane": "XZ",
             "relax": 2,
             "inset": 0,
@@ -990,10 +1178,11 @@
           "id": "fold_veins",
           "type": "geometry/height-from-lines",
           "position": {
-            "x": -700,
-            "y": -400
+            "x": -1360,
+            "y": -550
           },
           "params": {
+            "name": "Hauteur des nervures longitudinales",
             "plane": "XZ",
             "count": 4,
             "power": 2,
@@ -1004,19 +1193,33 @@
           "id": "creases",
           "type": "list/group",
           "position": {
-            "x": -400,
-            "y": -500
+            "x": -1360,
+            "y": -400
           },
-          "params": {}
+          "params": {
+            "name": "Plis : nervures \u00e9paisses + C, Sc, R1"
+          }
+        },
+        {
+          "id": "nodal",
+          "type": "list/group",
+          "position": {
+            "x": -1360,
+            "y": -250
+          },
+          "params": {
+            "name": "Nodus + subnodus"
+          }
         },
         {
           "id": "fold_membrane",
           "type": "geometry/height-from-lines",
           "position": {
-            "x": -400,
-            "y": -250
+            "x": -990,
+            "y": -550
           },
           "params": {
+            "name": "Pli de la membrane",
             "plane": "XZ",
             "count": 6,
             "power": 2,
@@ -1027,10 +1230,11 @@
           "id": "fold_cross",
           "type": "geometry/height-from-lines",
           "position": {
-            "x": -400,
-            "y": -50
+            "x": -990,
+            "y": -400
           },
           "params": {
+            "name": "Pli des nervures transverses",
             "plane": "XZ",
             "count": 6,
             "power": 2,
@@ -1041,10 +1245,26 @@
           "id": "fold_margin",
           "type": "geometry/height-from-lines",
           "position": {
-            "x": -400,
-            "y": 150
+            "x": -990,
+            "y": -250
           },
           "params": {
+            "name": "Pli de la nervure marginale",
+            "plane": "XZ",
+            "count": 6,
+            "power": 2,
+            "scale": 1
+          }
+        },
+        {
+          "id": "fold_nodus",
+          "type": "geometry/height-from-lines",
+          "position": {
+            "x": -990,
+            "y": -100
+          },
+          "params": {
+            "name": "Pli du nodus",
             "plane": "XZ",
             "count": 6,
             "power": 2,
@@ -1055,19 +1275,22 @@
           "id": "costa_list",
           "type": "list/group",
           "position": {
-            "x": -700,
-            "y": 700
+            "x": -1360,
+            "y": 50
           },
-          "params": {}
+          "params": {
+            "name": "Costa"
+          }
         },
         {
           "id": "fold_costa",
           "type": "geometry/height-from-lines",
           "position": {
-            "x": -400,
-            "y": 700
+            "x": -990,
+            "y": 50
           },
           "params": {
+            "name": "Hauteur de la costa",
             "plane": "XZ",
             "count": 1,
             "power": 1,
@@ -1079,10 +1302,11 @@
           "id": "thick_veins",
           "type": "curve/profiled-tubes",
           "position": {
-            "x": -100,
-            "y": -300
+            "x": -540,
+            "y": -550
           },
           "params": {
+            "name": "Tubes \u2014 nervures longitudinales",
             "radius": 0.005,
             "widthProfile": [
               {
@@ -1117,10 +1341,11 @@
           "id": "leading_veins",
           "type": "curve/profiled-tubes",
           "position": {
-            "x": -100,
-            "y": -100
+            "x": -310,
+            "y": -550
           },
           "params": {
+            "name": "Tubes \u2014 Sc, R1, pt\u00e9rostigma",
             "radius": 0.0065,
             "widthProfile": [
               {
@@ -1152,13 +1377,53 @@
           }
         },
         {
+          "id": "nodus_vein",
+          "type": "curve/profiled-tubes",
+          "position": {
+            "x": -540,
+            "y": -250
+          },
+          "params": {
+            "name": "Tube \u2014 nodus",
+            "radius": 0.012,
+            "widthProfile": [
+              {
+                "x": 0,
+                "y": 1
+              },
+              {
+                "x": 1,
+                "y": 1
+              }
+            ],
+            "heightProfile": [
+              {
+                "x": 0,
+                "y": 1
+              },
+              {
+                "x": 1,
+                "y": 1
+              }
+            ],
+            "heightRatio": 1,
+            "radialSegments": 6,
+            "upright": true,
+            "patches": false,
+            "color": 1379848,
+            "roughness": 0.45,
+            "metalness": 0.05
+          }
+        },
+        {
           "id": "cross_veins",
           "type": "curve/profiled-tubes",
           "position": {
-            "x": -100,
-            "y": 100
+            "x": -310,
+            "y": -250
           },
           "params": {
+            "name": "Tubes \u2014 nervures transverses",
             "radius": 0.002,
             "widthProfile": [
               {
@@ -1193,10 +1458,11 @@
           "id": "margin_vein",
           "type": "curve/profiled-tubes",
           "position": {
-            "x": -100,
-            "y": 300
+            "x": -540,
+            "y": 50
           },
           "params": {
+            "name": "Tube \u2014 nervure marginale",
             "radius": 0.0035,
             "widthProfile": [
               {
@@ -1231,10 +1497,11 @@
           "id": "costa_vein",
           "type": "curve/profiled-tubes",
           "position": {
-            "x": -100,
-            "y": 500
+            "x": -310,
+            "y": 50
           },
           "params": {
+            "name": "Tube \u2014 costa",
             "radius": 0.009,
             "widthProfile": [
               {
@@ -1269,12 +1536,48 @@
           "id": "stigma_fill",
           "type": "curve/fill",
           "position": {
-            "x": -100,
+            "x": -540,
+            "y": 350
+          },
+          "params": {
+            "name": "Pt\u00e9rostigma (rempli)",
+            "color": 3875860,
+            "opacity": 1
+          }
+        },
+        {
+          "id": "tunnel_obstacle",
+          "type": "list/group",
+          "position": {
+            "x": -2270,
             "y": 750
           },
           "params": {
-            "color": 3875860,
-            "opacity": 1
+            "name": "Obstacle : membrane + nervures"
+          }
+        },
+        {
+          "id": "tunnel",
+          "type": "physics/wind-tunnel-2d",
+          "position": {
+            "x": -2070,
+            "y": 750
+          },
+          "params": {
+            "name": "Soufflerie \u2014 7 coupes, 15 \u2192 85 % de l'envergure",
+            "sliceAxis": "X",
+            "sliceCount": 7,
+            "stationFrom": -1.75,
+            "stationTo": 1.75,
+            "flowAxis": "+Z",
+            "angle": 5,
+            "reynolds": 2000,
+            "reynoldsMode": "airspeed",
+            "cellsPerChord": 64,
+            "opacity": 0.75,
+            "field": "vorticity",
+            "range": 12,
+            "streamlineCount": 12
           }
         }
       ],
@@ -1308,11 +1611,25 @@
           "toSocket": "in1"
         },
         {
-          "id": "pterostigma.curve->leading.in2",
-          "fromNode": "pterostigma",
+          "id": "nodus.curve->leading.in2",
+          "fromNode": "nodus",
           "fromSocket": "curve",
           "toNode": "leading",
           "toSocket": "in2"
+        },
+        {
+          "id": "subnodus.curve->leading.in3",
+          "fromNode": "subnodus",
+          "fromSocket": "curve",
+          "toNode": "leading",
+          "toSocket": "in3"
+        },
+        {
+          "id": "pterostigma.curve->leading.in4",
+          "fromNode": "pterostigma",
+          "fromSocket": "curve",
+          "toNode": "leading",
+          "toSocket": "in4"
         },
         {
           "id": "vein_0.curve->flow.in0",
@@ -1490,6 +1807,20 @@
           "toSocket": "in2"
         },
         {
+          "id": "nodus.curve->nodal.in0",
+          "fromNode": "nodus",
+          "fromSocket": "curve",
+          "toNode": "nodal",
+          "toSocket": "in0"
+        },
+        {
+          "id": "subnodus.curve->nodal.in1",
+          "fromNode": "subnodus",
+          "fromSocket": "curve",
+          "toNode": "nodal",
+          "toSocket": "in1"
+        },
+        {
           "id": "cells.geometry->fold_membrane.geometry",
           "fromNode": "cells",
           "fromSocket": "geometry",
@@ -1532,6 +1863,20 @@
           "toSocket": "guides"
         },
         {
+          "id": "nodal.list->fold_nodus.points",
+          "fromNode": "nodal",
+          "fromSocket": "list",
+          "toNode": "fold_nodus",
+          "toSocket": "points"
+        },
+        {
+          "id": "creases.list->fold_nodus.guides",
+          "fromNode": "creases",
+          "fromSocket": "list",
+          "toNode": "fold_nodus",
+          "toSocket": "guides"
+        },
+        {
           "id": "costa.curve->costa_list.in0",
           "fromNode": "costa",
           "fromSocket": "curve",
@@ -1567,6 +1912,13 @@
           "toSocket": "pointLists"
         },
         {
+          "id": "fold_nodus.points->nodus_vein.pointLists",
+          "fromNode": "fold_nodus",
+          "fromSocket": "points",
+          "toNode": "nodus_vein",
+          "toSocket": "pointLists"
+        },
+        {
           "id": "fold_cross.points->cross_veins.pointLists",
           "fromNode": "fold_cross",
           "fromSocket": "points",
@@ -1593,6 +1945,55 @@
           "fromSocket": "curve",
           "toNode": "stigma_fill",
           "toSocket": "curve"
+        },
+        {
+          "id": "fold_membrane.geometry->tunnel_obstacle.in0",
+          "fromNode": "fold_membrane",
+          "fromSocket": "geometry",
+          "toNode": "tunnel_obstacle",
+          "toSocket": "in0"
+        },
+        {
+          "id": "thick_veins.geometry->tunnel_obstacle.in1",
+          "fromNode": "thick_veins",
+          "fromSocket": "geometry",
+          "toNode": "tunnel_obstacle",
+          "toSocket": "in1"
+        },
+        {
+          "id": "leading_veins.geometry->tunnel_obstacle.in2",
+          "fromNode": "leading_veins",
+          "fromSocket": "geometry",
+          "toNode": "tunnel_obstacle",
+          "toSocket": "in2"
+        },
+        {
+          "id": "nodus_vein.geometry->tunnel_obstacle.in3",
+          "fromNode": "nodus_vein",
+          "fromSocket": "geometry",
+          "toNode": "tunnel_obstacle",
+          "toSocket": "in3"
+        },
+        {
+          "id": "margin_vein.geometry->tunnel_obstacle.in4",
+          "fromNode": "margin_vein",
+          "fromSocket": "geometry",
+          "toNode": "tunnel_obstacle",
+          "toSocket": "in4"
+        },
+        {
+          "id": "costa_vein.geometry->tunnel_obstacle.in5",
+          "fromNode": "costa_vein",
+          "fromSocket": "geometry",
+          "toNode": "tunnel_obstacle",
+          "toSocket": "in5"
+        },
+        {
+          "id": "tunnel_obstacle.list->tunnel.obstacle",
+          "fromNode": "tunnel_obstacle",
+          "fromSocket": "list",
+          "toNode": "tunnel",
+          "toSocket": "obstacle"
         }
       ],
       "keyframes": {},

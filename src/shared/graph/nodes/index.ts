@@ -155,6 +155,7 @@ import { CURVE_FILL_NODE, INK_STROKE_NODE } from "./ink";
 import { VORONOI_2D_NODE } from "./voronoi2d";
 import { POISSON_DISK_2D_NODE } from "./poissonDisk2d";
 import { HEIGHT_FROM_LINES_NODE } from "./heightFromLines";
+import { WIND_TUNNEL_2D_NODE } from "./windTunnel2d";
 import { INSTANCE_ON_POINTS_NODE } from "./instanceOnPoints";
 import { WRITE_ON_NODE } from "./writeOn";
 import { STROKE_OUTLINE_NODE, STROKE_STYLE_NODE } from "./strokePaint";
@@ -510,6 +511,7 @@ export const STARTER_NODES = [
   VORONOI_2D_NODE,
   POISSON_DISK_2D_NODE,
   HEIGHT_FROM_LINES_NODE,
+  WIND_TUNNEL_2D_NODE,
   INSTANCE_ON_POINTS_NODE,
   WRITE_ON_NODE,
   STROKE_OUTLINE_NODE,
