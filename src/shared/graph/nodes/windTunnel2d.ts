@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { NodeDefinition, ParamFieldDef } from "../types";
 import { createNodeCache, disposeObject3D } from "../nodeCaches";
 import { stepsSince } from "../clock";
+import { onEvalSessionDisposed } from "../evaluate";
 import { toBoolean } from "../sockets";
 import { worldMatrixOf } from "../objectPosition";
 import { numberInput } from "./object";
@@ -64,6 +65,8 @@ export const WIND_TUNNEL_COMPUTE_ALL_ACTION = "windTunnel2d.computeAll";
 interface SliceState {
   backend: "gpu" | "cpu";
   sim: Lbm2D | Lbm2DGPU | null;
+  /** The WebGL renderer a GPU solver's textures belong to. */
+  renderer: THREE.WebGLRenderer | null;
   gridKey: string;
   sliceKey: string;
   /** Section in the un-tilted frame (angle of attack 0). */
@@ -90,6 +93,8 @@ interface TunnelState {
   lastStep: number;
   epoch: number;
   lastCompute: number;
+  /** An export session settles the flow once, before its first captured frame. */
+  warmedUp: boolean;
 }
 
 function disposeSlice(s: SliceState): void {
@@ -100,9 +105,30 @@ function disposeSlice(s: SliceState): void {
   disposeObject3D(s.group);
 }
 
-const tunnelCache = createNodeCache<TunnelState>((s) => {
+function disposeTunnel(s: TunnelState): void {
   s.slices.forEach(disposeSlice);
   disposeObject3D(s.group);
+}
+
+/**
+ * One state per node *and* per render session: the editor, a split preview and
+ * the offscreen export viewport each have their own WebGL context (a GPU
+ * solver's textures cannot cross contexts) and their own clock (an export
+ * must not step the editor's flow, nor start from it).
+ */
+const tunnelCache = createNodeCache<Map<string, TunnelState>>((bySession) => {
+  bySession.forEach(disposeTunnel);
+});
+const sessionKeyOf = (ctx: { sessionId?: string; evalScope?: string }) => `${ctx.sessionId ?? ""}|${ctx.evalScope ?? ""}`;
+onEvalSessionDisposed((sessionId) => {
+  for (const bySession of tunnelCache.values()) {
+    for (const [key, state] of bySession) {
+      if (key === sessionId || key.startsWith(`${sessionId}|`)) {
+        disposeTunnel(state);
+        bySession.delete(key);
+      }
+    }
+  }
 });
 
 function createSlice(): SliceState {
@@ -127,7 +153,7 @@ function createSlice(): SliceState {
   const dragArrow = new THREE.ArrowHelper(new THREE.Vector3(1, 0, 0), new THREE.Vector3(), 1, 0xef4444);
   group.add(fieldMesh, tracers, streamLines, pressureBars, liftArrow, dragArrow);
   return {
-    backend: "cpu", sim: null, gridKey: "", sliceKey: "", baseChains: [], chord: 0, maskKey: "",
+    backend: "cpu", sim: null, renderer: null, gridKey: "", sliceKey: "", baseChains: [], chord: 0, maskKey: "",
     group, fieldMesh, fieldTex: null, tracers, tracerPos: new Float32Array(0), tracerAge: new Float32Array(0),
     streamLines, pressureBars, liftArrow, dragArrow, seed: 1,
   };
@@ -244,7 +270,8 @@ const PARAM_FIELDS: ParamFieldDef[] = [
   { id: "computeButton", label: "Compute (run until the flow settles)", kind: "button", action: WIND_TUNNEL_COMPUTE_ACTION, group: "Solver" },
   { id: "computeAllButton", label: "Compute All Tunnels", kind: "button", action: WIND_TUNNEL_COMPUTE_ALL_ACTION, group: "Solver" },
   { id: "computeChords", label: "Compute Length (chords of air travelled)", kind: "number", step: 1, group: "Solver" },
-  { id: "simulate", label: "Simulate While Playing", kind: "boolean", group: "Solver" },
+  { id: "simulate", label: "Simulate While Playing / Exporting", kind: "boolean", group: "Solver" },
+  { id: "warmUp", label: "Video Export: Settle the Flow Before Frame 1", kind: "boolean", group: "Solver" },
   { id: "stepsPerFrame", label: "Steps per Frame", kind: "number", step: 5, group: "Solver" },
   { id: "solver", label: "Solver", kind: "select", options: ["auto", "gpu", "cpu"], group: "Solver" },
   { id: "unitMeters", label: "Scene Unit (m)", kind: "number", step: 0.01, group: "Real World" },
@@ -253,6 +280,7 @@ const PARAM_FIELDS: ParamFieldDef[] = [
   { id: "range", label: "Colour Range (ω·c/U, U/U∞ or Cp)", kind: "number", step: 0.5, group: "Display" },
   { id: "opacity", label: "Field Opacity", kind: "number", step: 0.05, group: "Display" },
   { id: "fadeCalm", label: "Fade Calm Air (vorticity, pressure)", kind: "boolean", group: "Display" },
+  { id: "calmOpacity", label: "Calm Air Opacity (0 = only the flow's colours)", kind: "number", step: 0.02, group: "Display" },
   { id: "showField", label: "Show Field", kind: "boolean", group: "Display" },
   { id: "showTracers", label: "Show Tracers", kind: "boolean", group: "Display" },
   { id: "tracerCount", label: "Tracer Count (per slice)", kind: "number", step: 100, group: "Display" },
@@ -366,12 +394,14 @@ function runSlice(
 
   // ---- Solver ---------------------------------------------------------------------------------
   const gridKey = `${nx}x${ny}|${backend}|${sh.epoch}`;
-  if (!sl.sim || gridKey !== sl.gridKey) {
+  const renderer = backend === "gpu" ? ctx.renderer ?? null : null;
+  if (!sl.sim || gridKey !== sl.gridKey || renderer !== sl.renderer) {
     if (sl.sim && "dispose" in sl.sim) sl.sim.dispose();
     sl.sim = backend === "gpu"
       ? createLbm2DGPU(ctx.renderer!, nx, ny, lengthCells, reynolds)
       : createLbm2D(nx, ny, lengthCells, reynolds);
     sl.backend = backend;
+    sl.renderer = renderer;
     sl.gridKey = gridKey;
     sl.maskKey = "";
     sl.tracerPos = new Float32Array(0);
@@ -437,6 +467,7 @@ function runSlice(
     const vortK = lengthCells / U_LATTICE / 2;
     const alpha = Math.round(255 * sh.opacity);
     const fadeCalm = flag(params.fadeCalm, true);
+    const veil = Math.max(0, Math.min(1, numberInput(undefined, params.calmOpacity, 0.06)));
     const { field, range } = sh;
     for (let j = 0; j < ny; j++) {
       for (let i = 0; i < nx; i++) {
@@ -452,7 +483,10 @@ function runSlice(
           strength = diverging(w / range, px, o);
         }
         // Calm air fades out (a faint veil keeps the tunnel visible): only the wake shows.
-        px[o + 3] = fadeCalm ? alpha * Math.min(1, 0.06 + 2 * strength) : alpha;
+        px[o + 3] = fadeCalm ? alpha * Math.min(1, veil + 2 * strength) : alpha;
+        // The tunnel's own walls (inflow, far field, outflow) shear the flow into thin bands
+        // of vorticity that say nothing about the obstacle: faded out with the calm air.
+        if (fadeCalm && (j < 3 || j > ny - 4 || i < 2 || i > nx - 3)) px[o + 3] = Math.round(alpha * veil);
       }
     }
     sl.fieldTex.needsUpdate = true;
@@ -624,15 +658,18 @@ export const WIND_TUNNEL_2D_NODE: NodeDefinition = {
     sliceAxis: "X", sliceCount: 1, station: 0, stationFrom: -1, stationTo: 1,
     flowAxis: "+Z", angle: 5, reynolds: 2000, reynoldsMode: "airspeed",
     cellsPerChord: 96, upstream: 1, downstream: 3, height: 2.5, thickness: 1.5,
-    simulate: true, stepsPerFrame: 40, solver: "auto", computeChords: 8, computeRequest: 0,
+    simulate: true, warmUp: true, stepsPerFrame: 40, solver: "auto", computeChords: 8, computeRequest: 0,
     unitMeters: 0.01, viscosity: 1.5e-5,
-    field: "vorticity", range: 12, opacity: 0.9, fadeCalm: true,
+    field: "vorticity", range: 12, opacity: 0.9, fadeCalm: true, calmOpacity: 0.06,
     showField: true, showTracers: false, tracerCount: 800, showStreamlines: true, streamlineCount: 24,
     showPressure: true, pressureScale: 0.08, showForces: true, forceScale: 0.5,
   },
   paramFields: PARAM_FIELDS,
   evaluate: (inputs, params, ctx) => {
-    let state = tunnelCache.get(ctx.nodeId);
+    let bySession = tunnelCache.get(ctx.nodeId);
+    if (!bySession) tunnelCache.set(ctx.nodeId, (bySession = new Map()));
+    const sessionKey = sessionKeyOf(ctx);
+    let state = bySession.get(sessionKey);
     if (!state) {
       const group = new THREE.Group();
       group.userData.nodeId = ctx.nodeId;
@@ -641,9 +678,9 @@ export const WIND_TUNNEL_2D_NODE: NodeDefinition = {
       group.add(liftCurve);
       state = {
         group, slices: [], liftCurve, lastStep: ctx.step - 1, epoch: ctx.simulationEpoch ?? 0,
-        lastCompute: Number(params.computeRequest) || 0,
+        lastCompute: Number(params.computeRequest) || 0, warmedUp: false,
       };
-      tunnelCache.set(ctx.nodeId, state);
+      bySession.set(sessionKey, state);
     }
     const st = state;
 
@@ -696,7 +733,12 @@ export const WIND_TUNNEL_2D_NODE: NodeDefinition = {
     const perFrame = Math.max(0, Math.round(numberInput(undefined, params.stepsPerFrame, 40)));
     const playSteps = graphSteps > 0 ? (sh.backend === "gpu" ? perFrame : Math.min(perFrame, CPU_MAX_STEPS)) : 0;
     const computeRequest = Number(params.computeRequest) || 0;
-    const computeChords = computeRequest !== st.lastCompute ? Math.max(1, numberInput(undefined, params.computeChords, 8)) : 0;
+    // A video export starts from still air in its own session: settled first (once), the film
+    // opens on the developed wake instead of on the flow starting up.
+    // GPU only: on the CPU (headless runs) settling would take minutes.
+    const warmUp = ctx.capturing === true && !st.warmedUp && sh.backend === "gpu" && flag(params.warmUp, true);
+    if (ctx.capturing) st.warmedUp = true;
+    const computeChords = computeRequest !== st.lastCompute || warmUp ? Math.max(1, numberInput(undefined, params.computeChords, 8)) : 0;
     st.lastCompute = computeRequest;
     st.epoch = sh.epoch;
 
@@ -734,7 +776,7 @@ export const WIND_TUNNEL_2D_NODE: NodeDefinition = {
   },
 };
 
-/** For tests: the live state of a node. */
-export function windTunnelState(nodeId: string): TunnelState | undefined {
-  return tunnelCache.get(nodeId);
+/** For tests: the live state of a node in a session (the headless one by default). */
+export function windTunnelState(nodeId: string, sessionId?: string): TunnelState | undefined {
+  return tunnelCache.get(nodeId)?.get(sessionKeyOf({ sessionId }));
 }

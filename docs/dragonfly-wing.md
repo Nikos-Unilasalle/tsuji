@@ -54,7 +54,8 @@ envergure, fraction de corde 0 = bord d'attaque → 1 = bord de fuite).
    traînée, et la **courbe de portance** le long de l'envergure qui relie les pointes des flèches.
    Bouton **Compute** : calcule toutes les coupes jusqu'à ce que l'air ait parcouru 8 cordes
    (≈ 1 s par coupe à 64 cellules par corde, sur GPU), sans lancer la lecture ; **Compute All
-   Tunnels** fait de même pour tous les nodes du canvas. Sorties : *Cl*, *Cd* (pondérés par la
+   Tunnels** fait de même pour tous les nodes du canvas. En export vidéo, l'écoulement est d'abord
+   stabilisé (option *Settle the Flow Before Frame 1*), puis avance de *Steps per Frame* pas par image. Sorties : *Cl*, *Cd* (pondérés par la
    corde), *Cl / Cd per Slice*, *Stations*, *Lift Curve*, *Airspeed* (m/s, pour de l'air et
    1 unité = 1 cm), *Section*, *Streamlines*.
 

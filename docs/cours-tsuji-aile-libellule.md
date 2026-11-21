@@ -358,9 +358,15 @@ jusqu'à ce que l'air ait parcouru **8 cordes** (*Compute Length*), environ 7 s 
 GPU, sans toucher à la timeline. **Compute All Tunnels** lance tous les nodes Wind Tunnel du canvas. On peut aussi lancer la
 lecture (▶) pour voir le sillage se former en direct (*Simulate While Playing*).
 
+**Filmer.** *Share → Export Video* filme la soufflerie : l'écoulement avance de *Steps per Frame*
+pas à chaque image. Avec *Video Export: Settle the Flow Before Frame 1* (coché par défaut), il est
+d'abord calculé jusqu'à stabilisation, et la vidéo s'ouvre sur l'allée de tourbillons déjà formée ;
+décoché, elle montre le sillage qui naît de l'air immobile.
+
 **Lire le résultat.**
 - **Vorticité** : derrière la coupe, des tourbillons alternés rouges et bleus — l'**allée de Kármán**.
-  L'air calme est transparent (*Fade Calm Air*).
+  L'air calme est transparent (*Fade Calm Air*) ; *Calm Air Opacity* règle le voile qui reste
+  (0 = plus que les couleurs de l'écoulement, pratique quand les coupes s'empilent).
 - **Sorties** : *Cl* et *Cd* de toute l'aile (moyenne des coupes pondérée par leur corde), *Cl per
   Slice* et *Cd per Slice* (une valeur par coupe, moyennée sur la seconde moitié du calcul),
   *Lift Curve*, *Airspeed* — la vitesse réelle que représente ce Reynolds pour cette corde, dans l'air,

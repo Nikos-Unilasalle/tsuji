@@ -259,7 +259,7 @@ n.append(node("tunnel", "physics/wind-tunnel-2d", OX + 1630, TOP + 1350,
               sliceAxis="X", sliceCount=TUNNEL_SLICES,
               stationFrom=round(TUNNEL_FROM * SPAN - SPAN / 2, 4), stationTo=round(TUNNEL_TO * SPAN - SPAN / 2, 4),
               flowAxis="+Z", angle=TUNNEL_AOA, reynolds=TUNNEL_RE, reynoldsMode="airspeed",
-              cellsPerChord=64, opacity=0.75, field="vorticity", range=12, streamlineCount=12))
+              cellsPerChord=64, opacity=0.75, calmOpacity=0, field="vorticity", range=12, streamlineCount=12))
 c.append(wire("tunnel_obstacle", "list", "tunnel", "obstacle"))
 
 if __name__ == "__main__":

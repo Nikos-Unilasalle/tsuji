@@ -1575,6 +1575,7 @@
             "reynoldsMode": "airspeed",
             "cellsPerChord": 64,
             "opacity": 0.75,
+            "calmOpacity": 0,
             "field": "vorticity",
             "range": 12,
             "streamlineCount": 12

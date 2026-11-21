@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { describe, expect, test } from "vitest";
 import { EvalContext } from "../types";
 import { WIND_TUNNEL_2D_NODE, windTunnelState } from "./windTunnel2d";
+import { disposeEvalSession } from "../evaluate";
 import { chainSegments, isClosed, rasterise, sliceObject, TunnelFrame } from "../../three/fluid/tunnelSection";
 
 const frameX: TunnelFrame = {
@@ -149,6 +150,43 @@ describe("Wind Tunnel 2D node (CPU)", () => {
     expect(st.slices).toHaveLength(4);
     for (const s of st.slices) expect(s.sim!.reynolds).toBe(300);
   });
+
+  test("Calm Air Opacity 0 leaves only the flow's colours (and the obstacle) opaque", () => {
+    const obstacle = plate();
+    const ctx = { time: 0, step: 0, nodeId: "wt-veil" } as EvalContext;
+    const alphaAt = (calmOpacity: number) => {
+      WIND_TUNNEL_2D_NODE.evaluate({ obstacle }, { ...WIND_TUNNEL_2D_NODE.defaultParams, cellsPerChord: 16, tracerCount: 0, calmOpacity }, ctx);
+      const tex = windTunnelState("wt-veil")!.slices[0].fieldTex!;
+      return tex.image.data as Uint8Array;
+    };
+    // Upstream corner: still air at the start.
+    const corner = (data: Uint8Array) => data[4 * (5 * windTunnelState("wt-veil")!.slices[0].sim!.nx + 5) + 3];
+    expect(corner(alphaAt(0.5))).toBeGreaterThan(50);
+    expect(corner(alphaAt(0))).toBe(0);
+  });
+
+  test("video export: its own session, the editor's flow untouched, released afterwards", () => {
+    const obstacle = plate();
+    const params = { ...WIND_TUNNEL_2D_NODE.defaultParams, angle: 8, reynolds: 500, cellsPerChord: 16, tracerCount: 0 };
+    // The editor has run a little.
+    for (let f = 0; f < 3; f++) WIND_TUNNEL_2D_NODE.evaluate({ obstacle }, params, { time: f / 60, step: f, nodeId: "wt-video", sessionId: "editor" } as EvalContext);
+    const editorSteps = windTunnelState("wt-video", "editor")!.slices[0].sim!.steps;
+    // Export frames 0 and 1 in the export viewport's session.
+    const exp = (frame: number) => WIND_TUNNEL_2D_NODE.evaluate({ obstacle }, params,
+      { time: frame / 30, step: frame * 2, nodeId: "wt-video", sessionId: "export", capturing: true } as EvalContext);
+    exp(0);
+    exp(1);
+    const exportState = windTunnelState("wt-video", "export")!;
+    expect(exportState.warmedUp).toBe(true);
+    // Headless means CPU, where the warm-up is skipped (GPU only): one frame's CPU steps each.
+    expect(exportState.slices[0].sim!.steps).toBe(16);
+    // The editor's flow was not touched, and its scene objects are not the export's.
+    expect(windTunnelState("wt-video", "editor")!.slices[0].sim!.steps).toBe(editorSteps);
+    expect(windTunnelState("wt-video", "editor")!.group).not.toBe(exportState.group);
+    disposeEvalSession("export");
+    expect(windTunnelState("wt-video", "export")).toBeUndefined();
+    expect(windTunnelState("wt-video", "editor")).toBeDefined();
+  }, 60_000);
 
   test("no obstacle: hidden, zero outputs", () => {
     const out = WIND_TUNNEL_2D_NODE.evaluate({}, WIND_TUNNEL_2D_NODE.defaultParams, { time: 0, step: 0, nodeId: "wt-none" } as EvalContext) as Record<string, unknown>;

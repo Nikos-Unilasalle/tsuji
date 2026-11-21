@@ -545,12 +545,31 @@ function frameSlotKey(ctx: EvalContext): string {
   return ctx.evalScope ? `${sessionId}::${ctx.evalScope}` : sessionId;
 }
 
+const sessionDisposedListeners = new Set<(sessionId: string) => void>();
+
+/**
+ * Lets a node that keeps state per session (a GPU simulation bound to that
+ * viewport's WebGL context, say) release it when the viewport goes away.
+ * Returns the unsubscribe function.
+ */
+export function onEvalSessionDisposed(listener: (sessionId: string) => void): () => void {
+  sessionDisposedListeners.add(listener);
+  return () => sessionDisposedListeners.delete(listener);
+}
+
 /**
  * Forgets a session's carried-over frames — call when its viewport unmounts.
  * Drops the nested scopes belonging to it too (one per group instance), which
  * would otherwise outlive the viewport that created them.
  */
 export function disposeEvalSession(sessionId: string): void {
+  for (const listener of sessionDisposedListeners) {
+    try {
+      listener(sessionId);
+    } catch (err) {
+      console.error("session dispose listener failed", err);
+    }
+  }
   previousFrameOutputsBySession.delete(sessionId);
   const prefix = `${sessionId}::`;
   for (const key of previousFrameOutputsBySession.keys()) {
