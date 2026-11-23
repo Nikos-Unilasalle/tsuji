@@ -42,6 +42,10 @@ envergure, fraction de corde 0 = bord d'attaque → 1 = bord de fuite).
 4. **Corrugation** : les nervures épaisses prennent leur hauteur des veines relevées
    (`fold_veins`), puis membrane, transverses et marge sont pliées entre elles, Sc, R1 et la costa
    (`creases` → `fold_*`, 6 lignes les plus proches, puissance 2 : pas de saut de hauteur).
+   Profondeur crête-vallée proportionnelle à la **corde locale** : ≈ 6 % de la corde dans l'avant
+   de la corde (jusqu'à 35 %), ≈ 1,5 % derrière (à partir de 55 %), constante de l'emplanture à
+   75 % de l'envergure puis réduite de moitié à l'apex. Valeurs lues sur les coupes photographiées
+   par Okamoto et al. 1996 (reprises en Fig. 9 de Sun & Bhushan 2012).
 5. **Tubes** : costa, Sc/R1 effilées, nodus (le plus gros, 0,12 mm, plus sombre), nervures épaisses,
    transverses, marge ; ptérostigma rempli.
 6. **Soufflerie 2D** (`physics/wind-tunnel-2d`, frame 7) : un seul node, **7 coupes** de 15 à 85 %
@@ -76,12 +80,12 @@ Dans le graphe (modifiables en direct) :
   viewport (Sc et R1 déplacent les murs ; les autres réorientent le réseau épais).
 
 Dans [`tools/gen_dragonfly_wing.py`](../tools/gen_dragonfly_wing.py) (puis
-`python3 tools/gen_dragonfly_wing.py`) : `SPAN` (5 cm, tout suit), `CORRUGATION` (0,35 mm à
-l'emplanture), `TIP_FADE`, `CELL`, `CELL_FORMULA`, `VEIN_GAP`, `VEIN_STRETCH`, `NODUS_X`, `NODUS_NOTCH`,
+`python3 tools/gen_dragonfly_wing.py`) : `SPAN` (5 cm, tout suit), `FRONT_DEPTH` / `REAR_DEPTH`
+(profondeur crête-vallée / corde, avant et arrière), `FRONT_TO` / `REAR_FROM`, `TIP_FROM` / `TIP_FADE`, `CELL`, `CELL_FORMULA`, `VEIN_GAP`, `VEIN_STRETCH`, `NODUS_X`, `NODUS_NOTCH`,
 tracé des veines et signes de corrugation.
 
 Résultat par défaut : ~40 panneaux, ~80 tronçons de nervures épaisses, ~1 200 cellules,
-corrugation ±0,35 mm, ≈ 0,8 s de calcul (au chargement et à chaque modification).
+corrugation ±0,3 mm à l'avant de la corde, ±0,07 mm à l'arrière, ≈ 0,8 s de calcul (au chargement et à chaque modification).
 
 **Limites** :
 - Soufflerie : écoulement 2D par coupe (pas de tourbillon de bout d'aile ni d'écoulement le long de
@@ -92,8 +96,12 @@ corrugation ±0,35 mm, ≈ 0,8 s de calcul (au chargement et à chaque modificat
   tracé précis à ~0,02 mm près, pas exactement « Voronoi » au sens analytique.
 - Dans un panneau très concave (encoche à une jonction), une cellule découpée peut se recroiser ;
   elle est alors réduite à sa plus grande boucle (perte < 0,01 % de surface).
-- La corrugation est forte à l'emplanture, là où les veines sont serrées : souvent 30 à 50° de pente
-  locale entre une crête et une vallée voisines, davantage par endroits.
+- La corrugation est lue sur des photos de coupes sans échelle, d'une espèce non précisée, sur
+  aile sèche (la forme peut avoir bougé au séchage) : ordres de grandeur à ±30 %. Les coupes montrent
+  aussi une cambrure (l'arrière de la corde retombe, surtout près de l'emplanture) que le modèle ne
+  reproduit pas.
+- Les pentes locales sont fortes près du bord d'attaque, où les veines sont serrées (35 à 60° entre
+  une crête et une vallée voisines sur les coupes), faibles à l'arrière (10 à 20°).
 
 ## Données morphologiques et mécaniques retenues
 
@@ -103,6 +111,7 @@ corrugation ±0,35 mm, ≈ 0,8 s de calcul (au chargement et à chaque modificat
 | Ptérostigma | ≈ 85 % de l'envergure, bord d'attaque | Jongerius & Lentink 2010 |
 | Charge aérodynamique max. | ≈ 65 % de l'envergure | Jongerius & Lentink 2010 |
 | Corrugation | forte à l'emplanture, décroît vers l'apex | Jongerius & Lentink 2010 (micro-CT *Sympetrum*) |
+| Profondeur crête-vallée | ≈ 5–8 % de la corde à l'avant, ≈ 1–2 % à l'arrière, de 5 à 75 % de l'envergure (lu sur photos) | Okamoto et al. 1996, via Sun & Bhushan 2012 Fig. 9 |
 | Longueur d'aile Odonata (ex.) | 52 mm | Salcedo et al. 2019 |
 | Diamètre costa à l'emplanture | ≈ 175 µm | Biomimetics 2025 (FEM paramétrique) |
 | Épaisseur membrane | ≈ 1,6–4,3 µm (médiane 4,31 µm *S. vulgatum*) | Appel et al. 2015 |
@@ -136,4 +145,8 @@ non confirmé par les sources ci-dessus ; le tracé des veines est relevé à la
   efficiency* (2025). Biomimetics 10(12):799. <https://doi.org/10.3390/biomimetics10120799>
 - *Fluid–structure interaction simulation on flight performance of a dragonfly wing under different
   pterostigma weights.* J. Mechanics. <https://academic.oup.com/jom/article/doi/10.1093/jom/ufaa013/6121959>
+- Okamoto M., Yasuda K., Azuma A. (1996). *Aerodynamic characteristics of the wings and body of a
+  dragonfly.* J. Exp. Biol. 199:281–294 — coupes de l'aile antérieure et postérieure.
+- Sun J., Bhushan B. (2012). *The structure and mechanical properties of dragonfly wings and their
+  role on flyability.* C. R. Mécanique 340:3–17. doi:10.1016/j.crme.2011.11.003
 - Algorithme Voronoi : d'après Voro++ (C. H. Rycroft), cf. `src/shared/graph/voronoi.ts`.

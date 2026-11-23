@@ -15,7 +15,8 @@ Two tiers of veins, as on the real wing:
    PNAS 115:9905). Wall Rows lays rows of cells along each panel's border: narrow panels become
    ladders or grids, wide ones keep irregular cells, denser toward the trailing edge.
 
-Corrugation: the thick veins take their height from the traced veins (ridges +, valleys -), then
+Corrugation: the thick veins take their height from the traced veins (ridges +, valleys -), a depth
+proportional to the local chord, deep at the front of the chord (Okamoto et al. 1996); then
 Height from Lines folds the membrane and cross veins between them, fading toward the tip
 (Jongerius & Lentink 2010, Exp. Mech.). Units: 1 scene unit = 1 cm.
 
@@ -27,8 +28,16 @@ from gen_demos import node, wire, v3, write_demo  # noqa: E402
 
 # ---- Parameters ------------------------------------------------------------------------------
 SPAN = 5.0           # wing length, root to tip (cm); everything scales with it
-CORRUGATION = 0.035  # ridge/valley height at the root (cm)
-TIP_FADE = 0.75      # fraction of the corrugation lost at the tip
+# Corrugation, read off the forewing cross sections photographed by Okamoto et al. 1996 (J. Exp.
+# Biol. 199:281), reproduced as Fig. 9 of Sun & Bhushan 2012 (C. R. Mécanique 340:3): ridge-to-valley
+# depth as a fraction of the LOCAL chord, deep in the leading part of the chord, shallow behind it,
+# about the same from root to 75 % of the span (absolute height then follows the chord).
+FRONT_DEPTH = 0.06   # ridge-to-valley depth / local chord, leading part (sections show ~5-8 %)
+REAR_DEPTH = 0.015   # same, trailing part (sections show ~1-2 %, nearly flat near the tip)
+FRONT_TO = 0.35      # chord fraction where the deep zone ends...
+REAR_FROM = 0.55     # ...and where the shallow zone starts (smooth blend between)
+TIP_FROM = 0.75      # span fraction of the outermost measured section; fade after it
+TIP_FADE = 0.5       # fraction of the corrugation lost at the tip (no data past 75 % span)
 BASE_Y = 0.45        # wing held horizontal this high above the ground
 CELL = 0.05          # cross-vein cell spacing s at mid-chord (cm)
 VEIN_GAP = 0.12      # spacing of the thick vein network's seeds, across the flow (cm)
@@ -74,10 +83,25 @@ def chordwise(x, f):
     return x, le + f * (te - le)
 
 
+def corrugation(x, y):
+    """Half the ridge-to-valley depth (cm) at traced point (x, y): a ridge sits this far above the
+    mean plane, a valley this far below. Scales with the local chord, deep at the front of the
+    chord, shallow behind, constant along the span up to TIP_FROM, then fading to the apex."""
+    xc = min(max(x, TE[0][0]), TE[-1][0])
+    le, te = interp(LE, min(max(x, 0.0), LE[-1][0])), interp(TE, xc)
+    chord = max(0.2, le - te)
+    f = max(0.0, min(1.0, (le - y) / chord))
+    s = max(0.0, min(1.0, (f - FRONT_TO) / (REAR_FROM - FRONT_TO)))
+    s = s * s * (3 - 2 * s)
+    depth = FRONT_DEPTH + (REAR_DEPTH - FRONT_DEPTH) * s
+    u = max(0.0, min(1.0, x / REF_SPAN))
+    fade = 1 - TIP_FADE * max(0.0, (u - TIP_FROM) / (1 - TIP_FROM))
+    return 0.5 * depth * chord * fade
+
+
 def place(x, y, sign=0.0, lift=0.0):
     """Traced cm → world. Wing in the XZ plane, height Y; X spans, Z runs leading (-) to trailing (+)."""
-    u = x / REF_SPAN
-    h = sign * CORRUGATION * (1 - TIP_FADE * max(0.0, min(1.0, u)))
+    h = sign * corrugation(x, y)
     k = SPAN / REF_SPAN
     return v3(round(x * k - SPAN / 2, 5), round(BASE_Y + h + lift, 5), round(-(y + 0.1) * k, 5))
 
