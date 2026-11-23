@@ -92,14 +92,23 @@ export function readPolylines(value: unknown, curveSamples: number): THREE.Vecto
 export function clipPolylineToOutline(line: THREE.Vector3[], outline: P2[], plane: Plane): THREE.Vector3[][] {
   const pieces: THREE.Vector3[][] = [];
   if (line.length === 0 || outline.length < 3) return pieces;
-  let inside = pointInPolygon(to2(line[0], plane), outline);
-  let current: THREE.Vector3[] = inside ? [line[0]] : [];
+  // Each segment is cut at every outline crossing, and each sub-span is kept or
+  // dropped by testing its midpoint. Toggling inside/outside per crossing broke
+  // when a wall ran exactly through an outline vertex: both edges meeting there
+  // reported the crossing (rounding put it at u = 1 - ε on one, u = 0 on the
+  // other), so the state flipped twice and the clip kept the outside part.
+  let current: THREE.Vector3[] = [];
+  const flush = () => {
+    if (current.length >= 2) pieces.push(current);
+    current = [];
+  };
+  if (line.length === 1) return pieces;
   for (let i = 1; i < line.length; i++) {
     const a = line[i - 1];
     const p = line[i];
     const a2 = to2(a, plane);
     const b2 = to2(p, plane);
-    const ts: number[] = [];
+    const ts: number[] = [0, 1];
     for (let k = 0; k < outline.length; k++) {
       const c = outline[k];
       const d = outline[(k + 1) % outline.length];
@@ -107,21 +116,30 @@ export function clipPolylineToOutline(line: THREE.Vector3[], outline: P2[], plan
       if (Math.abs(den) < 1e-15) continue;
       const t = ((c[0] - a2[0]) * (d[1] - c[1]) - (c[1] - a2[1]) * (d[0] - c[0])) / den;
       const u = ((c[0] - a2[0]) * (b2[1] - a2[1]) - (c[1] - a2[1]) * (b2[0] - a2[0])) / den;
-      if (t > 0 && t <= 1 && u >= 0 && u < 1) ts.push(t);
+      if (t > 0 && t < 1 && u >= -1e-12 && u <= 1 + 1e-12) ts.push(t);
     }
     ts.sort((x, y) => x - y);
-    for (const t of ts) {
-      const q = a.clone().lerp(p, t);
-      if (inside) {
-        current.push(q);
-        if (current.length >= 2) pieces.push(current);
-        current = [];
-      } else current = [q];
-      inside = !inside;
+    for (let j = 1; j < ts.length; j++) {
+      const t0 = ts[j - 1];
+      const t1 = ts[j];
+      if (t1 - t0 < 1e-12) continue;
+      const tm = (t0 + t1) / 2;
+      const mid: P2 = [a2[0] + (b2[0] - a2[0]) * tm, a2[1] + (b2[1] - a2[1]) * tm];
+      if (!pointInPolygon(mid, outline)) {
+        flush();
+        continue;
+      }
+      const start = t0 === 0 ? a : a.clone().lerp(p, t0);
+      const end = t1 === 1 ? p : a.clone().lerp(p, t1);
+      const last = current[current.length - 1];
+      if (!last || last.distanceToSquared(start) > 1e-18) {
+        flush();
+        current.push(start);
+      }
+      current.push(end);
     }
-    if (inside && current[current.length - 1] !== p && (current.length === 0 || current[current.length - 1].distanceToSquared(p) > 1e-18)) current.push(p);
   }
-  if (inside && current.length >= 2) pieces.push(current);
+  flush();
   return pieces;
 }
 
