@@ -870,6 +870,31 @@ describe("rigid body — geometry that changes every frame", () => {
     // The ball rode the bar up rather than being left inside it.
     expect((ballOut.position as THREE.Vector3).y).toBeCloseTo(3.2, 1);
   });
+
+  test("once stopped, a Bar Graph that keeps changing (a live microphone) is followed again", () => {
+    // After a run the bars still carry the solver's matrix with
+    // matrixAutoUpdate off; a stopped Rigid Body passes them through, and
+    // must hand their transform back to the Bar Graph, or they freeze.
+    const world = { ...PHYSICS_WORLD_NODE.defaultParams };
+    const bars = { ...RIGID_BODY_NODE.defaultParams, bodyType: "fixed" };
+    const frame = (value: number, f: number, playing: boolean) => {
+      const ctx = (id: string) => ({ ...makeContext(id, f / 60, playing), simulationRun: playing });
+      const graph = (OBJECT_BAR_GRAPH_NODE.evaluate({ values: [value], count: 1 }, { ...OBJECT_BAR_GRAPH_NODE.defaultParams }, ctx("st-graph")) as {
+        geometry: THREE.Object3D;
+      }).geometry;
+      const w = PHYSICS_WORLD_NODE.evaluate({}, world, ctx("st-w")) as { world: unknown };
+      RIGID_BODY_NODE.evaluate({ world: w.world, geometry: graph }, bars, ctx("st-bars"));
+      graph.updateMatrixWorld(true);
+      const scale = new THREE.Vector3();
+      (graph.getObjectByProperty("isMesh", true) as THREE.Mesh).matrixWorld.decompose(new THREE.Vector3(), new THREE.Quaternion(), scale);
+      return scale.y;
+    };
+    for (let f = 0; f < 10; f++) frame(0.2, f, true);
+    expect(frame(0.4, 10, true)).toBeCloseTo(2, 3);
+    // Stopped: time no longer moves, the microphone still does.
+    expect(frame(0.6, 10, false)).toBeCloseTo(3, 3);
+    expect(frame(0.1, 10, false)).toBeCloseTo(0.5, 3);
+  });
 });
 
 describe("rigid body — one node, many bodies", () => {

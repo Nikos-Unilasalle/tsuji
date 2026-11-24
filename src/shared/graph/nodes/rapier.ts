@@ -680,15 +680,24 @@ export const RIGID_BODY_NODE: NodeDefinition = {
     const handle = isPhysicsWorld(inputs.world) ? inputs.world : null;
     const api = getRapier();
 
-    const idle = () => ({
-      geometry: object,
-      matrix: object ? object.matrix.clone() : new THREE.Matrix4(),
-      position: object ? object.position.clone() : new THREE.Vector3(),
-      velocity: new THREE.Vector3(),
-      speed: 0,
-      count: 0,
-      body: null,
-    });
+    const idle = () => {
+      // Handing the geometry straight through must also hand its transform
+      // back: after a run the meshes still have matrixAutoUpdate off and the
+      // solver's last pose baked in, so an upstream that keeps re-authoring
+      // them while stopped (a Bar Graph on a live microphone) would freeze.
+      object?.traverse((child) => {
+        if ((child as THREE.Mesh).isMesh) honourUpstreamTransform(child);
+      });
+      return {
+        geometry: object,
+        matrix: object ? object.matrix.clone() : new THREE.Matrix4(),
+        position: object ? object.position.clone() : new THREE.Vector3(),
+        velocity: new THREE.Vector3(),
+        speed: 0,
+        count: 0,
+        body: null,
+      };
+    };
 
     // No world, no engine, or nothing to simulate: hand the geometry straight
     // back so the scene still renders while physics warms up.
