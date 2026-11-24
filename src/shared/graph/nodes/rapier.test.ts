@@ -5,6 +5,7 @@ import { beforeAll, describe, expect, test } from "vitest";
 import { PHYSICS_CHARACTER_NODE, PHYSICS_WORLD_NODE, RIGID_BODY_NODE, VEHICLE_NODE } from "./rapier";
 import { EvalContext } from "../types";
 import { DEFAULT_REGISTRY } from "./index";
+import { OBJECT_BAR_GRAPH_NODE } from "./object";
 import { evaluateGraph } from "../evaluate";
 import { Graph } from "../types";
 import {
@@ -824,6 +825,50 @@ describe("physics/vehicle — a raycast car", () => {
     expect(out.geometry).toBe(car);
     expect(out.wheels).toEqual([]);
     expect(out.speed).toBe(0);
+  });
+});
+
+describe("rigid body — geometry that changes every frame", () => {
+  beforeAll(async () => {
+    await initRapier();
+  });
+
+  test("a Bar Graph's bars keep following their values once they are bodies, and push what sits on them", () => {
+    // Bar Graph re-scales its bars through mesh.scale every frame; the body
+    // must hear that (visible height and collider both), without resetting.
+    const world = { ...PHYSICS_WORLD_NODE.defaultParams };
+    const bars = { ...RIGID_BODY_NODE.defaultParams, bodyType: "fixed", shape: "box" };
+    const ballParams = { ...RIGID_BODY_NODE.defaultParams, shape: "sphere", restitution: 0 };
+    const ball = new THREE.Mesh(new THREE.SphereGeometry(0.2, 12, 8));
+    ball.position.set(0, 2, 0);
+    ball.updateMatrixWorld(true);
+
+    let barOut: any;
+    let ballOut: any;
+    let graph: THREE.Object3D | null = null;
+    for (let frame = 0; frame < 360; frame++) {
+      const time = frame / 60;
+      // One bar, height 0.2 × 5 = 1 for two seconds, then rising to 0.6 × 5 = 3 over two more.
+      const value = 0.2 + 0.4 * Math.min(1, Math.max(0, (frame - 120) / 120));
+      graph = (OBJECT_BAR_GRAPH_NODE.evaluate(
+        { values: [value], count: 1 },
+        { ...OBJECT_BAR_GRAPH_NODE.defaultParams },
+        makeContext("bg-graph", time),
+      ) as { geometry: THREE.Object3D }).geometry;
+      const w = PHYSICS_WORLD_NODE.evaluate({}, world, makeContext("bg-w", time)) as { world: unknown };
+      barOut = RIGID_BODY_NODE.evaluate({ world: w.world, geometry: graph }, bars, makeContext("bg-bars", time));
+      ballOut = RIGID_BODY_NODE.evaluate({ world: w.world, geometry: ball }, ballParams, makeContext("bg-ball", time));
+      if (frame === 110) expect((ballOut.position as THREE.Vector3).y).toBeCloseTo(1.2, 1);
+    }
+
+    expect(barOut.count).toBe(1);
+    const bar = graph!.getObjectByProperty("isMesh", true) as THREE.Mesh;
+    graph!.updateMatrixWorld(true);
+    const scale = new THREE.Vector3();
+    bar.matrixWorld.decompose(new THREE.Vector3(), new THREE.Quaternion(), scale);
+    expect(scale.y).toBeCloseTo(3, 3);
+    // The ball rode the bar up rather than being left inside it.
+    expect((ballOut.position as THREE.Vector3).y).toBeCloseTo(3.2, 1);
   });
 });
 

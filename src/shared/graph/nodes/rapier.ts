@@ -285,8 +285,6 @@ export function collectBodyTargets(root: THREE.Object3D, split: BodySplitMode): 
   return targets;
 }
 
-const _shapeScale = new THREE.Vector3();
-
 /**
  * What one target *is*, in terms that survive the object being rebuilt.
  *
@@ -298,20 +296,19 @@ const _shapeScale = new THREE.Vector3();
  * long as every upstream node happened to cache well, and a body behind one
  * that did not was destroyed and re-created before it could ever move.
  *
- * So: the producing node's id where there is one, plus enough of the shape to
- * notice a real edit —
+ * So: the producing node's id where there is one, plus the **vertex and
+ * index counts**, which catch a re-subdivided, extruded or re-topologised mesh.
  *
- *  - **vertex and index counts** catch a re-subdivided, extruded or
- *    re-topologised mesh;
- *  - **world scale** catches a box resized through its own scale param, which
- *    changes no counts at all but does change the collider, since
- *    extractColliderGeometry bakes scale into the vertices.
+ * World scale is deliberately *not* part of it. A box resized through its own
+ * scale param, or a Bar Graph whose bars follow a sound, changes the collider
+ * but not what the body *is*: that is handled by swapping the collider on the
+ * existing body (see refitColliders), so the body keeps its pose, velocity,
+ * constraints and contacts instead of being torn down every frame.
  *
- * What it deliberately does *not* notice is vertices moving with the counts
- * unchanged — a lattice or a ripple deforming over time. That leaves the
- * collider slightly behind the visible surface, which is the cheaper of the
- * two errors by a wide margin: the alternative is resetting the body sixty
- * times a second, which is not "slightly" anything.
+ * What it does not notice is vertices moving with the counts unchanged — a
+ * lattice or a ripple deforming over time. That leaves the collider slightly
+ * behind the visible surface, which is the cheaper of the two errors by a wide
+ * margin: re-hulling every body every frame is not.
  */
 function describeTarget(target: BodyTarget): string {
   const mesh = target.mesh;
@@ -319,9 +316,67 @@ function describeTarget(target: BodyTarget): string {
   const identity = nodeId ?? mesh.geometry?.uuid ?? mesh.uuid;
   const vertices = mesh.geometry?.attributes?.position?.count ?? 0;
   const indices = mesh.geometry?.getIndex()?.count ?? 0;
-  target.matrix.decompose(new THREE.Vector3(), new THREE.Quaternion(), _shapeScale);
-  const scale = `${_shapeScale.x.toFixed(4)},${_shapeScale.y.toFixed(4)},${_shapeScale.z.toFixed(4)}`;
-  return `${identity}:${vertices}/${indices}:${scale}`;
+  return `${identity}:${vertices}/${indices}`;
+}
+
+/** Relative difference past which a target's scale counts as changed. */
+const SCALE_EPSILON = 1e-4;
+
+function scaleChanged(a: THREE.Vector3, b: THREE.Vector3): boolean {
+  const tol = (x: number, y: number) => Math.abs(x - y) > SCALE_EPSILON * Math.max(1e-3, Math.abs(x), Math.abs(y));
+  return tol(a.x, b.x) || tol(a.y, b.y) || tol(a.z, b.z);
+}
+
+/**
+ * What this node last left in a mesh's position / quaternion / scale when it
+ * wrote the solver's pose back. A mesh's transform belongs to the solver once
+ * it is a body, and matrixAutoUpdate is switched off so the graph's own
+ * transform can't fight it — but that also means an upstream node that keeps
+ * re-authoring the mesh through its properties (Bar Graph sets each bar's
+ * scale every frame to follow its values) would silently stop being heard:
+ * the bars would freeze at whatever height they had on the first frame.
+ *
+ * So: if the properties no longer hold what was written, someone upstream
+ * re-authored them this frame, and the matrix is rebuilt from them before the
+ * targets are read. Only the *scale* of that authored transform is used from
+ * then on (the pose stays the solver's); see refitColliders.
+ */
+interface WrittenTransform {
+  position: THREE.Vector3;
+  quaternion: THREE.Quaternion;
+  scale: THREE.Vector3;
+}
+const writtenTransforms = new WeakMap<THREE.Object3D, WrittenTransform>();
+
+function rememberWritten(mesh: THREE.Object3D) {
+  const slot = writtenTransforms.get(mesh);
+  if (slot) {
+    slot.position.copy(mesh.position);
+    slot.quaternion.copy(mesh.quaternion);
+    slot.scale.copy(mesh.scale);
+  } else {
+    writtenTransforms.set(mesh, {
+      position: mesh.position.clone(),
+      quaternion: mesh.quaternion.clone(),
+      scale: mesh.scale.clone(),
+    });
+  }
+}
+
+/** Hands a mesh back to its properties if something upstream re-authored them since this node's write. */
+function honourUpstreamTransform(mesh: THREE.Object3D) {
+  if (mesh.matrixAutoUpdate) return;
+  const written = writtenTransforms.get(mesh);
+  if (!written) return;
+  const eps = 1e-7;
+  if (
+    mesh.position.distanceToSquared(written.position) > eps ||
+    Math.abs(mesh.quaternion.dot(written.quaternion)) < 1 - eps ||
+    mesh.scale.distanceToSquared(written.scale) > eps
+  ) {
+    mesh.matrixAutoUpdate = true;
+    mesh.updateMatrix();
+  }
 }
 
 /**
@@ -453,6 +508,86 @@ const _pose = new THREE.Vector3();
 const _poseQuat = new THREE.Quaternion();
 const _poseScale = new THREE.Vector3();
 const _boxSize = new THREE.Vector3();
+
+const _refitScale = new THREE.Vector3();
+
+/**
+ * Resizes colliders in place: for every body whose target's world scale moved
+ * (a Bar Graph bar following a sound, a box driven through its Scale input),
+ * the collider is swapped on the *same* body. Pose, velocity, constraints and
+ * knocks all stay; only the shape changes.
+ *
+ * A fixed or kinematic body growing into a sleeping neighbour would not wake
+ * it on its own, so anything dynamic overlapping the new collider's bounds is
+ * woken — otherwise a ball resting on a bar stays asleep inside it as the bar
+ * rises.
+ */
+function refitColliders(
+  api: typeof RAPIER,
+  handle: PhysicsWorldHandle,
+  state: BodyState,
+  targets: readonly BodyTarget[],
+  shape: Exclude<ColliderShape, "auto">,
+): void {
+  const shapes = new Map<string, ColliderGeometry | null>();
+  const world = handle.world;
+  for (let i = 0; i < state.entries.length && i < targets.length; i++) {
+    const entry = state.entries[i];
+    const target = targets[i];
+    target.matrix.decompose(_pose, _poseQuat, _refitScale);
+    if (!scaleChanged(_refitScale, entry.scale)) continue;
+
+    let base = shapes.get(target.mesh.uuid);
+    if (base === undefined) {
+      base = extractColliderGeometry(target.mesh);
+      if (base && (base.box.isEmpty() || base.box.getSize(_boxSize).lengthSq() < 1e-10)) base = null;
+      shapes.set(target.mesh.uuid, base);
+    }
+    // Squashed to nothing this frame: keep the last good collider rather than
+    // hand Rapier a zero-volume hull (see the rebuild path). The visible scale
+    // still follows.
+    if (!base) {
+      entry.scale.copy(_refitScale);
+      continue;
+    }
+
+    try {
+      const scaled = target.instanceIndex >= 0 ? scaleColliderGeometry(base, _refitScale) : base;
+      const desc = buildColliderDesc(api, shape, scaled);
+      if (!desc) continue;
+      const body = entry.body;
+      for (let c = body.numColliders() - 1; c >= 0; c--) {
+        const old = body.collider(c);
+        if (old) world.removeCollider(old, true);
+      }
+      const collider = world.createCollider(desc, body);
+      entry.scale.copy(_refitScale);
+
+      if (!body.isDynamic()) {
+        const aabb = scaled.box;
+        const t = body.translation();
+        const r = body.rotation();
+        // World-space bounds of the new shape, generously: rotate the local
+        // box's half-diagonal rather than its corners.
+        const half = aabb.getSize(_boxSize).multiplyScalar(0.5);
+        const centre = aabb.getCenter(_pose).applyQuaternion(_poseQuat.set(r.x, r.y, r.z, r.w));
+        const radius = half.length() + TOUCHING;
+        world.collidersWithAabbIntersectingAabb(
+          { x: centre.x + t.x, y: centre.y + t.y, z: centre.z + t.z },
+          { x: radius, y: radius, z: radius },
+          (other) => {
+            if (other.handle === collider.handle) return true;
+            const parent = other.parent();
+            if (parent && parent.isDynamic() && parent.isSleeping()) parent.wakeUp();
+            return true;
+          },
+        );
+      }
+    } catch (err) {
+      console.error(`physics/rigid-body: failed to resize the collider of "${target.mesh.name || target.mesh.uuid}"`, err);
+    }
+  }
+}
 
 /**
  * Rigid Body — hands geometry to the physics world and moves it with whatever
@@ -586,6 +721,12 @@ export const RIGID_BODY_NODE: NodeDefinition = {
     const shape = resolveShape(asShape(params.shape), isDynamic);
     const split = asSplit(params.split);
 
+    // An upstream node that re-authors its meshes through their properties
+    // each frame (Bar Graph) must still be heard once they are bodies.
+    object.traverse((child) => {
+      if ((child as THREE.Mesh).isMesh) honourUpstreamTransform(child);
+    });
+
     const targets = collectBodyTargets(object, split);
     if (targets.length === 0) return idle();
 
@@ -701,6 +842,8 @@ export const RIGID_BODY_NODE: NodeDefinition = {
         state.entries[i].mesh = targets[i].mesh;
         state.entries[i].instanceIndex = targets[i].instanceIndex;
       }
+      // Same bodies, maybe new sizes: resize colliders on the bodies in place.
+      refitColliders(api, handle, state, targets, shape);
     }
 
     const linearDamping = Math.max(0, numberInput(undefined, params.linearDamping, 0.05));
@@ -780,6 +923,7 @@ export const RIGID_BODY_NODE: NodeDefinition = {
         entry.mesh.matrix.copy(_parentInverse);
         _parentInverse.decompose(entry.mesh.position, entry.mesh.quaternion, entry.mesh.scale);
         entry.mesh.matrixWorldNeedsUpdate = true;
+        rememberWritten(entry.mesh);
       }
     }
 
