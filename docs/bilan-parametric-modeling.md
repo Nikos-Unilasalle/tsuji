@@ -41,3 +41,17 @@ Branche `feat/parametric-modeling`, poussée sur GitHub. Tout le plan (`docs/par
 - Le travail a été parallélisé sur 5 agents, chacun dans son worktree ; tout a été fusionné et les worktrees supprimés.
 - `public/_tmp_expression.tsuji` et `yaolanyao_midi/` (non suivis) n'ont pas été touchés.
 - Rien n'est fusionné dans `main`.
+
+## Démos (deuxième vague)
+Cinq démos de plus dans « Parametric Modeling » :
+- **City Blocks** : une boucle For Each Piece, avec des fenêtres et un éclairage nocturne.
+- **Twisted Tower** : une boucle Repeat de 96 itérations ; Loop Info choisit le motif de chaque itération.
+- **Eroded Valley & Road** : érosion, groupes définis par la pente et l'altitude, Copy to Points, et une route posée sur le relief par Ray/Project.
+- **Pierced Lamp** : une forme sculptée par une expression, des trous dessinés par du bruit, Inset et Delete, Solidify puis Subdivide.
+- **Geodesic Contagion** : une fusion de SDF, une distance géodésique et un front animé qui parcourt la surface.
+
+Les construire a mis au jour trois corrections :
+- Inset et Extrude en mode individuel étaient quadratiques (16 s et 74 s). Ils se font maintenant en une seule passe, avec un résultat identique (testé).
+- Twist / Bend perdaient les groupes en re-découpant le maillage. La géométrie re-découpée note désormais son PolyMesh d'origine.
+- Le cache des lumières pouvait resservir une lumière d'un autre type sous le même id de node.
+

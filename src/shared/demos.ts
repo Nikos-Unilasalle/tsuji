@@ -99,6 +99,31 @@ export const DEMO_CATALOG: DemoCategory[] = [
         label: "SDF Blend & L-System",
         description: "A sphere and a box blended as signed distance fields and meshed back; a bush grown by an L-system.",
       },
+      {
+        file: "demo_parametric_city_blocks.tsuji",
+        label: "City Blocks (For Each Piece)",
+        description: "A plane cut into 49 lots; a Group in For Each Piece loop extrudes each lot to its own height and taper (Loop Info drives it); facades are divided, inset into windows, and a random 'lit' group glows at night.",
+      },
+      {
+        file: "demo_parametric_twisted_tower.tsuji",
+        label: "Twisted Tower (Repeat Loop)",
+        description: "A Group in Repeat mode runs 96 times: Loop Info picks slab flare, slab, step back or a turning glazed storey. Select Measure finds the tall facades, Divide + Inset cut the windows.",
+      },
+      {
+        file: "demo_parametric_eroded_valley.tsuji",
+        label: "Eroded Valley & Road",
+        description: "Attribute Expression carves a meandering valley from fbm, HeightField Erode weathers it; slope and altitude attributes pick rock, snow and sand groups; boulders are copied on random grassy points; a road is swept high above and dropped onto the ground with Ray / Project.",
+      },
+      {
+        file: "demo_parametric_pierced_lamp.tsuji",
+        label: "Pierced Lamp",
+        description: "A cylinder reshaped into a vase by Attribute Expression; a noise Select (in local space, so it turns with the lamp) picks organic regions, Inset gives them a rim and Delete opens them; Solidify + Subdivide smooth the shell. The bulb inside throws the pattern on the walls.",
+      },
+      {
+        file: "demo_parametric_geodesic_contagion.tsuji",
+        label: "Geodesic Contagion",
+        description: "Four shapes melted into one creature as distance fields; Geodesic Distance measures every point's way along the surface from a seed on the head. One Attribute Expression sweeps a front over it: buds (individually extruded faces) shoot out behind it and a glowing band rides on it.",
+      },
     ],
   },
   {
