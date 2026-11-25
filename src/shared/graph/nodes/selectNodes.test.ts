@@ -108,3 +108,14 @@ describe("Groups", () => {
     expect(path.out.count).toBeGreaterThanOrEqual(4);
   });
 });
+
+describe("Select Manual", () => {
+  it("writes picked points as a group, promoted to faces", async () => {
+    const { SELECT_MANUAL_NODE } = await import("./selectNodes");
+    const pts = run(SELECT_MANUAL_NODE, meshObj(createQuadBox()), { selectedIndices: [0, 1, 2, 3], domain: "point" });
+    expect(pts.out.count).toBe(4);
+    expect((pts.out.points as unknown[]).length).toBe(8);
+    const faces = run(SELECT_MANUAL_NODE, meshObj(createQuadBox()), { selectedIndices: [0, 1, 2, 3], domain: "face" });
+    expect(faces.out.count).toBe(1);
+  });
+});

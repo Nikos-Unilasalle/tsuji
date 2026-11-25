@@ -57,6 +57,10 @@ import {
   latticeEvaluatedPoints,
 } from "../graph/nodes/lattice";
 import { POINTS_SELECTION_NODE } from "../graph/nodes/pointsSelection";
+import { SELECT_MANUAL_TYPE } from "../graph/nodes/selectNodes";
+
+/** Nodes whose points are picked by click / marquee in the viewport (their `points` output, `selectedIndices` param). */
+const isPointPickerType = (type: string) => type === POINTS_SELECTION_NODE.type || type === SELECT_MANUAL_TYPE;
 import { applyWeldedPointMoves, EDIT_MESH_POINTS_NODE, RESEED_MESH_POINTS_ACTION } from "../graph/nodes/editMeshPoints";
 import { extractPointsFromMesh } from "../graph/nodes/pointsGeometry";
 import {
@@ -2572,7 +2576,7 @@ export function Viewport({
           return;
         }
         const activePointsSelNode = graphRef.current.nodes.find(
-          (n) => n.id === selectedNodeIdRef.current && n.type === POINTS_SELECTION_NODE.type,
+          (n) => n.id === selectedNodeIdRef.current && isPointPickerType(n.type),
         );
         if (activePointsSelNode) {
           e.preventDefault();
@@ -6469,7 +6473,7 @@ export function Viewport({
       // this frame), and there's no polyline (showLine=false) or drag/gizmo
       // support: this feature only selects, it never moves a point.
       const pointsSelNode = !outputMode
-        ? graphRef.current.nodes.find((n) => n.id === selectedNodeIdRef.current && n.type === POINTS_SELECTION_NODE.type)
+        ? graphRef.current.nodes.find((n) => n.id === selectedNodeIdRef.current && isPointPickerType(n.type))
         : undefined;
       if (pointsSelNode) {
         if (pointsSelectionNodeId !== pointsSelNode.id) {
@@ -8330,7 +8334,7 @@ export function Viewport({
         !elevationView &&
         selectedNodeId &&
         (() => {
-          const selNode = graph.nodes.find((n) => n.id === selectedNodeId && n.type === POINTS_SELECTION_NODE.type);
+          const selNode = graph.nodes.find((n) => n.id === selectedNodeId && isPointPickerType(n.type));
           if (!selNode) return null;
           const xray = selNode.params.xray === true;
           return (

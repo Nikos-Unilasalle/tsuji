@@ -814,7 +814,54 @@ export const GROUP_PATH_NODE = definePolyNode({
   },
 });
 
+// ============================================================ Select Manual
+
+export const SELECT_MANUAL_TYPE = "select/manual";
+
+/**
+ * Hand-picked points, kept as a group: with the node selected, click or drag
+ * a marquee over the mesh's points in the viewport (the same picking Points
+ * Selection uses — Viewport.tsx treats both types alike). The picked point
+ * indices are PolyMesh point indices, written as a point group and, when the
+ * Domain says so, promoted to the edges / faces they span.
+ *
+ * Indices are stored, so a pick survives as long as the mesh upstream keeps
+ * its point numbering; an upstream change that renumbers points moves the
+ * selection, as in every DCC's stored selections.
+ */
+export const SELECT_MANUAL_NODE = definePolyNode({
+  type: SELECT_MANUAL_TYPE,
+  label: "Select Manual",
+  category: "selection",
+  outputs: [...COUNT_OUTPUTS, { id: "points", label: "Points (local, for picking)", type: "list" }],
+  defaultParams: { ...OUTPUT_DEFAULTS, domain: "point", selectedIndices: [] as number[], xray: false, rule: "all" },
+  volatileParams: ["xray"],
+  paramFields: [
+    { id: "_help", label: "Select this node, then click / drag a marquee over the points in the viewport (Shift adds, Alt+Z X-ray).", kind: "note", group: "Selection" },
+    { id: "rule", label: "Promote to edges / faces when", kind: "select", options: ["all", "any"], optionLabels: ["all their points are picked", "any point is picked"], group: "Selection" },
+    ...OUTPUT_FIELDS,
+  ],
+  run: (run) => {
+    const mesh = run.mesh;
+    const domain = domainParam(run, "point");
+    const picked = Array.isArray(run.params.selectedIndices) ? (run.params.selectedIndices as unknown[]).map(Number) : [];
+    const pointMask = new Uint8Array(mesh.positions.length);
+    let outOfRange = 0;
+    for (const i of picked) {
+      if (Number.isInteger(i) && i >= 0 && i < pointMask.length) pointMask[i] = 1;
+      else outOfRange++;
+    }
+    if (outOfRange) run.note(`${outOfRange} picked point(s) no longer exist on this mesh`, true);
+    const rule = run.str("rule", "all") === "any" ? "any" : "all";
+    const fresh = domain === "point" ? pointMask : promoteMask(mesh, "point", domain, pointMask, rule);
+    const result = writeSelection(run, mesh, domain, fresh);
+    const points = mesh.positions.map((p) => new THREE.Vector3(p[0], p[1], p[2]));
+    return { mesh: result.mesh, outputs: { ...result.outputs, points } };
+  },
+});
+
 export const SELECT_NODES = [
+  SELECT_MANUAL_NODE,
   SELECT_NODE,
   SELECT_TOPOLOGY_NODE,
   SELECT_MEASURE_NODE,
