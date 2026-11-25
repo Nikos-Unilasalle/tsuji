@@ -176,6 +176,9 @@ import { SOLIDIFY_NODE } from "./solidify";
 import { SELECT_NODES } from "./selectNodes";
 import { MODELING_NODES } from "./modelingNodes";
 import { LOOP_INFO_NODE } from "./groupLoop";
+import { MODELING_OPS_NODES } from "./modelingOps";
+import { MODELING_ALGO_NODES } from "./modelingAlgos";
+import { CURVE_OPS_NODES } from "./curveOps";
 import { EXTRUDE_MESH_NODE, DELETE_GEOMETRY_NODE, FACE_SELECTION_NODE } from "./meshEdit";
 import { EDIT_MESH_NODE } from "./editMesh";
 import { SHADE_NODE } from "./shade";
@@ -538,6 +541,9 @@ export const STARTER_NODES = [
   ...SELECT_NODES,
   ...MODELING_NODES,
   LOOP_INFO_NODE,
+  ...MODELING_OPS_NODES,
+  ...MODELING_ALGO_NODES,
+  ...CURVE_OPS_NODES,
   EXTRUDE_MESH_NODE,
   EDIT_MESH_NODE,
   DELETE_GEOMETRY_NODE,

@@ -698,13 +698,6 @@ export const FLIP_FACES_NODE = definePolyNode({
     if (faces.length === 0) return run.mesh;
     return propagated(run.mesh, (m) => {
       const out = flipFaces(m, faces);
-      // flipFaces reverses corners and UVs but not the corner colours.
-      if (out.faceColors) {
-        for (const f of new Set(faces)) {
-          const c = out.faceColors[f];
-          if (c) out.faceColors[f] = [...c].reverse();
-        }
-      }
       return { mesh: out, maps: { point: m.positions.map((_, i) => i), face: m.faces.map((_, i) => i) } };
     });
   },

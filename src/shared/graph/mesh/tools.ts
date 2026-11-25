@@ -648,6 +648,9 @@ export function flipFaces(mesh: PolyMesh, faces: number[]): PolyMesh {
     if (!next.faces[f]) continue;
     next.faces[f] = [...next.faces[f]].reverse();
     next.faceUVs![f] = [...next.faceUVs![f]].reverse();
+    // Corner colours ride with their corners, like the UVs.
+    const colors = next.faceColors?.[f];
+    if (colors) next.faceColors![f] = [...colors].reverse();
   }
   return next;
 }
