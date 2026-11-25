@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { DEFORM_GROUP_FIELDS, groupWeightsForBuffer } from "./deformGroup";
 import { NodeDefinition } from "../types";
 import { clearMeshWarning, findFirstMesh, warnMeshRequired } from "../meshRequired";
 import { createNodeCache, disposeObject3D } from "../nodeCaches";
@@ -643,6 +644,8 @@ export const LATTICE_DEFORM_NODE: NodeDefinition = {
     { id: "cagePoints", label: "Cage Points (Local)", type: "list" },
   ],
   defaultParams: {
+    group: "",
+    weightAttribute: "",
     visible: 1,
     location: new THREE.Vector3(0, 0, 0),
     rotation: new THREE.Vector3(0, 0, 0),
@@ -699,6 +702,7 @@ export const LATTICE_DEFORM_NODE: NodeDefinition = {
     },
     { id: "showCage", label: "Show Cage", kind: "boolean", group: "Lattice Grid" },
 
+    ...DEFORM_GROUP_FIELDS,
     { id: "deformAxis", label: "Deform Axis", kind: "select", options: ["x", "y", "z"], group: "Deformations" },
     { id: "bulge", label: "Bulge", kind: "number", step: 0.05, group: "Deformations" },
     { id: "twist", label: "Twist (°)", kind: "number", step: 5, group: "Deformations" },
@@ -902,6 +906,8 @@ export const LATTICE_DEFORM_NODE: NodeDefinition = {
     const vertexCount = posAttr.count;
 
     const deformedPositions = new Float32Array(vertexCount * 3);
+    // Group / Weight Attribute: how much of the cage each vertex follows (see deformGroup.ts).
+    const groupWeights = groupWeightsForBuffer(srcGeom, posAttr.array as ArrayLike<number>, params);
     const v = new THREE.Vector3();
     const origLocal = new THREE.Vector3();
 
@@ -925,7 +931,7 @@ export const LATTICE_DEFORM_NODE: NodeDefinition = {
       // onto its faces, so a long mesh gets everything past the cage flattened against the end.
       // Clipped, the weight falls to zero at the cage's walls and the rest of the mesh passes
       // through untouched — a fish swims in one end and out the other.
-      const weight = clipToCage ? strength * cageWeight(u, wV, w, clipFalloff) : strength;
+      const weight = (clipToCage ? strength * cageWeight(u, wV, w, clipFalloff) : strength) * (groupWeights ? groupWeights[i] : 1);
 
       if (weight <= 0) {
         deformedPositions[i * 3] = origLocal.x;
@@ -966,6 +972,12 @@ export const LATTICE_DEFORM_NODE: NodeDefinition = {
       if (srcGeom.attributes.uv) built.setAttribute("uv", srcGeom.attributes.uv.clone());
       if (srcGeom.index) built.setIndex(flipWinding ? reversedWinding(srcGeom.index, vertexCount) : srcGeom.index.clone());
       else if (flipWinding) built.setIndex(reversedWinding(null, vertexCount));
+      // Same vertex order as the source: its PolyMesh (topology, attributes,
+      // groups) still describes this buffer — polyIO reads the moved
+      // positions back through polyVertexOf.
+      if (srcGeom.userData?.quadMesh && srcGeom.userData?.polyVertexOf) {
+        built.userData = { quadMesh: srcGeom.userData.quadMesh, polyVertexOf: srcGeom.userData.polyVertexOf };
+      }
       state.deformedGeometry = built;
       state.deformedFrom = sourceSignature;
     }

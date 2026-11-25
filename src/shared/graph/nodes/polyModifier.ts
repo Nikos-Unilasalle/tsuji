@@ -43,9 +43,22 @@ export interface PolyRunContext {
   note(message: string, warn?: boolean): void;
   /** The source mesh's world matrix (local → world). Set `dependsOnPose` for the node to rebuild when it changes. */
   worldMatrix: THREE.Matrix4;
+  /** How many materials the source mesh carries (1 for a single material). */
+  sourceMaterialCount: number;
 }
 
-export type PolyRunResult = PolyMesh | { mesh: PolyMesh; outputs?: Record<string, unknown>; shading?: QuadMeshShading };
+export type PolyRunResult =
+  | PolyMesh
+  | {
+      mesh: PolyMesh;
+      outputs?: Record<string, unknown>;
+      shading?: QuadMeshShading;
+      /**
+       * Extra materials appended after the source's own (slot = source material
+       * count + k), for faces whose material_index points at them.
+       */
+      extraMaterials?: THREE.Material[];
+    };
 
 export interface PolyNodeSpec {
   type: string;
@@ -76,6 +89,21 @@ interface PolyNodeState {
   object?: THREE.Mesh;
   signature?: string;
   outputs?: Record<string, unknown>;
+  extraMaterials?: THREE.Material[];
+}
+
+/** The source's material(s) followed by a node's extra slots. */
+const combinedMaterials = new WeakMap<THREE.Material[], { source: unknown; combined: THREE.Material[] }>();
+function withExtraMaterials(srcMesh: THREE.Mesh, extra: THREE.Material[] | undefined): THREE.Material | THREE.Material[] | undefined {
+  if (!extra || extra.length === 0) return undefined;
+  // Same array back while nothing changed: a new one every frame would make
+  // the material's geometry hook rerun every frame.
+  const hit = combinedMaterials.get(extra);
+  if (hit && hit.source === srcMesh.material) return hit.combined;
+  const base = Array.isArray(srcMesh.material) ? srcMesh.material : srcMesh.material ? [srcMesh.material] : [];
+  const combined = [...base, ...extra];
+  combinedMaterials.set(extra, { source: srcMesh.material, combined });
+  return combined;
 }
 
 const states = createNodeCache<PolyNodeState>((s) => {
@@ -228,7 +256,7 @@ export function definePolyNode(spec: PolyNodeSpec): NodeDefinition {
 
       if (state.object && state.signature === signature) {
         // Pose and material can change without the mesh changing.
-        return { ...emitModifiedMesh(state.object, { inputObj, srcMesh: read.srcMesh, nodeId: ctx.nodeId }), ...state.outputs };
+        return { ...emitModifiedMesh(state.object, { inputObj, srcMesh: read.srcMesh, nodeId: ctx.nodeId, material: withExtraMaterials(read.srcMesh, state.extraMaterials) }), ...state.outputs };
       }
 
       const status: PolyNodeStatus = {
@@ -269,6 +297,7 @@ export function definePolyNode(spec: PolyNodeSpec): NodeDefinition {
         },
         note,
         worldMatrix,
+        sourceMaterialCount: Array.isArray(read.srcMesh.material) ? read.srcMesh.material.length : 1,
       };
 
       let result: PolyRunResult;
@@ -282,13 +311,14 @@ export function definePolyNode(spec: PolyNodeSpec): NodeDefinition {
       const mesh = "positions" in result ? result : result.mesh;
       const outputs = "positions" in result ? {} : (result.outputs ?? {});
       const shading = "positions" in result ? undefined : result.shading;
+      state.extraMaterials = "positions" in result ? undefined : result.extraMaterials;
       statuses.set(ctx.nodeId, status);
 
       if (!state.object) state.object = createModifierMesh();
       const geometry = polyMeshToGeometry(mesh, shading);
       state.signature = signature;
       state.outputs = outputs;
-      return { ...emitModifiedMesh(state.object, { inputObj, srcMesh: read.srcMesh, geometry, nodeId: ctx.nodeId }), ...outputs };
+      return { ...emitModifiedMesh(state.object, { inputObj, srcMesh: read.srcMesh, geometry, nodeId: ctx.nodeId, material: withExtraMaterials(read.srcMesh, state.extraMaterials) }), ...outputs };
     },
   };
 }

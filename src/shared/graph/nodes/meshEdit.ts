@@ -5,6 +5,15 @@ import { createNodeCache, disposeObject3D } from "../nodeCaches";
 import { NodeDefinition } from "../types";
 import { clearMeshWarning, findFirstMesh, warnMeshRequired } from "../meshRequired";
 import { createPRNG } from "../../math/random";
+import type { PolyMesh } from "../quadMesh";
+import { faceNormals, setGroup } from "../mesh/polyAttributes";
+import { evaluateGroup } from "../mesh/groupExpr";
+import { notePolyAttributeSource, polyMeshToGeometry, readPolyMesh } from "../mesh/polyIO";
+import { quadMeshSignature } from "../quadMesh";
+import { withAttributes } from "../mesh/propagate";
+import { polyExtrudeGrow } from "../mesh/extrudeGrow";
+import { keepFacesWithAttributes, keepPointsWithAttributes } from "../mesh/subset";
+import { promoteMask } from "../mesh/promote";
 import {
   applyMaterialParams,
   createModifierMesh,
@@ -70,6 +79,37 @@ export function selectFaces(positions: ArrayLike<number>, indices: ArrayLike<num
     result[f] = config.invert ? !selected : selected;
   }
   return result;
+}
+
+/** The formula selection (all / normal / height) on a PolyMesh's real faces. */
+export function polyFormulaMask(mesh: PolyMesh, config: FaceSelectionConfig): Uint8Array {
+  const axisVec = AXIS_VECTORS[config.axis] ?? AXIS_VECTORS.y;
+  const key = config.axis === "x" ? 0 : config.axis === "y" ? 1 : 2;
+  const normals = faceNormals(mesh);
+  return Uint8Array.from(mesh.faces, (face, f) => {
+    let selected: boolean;
+    if (config.mode === "all") selected = true;
+    else if (config.mode === "normal") selected = normals[f * 3] * axisVec.x + normals[f * 3 + 1] * axisVec.y + normals[f * 3 + 2] * axisVec.z >= config.threshold;
+    else {
+      let sum = 0;
+      for (const v of face) sum += mesh.positions[v][key];
+      selected = sum / Math.max(1, face.length) >= config.threshold;
+    }
+    return (config.invert ? !selected : selected) ? 1 : 0;
+  });
+}
+
+/**
+ * Group + formula on the PolyMesh: the faces in the Group expression that the
+ * formula fields also select. Used by the PolyMesh paths of Extrude and Delete,
+ * which run when the node's Group field is set (new nodes get "*").
+ */
+function polyFaceSelection(mesh: PolyMesh, group: string, config: FaceSelectionConfig): number[] {
+  const g = evaluateGroup(mesh, "face", group).mask;
+  const formula = polyFormulaMask(mesh, config);
+  const out: number[] = [];
+  for (let f = 0; f < mesh.faces.length; f++) if (g[f] && formula[f]) out.push(f);
+  return out;
 }
 
 export const FACE_SELECTION_PARAM_FIELDS = [
@@ -575,6 +615,8 @@ export const EXTRUDE_MESH_NODE: NodeDefinition = {
     location: new THREE.Vector3(0, 0, 0),
     random: 0,
     seed: 1,
+    group: "",
+    individual: false,
     selectMode: "all",
     axis: "y",
     threshold: 0,
@@ -589,7 +631,12 @@ export const EXTRUDE_MESH_NODE: NodeDefinition = {
     { id: "random", label: "Random %", kind: "number", step: 0.05, group: "Random" },
     { id: "seed", label: "Seed", kind: "number", step: 1, group: "Random" },
     ...FACE_SELECTION_PARAM_FIELDS.map((f) => ({ ...f, group: "Extrude" })),
+    { id: "group", label: "Group (faces; empty = legacy triangle mode)", kind: "text", group: "Extrude" },
+    { id: "individual", label: "Individual Faces", kind: "boolean", group: "Extrude" },
   ],
+  // New nodes work on the PolyMesh's real faces and honour groups; saved
+  // ones without a Group keep the triangle path they were built with.
+  newNodeParams: { group: "*" },
   evaluate: (inputs, params, ctx) => {
     const inputObj = inputs.geometry instanceof THREE.Object3D ? inputs.geometry : null;
     if (!inputObj) return { geometry: null };
@@ -633,6 +680,47 @@ export const EXTRUDE_MESH_NODE: NodeDefinition = {
     const rawSelection = Array.isArray(inputs.selection) ? (inputs.selection as unknown[]).map((v) => Boolean(v)) : null;
 
     const state = getState(meshEditCache, ctx.nodeId);
+
+    // PolyMesh path: real faces, groups in and out, attributes carried.
+    const groupExpr = String(params.group ?? "").trim();
+    const polyRead = groupExpr && !rawSelection ? readPolyMesh(inputObj) : null;
+    if (polyRead) {
+      const individual = Boolean(params.individual);
+      const polySig = [
+        "poly",
+        quadMeshSignature(polyRead.mesh),
+        groupExpr,
+        individual,
+        distance,
+        passes,
+        random,
+        seed,
+        selection.mode,
+        selection.axis,
+        selection.threshold,
+        selection.invert,
+        growRotation.toArray().join(","),
+        growScale.toArray().join(","),
+        growLocation.toArray().join(","),
+      ].join(":");
+      if (!(state.mesh && state.lastSignature === polySig)) {
+        const faces = polyFaceSelection(polyRead.mesh, groupExpr, selection);
+        const out = withAttributes(polyRead.mesh, (m) => {
+          const grown = polyExtrudeGrow(m, faces, distance, { passes, rotation: growRotation, scale: growScale, location: growLocation, random, seed, individual });
+          const top = new Uint8Array(grown.mesh.faces.length);
+          for (const f of grown.caps) top[f] = 1;
+          const side = new Uint8Array(grown.mesh.faces.length);
+          for (const f of grown.walls) side[f] = 1;
+          return setGroup(setGroup(grown.mesh, "face", "extrude_top", top), "face", "extrude_side", side);
+        });
+        if (!state.mesh) state.mesh = createModifierMesh();
+        state.mesh.geometry?.dispose();
+        state.mesh.geometry = polyMeshToGeometry(out);
+        state.lastSignature = polySig;
+      }
+      applyExtrudeMaterial(state.mesh!, srcMesh, inputs.material);
+      return emitModifiedMesh(state.mesh!, { inputObj, srcMesh, nodeId: ctx.nodeId, material: state.mesh!.material });
+    }
     const transformPart = inputs.transform instanceof THREE.Matrix4
       ? `M${inputs.transform.elements.map((n) => n.toFixed(4)).join(",")}`
       : `${growRotation.toArray().map((n) => n.toFixed(4)).join(",")}:${growScale.toArray().map((n) => n.toFixed(4)).join(",")}:${growLocation.toArray().map((n) => n.toFixed(4)).join(",")}`;
@@ -679,6 +767,7 @@ export const EXTRUDE_MESH_NODE: NodeDefinition = {
     });
 
     const geometry = buildExtrudedGeometry(result);
+    notePolyAttributeSource(geometry, srcGeom);
 
     if (!state.mesh) state.mesh = createModifierMesh();
     state.mesh.geometry?.dispose();
@@ -826,8 +915,20 @@ export const DELETE_GEOMETRY_NODE: NodeDefinition = {
     axis: "y",
     threshold: 0,
     invert: false,
+    group: "",
+    domain: "face",
+    keepSelected: false,
   },
-  paramFields: FACE_SELECTION_PARAM_FIELDS,
+  // New nodes delete the PolyMesh's real faces and honour groups; a saved
+  // node with no Group keeps its triangle path. "all" + "*" would wipe the
+  // mesh on drop, so the formula keeps its upper-half default.
+  newNodeParams: { group: "*" },
+  paramFields: [
+    ...FACE_SELECTION_PARAM_FIELDS,
+    { id: "group", label: "Group (empty = legacy triangle mode)", kind: "text" },
+    { id: "domain", label: "Group Domain", kind: "select", options: ["face", "edge", "point"] },
+    { id: "keepSelected", label: "Delete Non-Selected", kind: "boolean" },
+  ],
   evaluate: (inputs, params, ctx) => {
     const inputObj = inputs.geometry instanceof THREE.Object3D ? inputs.geometry : null;
     if (!inputObj) return { geometry: null };
@@ -842,6 +943,37 @@ export const DELETE_GEOMETRY_NODE: NodeDefinition = {
 
     const selection = faceSelectionConfigFromParams(params);
     const state = getState(meshEditCache, ctx.nodeId);
+
+    // PolyMesh path: delete the Group's faces (or points / edges) that the
+    // formula also selects; attributes and the other groups carry through.
+    const groupExpr = String(params.group ?? "").trim();
+    const polyRead = groupExpr ? readPolyMesh(inputObj) : null;
+    if (polyRead) {
+      const domain = params.domain === "point" || params.domain === "edge" ? params.domain : "face";
+      const polySig = ["poly", quadMeshSignature(polyRead.mesh), groupExpr, domain, selection.mode, selection.axis, selection.threshold, selection.invert, Boolean(params.keepSelected)].join(":");
+      if (!(state.mesh && state.lastSignature === polySig)) {
+        const mesh = polyRead.mesh;
+        const formula = polyFormulaMask(mesh, selection);
+        let out: PolyMesh;
+        if (domain === "face") {
+          const g = evaluateGroup(mesh, "face", groupExpr).mask;
+          const keep = Uint8Array.from(mesh.faces, (_, f) => ((g[f] && formula[f]) ? 0 : 1) ^ (params.keepSelected ? 1 : 0));
+          out = keepFacesWithAttributes(mesh, keep);
+        } else {
+          // Points / edges: the formula is per face, so it gates through the points of the selected faces.
+          const g = evaluateGroup(mesh, domain === "edge" ? "edge" : "point", groupExpr).mask;
+          const pointSel = domain === "edge" ? promoteMask(mesh, "edge", "point", g, "any") : g;
+          const formulaPts = promoteMask(mesh, "face", "point", formula, "any");
+          const keepPoint = Uint8Array.from(mesh.positions, (_, v) => ((pointSel[v] && formulaPts[v]) ? 0 : 1) ^ (params.keepSelected ? 1 : 0));
+          out = keepPointsWithAttributes(mesh, keepPoint);
+        }
+        if (!state.mesh) state.mesh = createModifierMesh();
+        state.lastSignature = polySig;
+        return emitModifiedMesh(state.mesh, { inputObj, srcMesh, geometry: polyMeshToGeometry(out), nodeId: ctx.nodeId });
+      }
+      return emitModifiedMesh(state.mesh!, { inputObj, srcMesh, nodeId: ctx.nodeId });
+    }
+
     const signature = `${selection.mode}:${selection.axis}:${selection.threshold}:${selection.invert}:${srcGeom.attributes.position.count}:${srcGeom.index?.count ?? -1}`;
     if (state.mesh && state.lastSignature === signature) {
       return emitModifiedMesh(state.mesh, { inputObj, srcMesh, nodeId: ctx.nodeId });

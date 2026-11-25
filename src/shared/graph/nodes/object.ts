@@ -10,6 +10,7 @@ import { BUILTIN_FONTS, FONT_NAMES } from "../../three/fonts/fonts";
 import { createNodeCache, disposeObject3D } from "../nodeCaches";
 import { asVector3, composeNativeMatrix, preserveModifierUserData } from "./transform";
 import { worldMatrixOf } from "../objectPosition";
+import { notePolyAttributeSource } from "../mesh/polyIO";
 import { createQuadBox, createQuadPlane, createQuadSphere, PolyMesh, QuadSphereMethod, quadMeshToBufferGeometry, syncLooseEdgeLines } from "../quadMesh";
 
 export function numberInput(input: unknown, param: unknown, fallback: number): number {
@@ -550,6 +551,7 @@ export function emitModifiedMesh(mesh: THREE.Mesh, options: ModifiedMeshOptions)
   if (geometry && geometry !== mesh.geometry) {
     mesh.geometry?.dispose();
     mesh.geometry = geometry;
+    notePolyAttributeSource(geometry, srcMesh.geometry);
   }
 
   inheritSourceMaterial(mesh, material ?? srcMesh.material);

@@ -51,7 +51,7 @@ export function polyMeshFromGeometry(geometry: THREE.BufferGeometry): PolyMesh |
 
 function computePolyMesh(geometry: THREE.BufferGeometry, pos: THREE.BufferAttribute, stored: PolyMesh | undefined): PolyMesh | null {
   const vertexOf = geometry.userData?.polyVertexOf as ArrayLike<number> | undefined;
-  if (stored && vertexOf && vertexOf.length === pos.count && fits(vertexOf, stored.positions.length)) {
+  if (stored && vertexOf && vertexOf.length === pos.count && fits(vertexOf, stored.positions.length) && trianglesMatch(geometry, stored)) {
     let moved = false;
     const positions = stored.positions.map((p) => [p[0], p[1], p[2]] as [number, number, number]);
     for (let i = 0; i < pos.count; i++) {
@@ -71,8 +71,43 @@ function computePolyMesh(geometry: THREE.BufferGeometry, pos: THREE.BufferAttrib
   const imported = importBufferGeometry(geometry);
   if (!imported) return null;
   const fresh = imported.faceUVs ? imported : boxProjectUVs(imported);
-  if (!stored?.attributes) return fresh;
-  return transferByNearest(stored, fresh);
+  // A node that built this geometry from scratch (Boolean, Weld, Fracture…)
+  // leaves no PolyMesh, but emitModifiedMesh notes the one it started from,
+  // so its attributes and groups carry over by proximity.
+  const source = stored ?? (geometry.userData?.polyAttributeSource as PolyMesh | undefined);
+  if (!source?.attributes) return fresh;
+  return transferByNearest(source, fresh);
+}
+
+/**
+ * Called by emitModifiedMesh for every new geometry a modifier hands out: when
+ * the geometry carries no PolyMesh of its own but the mesh it was made from
+ * had attributes, remember that mesh so a parametric node downstream can
+ * recover the attributes (lazily — nothing is computed unless something
+ * reads them).
+ */
+export function notePolyAttributeSource(geometry: THREE.BufferGeometry, sourceGeometry: THREE.BufferGeometry | undefined): void {
+  if (!sourceGeometry || geometry === sourceGeometry) return;
+  if (geometry.userData?.quadMesh || geometry.userData?.polyAttributeSource) return;
+  const hasPoly = sourceGeometry.userData?.quadMesh || sourceGeometry.userData?.polyAttributeSource;
+  if (!hasPoly) return;
+  const source = polyMeshFromGeometry(sourceGeometry);
+  if (!source?.attributes) return;
+  const a = source.attributes;
+  const any = [a.point, a.face, a.corner, a.edge].some((r) => r && Object.keys(r).length > 0);
+  if (any) geometry.userData = { ...geometry.userData, polyAttributeSource: source };
+}
+
+/**
+ * The geometry still draws the stored mesh's faces: a node that cloned the
+ * geometry and rewrote its index (legacy Delete Geometry) keeps the vertex
+ * buffer — so polyVertexOf still fits — but not the faces.
+ */
+function trianglesMatch(geometry: THREE.BufferGeometry, mesh: PolyMesh): boolean {
+  let expected = 0;
+  for (const f of mesh.faces) if (f.length >= 3) expected += f.length - 2;
+  const drawn = geometry.index ? geometry.index.count / 3 : (geometry.getAttribute("position")?.count ?? 0) / 3;
+  return drawn === expected;
 }
 
 function fits(map: ArrayLike<number>, n: number): boolean {

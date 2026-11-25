@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { applyDeformGroup, DEFORM_GROUP_FIELDS } from "./deformGroup";
 import { TessellateModifier } from "three/examples/jsm/modifiers/TessellateModifier.js";
 import { createNodeCache } from "../nodeCaches";
 import { NodeDefinition } from "../types";
@@ -196,6 +197,8 @@ export const GEOMETRY_TWIST_BEND_TAPER_NODE: NodeDefinition = {
     { id: "matrix", label: "Matrix", type: "matrix" },
   ],
   defaultParams: {
+    group: "",
+    weightAttribute: "",
     twist: 0,
     bend: 0,
     taper: 0,
@@ -203,6 +206,7 @@ export const GEOMETRY_TWIST_BEND_TAPER_NODE: NodeDefinition = {
     bendToward: "auto",
   },
   paramFields: [
+    ...DEFORM_GROUP_FIELDS,
     { id: "twist", label: "Twist (°)", kind: "number", step: 5.0 },
     { id: "bend", label: "Bend (°)", kind: "number", step: 5.0 },
     { id: "taper", label: "Taper", kind: "number", step: 0.1 },
@@ -376,7 +380,10 @@ export const GEOMETRY_TWIST_BEND_TAPER_NODE: NodeDefinition = {
       return target.output;
     }
 
-    for (const target of targets) deformMesh(target);
+    for (const target of targets) {
+      deformMesh(target);
+      applyDeformGroup(target, params);
+    }
     const resultObject = deformedObject(state, targets, raw);
     applyResultTransform(resultObject, objMatrix, ctx.nodeId, raw);
 
@@ -409,6 +416,8 @@ export const GEOMETRY_WAVE_RIPPLE_NODE: NodeDefinition = {
     { id: "matrix", label: "Matrix", type: "matrix" },
   ],
   defaultParams: {
+    group: "",
+    weightAttribute: "",
     amplitude: 0.3,
     frequency: 3.0,
     speed: 2.0,
@@ -419,6 +428,7 @@ export const GEOMETRY_WAVE_RIPPLE_NODE: NodeDefinition = {
     space: "local",
   },
   paramFields: [
+    ...DEFORM_GROUP_FIELDS,
     { id: "amplitude", label: "Amplitude", kind: "number", step: 0.05 },
     { id: "frequency", label: "Frequency", kind: "number", step: 0.2 },
     { id: "speed", label: "Speed", kind: "number", step: 0.2 },
@@ -529,7 +539,10 @@ export const GEOMETRY_WAVE_RIPPLE_NODE: NodeDefinition = {
       return target.output;
     }
 
-    for (const target of targets) deformMesh(target);
+    for (const target of targets) {
+      deformMesh(target);
+      applyDeformGroup(target, params);
+    }
     const resultObject = deformedObject(state, targets, raw);
     applyResultTransform(resultObject, objMatrix, ctx.nodeId, raw);
 
