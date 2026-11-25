@@ -5,7 +5,7 @@ import { UV_DENSITY } from "./uv";
  * UVs for a surface built from nothing that has any (a weld's distance field,
  * metaballs, an extrusion of a mesh with no UVs): each vertex projected along
  * the axis its normal is closest to, in object space at UV_DENSITY — the same
- * rule and scale as a QuadMesh's box projection, so the texture neither
+ * rule and scale as a PolyMesh's box projection, so the texture neither
  * slides nor rescales when the surface moves or grows.
  *
  * Per vertex, because these surfaces share vertices between faces: it seams

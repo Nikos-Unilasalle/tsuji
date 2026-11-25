@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { createQuadBox, createQuadPlane, QuadMesh, computeFaceNormal, deleteFaces } from "../quadMesh";
+import { createQuadBox, createQuadPlane, PolyMesh, computeFaceNormal, deleteFaces } from "../quadMesh";
 import { validateQuadMesh } from "./validate";
 import {
   compactMesh,
@@ -20,7 +20,7 @@ import {
 } from "./tools";
 import * as THREE from "three";
 
-function expectSound(result: QuadMesh, input: QuadMesh) {
+function expectSound(result: PolyMesh, input: PolyMesh) {
   const before = validateQuadMesh(input);
   const after = validateQuadMesh(result);
   expect(after.errors).toEqual([]);
@@ -110,7 +110,7 @@ describe("merge", () => {
   it("welds coincident vertices by distance", () => {
     const box = createQuadBox();
     // Split the box into two pieces with duplicate vertices along a seam.
-    const split: QuadMesh = {
+    const split: PolyMesh = {
       positions: [...box.positions, ...box.positions.map((p) => [...p] as [number, number, number])],
       faces: box.faces.map((f, i) => (i < 3 ? f : f.map((v) => v + 8))),
     };
@@ -154,7 +154,7 @@ describe("dissolve", () => {
     expect(mesh.positions).toHaveLength(15);
 
     // A strip made with an extra vertex mid-edge: dissolving it restores a quad.
-    const kinked: QuadMesh = { positions: [[0, 0, 0], [0.5, 0, 0], [1, 0, 0], [1, 1, 0], [0, 1, 0]], faces: [[0, 1, 2, 3, 4]] };
+    const kinked: PolyMesh = { positions: [[0, 0, 0], [0.5, 0, 0], [1, 0, 0], [1, 1, 0], [0, 1, 0]], faces: [[0, 1, 2, 3, 4]] };
     const { mesh: quad } = dissolveVertices(kinked, [1]);
     expect(quad.faces).toEqual([[0, 1, 2, 3]]);
   });
@@ -172,7 +172,7 @@ describe("fillVertices", () => {
   });
 
   it("makes a face from loose points in a sensible order", () => {
-    const loose: QuadMesh = { positions: [[0, 0, 0], [1, 1, 0], [1, 0, 0], [0, 1, 0]], faces: [] };
+    const loose: PolyMesh = { positions: [[0, 0, 0], [1, 1, 0], [1, 0, 0], [0, 1, 0]], faces: [] };
     const { mesh } = fillVertices(loose, [0, 1, 2, 3]);
     expect(mesh.faces).toHaveLength(1);
     // Convex order, not the bow-tie 0-1-2-3.
@@ -226,7 +226,7 @@ describe("mirror", () => {
 
 describe("compactMesh", () => {
   it("drops degenerate faces and unused vertices", () => {
-    const m: QuadMesh = { positions: [[0, 0, 0], [1, 0, 0], [1, 1, 0], [5, 5, 5]], faces: [[0, 1, 1, 2], [0, 0, 1]], faceUVs: [[[0, 0], [1, 0], [1, 0], [1, 1]], [[0, 0], [0, 0], [1, 0]]] };
+    const m: PolyMesh = { positions: [[0, 0, 0], [1, 0, 0], [1, 1, 0], [5, 5, 5]], faces: [[0, 1, 1, 2], [0, 0, 1]], faceUVs: [[[0, 0], [1, 0], [1, 0], [1, 1]], [[0, 0], [0, 0], [1, 0]]] };
     const { mesh } = compactMesh(m);
     expect(mesh.faces).toEqual([[0, 1, 2]]);
     expect(mesh.positions).toHaveLength(3);

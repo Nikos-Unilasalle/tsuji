@@ -10,7 +10,8 @@ import { BUILTIN_FONTS, FONT_NAMES } from "../../three/fonts/fonts";
 import { createNodeCache, disposeObject3D } from "../nodeCaches";
 import { asVector3, composeNativeMatrix, preserveModifierUserData } from "./transform";
 import { worldMatrixOf } from "../objectPosition";
-import { createQuadBox, createQuadPlane, createQuadSphere, QuadMesh, QuadSphereMethod, quadMeshToBufferGeometry, syncLooseEdgeLines } from "../quadMesh";
+import { notePolyAttributeSource } from "../mesh/polyIO";
+import { createQuadBox, createQuadPlane, createQuadSphere, PolyMesh, QuadSphereMethod, quadMeshToBufferGeometry, syncLooseEdgeLines } from "../quadMesh";
 
 export function numberInput(input: unknown, param: unknown, fallback: number): number {
   const raw = input !== undefined ? input : param;
@@ -550,6 +551,7 @@ export function emitModifiedMesh(mesh: THREE.Mesh, options: ModifiedMeshOptions)
   if (geometry && geometry !== mesh.geometry) {
     mesh.geometry?.dispose();
     mesh.geometry = geometry;
+    notePolyAttributeSource(geometry, srcMesh.geometry);
   }
 
   inheritSourceMaterial(mesh, material ?? srcMesh.material);
@@ -1159,7 +1161,7 @@ function boxMesh(nodeId: string): THREE.Mesh {
 export const OBJECT_BOX_NODE: NodeDefinition = {
   type: "object/box",
   label: "Box",
-  category: "object",
+  category: "primitives",
   pure: true,
   inputs: [...COMMON_PRIMITIVE_INPUTS],
   outputs: [...COMMON_PRIMITIVE_OUTPUTS],
@@ -1315,7 +1317,7 @@ const PLANE_FIELDS = [
 export const OBJECT_PLANE_NODE: NodeDefinition = {
   type: "object/plane",
   label: "Plane",
-  category: "object",
+  category: "primitives",
   pure: true,
   inputs: [
     ...COMMON_PRIMITIVE_INPUTS,
@@ -1420,13 +1422,13 @@ const QUAD_SPHERE_FIELDS: ParamFieldDef[] = [
  * same vertices, faces and UVs, with its Segments (default 4) and Method —
  * all quads, no poles, even face sizes, the better base for Edit Mesh,
  * Subdivide or sculpting. See createQuadSphere. Its geometry carries the
- * QuadMesh it was built from, so Edit Mesh gets the quads as they are rather
+ * PolyMesh it was built from, so Edit Mesh gets the quads as they are rather
  * than re-pairing triangles.
  */
 export const OBJECT_SPHERE_NODE: NodeDefinition = {
   type: "object/sphere",
   label: "Sphere",
-  category: "object",
+  category: "primitives",
   pure: true,
   inputs: [...COMMON_PRIMITIVE_INPUTS, { id: "segments", label: "Segments", type: "value" }],
   outputs: [...COMMON_PRIMITIVE_OUTPUTS],
@@ -1484,7 +1486,7 @@ function discMesh(nodeId: string): THREE.Mesh {
 export const OBJECT_DISC_NODE: NodeDefinition = {
   type: "object/disc",
   label: "Disc",
-  category: "object",
+  category: "primitives",
   pure: true,
   inputs: [
     { id: "radius", label: "Radius", type: "value" },
@@ -1626,7 +1628,7 @@ function polygonCorners(sides: number, r: number): THREE.Vector2[] {
  * at each end joined by the vertical edges. Corners sit exactly where the
  * filled version puts them, so toggling Faces changes nothing else.
  */
-export function polygonWireMesh(sides: number, radius: number, innerRadius: number, depth: number): QuadMesh {
+export function polygonWireMesh(sides: number, radius: number, innerRadius: number, depth: number): PolyMesh {
   const positions: [number, number, number][] = [];
   const edges: [number, number][] = [];
   // The filled prism is a CylinderGeometry stood up, whose corners start a
@@ -1686,7 +1688,7 @@ const POLYGON_FIELDS = [
 export const OBJECT_POLYGON_NODE: NodeDefinition = {
   type: "object/polygon",
   label: "Polygon",
-  category: "object",
+  category: "primitives",
   pure: true,
   inputs: [
     { id: "sides", label: "Sides", type: "value" },
@@ -1757,7 +1759,7 @@ export const OBJECT_POLYGON_NODE: NodeDefinition = {
 
     const texParams = extractTextureParams(inputs, params, ctx.nodeId);
     applyMaterialParams(mesh, matParams, depth > 0 ? THREE.FrontSide : THREE.DoubleSide, texParams);
-    syncLooseEdgeLines(mesh, faces ? null : (mesh.geometry.userData.quadMesh as QuadMesh));
+    syncLooseEdgeLines(mesh, faces ? null : (mesh.geometry.userData.quadMesh as PolyMesh));
 
     return primitiveOutputs(mesh, params);
   },
@@ -1787,7 +1789,7 @@ const CYLINDER_HEIGHT_SEGMENTS_FIELD: ParamFieldDef = { id: "heightSegments", la
 export const OBJECT_CYLINDER_NODE: NodeDefinition = {
   type: "object/cylinder",
   label: "Cylinder",
-  category: "object",
+  category: "primitives",
   pure: true,
   inputs: [...COMMON_PRIMITIVE_INPUTS, { id: "heightSegments", label: "Height Segments", type: "value" }],
   outputs: [...COMMON_PRIMITIVE_OUTPUTS],
@@ -1837,7 +1839,7 @@ function coneMesh(nodeId: string): THREE.Mesh {
 export const OBJECT_CONE_NODE: NodeDefinition = {
   type: "object/cone",
   label: "Cone",
-  category: "object",
+  category: "primitives",
   pure: true,
   inputs: [...COMMON_PRIMITIVE_INPUTS],
   outputs: [...COMMON_PRIMITIVE_OUTPUTS],
@@ -1863,8 +1865,8 @@ export const OBJECT_CONE_NODE: NodeDefinition = {
 /** 3D Extruded Text Object with texture mapping and vector font glyph outlines. */
 export const OBJECT_TEXT_NODE: NodeDefinition = {
   type: "object/text",
-  label: "Text",
-  category: "object",
+  label: "Text 3D",
+  category: "primitives",
   inputs: [
     { id: "text", label: "Text", type: "text" },
     { id: "fontSize", label: "Font Size", type: "value" },
@@ -2094,7 +2096,7 @@ function getOrCreateLabelState(parentState: BarGraphState, index: number): Label
 export const OBJECT_BAR_GRAPH_NODE: NodeDefinition = {
   type: "object/bar_graph",
   label: "Bar Graph",
-  category: "object",
+  category: "dataviz",
   inputs: [
     { id: "values", label: "Values (List)", type: "list" },
     { id: "colors", label: "Colors (List)", type: "list" },
@@ -2306,7 +2308,7 @@ const emptyGroupCache = createNodeCache<THREE.Group>(disposeObject3D);
 export const OBJECT_EMPTY_NODE: NodeDefinition = {
   type: "object/empty",
   label: "Empty",
-  category: "object",
+  category: "primitives",
   pure: true,
   inputs: [
     { id: "matrix", label: "Matrix", type: "matrix" },

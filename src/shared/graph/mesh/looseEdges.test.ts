@@ -11,7 +11,7 @@ import {
   getQuadMeshEdges,
   insetFaces,
   loopCut,
-  QuadMesh,
+  PolyMesh,
   quadMeshSignature,
   transformSelection,
 } from "../quadMesh";
@@ -20,7 +20,7 @@ import { catmullClarkQuadMesh } from "./subdivide";
 import { duplicateFaces, extrudeEdges, extrudeFacesIndividual, extrudeVertices, flipFaces, insetRegion, mergeByDistance, subdivideFaces } from "./tools";
 
 /** A unit box (faces 0..5) plus one loose edge well away from it. */
-function boxWithLooseEdge(): QuadMesh {
+function boxWithLooseEdge(): PolyMesh {
   const box = createQuadBox(1, 1, 1);
   const a = box.positions.length;
   box.positions.push([5, 0, 0], [6, 0, 0]);
@@ -29,7 +29,7 @@ function boxWithLooseEdge(): QuadMesh {
 }
 
 /** The loose edges, by where their ends are — indices move with every operation. */
-function looseByPosition(mesh: QuadMesh): string[] {
+function looseByPosition(mesh: PolyMesh): string[] {
   return (mesh.edges ?? [])
     .map(([a, b]) => [mesh.positions[a], mesh.positions[b]].map((p) => p.map((c) => c.toFixed(3)).join(",")).sort().join("|"))
     .sort();
@@ -46,7 +46,7 @@ describe("loose edges", () => {
   });
 
   it("survive every operation that leaves their vertices alone", () => {
-    const ops: [string, (m: QuadMesh) => QuadMesh][] = [
+    const ops: [string, (m: PolyMesh) => PolyMesh][] = [
       ["extrude", (m) => extrudeFaces(m, [0], 0.5).mesh],
       ["extrude individual", (m) => extrudeFacesIndividual(m, [0, 1], 0.5).mesh],
       ["inset", (m) => insetFaces(m, [0], 0.25).mesh],
@@ -84,7 +84,7 @@ describe("loose edges", () => {
 
 describe("deleting vertices and edges, Blender's way", () => {
   // A single quad: 0 (0,0) 1 (1,0) 2 (1,1) 3 (0,1).
-  const quad = (): QuadMesh => ({
+  const quad = (): PolyMesh => ({
     positions: [[0, 0, 0], [1, 0, 0], [1, 1, 0], [0, 1, 0]],
     faces: [[0, 1, 2, 3]],
   });
@@ -128,7 +128,7 @@ describe("deleting vertices and edges, Blender's way", () => {
 });
 
 describe("extruding vertices and edges, Blender's way", () => {
-  const hexagon = (): QuadMesh => {
+  const hexagon = (): PolyMesh => {
     const positions: [number, number, number][] = [];
     const edges: [number, number][] = [];
     for (let i = 0; i < 6; i++) {
@@ -161,7 +161,7 @@ describe("extruding vertices and edges, Blender's way", () => {
 
   it("a border edge's new quad faces the same way as the face it grows from", () => {
     // One quad in the XY plane, normal +Z; extrude its right edge and pull it along +X.
-    const quad: QuadMesh = { positions: [[0, 0, 0], [1, 0, 0], [1, 1, 0], [0, 1, 0]], faces: [[0, 1, 2, 3]] };
+    const quad: PolyMesh = { positions: [[0, 0, 0], [1, 0, 0], [1, 1, 0], [0, 1, 0]], faces: [[0, 1, 2, 3]] };
     const r = extrudeEdges(quad, [[1, 2]]);
     const moved = { ...r.mesh, positions: r.mesh.positions.map((p, i) => (i >= 4 ? [p[0] + 1, p[1], p[2]] : p) as [number, number, number]) };
     const n = computeFaceNormal(moved.positions, moved.faces[r.newFaces[0]]);

@@ -119,7 +119,7 @@ function isResetting(inputs: Record<string, unknown>, params: Record<string, unk
 export const INTEGRATE_NODE: NodeDefinition = {
   type: "math/integrate",
   label: "Integrate",
-  category: "math",
+  category: "time",
   inputs: [
     { id: "rate", label: "Rate (per second)", type: "value" },
     { id: "time", label: "Time", type: "value" },
@@ -206,7 +206,7 @@ export const INTEGRATE_NODE: NodeDefinition = {
 export const INTEGRATE_VECTOR_NODE: NodeDefinition = {
   type: "vector/integrate",
   label: "Integrate Vector",
-  category: "math",
+  category: "time",
   inputs: [
     { id: "rate", label: "Rate (per second)", type: "vector" },
     { id: "time", label: "Time", type: "value" },

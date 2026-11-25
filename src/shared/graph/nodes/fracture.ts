@@ -202,7 +202,7 @@ function restorePose(state: FractureState): void {
 export const FRACTURE_NODE: NodeDefinition = {
   type: "modifier/fracture",
   label: "Fracture",
-  category: "object",
+  category: "modeling",
   inputs: [
     { id: "geometry", label: "Geometry", type: "geometry", owns: true },
     { id: "points", label: "Seed Points (List)", type: "list" },

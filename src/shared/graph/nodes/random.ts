@@ -131,7 +131,7 @@ export const RANDOM_VECTOR_NODE: NodeDefinition = {
 export const RANDOM_MATRIX_NODE: NodeDefinition = {
   type: "transform/random-matrix",
   label: "Random Matrix",
-  category: "math",
+  category: "transform",
   inputs: [
     { id: "seed", label: "Seed", type: "value" },
     { id: "posRange", label: "Pos Range", type: "value" },
@@ -216,7 +216,7 @@ export const RANDOM_MATRIX_NODE: NodeDefinition = {
 export const RANDOM_LIST_NODE: NodeDefinition = {
   type: "list/random-list",
   label: "Random List",
-  category: "math",
+  category: "list",
   inputs: [
     { id: "count", label: "Count", type: "value" },
     { id: "seed", label: "Seed", type: "value" },

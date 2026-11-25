@@ -64,6 +64,9 @@ export interface TopBarProps {
   /** Workspace space toggles (3D View, Camera, Canvas, Timeline) */
   spaces?: { view3D: boolean; camera: boolean; view2D: boolean; canvas: boolean; timeline?: boolean };
   onToggleSpace?: (space: "view3D" | "camera" | "view2D" | "canvas" | "timeline") => void;
+  /** "horizontal": views over the graph; "vertical": graph | views side by side, timeline across the bottom. */
+  workspaceLayout?: "horizontal" | "vertical";
+  onToggleWorkspaceLayout?: () => void;
 }
 
 export const TopBar: React.FC<TopBarProps> = ({
@@ -93,6 +96,8 @@ export const TopBar: React.FC<TopBarProps> = ({
   onResetSimulations,
   spaces,
   onToggleSpace,
+  workspaceLayout = "horizontal",
+  onToggleWorkspaceLayout,
 }) => {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [toastError, setToastError] = useState(false);
@@ -580,6 +585,38 @@ export const TopBar: React.FC<TopBarProps> = ({
               </button>
             )}
           </div>
+        )}
+
+        {onToggleWorkspaceLayout && (
+          <>
+            <div className="top-bar-divider" />
+            <div className="top-bar-spaces-group">
+              <button
+                type="button"
+                className="top-bar-space-btn"
+                onClick={onToggleWorkspaceLayout}
+                title={
+                  workspaceLayout === "vertical"
+                    ? "Layout: Vertical — graph left, views right (click for Horizontal)"
+                    : "Layout: Horizontal — views above the graph (click for Vertical)"
+                }
+                aria-label="Toggle workspace layout"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="3" width="18" height="18" rx="2" />
+                  {workspaceLayout === "vertical" ? (
+                    <>
+                      <line x1="12" y1="3" x2="12" y2="16" />
+                      <line x1="12" y1="9.5" x2="21" y2="9.5" />
+                      <line x1="3" y1="16" x2="21" y2="16" />
+                    </>
+                  ) : (
+                    <line x1="3" y1="11" x2="21" y2="11" />
+                  )}
+                </svg>
+              </button>
+            </div>
+          </>
         )}
       </div>
 

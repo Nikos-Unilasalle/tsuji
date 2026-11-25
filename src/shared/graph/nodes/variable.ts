@@ -125,7 +125,7 @@ function nameOptions(instance: NodeInstance): string[] {
 export const SET_VARIABLE_NODE: NodeDefinition = {
   type: "variable/set",
   label: "Set Variable",
-  category: "utility",
+  category: "structure",
   inputs: [{ id: "value", label: "Value", type: "any" }],
   outputs: [{ id: "value", label: "Value", type: "any" }],
   defaultParams: { name: "myVariable", type: "Float", initial: 0 },
@@ -164,7 +164,7 @@ export const SET_VARIABLE_NODE: NodeDefinition = {
 export const GET_VARIABLE_NODE: NodeDefinition = {
   type: "variable/get",
   label: "Get Variable",
-  category: "utility",
+  category: "structure",
   inputs: [],
   outputs: [{ id: "value", label: "Value", type: "any" }],
   defaultParams: { name: "myVariable" },

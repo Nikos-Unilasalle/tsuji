@@ -1,0 +1,662 @@
+{
+  "canvases": [
+    {
+      "nodes": [
+        {
+          "id": "setup_env",
+          "type": "lighting/environment",
+          "position": {
+            "x": -900,
+            "y": -400
+          },
+          "params": {
+            "color": 854804,
+            "intensity": 0.5,
+            "background": 1,
+            "blurriness": 0,
+            "filePath": "",
+            "backgroundImagePath": "",
+            "backgroundFit": "cover",
+            "backgroundScale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "backgroundOffset": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "backgroundRotation": 0,
+            "ambientIntensity": 0.25,
+            "sunIntensity": 0
+          }
+        },
+        {
+          "id": "setup_render",
+          "type": "render",
+          "position": {
+            "x": -600,
+            "y": -400
+          },
+          "params": {
+            "frameCount": 330,
+            "fps": 30,
+            "motionBlur": 0,
+            "resolutionPreset": "16:9 (1920x1080)",
+            "width": 1920,
+            "height": 1080,
+            "holdout": false
+          }
+        },
+        {
+          "id": "setup_sun",
+          "type": "light/directional",
+          "position": {
+            "x": -300,
+            "y": -400
+          },
+          "params": {
+            "location": {
+              "x": 5,
+              "y": 8,
+              "z": 6
+            },
+            "target": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "intensity": 1.4,
+            "castShadow": 1,
+            "shadowSoftness": 1
+          }
+        },
+        {
+          "id": "setup_bloom",
+          "type": "postprocess/bloom",
+          "position": {
+            "x": -900,
+            "y": -200
+          },
+          "params": {
+            "strength": 0.7,
+            "radius": 0.5,
+            "threshold": 0.75
+          }
+        },
+        {
+          "id": "rim",
+          "type": "light/point",
+          "position": {
+            "x": -300,
+            "y": -200
+          },
+          "params": {
+            "location": {
+              "x": -5,
+              "y": 3,
+              "z": -4
+            },
+            "color": 8019199,
+            "intensity": 25,
+            "distance": 20,
+            "decay": 1.5,
+            "castShadow": 0
+          }
+        },
+        {
+          "id": "floor",
+          "type": "object/plane",
+          "position": {
+            "x": 0,
+            "y": -400
+          },
+          "params": {
+            "location": {
+              "x": 0,
+              "y": -1.45,
+              "z": 0
+            },
+            "scale": {
+              "x": 30,
+              "y": 30,
+              "z": 1
+            },
+            "color": 1315354,
+            "roughness": 0.6,
+            "metalness": 0.2
+          }
+        },
+        {
+          "id": "body",
+          "type": "object/sphere",
+          "position": {
+            "x": 0,
+            "y": 0
+          },
+          "params": {
+            "location": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 2.6,
+              "y": 1.9,
+              "z": 2.0
+            },
+            "sphereType": "quad",
+            "segments": 4
+          }
+        },
+        {
+          "id": "body_sdf",
+          "type": "volume/mesh-to-sdf",
+          "position": {
+            "x": 300,
+            "y": 0
+          },
+          "params": {
+            "sizing": "voxel",
+            "voxel": 0.085,
+            "padding": 0.3
+          }
+        },
+        {
+          "id": "head",
+          "type": "object/sphere",
+          "position": {
+            "x": 0,
+            "y": 200
+          },
+          "params": {
+            "location": {
+              "x": 1.7,
+              "y": 0.75,
+              "z": 0.2
+            },
+            "scale": {
+              "x": 1.5,
+              "y": 1.4,
+              "z": 1.4
+            },
+            "sphereType": "quad",
+            "segments": 4
+          }
+        },
+        {
+          "id": "head_sdf",
+          "type": "volume/mesh-to-sdf",
+          "position": {
+            "x": 300,
+            "y": 200
+          },
+          "params": {
+            "sizing": "voxel",
+            "voxel": 0.085,
+            "padding": 0.3
+          }
+        },
+        {
+          "id": "hump",
+          "type": "object/sphere",
+          "position": {
+            "x": 0,
+            "y": 400
+          },
+          "params": {
+            "location": {
+              "x": -0.9,
+              "y": 0.9,
+              "z": -0.3
+            },
+            "scale": {
+              "x": 1.3,
+              "y": 1.2,
+              "z": 1.2
+            },
+            "sphereType": "quad",
+            "segments": 4
+          }
+        },
+        {
+          "id": "hump_sdf",
+          "type": "volume/mesh-to-sdf",
+          "position": {
+            "x": 300,
+            "y": 400
+          },
+          "params": {
+            "sizing": "voxel",
+            "voxel": 0.085,
+            "padding": 0.3
+          }
+        },
+        {
+          "id": "tail",
+          "type": "object/sphere",
+          "position": {
+            "x": 0,
+            "y": 600
+          },
+          "params": {
+            "location": {
+              "x": -1.9,
+              "y": -0.3,
+              "z": 0.4
+            },
+            "scale": {
+              "x": 1.2,
+              "y": 0.8,
+              "z": 0.9
+            },
+            "sphereType": "quad",
+            "segments": 4
+          }
+        },
+        {
+          "id": "tail_sdf",
+          "type": "volume/mesh-to-sdf",
+          "position": {
+            "x": 300,
+            "y": 600
+          },
+          "params": {
+            "sizing": "voxel",
+            "voxel": 0.085,
+            "padding": 0.3
+          }
+        },
+        {
+          "id": "u1",
+          "type": "volume/combine",
+          "position": {
+            "x": 600,
+            "y": 0
+          },
+          "params": {
+            "operation": "union",
+            "smooth": 0.45,
+            "resolution": 34
+          }
+        },
+        {
+          "id": "u2",
+          "type": "volume/combine",
+          "position": {
+            "x": 900,
+            "y": 0
+          },
+          "params": {
+            "operation": "union",
+            "smooth": 0.45,
+            "resolution": 34
+          }
+        },
+        {
+          "id": "u3",
+          "type": "volume/combine",
+          "position": {
+            "x": 1200,
+            "y": 0
+          },
+          "params": {
+            "operation": "union",
+            "smooth": 0.35,
+            "resolution": 34
+          }
+        },
+        {
+          "id": "skin",
+          "type": "volume/sdf-to-mesh",
+          "position": {
+            "x": 1500,
+            "y": 0
+          },
+          "params": {
+            "iso": 0,
+            "relax": 2,
+            "resolution": 34
+          }
+        },
+        {
+          "id": "seed",
+          "type": "select/basic",
+          "position": {
+            "x": 1800,
+            "y": 0
+          },
+          "params": {
+            "mode": "sphere",
+            "domain": "point",
+            "name": "seed",
+            "center": {
+              "x": 2.35,
+              "y": 1.0,
+              "z": 0.2
+            },
+            "radius": 0.4
+          }
+        },
+        {
+          "id": "geo",
+          "type": "modeling/geodesic-distance",
+          "position": {
+            "x": 2100,
+            "y": 0
+          },
+          "params": {
+            "group": "seed",
+            "name": "geodesic",
+            "method": "heat",
+            "normalize": true
+          }
+        },
+        {
+          "id": "spiky",
+          "type": "select/basic",
+          "position": {
+            "x": 2400,
+            "y": 0
+          },
+          "params": {
+            "mode": "random",
+            "domain": "face",
+            "name": "spiky",
+            "fraction": 0.1,
+            "seed": 11
+          }
+        },
+        {
+          "id": "buds",
+          "type": "modifier/extrude",
+          "position": {
+            "x": 2700,
+            "y": 0
+          },
+          "params": {
+            "group": "spiky",
+            "individual": true,
+            "distance": 0.02,
+            "passes": 1,
+            "scale": 0.25,
+            "selectMode": "all"
+          }
+        },
+        {
+          "id": "tips",
+          "type": "attribute/expression",
+          "position": {
+            "x": 3000,
+            "y": -250
+          },
+          "params": {
+            "group": "extrude_top",
+            "domain": "face",
+            "name1": "bud",
+            "type1": "vec3",
+            "formula1": "N"
+          }
+        },
+        {
+          "id": "bud_pts",
+          "type": "attribute/promote",
+          "position": {
+            "x": 3000,
+            "y": -450
+          },
+          "params": {
+            "name": "bud",
+            "from": "face",
+            "to": "point",
+            "reduce": "sum",
+            "keep": false
+          }
+        },
+        {
+          "id": "front",
+          "type": "attribute/expression",
+          "position": {
+            "x": 3000,
+            "y": 0
+          },
+          "params": {
+            "domain": "point",
+            "name1": "glow",
+            "type1": "float",
+            "formula1": "clamp(4.5 * clamp((mod(0.11*t, 1.35) - geodesic) / 0.1, 0, 1) * (1 - clamp((mod(0.11*t, 1.35) - geodesic) / 0.1, 0, 1)) + 0.35 * clamp((mod(0.11*t, 1.35) - geodesic) / 0.1, 0, 1), 0, 1)",
+            "name2": "P",
+            "type2": "auto",
+            "formula2": "P + bud * (0.55 * clamp((mod(0.11*t, 1.35) - geodesic - 0.05) / 0.2, 0, 1)) + N * (0.05 * clamp(4 * clamp((mod(0.11*t, 1.35) - geodesic) / 0.1, 0, 1) * (1 - clamp((mod(0.11*t, 1.35) - geodesic) / 0.1, 0, 1)), 0, 1))"
+          }
+        },
+        {
+          "id": "paint",
+          "type": "attribute/visualize",
+          "position": {
+            "x": 3900,
+            "y": 0
+          },
+          "params": {
+            "name": "glow",
+            "range": "fixed",
+            "min": 0,
+            "max": 1,
+            "ramp": {
+              "stops": [
+                {
+                  "position": 0,
+                  "color": 2842478
+                },
+                {
+                  "position": 0.35,
+                  "color": 4003408
+                },
+                {
+                  "position": 0.7,
+                  "color": 13777532
+                },
+                {
+                  "position": 1,
+                  "color": 16769162
+                }
+              ],
+              "interpolation": "linear"
+            },
+            "display": "vertex-colours"
+          }
+        },
+        {
+          "id": "cam_path",
+          "type": "math/expression",
+          "position": {
+            "x": -600,
+            "y": -200
+          },
+          "params": {
+            "formula": "(9*cos(0.09*t+0.8), 3.2, 9*sin(0.09*t+0.8))"
+          }
+        },
+        {
+          "id": "camera",
+          "type": "calibration/camera",
+          "position": {
+            "x": -300,
+            "y": -200
+          },
+          "params": {
+            "useTarget": true,
+            "target": {
+              "x": 0,
+              "y": 0.3,
+              "z": 0
+            },
+            "fov": 45,
+            "active": true
+          }
+        }
+      ],
+      "connections": [
+        {
+          "id": "setup_env.environment->setup_render.environment",
+          "fromNode": "setup_env",
+          "fromSocket": "environment",
+          "toNode": "setup_render",
+          "toSocket": "environment"
+        },
+        {
+          "id": "setup_bloom.effect->setup_render.postprocess",
+          "fromNode": "setup_bloom",
+          "fromSocket": "effect",
+          "toNode": "setup_render",
+          "toSocket": "postprocess"
+        },
+        {
+          "id": "body.geometry->body_sdf.geometry",
+          "fromNode": "body",
+          "fromSocket": "geometry",
+          "toNode": "body_sdf",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "head.geometry->head_sdf.geometry",
+          "fromNode": "head",
+          "fromSocket": "geometry",
+          "toNode": "head_sdf",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "hump.geometry->hump_sdf.geometry",
+          "fromNode": "hump",
+          "fromSocket": "geometry",
+          "toNode": "hump_sdf",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "tail.geometry->tail_sdf.geometry",
+          "fromNode": "tail",
+          "fromSocket": "geometry",
+          "toNode": "tail_sdf",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "body_sdf.geometry->u1.geometry",
+          "fromNode": "body_sdf",
+          "fromSocket": "geometry",
+          "toNode": "u1",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "head_sdf.geometry->u1.b",
+          "fromNode": "head_sdf",
+          "fromSocket": "geometry",
+          "toNode": "u1",
+          "toSocket": "b"
+        },
+        {
+          "id": "u1.geometry->u2.geometry",
+          "fromNode": "u1",
+          "fromSocket": "geometry",
+          "toNode": "u2",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "hump_sdf.geometry->u2.b",
+          "fromNode": "hump_sdf",
+          "fromSocket": "geometry",
+          "toNode": "u2",
+          "toSocket": "b"
+        },
+        {
+          "id": "u2.geometry->u3.geometry",
+          "fromNode": "u2",
+          "fromSocket": "geometry",
+          "toNode": "u3",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "tail_sdf.geometry->u3.b",
+          "fromNode": "tail_sdf",
+          "fromSocket": "geometry",
+          "toNode": "u3",
+          "toSocket": "b"
+        },
+        {
+          "id": "u3.geometry->skin.geometry",
+          "fromNode": "u3",
+          "fromSocket": "geometry",
+          "toNode": "skin",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "skin.geometry->seed.geometry",
+          "fromNode": "skin",
+          "fromSocket": "geometry",
+          "toNode": "seed",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "seed.geometry->geo.geometry",
+          "fromNode": "seed",
+          "fromSocket": "geometry",
+          "toNode": "geo",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "geo.geometry->spiky.geometry",
+          "fromNode": "geo",
+          "fromSocket": "geometry",
+          "toNode": "spiky",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "spiky.geometry->buds.geometry",
+          "fromNode": "spiky",
+          "fromSocket": "geometry",
+          "toNode": "buds",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "buds.geometry->tips.geometry",
+          "fromNode": "buds",
+          "fromSocket": "geometry",
+          "toNode": "tips",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "tips.geometry->bud_pts.geometry",
+          "fromNode": "tips",
+          "fromSocket": "geometry",
+          "toNode": "bud_pts",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "bud_pts.geometry->front.geometry",
+          "fromNode": "bud_pts",
+          "fromSocket": "geometry",
+          "toNode": "front",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "front.geometry->paint.geometry",
+          "fromNode": "front",
+          "fromSocket": "geometry",
+          "toNode": "paint",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "cam_path.vector->camera.location",
+          "fromNode": "cam_path",
+          "fromSocket": "vector",
+          "toNode": "camera",
+          "toSocket": "location"
+        }
+      ],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    }
+  ],
+  "activeCanvas": 0
+}

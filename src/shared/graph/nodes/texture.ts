@@ -288,7 +288,7 @@ export const TEXTURE_IMAGE_NODE: NodeDefinition = {
 export const TEXTURE_PLANE_NODE: NodeDefinition = {
   type: "texture/plane",
   label: "Texture to Plane",
-  category: "object",
+  category: "import",
   inputs: [
     { id: "visible", label: "Visible", type: "value" },
     { id: "texture", label: "Texture", type: "texture" },

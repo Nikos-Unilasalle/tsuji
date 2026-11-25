@@ -12,7 +12,8 @@ import { NodeDefinition } from "../types";
 export const CSV_READER_NODE: NodeDefinition = {
   type: "io/csv-reader",
   label: "CSV Reader",
-  category: "list",
+  category: "dataviz",
+  ownershipPassThrough: true,
   inputs: [{ id: "row", label: "Row", type: "value" }],
 
   outputs: [

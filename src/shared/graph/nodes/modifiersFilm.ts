@@ -192,7 +192,7 @@ const duotoneCache = createModifierCache();
 export const MODIFIER_DUOTONE_NODE: NodeDefinition = {
   type: "modifier/duotone",
   label: "Dual Tone",
-  category: "transform",
+  category: "postprocess",
   inputs: [
     { id: "geometry", label: "Geometry", type: "geometry", owns: true },
     { id: "matrix", label: "Matrix", type: "matrix" },
@@ -273,7 +273,7 @@ const HALFTONE_SHAPES = ["dot", "ellipse", "line", "square"];
 export const MODIFIER_HALFTONE_NODE: NodeDefinition = {
   type: "modifier/halftone",
   label: "Halftone",
-  category: "transform",
+  category: "postprocess",
   inputs: [
     { id: "geometry", label: "Geometry", type: "geometry", owns: true },
     { id: "matrix", label: "Matrix", type: "matrix" },
@@ -361,7 +361,7 @@ const filmTextureCache = createModifierCache();
 export const MODIFIER_FILM_TEXTURE_NODE: NodeDefinition = {
   type: "modifier/film-texture",
   label: "Film Texture",
-  category: "transform",
+  category: "postprocess",
   inputs: [
     { id: "geometry", label: "Geometry", type: "geometry", owns: true },
     { id: "matrix", label: "Matrix", type: "matrix" },
@@ -446,7 +446,7 @@ const dryBrushCache = createModifierCache();
 export const MODIFIER_DRY_BRUSH_NODE: NodeDefinition = {
   type: "modifier/dry-brush",
   label: "Dry Brush",
-  category: "transform",
+  category: "postprocess",
   inputs: [
     { id: "geometry", label: "Geometry", type: "geometry", owns: true },
     { id: "matrix", label: "Matrix", type: "matrix" },
@@ -548,7 +548,7 @@ const super8Cache = createModifierCache();
 export const MODIFIER_SUPER8_NODE: NodeDefinition = {
   type: "modifier/super8",
   label: "Super 8 Projector",
-  category: "transform",
+  category: "postprocess",
   inputs: [
     { id: "geometry", label: "Geometry", type: "geometry", owns: true },
     { id: "matrix", label: "Matrix", type: "matrix" },
@@ -633,7 +633,7 @@ const outlineCache = createModifierCache();
 export const MODIFIER_OUTLINE_NODE: NodeDefinition = {
   type: "modifier/outline",
   label: "Outline",
-  category: "transform",
+  category: "postprocess",
   inputs: [
     { id: "geometry", label: "Geometry", type: "geometry", owns: true },
     { id: "matrix", label: "Matrix", type: "matrix" },

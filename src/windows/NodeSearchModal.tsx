@@ -1,3 +1,4 @@
+import { nodeMatches } from "../shared/graph/nodes/nodeKeywords";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { CATEGORY_COLOR, CATEGORY_LABEL } from "../shared/graph/categories";
 import { GROUP_INPUT_TYPE, GROUP_OUTPUT_TYPE, GROUP_TYPE } from "../shared/graph/groups";
@@ -29,14 +30,8 @@ export function NodeSearchModal({ registry, onSelectNodeType, onClose }: NodeSea
   }, [registry]);
 
   const filteredNodes = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return availableNodes;
-    return availableNodes.filter(
-      (node) =>
-        node.label.toLowerCase().includes(q) ||
-        node.type.toLowerCase().includes(q) ||
-        (CATEGORY_LABEL[node.category] ?? node.category).toLowerCase().includes(q)
-    );
+    if (!query.trim()) return availableNodes;
+    return availableNodes.filter((node) => nodeMatches(node, query, CATEGORY_LABEL[node.category] ?? node.category));
   }, [availableNodes, query]);
 
   useEffect(() => {

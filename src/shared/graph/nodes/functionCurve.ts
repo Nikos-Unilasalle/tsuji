@@ -236,7 +236,7 @@ const FIELDS: ParamFieldDef[] = [
 export const FUNCTION_CURVE_NODE: NodeDefinition = {
   type: "math/function-curve",
   label: "Function Curve",
-  category: "math",
+  category: "dataviz",
   inputs: [
     { id: "space", label: "Space", type: "matrix" },
     { id: "a", label: "a", type: "value" },

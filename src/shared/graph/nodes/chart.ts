@@ -74,7 +74,7 @@ function lineGraphState(nodeId: string): LineGraphState {
 export const LINE_GRAPH_NODE: NodeDefinition = {
   type: "object/line_graph",
   label: "Line Graph",
-  category: "object",
+  category: "dataviz",
   inputs: [
     { id: "values", label: "Values (List)", type: "list" },
     { id: "colors", label: "Point Colors (List)", type: "list" },
@@ -252,7 +252,7 @@ function pooledBoxMesh(pool: THREE.Group, index: number, geometry: THREE.BufferG
 export const CHART_AXIS_NODE: NodeDefinition = {
   type: "object/chart_axis",
   label: "Chart Axis",
-  category: "object",
+  category: "dataviz",
   inputs: [
     { id: "min", label: "Min Value", type: "value" },
     { id: "max", label: "Max Value", type: "value" },
@@ -396,7 +396,7 @@ function buildSliceGeometry(startAngle: number, endAngle: number, radius: number
 export const PIE_CHART_NODE: NodeDefinition = {
   type: "object/pie_chart",
   label: "Pie / Donut Chart",
-  category: "object",
+  category: "dataviz",
   inputs: [
     { id: "values", label: "Values (List)", type: "list" },
     { id: "colors", label: "Slice Colors (List)", type: "list" },
@@ -510,7 +510,7 @@ function scatterPlotState(nodeId: string): ScatterPlotState {
 export const SCATTER_PLOT_NODE: NodeDefinition = {
   type: "object/scatter_plot",
   label: "Scatter Plot",
-  category: "object",
+  category: "dataviz",
   inputs: [
     { id: "xValues", label: "X Values (List)", type: "list" },
     { id: "yValues", label: "Y Values (List)", type: "list" },
@@ -655,7 +655,7 @@ function pointCloudState(nodeId: string): PointCloudState {
 export const POINT_CLOUD_NODE: NodeDefinition = {
   type: "object/point_cloud",
   label: "Point Cloud",
-  category: "object",
+  category: "primitives",
   inputs: [
     { id: "xValues", label: "X Values (List)", type: "list" },
     { id: "yValues", label: "Y Values (List)", type: "list" },

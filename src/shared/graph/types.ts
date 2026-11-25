@@ -37,6 +37,14 @@ export interface EvalContext {
    */
   groupInputs?: Record<string, unknown>;
   /**
+   * Inside a looping group (see nodes/groupLoop.ts): the current iteration
+   * (0-based), how many there are, and the value being iterated over (the
+   * piece number for For Each Piece). Read by the Loop Info node.
+   */
+  loopIteration?: number;
+  loopCount?: number;
+  loopValue?: number;
+  /**
    * Which nesting level within the session is being evaluated (a group node's
    * id, empty at the top). The evaluator carries one frame of state forward
    * per session; a subgraph is a second pass on the same session, so without
@@ -405,6 +413,26 @@ export interface NodeDefinition {
    * Blender does (see the node's own comment for which).
    */
   hidden?: boolean;
+  /**
+   * Extra words the palette filter and the node search match on: synonyms
+   * from Blender and Houdini ("wrangle", "scatter", "VDB"), former names.
+   * Filled in centrally from nodeKeywords.ts.
+   */
+  keywords?: readonly string[];
+  /**
+   * Geometry wired into this node is not drawn on its own when the node's own
+   * output is taken further downstream: ownership passes through it (List
+   * Group, Vertices to Points…). See sceneRoots.ts. Used to follow from the
+   * "list" category; explicit so moving a node between categories never
+   * changes what the viewport draws.
+   */
+  ownershipPassThrough?: boolean;
+  /**
+   * Put into the scene by the viewport's own pass (lights), never drawn as a
+   * scene root — see sceneRoots.ts. Explicit rather than read off the
+   * category, so re-filing a node never changes what is drawn.
+   */
+  managedByViewport?: boolean;
   /**
    * Params that can be opened as value inputs from the param panel (see
    * nodes/paramInputs.ts) — set by withParamInputs, not written by hand.

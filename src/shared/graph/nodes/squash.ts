@@ -77,7 +77,7 @@ function clamp01(n: number): number {
 export const SQUASH_STRETCH_NODE: NodeDefinition = {
   type: "modifier/squash-stretch",
   label: "Squash & Stretch",
-  category: "structure",
+  category: "deform",
   inputs: [
     { id: "geometry", label: "Geometry", type: "geometry", owns: true },
     { id: "time", label: "Time", type: "value" },

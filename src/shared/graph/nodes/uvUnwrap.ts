@@ -3,7 +3,7 @@ import { createNodeCache, disposeObject3D } from "../nodeCaches";
 import type { NodeDefinition, ParamFieldDef } from "../types";
 import { clearMeshWarning, findFirstMesh, warnMeshRequired } from "../meshRequired";
 import { createModifierMesh, emitModifiedMesh, numberInput, primitiveOutputs } from "./object";
-import type { QuadMesh } from "../quadMesh";
+import type { PolyMesh } from "../quadMesh";
 import { smartUnwrap } from "../mesh/unwrap";
 import { unwrapFaces } from "../mesh/lscm";
 import { cubeProject, cylinderProject, sphereProject, type ProjectionAxis } from "../mesh/project";
@@ -105,10 +105,10 @@ function topologyKey(geometry: THREE.BufferGeometry, corners: Uint32Array): stri
 }
 
 /**
- * The input as a QuadMesh of triangles, welded by position, and for each
+ * The input as a PolyMesh of triangles, welded by position, and for each
  * input triangle the face it became (-1: degenerate once welded).
  */
-export function weldedTriangles(geometry: THREE.BufferGeometry, corners: Uint32Array): { mesh: QuadMesh; faceOf: Int32Array } {
+export function weldedTriangles(geometry: THREE.BufferGeometry, corners: Uint32Array): { mesh: PolyMesh; faceOf: Int32Array } {
   const pos = geometry.getAttribute("position");
   geometry.computeBoundingBox();
   const size = geometry.boundingBox!.getSize(new THREE.Vector3());
@@ -158,7 +158,7 @@ export interface UVTransform {
 export function layoutUVs(geometry: THREE.BufferGeometry, corners: Uint32Array, options: UVLayoutOptions): { uvs: Float32Array; islands: number } {
   const { mesh, faceOf } = weldedTriangles(geometry, corners);
   const all = mesh.faces.map((_, f) => f);
-  let out: QuadMesh;
+  let out: PolyMesh;
   if (mesh.faces.length === 0) out = mesh;
   else if (options.method === "smart") out = smartUnwrap(mesh, { angleLimitDeg: options.angleLimit, margin: options.margin });
   else if (options.method === "conformal") out = unwrapFaces(mesh, null, options.margin).mesh;
@@ -204,7 +204,7 @@ function withCornerUVs(source: THREE.BufferGeometry, uvs: Float32Array): THREE.B
 export const UV_UNWRAP_NODE: NodeDefinition = {
   type: "modifier/uv-unwrap",
   label: "UV Unwrap",
-  category: "transform",
+  category: "modeling",
   inputs: [
     { id: "geometry", label: "Geometry", type: "geometry", owns: true },
     { id: "scale", label: "UV Scale", type: "value" },

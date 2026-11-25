@@ -1,4 +1,4 @@
-import type { QuadMesh } from "../quadMesh";
+import type { PolyMesh } from "../quadMesh";
 import type { UV } from "./uv";
 
 /**
@@ -112,7 +112,7 @@ function normalise(points: UV[]): { w: number; h: number } {
  * The UV islands among `faces`: faces joined across an edge where both ends
  * carry the same UVs on either side (no seam in the layout there).
  */
-export function faceUVIslands(mesh: QuadMesh, faces: number[]): number[][] {
+export function faceUVIslands(mesh: PolyMesh, faces: number[]): number[][] {
   const inSet = new Set(faces);
   const parent = new Map<number, number>(faces.map((f) => [f, f]));
   const find = (f: number): number => {
@@ -162,7 +162,7 @@ export function faceUVIslands(mesh: QuadMesh, faces: number[]): number[][] {
  * Packs the UV islands the given faces already form (Pack Islands): each
  * island moves and turns as one, its shape untouched. Returns a new mesh.
  */
-export function packFaceIslands(mesh: QuadMesh, faces: number[], margin = 0.02): QuadMesh {
+export function packFaceIslands(mesh: PolyMesh, faces: number[], margin = 0.02): PolyMesh {
   const faceUVs = (mesh.faceUVs ?? []).map((uvs) => uvs.map((uv) => [uv[0], uv[1]] as UV));
   const valid = faces.filter((f) => faceUVs[f]?.length === mesh.faces[f]?.length);
   const islands = faceUVIslands({ ...mesh, faceUVs }, valid).map((group) => group.flatMap((f) => faceUVs[f]));

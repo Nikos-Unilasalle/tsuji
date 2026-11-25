@@ -9,14 +9,14 @@ import {
   getLoopCutPreviewSegments,
   insetFaces,
   loopCut,
-  QuadMesh,
+  PolyMesh,
   quadMeshToBufferGeometry,
   withFaceUVs,
 } from "../quadMesh";
 import { validateQuadMesh } from "./validate";
 
 /** No structural faults, and no surface damage the input didn't already have. */
-function expectSound(result: QuadMesh, input: QuadMesh) {
+function expectSound(result: PolyMesh, input: PolyMesh) {
   const before = validateQuadMesh(input);
   const after = validateQuadMesh(result);
   expect(after.errors).toEqual([]);
@@ -30,7 +30,7 @@ function expectSound(result: QuadMesh, input: QuadMesh) {
 }
 
 /** A box whose six faces use material slots 0..5 and carry distinctive UVs. */
-function markedBox(): QuadMesh {
+function markedBox(): PolyMesh {
   const box = createQuadBox();
   box.faceMaterials = [0, 1, 2, 3, 4, 5];
   box.faceUVs = box.faces.map((face, f) => face.map((_, i) => [f + i * 0.1, f] as [number, number]));
@@ -80,7 +80,7 @@ describe("insetFaces", () => {
   });
 
   it("insets triangles and n-gons too", () => {
-    const shape: QuadMesh = {
+    const shape: PolyMesh = {
       positions: [[0, 0, 0], [1, 0, 0], [1.5, 1, 0], [0.5, 1.5, 0], [-0.5, 1, 0], [0.5, -1, 0]],
       faces: [[0, 1, 2, 3, 4], [1, 0, 5]],
     };
@@ -133,7 +133,7 @@ describe("loopCut", () => {
   });
 
   it("stops at triangles", () => {
-    const mixed: QuadMesh = {
+    const mixed: PolyMesh = {
       positions: [[0, 0, 0], [1, 0, 0], [1, 1, 0], [0, 1, 0], [2, 0.5, 0]],
       faces: [[0, 1, 2, 3], [1, 4, 2]],
     };

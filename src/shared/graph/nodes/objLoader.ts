@@ -49,7 +49,7 @@ function getOrCreateObjState(nodeId: string): ObjState {
 export const OBJECT_OBJ_NODE: NodeDefinition = {
   type: "object/obj",
   label: "OBJ Model",
-  category: "object",
+  category: "import",
   inputs: [
     { id: "visible", label: "Visible", type: "value" },
     { id: "diffuse", label: "Diffuse Map", type: "texture" },

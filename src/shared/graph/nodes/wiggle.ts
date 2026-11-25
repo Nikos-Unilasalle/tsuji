@@ -155,7 +155,7 @@ export const WIGGLE_NODE: NodeDefinition = {
 export const WIGGLE_NUMBER_NODE: NodeDefinition = {
   type: "math/wiggle-number",
   label: "Wiggle Number",
-  category: "math",
+  category: "time",
   inputs: [
     { id: "evolution", label: "Evolution", type: "value" },
     { id: "speed", label: "Speed", type: "value" },
@@ -206,7 +206,7 @@ export const WIGGLE_NUMBER_NODE: NodeDefinition = {
 export const WIGGLE_VECTOR_NODE: NodeDefinition = {
   type: "vector/wiggle-vector",
   label: "Wiggle Vector",
-  category: "math",
+  category: "time",
   inputs: [
     { id: "evolution", label: "Evolution", type: "value" },
     { id: "speed", label: "Speed", type: "value" },

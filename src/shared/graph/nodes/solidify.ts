@@ -4,7 +4,7 @@ import { createNodeCache, disposeObject3D } from "../nodeCaches";
 import { NodeDefinition } from "../types";
 import { clearMeshWarning, findFirstMesh, warnMeshRequired } from "../meshRequired";
 import { createModifierMesh, emitModifiedMesh, numberInput, primitiveOutputs } from "./object";
-import { cloneQuadMesh, computeFaceNormal, QuadMesh, quadMeshToBufferGeometry } from "../quadMesh";
+import { cloneQuadMesh, computeFaceNormal, PolyMesh, quadMeshToBufferGeometry } from "../quadMesh";
 import { fillNewFaceUVs } from "../mesh/uv";
 
 export interface SolidifyOptions {
@@ -14,9 +14,9 @@ export interface SolidifyOptions {
 }
 
 /**
- * Solidifies a QuadMesh by creating an offset shell and rim quads along open boundary edges.
+ * Solidifies a PolyMesh by creating an offset shell and rim quads along open boundary edges.
  */
-export function solidifyQuadMesh(mesh: QuadMesh, options: SolidifyOptions): QuadMesh {
+export function solidifyQuadMesh(mesh: PolyMesh, options: SolidifyOptions): PolyMesh {
   const thickness = options.thickness;
   const offset = options.offset !== undefined ? options.offset : -1.0;
   const rim = options.rim !== undefined ? Boolean(options.rim) : true;
@@ -121,7 +121,7 @@ export function solidifyQuadMesh(mesh: QuadMesh, options: SolidifyOptions): Quad
   }
 
   const hasUVs = mesh.faceUVs?.length === mesh.faces.length;
-  const out: QuadMesh = {
+  const out: PolyMesh = {
     positions,
     faces,
     faceUVs: hasUVs ? faceUVs : undefined,
@@ -144,9 +144,9 @@ export function solidifyGeometry(geometry: THREE.BufferGeometry, options: Solidi
 
   if (thickness === 0) return geometry.clone();
 
-  // If a QuadMesh exists on userData, solidify it directly and generate BufferGeometry
+  // If a PolyMesh exists on userData, solidify it directly and generate BufferGeometry
   if (geometry.userData?.quadMesh) {
-    const solidifiedQuad = solidifyQuadMesh(geometry.userData.quadMesh as QuadMesh, options);
+    const solidifiedQuad = solidifyQuadMesh(geometry.userData.quadMesh as PolyMesh, options);
     const outGeom = quadMeshToBufferGeometry(solidifiedQuad);
     outGeom.userData.quadMesh = solidifiedQuad;
     return outGeom;
@@ -262,7 +262,7 @@ export function solidifyGeometry(geometry: THREE.BufferGeometry, options: Solidi
 
     for (const { u, v, count } of edgeMap.values()) {
       if (count === 1) {
-        // Boundary edge (u -> v). Same outward winding as the QuadMesh path
+        // Boundary edge (u -> v). Same outward winding as the PolyMesh path
         // above: the quad (u+V, v+V, v, u) faces away from the solid.
         indices.push(u + V, v + V, v);
         indices.push(u + V, v, u);
@@ -319,7 +319,7 @@ function getState(nodeId: string): SolidifyState {
 export const SOLIDIFY_NODE: NodeDefinition = {
   type: "modifier/solidify",
   label: "Solidify",
-  category: "transform",
+  category: "modeling",
   inputs: [
     { id: "geometry", label: "Geometry", type: "geometry", owns: true },
     { id: "thickness", label: "Thickness", type: "value" },

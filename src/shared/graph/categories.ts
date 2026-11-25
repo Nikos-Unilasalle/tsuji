@@ -1,125 +1,206 @@
-/** BIBLE.md's base node catalog sections — one color per category, shown on the node header, the param panel, and the palette alike. */
+/**
+ * The node catalogue's sections. Every node belongs to one category, every
+ * category to one family; the palette lists families in workflow order
+ * (geometry first, audio last) and, inside a family, categories and nodes
+ * alphabetically.
+ *
+ * The placement rule: a node is filed by what it *does* to its data, not by
+ * the data it happens to touch — Extrude is Modeling even though it moves
+ * points, Lattice is Deform even though it takes a matrix.
+ *
+ * Colours: one hue range per family, a step within it per category, so a
+ * node header says which family it is from at a glance. They carry meaning,
+ * which is why they live here and not in the theme.
+ *
+ * Nothing may test a category to decide behaviour (what the viewport draws,
+ * which sockets a node grows…): use an explicit NodeDefinition flag instead,
+ * so re-filing a node never changes what it does.
+ */
+
+export type NodeFamily = "geometry" | "scene" | "appearance" | "animation" | "data" | "interaction";
+
 export type NodeCategory =
-  | "calibration"
-  | "compose"
-  | "converter"
+  // Geometry
+  | "attribute"
   | "curve"
-  | "hub"
+  | "deform"
+  | "generators"
+  | "import"
   | "instance"
-  | "io"
+  | "modeling"
+  | "primitives"
+  | "selection"
+  | "strokes"
+  | "volume"
+  // Scene
+  | "camera"
   | "lighting"
-  | "list"
-  | "logic"
-  | "material"
-  | "math"
-  | "music"
-  | "object"
-  | "particles"
-  | "physics"
-  | "post"
-  | "postprocess"
-  | "rig"
-  | "sound"
   | "structure"
-  | "text"
+  | "transform"
+  // Appearance
+  | "fx"
+  | "material"
+  | "postprocess"
   | "texture"
   | "textureTools"
+  // Animation & simulation
+  | "particles"
+  | "physics"
+  | "rig"
   | "time"
-  | "transform"
-  | "utility";
+  // Data
+  | "convert"
+  | "dataviz"
+  | "list"
+  | "logic"
+  | "math"
+  | "text"
+  // Interaction & audio
+  | "io"
+  | "music"
+  | "sound";
 
-/** Palette/section display order — alphabetically sorted. */
-export const CATEGORY_ORDER: NodeCategory[] = [
-  "calibration",
-  "compose",
-  "converter",
-  "curve",
-  "hub",
-  "instance",
-  "io",
-  "lighting",
-  "list",
-  "logic",
-  "material",
-  "math",
-  "music",
-  "object",
-  "particles",
-  "physics",
-  "postprocess",
-  "post",
-  "rig",
-  "sound",
-  "structure",
-  "text",
-  "texture",
-  "textureTools",
-  "time",
-  "transform",
-  "utility",
-];
+export const FAMILY_ORDER: NodeFamily[] = ["geometry", "scene", "appearance", "animation", "data", "interaction"];
 
-export const CATEGORY_LABEL: Record<NodeCategory, string> = {
-  calibration: "Calibration",
-  compose: "Compose",
-  converter: "Converter",
-  curve: "Curve / Path",
-  hub: "HUD",
-  instance: "Instance",
-  io: "I/O",
-  lighting: "Lighting & Shadows",
-  list: "List",
-  logic: "Logic",
-  material: "Material",
-  math: "Math",
-  music: "Music",
-  object: "Object",
-  particles: "Particles",
-  physics: "Physics",
-  postprocess: "Post-Process & FX",
-  post: "Post-render 2D",
-  rig: "Rig / IK",
-  sound: "Sound / Audio",
-  structure: "Structure",
-  text: "Text",
-  texture: "Textures",
-  textureTools: "Texture Tools",
-  time: "Time / Animation",
-  transform: "Transform",
-  utility: "Utility",
+export const FAMILY_LABEL: Record<NodeFamily, string> = {
+  geometry: "Geometry",
+  scene: "Scene",
+  appearance: "Appearance",
+  animation: "Animation & Simulation",
+  data: "Data",
+  interaction: "Interaction & Audio",
 };
 
-/**
- * Extends Tsuji's existing panel-tone convention to the catalog.
- */
+export const CATEGORY_FAMILY: Record<NodeCategory, NodeFamily> = {
+  attribute: "geometry",
+  curve: "geometry",
+  deform: "geometry",
+  generators: "geometry",
+  import: "geometry",
+  instance: "geometry",
+  modeling: "geometry",
+  primitives: "geometry",
+  selection: "geometry",
+  strokes: "geometry",
+  volume: "geometry",
+  camera: "scene",
+  lighting: "scene",
+  structure: "scene",
+  transform: "scene",
+  fx: "appearance",
+  material: "appearance",
+  postprocess: "appearance",
+  texture: "appearance",
+  textureTools: "appearance",
+  particles: "animation",
+  physics: "animation",
+  rig: "animation",
+  time: "animation",
+  convert: "data",
+  dataviz: "data",
+  list: "data",
+  logic: "data",
+  math: "data",
+  text: "data",
+  io: "interaction",
+  music: "interaction",
+  sound: "interaction",
+};
+
+export const CATEGORY_LABEL: Record<NodeCategory, string> = {
+  attribute: "Attributes",
+  curve: "Curves",
+  deform: "Deform",
+  generators: "Generators",
+  import: "Import",
+  instance: "Instances & Points",
+  modeling: "Modeling",
+  primitives: "Primitives",
+  selection: "Selection & Groups",
+  strokes: "Strokes & Drawing",
+  volume: "Volumes (SDF)",
+  camera: "Camera",
+  lighting: "Lighting",
+  structure: "Scene & Graph",
+  transform: "Transform",
+  fx: "Object FX",
+  material: "Materials",
+  postprocess: "Post-Process & Stylize",
+  texture: "Textures",
+  textureTools: "Texture Tools",
+  particles: "Particles",
+  physics: "Physics & Fluids",
+  rig: "Rig / IK",
+  time: "Time & Animation",
+  convert: "Compose & Convert",
+  dataviz: "Data Viz",
+  list: "Lists",
+  logic: "Logic",
+  math: "Math",
+  text: "Text",
+  io: "Input & HUD",
+  music: "Music",
+  sound: "Sound",
+};
+
+/** Families in workflow order; inside each, categories alphabetically by their label. */
+export const CATEGORY_ORDER: NodeCategory[] = FAMILY_ORDER.flatMap((family) =>
+  (Object.keys(CATEGORY_FAMILY) as NodeCategory[])
+    .filter((category) => CATEGORY_FAMILY[category] === family)
+    .sort((a, b) => CATEGORY_LABEL[a].localeCompare(CATEGORY_LABEL[b])),
+);
+
+/** A family's own colour: its headings in the palette. */
+export const FAMILY_COLOR: Record<NodeFamily, string> = {
+  geometry: "#34d399",
+  scene: "#60a5fa",
+  appearance: "#fbbf24",
+  animation: "#f472b6",
+  data: "#a78bfa",
+  interaction: "#fb7185",
+};
+
+/** Per category: a step inside its family's hue range, light enough to read on the dark canvas. */
 export const CATEGORY_COLOR: Record<NodeCategory, string> = {
-  calibration: "#94a3b8",
-  compose: "#0ea5e9",
-  converter: "#10b981",
+  // Geometry — lime → green → teal → cyan
+  strokes: "#a3e635",
   curve: "#84cc16",
-  hub: "#f472b6",
+  selection: "#bef264",
+  generators: "#4ade80",
+  deform: "#22c55e",
+  modeling: "#10b981",
   instance: "#14b8a6",
-  io: "#6366f1",
-  lighting: "#f59e0b",
+  import: "#5eead4",
+  volume: "#67e8f9",
+  attribute: "#22d3ee",
+  primitives: "#38bdf8",
+  // Scene — blue → indigo
+  structure: "#94a3b8",
+  camera: "#60a5fa",
+  lighting: "#93c5fd",
+  transform: "#818cf8",
+  // Appearance — amber → orange
+  material: "#f59e0b",
+  texture: "#fbbf24",
+  textureTools: "#fcd34d",
+  fx: "#fb923c",
+  postprocess: "#f97316",
+  // Animation & simulation — pink → fuchsia
+  time: "#f472b6",
+  particles: "#ec4899",
+  physics: "#e879f9",
+  rig: "#d946ef",
+  // Data — violet → purple
+  math: "#c4b5fd",
+  convert: "#a78bfa",
   list: "#8b5cf6",
-  logic: "#fb923c",
-  material: "#d97706",
-  math: "#f2c14e",
-  music: "#d946ef",
-  object: "#0284c7",
-  particles: "#2dd4bf",
-  physics: "#22c55e",
-  postprocess: "#c084fc",
-  post: "#f43f5e",
-  rig: "#c2773d",
-  sound: "#06b6d4",
-  structure: "#38bdf8",
-  text: "#f97316",
-  texture: "#2dd4bf",
-  textureTools: "#0d9488",
-  time: "#ec4899",
-  transform: "#a855f7",
-  utility: "#64748b",
+  logic: "#b794f4",
+  text: "#ddd6fe",
+  dataviz: "#9f7aea",
+  // Interaction & audio — rose → red
+  io: "#fb7185",
+  sound: "#f43f5e",
+  music: "#fda4af",
 };
 
 export const UNKNOWN_CATEGORY_COLOR = "#6b7280";

@@ -21,7 +21,7 @@ export const COLOR_CONSTANT_NODE: NodeDefinition = {
 export const COLOR_COMPOSE_NODE: NodeDefinition = {
   type: "color/compose",
   label: "Compose Color",
-  category: "compose",
+  category: "convert",
   pure: true,
   inputs: [
     { id: "r", label: "R", type: "value" },
@@ -53,7 +53,7 @@ export const COLOR_COMPOSE_NODE: NodeDefinition = {
 export const COLOR_DECOMPOSE_NODE: NodeDefinition = {
   type: "color/decompose",
   label: "Decompose Color",
-  category: "compose",
+  category: "convert",
   pure: true,
   inputs: [{ id: "color", label: "Color", type: "color" }],
   outputs: [

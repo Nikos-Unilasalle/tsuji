@@ -722,7 +722,7 @@ export function parseColorHex(v: unknown, fallback = "#38bdf8"): string {
 export const GREASE_PENCIL_NODE: NodeDefinition = {
   type: "curve/grease-pencil",
   label: "Grease Pencil",
-  category: "curve",
+  category: "strokes",
   inputs: [
     { id: "matrix", label: "Matrix", type: "matrix" },
     { id: "visible", label: "Visible", type: "value" },

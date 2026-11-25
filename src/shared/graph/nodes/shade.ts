@@ -260,7 +260,7 @@ function buildAutoSmoothGeometry(src: THREE.BufferGeometry, angleRad: number): T
 export const SHADE_NODE: NodeDefinition = {
   type: "modifier/shade",
   label: "Shade",
-  category: "transform",
+  category: "modeling",
   inputs: [{ id: "geometry", label: "Geometry", type: "geometry", owns: true }],
   outputs: [
     { id: "geometry", label: "Geometry", type: "geometry" },

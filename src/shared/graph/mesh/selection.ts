@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import type { QuadMesh } from "../quadMesh";
+import type { PolyMesh } from "../quadMesh";
 import { computeFaceNormal } from "../quadMesh";
 import { getTopology } from "./topology";
 
@@ -37,7 +37,7 @@ export function normalizeEdges(value: unknown): EdgeRef[] {
 }
 
 /** Every vertex the selection covers: the points, the edges' ends, the faces' corners. */
-export function selectionVertices(mesh: QuadMesh, mode: SelectMode, sel: MeshSelection): Set<number> {
+export function selectionVertices(mesh: PolyMesh, mode: SelectMode, sel: MeshSelection): Set<number> {
   const out = new Set<number>();
   if (mode === "points") {
     for (const v of sel.points) if (v >= 0 && v < mesh.positions.length) out.add(v);
@@ -53,12 +53,12 @@ export function selectionVertices(mesh: QuadMesh, mode: SelectMode, sel: MeshSel
 }
 
 /** Edges whose two ends are both in `vertices`. */
-function edgesWithin(mesh: QuadMesh, vertices: Set<number>): EdgeRef[] {
+function edgesWithin(mesh: PolyMesh, vertices: Set<number>): EdgeRef[] {
   return getTopology(mesh).edges.filter(([a, b]) => vertices.has(a) && vertices.has(b)).map(([a, b]) => [a, b] as EdgeRef);
 }
 
 /** Faces whose corners are all in `vertices`. */
-function facesWithin(mesh: QuadMesh, vertices: Set<number>): number[] {
+function facesWithin(mesh: PolyMesh, vertices: Set<number>): number[] {
   const out: number[] = [];
   mesh.faces.forEach((face, f) => {
     if (face.length > 0 && face.every((v) => vertices.has(v))) out.push(f);
@@ -72,7 +72,7 @@ function facesWithin(mesh: QuadMesh, vertices: Set<number>): number[] {
  * all selected; faces → points/edges takes their corners/edges; edges → faces
  * keeps faces whose every edge is selected.
  */
-export function convertSelection(mesh: QuadMesh, from: SelectMode, sel: MeshSelection, to: SelectMode): MeshSelection {
+export function convertSelection(mesh: PolyMesh, from: SelectMode, sel: MeshSelection, to: SelectMode): MeshSelection {
   const out: MeshSelection = { ...sel };
   if (from === to) return out;
   const vertices = selectionVertices(mesh, from, sel);
@@ -108,7 +108,7 @@ export function convertSelection(mesh: QuadMesh, from: SelectMode, sel: MeshSele
 }
 
 /** Vertex → neighbouring vertices across an edge. */
-function vertexNeighbours(mesh: QuadMesh): number[][] {
+function vertexNeighbours(mesh: PolyMesh): number[][] {
   const neighbours: number[][] = Array.from({ length: mesh.positions.length }, () => []);
   for (const [a, b] of getTopology(mesh).edges) {
     neighbours[a]?.push(b);
@@ -118,7 +118,7 @@ function vertexNeighbours(mesh: QuadMesh): number[][] {
 }
 
 /** A points-mode result expressed in `mode` (edges/faces within the vertex set). */
-function fromVertices(mesh: QuadMesh, mode: SelectMode, sel: MeshSelection, vertices: Set<number>): MeshSelection {
+function fromVertices(mesh: PolyMesh, mode: SelectMode, sel: MeshSelection, vertices: Set<number>): MeshSelection {
   const out: MeshSelection = { ...sel };
   if (mode === "points") out.points = [...vertices].sort((a, b) => a - b);
   else if (mode === "edges") out.edges = edgesWithin(mesh, vertices);
@@ -130,7 +130,7 @@ function fromVertices(mesh: QuadMesh, mode: SelectMode, sel: MeshSelection, vert
  * Grows the selection by one step: points take their neighbours, edges and
  * faces take everything sharing a vertex with them (Blender's default).
  */
-export function growSelection(mesh: QuadMesh, mode: SelectMode, sel: MeshSelection): MeshSelection {
+export function growSelection(mesh: PolyMesh, mode: SelectMode, sel: MeshSelection): MeshSelection {
   const vertices = selectionVertices(mesh, mode, sel);
   if (mode === "points") {
     const neighbours = vertexNeighbours(mesh);
@@ -152,7 +152,7 @@ export function growSelection(mesh: QuadMesh, mode: SelectMode, sel: MeshSelecti
 }
 
 /** Vertices on an open border of the mesh itself. */
-function meshBorderVertices(mesh: QuadMesh): Set<number> {
+function meshBorderVertices(mesh: PolyMesh): Set<number> {
   const topo = getTopology(mesh);
   const out = new Set<number>();
   topo.edges.forEach(([a, b], e) => {
@@ -171,7 +171,7 @@ function meshBorderVertices(mesh: QuadMesh): Set<number> {
  * a border too, as in Blender: shrinking a whole selected plane peels off
  * its outer ring.
  */
-export function shrinkSelection(mesh: QuadMesh, mode: SelectMode, sel: MeshSelection): MeshSelection {
+export function shrinkSelection(mesh: PolyMesh, mode: SelectMode, sel: MeshSelection): MeshSelection {
   const meshBorder = meshBorderVertices(mesh);
   if (mode === "faces") {
     const selected = new Set(sel.faces);
@@ -195,7 +195,7 @@ export function shrinkSelection(mesh: QuadMesh, mode: SelectMode, sel: MeshSelec
 /**
  * Every vertex connected to `seeds` through edges — the islands they're on.
  */
-export function linkedVertices(mesh: QuadMesh, seeds: Iterable<number>): Set<number> {
+export function linkedVertices(mesh: PolyMesh, seeds: Iterable<number>): Set<number> {
   const neighbours = vertexNeighbours(mesh);
   const seen = new Set<number>();
   const stack = [...seeds].filter((v) => v >= 0 && v < mesh.positions.length);
@@ -213,7 +213,7 @@ export function linkedVertices(mesh: QuadMesh, seeds: Iterable<number>): Set<num
 }
 
 /** The whole islands the selection touches, in `mode`. */
-export function linkedSelection(mesh: QuadMesh, mode: SelectMode, sel: MeshSelection): MeshSelection {
+export function linkedSelection(mesh: PolyMesh, mode: SelectMode, sel: MeshSelection): MeshSelection {
   return fromVertices(mesh, mode, sel, linkedVertices(mesh, selectionVertices(mesh, mode, sel)));
 }
 
@@ -221,7 +221,7 @@ export function linkedSelection(mesh: QuadMesh, mode: SelectMode, sel: MeshSelec
  * Faces reachable from `seeds` across edges where the two faces bend by no
  * more than `maxAngleDeg` — a flat side of a model, a floor, a panel.
  */
-export function flatFaces(mesh: QuadMesh, seeds: number[], maxAngleDeg: number): number[] {
+export function flatFaces(mesh: PolyMesh, seeds: number[], maxAngleDeg: number): number[] {
   const topo = getTopology(mesh);
   const cosLimit = Math.cos((Math.max(0, maxAngleDeg) * Math.PI) / 180) - 1e-9;
   const normals = mesh.faces.map((face) => computeFaceNormal(mesh.positions, face));
@@ -268,7 +268,7 @@ export function combineSelection(mode: SelectMode, current: MeshSelection, picke
 }
 
 /** Everything in the mesh, in `mode`. */
-export function selectAll(mesh: QuadMesh, mode: SelectMode, current: MeshSelection): MeshSelection {
+export function selectAll(mesh: PolyMesh, mode: SelectMode, current: MeshSelection): MeshSelection {
   const out: MeshSelection = { ...current };
   if (mode === "points") out.points = mesh.positions.map((_, i) => i);
   else if (mode === "edges") out.edges = getTopology(mesh).edges.map(([a, b]) => [a, b] as EdgeRef);
@@ -282,7 +282,7 @@ export function selectAll(mesh: QuadMesh, mode: SelectMode, current: MeshSelecti
  * points/edges the faces around them — and X along its first edge where it
  * has one (else any direction square to Z).
  */
-export function selectionOrientation(mesh: QuadMesh, mode: SelectMode, sel: MeshSelection): THREE.Quaternion {
+export function selectionOrientation(mesh: PolyMesh, mode: SelectMode, sel: MeshSelection): THREE.Quaternion {
   const topo = getTopology(mesh);
   const normal = new THREE.Vector3();
   const faces = new Set<number>();
@@ -313,7 +313,7 @@ export function selectionOrientation(mesh: QuadMesh, mode: SelectMode, sel: Mesh
  * edge chain, or run of selected points joined by edges — for the Individual
  * Origins pivot.
  */
-export function selectionIslands(mesh: QuadMesh, mode: SelectMode, sel: MeshSelection): number[][] {
+export function selectionIslands(mesh: PolyMesh, mode: SelectMode, sel: MeshSelection): number[][] {
   const parent = new Map<number, number>();
   const find = (v: number): number => {
     let r = v;

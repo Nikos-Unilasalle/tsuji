@@ -1,11 +1,11 @@
 import { describe, it, expect } from "vitest";
 import * as THREE from "three";
-import { createQuadBox, QuadMesh, computeFaceNormal, computeFaceCentroid } from "../quadMesh";
+import { createQuadBox, PolyMesh, computeFaceNormal, computeFaceCentroid } from "../quadMesh";
 import { validateQuadMesh } from "./validate";
 import { bridgeEdgeLoops, bridgeFaces, edgeChains, spinEdges } from "./bridge";
 
 /** Two separate open boxes (no top on the lower one, no bottom on the upper one), stacked with a gap. */
-function stackedOpenBoxes(): QuadMesh {
+function stackedOpenBoxes(): PolyMesh {
   const lower = createQuadBox();
   const upper = createQuadBox();
   const positions = [...lower.positions, ...upper.positions.map(([x, y, z]) => [x, y + 2, z] as [number, number, number])];
@@ -66,7 +66,7 @@ describe("bridgeFaces", () => {
 
 describe("spinEdges", () => {
   // A profile in the XY plane: from the axis out and up — a cup's section.
-  const profile = (): QuadMesh => ({
+  const profile = (): PolyMesh => ({
     positions: [[0, 0, 0], [1, 0, 0], [1, 1, 0]],
     faces: [],
   });

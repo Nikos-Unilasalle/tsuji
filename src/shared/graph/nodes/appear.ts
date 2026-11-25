@@ -258,7 +258,7 @@ function poseAbout(local: THREE.Matrix4, c: THREE.Vector3, scale: number, dy: nu
 export const APPEAR_NODE: NodeDefinition = {
   type: "modifier/appear",
   label: "Appear",
-  category: "object",
+  category: "fx",
   inputs: [
     { id: "geometry", label: "Geometry", type: "geometry", owns: true },
     { id: "progress", label: "Progress", type: "value" },

@@ -1,67 +1,423 @@
+/*
+ * The node list beside the graph. Same surface family as the canvas it sits
+ * next to (--canvas-node-list / --canvas-bg), one notch darker for the
+ * sticky search header so the list scrolls visibly beneath it.
+ */
 .node-palette {
-  width: 168px;
+  --palette-row: 26px;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 232px;
   flex: none;
   height: 100%;
-  overflow-y: auto;
-  /* Was a hard-coded #10151c, darker than any theme token and untouched by
-     it — the "left list background too dark" this fixes. Matches the node
-     canvas it sits beside rather than the darker top-bar/panel chrome. */
+  min-height: 0;
   background: var(--canvas-node-list, var(--canvas-bg));
   border-right: 1px solid var(--chrome-border);
-  padding: 8px 0;
-  scrollbar-width: none; /* Firefox */
+  font-family: "Roboto", system-ui, sans-serif;
+  color: var(--canvas-text);
+  user-select: none;
 }
 
-.node-palette::-webkit-scrollbar {
-  display: none; /* Chromium/WebKit (Tauri's webview) */
+/* ---------------------------------------------------------------- header */
+
+.palette-header {
+  flex: none;
+  padding: 10px 10px 6px;
+  background: color-mix(in srgb, var(--canvas-bg) 82%, black);
+  border-bottom: 1px solid color-mix(in srgb, var(--chrome-border) 60%, transparent);
 }
 
-.palette-category + .palette-category {
+.palette-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.palette-search input {
+  flex: 1;
+  min-width: 0;
+  height: 30px;
+  padding: 0 26px 0 30px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--chrome-border) 80%, transparent);
+  background: color-mix(in srgb, var(--canvas-bg) 70%, black);
+  color: var(--canvas-text);
+  font-size: 12.5px;
+  outline: none;
+  transition: border-color 120ms, box-shadow 120ms;
+}
+
+.palette-search input::placeholder {
+  color: var(--canvas-text-muted);
+  opacity: 0.8;
+}
+
+.palette-search input:focus {
+  border-color: var(--accent-color);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-color) 22%, transparent);
+}
+
+.palette-search-icon {
+  position: absolute;
+  left: 9px;
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: var(--canvas-text-muted);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  pointer-events: none;
+}
+
+.palette-search-clear {
+  position: absolute;
+  right: 38px;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--canvas-text-muted);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.palette-search-clear:hover {
+  background: var(--canvas-node-raised);
+  color: var(--canvas-text);
+}
+
+.palette-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 6px;
+  padding: 0 2px;
+}
+
+.palette-count {
+  font-size: 10.5px;
+  color: var(--canvas-text-muted);
+  letter-spacing: 0.02em;
+}
+
+.palette-toolbar-button {
+  border: none;
+  background: transparent;
+  color: var(--canvas-text-muted);
+  font-size: 10.5px;
+  padding: 2px 4px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.palette-toolbar-button:hover {
+  color: var(--canvas-text);
+  background: var(--canvas-node-raised);
+}
+
+/* ------------------------------------------------------------------ list */
+
+.palette-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 4px 6px 16px;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--chrome-border) 80%, transparent) transparent;
+}
+
+.palette-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.palette-list::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--chrome-border) 80%, transparent);
+  border-radius: 3px;
+}
+
+.palette-family {
   margin-top: 10px;
 }
+
+.palette-family-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 4px;
+  padding: 0 6px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--family-color);
+}
+
+.palette-family-title::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(to right, color-mix(in srgb, var(--family-color) 45%, transparent), transparent);
+}
+
+/* -------------------------------------------------------------- category */
 
 .palette-category-title {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   width: 100%;
-  padding: 4px 10px;
-  font-family: "Roboto", system-ui, sans-serif;
-  font-weight: 700;
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  background: transparent;
+  height: var(--palette-row);
+  padding: 0 6px;
   border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--canvas-text);
+  font-size: 12.5px;
+  font-weight: 500;
   text-align: left;
   cursor: pointer;
 }
 
 .palette-category-title:hover {
-  background: var(--canvas-node-raised);
+  background: color-mix(in srgb, var(--canvas-node-raised) 70%, transparent);
+}
+
+.palette-category.is-open > .palette-category-title {
+  background: color-mix(in srgb, var(--cat-color) 12%, transparent);
+}
+
+.palette-category-swatch {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 3px;
+  background: var(--cat-color);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--cat-color) 22%, transparent);
+}
+
+.palette-category-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.palette-category-count {
+  flex: none;
+  min-width: 20px;
+  padding: 0 5px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--canvas-bg) 60%, black);
+  color: var(--canvas-text-muted);
+  font-size: 10px;
+  line-height: 16px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
 }
 
 .palette-category-chevron {
+  flex: none;
   width: 10px;
-  font-size: 9px;
+  height: 10px;
+  fill: none;
+  stroke: var(--canvas-text-muted);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform 140ms ease;
+}
+
+.palette-category.is-open .palette-category-chevron {
+  transform: rotate(90deg);
+}
+
+.palette-category-nodes {
+  position: relative;
+  margin: 2px 0 6px 10px;
+  padding-left: 6px;
+  border-left: 1px solid color-mix(in srgb, var(--cat-color, var(--chrome-border)) 35%, transparent);
+}
+
+/* ------------------------------------------------------------------ node */
+
+.palette-node {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: var(--palette-row);
+  padding: 0 8px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--canvas-text);
+  font-size: 12.5px;
+  text-align: left;
+  cursor: grab;
+  touch-action: none;
+}
+
+.palette-node:hover,
+.palette-node.is-highlighted {
+  background: color-mix(in srgb, var(--node-color) 16%, var(--canvas-node-raised) 40%);
+}
+
+.palette-node.is-highlighted {
+  box-shadow: inset 2px 0 0 var(--node-color);
+}
+
+.palette-node:active {
+  cursor: grabbing;
+}
+
+.palette-node:focus-visible {
+  outline: 2px solid var(--accent-color);
+  outline-offset: -2px;
+}
+
+.palette-node-dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--node-color);
   opacity: 0.85;
 }
 
-.palette-node-button {
-  display: block;
-  width: 100%;
-  text-align: left;
-  padding: 5px 10px 5px 9px;
-  margin: 1px 0;
-  background: transparent;
-  border: none;
-  border-left: 2px solid transparent;
+.palette-node-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* In search results the category yields first: the node's name stays whole. */
+.palette-node-category {
+  flex: 1 1 0;
+  min-width: 0;
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10px;
+  color: var(--canvas-text-muted);
+}
+
+.palette-recent {
+  display: flex;
+  flex-direction: column;
+}
+
+/* --------------------------------------------------------------- search */
+
+.palette-results {
+  padding-top: 6px;
+}
+
+.palette-results-count {
+  padding: 0 8px 6px;
+  font-size: 10.5px;
+  color: var(--canvas-text-muted);
+}
+
+.palette-empty {
+  padding: 24px 12px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--canvas-text-muted);
+}
+
+/* ---------------------------------------------------------------- drag */
+
+.palette-drag-ghost {
+  position: fixed;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--node-color) 60%, transparent);
+  background: color-mix(in srgb, var(--canvas-node) 92%, var(--node-color));
   color: var(--canvas-text);
   font-family: "Roboto", system-ui, sans-serif;
-  font-size: 12px;
+  font-size: 12.5px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.palette-results .palette-node-label {
+  flex: 0 1 auto;
+}
+
+/* -------------------------------------------------------------- collapse */
+
+.palette-collapse {
+  flex: none;
+  width: 28px;
+  height: 30px;
+  margin-left: 6px;
+  border: 1px solid color-mix(in srgb, var(--chrome-border) 80%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--canvas-bg) 70%, black);
+  display: flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
 }
 
-.palette-node-button:hover {
-  background: var(--canvas-node-raised);
+.palette-collapse:hover {
+  border-color: var(--accent-color);
+}
+
+.palette-collapse-icon {
+  width: 12px;
+  height: 12px;
+  fill: none;
+  stroke: var(--canvas-text-muted);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.palette-collapse:hover .palette-collapse-icon,
+.palette-rail:hover .palette-collapse-icon {
+  stroke: var(--accent-color);
+}
+
+.node-palette.is-collapsed {
+  width: 26px;
+}
+
+.palette-rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  height: 100%;
+  padding: 12px 0 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+.palette-rail:hover {
+  background: color-mix(in srgb, var(--canvas-node-raised) 50%, transparent);
+}
+
+.palette-rail-label {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--canvas-text-muted);
 }

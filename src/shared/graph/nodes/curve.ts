@@ -1172,7 +1172,7 @@ export const SAMPLE_CURVE_NODE: NodeDefinition = {
 export const CURVE_DEFORM_NODE: NodeDefinition = {
   type: "curve/deform",
   label: "Curve Deform",
-  category: "curve",
+  category: "deform",
   inputs: [
     { id: "visible", label: "Visible", type: "value" },
     { id: "geometry", label: "Geometry", type: "geometry", owns: true },

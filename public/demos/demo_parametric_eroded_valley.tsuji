@@ -1,0 +1,742 @@
+{
+  "canvases": [
+    {
+      "nodes": [
+        {
+          "id": "setup_env",
+          "type": "lighting/environment",
+          "position": {
+            "x": -900,
+            "y": -400
+          },
+          "params": {
+            "color": 11125980,
+            "intensity": 0.9,
+            "background": 1,
+            "blurriness": 0,
+            "filePath": "",
+            "backgroundImagePath": "",
+            "backgroundFit": "cover",
+            "backgroundScale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "backgroundOffset": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "backgroundRotation": 0,
+            "ambientIntensity": 0.4,
+            "sunIntensity": 0
+          }
+        },
+        {
+          "id": "setup_render",
+          "type": "render",
+          "position": {
+            "x": -600,
+            "y": -400
+          },
+          "params": {
+            "frameCount": 360,
+            "fps": 30,
+            "motionBlur": 0,
+            "resolutionPreset": "16:9 (1920x1080)",
+            "width": 1920,
+            "height": 1080,
+            "holdout": false
+          }
+        },
+        {
+          "id": "setup_sun",
+          "type": "light/directional",
+          "position": {
+            "x": -300,
+            "y": -400
+          },
+          "params": {
+            "location": {
+              "x": -10,
+              "y": 9,
+              "z": 6
+            },
+            "target": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "intensity": 2.4,
+            "castShadow": 1,
+            "shadowSoftness": 1
+          }
+        },
+        {
+          "id": "land",
+          "type": "object/plane",
+          "position": {
+            "x": 0,
+            "y": 0
+          },
+          "params": {
+            "color": 7311178,
+            "roughness": 0.95,
+            "metalness": 0
+          }
+        },
+        {
+          "id": "grid",
+          "type": "modeling/divide",
+          "position": {
+            "x": 300,
+            "y": 0
+          },
+          "params": {
+            "cuts": 64,
+            "mode": "quads"
+          }
+        },
+        {
+          "id": "fine",
+          "type": "modeling/divide",
+          "position": {
+            "x": 380,
+            "y": 150
+          },
+          "params": {
+            "cuts": 2,
+            "mode": "quads"
+          }
+        },
+        {
+          "id": "size",
+          "type": "modeling/transform-elements",
+          "position": {
+            "x": 450,
+            "y": 0
+          },
+          "params": {
+            "domain": "face",
+            "scale": {
+              "x": 24,
+              "y": 24,
+              "z": 1
+            },
+            "pivot": "point",
+            "pivotPoint": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            }
+          }
+        },
+        {
+          "id": "relief",
+          "type": "attribute/expression",
+          "position": {
+            "x": 600,
+            "y": 0
+          },
+          "params": {
+            "domain": "point",
+            "name1": "P",
+            "type1": "auto",
+            "formula1": "P + vec(0, 0, -0.2 + (0.8 + 6.5*(0.5 + 0.5*fbm(P/7.5, 6, 4))) * clamp((abs(P.y + 2.4*sin(P.x/2.2)) - 0.7) / 5.5, 0, 1)^1.3)"
+          }
+        },
+        {
+          "id": "erode",
+          "type": "modeling/heightfield-erode",
+          "position": {
+            "x": 900,
+            "y": 0
+          },
+          "params": {
+            "up": "z",
+            "iterations": 12,
+            "droplets": 2500,
+            "erosion": 0.35,
+            "deposition": 0.25,
+            "capacity": 5,
+            "maxSteps": 80,
+            "thermal": 1,
+            "talus": 38,
+            "seed": 3,
+            "fixBorder": true
+          }
+        },
+        {
+          "id": "slope",
+          "type": "attribute/expression",
+          "position": {
+            "x": 1200,
+            "y": 0
+          },
+          "params": {
+            "domain": "face",
+            "name1": "slope",
+            "type1": "float",
+            "formula1": "1 - abs(N.z)",
+            "name2": "alt",
+            "type2": "float",
+            "formula2": "P.z"
+          }
+        },
+        {
+          "id": "rock",
+          "type": "select/basic",
+          "position": {
+            "x": 1500,
+            "y": 0
+          },
+          "params": {
+            "mode": "expression",
+            "domain": "face",
+            "name": "rock",
+            "expression": "@slope>0.32"
+          }
+        },
+        {
+          "id": "snow",
+          "type": "select/basic",
+          "position": {
+            "x": 1800,
+            "y": 0
+          },
+          "params": {
+            "mode": "expression",
+            "domain": "face",
+            "name": "snow",
+            "expression": "@alt>3.6 & !rock"
+          }
+        },
+        {
+          "id": "sand",
+          "type": "select/basic",
+          "position": {
+            "x": 2100,
+            "y": 0
+          },
+          "params": {
+            "mode": "expression",
+            "domain": "face",
+            "name": "sand",
+            "expression": "@alt<0.32 & !rock"
+          }
+        },
+        {
+          "id": "m_rock",
+          "type": "material/standard",
+          "position": {
+            "x": 1500,
+            "y": 300
+          },
+          "params": {
+            "color": 7037530,
+            "roughness": 1,
+            "metalness": 0
+          }
+        },
+        {
+          "id": "m_snow",
+          "type": "material/standard",
+          "position": {
+            "x": 1800,
+            "y": 300
+          },
+          "params": {
+            "color": 15988474,
+            "roughness": 0.6,
+            "metalness": 0
+          }
+        },
+        {
+          "id": "m_sand",
+          "type": "material/standard",
+          "position": {
+            "x": 2100,
+            "y": 300
+          },
+          "params": {
+            "color": 13218954,
+            "roughness": 1,
+            "metalness": 0
+          }
+        },
+        {
+          "id": "rocks",
+          "type": "modeling/material-by-group",
+          "position": {
+            "x": 2400,
+            "y": 0
+          },
+          "params": {
+            "group": "rock"
+          }
+        },
+        {
+          "id": "snows",
+          "type": "modeling/material-by-group",
+          "position": {
+            "x": 2700,
+            "y": 0
+          },
+          "params": {
+            "group": "snow"
+          }
+        },
+        {
+          "id": "sands",
+          "type": "modeling/material-by-group",
+          "position": {
+            "x": 3000,
+            "y": 0
+          },
+          "params": {
+            "group": "sand"
+          }
+        },
+        {
+          "id": "water",
+          "type": "object/plane",
+          "position": {
+            "x": 0,
+            "y": -300
+          },
+          "params": {
+            "location": {
+              "x": 0,
+              "y": 0.18,
+              "z": 0
+            },
+            "scale": {
+              "x": 22.5,
+              "y": 22.5,
+              "z": 1
+            },
+            "color": 3108751,
+            "roughness": 0.05,
+            "metalness": 0.2,
+            "opacity": 0.75,
+            "transmission": 0
+          }
+        },
+        {
+          "id": "spots",
+          "type": "select/basic",
+          "position": {
+            "x": 3300,
+            "y": 0
+          },
+          "params": {
+            "mode": "random",
+            "domain": "point",
+            "name": "spots",
+            "fraction": 0.006,
+            "seed": 5
+          }
+        },
+        {
+          "id": "boulder_pts",
+          "type": "group/combine",
+          "position": {
+            "x": 3600,
+            "y": 0
+          },
+          "params": {
+            "name": "boulders",
+            "domain": "point",
+            "expression": "spots & !rock & !sand & !snow"
+          }
+        },
+        {
+          "id": "pscale",
+          "type": "attribute/randomize",
+          "position": {
+            "x": 3900,
+            "y": 0
+          },
+          "params": {
+            "group": "boulders",
+            "domain": "point",
+            "name": "pscale",
+            "type": "float",
+            "mode": "range",
+            "min": 0.12,
+            "max": 0.4,
+            "seed": 9
+          }
+        },
+        {
+          "id": "stone",
+          "type": "object/sphere",
+          "position": {
+            "x": 3900,
+            "y": 300
+          },
+          "params": {
+            "sphereType": "quad",
+            "segments": 2,
+            "color": 8747888,
+            "roughness": 0.95,
+            "metalness": 0
+          }
+        },
+        {
+          "id": "stone_noise",
+          "type": "attribute/noise",
+          "position": {
+            "x": 4200,
+            "y": 300
+          },
+          "params": {
+            "domain": "point",
+            "name": "P",
+            "mode": "displace-normal",
+            "noise": "fbm",
+            "scale": 1.5,
+            "amplitude": 0.18,
+            "octaves": 3,
+            "seed": 2
+          }
+        },
+        {
+          "id": "boulders",
+          "type": "modeling/copy-to-points",
+          "position": {
+            "x": 4500,
+            "y": 0
+          },
+          "params": {
+            "group": "boulders",
+            "orient": "normal",
+            "alignAxis": "y",
+            "scale": 1,
+            "usePscale": true
+          }
+        },
+        {
+          "id": "road_pts",
+          "type": "math/expression",
+          "position": {
+            "x": 0,
+            "y": 600
+          },
+          "params": {
+            "formula": "(x, 9, 2.4*sin(x/2.2) + 2.7)"
+          }
+        },
+        {
+          "id": "road_x",
+          "type": "list/generate",
+          "position": {
+            "x": -300,
+            "y": 600
+          },
+          "params": {
+            "count": 24,
+            "start": -11.5,
+            "step": 1
+          }
+        },
+        {
+          "id": "road_curve",
+          "type": "curve/from_points",
+          "position": {
+            "x": 300,
+            "y": 600
+          },
+          "params": {}
+        },
+        {
+          "id": "road_res",
+          "type": "curve/resample",
+          "position": {
+            "x": 600,
+            "y": 600
+          },
+          "params": {
+            "mode": "count",
+            "count": 160
+          }
+        },
+        {
+          "id": "road",
+          "type": "curve/sweep",
+          "position": {
+            "x": 900,
+            "y": 600
+          },
+          "params": {
+            "profileType": "flat",
+            "radius": 0.42,
+            "resolution": 0,
+            "caps": false,
+            "color": 3882050,
+            "roughness": 0.85,
+            "metalness": 0,
+            "doubleSided": true
+          }
+        },
+        {
+          "id": "drape",
+          "type": "modeling/ray-project",
+          "position": {
+            "x": 1200,
+            "y": 600
+          },
+          "params": {
+            "mode": "direction",
+            "direction": {
+              "x": 0,
+              "y": -1,
+              "z": 0
+            },
+            "bidirectional": false,
+            "offset": 0.12,
+            "amount": 1
+          }
+        },
+        {
+          "id": "cam_path",
+          "type": "math/expression",
+          "position": {
+            "x": -600,
+            "y": -200
+          },
+          "params": {
+            "formula": "(20*cos(0.07*t+0.8), 10, 20*sin(0.07*t+0.8))"
+          }
+        },
+        {
+          "id": "camera",
+          "type": "calibration/camera",
+          "position": {
+            "x": -300,
+            "y": -200
+          },
+          "params": {
+            "useTarget": true,
+            "target": {
+              "x": 0,
+              "y": 1,
+              "z": 0
+            },
+            "fov": 45,
+            "active": true
+          }
+        }
+      ],
+      "connections": [
+        {
+          "id": "setup_env.environment->setup_render.environment",
+          "fromNode": "setup_env",
+          "fromSocket": "environment",
+          "toNode": "setup_render",
+          "toSocket": "environment"
+        },
+        {
+          "id": "land.geometry->grid.geometry",
+          "fromNode": "land",
+          "fromSocket": "geometry",
+          "toNode": "grid",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "grid.geometry->fine.geometry",
+          "fromNode": "grid",
+          "fromSocket": "geometry",
+          "toNode": "fine",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "fine.geometry->size.geometry",
+          "fromNode": "fine",
+          "fromSocket": "geometry",
+          "toNode": "size",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "size.geometry->relief.geometry",
+          "fromNode": "size",
+          "fromSocket": "geometry",
+          "toNode": "relief",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "relief.geometry->erode.geometry",
+          "fromNode": "relief",
+          "fromSocket": "geometry",
+          "toNode": "erode",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "erode.geometry->slope.geometry",
+          "fromNode": "erode",
+          "fromSocket": "geometry",
+          "toNode": "slope",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "slope.geometry->rock.geometry",
+          "fromNode": "slope",
+          "fromSocket": "geometry",
+          "toNode": "rock",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "rock.geometry->snow.geometry",
+          "fromNode": "rock",
+          "fromSocket": "geometry",
+          "toNode": "snow",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "snow.geometry->sand.geometry",
+          "fromNode": "snow",
+          "fromSocket": "geometry",
+          "toNode": "sand",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "sand.geometry->rocks.geometry",
+          "fromNode": "sand",
+          "fromSocket": "geometry",
+          "toNode": "rocks",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "rocks.geometry->snows.geometry",
+          "fromNode": "rocks",
+          "fromSocket": "geometry",
+          "toNode": "snows",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "snows.geometry->sands.geometry",
+          "fromNode": "snows",
+          "fromSocket": "geometry",
+          "toNode": "sands",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "m_rock.material->rocks.material",
+          "fromNode": "m_rock",
+          "fromSocket": "material",
+          "toNode": "rocks",
+          "toSocket": "material"
+        },
+        {
+          "id": "m_snow.material->snows.material",
+          "fromNode": "m_snow",
+          "fromSocket": "material",
+          "toNode": "snows",
+          "toSocket": "material"
+        },
+        {
+          "id": "m_sand.material->sands.material",
+          "fromNode": "m_sand",
+          "fromSocket": "material",
+          "toNode": "sands",
+          "toSocket": "material"
+        },
+        {
+          "id": "sand.geometry->spots.geometry",
+          "fromNode": "sand",
+          "fromSocket": "geometry",
+          "toNode": "spots",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "spots.geometry->boulder_pts.geometry",
+          "fromNode": "spots",
+          "fromSocket": "geometry",
+          "toNode": "boulder_pts",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "boulder_pts.geometry->pscale.geometry",
+          "fromNode": "boulder_pts",
+          "fromSocket": "geometry",
+          "toNode": "pscale",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "pscale.geometry->boulders.geometry",
+          "fromNode": "pscale",
+          "fromSocket": "geometry",
+          "toNode": "boulders",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "stone.geometry->stone_noise.geometry",
+          "fromNode": "stone",
+          "fromSocket": "geometry",
+          "toNode": "stone_noise",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "stone_noise.geometry->boulders.source",
+          "fromNode": "stone_noise",
+          "fromSocket": "geometry",
+          "toNode": "boulders",
+          "toSocket": "source"
+        },
+        {
+          "id": "road_x.list->road_pts.x",
+          "fromNode": "road_x",
+          "fromSocket": "list",
+          "toNode": "road_pts",
+          "toSocket": "x"
+        },
+        {
+          "id": "road_curve.curve->road_res.curve",
+          "fromNode": "road_curve",
+          "fromSocket": "curve",
+          "toNode": "road_res",
+          "toSocket": "curve"
+        },
+        {
+          "id": "road_res.curve->road.curve",
+          "fromNode": "road_res",
+          "fromSocket": "curve",
+          "toNode": "road",
+          "toSocket": "curve"
+        },
+        {
+          "id": "road.geometry->drape.geometry",
+          "fromNode": "road",
+          "fromSocket": "geometry",
+          "toNode": "drape",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "erode.geometry->drape.target",
+          "fromNode": "erode",
+          "fromSocket": "geometry",
+          "toNode": "drape",
+          "toSocket": "target"
+        },
+        {
+          "id": "road_pts.list->road_curve.points",
+          "fromNode": "road_pts",
+          "fromSocket": "list",
+          "toNode": "road_curve",
+          "toSocket": "points"
+        },
+        {
+          "id": "cam_path.vector->camera.location",
+          "fromNode": "cam_path",
+          "fromSocket": "vector",
+          "toNode": "camera",
+          "toSocket": "location"
+        }
+      ],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    }
+  ],
+  "activeCanvas": 0
+}

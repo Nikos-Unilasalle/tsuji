@@ -5,7 +5,7 @@ import { NodeDefinition } from "../types";
 export const VALUE_TO_VECTOR_NODE: NodeDefinition = {
   type: "converter/value-to-vector",
   label: "Value to Vector",
-  category: "converter",
+  category: "convert",
   pure: true,
   inputs: [{ id: "value", label: "Value", type: "value" }],
   outputs: [{ id: "vector", label: "Vector", type: "vector" }],
@@ -21,7 +21,7 @@ export const VALUE_TO_VECTOR_NODE: NodeDefinition = {
 export const COLOR_TO_VECTOR_NODE: NodeDefinition = {
   type: "converter/color-to-vector",
   label: "Color to Vector",
-  category: "converter",
+  category: "convert",
   pure: true,
   inputs: [{ id: "color", label: "Color", type: "color" }],
   outputs: [{ id: "vector", label: "Vector", type: "vector" }],
@@ -36,7 +36,7 @@ export const COLOR_TO_VECTOR_NODE: NodeDefinition = {
 export const VECTOR_TO_COLOR_NODE: NodeDefinition = {
   type: "converter/vector-to-color",
   label: "Vector to Color",
-  category: "converter",
+  category: "convert",
   pure: true,
   inputs: [{ id: "vector", label: "Vector", type: "vector" }],
   outputs: [{ id: "color", label: "Color", type: "color" }],
@@ -56,7 +56,7 @@ export const VECTOR_TO_COLOR_NODE: NodeDefinition = {
 export const VALUE_TO_COLOR_NODE: NodeDefinition = {
   type: "converter/value-to-color",
   label: "Value to Color",
-  category: "converter",
+  category: "convert",
   pure: true,
   inputs: [{ id: "value", label: "Value", type: "value" }],
   outputs: [{ id: "color", label: "Color", type: "color" }],
@@ -75,7 +75,7 @@ export const VALUE_TO_COLOR_NODE: NodeDefinition = {
 export const VALUE_TO_TEXT_NODE: NodeDefinition = {
   type: "converter/value-to-text",
   label: "Value to Text",
-  category: "converter",
+  category: "text",
   pure: true,
   inputs: [
 

@@ -5,7 +5,11 @@ import { IndexedMesh, subdivide as runSubdivide, SubdivisionMode } from "../subd
 import { NodeDefinition } from "../types";
 import { clearMeshWarning, findFirstMesh, warnMeshRequired } from "../meshRequired";
 import { createModifierMesh, emitModifiedMesh, primitiveOutputs } from "./object";
-import { QuadMesh, quadMeshToBufferGeometry } from "../quadMesh";
+import { quadMeshSignature } from "../quadMesh";
+import { polyMeshFromGeometry, polyMeshToGeometry } from "../mesh/polyIO";
+import { withAttributes } from "../mesh/propagate";
+import { evaluateGroup, maskIndices } from "../mesh/groupExpr";
+import { subdivideFaces } from "../mesh/tools";
 import { catmullClarkQuadMesh } from "../mesh/subdivide";
 
 
@@ -172,7 +176,7 @@ function toBufferGeometryWithUV(pos: IndexedMesh, uv: IndexedMesh): THREE.Buffer
 export const SUBDIVIDE_NODE: NodeDefinition = {
   type: "modifier/subdivide",
   label: "Subdivide",
-  category: "transform",
+  category: "modeling",
   inputs: [
     { id: "geometry", label: "Geometry", type: "geometry", owns: true },
     { id: "levels", label: "Levels", type: "value" },
@@ -184,10 +188,12 @@ export const SUBDIVIDE_NODE: NodeDefinition = {
   defaultParams: {
     mode: "catmull-clark",
     levels: 1,
+    group: "",
   },
   paramFields: [
     { id: "mode", label: "Mode", kind: "select", options: ["simple", "catmull-clark"] },
     { id: "levels", label: "Levels", kind: "number", step: 1 },
+    { id: "group", label: "Group (Simple mode: subdivide only these faces)", kind: "text" },
   ],
   evaluate: (inputs, params, ctx) => {
     const inputObj = inputs.geometry instanceof THREE.Object3D ? inputs.geometry : null;
@@ -228,11 +234,34 @@ export const SUBDIVIDE_NODE: NodeDefinition = {
     let geometry: THREE.BufferGeometry | undefined;
     // A polygon cage (Edit Mesh, or any node that carries its quad mesh):
     // Catmull-Clark on the polygons, with creases, instead of on triangles.
-    const quadSource = srcGeom.userData?.quadMesh as QuadMesh | undefined;
-    if (rebuild && quadSource && mode === "catmull-clark" && levels > 0) {
-      geometry = quadMeshToBufferGeometry(catmullClarkQuadMesh(quadSource, levels), "smooth");
-      state.lastSignature = signature;
-    } else if (rebuild) {
+    // Read through polyIO rather than userData directly: a deformer upstream
+    // shares the userData of the geometry it cloned, so the raw quadMesh
+    // there is the *undeformed* cage.
+    const quadSource = srcGeom.userData?.quadMesh ? (polyMeshFromGeometry(srcGeom) ?? undefined) : undefined;
+    const groupExpr = String(params.group ?? "").trim();
+    const polySignature = quadSource ? `${signature}:${quadMeshSignature(quadSource)}:${groupExpr}` : signature;
+    const polyRebuild = !state.mesh || state.lastSignature !== polySignature;
+    if (polyRebuild && quadSource && levels > 0 && (mode === "catmull-clark" || groupExpr)) {
+      if (mode === "catmull-clark") {
+        if (groupExpr && groupExpr !== "*") console.warn("Subdivide: Catmull-Clark applies to the whole mesh; Group is used by Simple mode only.");
+        geometry = polyMeshToGeometry(withAttributes(quadSource, (m) => catmullClarkQuadMesh(m, levels)), "smooth");
+      } else {
+        // Simple on the group's faces only: each level splits them again.
+        geometry = polyMeshToGeometry(
+          withAttributes(quadSource, (m) => {
+            let current = m;
+            let faces = maskIndices(evaluateGroup(quadSource, "face", groupExpr).mask);
+            for (let i = 0; i < levels && faces.length; i++) {
+              const r = subdivideFaces(current, faces);
+              current = r.mesh;
+              faces = r.newFaces;
+            }
+            return current;
+          }),
+        );
+      }
+      state.lastSignature = polySignature;
+    } else if (rebuild && !(quadSource && levels > 0 && (mode === "catmull-clark" || groupExpr))) {
       const indexedMesh = toIndexedMesh(srcGeom);
       if (!indexedMesh) return primitiveOutputs(inputObj);
 

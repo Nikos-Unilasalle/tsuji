@@ -113,7 +113,7 @@ function applyResult(state: BooleanState, result: BooleanResult, meshesA: THREE.
 export const BOOLEAN_NODE: NodeDefinition = {
   type: "modifier/boolean",
   label: "Boolean",
-  category: "transform",
+  category: "modeling",
   inputs: [
     { id: "geometry", label: "Geometry", type: "geometry", owns: true },
     { id: "boolean", label: "Boolean Shape", type: "geometry", owns: true },

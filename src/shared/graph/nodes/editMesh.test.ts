@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import * as THREE from "three";
 import { EDIT_MESH_NODE, EDIT_MESH_RESEED_ACTION, editMeshFreezeStatus, editMeshModeSwitchParams, editMeshSelectionParams, readEditMeshSelection, resolveEditMeshData } from "./editMesh";
 import { EvalContext } from "../types";
-import { cloneQuadMesh, createQuadBox, quadMeshToBufferGeometry, QuadMesh, transformSelection } from "../quadMesh";
+import { cloneQuadMesh, createQuadBox, quadMeshToBufferGeometry, PolyMesh, transformSelection } from "../quadMesh";
 
 describe("EDIT_MESH_NODE", () => {
   it("defaults to a quad box when no geometry is wired", () => {
@@ -245,7 +245,7 @@ describe("EDIT_MESH_NODE", () => {
     });
 
     it("returns existing meshData if already set (frozen)", () => {
-      const frozenMesh: QuadMesh = {
+      const frozenMesh: PolyMesh = {
         positions: [[0, 0, 0], [1, 0, 0], [1, 1, 0], [0, 1, 0]],
         faces: [[0, 1, 2, 3]],
       };
@@ -254,7 +254,7 @@ describe("EDIT_MESH_NODE", () => {
       expect(resolved).toBe(frozenMesh);
     });
 
-    it("extracts QuadMesh from evaluated results when meshData is not set", () => {
+    it("extracts PolyMesh from evaluated results when meshData is not set", () => {
       const inputQuad = createQuadBox(2, 4, 6);
       const inputGeom = quadMeshToBufferGeometry(inputQuad);
       const inputMesh = new THREE.Mesh(inputGeom);
@@ -269,7 +269,7 @@ describe("EDIT_MESH_NODE", () => {
       expect(resolved.faces.length).toBe(inputQuad.faces.length);
     });
 
-    it("extracts QuadMesh when input geometry is inside a THREE.Group", () => {
+    it("extracts PolyMesh when input geometry is inside a THREE.Group", () => {
       const cylinderGeom = new THREE.CylinderGeometry(1, 1, 2, 8);
       const group = new THREE.Group();
       group.add(new THREE.Mesh(cylinderGeom));
@@ -285,7 +285,7 @@ describe("EDIT_MESH_NODE", () => {
     });
 
     it("preserves frozen meshData even if evaluated input geometry changes", () => {
-      const frozenMesh: QuadMesh = {
+      const frozenMesh: PolyMesh = {
         positions: [[0, 0, 0], [2, 0, 0], [2, 2, 0], [0, 2, 0]],
         faces: [[0, 1, 2, 3]],
       };
@@ -361,7 +361,7 @@ describe("EDIT_MESH_NODE", () => {
       expect(noteIds(id, {})).toEqual([]);
 
       // What the viewport does on the first edit: clone the evaluated quad mesh.
-      const meshData = cloneQuadMesh((live.geometry as THREE.Mesh).geometry.userData.quadMesh as QuadMesh);
+      const meshData = cloneQuadMesh((live.geometry as THREE.Mesh).geometry.userData.quadMesh as PolyMesh);
       expect(meshData.sourceSignature).toBeTruthy();
       const params = { ...EDIT_MESH_NODE.defaultParams, meshData };
 
@@ -412,7 +412,7 @@ describe("EDIT_MESH_NODE", () => {
 
     it("proportionalEditing transforms nearby unselected vertices with smooth falloff", () => {
       // Mesh with 3 points along the X axis: 0, 0.5, 1.5
-      const lineMesh: QuadMesh = {
+      const lineMesh: PolyMesh = {
         positions: [
           [0, 0, 0],   // index 0: selected
           [0.5, 0, 0], // index 1: at distance 0.5 (within radius 1.0)
@@ -448,7 +448,7 @@ describe("EDIT_MESH_NODE", () => {
     });
 
     it("without proportionalEditing, unselected vertices remain completely untouched", () => {
-      const lineMesh: QuadMesh = {
+      const lineMesh: PolyMesh = {
         positions: [
           [0, 0, 0],
           [0.5, 0, 0],
@@ -551,7 +551,7 @@ describe("Edit Mesh on an edges-only mesh", () => {
       { nodeId: "edges-only" } as EvalContext,
     ).geometry as THREE.Mesh;
 
-    const quad = out.geometry.userData.quadMesh as QuadMesh;
+    const quad = out.geometry.userData.quadMesh as PolyMesh;
     expect(quad.faces).toEqual([]);
     expect(quad.edges).toHaveLength(6);
     const lines = out.children.find((c) => c instanceof THREE.LineSegments) as THREE.LineSegments;
@@ -591,7 +591,7 @@ describe("Edit Mesh on an object of several meshes", () => {
     const { group } = parts();
     const node = { id: "multi-b", params: { ...EDIT_MESH_NODE.defaultParams } };
     const mesh = EDIT_MESH_NODE.evaluate({ geometry: group }, node.params, ctx(node.id)).geometry as THREE.Mesh;
-    const stored = cloneQuadMesh(mesh.geometry.userData.quadMesh as QuadMesh);
+    const stored = cloneQuadMesh(mesh.geometry.userData.quadMesh as PolyMesh);
     expect(stored.positions.length).toBe(16);
     // The same data is what the viewport reads before anything is frozen.
     expect(resolveEditMeshData(node, new Map([[node.id, { geometry: mesh, __evaluatedInputs: { geometry: group } }]])).positions.length).toBe(16);

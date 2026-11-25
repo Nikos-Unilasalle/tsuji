@@ -94,7 +94,7 @@ function getOrCreatePlyState(nodeId: string): PlyState {
 export const OBJECT_PLY_NODE: NodeDefinition = {
   type: "object/ply_point_cloud",
   label: "PLY Point Cloud",
-  category: "object",
+  category: "import",
   inputs: [
     { id: "visible", label: "Visible", type: "value" },
     { id: "matrix", label: "Matrix", type: "matrix" },

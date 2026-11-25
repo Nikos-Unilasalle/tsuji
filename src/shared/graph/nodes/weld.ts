@@ -125,7 +125,7 @@ export function weldGeometries(
 export const WELD_NODE: NodeDefinition = {
   type: "modifier/weld",
   label: "Weld",
-  category: "transform",
+  category: "modeling",
   inputs: [
     { id: "geometry", label: "Geometry", type: "geometry", owns: true },
     { id: "weld", label: "Weld Shape", type: "geometry", owns: true },

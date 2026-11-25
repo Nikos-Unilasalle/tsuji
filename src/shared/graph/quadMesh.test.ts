@@ -20,7 +20,7 @@ import {
   extractFaces,
 } from "./quadMesh";
 
-describe("QuadMesh", () => {
+describe("PolyMesh", () => {
   it("creates a quad box with 8 vertices and 6 quads", () => {
     const box = createQuadBox(2, 2, 2);
     expect(box.positions.length).toBe(8);

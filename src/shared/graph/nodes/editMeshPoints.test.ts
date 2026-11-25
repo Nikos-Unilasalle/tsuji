@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 import { EvalContext } from "../types";
-import { createQuadBox, quadMeshToBufferGeometry, QuadMesh } from "../quadMesh";
+import { createQuadBox, quadMeshToBufferGeometry, PolyMesh } from "../quadMesh";
 import { applyWeldedPointMoves, EDIT_MESH_POINTS_NODE } from "./editMeshPoints";
 
 const CTX: EvalContext = { time: 0, step: 0, nodeId: "edit-points-test" };
@@ -44,7 +44,7 @@ describe("EDIT_MESH_POINTS_NODE", () => {
     const res = EDIT_MESH_POINTS_NODE.evaluate({ basis }, { pointsList: movedPoints }, CTX);
     const outMesh = res.geometry as THREE.Mesh;
     expect(outMesh.geometry.userData.quadMesh).toBeDefined();
-    const updatedQuad = outMesh.geometry.userData.quadMesh as QuadMesh;
+    const updatedQuad = outMesh.geometry.userData.quadMesh as PolyMesh;
     const matching = updatedQuad.positions.some(
       (p) => Math.abs(p[0] - (origPos.x + 5)) < 1e-4 && Math.abs(p[1] - origPos.y) < 1e-4 && Math.abs(p[2] - origPos.z) < 1e-4,
     );

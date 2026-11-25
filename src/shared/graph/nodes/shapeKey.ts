@@ -116,7 +116,7 @@ export const CURVE_SHAPE_KEY_NODE: NodeDefinition = {
 export const MESH_SHAPE_KEY_NODE: NodeDefinition = {
   type: "object/shape_key",
   label: "Mesh Shape Key",
-  category: "object",
+  category: "deform",
   inputs: [
     { id: "basis", label: "Basis", type: "geometry", owns: true },
     { id: `${TARGET_PREFIX}0`, label: "Target 1", type: "geometry" },

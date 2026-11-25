@@ -1,4 +1,4 @@
-import type { QuadMesh } from "../quadMesh";
+import type { PolyMesh } from "../quadMesh";
 import { buildTopology } from "./topology";
 
 export interface MeshReport {
@@ -12,11 +12,11 @@ export interface MeshReport {
 }
 
 /**
- * Checks a QuadMesh's invariants. Used by the operation tests (every op must
+ * Checks a PolyMesh's invariants. Used by the operation tests (every op must
  * keep `errors` empty, and must not add non-manifold or flipped edges to a
  * mesh that had none) and handy when an imported mesh misbehaves.
  */
-export function validateQuadMesh(mesh: QuadMesh): MeshReport {
+export function validateQuadMesh(mesh: PolyMesh): MeshReport {
   const errors: string[] = [];
   const n = mesh.positions.length;
 

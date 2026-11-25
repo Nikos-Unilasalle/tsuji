@@ -89,7 +89,7 @@ function liftPoints(value: unknown, at: (p: THREE.Vector3) => THREE.Vector3, cur
 export const HEIGHT_FROM_LINES_NODE: NodeDefinition = {
   type: "geometry/height-from-lines",
   label: "Height from Lines",
-  category: "transform",
+  category: "deform",
   inputs: [
     { id: "geometry", label: "Geometry", type: "geometry", owns: true },
     { id: "points", label: "Points / Point Lists / Curves", type: "list" },

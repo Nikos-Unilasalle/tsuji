@@ -548,7 +548,7 @@ export const FLUID_SOLVER_3D_NODE: NodeDefinition = {
 export const VOLUME_MATERIAL_3D_NODE: NodeDefinition = {
   type: "material/volume-3d",
   label: "Volume Material 3D (Fire Raymarcher)",
-  category: "physics",
+  category: "material",
   inputs: [
     { id: "dyeField", label: "Dye Field (3D Texture)", type: "texture" },
     { id: "velocityField", label: "Velocity Field (3D Texture)", type: "texture" },

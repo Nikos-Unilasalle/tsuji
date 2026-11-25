@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { NodeDefinition } from "../types";
 import { clearMeshWarning, findFirstMesh, warnMeshRequired } from "../meshRequired";
 import { createNodeCache, disposeObject3D } from "../nodeCaches";
-import { QuadMesh, cloneQuadMesh } from "../quadMesh";
+import { PolyMesh, cloneQuadMesh } from "../quadMesh";
 import { emitModifiedMesh, primitiveOutputs } from "./object";
 
 export interface ExtractedPoints {
@@ -114,8 +114,8 @@ interface PointsMeshState {
   groupCount?: number;
   /** Scratch accumulator for the per-frame normal recompute, sized groupCount * 3. */
   groupNormals?: Float64Array;
-  /** If the source geometry carries a QuadMesh (e.g. from Box, Plane, etc.), keep its topology and sync positions. */
-  quadMesh?: QuadMesh;
+  /** If the source geometry carries a PolyMesh (e.g. from Box, Plane, etc.), keep its topology and sync positions. */
+  quadMesh?: PolyMesh;
   quadVertexToBufferIndex?: Int32Array;
 }
 
@@ -232,11 +232,11 @@ function recomputeGroupedNormals(geometry: THREE.BufferGeometry, groups: Int32Ar
   nor.needsUpdate = true;
 }
 
-/** Farthest a buffer vertex may sit from a QuadMesh vertex and still be its copy. */
+/** Farthest a buffer vertex may sit from a PolyMesh vertex and still be its copy. */
 const QUAD_MATCH_DIST = 1e-2;
 
 /**
- * For each QuadMesh vertex, the buffer vertex sitting on it (-1: none within
+ * For each PolyMesh vertex, the buffer vertex sitting on it (-1: none within
  * QUAD_MATCH_DIST) — the first one in buffer order when several coincide,
  * else the nearest.
  *
@@ -245,7 +245,7 @@ const QUAD_MATCH_DIST = 1e-2;
  * and froze the app for seconds on a subdivided mesh (25k quad vertices
  * against 150k buffer vertices) every time the source geometry changed.
  */
-export function mapQuadVerticesToBuffer(quad: QuadMesh, pos: THREE.BufferAttribute | THREE.InterleavedBufferAttribute): Int32Array {
+export function mapQuadVerticesToBuffer(quad: PolyMesh, pos: THREE.BufferAttribute | THREE.InterleavedBufferAttribute): Int32Array {
   const cell = (x: number) => Math.floor(x / QUAD_MATCH_DIST);
   const buckets = new Map<string, number[]>();
   for (let b = 0; b < pos.count; b++) {
@@ -346,7 +346,7 @@ export function writePointsToMesh(nodeId: string, inputObj: THREE.Object3D, poin
     state.groupNormals = smoothing ? new Float64Array(smoothing.count * 3) : undefined;
 
     if (srcGeom.userData?.quadMesh) {
-      const srcQuad = srcGeom.userData.quadMesh as QuadMesh;
+      const srcQuad = srcGeom.userData.quadMesh as PolyMesh;
       state.quadMesh = cloneQuadMesh(srcQuad);
       state.quadVertexToBufferIndex = mapQuadVerticesToBuffer(srcQuad, srcGeom.attributes.position);
     } else {
@@ -402,7 +402,7 @@ export function writePointsToMesh(nodeId: string, inputObj: THREE.Object3D, poin
 export const MESH_TO_POINTS_NODE: NodeDefinition = {
   type: "converter/mesh-to-points",
   label: "Mesh to Points",
-  category: "converter",
+  category: "instance",
   inputs: [
     { id: "geometry", label: "Geometry", type: "geometry" },
     // An outer transform composed on top of the mesh's own world matrix —
@@ -446,7 +446,7 @@ export const MESH_TO_POINTS_NODE: NodeDefinition = {
 export const POINTS_TO_MESH_NODE: NodeDefinition = {
   type: "converter/points-to-mesh",
   label: "Points to Mesh",
-  category: "converter",
+  category: "instance",
   inputs: [
     { id: "geometry", label: "Geometry", type: "geometry" },
     { id: "points", label: "Points (Local)", type: "list" },

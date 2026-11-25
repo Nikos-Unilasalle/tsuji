@@ -30,7 +30,7 @@ function asNumber(v: unknown, fallback: number): number {
 export const INSTANCE_POSITIONS_NODE: NodeDefinition = {
   type: "structure/instance-positions",
   label: "Instance Positions",
-  category: "converter",
+  category: "instance",
   pure: true,
   inputs: [
     { id: "geometry", label: "Geometry", type: "geometry", owns: true },

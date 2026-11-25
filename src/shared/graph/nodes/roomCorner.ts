@@ -93,7 +93,7 @@ export function readRoomCornerDimensions(
 export const ROOM_CORNER_NODE: NodeDefinition = {
   type: "calibration/room_corner",
   label: "Room Corner",
-  category: "calibration",
+  category: "camera",
   inputs: [
     { id: "width", label: "Width (m)", type: "value" },
     { id: "height", label: "Height (m)", type: "value" },

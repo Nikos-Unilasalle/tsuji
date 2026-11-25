@@ -94,7 +94,7 @@ const outlineCache = createNodeCache<OutlineState>();
 export const STROKE_OUTLINE_NODE: NodeDefinition = {
   type: "curve/stroke-outline",
   label: "Stroke Outline",
-  category: "curve",
+  category: "strokes",
   inputs: [
     { id: "curves", label: "Curves", type: "curve" },
     { id: "list", label: "Curves (List)", type: "list" },
@@ -173,7 +173,7 @@ function itemAt(list: unknown, i: number, fallback: number): number {
 export const STROKE_STYLE_NODE: NodeDefinition = {
   type: "curve/stroke-style",
   label: "Stroke Style",
-  category: "curve",
+  category: "strokes",
   inputs: [
     { id: "curves", label: "Curves", type: "curve" },
     { id: "list", label: "Curves (List)", type: "list" },

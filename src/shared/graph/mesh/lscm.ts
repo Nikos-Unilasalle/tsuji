@@ -1,4 +1,4 @@
-import type { QuadMesh } from "../quadMesh";
+import type { PolyMesh } from "../quadMesh";
 import { triangulateFace } from "./triangulate";
 import { packIslands } from "./pack";
 import { angleIslands } from "./unwrap";
@@ -25,7 +25,7 @@ const len = (a: readonly number[]) => Math.sqrt(dot(a, a));
 const edgeKey = (a: number, b: number) => (a < b ? `${a}_${b}` : `${b}_${a}`);
 
 export interface UnwrapResult {
-  mesh: QuadMesh;
+  mesh: PolyMesh;
   islands: number;
 }
 
@@ -33,7 +33,7 @@ export interface UnwrapResult {
  * Unwraps `faces` (every face when empty) and packs the result into 0..1.
  * Faces outside the set keep their UVs.
  */
-export function unwrapFaces(mesh: QuadMesh, faces: number[] | null, margin = 0.02): UnwrapResult {
+export function unwrapFaces(mesh: PolyMesh, faces: number[] | null, margin = 0.02): UnwrapResult {
   const target = (faces && faces.length > 0 ? [...new Set(faces)] : mesh.faces.map((_, f) => f)).filter((f) => (mesh.faces[f]?.length ?? 0) >= 3);
   const faceUVs: UV[][] = mesh.faces.map((face, f) =>
     (mesh.faceUVs?.[f]?.length === face.length ? mesh.faceUVs[f] : face.map(() => [0, 0])).map((uv) => [uv[0], uv[1]] as UV),
@@ -114,7 +114,7 @@ export function unwrapFaces(mesh: QuadMesh, faces: number[] | null, margin = 0.0
 }
 
 /** One island's corner UVs, at 3D scale (one UV unit per scene unit), unpacked. */
-function unwrapIsland(mesh: QuadMesh, group: number[], joined: (key: string) => boolean): Map<number, UV[]> {
+function unwrapIsland(mesh: PolyMesh, group: number[], joined: (key: string) => boolean): Map<number, UV[]> {
   const P = mesh.positions;
 
   // UV vertices: face corners around a vertex, united across joined edges.

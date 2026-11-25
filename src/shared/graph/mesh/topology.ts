@@ -1,9 +1,9 @@
-import type { QuadMesh } from "../quadMesh";
+import type { PolyMesh } from "../quadMesh";
 
 /**
- * Half-edge connectivity for a QuadMesh.
+ * Half-edge connectivity for a PolyMesh.
  *
- * QuadMesh stays the stored format (plain JSON in the .tsuji, per-corner UVs
+ * PolyMesh stays the stored format (plain JSON in the .tsuji, per-corner UVs
  * already in faceUVs); this is the index built on top of it whenever an
  * operation or a selection tool needs to walk the surface — across an edge to
  * the neighbouring face, around a vertex, along a loop — instead of every
@@ -55,7 +55,7 @@ export interface MeshTopology {
 const pairKey = (a: number, b: number) => (a < b ? a * 0x100000000 + b : b * 0x100000000 + a);
 const dirKey = (a: number, b: number) => a * 0x100000000 + b;
 
-export function buildTopology(mesh: QuadMesh): MeshTopology {
+export function buildTopology(mesh: PolyMesh): MeshTopology {
   const vertexCount = mesh.positions.length;
   const faceCount = mesh.faces.length;
 
@@ -176,7 +176,7 @@ export function buildTopology(mesh: QuadMesh): MeshTopology {
   };
 }
 
-const topologyCache = new WeakMap<QuadMesh, MeshTopology>();
+const topologyCache = new WeakMap<PolyMesh, MeshTopology>();
 
 /**
  * The topology of `mesh`, cached on the object. Only valid while the mesh is
@@ -184,7 +184,7 @@ const topologyCache = new WeakMap<QuadMesh, MeshTopology>();
  * they never mutate it); an operation building a new mesh calls buildTopology
  * on it directly instead.
  */
-export function getTopology(mesh: QuadMesh): MeshTopology {
+export function getTopology(mesh: PolyMesh): MeshTopology {
   let topology = topologyCache.get(mesh);
   if (!topology) {
     topology = buildTopology(mesh);

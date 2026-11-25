@@ -1,0 +1,698 @@
+{
+  "canvases": [
+    {
+      "nodes": [
+        {
+          "id": "setup_env",
+          "type": "lighting/environment",
+          "position": {
+            "x": -900,
+            "y": -400
+          },
+          "params": {
+            "color": 1844296,
+            "intensity": 0.6,
+            "background": 1,
+            "blurriness": 0,
+            "filePath": "",
+            "backgroundImagePath": "",
+            "backgroundFit": "cover",
+            "backgroundScale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "backgroundOffset": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "backgroundRotation": 0,
+            "ambientIntensity": 0.15,
+            "sunIntensity": 0
+          }
+        },
+        {
+          "id": "setup_render",
+          "type": "render",
+          "position": {
+            "x": -600,
+            "y": -400
+          },
+          "params": {
+            "frameCount": 240,
+            "fps": 30,
+            "motionBlur": 0,
+            "resolutionPreset": "16:9 (1920x1080)",
+            "width": 1920,
+            "height": 1080,
+            "holdout": false
+          }
+        },
+        {
+          "id": "setup_sun",
+          "type": "light/directional",
+          "position": {
+            "x": -300,
+            "y": -400
+          },
+          "params": {
+            "location": {
+              "x": -6,
+              "y": 12,
+              "z": 4
+            },
+            "target": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "intensity": 0.6,
+            "castShadow": 1,
+            "shadowSoftness": 1
+          }
+        },
+        {
+          "id": "setup_bloom",
+          "type": "postprocess/bloom",
+          "position": {
+            "x": -900,
+            "y": -200
+          },
+          "params": {
+            "strength": 0.9,
+            "radius": 0.5,
+            "threshold": 0.6
+          }
+        },
+        {
+          "id": "moon",
+          "type": "light/point",
+          "position": {
+            "x": -300,
+            "y": -200
+          },
+          "params": {
+            "location": {
+              "x": 0,
+              "y": 6,
+              "z": 0
+            },
+            "color": 7310591,
+            "intensity": 20,
+            "distance": 30,
+            "decay": 1.5,
+            "castShadow": 0
+          }
+        },
+        {
+          "id": "ground",
+          "type": "object/plane",
+          "position": {
+            "x": 0,
+            "y": -200
+          },
+          "params": {
+            "location": {
+              "x": 0,
+              "y": -0.01,
+              "z": 0
+            },
+            "scale": {
+              "x": 16,
+              "y": 16,
+              "z": 1
+            },
+            "color": 1382172,
+            "roughness": 0.9,
+            "metalness": 0
+          }
+        },
+        {
+          "id": "lots",
+          "type": "object/plane",
+          "position": {
+            "x": 0,
+            "y": 0
+          },
+          "params": {
+            "scale": {
+              "x": 12,
+              "y": 12,
+              "z": 1
+            },
+            "color": 7041408,
+            "roughness": 0.8,
+            "metalness": 0
+          }
+        },
+        {
+          "id": "grid",
+          "type": "modeling/divide",
+          "position": {
+            "x": 300,
+            "y": 0
+          },
+          "params": {
+            "cuts": 7,
+            "mode": "quads"
+          }
+        },
+        {
+          "id": "blocks",
+          "type": "modeling/scale-elements",
+          "position": {
+            "x": 600,
+            "y": 0
+          },
+          "params": {
+            "scale": 0.72,
+            "mode": "face",
+            "disconnect": true
+          }
+        },
+        {
+          "id": "city",
+          "type": "structure/group",
+          "position": {
+            "x": 900,
+            "y": 0
+          },
+          "params": {
+            "name": "City (For Each Piece)",
+            "loop": "for-each-piece",
+            "iterations": 3,
+            "pieceAttribute": "piece",
+            "animated": false
+          },
+          "subgraph": {
+            "nodes": [
+              {
+                "id": "gin",
+                "type": "structure/group-input",
+                "position": {
+                  "x": 0,
+                  "y": 0
+                },
+                "params": {
+                  "ports": [
+                    {
+                      "id": "geometry",
+                      "label": "Geometry",
+                      "type": "geometry"
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "info",
+                "type": "structure/loop-info",
+                "position": {
+                  "x": 0,
+                  "y": 250
+                },
+                "params": {}
+              },
+              {
+                "id": "height",
+                "type": "math/expression",
+                "position": {
+                  "x": 300,
+                  "y": 250
+                },
+                "params": {
+                  "formula": "0.12 + (0.15 + 0.75*exp(-((mod(x,7)-3)^2 + (floor(x/7)-3)^2)/7)) * (0.45 + 0.55*frac(sin(x*12.9898)*43758.5))"
+                }
+              },
+              {
+                "id": "taper",
+                "type": "math/expression",
+                "position": {
+                  "x": 300,
+                  "y": 400
+                },
+                "params": {
+                  "formula": "0.9 + 0.09*frac(sin(x*78.233)*12345.6)"
+                }
+              },
+              {
+                "id": "ext",
+                "type": "modifier/extrude",
+                "position": {
+                  "x": 600,
+                  "y": 0
+                },
+                "params": {
+                  "group": "*",
+                  "distance": 0.5,
+                  "passes": 6,
+                  "scale": 0.9,
+                  "selectMode": "all"
+                }
+              },
+              {
+                "id": "gout",
+                "type": "structure/group-output",
+                "position": {
+                  "x": 900,
+                  "y": 0
+                },
+                "params": {
+                  "ports": [
+                    {
+                      "id": "geometry",
+                      "label": "Geometry",
+                      "type": "geometry"
+                    }
+                  ]
+                }
+              }
+            ],
+            "connections": [
+              {
+                "id": "info.value->height.x",
+                "fromNode": "info",
+                "fromSocket": "value",
+                "toNode": "height",
+                "toSocket": "x"
+              },
+              {
+                "id": "info.value->taper.x",
+                "fromNode": "info",
+                "fromSocket": "value",
+                "toNode": "taper",
+                "toSocket": "x"
+              },
+              {
+                "id": "height.value->ext.distance",
+                "fromNode": "height",
+                "fromSocket": "value",
+                "toNode": "ext",
+                "toSocket": "distance"
+              },
+              {
+                "id": "taper.value->ext.scale",
+                "fromNode": "taper",
+                "fromSocket": "value",
+                "toNode": "ext",
+                "toSocket": "scale"
+              },
+              {
+                "id": "gin.geometry->ext.geometry",
+                "fromNode": "gin",
+                "fromSocket": "geometry",
+                "toNode": "ext",
+                "toSocket": "geometry"
+              },
+              {
+                "id": "ext.geometry->gout.geometry",
+                "fromNode": "ext",
+                "fromSocket": "geometry",
+                "toNode": "gout",
+                "toSocket": "geometry"
+              }
+            ]
+          }
+        },
+        {
+          "id": "floors",
+          "type": "modeling/divide",
+          "position": {
+            "x": 1200,
+            "y": 0
+          },
+          "params": {
+            "group": "extrude_side",
+            "cuts": 2,
+            "mode": "quads"
+          }
+        },
+        {
+          "id": "windows",
+          "type": "modeling/inset",
+          "position": {
+            "x": 1500,
+            "y": 0
+          },
+          "params": {
+            "group": "extrude_side",
+            "mode": "individual",
+            "thickness": 0.035,
+            "depth": -0.015
+          }
+        },
+        {
+          "id": "lit",
+          "type": "select/basic",
+          "position": {
+            "x": 1800,
+            "y": 0
+          },
+          "params": {
+            "mode": "random",
+            "domain": "face",
+            "name": "lit",
+            "expression": "",
+            "fraction": 0.55,
+            "seed": 7
+          }
+        },
+        {
+          "id": "litg",
+          "type": "group/combine",
+          "position": {
+            "x": 2100,
+            "y": 0
+          },
+          "params": {
+            "name": "lit",
+            "domain": "face",
+            "expression": "lit & inset_inner"
+          }
+        },
+        {
+          "id": "m_glass",
+          "type": "material/standard",
+          "position": {
+            "x": 2400,
+            "y": 250
+          },
+          "params": {
+            "color": 791584,
+            "roughness": 0.15,
+            "metalness": 0.6
+          }
+        },
+        {
+          "id": "m_lit",
+          "type": "material/standard",
+          "position": {
+            "x": 2700,
+            "y": 250
+          },
+          "params": {
+            "color": 16765834,
+            "emissive": 16757575,
+            "emissiveIntensity": 2.2,
+            "roughness": 0.4
+          }
+        },
+        {
+          "id": "cool",
+          "type": "select/basic",
+          "position": {
+            "x": 1800,
+            "y": -250
+          },
+          "params": {
+            "mode": "random",
+            "domain": "face",
+            "name": "cool",
+            "expression": "",
+            "fraction": 0.3,
+            "seed": 21
+          }
+        },
+        {
+          "id": "coolg",
+          "type": "group/combine",
+          "position": {
+            "x": 2100,
+            "y": -250
+          },
+          "params": {
+            "name": "cool",
+            "domain": "face",
+            "expression": "cool & lit"
+          }
+        },
+        {
+          "id": "m_cool",
+          "type": "material/standard",
+          "position": {
+            "x": 2850,
+            "y": 500
+          },
+          "params": {
+            "color": 12576511,
+            "emissive": 8374527,
+            "emissiveIntensity": 1.8,
+            "roughness": 0.4
+          }
+        },
+        {
+          "id": "cools",
+          "type": "modeling/material-by-group",
+          "position": {
+            "x": 2850,
+            "y": -250
+          },
+          "params": {
+            "group": "cool"
+          }
+        },
+        {
+          "id": "m_roof",
+          "type": "material/standard",
+          "position": {
+            "x": 3000,
+            "y": 250
+          },
+          "params": {
+            "color": 3817290,
+            "roughness": 0.9,
+            "metalness": 0
+          }
+        },
+        {
+          "id": "glass",
+          "type": "modeling/material-by-group",
+          "position": {
+            "x": 2400,
+            "y": 0
+          },
+          "params": {
+            "group": "inset_inner"
+          }
+        },
+        {
+          "id": "lights",
+          "type": "modeling/material-by-group",
+          "position": {
+            "x": 2700,
+            "y": 0
+          },
+          "params": {
+            "group": "lit"
+          }
+        },
+        {
+          "id": "roofs",
+          "type": "modeling/material-by-group",
+          "position": {
+            "x": 3000,
+            "y": 0
+          },
+          "params": {
+            "group": "extrude_top"
+          }
+        },
+        {
+          "id": "sheet",
+          "type": "attribute/spreadsheet",
+          "position": {
+            "x": 3300,
+            "y": 0
+          },
+          "params": {
+            "domain": "face",
+            "rows": 10,
+            "columns": "piece area extrude_top extrude_side inset_inner lit"
+          }
+        },
+        {
+          "id": "cam_path",
+          "type": "math/expression",
+          "position": {
+            "x": -600,
+            "y": -200
+          },
+          "params": {
+            "formula": "(15*cos(0.12*t+0.8), 8, 15*sin(0.12*t+0.8))"
+          }
+        },
+        {
+          "id": "camera",
+          "type": "calibration/camera",
+          "position": {
+            "x": -300,
+            "y": -200
+          },
+          "params": {
+            "useTarget": true,
+            "target": {
+              "x": 0,
+              "y": 1.2,
+              "z": 0
+            },
+            "fov": 40,
+            "active": true
+          }
+        }
+      ],
+      "connections": [
+        {
+          "id": "setup_env.environment->setup_render.environment",
+          "fromNode": "setup_env",
+          "fromSocket": "environment",
+          "toNode": "setup_render",
+          "toSocket": "environment"
+        },
+        {
+          "id": "setup_bloom.effect->setup_render.postprocess",
+          "fromNode": "setup_bloom",
+          "fromSocket": "effect",
+          "toNode": "setup_render",
+          "toSocket": "postprocess"
+        },
+        {
+          "id": "lots.geometry->grid.geometry",
+          "fromNode": "lots",
+          "fromSocket": "geometry",
+          "toNode": "grid",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "grid.geometry->blocks.geometry",
+          "fromNode": "grid",
+          "fromSocket": "geometry",
+          "toNode": "blocks",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "blocks.geometry->city.geometry",
+          "fromNode": "blocks",
+          "fromSocket": "geometry",
+          "toNode": "city",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "city.geometry->floors.geometry",
+          "fromNode": "city",
+          "fromSocket": "geometry",
+          "toNode": "floors",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "floors.geometry->windows.geometry",
+          "fromNode": "floors",
+          "fromSocket": "geometry",
+          "toNode": "windows",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "windows.geometry->lit.geometry",
+          "fromNode": "windows",
+          "fromSocket": "geometry",
+          "toNode": "lit",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "lit.geometry->litg.geometry",
+          "fromNode": "lit",
+          "fromSocket": "geometry",
+          "toNode": "litg",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "litg.geometry->cool.geometry",
+          "fromNode": "litg",
+          "fromSocket": "geometry",
+          "toNode": "cool",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "cool.geometry->coolg.geometry",
+          "fromNode": "cool",
+          "fromSocket": "geometry",
+          "toNode": "coolg",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "coolg.geometry->glass.geometry",
+          "fromNode": "coolg",
+          "fromSocket": "geometry",
+          "toNode": "glass",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "glass.geometry->lights.geometry",
+          "fromNode": "glass",
+          "fromSocket": "geometry",
+          "toNode": "lights",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "lights.geometry->cools.geometry",
+          "fromNode": "lights",
+          "fromSocket": "geometry",
+          "toNode": "cools",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "cools.geometry->roofs.geometry",
+          "fromNode": "cools",
+          "fromSocket": "geometry",
+          "toNode": "roofs",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "roofs.geometry->sheet.geometry",
+          "fromNode": "roofs",
+          "fromSocket": "geometry",
+          "toNode": "sheet",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "m_glass.material->glass.material",
+          "fromNode": "m_glass",
+          "fromSocket": "material",
+          "toNode": "glass",
+          "toSocket": "material"
+        },
+        {
+          "id": "m_lit.material->lights.material",
+          "fromNode": "m_lit",
+          "fromSocket": "material",
+          "toNode": "lights",
+          "toSocket": "material"
+        },
+        {
+          "id": "m_cool.material->cools.material",
+          "fromNode": "m_cool",
+          "fromSocket": "material",
+          "toNode": "cools",
+          "toSocket": "material"
+        },
+        {
+          "id": "m_roof.material->roofs.material",
+          "fromNode": "m_roof",
+          "fromSocket": "material",
+          "toNode": "roofs",
+          "toSocket": "material"
+        },
+        {
+          "id": "cam_path.vector->camera.location",
+          "fromNode": "cam_path",
+          "fromSocket": "vector",
+          "toNode": "camera",
+          "toSocket": "location"
+        }
+      ],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    }
+  ],
+  "activeCanvas": 0
+}

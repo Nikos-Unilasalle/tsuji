@@ -90,7 +90,7 @@ function getOrCreateFbxState(nodeId: string): FbxState {
 export const OBJECT_FBX_NODE: NodeDefinition = {
   type: "object/fbx",
   label: "FBX Model",
-  category: "object",
+  category: "import",
   inputs: [
     { id: "visible", label: "Visible", type: "value" },
     { id: "diffuse", label: "Texture Map", type: "texture" },

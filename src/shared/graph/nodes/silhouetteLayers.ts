@@ -182,7 +182,7 @@ function silhouetteStack(
 export const RIDGE_LAYERS_NODE: NodeDefinition = {
   type: "curve/ridge-layers",
   label: "Silhouette Layers",
-  category: "curve",
+  category: "strokes",
   inputs: [
     { id: "anchors", label: "Anchors (Vector List)", type: "list" },
     { id: "scales", label: "Scales (List)", type: "list" },

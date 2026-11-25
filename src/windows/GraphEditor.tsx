@@ -846,7 +846,7 @@ function GraphEditorContent({
             nodeId: id,
             nodeType: "utility/reroute",
             label: "Reroute",
-            category: "converter",
+            category: "structure",
             inputs: [{ id: "in", label: "", type: "any" }],
             outputs: [{ id: "out", label: "", type: "any" }],
           },
@@ -1823,6 +1823,20 @@ function GraphEditorContent({
   // React Flow hands these to every node and edge; stable identities keep a
   // drag, a selection or a graph edit from re-rendering the whole canvas.
   const stableAddNode = useStableHandler(addNode);
+  // A node dragged out of the palette: added where it is let go, if that is over the canvas.
+  const dropNode = useCallback(
+    (type: string, clientX: number, clientY: number) => {
+      const rect = canvasPaneRef.current?.getBoundingClientRect();
+      if (!rect || clientX < rect.left || clientX > rect.right || clientY < rect.top || clientY > rect.bottom) return false;
+      const flowPos = screenToFlowPosition({ x: clientX, y: clientY });
+      spawnCursorPosRef.current = flowPos;
+      setSpawnCursorPos(flowPos);
+      addNode(type);
+      return true;
+    },
+    [addNode, screenToFlowPosition],
+  );
+  const stableDropNode = useStableHandler(dropNode);
   const stableOnNodesChange = useStableHandler(onNodesChange);
   const stableOnEdgesChange = useStableHandler(onEdgesChange);
   const stableOnNodesDelete = useStableHandler(onNodesDelete);
@@ -1863,7 +1877,7 @@ function GraphEditorContent({
         if (getInputZone() === "graph") setInputZone(null);
       }}
     >
-      <NodePalette nodes={paletteNodes} onAddNode={stableAddNode} />
+      <NodePalette nodes={paletteNodes} onAddNode={stableAddNode} onDropNode={stableDropNode} />
       <div
         className="graph-editor-canvas"
         ref={canvasPaneRef}

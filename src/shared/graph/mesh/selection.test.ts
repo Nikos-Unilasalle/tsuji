@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { createQuadBox, createQuadPlane, QuadMesh } from "../quadMesh";
+import { createQuadBox, createQuadPlane, PolyMesh } from "../quadMesh";
 import {
   convertSelection,
   emptySelection,
@@ -83,7 +83,7 @@ describe("grow / shrink", () => {
 describe("linked / flat", () => {
   it("selects only the island the selection is on", () => {
     const a = createQuadBox();
-    const two: QuadMesh = {
+    const two: PolyMesh = {
       positions: [...a.positions, ...a.positions.map(([x, y, z]) => [x + 3, y, z] as [number, number, number])],
       faces: [...a.faces, ...a.faces.map((f) => f.map((v) => v + 8))],
     };

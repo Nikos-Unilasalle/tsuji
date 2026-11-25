@@ -263,7 +263,7 @@ export const TRANSFORM_NODE: NodeDefinition = {
   type: "transform",
   // Blender's name for the same node (Geometry Nodes, 4.2).
   label: "Combine Transform",
-  category: "compose",
+  category: "transform",
   pure: true,
   outputs: [{ id: "matrix", label: "Matrix", type: "matrix" }],
   defaultParams: {
@@ -315,7 +315,7 @@ const DECOMPOSE_OUTPUTS = [
 export const DECOMPOSE_MATRIX_NODE: NodeDefinition = {
   type: "matrix/decompose",
   label: "Separate Transform",
-  category: "compose",
+  category: "transform",
   pure: true,
   inputs: [{ id: "matrix", label: "Matrix", type: "matrix" }],
   outputs: DECOMPOSE_OUTPUTS,

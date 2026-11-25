@@ -39,7 +39,7 @@ function getTrailState(nodeId: string): TrailState {
 export const TRAIL_NODE: NodeDefinition = {
   type: "structure/trail",
   label: "Trail",
-  category: "structure",
+  category: "fx",
   inputs: [
     // NOT owns: the trail only *reads* the object's position, like a Look At
     // target — declaring ownership would yank the source object out of the

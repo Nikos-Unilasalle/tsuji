@@ -1,0 +1,546 @@
+{
+  "canvases": [
+    {
+      "nodes": [
+        {
+          "id": "setup_env",
+          "type": "lighting/environment",
+          "position": {
+            "x": -900,
+            "y": -400
+          },
+          "params": {
+            "color": 15911334,
+            "intensity": 0.8,
+            "background": 1,
+            "blurriness": 0,
+            "filePath": "",
+            "backgroundImagePath": "",
+            "backgroundFit": "cover",
+            "backgroundScale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "backgroundOffset": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "backgroundRotation": 0,
+            "ambientIntensity": 0.35,
+            "sunIntensity": 0
+          }
+        },
+        {
+          "id": "setup_render",
+          "type": "render",
+          "position": {
+            "x": -600,
+            "y": -400
+          },
+          "params": {
+            "frameCount": 360,
+            "fps": 30,
+            "motionBlur": 0,
+            "resolutionPreset": "16:9 (1920x1080)",
+            "width": 1920,
+            "height": 1080,
+            "holdout": false
+          }
+        },
+        {
+          "id": "setup_sun",
+          "type": "light/directional",
+          "position": {
+            "x": -300,
+            "y": -400
+          },
+          "params": {
+            "location": {
+              "x": 10,
+              "y": 6,
+              "z": 4
+            },
+            "target": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "intensity": 2.6,
+            "castShadow": 1,
+            "shadowSoftness": 1
+          }
+        },
+        {
+          "id": "setup_bloom",
+          "type": "postprocess/bloom",
+          "position": {
+            "x": -900,
+            "y": -200
+          },
+          "params": {
+            "strength": 0.5,
+            "radius": 0.4,
+            "threshold": 0.85
+          }
+        },
+        {
+          "id": "ground",
+          "type": "object/plane",
+          "position": {
+            "x": 0,
+            "y": -250
+          },
+          "params": {
+            "scale": {
+              "x": 30,
+              "y": 30,
+              "z": 1
+            },
+            "color": 10134445,
+            "roughness": 0.95,
+            "metalness": 0
+          }
+        },
+        {
+          "id": "base",
+          "type": "object/polygon",
+          "position": {
+            "x": 0,
+            "y": 0
+          },
+          "params": {
+            "sides": 4,
+            "radius": 1.9,
+            "color": 16052198,
+            "roughness": 0.45,
+            "metalness": 0.05
+          }
+        },
+        {
+          "id": "seed",
+          "type": "select/basic",
+          "position": {
+            "x": 300,
+            "y": 0
+          },
+          "params": {
+            "mode": "all",
+            "domain": "face",
+            "name": "extrude_top"
+          }
+        },
+        {
+          "id": "tower",
+          "type": "structure/group",
+          "position": {
+            "x": 600,
+            "y": 0
+          },
+          "params": {
+            "name": "Tower (Repeat)",
+            "loop": "repeat",
+            "iterations": 96,
+            "pieceAttribute": "piece",
+            "animated": false
+          },
+          "subgraph": {
+            "nodes": [
+              {
+                "id": "gin",
+                "type": "structure/group-input",
+                "position": {
+                  "x": 0,
+                  "y": 0
+                },
+                "params": {
+                  "ports": [
+                    {
+                      "id": "geometry",
+                      "label": "Geometry",
+                      "type": "geometry"
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "info",
+                "type": "structure/loop-info",
+                "position": {
+                  "x": 0,
+                  "y": 250
+                },
+                "params": {}
+              },
+              {
+                "id": "dist",
+                "type": "math/expression",
+                "position": {
+                  "x": 300,
+                  "y": 200
+                },
+                "params": {
+                  "formula": "mod(x,4) == 0 ? 0.05 : mod(x,4) == 1 ? 0.07 : mod(x,4) == 2 ? 0.0 : 0.42"
+                }
+              },
+              {
+                "id": "scl",
+                "type": "math/expression",
+                "position": {
+                  "x": 300,
+                  "y": 350
+                },
+                "params": {
+                  "formula": "mod(x,4) == 0 ? 1.12 : mod(x,4) == 2 ? 0.99/1.12 : 1"
+                }
+              },
+              {
+                "id": "rot",
+                "type": "math/expression",
+                "position": {
+                  "x": 300,
+                  "y": 500
+                },
+                "params": {
+                  "formula": "(0, 0, mod(x,4) == 3 ? 0.075 : 0)"
+                }
+              },
+              {
+                "id": "ext",
+                "type": "modifier/extrude",
+                "position": {
+                  "x": 600,
+                  "y": 0
+                },
+                "params": {
+                  "group": "extrude_top",
+                  "distance": 0.3,
+                  "passes": 1,
+                  "scale": 1,
+                  "selectMode": "all"
+                }
+              },
+              {
+                "id": "gout",
+                "type": "structure/group-output",
+                "position": {
+                  "x": 900,
+                  "y": 0
+                },
+                "params": {
+                  "ports": [
+                    {
+                      "id": "geometry",
+                      "label": "Geometry",
+                      "type": "geometry"
+                    }
+                  ]
+                }
+              }
+            ],
+            "connections": [
+              {
+                "id": "info.iteration->dist.x",
+                "fromNode": "info",
+                "fromSocket": "iteration",
+                "toNode": "dist",
+                "toSocket": "x"
+              },
+              {
+                "id": "info.iteration->scl.x",
+                "fromNode": "info",
+                "fromSocket": "iteration",
+                "toNode": "scl",
+                "toSocket": "x"
+              },
+              {
+                "id": "info.iteration->rot.x",
+                "fromNode": "info",
+                "fromSocket": "iteration",
+                "toNode": "rot",
+                "toSocket": "x"
+              },
+              {
+                "id": "dist.value->ext.distance",
+                "fromNode": "dist",
+                "fromSocket": "value",
+                "toNode": "ext",
+                "toSocket": "distance"
+              },
+              {
+                "id": "scl.value->ext.scale",
+                "fromNode": "scl",
+                "fromSocket": "value",
+                "toNode": "ext",
+                "toSocket": "scale"
+              },
+              {
+                "id": "rot.vector->ext.rotation",
+                "fromNode": "rot",
+                "fromSocket": "vector",
+                "toNode": "ext",
+                "toSocket": "rotation"
+              },
+              {
+                "id": "gin.geometry->ext.geometry",
+                "fromNode": "gin",
+                "fromSocket": "geometry",
+                "toNode": "ext",
+                "toSocket": "geometry"
+              },
+              {
+                "id": "ext.geometry->gout.geometry",
+                "fromNode": "ext",
+                "fromSocket": "geometry",
+                "toNode": "gout",
+                "toSocket": "geometry"
+              }
+            ]
+          }
+        },
+        {
+          "id": "facade",
+          "type": "select/measure",
+          "position": {
+            "x": 900,
+            "y": 0
+          },
+          "params": {
+            "name": "facade",
+            "domain": "face",
+            "measure": "area",
+            "relative": true,
+            "min": 0.3,
+            "max": 1
+          }
+        },
+        {
+          "id": "sides",
+          "type": "select/basic",
+          "position": {
+            "x": 1200,
+            "y": 0
+          },
+          "params": {
+            "mode": "normal",
+            "domain": "face",
+            "name": "sides",
+            "direction": {
+              "x": 0,
+              "y": 1,
+              "z": 0
+            },
+            "angle": 60,
+            "invert": true
+          }
+        },
+        {
+          "id": "glazing",
+          "type": "group/combine",
+          "position": {
+            "x": 1500,
+            "y": 0
+          },
+          "params": {
+            "name": "facade",
+            "domain": "face",
+            "expression": "facade & sides"
+          }
+        },
+        {
+          "id": "mullions",
+          "type": "modeling/divide",
+          "position": {
+            "x": 1800,
+            "y": 0
+          },
+          "params": {
+            "group": "facade",
+            "cuts": 3,
+            "mode": "quads"
+          }
+        },
+        {
+          "id": "windows",
+          "type": "modeling/inset",
+          "position": {
+            "x": 2100,
+            "y": 0
+          },
+          "params": {
+            "group": "facade",
+            "mode": "individual",
+            "thickness": 0.025,
+            "depth": -0.03
+          }
+        },
+        {
+          "id": "m_glass",
+          "type": "material/standard",
+          "position": {
+            "x": 3000,
+            "y": 300
+          },
+          "params": {
+            "color": 2902638,
+            "roughness": 0.08,
+            "metalness": 0.85,
+            "emissive": 660514,
+            "emissiveIntensity": 1
+          }
+        },
+        {
+          "id": "glass",
+          "type": "modeling/material-by-group",
+          "position": {
+            "x": 3000,
+            "y": 0
+          },
+          "params": {
+            "group": "inset_inner"
+          }
+        },
+        {
+          "id": "sheet",
+          "type": "attribute/spreadsheet",
+          "position": {
+            "x": 3300,
+            "y": 0
+          },
+          "params": {
+            "domain": "face",
+            "rows": 8,
+            "columns": "area facade sides extrude_top inset_inner"
+          }
+        },
+        {
+          "id": "cam_path",
+          "type": "math/expression",
+          "position": {
+            "x": -600,
+            "y": -200
+          },
+          "params": {
+            "formula": "(17*cos(0.1*t+0.8), 3, 17*sin(0.1*t+0.8))"
+          }
+        },
+        {
+          "id": "camera",
+          "type": "calibration/camera",
+          "position": {
+            "x": -300,
+            "y": -200
+          },
+          "params": {
+            "useTarget": true,
+            "target": {
+              "x": 0,
+              "y": 7,
+              "z": 0
+            },
+            "fov": 55,
+            "active": true
+          }
+        }
+      ],
+      "connections": [
+        {
+          "id": "setup_env.environment->setup_render.environment",
+          "fromNode": "setup_env",
+          "fromSocket": "environment",
+          "toNode": "setup_render",
+          "toSocket": "environment"
+        },
+        {
+          "id": "setup_bloom.effect->setup_render.postprocess",
+          "fromNode": "setup_bloom",
+          "fromSocket": "effect",
+          "toNode": "setup_render",
+          "toSocket": "postprocess"
+        },
+        {
+          "id": "base.geometry->seed.geometry",
+          "fromNode": "base",
+          "fromSocket": "geometry",
+          "toNode": "seed",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "seed.geometry->tower.geometry",
+          "fromNode": "seed",
+          "fromSocket": "geometry",
+          "toNode": "tower",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "tower.geometry->facade.geometry",
+          "fromNode": "tower",
+          "fromSocket": "geometry",
+          "toNode": "facade",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "facade.geometry->sides.geometry",
+          "fromNode": "facade",
+          "fromSocket": "geometry",
+          "toNode": "sides",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "sides.geometry->glazing.geometry",
+          "fromNode": "sides",
+          "fromSocket": "geometry",
+          "toNode": "glazing",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "glazing.geometry->mullions.geometry",
+          "fromNode": "glazing",
+          "fromSocket": "geometry",
+          "toNode": "mullions",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "mullions.geometry->windows.geometry",
+          "fromNode": "mullions",
+          "fromSocket": "geometry",
+          "toNode": "windows",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "windows.geometry->glass.geometry",
+          "fromNode": "windows",
+          "fromSocket": "geometry",
+          "toNode": "glass",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "glass.geometry->sheet.geometry",
+          "fromNode": "glass",
+          "fromSocket": "geometry",
+          "toNode": "sheet",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "m_glass.material->glass.material",
+          "fromNode": "m_glass",
+          "fromSocket": "material",
+          "toNode": "glass",
+          "toSocket": "material"
+        },
+        {
+          "id": "cam_path.vector->camera.location",
+          "fromNode": "cam_path",
+          "fromSocket": "vector",
+          "toNode": "camera",
+          "toSocket": "location"
+        }
+      ],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    }
+  ],
+  "activeCanvas": 0
+}

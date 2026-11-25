@@ -254,7 +254,7 @@ function resolveHubAnimation(
 export const HUB_TEXT_NODE: NodeDefinition = {
   type: "hub/text",
   label: "HUD Text",
-  category: "hub",
+  category: "io",
   inputs: [
     { id: "trigger", label: "Trigger", type: "value" },
     { id: "text", label: "Text", type: "text" },
@@ -485,7 +485,7 @@ function reloadImageFromDisk(nodeId: string, path: string): void {
 export const HUB_IMAGE_NODE: NodeDefinition = {
   type: "hub/image",
   label: "HUD Image",
-  category: "hub",
+  category: "io",
   inputs: [
     { id: "trigger", label: "Trigger", type: "value" },
     { id: "x", label: "Position X", type: "value" },

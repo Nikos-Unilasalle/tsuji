@@ -1,5 +1,5 @@
 import { resolveDefinition } from "./groups";
-import { Graph, NodeDefinition, NodeRegistry } from "./types";
+import { Graph, NodeDefinition, NodeInstance, NodeRegistry } from "./types";
 
 /**
  * Which nodes' objects the viewport draws.
@@ -32,16 +32,15 @@ import { Graph, NodeDefinition, NodeRegistry } from "./types";
 /** Sockets carrying an Object3D — `any` included, since a Reroute or a Logic Bridge only knows its real type once something is wired into it. */
 const GEOMETRY_BEARING_TYPES = new Set(["geometry", "any"]);
 
-/**
- * Lights are put into the scene by the viewport's own light pass, not by
- * this one: a light has to exist even when it is only wired up as another
- * node's aim target, and it is the one kind of object that is invisible in
- * its own right anyway.
- */
-const SELF_MANAGED_CATEGORIES = new Set(["lighting"]);
+/** Output sockets of this instance: a node whose sockets follow a param (an effect applied to the screen or to an object) declares them per instance. */
+function outputSocketsOf(def: NodeDefinition, graph: Graph, node: NodeInstance | undefined) {
+  if (!def.dynamicOutputs || !node) return def.outputs;
+  const outgoing = graph.connections.filter((c) => c.fromNode === node.id);
+  return def.dynamicOutputs(outgoing, undefined, node.params) ?? def.outputs;
+}
 
-function producesGeometry(def: NodeDefinition): boolean {
-  return def.outputs.some((socket) => GEOMETRY_BEARING_TYPES.has(socket.type));
+function producesGeometry(def: NodeDefinition, graph: Graph, node: NodeInstance): boolean {
+  return outputSocketsOf(def, graph, node).some((socket) => GEOMETRY_BEARING_TYPES.has(socket.type));
 }
 
 /**
@@ -49,10 +48,10 @@ function producesGeometry(def: NodeDefinition): boolean {
  * `in3` only exists once three wires are already attached, and a connection
  * into it has to resolve to a socket like any other.
  */
-function inputSocketsOf(def: NodeDefinition, graph: Graph, nodeId: string) {
+function inputSocketsOf(def: NodeDefinition, graph: Graph, node: NodeInstance) {
   if (!def.dynamicInputs) return def.inputs;
-  const incoming = graph.connections.filter((c) => c.toNode === nodeId);
-  return def.dynamicInputs(incoming) ?? def.inputs;
+  const incoming = graph.connections.filter((c) => c.toNode === node.id);
+  return def.dynamicInputs(incoming, undefined, node.params) ?? def.inputs;
 }
 
 /** Does any connection out of `nodeId` hand its geometry to a socket that claims ownership of it? */
@@ -71,14 +70,14 @@ function isOwnedDownstream(
     if (!consumer) return false;
     const consumerDef = resolveDefinition(consumer, registry);
     if (!consumerDef) return false;
-    const socket = inputSocketsOf(consumerDef, graph, connection.toNode).find((s) => s.id === connection.toSocket);
+    const socket = inputSocketsOf(consumerDef, graph, consumer).find((s) => s.id === connection.toSocket);
     if (!socket) return false;
 
     // Direct ownership claim on the receiving socket
     if (socket.owns) {
       const producer = graph.nodes.find((n) => n.id === connection.fromNode);
       const producerDef = resolveDefinition(producer, registry);
-      const fromSocket = producerDef?.outputs.find((s) => s.id === connection.fromSocket);
+      const fromSocket = producerDef ? outputSocketsOf(producerDef, graph, producer).find((s) => s.id === connection.fromSocket) : undefined;
       if (
         fromSocket &&
         (fromSocket.type === "curve" ||
@@ -94,7 +93,7 @@ function isOwnedDownstream(
 
     // Multi-hop ownership: if the consumer is a pass-through/grouping node without
     // standalone rendering (like List Group or Reroute), propagate downstream.
-    if (consumerDef.category === "list" || consumerDef.type === "utility/reroute") {
+    if (consumerDef.ownershipPassThrough || consumerDef.type === "utility/reroute") {
       return isOwnedDownstream(graph, registry, consumer.id, visited);
     }
 
@@ -114,8 +113,11 @@ export function resolveSceneRoots(graph: Graph, registry: NodeRegistry): string[
   return graph.nodes
     .filter((node) => {
       const def = resolveDefinition(node, registry);
-      if (!def || SELF_MANAGED_CATEGORIES.has(def.category)) return false;
-      if (!producesGeometry(def)) return false;
+      // Lights are put into the scene by the viewport's own light pass: a light
+      // has to exist even when it is only wired up as another node's aim
+      // target, and it is invisible in its own right anyway.
+      if (!def || def.managedByViewport) return false;
+      if (!producesGeometry(def, graph, node)) return false;
       return !isOwnedDownstream(graph, registry, node.id);
     })
     .map((node) => node.id);

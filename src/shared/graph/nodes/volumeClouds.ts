@@ -115,7 +115,7 @@ const cloudCache = createNodeCache<THREE.Mesh>(disposeObject3D);
 export const VOLUME_CLOUDS_NODE: NodeDefinition = {
   type: "object/volume-clouds",
   label: "Volume Clouds",
-  category: "object",
+  category: "fx",
   inputs: [
     { id: "shape", label: "Shape Volume (3D)", type: "texture" },
     { id: "detail", label: "Detail Volume (3D)", type: "texture" },

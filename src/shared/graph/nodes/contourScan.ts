@@ -58,7 +58,7 @@ function getState(nodeId: string): ContourScanState {
 export const CONTOUR_SCAN_NODE: NodeDefinition = {
   type: "modifier/contour-scan",
   label: "Contour Scan",
-  category: "transform",
+  category: "fx",
   inputs: [
     { id: "geometry", label: "Geometry", type: "geometry", owns: true },
     { id: "target", label: "Target (Morph)", type: "geometry", owns: true },

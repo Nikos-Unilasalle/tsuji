@@ -7,7 +7,7 @@ import { NodeDefinition } from "../types";
 export const REROUTE_NODE: NodeDefinition = {
   type: "utility/reroute",
   label: "Reroute",
-  category: "utility",
+  category: "structure",
   pure: true,
   inputs: [{ id: "in", label: "", type: "any", owns: true }],
   outputs: [{ id: "out", label: "", type: "any" }],

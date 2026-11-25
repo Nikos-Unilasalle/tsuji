@@ -217,7 +217,7 @@ function boundsMatrix(object: THREE.Object3D): THREE.Matrix4 | null {
 export const CLIP_BOX_NODE: NodeDefinition = {
   type: "modifier/clip-box",
   label: "Clip Box",
-  category: "transform",
+  category: "modeling",
   inputs: [
     { id: "geometry", label: "Geometry", type: "geometry", owns: true },
     { id: "location", label: "Box Center", type: "vector" },
@@ -327,7 +327,7 @@ export const CLIP_BOX_NODE: NodeDefinition = {
 export const VISUAL_SLICE_NODE: NodeDefinition = {
   type: "modifier/visual-slice",
   label: "Visual Slice",
-  category: "transform",
+  category: "fx",
   inputs: [
     { id: "geometry", label: "Geometry", type: "geometry", owns: true },
     { id: "point", label: "Plane Point", type: "vector" },

@@ -616,3 +616,26 @@
   border-color: #ef4444;
   color: #ffffff;
 }
+
+/* Vertical workspace layout: the splitter between the graph and the views runs top to bottom. */
+.workspace-split-divider.is-column {
+  width: 2px;
+  height: 100%;
+  cursor: col-resize;
+  justify-content: center;
+}
+
+.workspace-split-divider.is-column::before {
+  top: 0;
+  bottom: 0;
+  left: -4px;
+  right: -4px;
+  cursor: col-resize;
+}
+
+.workspace-split-divider.is-column .timeline-split-handle-btn {
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  cursor: col-resize;
+}

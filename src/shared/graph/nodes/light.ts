@@ -5,6 +5,20 @@ import { asVector3, composeNativeMatrix, extractPositionFromInput } from "./tran
 
 const lightCache = createNodeCache<THREE.Object3D>(disposeObject3D);
 
+/**
+ * This node's light from the cache, if it is still the right kind: the cache
+ * is keyed by node id alone, and a project opened after another can reuse an
+ * id for a different light type (an ambient "fill" then a point "fill").
+ */
+function cachedLight<T extends THREE.Light>(nodeId: string, kind: new (...args: never[]) => T): T | undefined {
+  const hit = lightCache.get(nodeId);
+  if (!hit) return undefined;
+  if (hit instanceof kind) return hit;
+  disposeObject3D(hit);
+  lightCache.delete(nodeId);
+  return undefined;
+}
+
 function asColor(v: unknown, fallback: THREE.Color): THREE.Color {
   if (v instanceof THREE.Color) return v;
   if (typeof v === "object" && v !== null && "r" in v && "g" in v && "b" in v) {
@@ -66,6 +80,7 @@ export const LIGHT_DIRECTIONAL_NODE: NodeDefinition = {
   type: "light/directional",
   label: "Directional Light",
   category: "lighting",
+  managedByViewport: true,
   pure: true,
   inputs: [
     { id: "color", label: "Color", type: "color" },
@@ -97,7 +112,7 @@ export const LIGHT_DIRECTIONAL_NODE: NodeDefinition = {
     { id: "shadowSoftness", label: "Shadow Softness", kind: "number", step: 0.1 },
   ],
   evaluate: (inputs, params, ctx) => {
-    let light = lightCache.get(ctx.nodeId) as THREE.DirectionalLight | undefined;
+    let light = cachedLight(ctx.nodeId, THREE.DirectionalLight);
 
     if (!light) {
       light = new THREE.DirectionalLight(0xffffff, 1.5);
@@ -152,6 +167,7 @@ export const LIGHT_POINT_NODE: NodeDefinition = {
   type: "light/point",
   label: "Point Light",
   category: "lighting",
+  managedByViewport: true,
   pure: true,
   inputs: [
     { id: "color", label: "Color", type: "color" },
@@ -186,7 +202,7 @@ export const LIGHT_POINT_NODE: NodeDefinition = {
     { id: "shadowSoftness", label: "Shadow Softness", kind: "number", step: 0.1 },
   ],
   evaluate: (inputs, params, ctx) => {
-    let light = lightCache.get(ctx.nodeId) as THREE.PointLight | undefined;
+    let light = cachedLight(ctx.nodeId, THREE.PointLight);
     if (!light) {
       light = new THREE.PointLight(0xffffff, 2.0, 15, 2);
       light.shadow.mapSize.width = 1024;
@@ -225,6 +241,7 @@ export const LIGHT_SPOT_NODE: NodeDefinition = {
   type: "light/spot",
   label: "Spot Light",
   category: "lighting",
+  managedByViewport: true,
   pure: true,
   inputs: [
     { id: "color", label: "Color", type: "color" },
@@ -262,7 +279,7 @@ export const LIGHT_SPOT_NODE: NodeDefinition = {
     { id: "shadowSoftness", label: "Shadow Softness", kind: "number", step: 0.1 },
   ],
   evaluate: (inputs, params, ctx) => {
-    let light = lightCache.get(ctx.nodeId) as THREE.SpotLight | undefined;
+    let light = cachedLight(ctx.nodeId, THREE.SpotLight);
 
     if (!light) {
       light = new THREE.SpotLight(0xffffff, 3.0, 0, (45 * Math.PI) / 180, 0.3);
@@ -321,6 +338,7 @@ export const LIGHT_AMBIENT_NODE: NodeDefinition = {
   type: "light/ambient",
   label: "Ambient Light",
   category: "lighting",
+  managedByViewport: true,
   pure: true,
   inputs: [
     { id: "color", label: "Color", type: "color" },
@@ -336,7 +354,7 @@ export const LIGHT_AMBIENT_NODE: NodeDefinition = {
     { id: "intensity", label: "Intensity", kind: "number", step: 0.1 },
   ],
   evaluate: (inputs, params, ctx) => {
-    let light = lightCache.get(ctx.nodeId) as THREE.AmbientLight | undefined;
+    let light = cachedLight(ctx.nodeId, THREE.AmbientLight);
     if (!light) {
       light = new THREE.AmbientLight(0xffffff, 0.4);
       light.userData.nodeId = ctx.nodeId;

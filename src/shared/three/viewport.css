@@ -461,3 +461,25 @@
 .music-hud-scroll::-webkit-scrollbar-corner {
   background: transparent;
 }
+
+/* Stacked panes (vertical workspace layout): the splitter runs across. */
+.viewport-split-divider.is-stacked {
+  width: 100%;
+  height: 2px;
+  cursor: row-resize;
+}
+
+.viewport-split-divider.is-stacked::before {
+  top: -4px;
+  bottom: -4px;
+  left: 0;
+  right: 0;
+  cursor: row-resize;
+}
+
+.viewport-split-divider.is-stacked .viewport-split-handle-btn {
+  top: 50%;
+  left: 8px;
+  transform: translateY(-50%) rotate(90deg);
+  cursor: row-resize;
+}

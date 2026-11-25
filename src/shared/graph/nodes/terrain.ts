@@ -124,7 +124,7 @@ const TERRAIN_PARAM_FIELDS: ParamFieldDef[] = [
 export const TERRAIN_NODE: NodeDefinition = {
   type: "object/terrain",
   label: "Terrain",
-  category: "object",
+  category: "generators",
   inputs: [
     { id: "heightmap", label: "Height Map", type: "texture" },
     { id: "material", label: "Material", type: "material" },
