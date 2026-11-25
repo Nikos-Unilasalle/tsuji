@@ -24,7 +24,7 @@ function run(def: NodeDefinition, input: THREE.Object3D, params: Record<string, 
   return { out, mesh };
 }
 const group = (m: PolyMesh, domain: "point" | "edge" | "face", name: string) =>
-  Array.from(readAttribute(m, domain, name)?.values ?? []).map((v) => (v ? 1 : 0));
+  Array.from(readAttribute(m, domain, name)?.values ?? []).map((v): number => (v ? 1 : 0));
 
 describe("Select", () => {
   it("box selects the top face", () => {
