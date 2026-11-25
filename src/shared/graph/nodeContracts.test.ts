@@ -63,7 +63,7 @@ function geometryPipelineNodes(): NodeDefinition[] {
  * contracts applies; they are asserted to be mesh-less rather than skipped
  * silently, so a node that stops emitting a mesh by accident is caught.
  */
-const NOT_A_MESH_PIPELINE = new Set(["texture/pixel-spawner", "object/decal", "vector/spring"]);
+const NOT_A_MESH_PIPELINE = new Set(["texture/pixel-spawner", "object/decal", "vector/spring", "curve/mesh-edges-to-curves"]);
 
 /**
  * Reads the incoming geometry but emits something else entirely, so none of
@@ -171,6 +171,7 @@ function appearanceGraph(modifierType: string): Graph {
 
 /** Nodes whose whole job is to change one of these. Not bugs, never will be. */
 const APPEARANCE_BY_DESIGN: Record<string, string> = {
+  "attribute/visualize": "a debug view: swaps in a vertex-colour material so the attribute it paints shows (Display = keep-material turns that off)",
   "structure/instance-color": "replaces the colour per instance — that is the node",
   "geometry/wind-sway": "clones the material to patch its vertex shader; the clone keeps every map",
   "physics/ray-burst": "emits its own line material, it does not pass the source mesh along",

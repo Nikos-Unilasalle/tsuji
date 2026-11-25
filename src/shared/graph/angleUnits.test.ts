@@ -53,6 +53,7 @@ const DEGREE_SCALAR_SOCKETS = [
 /** Convention 1, vector: radians-stored and radians on the wire — they carry rotations between nodes. */
 const RADIAN_VECTOR_SOCKETS = [
   "calibration/camera.rotation",
+  "modeling/transform-elements.rotate",
   "modifier/clip-box.rotation",
   "modifier/extrude.rotation",
   "structure/geometry-transform.rotation",

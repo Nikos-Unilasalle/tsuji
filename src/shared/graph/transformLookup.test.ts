@@ -197,6 +197,7 @@ describe("GIZMO_SELECTABLE_TYPES", () => {
       "object/frozen",
       "object/text",
       "curve/to_mesh",
+      "curve/sweep",
       "curve/to_mesh_list",
       "curve/from_points",
       "curve/primitive",
