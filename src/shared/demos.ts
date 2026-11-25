@@ -82,6 +82,26 @@ export const DEMO_CATALOG: DemoCategory[] = [
     ],
   },
   {
+    title: "Parametric Modeling",
+    demos: [
+      {
+        file: "demo_parametric_select_extrude.tsuji",
+        label: "Select → Extrude → Material",
+        description: "A Select node writes a 'top' face group; Extrude grows it in five turning passes and writes extrude_top / extrude_side; Material by Group colours the tips; the Spreadsheet shows the groups per face.",
+      },
+      {
+        file: "demo_parametric_soft_displace.tsuji",
+        label: "Soft Selection & Displace",
+        description: "Select Distance writes a falloff weight; Displace pushes the bump by it, Smooth relaxes it, Attribute Visualize paints the weight.",
+      },
+      {
+        file: "demo_parametric_sdf_lsystem.tsuji",
+        label: "SDF Blend & L-System",
+        description: "A sphere and a box blended as signed distance fields and meshed back; a bush grown by an L-system.",
+      },
+    ],
+  },
+  {
     title: "Modifiers",
     demos: [
       {
