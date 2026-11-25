@@ -236,7 +236,7 @@ Tout le plan est implémenté sur `feat/parametric-modeling`, environ 78 nouveau
 
 ### Limites connues
 - Face Selection garde ses index de triangles (ses clics dans le viewport en dépendent). C'est le node **Select** qui le remplace pour le travail paramétrique.
-- Pas de sélection manuelle sur les faces du PolyMesh dans le viewport (« Select Manual » du plan) : il faudrait toucher Viewport.tsx. Les sélections faites à la main restent dans Edit Mesh / Points Selection.
+- **Select Manual** pique les *points* du PolyMesh (clic ou rectangle, comme Points Selection) et les promeut en arêtes ou faces ; il n’y a pas de pique directe des faces ou arêtes dans le viewport.
 - Catmull-Clark s'applique à tout le mesh (Group seulement en mode Simple). Decimate et le calcul SDF tournent sur le thread principal (plafonné à 128³).
 - Les nouvelles faces sans source exacte (bandes de bevel, flancs d'inset…) héritent des groupes de la face source la plus proche, comme dans Houdini.
 - Bridge exige le même nombre de points de chaque côté. Mirror n'utilise que des plans alignés sur les axes. Offset 2D ne nettoie pas les auto-intersections.
