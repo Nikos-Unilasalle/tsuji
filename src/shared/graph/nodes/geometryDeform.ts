@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { applyDeformGroup, DEFORM_GROUP_FIELDS } from "./deformGroup";
+import { notePolyAttributeSource } from "../mesh/polyIO";
 import { TessellateModifier } from "three/examples/jsm/modifiers/TessellateModifier.js";
 import { createNodeCache } from "../nodeCaches";
 import { NodeDefinition } from "../types";
@@ -106,6 +107,10 @@ function reuseDeformTargets(
         : nonIndexed && source.geometry.index
           ? source.geometry.toNonIndexed()
           : source.geometry.clone();
+    // A re-cut buffer (tessellated, or de-indexed) no longer matches the
+    // source's PolyMesh: note it, so groups and attributes downstream carry
+    // over by proximity instead of vanishing.
+    if (geometry !== source.geometry && !geometry.userData?.quadMesh) notePolyAttributeSource(geometry, source.geometry);
     const output = new THREE.Mesh(geometry, source.material);
     output.castShadow = source.castShadow;
     output.receiveShadow = source.receiveShadow;

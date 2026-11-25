@@ -7,6 +7,7 @@ import { evaluateGraph } from "./evaluate";
 import { initBvhRaycast } from "../three/bvh";
 import { Connection, Graph, NodeDefinition } from "./types";
 import { DEMO_CATALOG } from "../demos";
+import { resolveDefinition } from "./groups";
 
 // Lives under public/ (not a top-level demos/ folder) so Vite ships these
 // files verbatim into dist and the in-app Demos menu can fetch() them at
@@ -58,8 +59,9 @@ function assertSocketsExist(raw: string, file: string): void {
       expect(from, `${file}: connection "${connection.id}" names no source node`).toBeDefined();
       expect(to, `${file}: connection "${connection.id}" names no target node`).toBeDefined();
 
-      const fromDef = DEFAULT_REGISTRY.get(from!.type);
-      const toDef = DEFAULT_REGISTRY.get(to!.type);
+      // resolveDefinition: a Group's (and its boundary nodes') sockets come from its subgraph.
+      const fromDef = resolveDefinition(from, DEFAULT_REGISTRY);
+      const toDef = resolveDefinition(to, DEFAULT_REGISTRY);
       // Unknown node types come from legacy demos — skipped, same as below.
       if (!fromDef || !toDef) continue;
 

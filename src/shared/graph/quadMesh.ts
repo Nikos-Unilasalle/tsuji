@@ -896,7 +896,7 @@ export function withFaceUVs(mesh: PolyMesh): PolyMesh {
  * operation is built: `pending` collects those for fillNewFaceUVs), material
  * slot and shading inherited from the face it came from.
  */
-function appendFace(
+export function appendFace(
   next: PolyMesh,
   face: number[],
   from: number,

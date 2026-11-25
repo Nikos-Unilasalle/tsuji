@@ -1,10 +1,10 @@
 import * as THREE from "three";
 import {
   PolyMesh,
+  appendFace,
   cloneQuadMesh,
   computeFaceCentroid,
   computeFaceNormal,
-  extrudeFaces,
   withFaceUVs,
 } from "../quadMesh";
 import { buildTopology } from "./topology";
@@ -179,10 +179,31 @@ export function extrudeFacesIndividual(
   direction?: { x: number; y: number; z: number },
   keepAtZero = false,
 ): { mesh: PolyMesh; newFaces: number[] } {
-  let current = cloneQuadMesh(mesh);
   const valid = [...new Set(faces)].filter((f) => f >= 0 && f < mesh.faces.length).sort((a, b) => a - b);
-  for (const f of valid) current = extrudeFaces(current, [f], distance, direction, keepAtZero).mesh;
-  return { mesh: current, newFaces: valid };
+  if (valid.length === 0 || (distance === 0 && !keepAtZero)) return { mesh: cloneQuadMesh(mesh), newFaces: valid };
+  // One pass (each face only ever moves its own new corners), rather than one
+  // extrudeFaces per face — that cloned the whole mesh per face, and took
+  // over a minute on a couple of thousand faces.
+  const base = withFaceUVs(mesh);
+  const next = cloneQuadMesh(base);
+  const pending: number[] = [];
+  const fixed = direction ? new THREE.Vector3(direction.x, direction.y, direction.z) : null;
+  for (const f of valid) {
+    const face = base.faces[f];
+    const n = fixed ?? computeFaceNormal(base.positions, face);
+    const moved = face.map((v) => {
+      const p = base.positions[v];
+      next.positions.push([p[0] + n.x * distance, p[1] + n.y * distance, p[2] + n.z * distance]);
+      return next.positions.length - 1;
+    });
+    next.faces[f] = moved;
+    for (let i = 0; i < face.length; i++) {
+      const j = (i + 1) % face.length;
+      appendFace(next, [face[i], face[j], moved[j], moved[i]], f, null, pending);
+    }
+  }
+  fillNewFaceUVs(next, pending);
+  return { mesh: next, newFaces: valid };
 }
 
 // ---------------------------------------------------------------------------
@@ -208,11 +229,7 @@ export function insetRegion(
 ): { mesh: PolyMesh; newFaces: number[] } {
   const selected = [...new Set(faceIndices)].filter((f) => f >= 0 && f < mesh.faces.length).sort((a, b) => a - b);
   if (selected.length === 0 || (thickness <= 0 && depth === 0)) return { mesh: cloneQuadMesh(mesh), newFaces: selected };
-  if (individual) {
-    let current = withFaceUVs(mesh);
-    for (const f of selected) current = insetRegion(current, [f], thickness, depth, false).mesh;
-    return { mesh: current, newFaces: selected };
-  }
+  if (individual) return { mesh: insetEachFace(withFaceUVs(mesh), selected, thickness, depth), newFaces: selected };
 
   const base = withFaceUVs(mesh);
   const next = cloneQuadMesh(base);
@@ -310,6 +327,58 @@ export function insetRegion(
   }
 
   return { mesh: next, newFaces: selected };
+}
+
+/**
+ * Individual inset in one pass: every selected face is its own region, so its
+ * inner vertices depend only on its own corners and edges. Same result, face
+ * order and UVs as insetting the faces one after another, without rebuilding
+ * the topology once per face (which made a few thousand windows take seconds).
+ */
+function insetEachFace(base: PolyMesh, selected: number[], thickness: number, depth: number): PolyMesh {
+  const next = cloneQuadMesh(base);
+  const positions = base.positions;
+  const pa = new THREE.Vector3();
+  const pb = new THREE.Vector3();
+  for (const f of selected) {
+    const face = base.faces[f];
+    const n = face.length;
+    const normal = computeFaceNormal(positions, face);
+    const uvs = base.faceUVs![f] as UV[];
+    const mapper = faceUVMapper(positions, face, uvs);
+    // Interior of a counter-clockwise face is to the left of each edge: normal × edge.
+    const lefts = face.map((a, i) => {
+      pa.set(...positions[a]);
+      pb.set(...positions[face[(i + 1) % n]]);
+      return new THREE.Vector3().crossVectors(normal, pb.sub(pa).normalize()).normalize();
+    });
+    const inner: number[] = [];
+    const innerUVs: UV[] = [];
+    for (let i = 0; i < n; i++) {
+      const dirs = [lefts[(i - 1 + n) % n], lefts[i]];
+      const sum = dirs[0].clone().add(dirs[1]);
+      if (sum.lengthSq() < 1e-12) sum.copy(dirs[0]);
+      sum.normalize();
+      const cos = Math.max(0.2, Math.min(dirs[0].dot(sum), dirs[1].dot(sum)));
+      const p = positions[face[i]];
+      const q: [number, number, number] = [p[0] + (sum.x * thickness) / cos, p[1] + (sum.y * thickness) / cos, p[2] + (sum.z * thickness) / cos];
+      innerUVs.push(mapper(new THREE.Vector3(...q)));
+      if (depth !== 0) {
+        q[0] += normal.x * depth;
+        q[1] += normal.y * depth;
+        q[2] += normal.z * depth;
+      }
+      inner.push(next.positions.length);
+      next.positions.push(q);
+    }
+    next.faces[f] = inner;
+    next.faceUVs![f] = innerUVs;
+    for (let i = 0; i < n; i++) {
+      const j = (i + 1) % n;
+      pushFace(next, [face[i], face[j], inner[j], inner[i]], [uvs[i], uvs[j], innerUVs[j], innerUVs[i]], f);
+    }
+  }
+  return next;
 }
 
 // ---------------------------------------------------------------------------
