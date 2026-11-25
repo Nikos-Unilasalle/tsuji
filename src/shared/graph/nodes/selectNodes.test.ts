@@ -30,7 +30,7 @@ describe("Select", () => {
   it("box selects the top face", () => {
     const { out, mesh } = run(SELECT_NODE, meshObj(createQuadBox()), { mode: "box", center: new THREE.Vector3(0, 0.5, 0), size: new THREE.Vector3(2, 0.2, 2), name: "top" });
     expect(out.count).toBe(1);
-    expect(group(mesh, "face", "top").reduce((a, b) => a + b)).toBe(1);
+    expect(group(mesh, "face", "top").reduce<number>((a, b) => a + b, 0)).toBe(1);
   });
   it("normal mode, inverted, intersect", () => {
     const base = meshObj(createQuadBox());
