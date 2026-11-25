@@ -692,3 +692,33 @@ input, textarea, [contenteditable="true"], .drag-number-editing, .param-text-inp
   background: var(--accent-color, #38bdf8) !important;
   border: none !important;
 }
+
+/* Geometry Spreadsheet (attribute/spreadsheet): a compact scrollable table. */
+.graph-node-spreadsheet {
+  max-height: 260px;
+  max-width: 520px;
+  overflow: auto;
+  color: var(--text, #e5e7eb);
+}
+.spreadsheet-caption {
+  color: #38bdf8;
+  margin-bottom: 4px;
+  white-space: nowrap;
+}
+.spreadsheet-table {
+  border-collapse: collapse;
+  font-size: 10px;
+}
+.spreadsheet-table th,
+.spreadsheet-table td {
+  padding: 1px 6px;
+  border-bottom: 1px solid var(--chrome-border);
+  text-align: right;
+  white-space: nowrap;
+}
+.spreadsheet-table th {
+  color: #38bdf8;
+  position: sticky;
+  top: 0;
+  background: var(--canvas-bg);
+}

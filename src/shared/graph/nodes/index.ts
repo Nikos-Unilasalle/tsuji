@@ -180,6 +180,7 @@ import { MODELING_OPS_NODES } from "./modelingOps";
 import { MODELING_ALGO_NODES } from "./modelingAlgos";
 import { CURVE_OPS_NODES } from "./curveOps";
 import { ATTRIBUTE_NODES } from "./attributeNodes";
+import { SPREADSHEET_NODE } from "./spreadsheet";
 import { EXTRUDE_MESH_NODE, DELETE_GEOMETRY_NODE, FACE_SELECTION_NODE } from "./meshEdit";
 import { EDIT_MESH_NODE } from "./editMesh";
 import { SHADE_NODE } from "./shade";
@@ -546,6 +547,7 @@ export const STARTER_NODES = [
   ...MODELING_ALGO_NODES,
   ...CURVE_OPS_NODES,
   ...ATTRIBUTE_NODES,
+  SPREADSHEET_NODE,
   EXTRUDE_MESH_NODE,
   EDIT_MESH_NODE,
   DELETE_GEOMETRY_NODE,

@@ -4,6 +4,7 @@ import * as THREE from "three";
 import { CATEGORY_COLOR, NodeCategory, UNKNOWN_CATEGORY_COLOR } from "../shared/graph/categories";
 import { GROUP_TYPE, NEW_PORT_SOCKET } from "../shared/graph/groups";
 import { getInspectorValue, subscribeInspector } from "../shared/graph/inspectorStore";
+import { isSpreadsheetTable, SPREADSHEET_TYPE } from "../shared/graph/nodes/spreadsheet";
 import { SOCKET_COLOR, SocketDef } from "../shared/graph/sockets";
 import { NODE_APPLY_TRANSFORM_ACTION, NODE_FREEZE_ACTION } from "../shared/graph/nodeActions";
 import { FRAME_MIN_HEIGHT, FRAME_MIN_WIDTH, FRAME_TYPE } from "../shared/graph/nodes/frame";
@@ -350,6 +351,39 @@ function useInspectorValue(nodeId?: string) {
   return val;
 }
 
+/** Geometry Spreadsheet: the table the node left in the inspector store. */
+function renderSpreadsheet(val: unknown) {
+  if (!isSpreadsheetTable(val)) return <span style={{ color: "#6b7280" }}>no mesh</span>;
+  return (
+    <div>
+      <div className="spreadsheet-caption">
+        {val.count === val.total ? `${val.total} ${val.domain}s` : `${val.count} / ${val.total} ${val.domain}s`}
+        {val.groups.length > 0 && ` · groups: ${val.groups.join(", ")}`}
+      </div>
+      <table className="spreadsheet-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            {val.columns.map((c) => (
+              <th key={c}>{c}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {val.rows.map((row) => (
+            <tr key={row.index}>
+              <td>{row.index}</td>
+              {row.cells.map((cell, i) => (
+                <td key={i}>{cell}</td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 function renderValuePreview(val: unknown) {
   if (val === undefined || val === null) {
     return <span style={{ color: "#6b7280" }}>null</span>;
@@ -530,6 +564,7 @@ export const GraphNode = memo(function GraphNode({ data, selected }: { data: Gra
           {data.groupSize} node{data.groupSize === 1 ? "" : "s"} ⏎
         </div>
       )}
+      {data.nodeType === SPREADSHEET_TYPE && <div className="graph-node-inspector graph-node-spreadsheet nodrag nowheel">{renderSpreadsheet(inspectorVal)}</div>}
       {data.nodeType === "io/inspector" && (
         <div className="graph-node-inspector">{renderValuePreview(inspectorVal)}</div>
       )}
