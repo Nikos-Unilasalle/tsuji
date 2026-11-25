@@ -5,6 +5,7 @@ import { boundaryNodes, GROUP_INPUT_TYPE, GROUP_OUTPUT_TYPE, GROUP_TYPE, groupRe
 import { createNodeCache } from "../nodeCaches";
 import { resolveSceneRoots } from "../sceneRoots";
 import { EvalContext, Graph, NodeDefinition, ParamFieldDef } from "../types";
+import { evaluateGroupLoop, LOOP_DEFAULTS, LOOP_PARAM_FIELDS } from "./groupLoop";
 
 /**
  * A group: a whole graph, evaluated as one node.
@@ -112,8 +113,9 @@ export const GROUP_NODE: NodeDefinition = {
     location: new THREE.Vector3(0, 0, 0),
     rotation: new THREE.Vector3(0, 0, 0),
     scale: new THREE.Vector3(1, 1, 1),
+    ...LOOP_DEFAULTS,
   },
-  paramFields: POSED_PARAM_FIELDS,
+  paramFields: [...POSED_PARAM_FIELDS, ...LOOP_PARAM_FIELDS],
   /**
    * The pose is only real while the group renders its own container. A group
    * that hands an interior object out through a `geometry` port doesn't place
@@ -122,8 +124,9 @@ export const GROUP_NODE: NodeDefinition = {
    */
   dynamicParamFields: (instance) =>
     !instance.subgraph || groupRendersOwnContainer(instance.subgraph)
-      ? POSED_PARAM_FIELDS
+      ? [...POSED_PARAM_FIELDS, ...LOOP_PARAM_FIELDS]
       : [
+          ...LOOP_PARAM_FIELDS,
           { id: "name", label: "Name", kind: "text" },
           { id: "visible", label: "Visible", kind: "boolean" },
           {
@@ -154,6 +157,12 @@ export const GROUP_NODE: NodeDefinition = {
     // that owns the timeline, keyed by node id, and grouping does not change
     // a node's id. An interior node stays animated by exactly the keys it had
     // before it was grouped.
+    // A looping group runs its interior several times (see groupLoop.ts).
+    const looped = evaluateGroupLoop(subgraph, inputs, params, ctx, evalScope);
+    if (looped) {
+      lastOutputs.set(ctx.nodeId, looped);
+      return looped;
+    }
     const results = evaluateGraph(subgraph, ctx.registry, {
       ...ctx,
       nodeId: "",

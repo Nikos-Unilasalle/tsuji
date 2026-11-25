@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { createNodeCache } from "../nodeCaches";
 import { isValidAttributeName, readAttribute, setAttribute } from "../mesh/polyAttributes";
 import { joinMeshes } from "../mesh/join";
+import { elementNormals, elementPositions } from "../mesh/selectOps";
 import { applyMaterialParams, materialParamsFromValue } from "./object";
 import { definePolyNode } from "./polyModifier";
 
@@ -93,4 +94,59 @@ function slots(count: number, material: THREE.Material): THREE.Material[] {
   return out;
 }
 
-export const MODELING_NODES = [JOIN_NODE, MATERIAL_BY_GROUP_NODE];
+// ============================================================ Group to Points
+
+/**
+ * The bridge from groups to the list world: the positions, normals and a
+ * scale attribute of a group's points (or face centres), as aligned lists —
+ * wire them straight into Instance on Points' Points / Ups / Scales, or any
+ * list node.
+ */
+export const GROUP_TO_POINTS_NODE = definePolyNode({
+  type: "modeling/group-to-points",
+  label: "Group to Points",
+  category: "selection",
+  dependsOnPose: true,
+  group: { domain: "choose", defaultDomain: "point" },
+  outputs: [
+    { id: "points", label: "Points (list)", type: "list" },
+    { id: "normals", label: "Normals / Ups (list)", type: "list" },
+    { id: "scales", label: "Scales (list)", type: "list" },
+    { id: "indices", label: "Indices (list)", type: "list" },
+    { id: "count", label: "Count", type: "value" },
+  ],
+  defaultParams: { domain: "point", group: "", space: "world", scaleAttribute: "pscale" },
+  paramFields: [
+    { id: "space", label: "Space", kind: "select", options: ["world", "local"] },
+    { id: "scaleAttribute", label: "Scale Attribute (float; missing = 1)", kind: "text" },
+  ],
+  run: (run) => {
+    const raw = run.str("domain", "point");
+    const domain = raw === "face" || raw === "edge" || raw === "corner" ? raw : "point";
+    const { indices } = run.group(domain);
+    const pos = elementPositions(run.mesh, domain);
+    const nrm = elementNormals(run.mesh, domain);
+    const scaleName = run.str("scaleAttribute", "pscale").trim();
+    const sc = scaleName ? readAttribute(run.mesh, domain, scaleName) : null;
+    const world = run.str("space", "world") === "world";
+    const normalMatrix = new THREE.Matrix3().getNormalMatrix(run.worldMatrix);
+    const points: THREE.Vector3[] = [];
+    const normals: THREE.Vector3[] = [];
+    const scales: number[] = [];
+    for (const i of indices) {
+      const p = new THREE.Vector3(pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2]);
+      const n = new THREE.Vector3(nrm[i * 3], nrm[i * 3 + 1], nrm[i * 3 + 2]);
+      if (world) {
+        p.applyMatrix4(run.worldMatrix);
+        n.applyMatrix3(normalMatrix).normalize();
+      }
+      points.push(p);
+      normals.push(n);
+      scales.push(sc ? sc.values[i * sc.size] : 1);
+    }
+    run.note(`${points.length} points`);
+    return { mesh: run.mesh, outputs: { points, normals, scales, indices, count: points.length } };
+  },
+});
+
+export const MODELING_NODES = [JOIN_NODE, MATERIAL_BY_GROUP_NODE, GROUP_TO_POINTS_NODE];

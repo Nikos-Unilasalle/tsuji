@@ -37,6 +37,14 @@ export interface EvalContext {
    */
   groupInputs?: Record<string, unknown>;
   /**
+   * Inside a looping group (see nodes/groupLoop.ts): the current iteration
+   * (0-based), how many there are, and the value being iterated over (the
+   * piece number for For Each Piece). Read by the Loop Info node.
+   */
+  loopIteration?: number;
+  loopCount?: number;
+  loopValue?: number;
+  /**
    * Which nesting level within the session is being evaluated (a group node's
    * id, empty at the top). The evaluator carries one frame of state forward
    * per session; a subgraph is a second pass on the same session, so without
