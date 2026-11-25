@@ -11,7 +11,7 @@ import {
 import { EDIT_MESH_POINTS_NODE } from "../../graph/nodes/editMeshPoints";
 import { extractPointsFromMesh } from "../../graph/nodes/pointsGeometry";
 import {
-  QuadMesh,
+  PolyMesh,
   cloneQuadMesh,
   createQuadBox,
   bufferGeometryToQuadMesh,
@@ -86,14 +86,14 @@ import type { TransformPatch } from "../gizmoWriteback";
  * used to run on every frame (and every pointermove) for as long as the node
  * stayed selected. The result is shared: callers treat it as read-only.
  */
-const pointsQuadMeshCache = new WeakMap<THREE.BufferGeometry, { version: number; mesh: QuadMesh }>();
+const pointsQuadMeshCache = new WeakMap<THREE.BufferGeometry, { version: number; mesh: PolyMesh }>();
 
 /** The mesh an Edit Mesh (or Edit Mesh Points) node is editing right now. */
 export function editMeshQuadMesh(
   node: { id: string; type: string; params: Record<string, unknown> },
   results: Map<string, Record<string, unknown>> | null | undefined,
   srcMesh: THREE.Mesh | null,
-): QuadMesh {
+): PolyMesh {
   if (node.type === EDIT_MESH_NODE.type) return resolveEditMeshData(node, results);
   const geometry = srcMesh?.geometry;
   if (!geometry) return createQuadBox(1, 1, 1);
@@ -127,7 +127,7 @@ export function findEditMeshNode<T extends { id: string; type: string; params: R
 export const EDIT_MESH_BRUSH_RADIUS_PX = 28;
 
 /** X-mirror matching tolerance: a small fraction of the mesh's size. */
-export function mirrorTolerance(mesh: QuadMesh): number {
+export function mirrorTolerance(mesh: PolyMesh): number {
   let size = 0;
   for (const p of mesh.positions) size = Math.max(size, Math.abs(p[0]), Math.abs(p[1]), Math.abs(p[2]));
   return Math.max(1e-6, size * 1e-4);
@@ -231,7 +231,7 @@ export function createEditMeshController(ctx: EditMeshControllerContext) {
   interface EditMeshTarget {
     node: GraphNodeLike;
     srcMesh: THREE.Mesh;
-    quadMesh: QuadMesh;
+    quadMesh: PolyMesh;
     mode: SelectMode;
     selection: MeshSelection;
     isPointsOnly: boolean;
@@ -343,7 +343,7 @@ export function createEditMeshController(ctx: EditMeshControllerContext) {
     kind: EditModalKind;
     nodeId: string;
     /** The mesh the tool works from; every preview is recomputed from it. */
-    base: QuadMesh;
+    base: PolyMesh;
     /** The node's params before the tool, put back on cancel. */
     restore: Record<string, unknown>;
     mode: SelectMode;
@@ -584,7 +584,7 @@ export function createEditMeshController(ctx: EditMeshControllerContext) {
     opts: {
       individual?: boolean;
       edge?: EdgeRef;
-      base?: QuadMesh;
+      base?: PolyMesh;
       selection?: MeshSelection;
       mode?: SelectMode;
       restore?: Record<string, unknown>;
@@ -855,7 +855,7 @@ export function createEditMeshController(ctx: EditMeshControllerContext) {
   function runUVOp(target: EditMeshTarget, op: EditMeshOp): boolean {
     const mesh = withFaceUVs(target.quadMesh);
     const faces = targetFaces(target);
-    let next: QuadMesh | null = null;
+    let next: PolyMesh | null = null;
     if (op === "uv-unwrap") next = unwrapFaces(mesh, faces).mesh;
     else if (op === "uv-cube") next = cubeProject(mesh, faces);
     else if (op === "uv-cylinder") next = cylinderProject(mesh, faces, "y");
@@ -1249,7 +1249,7 @@ export function createEditMeshController(ctx: EditMeshControllerContext) {
 
 
   // --- Gizmo drag state ----------------------------------------------------
-  let dragStartMeshData: QuadMesh | null = null;
+  let dragStartMeshData: PolyMesh | null = null;
   /** X-mirror counterparts for the drag in progress, when the node has X-mirror on. */
   let dragStartMirrorMap: Int32Array | null = null;
   /** Individual Origins: the selection's islands and their centres, when the drag began. */

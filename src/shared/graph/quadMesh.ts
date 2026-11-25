@@ -3,11 +3,19 @@ import { triangulateFace } from "./mesh/triangulate";
 import { averageUV, boxProjectFace, fillNewFaceUVs, lerpUV, UV } from "./mesh/uv";
 import { quadRing } from "./mesh/loops";
 import { importBufferGeometry } from "./mesh/importGeometry";
+import { clonePolyAttributes, mixPolyAttributes, type PolyAttributes } from "./mesh/polyAttributes";
 import { cloneEdgeAttributes, cornerColor, remapEdgeAttributes, splitEdgeAttributes } from "./mesh/attributes";
 
 export type QuadMeshShading = "auto" | "smooth" | "flat";
 
-export interface QuadMesh {
+/**
+ * The modelling mesh: n-gon faces over shared vertices, plus everything that
+ * rides on them (UVs, colours, materials, edge marks, named attributes and
+ * groups). Formerly `QuadMesh` — the alias below stays while code migrates.
+ * It travels between nodes as `geometry.userData.quadMesh`, a key that keeps
+ * its old name so saved projects load unchanged.
+ */
+export interface PolyMesh {
   positions: [number, number, number][];
   faces: number[][]; // indices of vertices (4 for quads, 3 for triangles)
   uvs?: [number, number][];
@@ -40,9 +48,19 @@ export interface QuadMesh {
    * syncLooseEdgeLines); the faces' own edges are never listed here.
    */
   edges?: [number, number][];
+  /**
+   * Named attributes and groups, per domain (see mesh/polyAttributes.ts). A
+   * group is simply a `bool` attribute. Point, face and corner data are flat
+   * arrays parallel to positions / faces / face corners; edge data is keyed
+   * by edgeKey(a, b) so it survives edge reordering.
+   */
+  attributes?: PolyAttributes;
 }
 
-export function cloneQuadMesh(mesh: QuadMesh): QuadMesh {
+/** @deprecated Use PolyMesh. Kept while the code base migrates. */
+export type QuadMesh = PolyMesh;
+
+export function cloneQuadMesh(mesh: PolyMesh): PolyMesh {
   return {
     positions: mesh.positions.map((p) => [p[0], p[1], p[2]]),
     faces: mesh.faces.map((f) => [...f]),
@@ -53,6 +71,7 @@ export function cloneQuadMesh(mesh: QuadMesh): QuadMesh {
     faceMaterials: mesh.faceMaterials ? [...mesh.faceMaterials] : undefined,
     sourceSignature: mesh.sourceSignature,
     ...cloneEdgeAttributes(mesh),
+    attributes: clonePolyAttributes(mesh.attributes),
   };
 }
 
@@ -74,7 +93,7 @@ export function cloneQuadMesh(mesh: QuadMesh): QuadMesh {
  * Recalculate UVs changes nothing else, and leaving them out made that button
  * do nothing.
  */
-const signatureCache = new WeakMap<QuadMesh, string>();
+const signatureCache = new WeakMap<PolyMesh, string>();
 
 /**
  * Memoised per mesh object: stored and preview meshes are never mutated
@@ -82,7 +101,7 @@ const signatureCache = new WeakMap<QuadMesh, string>();
  * hash is ~15 ms — the node and the viewport overlay each used to pay it
  * every frame of a drag.
  */
-export function quadMeshSignature(mesh: QuadMesh): string {
+export function quadMeshSignature(mesh: PolyMesh): string {
   let cached = signatureCache.get(mesh);
   if (cached === undefined) {
     cached = computeQuadMeshSignature(mesh);
@@ -91,7 +110,7 @@ export function quadMeshSignature(mesh: QuadMesh): string {
   return cached;
 }
 
-function computeQuadMeshSignature(mesh: QuadMesh): string {
+function computeQuadMeshSignature(mesh: PolyMesh): string {
   let hash = 0x811c9dc5;
   const mix = (n: number) => {
     hash = Math.imul(hash ^ (n | 0), 16777619) >>> 0;
@@ -126,6 +145,7 @@ function computeQuadMeshSignature(mesh: QuadMesh): string {
     }
   }
   if (mesh.edges) for (const [a, b] of mesh.edges) mix(a * 104729 + b);
+  mixPolyAttributes(mesh.attributes, mix);
   return `${mesh.positions.length}:${mesh.faces.length}:${mesh.edges?.length ?? 0}:${hash.toString(36)}`;
 }
 
@@ -184,11 +204,11 @@ export function computeFaceCentroid(positions: [number, number, number][], face:
 }
 
 /**
- * Box/cube projection UVs for a QuadMesh: each face onto its dominant normal
+ * Box/cube projection UVs for a PolyMesh: each face onto its dominant normal
  * plane (XY, XZ, or YZ), in object space at a fixed density (UV_DENSITY) —
  * so each face's UVs depend on that face alone.
  */
-export function boxProjectUVs(mesh: QuadMesh): QuadMesh {
+export function boxProjectUVs(mesh: PolyMesh): PolyMesh {
   const next = cloneQuadMesh(mesh);
   next.faceUVs = next.faces.map((face) =>
     face.length === 0 ? [] : boxProjectFace(next, face, computeFaceNormal(next.positions, face)),
@@ -200,7 +220,7 @@ export function boxProjectUVs(mesh: QuadMesh): QuadMesh {
  * Creates a pristine unit box represented as 6 quads and 8 unique vertices.
  * No internal diagonal triangulation edges.
  */
-export function createQuadBox(width = 1, height = 1, depth = 1): QuadMesh {
+export function createQuadBox(width = 1, height = 1, depth = 1): PolyMesh {
   const hw = width / 2;
   const hh = height / 2;
   const hd = depth / 2;
@@ -281,7 +301,7 @@ const QUAD_SPHERE_FACE_UV = [
  * UVs: the cube-cross layout of Blender's default cube, a quarter of the UV
  * width per face.
  */
-export function createQuadSphere(radius = 0.5, segments = 4, method: QuadSphereMethod = "even_area"): QuadMesh {
+export function createQuadSphere(radius = 0.5, segments = 4, method: QuadSphereMethod = "even_area"): PolyMesh {
   const seg = Math.max(1, Math.round(segments));
   const segVert = seg + 1;
   const layerFull = segVert * segVert;
@@ -361,7 +381,7 @@ export function createQuadSphere(radius = 0.5, segments = 4, method: QuadSphereM
 /**
  * Creates a plane represented as a grid of quads.
  */
-export function createQuadPlane(width = 1, height = 1, segX = 1, segY = 1): QuadMesh {
+export function createQuadPlane(width = 1, height = 1, segX = 1, segY = 1): PolyMesh {
   const sx = Math.max(1, Math.round(segX));
   const sy = Math.max(1, Math.round(segY));
   const hw = width / 2;
@@ -402,7 +422,7 @@ export function createQuadPlane(width = 1, height = 1, segX = 1, segY = 1): Quad
 const edgesCache = new WeakMap<number[][], [number, number][]>();
 
 /** Memoised per faces array (shared, unchanged, while a drag only moves vertices). */
-export function getQuadMeshEdges(mesh: QuadMesh): [number, number][] {
+export function getQuadMeshEdges(mesh: PolyMesh): [number, number][] {
   let edges = edgesCache.get(mesh.faces);
   if (!edges) {
     edges = computeQuadMeshEdges(mesh);
@@ -425,7 +445,7 @@ const withLooseCache = new WeakMap<[number, number][], { faceEdges: [number, num
  * lines are the only way to show an edge no face uses. The colour follows the
  * object's material, so an edges-only mesh still reads as its colour.
  */
-export function syncLooseEdgeLines(object: THREE.Mesh, mesh: QuadMesh | null): void {
+export function syncLooseEdgeLines(object: THREE.Mesh, mesh: PolyMesh | null): void {
   let lines = object.children.find((c) => c.userData.looseEdges) as THREE.LineSegments | undefined;
   if (!mesh?.edges?.length) {
     if (lines) {
@@ -459,7 +479,7 @@ export function syncLooseEdgeLines(object: THREE.Mesh, mesh: QuadMesh | null): v
   if (color instanceof THREE.Color) lineMaterial.color.copy(color);
 }
 
-function computeQuadMeshEdges(mesh: QuadMesh): [number, number][] {
+function computeQuadMeshEdges(mesh: PolyMesh): [number, number][] {
   // Numeric keys (a·N + b): several times faster than string keys at mesh sizes.
   const n = mesh.positions.length + 1;
   const edgeSet = new Set<number>();
@@ -509,12 +529,12 @@ function setGroupedIndex(geometry: THREE.BufferGeometry, byMaterial: Map<number,
 }
 
 /**
- * Converts a QuadMesh to a Three.js BufferGeometry (triangulated for GPU rendering).
+ * Converts a PolyMesh to a Three.js BufferGeometry (triangulated for GPU rendering).
  * Supports "auto" (crease angle), "smooth", and "flat" shading.
- * Attaches the QuadMesh it was built from in `geometry.userData.quadMesh` — by reference, read-only.
+ * Attaches the PolyMesh it was built from in `geometry.userData.quadMesh` — by reference, read-only.
  */
 export function quadMeshToBufferGeometry(
-  inputMesh: QuadMesh,
+  inputMesh: PolyMesh,
   forcedShading?: QuadMeshShading,
 ): THREE.BufferGeometry {
   const globalShading = forcedShading || inputMesh.shading || "auto";
@@ -586,6 +606,8 @@ export function quadMeshToBufferGeometry(
   const normals: number[] = [];
   const uvs: number[] = [];
   const colors: number[] = [];
+  /** The mesh vertex each output vertex was made for (split path). */
+  const vertexOf: number[] = [];
 
   if (isPureSmooth) {
     for (const p of mesh.positions) {
@@ -613,6 +635,7 @@ export function quadMeshToBufferGeometry(
     geometry.computeBoundingBox();
     geometry.computeBoundingSphere();
     geometry.userData.quadMesh = mesh; // read-only: consumers copy it (bufferGeometryToQuadMesh, resolveEditMeshData)
+    geometry.userData.polyVertexOf = identityVertexOf(mesh.positions.length);
     buildPlans.set(geometry, { kind: "shared", mesh: inputMesh, shading: globalShading });
     return geometry;
   }
@@ -678,6 +701,7 @@ export function quadMeshToBufferGeometry(
     const p = mesh.positions[vIdx];
     const newIdx = positions.length / 3;
     positions.push(p[0], p[1], p[2]);
+    vertexOf.push(vIdx);
     normals.push(nx, ny, nz);
     uvs.push(u, v);
     if (color) colors.push(color[0], color[1], color[2]);
@@ -713,14 +737,29 @@ export function quadMeshToBufferGeometry(
   geometry.computeBoundingBox();
   geometry.computeBoundingSphere();
   geometry.userData.quadMesh = mesh; // read-only: consumers copy it (bufferGeometryToQuadMesh, resolveEditMeshData)
+  geometry.userData.polyVertexOf = Int32Array.from(vertexOf);
   buildPlans.set(geometry, { kind: "split", mesh: inputMesh, shading: globalShading, cornerOut: Int32Array.from(cornerOut), smoothingGroup });
   return geometry;
+}
+
+/**
+ * `geometry.userData.polyVertexOf[i]` is the PolyMesh vertex the geometry's
+ * vertex i was made for. It lets readPolyMesh (mesh/polyIO.ts) recover the
+ * PolyMesh — topology, attributes, groups — from a geometry that a deformer
+ * cloned and moved: three's BufferGeometry.clone() shares `userData`, so the
+ * clone still points at the *undeformed* mesh, and this map is how its new
+ * vertex positions are written back onto it.
+ */
+function identityVertexOf(n: number): Int32Array {
+  const out = new Int32Array(n);
+  for (let i = 0; i < n; i++) out[i] = i;
+  return out;
 }
 
 interface BuildPlan {
   kind: "split" | "shared";
   /** The mesh the geometry was built from (for the same-topology check). */
-  mesh: QuadMesh;
+  mesh: PolyMesh;
   shading: QuadMeshShading;
   /** Split build: the output vertex of every face corner, in face order. */
   cornerOut?: Int32Array;
@@ -737,7 +776,7 @@ const buildPlans = new WeakMap<THREE.BufferGeometry, BuildPlan>();
  * vertices stays as it was at the last full build; for a drag that's exact
  * in flat and smooth shading and near enough in auto.
  */
-export function updateQuadMeshGeometry(geometry: THREE.BufferGeometry, mesh: QuadMesh, forcedShading?: QuadMeshShading): boolean {
+export function updateQuadMeshGeometry(geometry: THREE.BufferGeometry, mesh: PolyMesh, forcedShading?: QuadMeshShading): boolean {
   const plan = buildPlans.get(geometry);
   if (!plan) return false;
   const prev = plan.mesh;
@@ -811,11 +850,11 @@ export function updateQuadMeshGeometry(geometry: THREE.BufferGeometry, mesh: Qua
 }
 
 /**
- * Converts a BufferGeometry to a QuadMesh.
+ * Converts a BufferGeometry to a PolyMesh.
  * If `userData.quadMesh` exists, uses that directly.
  * Otherwise rebuilds quads, UVs and material slots — see importBufferGeometry.
  */
-export function bufferGeometryToQuadMesh(geometry: THREE.BufferGeometry): QuadMesh {
+export function bufferGeometryToQuadMesh(geometry: THREE.BufferGeometry): PolyMesh {
   if (geometry.userData.quadMesh) {
     return cloneQuadMesh(geometry.userData.quadMesh);
   }
@@ -830,7 +869,7 @@ export function bufferGeometryToQuadMesh(geometry: THREE.BufferGeometry): QuadMe
  * createQuadPlane grid) turned into per-corner ones, otherwise a box
  * projection. Returns the input itself when it already qualifies.
  */
-export function withFaceUVs(mesh: QuadMesh): QuadMesh {
+export function withFaceUVs(mesh: PolyMesh): PolyMesh {
   const valid = (f: number) => mesh.faceUVs?.[f]?.length === mesh.faces[f].length;
   if (mesh.faceUVs) {
     const missing = mesh.faces.map((_, f) => f).filter((f) => !valid(f));
@@ -858,7 +897,7 @@ export function withFaceUVs(mesh: QuadMesh): QuadMesh {
  * slot and shading inherited from the face it came from.
  */
 function appendFace(
-  next: QuadMesh,
+  next: PolyMesh,
   face: number[],
   from: number,
   uvs: [number, number][] | null,
@@ -873,12 +912,12 @@ function appendFace(
   return index;
 }
 
-function projectPendingUVs(next: QuadMesh, pending: number[]) {
+function projectPendingUVs(next: PolyMesh, pending: number[]) {
   fillNewFaceUVs(next, pending);
 }
 
 /** Selected face indices that exist, deduplicated, in ascending order. */
-function validFaces(mesh: QuadMesh, indices: number[]): number[] {
+function validFaces(mesh: PolyMesh, indices: number[]): number[] {
   return [...new Set(indices)].filter((f) => Number.isInteger(f) && f >= 0 && f < mesh.faces.length).sort((a, b) => a - b);
 }
 
@@ -894,13 +933,13 @@ function validFaces(mesh: QuadMesh, indices: number[]): number[] {
  * material and shading of the cap face they border.
  */
 export function extrudeFaces(
-  mesh: QuadMesh,
+  mesh: PolyMesh,
   selectedFaceIndices: number[],
   distance = 0.5,
   direction?: { x: number; y: number; z: number },
   /** Build the walls even at distance 0 (an extrude cancelled in place). */
   keepAtZero = false,
-): { mesh: QuadMesh; newFaces: number[] } {
+): { mesh: PolyMesh; newFaces: number[] } {
   const selected = validFaces(mesh, selectedFaceIndices);
   if (selected.length === 0 || (distance === 0 && !keepAtZero)) {
     return { mesh: cloneQuadMesh(mesh), newFaces: selected };
@@ -964,10 +1003,10 @@ export function extrudeFaces(
  * quads reuse the original and inner corner UVs.
  */
 export function insetFaces(
-  mesh: QuadMesh,
+  mesh: PolyMesh,
   selectedFaceIndices: number[],
   insetRatio = 0.25,
-): { mesh: QuadMesh; newFaces: number[] } {
+): { mesh: PolyMesh; newFaces: number[] } {
   const selected = validFaces(mesh, selectedFaceIndices);
   if (selected.length === 0 || insetRatio <= 0) {
     return { mesh: cloneQuadMesh(mesh), newFaces: selected };
@@ -1029,10 +1068,10 @@ function cutRatios(cutsOrRatio: number): number[] {
  * material and shading.
  */
 export function loopCut(
-  mesh: QuadMesh,
+  mesh: PolyMesh,
   startEdge: [number, number],
   cutsOrRatio: number = 1,
-): { mesh: QuadMesh; newEdgeIndices: [number, number][]; newVertexIndices: number[] } {
+): { mesh: PolyMesh; newEdgeIndices: [number, number][]; newVertexIndices: number[] } {
   const base = withFaceUVs(mesh);
   const next = cloneQuadMesh(base);
   const { faces: ring } = quadRing(base, startEdge[0], startEdge[1]);
@@ -1104,7 +1143,7 @@ export function loopCut(
  * the same ring and ratios loopCut uses.
  */
 export function getLoopCutPreviewSegments(
-  mesh: QuadMesh,
+  mesh: PolyMesh,
   startEdge: [number, number],
   cutsOrRatio: number = 1,
 ): [ [number, number, number], [number, number, number] ][] {
@@ -1170,13 +1209,13 @@ export function proportionalWeight(t: number, falloff: ProportionalFalloff = "sm
  * Transforms the selected points or faces around their centroid, with optional Blender-style Proportional Editing.
  */
 export function transformSelection(
-  mesh: QuadMesh,
+  mesh: PolyMesh,
   mode: "points" | "faces",
   selectedIndices: number[],
   delta: { position: THREE.Vector3; rotation: THREE.Quaternion; scale: THREE.Vector3 },
   centroid: THREE.Vector3,
   proportionalOptions?: ProportionalOptions,
-): QuadMesh {
+): PolyMesh {
   const matrix = new THREE.Matrix4()
     .makeTranslation(centroid.x + delta.position.x, centroid.y + delta.position.y, centroid.z + delta.position.z)
     .multiply(new THREE.Matrix4().makeRotationFromQuaternion(delta.rotation))
@@ -1231,12 +1270,12 @@ export function gizmoWorldDelta(
  * influence radius get the same displacement, weighted by the falloff).
  */
 export function transformSelectionByMatrix(
-  mesh: QuadMesh,
+  mesh: PolyMesh,
   mode: "points" | "faces",
   selectedIndices: number[],
   matrix: THREE.Matrix4,
   proportionalOptions?: ProportionalOptions,
-): QuadMesh {
+): PolyMesh {
   const vertices = new Set<number>();
   if (mode === "points") {
     for (const idx of selectedIndices) if (idx >= 0 && idx < mesh.positions.length) vertices.add(idx);
@@ -1254,15 +1293,15 @@ export function transformSelectionByMatrix(
  * along edges when `connected`).
  */
 export function transformVertexGroups(
-  mesh: QuadMesh,
+  mesh: PolyMesh,
   groups: { vertices: number[]; matrix: THREE.Matrix4 }[],
   proportional?: ProportionalOptions,
-): QuadMesh {
+): PolyMesh {
   // Only positions change: everything else is shared with the input rather
   // than copied (meshes are never mutated once built). That's what lets the
   // geometry build see "same topology" by reference and just move vertices
   // — see updateQuadMeshGeometry — on every frame of a drag.
-  const next: QuadMesh = { ...mesh, positions: mesh.positions.map((p) => [p[0], p[1], p[2]] as [number, number, number]) };
+  const next: PolyMesh = { ...mesh, positions: mesh.positions.map((p) => [p[0], p[1], p[2]] as [number, number, number]) };
   const groupOf = new Map<number, number>();
   groups.forEach((g, gi) => {
     for (const v of g.vertices) if (v >= 0 && v < mesh.positions.length) groupOf.set(v, gi);
@@ -1299,7 +1338,7 @@ export function transformVertexGroups(
 
 type Reach = Map<number, { dist: number; source: number }>;
 
-function straightDistances(mesh: QuadMesh, selected: Map<number, number>, radius: number): Reach {
+function straightDistances(mesh: PolyMesh, selected: Map<number, number>, radius: number): Reach {
   const out: Reach = new Map();
   const sources = [...selected.keys()];
   mesh.positions.forEach((raw, v) => {
@@ -1321,7 +1360,7 @@ function straightDistances(mesh: QuadMesh, selected: Map<number, number>, radius
 }
 
 /** Shortest distance along edges from the selection (Dijkstra), up to `radius`. */
-function connectedDistances(mesh: QuadMesh, selected: Map<number, number>, radius: number): Reach {
+function connectedDistances(mesh: PolyMesh, selected: Map<number, number>, radius: number): Reach {
   const neighbours: number[][] = Array.from({ length: mesh.positions.length }, () => []);
   for (const [a, b] of getQuadMeshEdges(mesh)) {
     neighbours[a].push(b);
@@ -1356,7 +1395,7 @@ function connectedDistances(mesh: QuadMesh, selected: Map<number, number>, radiu
  * shading, material) carried along and the vertices compacted: unused ones
  * dropped, the rest renumbered in their original order.
  */
-function subsetFaces(mesh: QuadMesh, keep: (face: number) => boolean): QuadMesh {
+function subsetFaces(mesh: PolyMesh, keep: (face: number) => boolean): PolyMesh {
   const kept: number[] = [];
   for (let f = 0; f < mesh.faces.length; f++) if (keep(f)) kept.push(f);
 
@@ -1375,7 +1414,7 @@ function subsetFaces(mesh: QuadMesh, keep: (face: number) => boolean): QuadMesh 
   }
 
   const hasFaceShading = Boolean(mesh.faceShading && mesh.faceShading.length > 0);
-  const out: QuadMesh = {
+  const out: PolyMesh = {
     positions,
     faces: kept.map((f) => mesh.faces[f].map((v) => oldToNew.get(v)!)),
     uvs: mesh.uvs ? uvs : undefined,
@@ -1393,10 +1432,10 @@ function subsetFaces(mesh: QuadMesh, keep: (face: number) => boolean): QuadMesh 
 }
 
 /**
- * Deletes the specified faces from a QuadMesh, reindexing vertices and
+ * Deletes the specified faces from a PolyMesh, reindexing vertices and
  * dropping any left unused, with UVs, shading and materials kept in step.
  */
-export function deleteFaces(mesh: QuadMesh, faceIndices: number[]): QuadMesh {
+export function deleteFaces(mesh: PolyMesh, faceIndices: number[]): PolyMesh {
   if (faceIndices.length === 0) return cloneQuadMesh(mesh);
   const toDelete = new Set(faceIndices.map(Number));
   return subsetFaces(mesh, (f) => !toDelete.has(f));
@@ -1407,7 +1446,7 @@ export function deleteFaces(mesh: QuadMesh, faceIndices: number[]): QuadMesh {
  * What else those faces had stays — their other edges become loose edges —
  * so deleting one corner of a quad leaves the three edges opposite it.
  */
-export function deleteVertices(mesh: QuadMesh, vertices: number[]): QuadMesh {
+export function deleteVertices(mesh: PolyMesh, vertices: number[]): PolyMesh {
   const gone = new Set(vertices.map(Number));
   if (gone.size === 0) return cloneQuadMesh(mesh);
   return deleteKeepingEdges(mesh, (face) => face.some((v) => gone.has(v)), (a, b) => gone.has(a) || gone.has(b));
@@ -1417,7 +1456,7 @@ export function deleteVertices(mesh: QuadMesh, vertices: number[]): QuadMesh {
  * Deletes edges, as Blender does: with every face using them. Those faces'
  * other edges stay, as loose edges; vertices left with nothing go.
  */
-export function deleteEdges(mesh: QuadMesh, edges: [number, number][]): QuadMesh {
+export function deleteEdges(mesh: PolyMesh, edges: [number, number][]): PolyMesh {
   const gone = new Set(edges.map(([a, b]) => (a < b ? `${a}_${b}` : `${b}_${a}`)));
   if (gone.size === 0) return cloneQuadMesh(mesh);
   const isGone = (a: number, b: number) => gone.has(a < b ? `${a}_${b}` : `${b}_${a}`);
@@ -1430,10 +1469,10 @@ export function deleteEdges(mesh: QuadMesh, edges: [number, number][]): QuadMesh
  * loose edges.
  */
 function deleteKeepingEdges(
-  mesh: QuadMesh,
+  mesh: PolyMesh,
   removeFace: (face: number[]) => boolean,
   removeEdge: (a: number, b: number) => boolean,
-): QuadMesh {
+): PolyMesh {
   const key = (a: number, b: number) => (a < b ? `${a}_${b}` : `${b}_${a}`);
   const keptFaces = new Set<number>();
   const surviving = new Set<string>();
@@ -1456,11 +1495,11 @@ function deleteKeepingEdges(
 }
 
 /**
- * Extracts the specified faces from a QuadMesh into a new QuadMesh,
+ * Extracts the specified faces from a PolyMesh into a new PolyMesh,
  * preserving their geometry, UVs, shading and materials with compact vertex
  * indexing.
  */
-export function extractFaces(mesh: QuadMesh, faceIndices: number[]): QuadMesh {
+export function extractFaces(mesh: PolyMesh, faceIndices: number[]): PolyMesh {
   const toExtract = new Set(faceIndices.map(Number));
   // Loose edges belong to no face, so they stay with the mesh the faces left.
   return subsetFaces({ ...mesh, edges: undefined }, (f) => toExtract.has(f));

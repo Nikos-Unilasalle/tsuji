@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
-import { createQuadBox, createQuadPlane, extrudeFaces, QuadMesh, quadMeshToBufferGeometry, withFaceUVs } from "../quadMesh";
+import { createQuadBox, createQuadPlane, extrudeFaces, PolyMesh, quadMeshToBufferGeometry, withFaceUVs } from "../quadMesh";
 import { smartUnwrap } from "./unwrap";
 import { extrudeEdges } from "./tools";
 import { fillNewFaceUVs } from "./uv";
@@ -22,12 +22,12 @@ function uvByPosition(geometry: THREE.BufferGeometry): Map<string, string[]> {
 }
 
 /** The UV a face gives vertex v. */
-const uvAt = (mesh: QuadMesh, f: number, v: number): UV => mesh.faceUVs![f][mesh.faces[f].indexOf(v)] as UV;
+const uvAt = (mesh: PolyMesh, f: number, v: number): UV => mesh.faceUVs![f][mesh.faces[f].indexOf(v)] as UV;
 
 describe("UVs stay put", () => {
   it("moving a vertex changes no other face's UVs — with stored UVs or none", () => {
     for (const base of [createQuadPlane(2, 2, 2, 2), { ...createQuadBox(1, 1, 1), faceUVs: undefined }]) {
-      const moved: QuadMesh = { ...base, positions: base.positions.map((p, i) => (i === 0 ? [p[0] - 10, p[1] + 3, p[2]] : p) as [number, number, number]) };
+      const moved: PolyMesh = { ...base, positions: base.positions.map((p, i) => (i === 0 ? [p[0] - 10, p[1] + 3, p[2]] : p) as [number, number, number]) };
       // What the geometry builds from: the same UVs for every face away from the moved vertex.
       const before = withFaceUVs(base).faceUVs!;
       const after = withFaceUVs(moved).faceUVs!;
@@ -103,7 +103,7 @@ describe("new faces continue their neighbours' UVs", () => {
     }
     const r = extrudeEdges({ positions, faces: [], edges }, edges);
     // Lift the copies, then fill the walls' UVs as the move does.
-    const lifted: QuadMesh = { ...r.mesh, positions: r.mesh.positions.map((p, i) => (i >= 6 ? [p[0], 1, p[2]] : p) as [number, number, number]) };
+    const lifted: PolyMesh = { ...r.mesh, positions: r.mesh.positions.map((p, i) => (i >= 6 ? [p[0], 1, p[2]] : p) as [number, number, number]) };
     fillNewFaceUVs(lifted, r.newFaces);
     // Neighbouring walls agree on the UVs of every vertex they share, bar one seam.
     let seams = 0;

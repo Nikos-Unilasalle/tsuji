@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import type { QuadMesh } from "../quadMesh";
+import type { PolyMesh } from "../quadMesh";
 import { describe, expect, it } from "vitest";
 import { EvalContext } from "../types";
 import { OBJECT_BOX_NODE, OBJECT_CYLINDER_NODE, OBJECT_DISC_NODE, OBJECT_PLANE_NODE, OBJECT_POLYGON_NODE, OBJECT_TEXT_NODE } from "./object";
@@ -288,7 +288,7 @@ describe("OBJECT_POLYGON_NODE", () => {
   it("without Faces, is vertices and edges only — Blender's Fill: Nothing", () => {
     const wireOf = (params: Record<string, unknown>) => {
       const mesh = poly({ faces: 0, sides: 5, ...params }, "poly-wire").geometry as THREE.Mesh;
-      return { mesh, quad: mesh.geometry.userData.quadMesh as QuadMesh };
+      return { mesh, quad: mesh.geometry.userData.quadMesh as PolyMesh };
     };
     const flat = wireOf({});
     expect(flat.mesh).toBeInstanceOf(THREE.Mesh);
@@ -315,7 +315,7 @@ describe("OBJECT_POLYGON_NODE", () => {
   it("puts the wire's corners where the filled polygon has them", () => {
     for (const depth of [0, 0.5]) {
       const filled = (poly({ sides: 5, depth }, `poly-filled-${depth}`).geometry as THREE.Mesh).geometry.getAttribute("position");
-      const wire = (poly({ sides: 5, depth, faces: 0 }, `poly-corners-${depth}`).geometry as THREE.Mesh).geometry.userData.quadMesh as QuadMesh;
+      const wire = (poly({ sides: 5, depth, faces: 0 }, `poly-corners-${depth}`).geometry as THREE.Mesh).geometry.userData.quadMesh as PolyMesh;
       for (const [x, y, z] of wire.positions) {
         let hit = false;
         for (let i = 0; i < filled.count && !hit; i++) {

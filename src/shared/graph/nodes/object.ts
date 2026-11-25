@@ -10,7 +10,7 @@ import { BUILTIN_FONTS, FONT_NAMES } from "../../three/fonts/fonts";
 import { createNodeCache, disposeObject3D } from "../nodeCaches";
 import { asVector3, composeNativeMatrix, preserveModifierUserData } from "./transform";
 import { worldMatrixOf } from "../objectPosition";
-import { createQuadBox, createQuadPlane, createQuadSphere, QuadMesh, QuadSphereMethod, quadMeshToBufferGeometry, syncLooseEdgeLines } from "../quadMesh";
+import { createQuadBox, createQuadPlane, createQuadSphere, PolyMesh, QuadSphereMethod, quadMeshToBufferGeometry, syncLooseEdgeLines } from "../quadMesh";
 
 export function numberInput(input: unknown, param: unknown, fallback: number): number {
   const raw = input !== undefined ? input : param;
@@ -1420,7 +1420,7 @@ const QUAD_SPHERE_FIELDS: ParamFieldDef[] = [
  * same vertices, faces and UVs, with its Segments (default 4) and Method —
  * all quads, no poles, even face sizes, the better base for Edit Mesh,
  * Subdivide or sculpting. See createQuadSphere. Its geometry carries the
- * QuadMesh it was built from, so Edit Mesh gets the quads as they are rather
+ * PolyMesh it was built from, so Edit Mesh gets the quads as they are rather
  * than re-pairing triangles.
  */
 export const OBJECT_SPHERE_NODE: NodeDefinition = {
@@ -1626,7 +1626,7 @@ function polygonCorners(sides: number, r: number): THREE.Vector2[] {
  * at each end joined by the vertical edges. Corners sit exactly where the
  * filled version puts them, so toggling Faces changes nothing else.
  */
-export function polygonWireMesh(sides: number, radius: number, innerRadius: number, depth: number): QuadMesh {
+export function polygonWireMesh(sides: number, radius: number, innerRadius: number, depth: number): PolyMesh {
   const positions: [number, number, number][] = [];
   const edges: [number, number][] = [];
   // The filled prism is a CylinderGeometry stood up, whose corners start a
@@ -1757,7 +1757,7 @@ export const OBJECT_POLYGON_NODE: NodeDefinition = {
 
     const texParams = extractTextureParams(inputs, params, ctx.nodeId);
     applyMaterialParams(mesh, matParams, depth > 0 ? THREE.FrontSide : THREE.DoubleSide, texParams);
-    syncLooseEdgeLines(mesh, faces ? null : (mesh.geometry.userData.quadMesh as QuadMesh));
+    syncLooseEdgeLines(mesh, faces ? null : (mesh.geometry.userData.quadMesh as PolyMesh));
 
     return primitiveOutputs(mesh, params);
   },

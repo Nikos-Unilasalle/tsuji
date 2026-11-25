@@ -8,10 +8,12 @@ export type NodeCategory =
   | "instance"
   | "io"
   | "lighting"
+  | "attribute"
   | "list"
   | "logic"
   | "material"
   | "math"
+  | "modeling"
   | "music"
   | "object"
   | "particles"
@@ -19,6 +21,7 @@ export type NodeCategory =
   | "post"
   | "postprocess"
   | "rig"
+  | "selection"
   | "sound"
   | "structure"
   | "text"
@@ -30,6 +33,7 @@ export type NodeCategory =
 
 /** Palette/section display order — alphabetically sorted. */
 export const CATEGORY_ORDER: NodeCategory[] = [
+  "attribute",
   "calibration",
   "compose",
   "converter",
@@ -42,6 +46,7 @@ export const CATEGORY_ORDER: NodeCategory[] = [
   "logic",
   "material",
   "math",
+  "modeling",
   "music",
   "object",
   "particles",
@@ -49,6 +54,7 @@ export const CATEGORY_ORDER: NodeCategory[] = [
   "postprocess",
   "post",
   "rig",
+  "selection",
   "sound",
   "structure",
   "text",
@@ -60,6 +66,7 @@ export const CATEGORY_ORDER: NodeCategory[] = [
 ];
 
 export const CATEGORY_LABEL: Record<NodeCategory, string> = {
+  attribute: "Attributes",
   calibration: "Calibration",
   compose: "Compose",
   converter: "Converter",
@@ -72,6 +79,7 @@ export const CATEGORY_LABEL: Record<NodeCategory, string> = {
   logic: "Logic",
   material: "Material",
   math: "Math",
+  modeling: "Modeling",
   music: "Music",
   object: "Object",
   particles: "Particles",
@@ -79,6 +87,7 @@ export const CATEGORY_LABEL: Record<NodeCategory, string> = {
   postprocess: "Post-Process & FX",
   post: "Post-render 2D",
   rig: "Rig / IK",
+  selection: "Selection / Groups",
   sound: "Sound / Audio",
   structure: "Structure",
   text: "Text",
@@ -93,6 +102,7 @@ export const CATEGORY_LABEL: Record<NodeCategory, string> = {
  * Extends Tsuji's existing panel-tone convention to the catalog.
  */
 export const CATEGORY_COLOR: Record<NodeCategory, string> = {
+  attribute: "#06b6d4",
   calibration: "#94a3b8",
   compose: "#0ea5e9",
   converter: "#10b981",
@@ -105,6 +115,7 @@ export const CATEGORY_COLOR: Record<NodeCategory, string> = {
   logic: "#fb923c",
   material: "#d97706",
   math: "#f2c14e",
+  modeling: "#eab308",
   music: "#d946ef",
   object: "#0284c7",
   particles: "#2dd4bf",
@@ -112,6 +123,7 @@ export const CATEGORY_COLOR: Record<NodeCategory, string> = {
   postprocess: "#c084fc",
   post: "#f43f5e",
   rig: "#c2773d",
+  selection: "#e11d48",
   sound: "#06b6d4",
   structure: "#38bdf8",
   text: "#f97316",

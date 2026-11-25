@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 import { EvalContext } from "../types";
 import { SOLIDIFY_NODE, solidifyGeometry, solidifyQuadMesh } from "./solidify";
-import { boxProjectUVs, createQuadBox, createQuadPlane, QuadMesh } from "../quadMesh";
+import { boxProjectUVs, createQuadBox, createQuadPlane, PolyMesh } from "../quadMesh";
 
 const CTX: EvalContext = { time: 0, step: 0, nodeId: "solidify-test" };
 
@@ -62,7 +62,7 @@ describe("SOLIDIFY_NODE and Solidify functions", () => {
     expect(solidified.index!.count).toBe(36);
   });
 
-  it("evaluates SOLIDIFY_NODE on an incoming Mesh and preserves QuadMesh data", () => {
+  it("evaluates SOLIDIFY_NODE on an incoming Mesh and preserves PolyMesh data", () => {
     const quadBox = createQuadBox(1, 1, 1);
     const geom = new THREE.BoxGeometry(1, 1, 1);
     geom.userData.quadMesh = quadBox;
@@ -77,7 +77,7 @@ describe("SOLIDIFY_NODE and Solidify functions", () => {
     const outMesh = res.geometry as THREE.Mesh;
     expect(outMesh).toBeInstanceOf(THREE.Mesh);
     expect(outMesh.geometry.userData.quadMesh).toBeDefined();
-    const outQuad = outMesh.geometry.userData.quadMesh as QuadMesh;
+    const outQuad = outMesh.geometry.userData.quadMesh as PolyMesh;
     expect(outQuad.faces.length).toBe(12);
   });
 });

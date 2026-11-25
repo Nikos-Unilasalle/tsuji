@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import type { QuadMesh } from "../quadMesh";
+import type { PolyMesh } from "../quadMesh";
 
 /** Adjacent triangles bent further apart than this stay triangles. */
 const MAX_FACE_ANGLE_DEG = 40;
@@ -11,7 +11,7 @@ const WELD_RELATIVE = 1e-6;
 type V3 = [number, number, number];
 
 /**
- * Rebuilds an editable QuadMesh from a triangulated BufferGeometry.
+ * Rebuilds an editable PolyMesh from a triangulated BufferGeometry.
  *
  * - **Welding** by distance relative to the object's size (a fixed 1e-4 used
  *   to merge real detail on small objects and miss seams on large ones).
@@ -26,7 +26,7 @@ type V3 = [number, number, number];
  *   when the two triangles disagree on winding.
  * - **Materials**: the geometry's groups become per-face material slots.
  */
-export function importBufferGeometry(geometry: THREE.BufferGeometry): QuadMesh | null {
+export function importBufferGeometry(geometry: THREE.BufferGeometry): PolyMesh | null {
   const posAttr = geometry.attributes.position;
   if (!posAttr) return null;
   const uvAttr = geometry.attributes.uv;
@@ -142,7 +142,7 @@ export function importBufferGeometry(geometry: THREE.BufferGeometry): QuadMesh |
   // Faces in source order (a quad sits where its first triangle was), so the
   // same geometry always yields the same face indices.
   const order = [...faceAt.keys()].sort((a, b) => a - b);
-  const result: QuadMesh = {
+  const result: PolyMesh = {
     positions,
     faces: order.map((t) => faceAt.get(t)!.face),
   };

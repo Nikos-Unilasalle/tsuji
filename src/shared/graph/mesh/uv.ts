@@ -1,4 +1,4 @@
-import type { QuadMesh } from "../quadMesh";
+import type { PolyMesh } from "../quadMesh";
 
 export type UV = [number, number];
 
@@ -9,7 +9,7 @@ export interface UVBounds {
   span: number;
 }
 
-export function uvBounds(mesh: QuadMesh): UVBounds {
+export function uvBounds(mesh: PolyMesh): UVBounds {
   let minX = Infinity, maxX = -Infinity;
   let minY = Infinity, maxY = -Infinity;
   let minZ = Infinity, maxZ = -Infinity;
@@ -41,7 +41,7 @@ const UV_OFFSET = 0.5;
  * Box-projection UVs for one face: projected on the plane its normal is
  * closest to, in object space at UV_DENSITY.
  */
-export function boxProjectFace(mesh: QuadMesh, face: number[], normal: { x: number; y: number; z: number }): UV[] {
+export function boxProjectFace(mesh: PolyMesh, face: number[], normal: { x: number; y: number; z: number }): UV[] {
   const ax = Math.abs(normal.x), ay = Math.abs(normal.y), az = Math.abs(normal.z);
   const d = UV_DENSITY;
   return face.map((vIdx) => {
@@ -67,7 +67,7 @@ const length = (a: readonly number[]) => Math.sqrt(dot(a, a));
 const scaled = (a: readonly number[], s: number): V3 => [a[0] * s, a[1] * s, a[2] * s];
 
 /** A face's unit normal (Newell's method: robust for n-gons), or zero for a degenerate face. */
-function faceNormal(mesh: QuadMesh, face: number[]): V3 {
+function faceNormal(mesh: PolyMesh, face: number[]): V3 {
   const n: V3 = [0, 0, 0];
   for (let i = 0; i < face.length; i++) {
     const a = mesh.positions[face[i]];
@@ -89,7 +89,7 @@ const edgeKeyOf = (a: number, b: number) => (a < b ? `${a}_${b}` : `${b}_${a}`);
  * rest of `f` lands on the far side of the edge from `g`, at the same scale
  * as `g` has along the edge. Null when the edge is degenerate in 3D or in UV.
  */
-function unfoldAcross(mesh: QuadMesh, f: number, g: number, a: number, b: number): UV[] | null {
+function unfoldAcross(mesh: PolyMesh, f: number, g: number, a: number, b: number): UV[] | null {
   const F = mesh.faces[f];
   const G = mesh.faces[g];
   const gUVs = mesh.faceUVs![g];
@@ -154,7 +154,7 @@ function unfoldAcross(mesh: QuadMesh, f: number, g: number, a: number, b: number
  * at all (an edges-only outline extruded into a strip) starts from one
  * box-projected face and unfolds from there.
  */
-export function fillNewFaceUVs(mesh: QuadMesh, faces: number[], sources?: ReadonlySet<number>): void {
+export function fillNewFaceUVs(mesh: PolyMesh, faces: number[], sources?: ReadonlySet<number>): void {
   const pending = new Set(faces.filter((f) => mesh.faces[f]?.length >= 3));
   if (pending.size === 0) return;
   const faceUVs = mesh.faceUVs!;

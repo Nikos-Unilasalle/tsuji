@@ -1,4 +1,4 @@
-import type { QuadMesh } from "../quadMesh";
+import type { PolyMesh } from "../quadMesh";
 import { boxProjectFace, fillNewFaceUVs, UV_DENSITY, type UV } from "./uv";
 
 /*
@@ -13,18 +13,18 @@ import { boxProjectFace, fillNewFaceUVs, UV_DENSITY, type UV } from "./uv";
 type V3 = [number, number, number];
 export type ProjectionAxis = "x" | "y" | "z";
 
-function targetFaces(mesh: QuadMesh, faces: number[]): number[] {
+function targetFaces(mesh: PolyMesh, faces: number[]): number[] {
   const list = faces.length > 0 ? [...new Set(faces)] : mesh.faces.map((_, f) => f);
   return list.filter((f) => (mesh.faces[f]?.length ?? 0) >= 3);
 }
 
-function copyUVs(mesh: QuadMesh): UV[][] {
+function copyUVs(mesh: PolyMesh): UV[][] {
   return mesh.faces.map((face, f) =>
     (mesh.faceUVs?.[f]?.length === face.length ? mesh.faceUVs[f] : face.map(() => [0, 0])).map((uv) => [uv[0], uv[1]] as UV),
   );
 }
 
-function centreOf(mesh: QuadMesh, faces: number[]): V3 {
+function centreOf(mesh: PolyMesh, faces: number[]): V3 {
   const seen = new Set<number>();
   const c: V3 = [0, 0, 0];
   for (const f of faces) for (const v of mesh.faces[f]) {
@@ -58,7 +58,7 @@ function wrapped(values: number[], period: number): number[] {
 }
 
 /** Box / cube projection (the same projection as a mesh with no UVs gets). */
-export function cubeProject(mesh: QuadMesh, faces: number[]): QuadMesh {
+export function cubeProject(mesh: PolyMesh, faces: number[]): PolyMesh {
   const faceUVs = copyUVs(mesh);
   for (const f of targetFaces(mesh, faces)) {
     faceUVs[f] = boxProjectFace(mesh, mesh.faces[f], faceNormal(mesh, mesh.faces[f]));
@@ -72,7 +72,7 @@ export function cubeProject(mesh: QuadMesh, faces: number[]): QuadMesh {
  * both in scene units at UV_DENSITY, so a cylinder of any size keeps the
  * texture's proportions.
  */
-export function cylinderProject(mesh: QuadMesh, faces: number[], axis: ProjectionAxis = "y"): QuadMesh {
+export function cylinderProject(mesh: PolyMesh, faces: number[], axis: ProjectionAxis = "y"): PolyMesh {
   const target = targetFaces(mesh, faces);
   const faceUVs = copyUVs(mesh);
   const c = centreOf(mesh, target);
@@ -90,7 +90,7 @@ export function cylinderProject(mesh: QuadMesh, faces: number[], axis: Projectio
  * Sphere projection about the selection's centre: longitude and latitude,
  * as arc lengths at the mean radius (UV_DENSITY), `axis` the pole.
  */
-export function sphereProject(mesh: QuadMesh, faces: number[], axis: ProjectionAxis = "y"): QuadMesh {
+export function sphereProject(mesh: PolyMesh, faces: number[], axis: ProjectionAxis = "y"): PolyMesh {
   const target = targetFaces(mesh, faces);
   const faceUVs = copyUVs(mesh);
   const c = centreOf(mesh, target);
@@ -107,7 +107,7 @@ export function sphereProject(mesh: QuadMesh, faces: number[], axis: ProjectionA
   return { ...mesh, faceUVs };
 }
 
-function meanRadius(mesh: QuadMesh, faces: number[], c: V3, axis: ProjectionAxis, aroundAxis: boolean): number {
+function meanRadius(mesh: PolyMesh, faces: number[], c: V3, axis: ProjectionAxis, aroundAxis: boolean): number {
   let sum = 0;
   let count = 0;
   const seen = new Set<number>();
@@ -126,7 +126,7 @@ function meanRadius(mesh: QuadMesh, faces: number[], c: V3, axis: ProjectionAxis
  * from a local-space point to normalised device coordinates), scaled
  * uniformly into 0..1 — its on-screen proportions kept.
  */
-export function viewProject(mesh: QuadMesh, faces: number[], toView: (p: V3) => [number, number]): QuadMesh {
+export function viewProject(mesh: PolyMesh, faces: number[], toView: (p: V3) => [number, number]): PolyMesh {
   const target = targetFaces(mesh, faces);
   const faceUVs = copyUVs(mesh);
   const projected = new Map<number, [number, number]>();
@@ -154,10 +154,10 @@ export function viewProject(mesh: QuadMesh, faces: number[], toView: (p: V3) => 
  * a neighbour in the set — so a strip or grid of quads comes out as one
  * straight, continuous layout following the active face.
  */
-export function followActiveQuads(mesh: QuadMesh, faces: number[], active: number): QuadMesh {
+export function followActiveQuads(mesh: PolyMesh, faces: number[], active: number): PolyMesh {
   const target = targetFaces(mesh, faces);
   const faceUVs = copyUVs(mesh);
-  const next: QuadMesh = { ...mesh, faceUVs };
+  const next: PolyMesh = { ...mesh, faceUVs };
   if (!(mesh.faceUVs?.[active]?.length === mesh.faces[active]?.length)) {
     faceUVs[active] = boxProjectFace(mesh, mesh.faces[active], faceNormal(mesh, mesh.faces[active]));
   }
@@ -167,7 +167,7 @@ export function followActiveQuads(mesh: QuadMesh, faces: number[], active: numbe
   return next;
 }
 
-function faceNormal(mesh: QuadMesh, face: number[]): { x: number; y: number; z: number } {
+function faceNormal(mesh: PolyMesh, face: number[]): { x: number; y: number; z: number } {
   const n = [0, 0, 0];
   for (let i = 0; i < face.length; i++) {
     const a = mesh.positions[face[i]];

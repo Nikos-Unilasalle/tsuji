@@ -1,4 +1,4 @@
-import type { QuadMesh } from "../quadMesh";
+import type { PolyMesh } from "../quadMesh";
 
 /*
  * Edge attributes — sharp, seam, crease — are stored as vertex pairs (lower
@@ -16,8 +16,8 @@ const pair = (a: number, b: number): [number, number] => (a < b ? [a, b] : [b, a
 
 /** Copies of the edge attributes (for cloneQuadMesh). */
 export function cloneEdgeAttributes(
-  mesh: QuadMesh,
-): Pick<QuadMesh, "sharpEdges" | "seamEdges" | "edgeCreases" | "faceColors" | "edges"> {
+  mesh: PolyMesh,
+): Pick<PolyMesh, "sharpEdges" | "seamEdges" | "edgeCreases" | "faceColors" | "edges"> {
   return {
     edges: mesh.edges?.map(([a, b]) => [a, b] as [number, number]),
     sharpEdges: mesh.sharpEdges?.map(([a, b]) => [a, b] as [number, number]),
@@ -28,7 +28,7 @@ export function cloneEdgeAttributes(
 }
 
 /** The mesh's existing edges, as keys. */
-export function meshEdgeKeys(mesh: QuadMesh): Set<string> {
+export function meshEdgeKeys(mesh: PolyMesh): Set<string> {
   const keys = new Set<string>();
   for (const face of mesh.faces) for (let i = 0; i < face.length; i++) keys.add(edgeKey(face[i], face[(i + 1) % face.length]));
   return keys;
@@ -38,7 +38,7 @@ export function meshEdgeKeys(mesh: QuadMesh): Set<string> {
  * Writes `src`'s edge attributes onto `out` through a vertex renumbering
  * (-1 = gone), keeping only edges `out` actually has.
  */
-export function remapEdgeAttributes(src: QuadMesh, out: QuadMesh, remap: ArrayLike<number>): void {
+export function remapEdgeAttributes(src: PolyMesh, out: PolyMesh, remap: ArrayLike<number>): void {
   const exists = meshEdgeKeys(out);
   const mapPairs = (list?: [number, number][]) => {
     if (!list) return undefined;
@@ -87,7 +87,7 @@ export function remapEdgeAttributes(src: QuadMesh, out: QuadMesh, remap: ArrayLi
 }
 
 /** Remaps edge attributes in place through a vertex map (merges: many to one). */
-export function mapEdgeAttributesInPlace(mesh: QuadMesh, map: (v: number) => number): void {
+export function mapEdgeAttributesInPlace(mesh: PolyMesh, map: (v: number) => number): void {
   const identity = new Int32Array(mesh.positions.length).map((_, i) => map(i));
   const copy = { ...mesh };
   remapEdgeAttributes(copy, mesh, identity);
@@ -97,7 +97,7 @@ export function mapEdgeAttributesInPlace(mesh: QuadMesh, map: (v: number) => num
  * An operation put vertices `mids` along edge a–b, in order from a (loop
  * cut, knife, subdivide): whatever marked a–b now marks every piece of it.
  */
-export function splitEdgeAttributes(mesh: QuadMesh, a: number, b: number, mids: number[]): void {
+export function splitEdgeAttributes(mesh: PolyMesh, a: number, b: number, mids: number[]): void {
   if (mids.length === 0) return;
   const key = edgeKey(a, b);
   const chain = [a, ...mids, b];
@@ -119,7 +119,7 @@ export function splitEdgeAttributes(mesh: QuadMesh, a: number, b: number, mids: 
 }
 
 /** Marks (or, with `clear`, unmarks) edges as sharp or seam. */
-export function setEdgeFlag(mesh: QuadMesh, attribute: EdgeAttribute, edges: [number, number][], clear = false): QuadMesh {
+export function setEdgeFlag(mesh: PolyMesh, attribute: EdgeAttribute, edges: [number, number][], clear = false): PolyMesh {
   const current = new Map((mesh[attribute] ?? []).map((e) => [edgeKey(e[0], e[1]), e] as const));
   for (const [a, b] of edges) {
     if (clear) current.delete(edgeKey(a, b));
@@ -129,7 +129,7 @@ export function setEdgeFlag(mesh: QuadMesh, attribute: EdgeAttribute, edges: [nu
 }
 
 /** Sets the crease weight (0..1; 0 removes it) of the given edges. */
-export function setEdgeCrease(mesh: QuadMesh, edges: [number, number][], weight: number): QuadMesh {
+export function setEdgeCrease(mesh: PolyMesh, edges: [number, number][], weight: number): PolyMesh {
   const w = Math.max(0, Math.min(1, weight));
   const current = new Map((mesh.edgeCreases ?? []).map((e) => [edgeKey(e[0], e[1]), e] as const));
   for (const [a, b] of edges) {
@@ -140,12 +140,12 @@ export function setEdgeCrease(mesh: QuadMesh, edges: [number, number][], weight:
 }
 
 /** Crease weight per edge key. */
-export function creaseMap(mesh: QuadMesh): Map<string, number> {
+export function creaseMap(mesh: PolyMesh): Map<string, number> {
   return new Map((mesh.edgeCreases ?? []).map(([a, b, w]) => [edgeKey(a, b), w]));
 }
 
 /** The colour of each corner of face f, falling back to the face's first colour, then white. */
-export function cornerColor(mesh: QuadMesh, f: number, corner: number): Color3 {
+export function cornerColor(mesh: PolyMesh, f: number, corner: number): Color3 {
   const c = mesh.faceColors?.[f];
   return c?.[corner] ?? c?.[0] ?? [1, 1, 1];
 }
@@ -154,7 +154,7 @@ export function cornerColor(mesh: QuadMesh, f: number, corner: number): Color3 {
  * Paints corners: every corner of the given faces, or — for points — every
  * corner sitting on one of the vertices.
  */
-export function paintCorners(mesh: QuadMesh, color: Color3, target: { faces?: number[]; vertices?: number[] }): QuadMesh {
+export function paintCorners(mesh: PolyMesh, color: Color3, target: { faces?: number[]; vertices?: number[] }): PolyMesh {
   const faceColors = mesh.faces.map((face, f) => face.map((_, i) => cornerColor(mesh, f, i)) as Color3[]);
   const faces = new Set(target.faces ?? []);
   const vertices = new Set(target.vertices ?? []);

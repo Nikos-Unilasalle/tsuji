@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { QuadMesh, computeFaceNormal } from "../quadMesh";
+import { PolyMesh, computeFaceNormal } from "../quadMesh";
 import { buildTopology } from "./topology";
 import { edgeKey } from "./attributes";
 import { triangulateFace } from "./triangulate";
@@ -27,7 +27,7 @@ export interface UnwrapOptions {
  *    square — every island keeps the same texel density, so a texture has
  *    the same scale all over the model.
  */
-export function smartUnwrap(mesh: QuadMesh, options: UnwrapOptions = {}): QuadMesh {
+export function smartUnwrap(mesh: PolyMesh, options: UnwrapOptions = {}): PolyMesh {
   const marginFrac = Math.max(0, Math.min(0.2, options.margin ?? 0.02));
   const P = mesh.positions;
   const islands = angleIslands(mesh, mesh.faces.map((_, f) => f), options.angleLimitDeg ?? 66);
@@ -63,7 +63,7 @@ export function smartUnwrap(mesh: QuadMesh, options: UnwrapOptions = {}): QuadMe
  * (area-weighted) average normal. Also what Unwrap cuts a closed surface with
  * no seams into, since a conformal unwrap needs an open patch.
  */
-export function angleIslands(mesh: QuadMesh, faces: number[], angleLimitDeg = 66): { faces: number[]; normal: THREE.Vector3 }[] {
+export function angleIslands(mesh: PolyMesh, faces: number[], angleLimitDeg = 66): { faces: number[]; normal: THREE.Vector3 }[] {
   const limit = Math.cos(THREE.MathUtils.degToRad(Math.max(1, Math.min(89, angleLimitDeg))));
   const topo = buildTopology(mesh);
   const P = mesh.positions;

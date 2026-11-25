@@ -5,7 +5,7 @@ import { LineSegmentsGeometry } from "three/examples/jsm/lines/LineSegmentsGeome
 import { LineMaterial } from "three/examples/jsm/lines/LineMaterial.js";
 import { disposeGeometryBvh, getBoundsTree } from "./bvh";
 import {
-  QuadMesh,
+  PolyMesh,
   getQuadMeshEdges,
   computeFaceNormal,
   computeFaceCentroid,
@@ -165,7 +165,7 @@ type Segment = [[number, number, number], [number, number, number]];
 /** Everything the overlay draws for one frame. */
 export interface EditMeshDisplayState {
   mesh: THREE.Mesh | null;
-  quadMesh: QuadMesh | null;
+  quadMesh: PolyMesh | null;
   mode: SelectMode;
   points: ReadonlySet<number>;
   edges: ReadonlyArray<EdgeRef>;
@@ -239,7 +239,7 @@ export interface EditMeshHandles {
    */
   pickFace(
     raycaster: THREE.Raycaster,
-    quadMesh: QuadMesh,
+    quadMesh: PolyMesh,
     meshWorldMatrix: THREE.Matrix4,
     viewport?: { widthPx: number; heightPx: number },
   ): number | null;
@@ -249,7 +249,7 @@ export interface EditMeshHandles {
     camera: THREE.Camera,
     widthPx: number,
     heightPx: number,
-    quadMesh: QuadMesh,
+    quadMesh: PolyMesh,
     meshWorldMatrix: THREE.Matrix4,
     exclude?: ReadonlySet<number>,
   ): number | null;
@@ -258,7 +258,7 @@ export interface EditMeshHandles {
     camera: THREE.Camera,
     widthPx: number,
     heightPx: number,
-    quadMesh: QuadMesh,
+    quadMesh: PolyMesh,
     meshWorldMatrix: THREE.Matrix4,
   ): EdgeRef | null;
   pickPointsInRegion(
@@ -266,7 +266,7 @@ export interface EditMeshHandles {
     widthPx: number,
     heightPx: number,
     camera: THREE.Camera,
-    quadMesh: QuadMesh,
+    quadMesh: PolyMesh,
     meshWorldMatrix: THREE.Matrix4,
   ): number[];
   pickEdgesInRegion(
@@ -274,7 +274,7 @@ export interface EditMeshHandles {
     widthPx: number,
     heightPx: number,
     camera: THREE.Camera,
-    quadMesh: QuadMesh,
+    quadMesh: PolyMesh,
     meshWorldMatrix: THREE.Matrix4,
   ): EdgeRef[];
   pickFacesInRegion(
@@ -282,7 +282,7 @@ export interface EditMeshHandles {
     widthPx: number,
     heightPx: number,
     camera: THREE.Camera,
-    quadMesh: QuadMesh,
+    quadMesh: PolyMesh,
     meshWorldMatrix: THREE.Matrix4,
   ): number[];
 }
@@ -293,10 +293,10 @@ const EDGE_PICK_RADIUS_PX = 10;
 export function createEditMeshHandles(): EditMeshHandles {
   // quadMeshSignature memoised on identity: a frozen mesh is the same object
   // every frame, a live one a fresh clone whose content usually hasn't moved.
-  let keyedMesh: QuadMesh | null = null;
+  let keyedMesh: PolyMesh | null = null;
   let keyedValue = "";
   let dragFrame = 0;
-  function keyOf(mesh: QuadMesh): string {
+  function keyOf(mesh: PolyMesh): string {
     if (mesh !== keyedMesh) {
       // A new mesh sharing the last one's faces is a drag frame: its
       // vertices moved (that's the only reason to make one), so it gets a
@@ -315,7 +315,7 @@ export function createEditMeshHandles(): EditMeshHandles {
   let occluderEpsilon = 1e-4;
   let occluderEmpty = false;
   /** Null for a mesh with no faces (edges only): nothing on it can hide anything. */
-  function occluderFor(mesh: QuadMesh): MeshBVH | null {
+  function occluderFor(mesh: PolyMesh): MeshBVH | null {
     const key = keyOf(mesh);
     if (!occluderGeometry || occluderKey !== key) {
       if (occluderGeometry) {
@@ -501,7 +501,7 @@ export function createEditMeshHandles(): EditMeshHandles {
     object.visible = values.length > 0;
   }
 
-  function edgeSegments(mesh: QuadMesh, edges: ReadonlyArray<EdgeRef>): number[] {
+  function edgeSegments(mesh: PolyMesh, edges: ReadonlyArray<EdgeRef>): number[] {
     const out: number[] = [];
     for (const [a, b] of edges) {
       const pa = mesh.positions[a];
@@ -513,7 +513,7 @@ export function createEditMeshHandles(): EditMeshHandles {
 
   // What each overlay was last built from. A key that matches means the
   // overlay is already right and is left alone.
-  let lastMesh: QuadMesh | null = null;
+  let lastMesh: PolyMesh | null = null;
   let meshKey = "";
   let wireKey = "";
   let markedKey = "";

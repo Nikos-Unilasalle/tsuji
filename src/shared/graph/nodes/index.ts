@@ -173,6 +173,7 @@ import { CONTOUR_SCAN_NODE } from "./contourScan";
 import { WELD_NODE } from "./weld";
 import { SUBDIVIDE_NODE } from "./subdivide";
 import { SOLIDIFY_NODE } from "./solidify";
+import { SELECT_NODES } from "./selectNodes";
 import { EXTRUDE_MESH_NODE, DELETE_GEOMETRY_NODE, FACE_SELECTION_NODE } from "./meshEdit";
 import { EDIT_MESH_NODE } from "./editMesh";
 import { SHADE_NODE } from "./shade";
@@ -532,6 +533,7 @@ export const STARTER_NODES = [
   WELD_NODE,
   SUBDIVIDE_NODE,
   SOLIDIFY_NODE,
+  ...SELECT_NODES,
   EXTRUDE_MESH_NODE,
   EDIT_MESH_NODE,
   DELETE_GEOMETRY_NODE,

@@ -1,10 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { createQuadBox, createQuadPlane, QuadMesh, computeFaceNormal } from "../quadMesh";
+import { createQuadBox, createQuadPlane, PolyMesh, computeFaceNormal } from "../quadMesh";
 import { validateQuadMesh } from "./validate";
 import { bevelEdges } from "./bevel";
 import { getTopology } from "./topology";
 
-function expectClosedAndSound(mesh: QuadMesh) {
+function expectClosedAndSound(mesh: PolyMesh) {
   const r = validateQuadMesh(mesh);
   expect(r.errors).toEqual([]);
   expect(r.nonManifoldEdges).toBe(0);

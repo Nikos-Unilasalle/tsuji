@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { QuadMesh, cloneQuadMesh, withFaceUVs } from "../quadMesh";
+import { PolyMesh, cloneQuadMesh, withFaceUVs } from "../quadMesh";
 import { buildTopology } from "./topology";
 import { compactMesh, faceUVMapper, projectNewFaceUVs } from "./tools";
 import type { UV } from "./uv";
@@ -23,11 +23,11 @@ const vec = (p: readonly number[]) => new THREE.Vector3(p[0], p[1], p[2]);
  * skipped. New faces are selected in the result.
  */
 export function bevelEdges(
-  mesh: QuadMesh,
+  mesh: PolyMesh,
   edges: [number, number][],
   width: number,
   segments = 1,
-): { mesh: QuadMesh; newFaces: number[] } {
+): { mesh: PolyMesh; newFaces: number[] } {
   const base = withFaceUVs(mesh);
   const topo = buildTopology(base);
   const P = base.positions;

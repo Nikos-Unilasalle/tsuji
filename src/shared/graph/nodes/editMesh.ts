@@ -19,7 +19,7 @@ import {
 } from "./object";
 import { asVector3, composeNativeMatrix, preserveModifierUserData } from "./transform";
 import {
-  QuadMesh,
+  PolyMesh,
   QuadMeshShading,
   createQuadBox,
   cloneQuadMesh,
@@ -43,7 +43,7 @@ export const EDIT_MESH_DELETE_FACES_ACTION = "edit-mesh/delete-faces";
 export const EDIT_MESH_SEPARATE_FACES_ACTION = "edit-mesh/separate-faces";
 
 /**
- * Resolves the effective QuadMesh for an Edit Mesh node:
+ * Resolves the effective PolyMesh for an Edit Mesh node:
  * 1. Returns frozen `node.params.meshData` if already edited / set.
  * 2. If not yet frozen, extracts the input geometry from evaluated results (or inputs).
  * 3. Falls back to a pristine unit quad box if no input geometry exists.
@@ -51,8 +51,8 @@ export const EDIT_MESH_SEPARATE_FACES_ACTION = "edit-mesh/separate-faces";
 export function resolveEditMeshData(
   node: { id: string; params: Record<string, unknown> },
   evaluatedResults?: Map<string, Record<string, unknown>> | null,
-): QuadMesh {
-  const meshData = node.params.meshData as QuadMesh | undefined;
+): PolyMesh {
+  const meshData = node.params.meshData as PolyMesh | undefined;
   if (
     meshData &&
     typeof meshData === "object" &&
@@ -67,7 +67,7 @@ export function resolveEditMeshData(
   const evalObj = evalResult?.geometry;
   const evalMesh = evalObj instanceof THREE.Object3D ? findFirstMesh(evalObj) : null;
   if (evalMesh?.geometry?.userData?.quadMesh) {
-    return cloneQuadMesh(evalMesh.geometry.userData.quadMesh as QuadMesh);
+    return cloneQuadMesh(evalMesh.geometry.userData.quadMesh as PolyMesh);
   }
 
   // Check evaluated inputs if available
@@ -129,7 +129,7 @@ export function editMeshSelectionParams(
   node: { type: string; params: Record<string, unknown> },
   mode: SelectMode,
   selection: MeshSelection,
-  quadMesh: QuadMesh,
+  quadMesh: PolyMesh,
 ): Record<string, unknown> {
   const key = SELECTION_KEYS[mode];
   const value = mode === "points" ? selection.points : mode === "edges" ? selection.edges : selection.faces;
@@ -146,7 +146,7 @@ export function editMeshSelectionParams(
 export function editMeshModeSwitchParams(
   node: { type: string; params: Record<string, unknown> },
   to: SelectMode,
-  quadMesh: QuadMesh,
+  quadMesh: PolyMesh,
 ): Record<string, unknown> {
   const { mode, selection } = readEditMeshSelection(node);
   if (mode === to) return {};
@@ -158,7 +158,7 @@ interface EditMeshState {
   mesh?: THREE.Mesh;
   lastQuadMesh?: string;
   /** The mesh object last built from (identity check before any hashing). */
-  lastQuadMeshObject?: QuadMesh;
+  lastQuadMeshObject?: PolyMesh;
   lastShading?: string;
   sourceGeometry?: THREE.BufferGeometry | null;
   /** geometrySignature() of the wired input, cached against its identity/version. */
@@ -311,7 +311,7 @@ function applyEditMeshMaterial(
   }
 
   // A single material or a multi-material array alike: a multi-material
-  // import carries per-face slots (QuadMesh.faceMaterials) that index into it.
+  // import carries per-face slots (PolyMesh.faceMaterials) that index into it.
   if (srcMesh && (srcMesh.material instanceof THREE.Material || Array.isArray(srcMesh.material))) {
     inheritSourceMaterial(mesh, srcMesh.material);
     clearAppliedMaterialSignature(mesh);
@@ -394,7 +394,7 @@ function applyEditMeshMaterials(
   srcMesh: THREE.Mesh | null,
   inputs: Record<string, unknown>,
   texParams: TextureParams | undefined,
-  quadMesh: QuadMesh,
+  quadMesh: PolyMesh,
   side: THREE.Side | null,
 ) {
   if (state.baseMaterial) mesh.material = state.baseMaterial;
@@ -650,7 +650,7 @@ export const EDIT_MESH_NODE: NodeDefinition = {
   ],
   reset: { action: EDIT_MESH_RESEED_ACTION },
   defaultParams: {
-    meshData: null as QuadMesh | null,
+    meshData: null as PolyMesh | null,
     selectMode: "faces" as SelectMode,
     selectedPoints: [] as number[],
     selectedEdges: [] as [number, number][],
@@ -713,9 +713,9 @@ export const EDIT_MESH_NODE: NodeDefinition = {
     const state = getState(editMeshCache, ctx.nodeId);
     const sourceSig = srcGeom ? sourceSignatureOf(state, srcGeom) : undefined;
 
-    let quadMesh: QuadMesh;
-    if (params.meshData && typeof params.meshData === "object" && Array.isArray((params.meshData as QuadMesh).positions)) {
-      quadMesh = params.meshData as QuadMesh;
+    let quadMesh: PolyMesh;
+    if (params.meshData && typeof params.meshData === "object" && Array.isArray((params.meshData as PolyMesh).positions)) {
+      quadMesh = params.meshData as PolyMesh;
       state.frozen = true;
       // A copy frozen before signatures existed has nothing to compare
       // against, so it is never flagged rather than always flagged.

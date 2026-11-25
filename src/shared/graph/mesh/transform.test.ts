@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import * as THREE from "three";
-import { createQuadBox, createQuadPlane, gizmoWorldDelta, proportionalWeight, QuadMesh, transformVertexGroups } from "../quadMesh";
+import { createQuadBox, createQuadPlane, gizmoWorldDelta, proportionalWeight, PolyMesh, transformVertexGroups } from "../quadMesh";
 import { emptySelection, selectionIslands, selectionOrientation } from "./selection";
 
 describe("gizmoWorldDelta", () => {
@@ -38,7 +38,7 @@ describe("proportional editing", () => {
   it("in connected mode, leaves separate pieces alone", () => {
     // Two unit quads side by side with a small gap: close in space, not connected.
     const a = createQuadPlane(1, 1, 1, 1);
-    const two: QuadMesh = {
+    const two: PolyMesh = {
       positions: [...a.positions, ...a.positions.map(([x, y, z]) => [x + 1.2, y, z] as [number, number, number])],
       faces: [...a.faces, ...a.faces.map((f) => f.map((v) => v + 4))],
     };

@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { QuadMesh, cloneQuadMesh, withFaceUVs } from "../quadMesh";
+import { PolyMesh, cloneQuadMesh, withFaceUVs } from "../quadMesh";
 import { buildTopology } from "./topology";
 import { compactMesh, projectNewFaceUVs } from "./tools";
 import type { UV } from "./uv";
@@ -43,7 +43,7 @@ export function edgeChains(edges: Pair[]): { verts: number[]; closed: boolean }[
   return chains;
 }
 
-const dist2 = (m: QuadMesh, a: number, b: number) => {
+const dist2 = (m: PolyMesh, a: number, b: number) => {
   const p = m.positions[a];
   const q = m.positions[b];
   return (p[0] - q[0]) ** 2 + (p[1] - q[1]) ** 2 + (p[2] - q[2]) ** 2;
@@ -57,9 +57,9 @@ const dist2 = (m: QuadMesh, a: number, b: number) => {
  * wound to agree with faces already on those edges.
  */
 export function bridgeEdgeLoops(
-  mesh: QuadMesh,
+  mesh: PolyMesh,
   edges: Pair[],
-): { mesh: QuadMesh; newFaces: number[]; error?: string } {
+): { mesh: PolyMesh; newFaces: number[]; error?: string } {
   const chains = edgeChains(edges);
   if (!chains || chains.length !== 2) return { mesh: cloneQuadMesh(mesh), newFaces: [], error: "Select exactly two edge loops" };
   const [A, B] = chains;
@@ -122,7 +122,7 @@ export function bridgeEdgeLoops(
  * joined by a band of quads — a tunnel through a box, a handle between two
  * pieces.
  */
-export function bridgeFaces(mesh: QuadMesh, faces: number[]): { mesh: QuadMesh; newFaces: number[]; error?: string } {
+export function bridgeFaces(mesh: PolyMesh, faces: number[]): { mesh: PolyMesh; newFaces: number[]; error?: string } {
   const topo = buildTopology(mesh);
   const selected = new Set(faces.filter((f) => f >= 0 && f < mesh.faces.length));
   // Border edges of the selection: an edge with exactly one selected face.
@@ -149,13 +149,13 @@ export function bridgeFaces(mesh: QuadMesh, faces: number[]): { mesh: QuadMesh; 
  * turn (u) and along the profile (v); faces point away from the axis.
  */
 export function spinEdges(
-  mesh: QuadMesh,
+  mesh: PolyMesh,
   edges: Pair[],
   axis: "x" | "y" | "z",
   angleDeg: number,
   steps: number,
   center: [number, number, number] = [0, 0, 0],
-): { mesh: QuadMesh; newFaces: number[] } {
+): { mesh: PolyMesh; newFaces: number[] } {
   const chains = edgeChains(edges);
   const count = Math.max(1, Math.min(256, Math.round(steps)));
   if (!chains || chains.length === 0 || angleDeg === 0) return { mesh: cloneQuadMesh(mesh), newFaces: [] };

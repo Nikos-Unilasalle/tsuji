@@ -1,4 +1,4 @@
-import type { QuadMesh } from "../quadMesh";
+import type { PolyMesh } from "../quadMesh";
 import { getTopology } from "./topology";
 
 export interface RingFace {
@@ -24,7 +24,7 @@ export interface RingFace {
  * at a boundary, a non-quad face, or an edge that can't be crossed (see
  * MeshTopology.heTwin).
  */
-export function quadRing(mesh: QuadMesh, a: number, b: number): { faces: RingFace[]; closed: boolean } {
+export function quadRing(mesh: PolyMesh, a: number, b: number): { faces: RingFace[]; closed: boolean } {
   const topo = getTopology(mesh);
   let start = topo.findHalfedge(a, b);
   if (start === -1) start = topo.findHalfedge(b, a);
@@ -70,7 +70,7 @@ type EdgePair = [number, number];
  * reaches a pole (any other edge count) or a boundary. A boundary edge
  * instead follows the boundary around its hole or open border.
  */
-export function edgeLoop(mesh: QuadMesh, a: number, b: number): EdgePair[] {
+export function edgeLoop(mesh: PolyMesh, a: number, b: number): EdgePair[] {
   const topo = getTopology(mesh);
   let start = topo.findHalfedge(a, b);
   if (start === -1) start = topo.findHalfedge(b, a);
@@ -115,7 +115,7 @@ export function edgeLoop(mesh: QuadMesh, a: number, b: number): EdgePair[] {
  * The edge ring through edge {a, b}: the "rungs" a loop cut there would
  * cross — the entry and opposite edge of every quad in quadRing.
  */
-export function edgeRing(mesh: QuadMesh, a: number, b: number): EdgePair[] {
+export function edgeRing(mesh: PolyMesh, a: number, b: number): EdgePair[] {
   const seen = new Set<string>();
   const out: EdgePair[] = [];
   const add = (u: number, v: number) => {

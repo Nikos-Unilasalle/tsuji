@@ -1,4 +1,4 @@
-import { QuadMesh, withFaceUVs } from "../quadMesh";
+import { PolyMesh, withFaceUVs } from "../quadMesh";
 import { buildTopology } from "./topology";
 import { cornerColor, creaseMap, edgeKey } from "./attributes";
 import type { UV } from "./uv";
@@ -24,14 +24,14 @@ const lerp = (a: V3, b: V3, t: number): V3 => [a[0] + (b[0] - a[0]) * t, a[1] + 
  * per face (an edge's new corner at the midpoint of its two, a face's at the
  * average), so texture seams stay where they were.
  */
-export function catmullClarkQuadMesh(mesh: QuadMesh, levels = 1): QuadMesh {
+export function catmullClarkQuadMesh(mesh: PolyMesh, levels = 1): PolyMesh {
   let current = withFaceUVs(mesh);
   const count = Math.max(0, Math.min(6, Math.round(levels)));
   for (let i = 0; i < count; i++) current = catmullClarkStep(current);
   return current;
 }
 
-function catmullClarkStep(mesh: QuadMesh): QuadMesh {
+function catmullClarkStep(mesh: PolyMesh): PolyMesh {
   const topo = buildTopology(mesh);
   const P = mesh.positions;
   const creases = creaseMap(mesh);
@@ -97,9 +97,9 @@ function catmullClarkStep(mesh: QuadMesh): QuadMesh {
 
   const faces: number[][] = [];
   const faceUVs: UV[][] = [];
-  const faceColors: NonNullable<QuadMesh["faceColors"]> = [];
+  const faceColors: NonNullable<PolyMesh["faceColors"]> = [];
   const faceMaterials: number[] = [];
-  const faceShading: NonNullable<QuadMesh["faceShading"]> = [];
+  const faceShading: NonNullable<PolyMesh["faceShading"]> = [];
   const hasColors = Boolean(mesh.faceColors?.some((c) => c));
   const hasShading = Boolean(mesh.faceShading && mesh.faceShading.length > 0);
 

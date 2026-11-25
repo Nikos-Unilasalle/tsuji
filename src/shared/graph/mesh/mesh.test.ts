@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { createQuadBox, createQuadPlane, QuadMesh } from "../quadMesh";
+import { createQuadBox, createQuadPlane, PolyMesh } from "../quadMesh";
 import { buildTopology } from "./topology";
 import { validateQuadMesh } from "./validate";
 import { triangulateFace } from "./triangulate";
@@ -38,13 +38,13 @@ describe("buildTopology", () => {
   });
 
   it("counts non-manifold and flipped edges instead of linking them", () => {
-    const fin: QuadMesh = {
+    const fin: PolyMesh = {
       positions: [[0, 0, 0], [1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1]],
       faces: [[0, 1, 2], [1, 0, 3], [0, 1, 4]],
     };
     expect(buildTopology(fin).nonManifoldEdgeCount).toBe(1);
 
-    const flipped: QuadMesh = {
+    const flipped: PolyMesh = {
       positions: [[0, 0, 0], [1, 0, 0], [0, 1, 0], [0, -1, 0]],
       faces: [[0, 1, 2], [0, 1, 3]],
     };
@@ -61,7 +61,7 @@ describe("validateQuadMesh", () => {
   });
 
   it("reports structural faults", () => {
-    const broken: QuadMesh = {
+    const broken: PolyMesh = {
       positions: [[0, 0, 0], [1, 0, 0], [0, 1, 0], [NaN, 0, 0]],
       faces: [[0, 1, 1], [0, 5, 2]],
       faceUVs: [[[0, 0], [1, 0], [0, 1]]],

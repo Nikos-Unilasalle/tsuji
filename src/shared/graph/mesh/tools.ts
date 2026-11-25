@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import {
-  QuadMesh,
+  PolyMesh,
   cloneQuadMesh,
   computeFaceCentroid,
   computeFaceNormal,
@@ -69,7 +69,7 @@ export function faceUVMapper(positions: ReadonlyArray<V3>, face: number[], uvs: 
 }
 
 /** Appends a face with its per-face attributes, inheriting slot and shading from `from`. */
-function pushFace(mesh: QuadMesh, face: number[], uvs: UV[], from: number): number {
+function pushFace(mesh: PolyMesh, face: number[], uvs: UV[], from: number): number {
   mesh.faces.push(face);
   mesh.faceUVs!.push(uvs);
   if (mesh.faceMaterials) mesh.faceMaterials.push(mesh.faceMaterials[from] ?? 0);
@@ -81,7 +81,7 @@ function pushFace(mesh: QuadMesh, face: number[], uvs: UV[], from: number): numb
  * UVs for faces an operation created from nothing (bevel strips, bridges,
  * fills, extruded edges): continued from their neighbours — see fillNewFaceUVs.
  */
-export function projectNewFaceUVs(mesh: QuadMesh, faces: number[]) {
+export function projectNewFaceUVs(mesh: PolyMesh, faces: number[]) {
   fillNewFaceUVs(mesh, faces);
 }
 
@@ -92,13 +92,13 @@ export function projectNewFaceUVs(mesh: QuadMesh, faces: number[]) {
  * reports where each surviving face went (-1 when dropped), `remapVertex`
  * where each vertex went.
  */
-export function compactMesh(mesh: QuadMesh): { mesh: QuadMesh; remapFace: Int32Array; remapVertex: Int32Array } {
+export function compactMesh(mesh: PolyMesh): { mesh: PolyMesh; remapFace: Int32Array; remapVertex: Int32Array } {
   const remapFace = new Int32Array(mesh.faces.length).fill(-1);
   const faces: number[][] = [];
   const faceUVs: UV[][] = [];
   const faceMaterials: number[] = [];
-  const faceShading: NonNullable<QuadMesh["faceShading"]> = [];
-  const faceColors: NonNullable<QuadMesh["faceColors"]> = [];
+  const faceShading: NonNullable<PolyMesh["faceShading"]> = [];
+  const faceColors: NonNullable<PolyMesh["faceColors"]> = [];
   const hasShading = Boolean(mesh.faceShading && mesh.faceShading.length > 0);
 
   mesh.faces.forEach((face, f) => {
@@ -145,7 +145,7 @@ export function compactMesh(mesh: QuadMesh): { mesh: QuadMesh; remapFace: Int32A
     }
   }
 
-  const out: QuadMesh = {
+  const out: PolyMesh = {
     positions,
     faces: faces.map((face) => face.map((v) => remapVertex[v])),
     faceUVs: mesh.faceUVs ? faceUVs : undefined,
@@ -173,12 +173,12 @@ function remapList(list: number[], remap: Int32Array): number[] {
  * selected faces too — rather than as one region (extrudeFaces).
  */
 export function extrudeFacesIndividual(
-  mesh: QuadMesh,
+  mesh: PolyMesh,
   faces: number[],
   distance: number,
   direction?: { x: number; y: number; z: number },
   keepAtZero = false,
-): { mesh: QuadMesh; newFaces: number[] } {
+): { mesh: PolyMesh; newFaces: number[] } {
   let current = cloneQuadMesh(mesh);
   const valid = [...new Set(faces)].filter((f) => f >= 0 && f < mesh.faces.length).sort((a, b) => a - b);
   for (const f of valid) current = extrudeFaces(current, [f], distance, direction, keepAtZero).mesh;
@@ -200,12 +200,12 @@ export function extrudeFacesIndividual(
  * faceUVMapper), so a textured surface stays continuous.
  */
 export function insetRegion(
-  mesh: QuadMesh,
+  mesh: PolyMesh,
   faceIndices: number[],
   thickness: number,
   depth = 0,
   individual = false,
-): { mesh: QuadMesh; newFaces: number[] } {
+): { mesh: PolyMesh; newFaces: number[] } {
   const selected = [...new Set(faceIndices)].filter((f) => f >= 0 && f < mesh.faces.length).sort((a, b) => a - b);
   if (selected.length === 0 || (thickness <= 0 && depth === 0)) return { mesh: cloneQuadMesh(mesh), newFaces: selected };
   if (individual) {
@@ -320,10 +320,10 @@ export function insetRegion(
  * of them is). Faces that collapse below three corners are removed.
  */
 export function mergeVertices(
-  mesh: QuadMesh,
+  mesh: PolyMesh,
   vertices: number[],
   at: "center" | "first" | "last" = "center",
-): { mesh: QuadMesh; vertex: number | null } {
+): { mesh: PolyMesh; vertex: number | null } {
   const valid = vertices.filter((v) => v >= 0 && v < mesh.positions.length);
   if (valid.length < 2) return { mesh: cloneQuadMesh(mesh), vertex: valid[0] ?? null };
   const keep = at === "last" ? valid[valid.length - 1] : valid[0];
@@ -346,10 +346,10 @@ export function mergeVertices(
  * Distance), restricted to `vertices` when given. Returns how many went.
  */
 export function mergeByDistance(
-  mesh: QuadMesh,
+  mesh: PolyMesh,
   distance: number,
   vertices?: number[],
-): { mesh: QuadMesh; removed: number; remapVertex: Int32Array } {
+): { mesh: PolyMesh; removed: number; remapVertex: Int32Array } {
   const candidates = vertices ?? mesh.positions.map((_, i) => i);
   const cell = Math.max(distance, 1e-9);
   const grid = new Map<string, number[]>();
@@ -402,7 +402,7 @@ export function mergeByDistance(
  * border. A region whose border isn't one simple loop (it has a hole, or
  * touches itself) is left alone. Vertices left unused are removed.
  */
-export function dissolveFaceRegions(mesh: QuadMesh, regions: number[][]): { mesh: QuadMesh; newFaces: number[] } {
+export function dissolveFaceRegions(mesh: PolyMesh, regions: number[][]): { mesh: PolyMesh; newFaces: number[] } {
   const base = withFaceUVs(mesh);
   const topo = buildTopology(base);
   const next = cloneQuadMesh(base);
@@ -455,7 +455,7 @@ export function dissolveFaceRegions(mesh: QuadMesh, regions: number[][]): { mesh
 }
 
 /** Connected groups of `faces`, joined only across the given edges (all shared edges when omitted). */
-function faceGroups(mesh: QuadMesh, faces: Set<number>, across?: Set<string>): number[][] {
+function faceGroups(mesh: PolyMesh, faces: Set<number>, across?: Set<string>): number[][] {
   const topo = buildTopology(mesh);
   const seen = new Set<number>();
   const groups: number[][] = [];
@@ -486,12 +486,12 @@ function faceGroups(mesh: QuadMesh, faces: Set<number>, across?: Set<string>): n
 }
 
 /** Dissolves selected faces: each connected patch becomes one n-gon. */
-export function dissolveFaces(mesh: QuadMesh, faces: number[]) {
+export function dissolveFaces(mesh: PolyMesh, faces: number[]) {
   return dissolveFaceRegions(mesh, faceGroups(mesh, new Set(faces)));
 }
 
 /** Dissolves selected edges: the two faces on each side become one. */
-export function dissolveEdges(mesh: QuadMesh, edges: [number, number][]) {
+export function dissolveEdges(mesh: PolyMesh, edges: [number, number][]) {
   const topo = buildTopology(mesh);
   const keys = new Set<string>();
   const faces = new Set<number>();
@@ -512,7 +512,7 @@ export function dissolveEdges(mesh: QuadMesh, edges: [number, number][]) {
  * one n-gon without it; a vertex in the middle of a straight run of two
  * edges is simply dropped from its faces.
  */
-export function dissolveVertices(mesh: QuadMesh, vertices: number[]): { mesh: QuadMesh; newFaces: number[] } {
+export function dissolveVertices(mesh: PolyMesh, vertices: number[]): { mesh: PolyMesh; newFaces: number[] } {
   const topo = buildTopology(mesh);
   const valence = new Int32Array(topo.vertexCount);
   for (const [a, b] of topo.edges) {
@@ -561,7 +561,7 @@ export function dissolveVertices(mesh: QuadMesh, vertices: number[]): { mesh: Qu
  * is then chosen to agree with any existing face on a shared edge, so the new
  * face's normal points the same way as its neighbours'.
  */
-export function fillVertices(mesh: QuadMesh, vertices: number[]): { mesh: QuadMesh; newFaces: number[] } {
+export function fillVertices(mesh: PolyMesh, vertices: number[]): { mesh: PolyMesh; newFaces: number[] } {
   const verts = [...new Set(vertices)].filter((v) => v >= 0 && v < mesh.positions.length);
   if (verts.length < 3) return { mesh: cloneQuadMesh(mesh), newFaces: [] };
   const topo = buildTopology(mesh);
@@ -642,7 +642,7 @@ export function fillVertices(mesh: QuadMesh, vertices: number[]): { mesh: QuadMe
 // Flip, duplicate, subdivide
 
 /** Reverses the winding of the selected faces, flipping their normals. */
-export function flipFaces(mesh: QuadMesh, faces: number[]): QuadMesh {
+export function flipFaces(mesh: PolyMesh, faces: number[]): PolyMesh {
   const next = withFaceUVs(cloneQuadMesh(mesh));
   for (const f of new Set(faces)) {
     if (!next.faces[f]) continue;
@@ -656,7 +656,7 @@ export function flipFaces(mesh: QuadMesh, faces: number[]): QuadMesh {
  * Copies the selected faces as new, disconnected geometry (Shift+D). The
  * copies come back selected, sitting exactly on the originals.
  */
-export function duplicateFaces(mesh: QuadMesh, faces: number[]): { mesh: QuadMesh; newFaces: number[] } {
+export function duplicateFaces(mesh: PolyMesh, faces: number[]): { mesh: PolyMesh; newFaces: number[] } {
   const next = withFaceUVs(cloneQuadMesh(mesh));
   const copyOf = new Map<number, number>();
   const newFaces: number[] = [];
@@ -682,7 +682,7 @@ export function duplicateFaces(mesh: QuadMesh, faces: number[]): { mesh: QuadMes
  * Extrudes vertices, as Blender does: each gets a copy, sitting on it, joined
  * to it by a loose edge. The copies come back (to be moved with the mouse).
  */
-export function extrudeVertices(mesh: QuadMesh, vertices: number[]): { mesh: QuadMesh; newVertices: number[] } {
+export function extrudeVertices(mesh: PolyMesh, vertices: number[]): { mesh: PolyMesh; newVertices: number[] } {
   const next = cloneQuadMesh(mesh);
   const edges = next.edges ?? [];
   const newVertices: number[] = [];
@@ -706,9 +706,9 @@ export function extrudeVertices(mesh: QuadMesh, vertices: number[]): { mesh: Qua
  * consistent. The copied edges come back, with the new faces.
  */
 export function extrudeEdges(
-  mesh: QuadMesh,
+  mesh: PolyMesh,
   edges: [number, number][],
-): { mesh: QuadMesh; newEdges: [number, number][]; newFaces: number[] } {
+): { mesh: PolyMesh; newEdges: [number, number][]; newFaces: number[] } {
   const next = withFaceUVs(cloneQuadMesh(mesh));
   const copyOf = new Map<number, number>();
   const copy = (v: number) => {
@@ -756,7 +756,7 @@ export function extrudeEdges(
  * into three, an n-gon into n). Unselected neighbours sharing a split edge
  * take the midpoint as an extra corner, so the surface stays closed.
  */
-export function subdivideFaces(mesh: QuadMesh, faces: number[]): { mesh: QuadMesh; newFaces: number[] } {
+export function subdivideFaces(mesh: PolyMesh, faces: number[]): { mesh: PolyMesh; newFaces: number[] } {
   const selected = [...new Set(faces)].filter((f) => f >= 0 && f < mesh.faces.length).sort((a, b) => a - b);
   if (selected.length === 0) return { mesh: cloneQuadMesh(mesh), newFaces: [] };
   const base = withFaceUVs(mesh);
@@ -839,7 +839,7 @@ export function subdivideFaces(mesh: QuadMesh, faces: number[]): { mesh: QuadMes
  * Each vertex's mirror image across the local X = 0 plane, when the mesh has
  * one within `tolerance` (-1 otherwise; a vertex on the plane is its own).
  */
-export function mirrorXMap(mesh: QuadMesh, tolerance = 1e-4): Int32Array {
+export function mirrorXMap(mesh: PolyMesh, tolerance = 1e-4): Int32Array {
   const map = new Int32Array(mesh.positions.length).fill(-1);
   const cell = Math.max(tolerance * 4, 1e-9);
   const grid = new Map<string, number[]>();
@@ -881,7 +881,7 @@ export function mirrorXMap(mesh: QuadMesh, tolerance = 1e-4): Int32Array {
  * it. Counterparts that were themselves moved keep their own move.
  */
 export function mirrorMovesX(
-  mesh: QuadMesh,
+  mesh: PolyMesh,
   moved: Map<number, V3>,
   mirror: Int32Array,
   planeTolerance = 1e-4,

@@ -28,7 +28,7 @@ import {
   readEditMeshSelection,
 } from "./shared/graph/nodes/editMesh";
 import {
-  QuadMesh,
+  PolyMesh,
   QuadMeshShading,
   cloneQuadMesh,
   createQuadBox,
@@ -1605,7 +1605,7 @@ function MainEditor() {
         const selectedFaces: number[] = Array.isArray(instance.params.selectedFaces)
           ? (instance.params.selectedFaces as number[])
           : [];
-        const rawMesh = (instance.params.meshData as QuadMesh) || createQuadBox(1, 1, 1);
+        const rawMesh = (instance.params.meshData as PolyMesh) || createQuadBox(1, 1, 1);
         const updatedMesh = cloneQuadMesh(rawMesh);
         const shadeMode = value as QuadMeshShading;
         if (selectedFaces.length > 0) {
@@ -1868,7 +1868,7 @@ function MainEditor() {
         const inputs = evaluatedResults?.get(nodeId)?.__evaluatedInputs as Record<string, unknown> | undefined;
         const geomObj = inputs?.geometry;
         const mesh = geomObj instanceof THREE.Object3D ? findFirstMesh(geomObj) : null;
-        let quadMesh: QuadMesh;
+        let quadMesh: PolyMesh;
         if (mesh && mesh.geometry) {
           quadMesh = bufferGeometryToQuadMesh(mesh.geometry);
           quadMesh.sourceSignature = geometrySignature(mesh.geometry);
@@ -1889,7 +1889,7 @@ function MainEditor() {
         // A face operation: a points/edges selection would silently act on
         // whatever face list was left over from the last face selection.
         if (readEditMeshSelection(node).mode !== "faces") return;
-        const meshData: QuadMesh = resolveEditMeshData(node, evaluatedResults);
+        const meshData: PolyMesh = resolveEditMeshData(node, evaluatedResults);
         const selectedFaces: number[] = Array.isArray(node.params.selectedFaces)
           ? (node.params.selectedFaces as number[])
           : [];
@@ -1908,7 +1908,7 @@ function MainEditor() {
         // A face operation: a points/edges selection would silently act on
         // whatever face list was left over from the last face selection.
         if (readEditMeshSelection(node).mode !== "faces") return;
-        const meshData: QuadMesh = resolveEditMeshData(node, evaluatedResults);
+        const meshData: PolyMesh = resolveEditMeshData(node, evaluatedResults);
         const selectedFaces: number[] = Array.isArray(node.params.selectedFaces)
           ? (node.params.selectedFaces as number[])
           : [];
@@ -1990,7 +1990,7 @@ function MainEditor() {
       if (action === EDIT_MESH_SMART_UNWRAP_ACTION) {
         const node = findNodeDeep(graph, nodeId);
         if (!node) return;
-        const meshData: QuadMesh = resolveEditMeshData(node, evaluatedResults);
+        const meshData: PolyMesh = resolveEditMeshData(node, evaluatedResults);
         const angle = Number(node.params.uvAngleLimit) || 66;
         onParamChange("meshData", smartUnwrap(meshData, { angleLimitDeg: angle }), nodeId);
         return;
@@ -1998,7 +1998,7 @@ function MainEditor() {
       if (action === EDIT_MESH_UNWRAP_UVS_ACTION) {
         const node = findNodeDeep(graph, nodeId);
         if (!node) return;
-        const meshData: QuadMesh = resolveEditMeshData(node, evaluatedResults);
+        const meshData: PolyMesh = resolveEditMeshData(node, evaluatedResults);
         const unwrapped = boxProjectUVs(meshData);
         onParamChange("meshData", unwrapped, nodeId);
         return;
@@ -2056,7 +2056,7 @@ function MainEditor() {
           : [];
         if (selectedFaces.length === 0) return;
 
-        const meshData: QuadMesh = resolveEditMeshData(node, evaluatedResults);
+        const meshData: PolyMesh = resolveEditMeshData(node, evaluatedResults);
         const remainingMesh = deleteFaces(meshData, selectedFaces);
         onParamChange({
           meshData: cloneQuadMesh(remainingMesh),
@@ -2075,7 +2075,7 @@ function MainEditor() {
           : [];
         if (selectedFaces.length === 0) return;
 
-        const meshData: QuadMesh = resolveEditMeshData(node, evaluatedResults);
+        const meshData: PolyMesh = resolveEditMeshData(node, evaluatedResults);
         const separatedMesh = extractFaces(meshData, selectedFaces);
         const remainingMesh = deleteFaces(meshData, selectedFaces);
 

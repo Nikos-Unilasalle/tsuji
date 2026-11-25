@@ -1,4 +1,4 @@
-import { QuadMesh, cloneQuadMesh, withFaceUVs } from "../quadMesh";
+import { PolyMesh, cloneQuadMesh, withFaceUVs } from "../quadMesh";
 import { lerpUV, UV } from "./uv";
 import { splitEdgeAttributes } from "./attributes";
 
@@ -16,9 +16,9 @@ export type KnifePoint = { vertex: number } | { edge: [number, number]; t: numbe
  * be cut because their two points share no face.
  */
 export function knifeCut(
-  mesh: QuadMesh,
+  mesh: PolyMesh,
   points: KnifePoint[],
-): { mesh: QuadMesh; newEdges: [number, number][]; skipped: number } {
+): { mesh: PolyMesh; newEdges: [number, number][]; skipped: number } {
   const next = withFaceUVs(cloneQuadMesh(mesh));
   /** Vertices already inserted on each original edge, by position along it from its lower vertex. */
   const splits = new Map<string, { t: number; v: number }[]>();
