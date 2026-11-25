@@ -215,3 +215,29 @@ Essentiellement des emballages du noyau existant + quelques nouveaux algorithmes
 ## 6. Question reportée
 
 - **Socket `volume`** : à décider au début de la phase 8 (nouveau type ou transport dans `geometry`).
+
+---
+
+## 7. État de livraison (2026-11-25)
+
+Tout le plan est implémenté sur `feat/parametric-modeling`, environ 78 nouveaux nodes. Suite complète verte (plus de 5 200 tests), typecheck propre. Trois démos ont été ajoutées dans la catégorie « Parametric Modeling ».
+
+| Phase | Livré |
+|---|---|
+| 1 Fondations | `PolyMesh` (alias `QuadMesh`), attributs nommés par domaine et groupes (`mesh/polyAttributes.ts`), expressions de groupe (`mesh/groupExpr.ts`), promotion entre domaines, propagation des attributs (`mesh/propagate.ts`), index spatial k-d, `mesh/polyIO.ts`. Le PolyMesh survit aux déformeurs grâce à la table buffer → sommet ; les attributs survivent aux nœuds qui reconstruisent leur géométrie (Boolean, Weld…). Socle `definePolyNode`. Le node **Geometry Spreadsheet** affiche son tableau dans le corps du node. |
+| 2 Sélection | `select/basic` (all, expression, random, box, sphere, plane, axis-range, normal, inside-object, noise), `select/topology`, `select/measure`, `select/distance` (douce, euclidienne ou le long de la surface), `group/combine`, `group/expand` (grow, shrink, linked, promote, border), `group/path` (plus court chemin, edge loop/ring, boundary loop), `modeling/group-to-points`. |
+| 3 Attributs | `attribute/expression` (wrangle vectoriel), create, delete, rename, copy, promote, noise, blur, transfer, from-texture, measure, to-list, from-list, visualize, randomize, spreadsheet. |
+| 4 Refonte | Extrude Mesh et Delete Geometry : chemin PolyMesh piloté par Group (pour les nouveaux nodes ; les scènes sauvegardées gardent le chemin triangles). Subdivide lit le PolyMesh via polyIO, avec Group en mode Simple. Twist/Bend/Taper, Wave et Lattice reçoivent Group et Weight Attribute. Nouveaux : `modeling/join`, `modeling/material-by-group`. Correctif : `flipFaces` garde les couleurs aux bons coins. |
+| 5 Opérations | bevel, inset, bridge, revolve, mirror/symmetrize, fuse, dissolve (+ limited), fill-holes, clip, triangulate, quadrangulate, split-edges, extract, subdivide-faces, flip-faces ; smooth, displace, transform-elements, scale-elements, dual-mesh, poke, divide, convex-hull, bounding-box, decimate (QEM), sort, keep-group, edge-mark. |
+| 6 Courbes | attributs de courbe radius/tilt (`curveAttributes.ts`), set-radius/tilt/attribute, resample, trim, reverse, fillet, offset-2d, sweep (groupes `side`/`caps`, attributs `u`/`v`), mesh-edges-to-curves, info. |
+| 7 Boucles | mode Loop du node Group : Repeat (feedback), For Each Piece, For Each Count ; node `structure/loop-info`. |
+| 8 Volumes | Décision §6 : les SDF voyagent dans `geometry` (aperçu iso-surface + `userData.sdfGrid`). mesh-to-sdf, points-to-sdf, combine (lisse), offset, smooth, noise, sdf-to-mesh, voxel-remesh. |
+| 9 Procédural | ray-project / shrinkwrap, copy-to-points (pscale, N/orient, variantes), l-system, heightfield-erode, geodesic-distance (méthode de la chaleur). |
+
+### Limites connues
+- Face Selection garde ses index de triangles (ses clics dans le viewport en dépendent). C'est le node **Select** qui le remplace pour le travail paramétrique.
+- Pas de sélection manuelle sur les faces du PolyMesh dans le viewport (« Select Manual » du plan) : il faudrait toucher Viewport.tsx. Les sélections faites à la main restent dans Edit Mesh / Points Selection.
+- Catmull-Clark s'applique à tout le mesh (Group seulement en mode Simple). Decimate et le calcul SDF tournent sur le thread principal (plafonné à 128³).
+- Les nouvelles faces sans source exacte (bandes de bevel, flancs d'inset…) héritent des groupes de la face source la plus proche, comme dans Houdini.
+- Bridge exige le même nombre de points de chaque côté. Mirror n'utilise que des plans alignés sur les axes. Offset 2D ne nettoie pas les auto-intersections.
+- L-System déterministe uniquement. Copy to Points n'a pas d'orient en quaternion (vec3 seulement).

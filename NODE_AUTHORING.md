@@ -297,7 +297,34 @@ identity leak in a *modelling* node froze physics two nodes downstream.
 Physics no longer keys on identity, but plenty of other things still do — and
 rebuilding a mesh sixty times a second is wasteful even when nothing breaks.
 
-## 10. Before you say you're done
+## 10. Mesh nodes: PolyMesh, attributes and groups
+
+A node that reads or builds a mesh works on the **PolyMesh** (`quadMesh.ts`),
+not on triangles: n-gon faces over shared vertices, carrying UVs, colours,
+material slots, edge marks and **named attributes** per point / edge / face /
+corner (`mesh/polyAttributes.ts`). A **group** is a `bool` attribute.
+
+- **Read and write through `mesh/polyIO.ts`** (`readPolyMesh`,
+  `polyMeshToGeometry`) — never `geometry.userData.quadMesh` directly: a
+  deformer upstream may have cloned the geometry (three shares `userData` on
+  clone), and polyIO is what recovers the moved positions, or re-imports
+  with the attributes carried over.
+- **Prefer `definePolyNode` (`nodes/polyModifier.ts`).** It gives you the
+  Group field, caching on the input signature, status notes, and the output
+  mesh that inherits pose, material and userData. Your node is a
+  `run(ctx) => PolyMesh` function; see `nodes/selectNodes.ts`.
+- **Groups in, groups out.** Restrict the effect with `ctx.group(domain)`;
+  write groups for what you made (`extrude_top`, `inset_side`…) with
+  `setGroup`. Group expressions (`mesh/groupExpr.ts`) accept names, `a b`,
+  `a & !b`, wildcards, index ranges and `@P.y>0`.
+- **Keep the attributes.** Wrap every topology-changing operation in
+  `withAttributes(src, op)` (`mesh/propagate.ts`); return explicit
+  `{ point, face }` provenance maps when you know them (deleting or
+  reordering always does — see `mesh/subset.ts`).
+- Deformers that move a vertex buffer in place get Group / Weight Attribute
+  for free through `nodes/deformGroup.ts`.
+
+## 11. Before you say you're done
 
 Run both, from the repo root, and both must be clean:
 
@@ -308,7 +335,7 @@ npx vitest run
 
 If either fails, fix it — don't hand back code that doesn't pass these.
 
-## 11. Style rules (project-wide, apply to your node too)
+## 12. Style rules (project-wide, apply to your node too)
 
 - `camelCase` for variables/functions, `PascalCase` only for types.
 - No `any`. Cast with `instanceof` checks or `Number(...)`/`String(...)`,
