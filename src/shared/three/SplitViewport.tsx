@@ -48,6 +48,8 @@ interface SplitViewportProps {
   showCameraView?: boolean;
   /** Third, independent pane — the `view2d` node's texture, full-bleed. Shares this row with 3D/Camera rather than living elsewhere, since it's "a space like any other." */
   show2DView?: boolean;
+  /** Stack the panes top to bottom (3D, Camera, 2D Render) instead of side by side — the vertical workspace layout. */
+  stacked?: boolean;
   view2DNodeId?: string;
   /** Editor pane's pinned param HUD — see ViewportParamHUD. Not passed to the output/camera-preview pane. */
   keyframes?: KeyframeStore;
@@ -96,6 +98,7 @@ export function SplitViewport({
   show3DView,
   showCameraView,
   show2DView = false,
+  stacked = false,
   view2DNodeId,
   keyframes,
   keyframesEnabled,
@@ -149,6 +152,13 @@ export function SplitViewport({
     [onCameraChange],
   );
 
+  // Which way the panes are laid out: the splitters measure along this axis.
+  const stackedRef = useRef(stacked);
+  stackedRef.current = stacked;
+  const along = (e: { clientX: number; clientY: number }) => (stackedRef.current ? e.clientY : e.clientX);
+  const spanOf = (rect: DOMRect) => (stackedRef.current ? { start: rect.top, size: rect.height } : { start: rect.left, size: rect.width });
+  const ghostTransform = (offset: number) => (stackedRef.current ? `translateY(${offset}px)` : `translateX(${offset}px)`);
+
   const isDraggingRef = useRef(false);
   const [isDragging, setIsDragging] = useState(false);
   const ghostLineRef = useRef<HTMLDivElement>(null);
@@ -199,9 +209,9 @@ export function SplitViewport({
     e.preventDefault();
     e.stopPropagation();
     isDraggingRef.current = true;
-    lastClampedXRef.current = e.clientX;
+    lastClampedXRef.current = along(e);
     setIsDragging(true);
-    document.body.style.cursor = "col-resize";
+    document.body.style.cursor = stackedRef.current ? "row-resize" : "col-resize";
     document.body.style.userSelect = "none";
 
     const onMouseMove = (moveEvent: MouseEvent | PointerEvent) => {
@@ -211,15 +221,15 @@ export function SplitViewport({
       // part of the row's width (see split-viewport-group below).
       const container = document.getElementById("split-viewport-group");
       if (!container) return;
-      const rect = container.getBoundingClientRect();
-      if (rect.width <= 0) return;
+      const { start, size } = spanOf(container.getBoundingClientRect());
+      if (size <= 0) return;
 
-      const minX = rect.left + rect.width * 0.15;
-      const maxX = rect.left + rect.width * 0.85;
-      const clampedX = Math.min(maxX, Math.max(minX, moveEvent.clientX));
+      const minX = start + size * 0.15;
+      const maxX = start + size * 0.85;
+      const clampedX = Math.min(maxX, Math.max(minX, along(moveEvent)));
       lastClampedXRef.current = clampedX;
       if (ghostLineRef.current) {
-        ghostLineRef.current.style.transform = `translateX(${clampedX - rect.left}px)`;
+        ghostLineRef.current.style.transform = ghostTransform(clampedX - start);
       }
     };
 
@@ -236,9 +246,9 @@ export function SplitViewport({
 
       const container = document.getElementById("split-viewport-group");
       if (container) {
-        const rect = container.getBoundingClientRect();
-        if (rect.width > 0) {
-          const newPercent = ((lastClampedXRef.current - rect.left) / rect.width) * 100;
+        const { start, size } = spanOf(container.getBoundingClientRect());
+        if (size > 0) {
+          const newPercent = ((lastClampedXRef.current - start) / size) * 100;
           setSplitPercent(Math.max(15, Math.min(85, newPercent)));
         }
       }
@@ -258,24 +268,24 @@ export function SplitViewport({
     e.preventDefault();
     e.stopPropagation();
     isDragging2DRef.current = true;
-    lastClampedX2DRef.current = e.clientX;
+    lastClampedX2DRef.current = along(e);
     setIsDragging2D(true);
-    document.body.style.cursor = "col-resize";
+    document.body.style.cursor = stackedRef.current ? "row-resize" : "col-resize";
     document.body.style.userSelect = "none";
 
     const onMouseMove = (moveEvent: MouseEvent | PointerEvent) => {
       if (!isDragging2DRef.current) return;
       const container = document.getElementById("split-viewport-container");
       if (!container) return;
-      const rect = container.getBoundingClientRect();
-      if (rect.width <= 0) return;
+      const { start, size } = spanOf(container.getBoundingClientRect());
+      if (size <= 0) return;
 
-      const minX = rect.left + rect.width * 0.15;
-      const maxX = rect.left + rect.width * 0.85;
-      const clampedX = Math.min(maxX, Math.max(minX, moveEvent.clientX));
+      const minX = start + size * 0.15;
+      const maxX = start + size * 0.85;
+      const clampedX = Math.min(maxX, Math.max(minX, along(moveEvent)));
       lastClampedX2DRef.current = clampedX;
       if (ghostLine2DRef.current) {
-        ghostLine2DRef.current.style.transform = `translateX(${clampedX - rect.left}px)`;
+        ghostLine2DRef.current.style.transform = ghostTransform(clampedX - start);
       }
     };
 
@@ -292,9 +302,9 @@ export function SplitViewport({
 
       const container = document.getElementById("split-viewport-container");
       if (container) {
-        const rect = container.getBoundingClientRect();
-        if (rect.width > 0) {
-          const newPercent = ((lastClampedX2DRef.current - rect.left) / rect.width) * 100;
+        const { start, size } = spanOf(container.getBoundingClientRect());
+        if (size > 0) {
+          const newPercent = ((lastClampedX2DRef.current - start) / size) * 100;
           setGroupPercent(Math.max(15, Math.min(85, newPercent)));
         }
       }
@@ -329,6 +339,15 @@ export function SplitViewport({
   const everShown2DRef = useRef(show2DView);
   if (show2DView) everShown2DRef.current = true;
 
+  // Side by side, the splitters divide widths; stacked, heights.
+  const mainSize = stacked ? "height" : "width";
+  const crossSize = stacked ? "width" : "height";
+  const ghostLineBox = stacked ? { left: 0, right: 0, top: 0, height: 1 } : { top: 0, bottom: 0, left: 0, width: 1 };
+  const containerStart = (id: string) => {
+    const rect = document.getElementById(id)?.getBoundingClientRect();
+    return rect ? (stacked ? rect.top : rect.left) : 0;
+  };
+
   return (
     <div
       id="split-viewport-container"
@@ -336,6 +355,7 @@ export function SplitViewport({
         width: "100%",
         height: "100%",
         display: "flex",
+        flexDirection: stacked ? "column" : "row",
         position: "relative",
         overflow: "hidden",
         backgroundColor: "#090d16",
@@ -344,19 +364,22 @@ export function SplitViewport({
       <div
         id="split-viewport-group"
         style={{
-          width: bothRowGroupsVisible ? `${groupPercent}%` : groupVisible ? "100%" : "0%",
-          height: "100%",
+          [mainSize]: bothRowGroupsVisible ? `${groupPercent}%` : groupVisible ? "100%" : "0%",
+          [crossSize]: "100%",
           display: "flex",
+          flexDirection: stacked ? "column" : "row",
           position: "relative",
           minWidth: 0,
+          minHeight: 0,
         }}
       >
       <div
         style={{
-          width: isSplitActive ? `${splitPercent}%` : "100%",
-          height: "100%",
+          [mainSize]: isSplitActive ? `${splitPercent}%` : "100%",
+          [crossSize]: "100%",
           position: "relative",
           minWidth: 0,
+          minHeight: 0,
           display: primaryVisible ? "block" : "none",
         }}
       >
@@ -404,21 +427,21 @@ export function SplitViewport({
 
       {/* Draggable Splitter — between 3D View and Camera View (split or 2D mode) */}
       <div
-        className="viewport-split-divider"
+        className={`viewport-split-divider${stacked ? " is-stacked" : ""}`}
         onMouseDown={handleMouseDown}
         onPointerDown={handleMouseDown}
         style={{
           backgroundColor: is2D ? "var(--accent-color, #38bdf8)" : undefined,
           display: isSplitActive ? "block" : "none",
         }}
-        title="Resize viewports (drag horizontally)"
+        title={stacked ? "Resize viewports (drag vertically)" : "Resize viewports (drag horizontally)"}
       >
         <button
           type="button"
           className="viewport-split-handle-btn viewport-split-handle-btn-top"
           onMouseDown={handleMouseDown}
           onPointerDown={handleMouseDown}
-          title="Resize viewports (drag horizontally)"
+          title={stacked ? "Resize viewports (drag vertically)" : "Resize viewports (drag horizontally)"}
         >
           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="7 8 3 12 7 16" />
@@ -430,10 +453,11 @@ export function SplitViewport({
 
       <div
         style={{
-          width: isSplitActive ? `${100 - splitPercent}%` : "100%",
-          height: "100%",
+          [mainSize]: isSplitActive ? `${100 - splitPercent}%` : "100%",
+          [crossSize]: "100%",
           position: "relative",
           minWidth: 0,
+          minHeight: 0,
           display: secondaryVisible ? "block" : "none",
         }}
       >
@@ -473,18 +497,18 @@ export function SplitViewport({
 
       {/* Draggable Splitter — between the 3D/Camera group and the 2D pane */}
       <div
-        className="viewport-split-divider"
+        className={`viewport-split-divider${stacked ? " is-stacked" : ""}`}
         onMouseDown={handleMouseDown2D}
         onPointerDown={handleMouseDown2D}
         style={{ display: bothRowGroupsVisible ? "block" : "none" }}
-        title="Resize 2D Render (drag horizontally)"
+        title={stacked ? "Resize 2D Render (drag vertically)" : "Resize 2D Render (drag horizontally)"}
       >
         <button
           type="button"
           className="viewport-split-handle-btn viewport-split-handle-btn-top"
           onMouseDown={handleMouseDown2D}
           onPointerDown={handleMouseDown2D}
-          title="Resize 2D Render (drag horizontally)"
+          title={stacked ? "Resize 2D Render (drag vertically)" : "Resize 2D Render (drag horizontally)"}
         >
           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="7 8 3 12 7 16" />
@@ -496,10 +520,11 @@ export function SplitViewport({
 
       <div
         style={{
-          width: bothRowGroupsVisible ? `${100 - groupPercent}%` : show2DView ? "100%" : "0%",
-          height: "100%",
+          [mainSize]: bothRowGroupsVisible ? `${100 - groupPercent}%` : show2DView ? "100%" : "0%",
+          [crossSize]: "100%",
           position: "relative",
           minWidth: 0,
+          minHeight: 0,
           display: show2DView ? "block" : "none",
         }}
       >
@@ -538,7 +563,7 @@ export function SplitViewport({
                 padding: 24,
               }}
             >
-              Add a "2D Render" node (Structure category) and wire a texture into it.
+              Add a "2D Render" node (Scene &amp; Graph category) and wire a texture into it.
             </div>
           )
         )}
@@ -550,7 +575,7 @@ export function SplitViewport({
             position: "absolute",
             inset: 0,
             zIndex: 99999,
-            cursor: "col-resize",
+            cursor: stacked ? "row-resize" : "col-resize",
             userSelect: "none",
             pointerEvents: "auto",
           }}
@@ -559,12 +584,9 @@ export function SplitViewport({
             ref={ghostLine2DRef}
             style={{
               position: "absolute",
-              top: 0,
-              bottom: 0,
-              left: 0,
-              width: 1,
+              ...ghostLineBox,
               background: "var(--accent-color, #38bdf8)",
-              transform: `translateX(${lastClampedX2DRef.current - (document.getElementById("split-viewport-container")?.getBoundingClientRect().left ?? 0)}px)`,
+              transform: ghostTransform(lastClampedX2DRef.current - containerStart("split-viewport-container")),
               pointerEvents: "none",
             }}
           />
@@ -577,7 +599,7 @@ export function SplitViewport({
             position: "absolute",
             inset: 0,
             zIndex: 99999,
-            cursor: "col-resize",
+            cursor: stacked ? "row-resize" : "col-resize",
             userSelect: "none",
             pointerEvents: "auto",
           }}
@@ -586,12 +608,9 @@ export function SplitViewport({
             ref={ghostLineRef}
             style={{
               position: "absolute",
-              top: 0,
-              bottom: 0,
-              left: 0,
-              width: 1,
+              ...ghostLineBox,
               background: "var(--accent-color, #38bdf8)",
-              transform: `translateX(${lastClampedXRef.current - (document.getElementById("split-viewport-container")?.getBoundingClientRect().left ?? 0)}px)`,
+              transform: ghostTransform(lastClampedXRef.current - containerStart("split-viewport-container")),
               pointerEvents: "none",
             }}
           />

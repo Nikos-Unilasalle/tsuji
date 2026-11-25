@@ -409,6 +409,36 @@ function MainEditor() {
   const selectedNodeIdsRef = useRef<string[]>([]);
   const [timelineDrawerHeight, setTimelineDrawerHeight] = useState(280);
   const [splitPercent, setSplitPercent] = useState(50);
+  // Workspace arrangement: "horizontal" stacks the views over the graph;
+  // "vertical" puts the graph on the left half, the views (3D, Camera, 2D
+  // Render, top to bottom) on the right, and the timeline across the bottom.
+  const [workspaceLayout, setWorkspaceLayout] = useState<"horizontal" | "vertical">(() => {
+    try {
+      return localStorage.getItem("tsuji_workspace_layout_v1") === "vertical" ? "vertical" : "horizontal";
+    } catch {
+      return "horizontal";
+    }
+  });
+  const workspaceLayoutRef = useRef(workspaceLayout);
+  workspaceLayoutRef.current = workspaceLayout;
+  const toggleWorkspaceLayout = useCallback(() => {
+    setWorkspaceLayout((prev) => {
+      const next = prev === "vertical" ? "horizontal" : "vertical";
+      try {
+        localStorage.setItem("tsuji_workspace_layout_v1", next);
+      } catch {}
+      return next;
+    });
+  }, []);
+  /** Vertical layout: the graph's share of the width, in percent. */
+  const [columnSplitPercent, setColumnSplitPercent] = useState(50);
+  const columnRowRef = useRef<HTMLDivElement>(null);
+  const draggingColumns = useRef(false);
+  const [isDraggingColumns, setIsDraggingColumns] = useState(false);
+  const ghostColumnLineRef = useRef<HTMLDivElement>(null);
+  const lastClampedColumnXRef = useRef(0);
+  /** The drawer grows upward when it sits at the bottom (vertical layout). */
+  const drawerGrowsUpRef = useRef(false);
   const [is2DMode, setIs2DMode] = useState(false);
   const [snapElevation, setSnapElevation] = useState(false);
   const toggle2DMode = useCallback(() => setIs2DMode((prev) => !prev), []);
@@ -2485,6 +2515,7 @@ function MainEditor() {
       } catch {}
     }
     draggingDrawer.current = true;
+    drawerGrowsUpRef.current = workspaceLayoutRef.current === "vertical";
     drawerStartYRef.current = e.clientY;
     drawerStartHeightRef.current = timelineDrawerHeight;
     lastClampedDrawerYRef.current = e.clientY;
@@ -2493,8 +2524,33 @@ function MainEditor() {
     document.body.style.userSelect = "none";
   }, [timelineDrawerHeight]);
 
+  const onColumnSplitMouseDown = useCallback((e: React.MouseEvent | React.PointerEvent) => {
+    if (e.shiftKey) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if ("pointerId" in e && e.currentTarget && typeof (e.currentTarget as HTMLElement).setPointerCapture === "function") {
+      try {
+        (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+      } catch {}
+    }
+    draggingColumns.current = true;
+    lastClampedColumnXRef.current = e.clientX;
+    setIsDraggingColumns(true);
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+  }, []);
+
   useEffect(() => {
     function onPointerMove(e: MouseEvent | PointerEvent) {
+      if (draggingColumns.current && columnRowRef.current) {
+        const rect = columnRowRef.current.getBoundingClientRect();
+        const minX = rect.left + (rect.width * MIN_PANE_PERCENT) / 100;
+        const maxX = rect.left + (rect.width * MAX_PANE_PERCENT) / 100;
+        const clampedX = Math.min(maxX, Math.max(minX, e.clientX));
+        lastClampedColumnXRef.current = clampedX;
+        if (ghostColumnLineRef.current) ghostColumnLineRef.current.style.transform = `translateX(${clampedX}px)`;
+        return;
+      }
       if (draggingSplit.current && containerRef.current) {
         const rect = containerRef.current.getBoundingClientRect();
         const minTop = rect.top + (rect.height * MIN_PANE_PERCENT) / 100;
@@ -2505,9 +2561,10 @@ function MainEditor() {
           ghostLineRef.current.style.transform = `translateY(${clampedY}px)`;
         }
       } else if (draggingDrawer.current) {
-        const delta = e.clientY - drawerStartYRef.current;
+        const sign = drawerGrowsUpRef.current ? -1 : 1;
+        const delta = (e.clientY - drawerStartYRef.current) * sign;
         const newHeight = Math.max(160, Math.min(650, drawerStartHeightRef.current + delta));
-        const clampedY = drawerStartYRef.current + (newHeight - drawerStartHeightRef.current);
+        const clampedY = drawerStartYRef.current + (newHeight - drawerStartHeightRef.current) * sign;
         lastClampedDrawerYRef.current = clampedY;
         if (ghostDrawerLineRef.current) {
           ghostDrawerLineRef.current.style.transform = `translateY(${clampedY}px)`;
@@ -2516,6 +2573,17 @@ function MainEditor() {
     }
 
     function onPointerUp() {
+      if (draggingColumns.current) {
+        draggingColumns.current = false;
+        document.body.style.cursor = "";
+        document.body.style.userSelect = "";
+        if (columnRowRef.current) {
+          const rect = columnRowRef.current.getBoundingClientRect();
+          const percent = ((lastClampedColumnXRef.current - rect.left) / rect.width) * 100;
+          setColumnSplitPercent(Math.min(MAX_PANE_PERCENT, Math.max(MIN_PANE_PERCENT, percent)));
+        }
+        setIsDraggingColumns(false);
+      }
       if (draggingSplit.current) {
         draggingSplit.current = false;
         document.body.style.cursor = "";
@@ -2531,7 +2599,7 @@ function MainEditor() {
         draggingDrawer.current = false;
         document.body.style.cursor = "";
         document.body.style.userSelect = "";
-        const delta = lastClampedDrawerYRef.current - drawerStartYRef.current;
+        const delta = (lastClampedDrawerYRef.current - drawerStartYRef.current) * (drawerGrowsUpRef.current ? -1 : 1);
         setTimelineDrawerHeight(Math.max(160, Math.min(650, drawerStartHeightRef.current + delta)));
         setIsDraggingDrawer(false);
       }
@@ -3074,6 +3142,147 @@ function MainEditor() {
     }, `marker:rename:${frame}`);
   }, [setGraphWithHistory]);
 
+  const anyView = spaces.view3D || spaces.camera || spaces.view2D;
+  const vertical = workspaceLayout === "vertical";
+  // The panes, composed below either one above the other (horizontal layout:
+  // views, then timeline + graph) or side by side (vertical: graph | views,
+  // timeline across the bottom).
+  const viewsBody = (
+        <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
+          <WithPlayhead canvas={activeCanvas}>
+            {(currentFrame) => (
+          <SplitViewport
+            graph={graph}
+            registry={DEFAULT_REGISTRY}
+            renderNodeId={findRenderNodeId(graph) ?? ""}
+            epochMs={epochMs}
+            selectedNodeId={selectedNodeId}
+            onSelectNode={handleSelectNode}
+            onTransformChange={onTransformChange}
+            onTransformStart={onTransformStart}
+            onCameraChange={onPreviewCameraChange}
+            currentFrame={currentFrame}
+            totalFrames={totalFrames}
+            onFrameChange={onViewportFrame}
+            onEvaluatedResults={onEvaluatedResults}
+            isPlaying={isPlaying}
+            onHubChange={handleHubChange}
+            suspended={isExporting || (!spaces.view3D && !spaces.camera && !spaces.view2D)}
+            show3DView={spaces.view3D}
+            showCameraView={spaces.camera}
+            show2DView={spaces.view2D}
+            view2DNodeId={findView2DNodeId(graph)}
+            onCycleViewMode={() => toggleSpace("camera")}
+            keyframes={graph.keyframes}
+            keyframesEnabled={keyframesEnabled}
+            onParamChange={onParamChange}
+            onParamAction={onParamAction}
+            onKeyframesEdit={onKeyframesEdit}
+            onUnpinParam={onToggleExposed}
+            onRenameExposedParam={onRenameExposed}
+            onBindExposedMidi={onBindExposedMidi}
+            mode2D={is2DMode}
+            stacked={vertical}
+            snapElevation={snapElevation}
+            onToggleSnapElevation={toggleSnapElevation}
+          />
+            )}
+          </WithPlayhead>
+          {needsTransformHint && (
+            <div className="viewport-hint">Wire a Transform node into this object's Matrix to move it</div>
+          )}
+          {selectedInstance &&
+            selectedInstance.type === CAMERA_NODE.type &&
+            selectedInstance.params.mode === "calibrated" && (
+              <CalibrationOverlay
+                graph={graph}
+                cameraNodeId={selectedInstance.id}
+                storedPicks={selectedInstance.params.calibrationPicks}
+                mode={selectedInstance.params.mode ?? DEFAULT_REGISTRY.get(selectedInstance.type)?.defaultParams.mode}
+                onChange={onParamChange}
+              />
+            )}
+        </div>
+  );
+  const liveBar = keyframesEnabled ? (
+          <LiveTimelineBar
+            canvas={activeCanvas}
+            nodes={graph.nodes}
+            totalFrames={totalFrames}
+            isPlaying={isPlaying}
+            keyframesEnabled={keyframesEnabled}
+            selectedKeyframes={selectedKeyframesRecord}
+            markers={graph.markers ?? []}
+            fps={exportFps}
+            onToggleMarker={onToggleMarker}
+            onMoveMarker={onMoveMarker}
+            onRenameMarker={onRenameMarker}
+            onMoveKeyframe={onMoveKeyframe}
+            onUpdateKeyframeEasing={onUpdateKeyframeEasing}
+            onDeleteKeyframe={onDeleteKeyframe}
+            onFrameChange={setCurrentFrame}
+            onSplitHandleMouseDown={!vertical && anyView && (spaces.canvas || spaces.timeline) ? onSplitHandleMouseDown : () => {}}
+            canResizeSplit={!vertical && anyView && (spaces.canvas || spaces.timeline)}
+            isDrawerOpen={spaces.timeline}
+            onToggleDrawer={() => toggleSpace("timeline")}
+          />
+  ) : null;
+  const drawerEl = (
+          <WithPlayhead canvas={activeCanvas}>
+            {(currentFrame) => (
+          <TimelineDrawer
+            isOpen={spaces.timeline}
+            onClose={() => toggleSpace("timeline")}
+            currentFrame={currentFrame}
+            totalFrames={totalFrames}
+            isPlaying={isPlaying}
+            keyframesEnabled={keyframesEnabled}
+            graph={graph}
+            registry={DEFAULT_REGISTRY}
+            selectedNodeIds={selectedNodeIds}
+            onSelectNode={handleSelectNode}
+            onFrameChange={setCurrentFrame}
+            onTogglePlay={() => setIsPlaying((p) => !p)}
+            onToggleKeyframe={onToggleKeyframe}
+            onBatchMoveKeyframes={onBatchMoveKeyframes}
+            onBatchDeleteKeyframes={onBatchDeleteKeyframes}
+            onBatchDuplicateKeyframes={onBatchDuplicateKeyframes}
+            onBatchUpdateEasing={onBatchUpdateEasing}
+            onChangeKeyframeValue={onChangeKeyframeValue}
+            onEditKeyframes={onEditKeyframes}
+            fps={exportFps}
+            onPasteKeyframes={onPasteKeyframes}
+            markers={graph.markers ?? []}
+            onToggleMarker={onToggleMarker}
+            onMoveMarker={onMoveMarker}
+            onRenameMarker={onRenameMarker}
+            drawerHeight={timelineDrawerHeight}
+            onDrawerHeightChange={setTimelineDrawerHeight}
+            onSplitHandleMouseDown={!vertical && anyView && spaces.canvas ? onSplitHandleMouseDown : () => {}}
+            isFullHeight={vertical ? !anyView && !spaces.canvas : !spaces.canvas}
+            isDraggingDrawer={isDraggingDrawer}
+          />
+            )}
+          </WithPlayhead>
+  );
+  const graphEditorEl = (
+            <GraphEditor
+              key={`${activeCanvas}:${editorKey}`}
+              graph={graph}
+              registry={DEFAULT_REGISTRY}
+              onGraphChange={onGraphChange}
+              onSelectNode={handleSelectNode}
+              selectedNodeId={selectedNodeId}
+              onSelectNodes={handleSelectNodes}
+              selectedNodeIds={selectedNodeIds}
+              canvasCount={CANVAS_COUNT}
+              activeCanvas={activeCanvas}
+              emptyCanvases={emptyCanvases}
+              onSelectCanvas={switchCanvas}
+              onNodeAction={onNodeAction}
+            />
+  );
+
   return (
     <div
       ref={containerRef}
@@ -3112,6 +3321,8 @@ function MainEditor() {
         onResetSimulations={handleResetSimulations}
         spaces={spaces}
         onToggleSpace={toggleSpace}
+        workspaceLayout={workspaceLayout}
+        onToggleWorkspaceLayout={toggleWorkspaceLayout}
       />
       {isExporting && (
         // Off-screen (not display:none, which some webviews suspend rAF
@@ -3139,6 +3350,8 @@ function MainEditor() {
           />
         </div>
       )}
+      {!vertical && (
+      <>
       <div
         style={{
           display: spaces.view3D || spaces.camera || spaces.view2D ? "flex" : "none",
@@ -3157,87 +3370,8 @@ function MainEditor() {
           position: "relative",
         }}
       >
-        <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
-          <WithPlayhead canvas={activeCanvas}>
-            {(currentFrame) => (
-          <SplitViewport
-            graph={graph}
-            registry={DEFAULT_REGISTRY}
-            renderNodeId={findRenderNodeId(graph) ?? ""}
-            epochMs={epochMs}
-            selectedNodeId={selectedNodeId}
-            onSelectNode={handleSelectNode}
-            onTransformChange={onTransformChange}
-            onTransformStart={onTransformStart}
-            onCameraChange={onPreviewCameraChange}
-            currentFrame={currentFrame}
-            totalFrames={totalFrames}
-            onFrameChange={onViewportFrame}
-            onEvaluatedResults={onEvaluatedResults}
-            isPlaying={isPlaying}
-            onHubChange={handleHubChange}
-            suspended={isExporting || (!spaces.view3D && !spaces.camera && !spaces.view2D)}
-            show3DView={spaces.view3D}
-            showCameraView={spaces.camera}
-            show2DView={spaces.view2D}
-            view2DNodeId={findView2DNodeId(graph)}
-            onCycleViewMode={() => toggleSpace("camera")}
-            keyframes={graph.keyframes}
-            keyframesEnabled={keyframesEnabled}
-            onParamChange={onParamChange}
-            onParamAction={onParamAction}
-            onKeyframesEdit={onKeyframesEdit}
-            onUnpinParam={onToggleExposed}
-            onRenameExposedParam={onRenameExposed}
-            onBindExposedMidi={onBindExposedMidi}
-            mode2D={is2DMode}
-            snapElevation={snapElevation}
-            onToggleSnapElevation={toggleSnapElevation}
-          />
-            )}
-          </WithPlayhead>
-          {needsTransformHint && (
-            <div className="viewport-hint">Wire a Transform node into this object's Matrix to move it</div>
-          )}
-          {selectedInstance &&
-            selectedInstance.type === CAMERA_NODE.type &&
-            selectedInstance.params.mode === "calibrated" && (
-              <CalibrationOverlay
-                graph={graph}
-                cameraNodeId={selectedInstance.id}
-                storedPicks={selectedInstance.params.calibrationPicks}
-                mode={selectedInstance.params.mode ?? DEFAULT_REGISTRY.get(selectedInstance.type)?.defaultParams.mode}
-                onChange={onParamChange}
-              />
-            )}
-        </div>
-        {keyframesEnabled && (
-          <LiveTimelineBar
-            canvas={activeCanvas}
-            nodes={graph.nodes}
-            totalFrames={totalFrames}
-            isPlaying={isPlaying}
-            keyframesEnabled={keyframesEnabled}
-            selectedKeyframes={selectedKeyframesRecord}
-            markers={graph.markers ?? []}
-            fps={exportFps}
-            onToggleMarker={onToggleMarker}
-            onMoveMarker={onMoveMarker}
-            onRenameMarker={onRenameMarker}
-            onMoveKeyframe={onMoveKeyframe}
-            onUpdateKeyframeEasing={onUpdateKeyframeEasing}
-            onDeleteKeyframe={onDeleteKeyframe}
-            onFrameChange={setCurrentFrame}
-            onSplitHandleMouseDown={
-              (spaces.view3D || spaces.camera || spaces.view2D) && (spaces.canvas || spaces.timeline)
-                ? onSplitHandleMouseDown
-                : () => {}
-            }
-            canResizeSplit={Boolean((spaces.view3D || spaces.camera || spaces.view2D) && (spaces.canvas || spaces.timeline))}
-            isDrawerOpen={spaces.timeline}
-            onToggleDrawer={() => toggleSpace("timeline")}
-          />
-        )}
+        {viewsBody}
+        {liveBar}
       </div>
 
       {/* Primary Split Divider with left & right resize handle buttons between 3D View and Lower Pane (only needed when mini timeline is disabled) */}
@@ -3264,6 +3398,9 @@ function MainEditor() {
         </div>
       )}
 
+
+      </>
+      )}
 
       {/* True screen overlay, not scoped to the 3D-viewport pane above: a
           fixed-position sibling of every other pane (see param-panel.css),
@@ -3308,6 +3445,7 @@ function MainEditor() {
           )}
         </WithEvaluation>
       )}
+      {!vertical && (
       <div
         style={{
           flex: spaces.canvas || spaces.timeline ? 1 : "none",
@@ -3316,48 +3454,7 @@ function MainEditor() {
           flexDirection: "column",
         }}
       >
-        {spaces.timeline && (
-          <WithPlayhead canvas={activeCanvas}>
-            {(currentFrame) => (
-          <TimelineDrawer
-            isOpen={spaces.timeline}
-            onClose={() => toggleSpace("timeline")}
-            currentFrame={currentFrame}
-            totalFrames={totalFrames}
-            isPlaying={isPlaying}
-            keyframesEnabled={keyframesEnabled}
-            graph={graph}
-            registry={DEFAULT_REGISTRY}
-            selectedNodeIds={selectedNodeIds}
-            onSelectNode={handleSelectNode}
-            onFrameChange={setCurrentFrame}
-            onTogglePlay={() => setIsPlaying((p) => !p)}
-            onToggleKeyframe={onToggleKeyframe}
-            onBatchMoveKeyframes={onBatchMoveKeyframes}
-            onBatchDeleteKeyframes={onBatchDeleteKeyframes}
-            onBatchDuplicateKeyframes={onBatchDuplicateKeyframes}
-            onBatchUpdateEasing={onBatchUpdateEasing}
-            onChangeKeyframeValue={onChangeKeyframeValue}
-            onEditKeyframes={onEditKeyframes}
-            fps={exportFps}
-            onPasteKeyframes={onPasteKeyframes}
-            markers={graph.markers ?? []}
-            onToggleMarker={onToggleMarker}
-            onMoveMarker={onMoveMarker}
-            onRenameMarker={onRenameMarker}
-            drawerHeight={timelineDrawerHeight}
-            onDrawerHeightChange={setTimelineDrawerHeight}
-            onSplitHandleMouseDown={
-              (spaces.view3D || spaces.camera || spaces.view2D) && spaces.canvas
-                ? onSplitHandleMouseDown
-                : () => {}
-            }
-            isFullHeight={!spaces.canvas}
-            isDraggingDrawer={isDraggingDrawer}
-          />
-            )}
-          </WithPlayhead>
-        )}
+        {spaces.timeline && drawerEl}
         {/* Secondary Split Divider with left & right resize handle buttons between Timeline and Canvas */}
         {spaces.timeline && spaces.canvas && (
           <div
@@ -3382,26 +3479,75 @@ function MainEditor() {
           </div>
         )}
 
-        {spaces.canvas && (
-          <div style={{ flex: 1, minHeight: 0 }}>
-            <GraphEditor
-              key={`${activeCanvas}:${editorKey}`}
-              graph={graph}
-              registry={DEFAULT_REGISTRY}
-              onGraphChange={onGraphChange}
-              onSelectNode={handleSelectNode}
-              selectedNodeId={selectedNodeId}
-              onSelectNodes={handleSelectNodes}
-              selectedNodeIds={selectedNodeIds}
-              canvasCount={CANVAS_COUNT}
-              activeCanvas={activeCanvas}
-              emptyCanvases={emptyCanvases}
-              onSelectCanvas={switchCanvas}
-              onNodeAction={onNodeAction}
-            />
-          </div>
-        )}
+        {spaces.canvas && <div style={{ flex: 1, minHeight: 0 }}>{graphEditorEl}</div>}
       </div>
+      )}
+      {vertical && (
+        <>
+          <div
+            ref={columnRowRef}
+            style={{ flex: 1, minHeight: 0, display: spaces.canvas || anyView ? "flex" : "none", flexDirection: "row" }}
+          >
+            {spaces.canvas && (
+              <div style={{ width: anyView ? `${columnSplitPercent}%` : "100%", minWidth: 0, height: "100%" }}>{graphEditorEl}</div>
+            )}
+            {spaces.canvas && anyView && (
+              <div
+                className="workspace-split-divider is-column"
+                onMouseDown={onColumnSplitMouseDown}
+                onPointerDown={onColumnSplitMouseDown}
+                title="Resize graph / views (drag horizontally)"
+              >
+                <button
+                  type="button"
+                  className="timeline-split-handle-btn timeline-split-handle-btn-left"
+                  onMouseDown={onColumnSplitMouseDown}
+                  onPointerDown={onColumnSplitMouseDown}
+                  title="Resize graph / views (drag horizontally)"
+                >
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="7 8 3 12 7 16" />
+                    <polyline points="17 8 21 12 17 16" />
+                    <line x1="3" y1="12" x2="21" y2="12" />
+                  </svg>
+                </button>
+              </div>
+            )}
+            {anyView && (
+              <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", position: "relative" }}>{viewsBody}</div>
+            )}
+          </div>
+          {liveBar}
+          {spaces.timeline && (spaces.canvas || anyView) && (
+            <div
+              className="workspace-split-divider"
+              onMouseDown={onDrawerSplitMouseDown}
+              onPointerDown={onDrawerSplitMouseDown}
+              title="Resize timeline height (drag vertically)"
+            />
+          )}
+          {spaces.timeline && (
+            <div style={{ flex: spaces.canvas || anyView ? "none" : 1, minHeight: 0, display: "flex", flexDirection: "column" }}>{drawerEl}</div>
+          )}
+        </>
+      )}
+      {isDraggingColumns && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 99999, cursor: "col-resize", userSelect: "none", pointerEvents: "auto" }}>
+          <div
+            ref={ghostColumnLineRef}
+            style={{
+              position: "absolute",
+              top: 0,
+              bottom: 0,
+              left: 0,
+              width: 1,
+              background: "var(--accent-color, #38bdf8)",
+              transform: `translateX(${lastClampedColumnXRef.current}px)`,
+              pointerEvents: "none",
+            }}
+          />
+        </div>
+      )}
       {isDraggingSplit && (
         <div
           style={{
