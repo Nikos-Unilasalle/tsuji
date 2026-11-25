@@ -8,6 +8,7 @@ export const GET_LIST_ITEM_NODE: NodeDefinition = {
   type: "list/get-item",
   label: "Get List Item",
   category: "list",
+  ownershipPassThrough: true,
   pure: true,
   inputs: [
     { id: "list", label: "List", type: "list" },
@@ -47,6 +48,7 @@ export const LIST_LENGTH_NODE: NodeDefinition = {
   type: "list/length",
   label: "List Length",
   category: "list",
+  ownershipPassThrough: true,
   pure: true,
   inputs: [{ id: "list", label: "List", type: "list" }],
   outputs: [{ id: "length", label: "Length", type: "value" }],
@@ -62,6 +64,7 @@ export const GENERATE_LIST_NODE: NodeDefinition = {
   type: "list/generate",
   label: "Generate List",
   category: "list",
+  ownershipPassThrough: true,
   pure: true,
   inputs: [
     { id: "count", label: "Count", type: "value" },
@@ -123,6 +126,7 @@ export const LIST_MATH_NODE: NodeDefinition = {
   type: "list/math",
   label: "List Math",
   category: "list",
+  ownershipPassThrough: true,
   pure: true,
   inputs: [
     { id: "a", label: "A", type: "list" },
@@ -260,6 +264,7 @@ export const LIST_STATISTICS_NODE: NodeDefinition = {
   type: "list/statistics",
   label: "List Statistics",
   category: "list",
+  ownershipPassThrough: true,
   pure: true,
   inputs: [{ id: "list", label: "List", type: "list" }],
   outputs: [
@@ -314,6 +319,7 @@ export const LIST_HISTOGRAM_NODE: NodeDefinition = {
   type: "list/histogram",
   label: "List Histogram",
   category: "list",
+  ownershipPassThrough: true,
   pure: true,
   inputs: [
     { id: "list", label: "List", type: "list" },
@@ -366,6 +372,7 @@ export const LIST_COMBINE_MATH_NODE: NodeDefinition = {
   type: "list/combine-math",
   label: "Combine Lists Math",
   category: "list",
+  ownershipPassThrough: true,
   pure: true,
   inputs: [
     { id: "a", label: "A", type: "list" },
@@ -422,6 +429,7 @@ export const COLOR_PALETTE_LIST_NODE: NodeDefinition = {
   type: "list/color-palette",
   label: "Color Palette List",
   category: "list",
+  ownershipPassThrough: true,
   pure: true,
   inputs: [{ id: "count", label: "Count", type: "value" }],
   outputs: [{ id: "list", label: "Colors", type: "list" }],
@@ -465,6 +473,7 @@ export const LIST_MAP_RANGE_NODE: NodeDefinition = {
   type: "list/map-range",
   label: "List Map Range",
   category: "list",
+  ownershipPassThrough: true,
   pure: true,
   inputs: [
     { id: "list", label: "List", type: "list" },
@@ -519,6 +528,7 @@ export const GRADIENT_LIST_NODE: NodeDefinition = {
   type: "list/gradient",
   label: "Gradient List",
   category: "list",
+  ownershipPassThrough: true,
   pure: true,
   inputs: [
     { id: "values", label: "Values", type: "list" },
@@ -583,6 +593,7 @@ export const SLICE_LIST_NODE: NodeDefinition = {
   type: "list/slice",
   label: "Slice List",
   category: "list",
+  ownershipPassThrough: true,
   pure: true,
   inputs: [
     { id: "list", label: "List", type: "list" },
@@ -610,6 +621,7 @@ export const COMBINE_VECTOR_LISTS_NODE: NodeDefinition = {
   type: "list/combine-vectors",
   label: "Combine Vectors",
   category: "list",
+  ownershipPassThrough: true,
   pure: true,
   inputs: [
     { id: "xList", label: "X List", type: "list" },
@@ -657,6 +669,7 @@ export const SPLIT_VECTOR_LIST_NODE: NodeDefinition = {
   type: "list/split-vectors",
   label: "Split Vector List",
   category: "list",
+  ownershipPassThrough: true,
   pure: true,
   inputs: [{ id: "vectorList", label: "Vector List", type: "list" }],
   outputs: [
@@ -710,6 +723,7 @@ export const RANDOM_SAMPLE_LIST_NODE: NodeDefinition = {
   type: "list/random-sample",
   label: "Random Sample List",
   category: "list",
+  ownershipPassThrough: true,
   pure: true,
   inputs: [
     { id: "list", label: "List", type: "list" },

@@ -208,7 +208,7 @@ function defineVolumeNode(spec: VolumeSpec): NodeDefinition {
   return {
     type: spec.type,
     label: spec.label,
-    category: "modeling",
+    category: "volume",
     inputs: [{ id: "geometry", label: spec.primary === "mesh" ? "Mesh" : spec.primary === "optional" ? "Points (Geometry)" : "SDF", type: "geometry", owns: true }, ...(spec.inputs ?? [])],
     outputs: [{ id: "geometry", label: spec.primary === "mesh" || spec.type === "volume/sdf-to-mesh" ? "Mesh" : "SDF", type: "geometry" }, { id: "matrix", label: "Matrix", type: "matrix" }, ...extraOutputs],
     defaultParams: spec.defaultParams,

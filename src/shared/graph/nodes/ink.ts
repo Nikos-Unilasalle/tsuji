@@ -298,7 +298,7 @@ const STROKE_FIELDS: ParamFieldDef[] = [
 export const INK_STROKE_NODE: NodeDefinition = {
   type: "curve/ink-stroke",
   label: "Ink Stroke",
-  category: "curve",
+  category: "strokes",
   inputs: [
     ...INK_INPUTS,
     { id: "width", label: "Width", type: "value" },
@@ -428,7 +428,7 @@ const FILL_FIELDS: ParamFieldDef[] = [
 export const CURVE_FILL_NODE: NodeDefinition = {
   type: "curve/fill",
   label: "Curve Fill",
-  category: "curve",
+  category: "strokes",
   inputs: [...INK_INPUTS, ...INK_TRAILING_INPUTS],
   outputs: INK_OUTPUTS,
   defaultParams: {

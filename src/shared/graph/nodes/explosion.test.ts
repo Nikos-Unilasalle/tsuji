@@ -28,7 +28,7 @@ function scaleOf(res: ExplosionResult): number {
 describe("OBJECT_EXPLOSION_NODE", () => {
   it("has the expected node schema", () => {
     expect(OBJECT_EXPLOSION_NODE.type).toBe("object/explosion");
-    expect(OBJECT_EXPLOSION_NODE.category).toBe("object");
+    expect(OBJECT_EXPLOSION_NODE.category).toBe("fx");
     expect(OBJECT_EXPLOSION_NODE.outputs.map((o) => o.id)).toEqual(["geometry", "matrix", "progress", "active"]);
   });
 

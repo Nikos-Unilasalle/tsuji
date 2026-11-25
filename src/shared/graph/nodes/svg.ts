@@ -180,7 +180,7 @@ export function transformCurve3(c: THREE.Curve<THREE.Vector3>, s: number, ox: nu
 export const SVG_TO_CURVES_NODE: NodeDefinition = {
   type: "curve/svg",
   label: "SVG to Curves",
-  category: "curve",
+  category: "import",
   inputs: [
     { id: "matrix", label: "Matrix", type: "matrix" },
     { id: "visible", label: "Visible", type: "value" },
@@ -372,7 +372,7 @@ function getSvgSolidState(nodeId: string): SvgSolidState {
 export const SVG_TO_SOLID_NODE: NodeDefinition = {
   type: "curve/svg_solid",
   label: "SVG to Solid",
-  category: "curve",
+  category: "import",
   inputs: [
     { id: "depth", label: "Depth", type: "value" },
     ...COMMON_PRIMITIVE_INPUTS,
@@ -630,7 +630,7 @@ function getSvgMeshState(nodeId: string): SvgMeshState {
 export const SVG_TO_MESH_NODE: NodeDefinition = {
   type: "curve/svg_mesh",
   label: "SVG to Mesh",
-  category: "curve",
+  category: "import",
   inputs: [...COMMON_PRIMITIVE_INPUTS],
   outputs: [...COMMON_PRIMITIVE_OUTPUTS],
   defaultParams: {

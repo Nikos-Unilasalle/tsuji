@@ -1,3 +1,5 @@
+import { withKeywords } from "./nodeKeywords";
+import { legacyObjectEffect, screenOrObjectEffect } from "./effectTarget";
 import { createRegistry } from "../types";
 import { addPoseSockets } from "../poseSockets";
 import { CAMERA_FLY_TO_NODE, CAMERA_NODE } from "./camera";
@@ -490,7 +492,7 @@ export const STARTER_NODES = [
   POSTPROCESS_VIGNETTE_NODE,
   POSTPROCESS_RGB_SHIFT_NODE,
   POSTPROCESS_DOF_NODE,
-  POSTPROCESS_OUTLINE_NODE,
+  screenOrObjectEffect(POSTPROCESS_OUTLINE_NODE, MODIFIER_OUTLINE_NODE),
   POSTPROCESS_FILM_GRAIN_NODE,
   POSTPROCESS_GLITCH_NODE,
   POSTPROCESS_PIXELATE_NODE,
@@ -499,11 +501,11 @@ export const STARTER_NODES = [
   POSTPROCESS_ANTIALIAS_NODE,
   POSTPROCESS_FOG_NODE,
   POSTPROCESS_AMBIENT_OCCLUSION_NODE,
-  POSTPROCESS_DUOTONE_NODE,
-  POSTPROCESS_HALFTONE_NODE,
-  POSTPROCESS_FILM_TEXTURE_NODE,
-  POSTPROCESS_SUPER8_NODE,
-  POSTPROCESS_DRY_BRUSH_NODE,
+  screenOrObjectEffect(POSTPROCESS_DUOTONE_NODE, MODIFIER_DUOTONE_NODE),
+  screenOrObjectEffect(POSTPROCESS_HALFTONE_NODE, MODIFIER_HALFTONE_NODE),
+  screenOrObjectEffect(POSTPROCESS_FILM_TEXTURE_NODE, MODIFIER_FILM_TEXTURE_NODE),
+  screenOrObjectEffect(POSTPROCESS_SUPER8_NODE, MODIFIER_SUPER8_NODE),
+  screenOrObjectEffect(POSTPROCESS_DRY_BRUSH_NODE, MODIFIER_DRY_BRUSH_NODE),
   LIST_GROUP_NODE,
   SPAWN_NODE,
   CURVE_TO_LINE_NODE,
@@ -655,19 +657,24 @@ export const STARTER_NODES = [
   CONSTRAINT_NODE,
   CHAIN_NODE,
   ROTO_MASK_NODE,
-  MODIFIER_DUOTONE_NODE,
-  MODIFIER_HALFTONE_NODE,
-  MODIFIER_FILM_TEXTURE_NODE,
-  MODIFIER_DRY_BRUSH_NODE,
-  MODIFIER_SUPER8_NODE,
-  MODIFIER_OUTLINE_NODE,
+  legacyObjectEffect(MODIFIER_DUOTONE_NODE),
+  legacyObjectEffect(MODIFIER_HALFTONE_NODE),
+  legacyObjectEffect(MODIFIER_FILM_TEXTURE_NODE),
+  legacyObjectEffect(MODIFIER_DRY_BRUSH_NODE),
+  legacyObjectEffect(MODIFIER_SUPER8_NODE),
+  legacyObjectEffect(MODIFIER_OUTLINE_NODE),
 ];
 
 // Location / Rotation / Scale sockets on every node that owns a pose — see poseSockets.ts.
 for (const def of STARTER_NODES) addPoseSockets(def);
 // Music: any number, on/off or choice param can be opened as an input from the param panel — see paramInputs.ts.
 STARTER_NODES.forEach((def, i) => {
-  if (def.category === "music" && def.type !== "music/viewer" && def.type !== "music/mixing-console") STARTER_NODES[i] = withParamInputs(def);
+  if (def.type.startsWith("music/") && def.type !== "music/viewer" && def.type !== "music/mixing-console") STARTER_NODES[i] = withParamInputs(def);
+});
+
+// Search synonyms (Blender / Houdini names, former labels) — see nodeKeywords.ts.
+STARTER_NODES.forEach((def, i) => {
+  STARTER_NODES[i] = withKeywords(def);
 });
 
 export const DEFAULT_REGISTRY = createRegistry(STARTER_NODES);

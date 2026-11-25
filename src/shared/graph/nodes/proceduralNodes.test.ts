@@ -29,7 +29,7 @@ describe("procedural nodes", () => {
       "modeling/heightfield-erode",
       "modeling/geodesic-distance",
     ]);
-    for (const d of PROCEDURAL_NODES) expect(d.category).toBe("modeling");
+    for (const d of PROCEDURAL_NODES) expect(["deform", "instance", "generators", "attribute"]).toContain(d.category);
   });
 
   it("shrinkwrap puts every point on the sphere", () => {

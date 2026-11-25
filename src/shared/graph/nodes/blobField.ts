@@ -35,7 +35,7 @@ const WORLD = new THREE.Matrix4();
 export const BLOB_FIELD_POINTS_NODE: NodeDefinition = {
   type: "field/blob-points",
   label: "Blob Field: Points",
-  category: "object",
+  category: "generators",
   inputs: [
     { id: "points", label: "Points", type: "list" },
     { id: "geometry", label: "Geometry (children / instances)", type: "geometry", owns: true },
@@ -81,7 +81,7 @@ export const BLOB_FIELD_POINTS_NODE: NodeDefinition = {
 export const BLOB_FIELD_POLYLINE_NODE: NodeDefinition = {
   type: "field/blob-polyline",
   label: "Blob Field: Polyline",
-  category: "object",
+  category: "generators",
   inputs: [
     { id: "curve", label: "Curve", type: "curve" },
     { id: "points", label: "Points / Polylines", type: "list" },
@@ -134,7 +134,7 @@ const IN_PREFIX = "in";
 export const BLOB_FIELD_COMBINE_NODE: NodeDefinition = {
   type: "field/blob-combine",
   label: "Blob Field: Combine",
-  category: "object",
+  category: "generators",
   inputs: [
     { id: `${IN_PREFIX}0`, label: "Add 1", type: "blobfield" },
     { id: "subtract", label: "Subtract", type: "blobfield" },

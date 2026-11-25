@@ -149,7 +149,7 @@ function getState(nodeId: string): InvertState {
 export const INVERT_NORMALS_NODE: NodeDefinition = {
   type: "modifier/invert-normals",
   label: "Invert Normals",
-  category: "transform",
+  category: "modeling",
   inputs: [{ id: "geometry", label: "Geometry", type: "geometry", owns: true }],
   outputs: [
     { id: "geometry", label: "Geometry", type: "geometry" },

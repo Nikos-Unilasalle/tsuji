@@ -584,7 +584,7 @@ function buildExtrudedGeometry(result: WeldedMesh): THREE.BufferGeometry {
 export const EXTRUDE_MESH_NODE: NodeDefinition = {
   type: "modifier/extrude",
   label: "Extrude Mesh",
-  category: "transform",
+  category: "modeling",
   inputs: [
     { id: "geometry", label: "Geometry", type: "geometry", owns: true },
     // A Face Selection node's `selection` output — booleans, one per face in
@@ -814,7 +814,7 @@ export const EXTRUDE_MESH_NODE: NodeDefinition = {
 export const FACE_SELECTION_NODE: NodeDefinition = {
   type: "modifier/face-selection",
   label: "Face Selection",
-  category: "transform",
+  category: "selection",
   pure: true,
   inputs: [
     // `owns`: this node re-emits the source object through its `geometry`
@@ -900,7 +900,7 @@ export const FACE_SELECTION_NODE: NodeDefinition = {
 export const DELETE_GEOMETRY_NODE: NodeDefinition = {
   type: "modifier/delete-geometry",
   label: "Delete Geometry",
-  category: "transform",
+  category: "modeling",
   inputs: [{ id: "geometry", label: "Geometry", type: "geometry", owns: true }],
   outputs: [
     { id: "geometry", label: "Geometry", type: "geometry" },

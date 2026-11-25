@@ -130,7 +130,7 @@ const SPAWNER_PARAM_FIELDS: ParamFieldDef[] = [
  */
 export const PHYSICS_SPAWNER_NODE: NodeDefinition = {
   type: "physics/spawner",
-  label: "Spawner",
+  label: "Physics Spawner",
   category: "physics",
   inputs: [
     { id: "world", label: "World", type: "any" },

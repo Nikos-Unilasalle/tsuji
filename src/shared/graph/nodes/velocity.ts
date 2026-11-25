@@ -34,7 +34,7 @@ function getState(nodeId: string): VelocityState {
 export const VELOCITY_NODE: NodeDefinition = {
   type: "math/velocity",
   label: "Velocity",
-  category: "math",
+  category: "time",
   inputs: [
     { id: "matrix", label: "Matrix", type: "matrix" },
     { id: "time", label: "Time", type: "value" },

@@ -59,7 +59,7 @@ describe("MODELING_ALGO_NODES", () => {
   it("are all modeling/* nodes with a Group field, and survive no input", () => {
     for (const def of MODELING_ALGO_NODES) {
       expect(def.type.startsWith("modeling/")).toBe(true);
-      expect(def.category).toBe("modeling");
+      expect(["modeling", "deform"]).toContain(def.category);
       expect(def.paramFields?.some((f) => f.id === "group")).toBe(true);
       const out = def.evaluate({}, def.defaultParams ?? {}, ctx());
       expect(out.geometry).toBeNull();

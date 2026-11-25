@@ -102,6 +102,7 @@ export const STAGGER_NODE: NodeDefinition = {
   type: "list/stagger",
   label: "Stagger",
   category: "list",
+  ownershipPassThrough: true,
   inputs: [
     { id: "time", label: "Time", type: "value" },
     { id: "source", label: "Source (List / Geometry)", type: "any" },

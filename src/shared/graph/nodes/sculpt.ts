@@ -109,7 +109,7 @@ function toSculptMeshData(serialized: SerializedSculptMesh, adjacencyOut: { curr
 export const SCULPT_NODE: NodeDefinition = {
   type: "object/sculpt",
   label: "Sculpt",
-  category: "object",
+  category: "modeling",
   inputs: [{ id: "geometry", label: "Geometry", type: "geometry" }, ...COMMON_PRIMITIVE_INPUTS],
   outputs: [...COMMON_PRIMITIVE_OUTPUTS],
   reset: { params: ["sculptMesh"] },

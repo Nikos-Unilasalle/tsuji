@@ -162,7 +162,7 @@ function verticalFovDegrees(calibration: ProjectorCalibration): number {
 export const CAMERA_NODE: NodeDefinition = {
   type: "calibration/camera",
   label: "Camera",
-  category: "calibration",
+  category: "camera",
   inputs: [
     // No `geometry` input: the Camera aims at things through `target` below,
     // and builds its own helper for the `geometry` *output*. It carried an
@@ -392,7 +392,7 @@ const flyToCache = createNodeCache<FlyToState>();
 export const CAMERA_FLY_TO_NODE: NodeDefinition = {
   type: "camera/fly_to",
   label: "Fly To",
-  category: "calibration",
+  category: "camera",
   inputs: [
     { id: "cameraA", label: "Camera A (Start)", type: "any" },
     { id: "cameraB", label: "Camera B (Target)", type: "any" },

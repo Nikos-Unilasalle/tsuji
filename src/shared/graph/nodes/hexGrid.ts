@@ -28,7 +28,7 @@ function numberInput(input: unknown, param: unknown, fallback: number): number {
 export const HEX_GRID_NODE: NodeDefinition = {
   type: "structure/hex-grid",
   label: "Hex Grid",
-  category: "structure",
+  category: "generators",
   inputs: [
     { id: "geometry", label: "Geometry", type: "geometry", owns: true },
     { id: "cols", label: "Cols (X)", type: "value" },

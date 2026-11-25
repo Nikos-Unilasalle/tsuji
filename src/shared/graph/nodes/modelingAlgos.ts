@@ -115,7 +115,7 @@ export const SMOOTH_WEIGHTINGS: SmoothWeighting[] = ["uniform", "edge-length", "
 export const SMOOTH_NODE = definePolyNode({
   type: "modeling/smooth",
   label: "Smooth / Relax",
-  category: CATEGORY,
+  category: "deform",
   group: { domain: "choose", defaultDomain: "point" },
   inputs: [{ id: "strength", label: "Strength", type: "value" }],
   defaultParams: { domain: "point", weightAttr: "", iterations: 10, strength: 0.5, weighting: "uniform", preserveVolume: false, pinBoundary: true },
@@ -150,7 +150,7 @@ export const DISPLACE_DIRECTIONS = ["normal", "vector"] as const;
 export const DISPLACE_NODE = definePolyNode({
   type: "modeling/displace",
   label: "Displace",
-  category: CATEGORY,
+  category: "deform",
   group: { domain: "choose", defaultDomain: "point" },
   inputs: [
     { id: "amount", label: "Amount", type: "value" },
@@ -234,7 +234,7 @@ export const TRANSFORM_PIVOTS = ["group-centroid", "piece", "face", "origin", "c
 export const TRANSFORM_ELEMENTS_NODE = definePolyNode({
   type: "modeling/transform-elements",
   label: "Transform Elements",
-  category: CATEGORY,
+  category: "deform",
   group: { domain: "choose", defaultDomain: "face" },
   inputs: [
     { id: "translate", label: "Translate", type: "vector" },
@@ -354,7 +354,7 @@ export const TRANSFORM_ELEMENTS_NODE = definePolyNode({
 export const SCALE_ELEMENTS_NODE = definePolyNode({
   type: "modeling/scale-elements",
   label: "Scale Elements",
-  category: CATEGORY,
+  category: "deform",
   group: { domain: "face" },
   inputs: [{ id: "scale", label: "Scale", type: "value" }],
   defaultParams: { weightAttr: "", scale: 0.8, axes: new THREE.Vector3(1, 1, 1), mode: "face", disconnect: false },

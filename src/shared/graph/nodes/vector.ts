@@ -23,7 +23,7 @@ export function getUnusedAxes(v: THREE.Vector3): string[] {
 export const VECTOR_COMPOSE_NODE: NodeDefinition = {
   type: "vector/compose",
   label: "Compose Vector",
-  category: "compose",
+  category: "convert",
   pure: true,
   inputs: [
     { id: "x", label: "X", type: "value" },
@@ -70,7 +70,7 @@ export const VECTOR_COMPOSE_NODE: NodeDefinition = {
 export const VECTOR_DECOMPOSE_NODE: NodeDefinition = {
   type: "vector/decompose",
   label: "Decompose Vector",
-  category: "compose",
+  category: "convert",
   pure: true,
   inputs: [{ id: "vector", label: "Vector", type: "vector" }],
   outputs: [

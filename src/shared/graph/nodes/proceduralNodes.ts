@@ -66,7 +66,7 @@ export const RAY_PROJECT_MODES = ["nearest", "normal", "direction"] as const;
 export const RAY_PROJECT_NODE = definePolyNode({
   type: "modeling/ray-project",
   label: "Ray / Project / Shrinkwrap",
-  category: "modeling",
+  category: "deform",
   group: { domain: "point", label: "Point Group" },
   dependsOnPose: true,
   inputs: [
@@ -179,7 +179,7 @@ function orthoBasis(primary: THREE.Vector3, hint: THREE.Vector3): [THREE.Vector3
 export const COPY_TO_POINTS_NODE = definePolyNode({
   type: "modeling/copy-to-points",
   label: "Copy to Points",
-  category: "modeling",
+  category: "instance",
   group: { domain: "point", label: "Target Points" },
   inputs: [
     { id: "source", label: "Source", type: "geometry" },
@@ -356,7 +356,7 @@ const L_DEFAULTS = {
 export const LSYSTEM_NODE: NodeDefinition = {
   type: "modeling/l-system",
   label: "L-System",
-  category: "modeling",
+  category: "generators",
   inputs: [
     { id: "iterations", label: "Iterations", type: "value" },
     { id: "angle", label: "Angle (°)", type: "value" },
@@ -445,7 +445,7 @@ export const LSYSTEM_NODE: NodeDefinition = {
 export const HEIGHTFIELD_ERODE_NODE = definePolyNode({
   type: "modeling/heightfield-erode",
   label: "HeightField Erode",
-  category: "modeling",
+  category: "generators",
   group: { domain: "point", label: "Erodible Points" },
   inputs: [{ id: "seed", label: "Seed", type: "value" }],
   outputs: [{ id: "steps", label: "Droplet Steps", type: "value" }],
@@ -526,7 +526,7 @@ export const HEIGHTFIELD_ERODE_NODE = definePolyNode({
 export const GEODESIC_DISTANCE_NODE = definePolyNode({
   type: "modeling/geodesic-distance",
   label: "Geodesic Distance",
-  category: "modeling",
+  category: "attribute",
   group: { domain: "point", label: "Source Points" },
   outputs: [{ id: "maxDistance", label: "Max Distance", type: "value" }],
   defaultParams: { group: "0", name: "geodesic", method: "heat", timeScale: 1, normalize: false },

@@ -440,7 +440,7 @@ export const RAY_BURST_NODE: NodeDefinition = {
 export const SAMPLE_SURFACE_NODE: NodeDefinition = {
   type: "physics/sample",
   label: "Surface Scatter",
-  category: "physics",
+  category: "instance",
   inputs: [
     { id: "geometry", label: "Surface", type: "geometry" },
     { id: "count", label: "Count", type: "value" },
@@ -477,7 +477,7 @@ export const SAMPLE_SURFACE_NODE: NodeDefinition = {
 export const VOLUME_SCATTER_NODE: NodeDefinition = {
   type: "physics/volume_scatter",
   label: "Volume Scatter",
-  category: "physics",
+  category: "instance",
   inputs: [
     { id: "geometry", label: "Volume", type: "geometry" },
     { id: "count", label: "Count", type: "value" },

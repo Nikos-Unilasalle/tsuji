@@ -139,7 +139,7 @@ const FIELDS: ParamFieldDef[] = [
 export const FUNCTION_SURFACE_NODE: NodeDefinition = {
   type: "math/function-surface",
   label: "Function Surface",
-  category: "math",
+  category: "dataviz",
   inputs: [
     { id: "space", label: "Space", type: "matrix" },
     { id: "a", label: "a", type: "value" },

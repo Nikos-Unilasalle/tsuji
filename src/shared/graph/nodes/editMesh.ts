@@ -618,7 +618,7 @@ function editMeshParamFields(instance?: NodeInstance): ParamFieldDef[] {
 export const EDIT_MESH_NODE: NodeDefinition = {
   type: EDIT_MESH_NODE_TYPE,
   label: "Edit Mesh",
-  category: "transform",
+  category: "modeling",
   inputs: [
     { id: "geometry", label: "Geometry", type: "geometry", owns: true },
     // Same role as a primitive's Matrix socket: a parent pose applied

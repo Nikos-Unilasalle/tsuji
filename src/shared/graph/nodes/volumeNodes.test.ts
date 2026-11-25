@@ -28,10 +28,10 @@ function run(def: NodeDefinition, inputs: Record<string, unknown>, params: Recor
 const polyOf = (o: unknown) => readPolyMesh(o as THREE.Object3D)!.mesh;
 
 describe("volume nodes", () => {
-  it("are all modeling nodes under volume/", () => {
+  it("are all Volume nodes under volume/", () => {
     expect(VOLUME_NODES).toHaveLength(8);
     for (const def of VOLUME_NODES) {
-      expect(def.category).toBe("modeling");
+      expect(def.category).toBe("volume");
       expect(def.type.startsWith("volume/")).toBe(true);
     }
   });

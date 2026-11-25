@@ -45,7 +45,7 @@ const hatchCache = createNodeCache<Cached<Curve3[]>>();
 export const STRATA_HATCH_NODE: NodeDefinition = {
   type: "curve/strata-hatch",
   label: "Strata Hatch",
-  category: "curve",
+  category: "strokes",
   inputs: [
     { id: "stacks", label: "Stacks (List of Lists)", type: "list" },
     { id: "count", label: "Strokes per Stack", type: "value" },
@@ -150,7 +150,7 @@ const scatterCache = createNodeCache<Cached<ScatterOutput>>();
 export const SCATTER_ON_CURVES_NODE: NodeDefinition = {
   type: "curve/scatter",
   label: "Scatter on Curves",
-  category: "curve",
+  category: "instance",
   inputs: [
     { id: "curves", label: "Curves / Stacks (List)", type: "list" },
     { id: "seed", label: "Seed", type: "value" },

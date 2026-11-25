@@ -52,7 +52,7 @@ const scratch = createNodeCache<THREE.Mesh>((m) => {
 export const MATERIAL_BY_GROUP_NODE = definePolyNode({
   type: "modeling/material-by-group",
   label: "Material by Group",
-  category: "modeling",
+  category: "material",
   group: { domain: "face" },
   inputs: [{ id: "material", label: "Material", type: "material" }],
   defaultParams: { group: "selected" },
@@ -105,7 +105,7 @@ function slots(count: number, material: THREE.Material): THREE.Material[] {
 export const GROUP_TO_POINTS_NODE = definePolyNode({
   type: "modeling/group-to-points",
   label: "Group to Points",
-  category: "selection",
+  category: "instance",
   dependsOnPose: true,
   group: { domain: "choose", defaultDomain: "point" },
   outputs: [

@@ -597,7 +597,7 @@ function asNumber(v: unknown, fallback: number): number {
 export const LATTICE_DEFORM_NODE: NodeDefinition = {
   type: "modifier/lattice",
   label: "Lattice Deform",
-  category: "transform",
+  category: "deform",
   inputs: [
     { id: "geometry", label: "Geometry", type: "geometry", owns: true },
     // Not just a param field — evaluateGraph's generic visibility mechanism

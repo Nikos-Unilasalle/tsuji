@@ -52,7 +52,7 @@ function advance(axis: SpringState, target: number, dt: number, rewound: boolean
 export const SPRING_NODE: NodeDefinition = {
   type: "math/spring",
   label: "Spring",
-  category: "math",
+  category: "time",
   inputs: [
     { id: "target", label: "Target", type: "value" },
     { id: "time", label: "Time", type: "value" },
@@ -305,7 +305,7 @@ function springPoints(
 export const SPRING_VECTOR_NODE: NodeDefinition = {
   type: "vector/spring",
   label: "Spring Vector",
-  category: "math",
+  category: "time",
   inputs: [
     { id: "target", label: "Target", type: "vector" },
     // Wiring Points switches this node into "Individual Points" mode: Target

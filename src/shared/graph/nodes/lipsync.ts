@@ -186,7 +186,7 @@ const DEFAULT_SHAPE_NAMES = VISEMES.join(", ");
 export const MORPH_TARGETS_NODE: NodeDefinition = {
   type: "object/morph-targets",
   label: "Morph Targets",
-  category: "object",
+  category: "deform",
   inputs: [
     { id: "geometry", label: "Geometry", type: "geometry" },
     { id: "weights", label: "Weights", type: "list" },

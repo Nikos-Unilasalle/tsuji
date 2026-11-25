@@ -199,7 +199,7 @@ export function renderGraphToSvg(
   if (nodes.length === 0) return `<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"/>`;
 
   const defOf = (n: NodeInstance): NodeDefinition =>
-    resolveDefinition(n, registry) ?? { type: n.type, label: n.type, category: "utility", inputs: [], outputs: [], defaultParams: {}, evaluate: () => ({}) };
+    resolveDefinition(n, registry) ?? { type: n.type, label: n.type, category: "structure", inputs: [], outputs: [], defaultParams: {}, evaluate: () => ({}) };
   const socketsOf = (n: NodeInstance) => {
     const def = defOf(n);
     return {

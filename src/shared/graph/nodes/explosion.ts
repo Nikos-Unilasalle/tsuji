@@ -60,7 +60,7 @@ const EXPLOSION_PARAM_FIELDS: ParamFieldDef[] = [
 export const OBJECT_EXPLOSION_NODE: NodeDefinition = {
   type: "object/explosion",
   label: "Explosion",
-  category: "object",
+  category: "fx",
   inputs: [
     { id: "trigger", label: "Trigger", type: "value" },
     { id: "location", label: "Location", type: "vector" },

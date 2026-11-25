@@ -77,7 +77,7 @@ export function applyWeldedPointMoves(
 export const EDIT_MESH_POINTS_NODE: NodeDefinition = {
   type: "object/edit_points",
   label: "Edit Mesh Points",
-  category: "object",
+  category: "modeling",
   inputs: [{ id: "basis", label: "Basis", type: "geometry", owns: true }],
   outputs: [{ id: "geometry", label: "Geometry", type: "geometry" }],
   reset: { action: RESEED_MESH_POINTS_ACTION },

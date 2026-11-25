@@ -700,7 +700,7 @@ export const CURVE_TEXT_PARAM_FIELDS: ParamFieldDef[] = [
 export const CURVE_TEXT_ON_PATH_NODE: NodeDefinition = {
   type: "curve/text-on-path",
   label: "Text on Path",
-  category: "curve",
+  category: "strokes",
   inputs: [
     { id: "text", label: "Text", type: "text" },
     { id: "curve", label: "Curve", type: "curve" },

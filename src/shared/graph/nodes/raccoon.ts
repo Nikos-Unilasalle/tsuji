@@ -54,7 +54,7 @@ function raccoonMesh(nodeId: string): THREE.Mesh {
 export const OBJECT_RACCOON_NODE: NodeDefinition = {
   type: "object/raccoon",
   label: "Raccoon",
-  category: "object",
+  category: "import",
   inputs: [...COMMON_PRIMITIVE_INPUTS],
   outputs: [...COMMON_PRIMITIVE_OUTPUTS],
   defaultParams: { ...COMMON_DEFAULT_PARAMS },

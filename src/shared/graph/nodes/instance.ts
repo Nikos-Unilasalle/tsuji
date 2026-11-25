@@ -624,7 +624,7 @@ export const GET_INSTANCE_NODE: NodeDefinition = {
 export const GEOMETRY_TRANSFORM_NODE: NodeDefinition = {
   type: "structure/geometry-transform",
   label: "Transform Geometry",
-  category: "instance",
+  category: "transform",
   pure: true,
   inputs: [
     { id: "geometry", label: "Geometry", type: "geometry", owns: true },
@@ -776,7 +776,7 @@ export const GEOMETRY_TRANSFORM_NODE: NodeDefinition = {
 export const INSTANCES_TO_LIST_NODE: NodeDefinition = {
   type: "structure/instances-to-list",
   label: "Instances to List",
-  category: "converter",
+  category: "instance",
   pure: true,
   inputs: [{ id: "geometry", label: "Geometry", type: "geometry", owns: true }],
   outputs: [

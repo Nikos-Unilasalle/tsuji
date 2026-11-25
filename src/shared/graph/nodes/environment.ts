@@ -169,6 +169,7 @@ export const ENVIRONMENT_NODE: NodeDefinition = {
   type: "lighting/environment",
   label: "Environment & HDRI",
   category: "lighting",
+  managedByViewport: true,
   inputs: [
     { id: "color", label: "Background Color", type: "color" },
     { id: "texture", label: "HDRI / Env Map", type: "texture" },

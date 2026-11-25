@@ -139,7 +139,7 @@ function buildMembrane(cells: P2[][], plane: Plane, box: { x0: number; y0: numbe
 export const VORONOI_2D_NODE: NodeDefinition = {
   type: "curve/voronoi-2d",
   label: "Voronoi 2D",
-  category: "curve",
+  category: "generators",
   inputs: [
     { id: "points", label: "Seed Points", type: "list" },
     { id: "boundary", label: "Boundary (closed curve)", type: "curve" },

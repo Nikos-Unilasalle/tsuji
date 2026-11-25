@@ -55,7 +55,7 @@ function getState(nodeId: string): PaintOnGeometryState {
 export const PAINT_ON_GEOMETRY_NODE: NodeDefinition = {
   type: "curve/paint-on-geometry",
   label: "Paint on geometry",
-  category: "curve",
+  category: "strokes",
   inputs: [
     { id: "geometry", label: "Geometry", type: "geometry", owns: true },
     { id: "matrix", label: "Matrix", type: "matrix" },

@@ -105,7 +105,7 @@ const EXTRA_FIELDS: ParamFieldDef[] = [
 export const AXES_NODE: NodeDefinition = {
   type: "math/axes",
   label: "Axes",
-  category: "math",
+  category: "dataviz",
   inputs: [
     { id: "matrix", label: "Matrix", type: "matrix" },
     { id: "visible", label: "Visible", type: "value" },

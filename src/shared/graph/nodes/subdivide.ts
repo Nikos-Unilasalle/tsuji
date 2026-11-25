@@ -176,7 +176,7 @@ function toBufferGeometryWithUV(pos: IndexedMesh, uv: IndexedMesh): THREE.Buffer
 export const SUBDIVIDE_NODE: NodeDefinition = {
   type: "modifier/subdivide",
   label: "Subdivide",
-  category: "transform",
+  category: "modeling",
   inputs: [
     { id: "geometry", label: "Geometry", type: "geometry", owns: true },
     { id: "levels", label: "Levels", type: "value" },

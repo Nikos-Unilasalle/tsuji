@@ -56,7 +56,7 @@ function buildGeometry(params: Record<string, unknown>): THREE.BufferGeometry {
 export const OBJECT_FROZEN_NODE: NodeDefinition = {
   type: "object/frozen",
   label: "Frozen Geometry",
-  category: "object",
+  category: "import",
   inputs: [...COMMON_PRIMITIVE_INPUTS],
   outputs: [...COMMON_PRIMITIVE_OUTPUTS],
   defaultParams: {

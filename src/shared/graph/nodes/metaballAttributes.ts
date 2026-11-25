@@ -47,7 +47,7 @@ function poseKey(root: THREE.Object3D): string {
 export const METABALL_ATTRIBUTES_NODE: NodeDefinition = {
   type: "object/metaball-attributes",
   label: "Metaball Attributes",
-  category: "object",
+  category: "generators",
   inputs: [
     { id: "geometry", label: "Geometry", type: "geometry" },
     { id: "radius", label: "Radius", type: "value" },

@@ -76,7 +76,7 @@ function mixMatrices(a: THREE.Matrix4, b: THREE.Matrix4, t: number): THREE.Matri
 export const MATRIX_MATH_NODE: NodeDefinition = {
   type: "matrix/math",
   label: "Matrix Math",
-  category: "math",
+  category: "transform",
   pure: true,
   inputs: [
     { id: "a", label: "A", type: "matrix" },

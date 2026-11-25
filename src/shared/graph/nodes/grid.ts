@@ -36,7 +36,7 @@ function getGrid(nodeId: string, size: number, divisions: number, color: THREE.C
 export const GRID_NODE: NodeDefinition = {
   type: "calibration/grid",
   label: "3D Grid",
-  category: "calibration",
+  category: "camera",
   inputs: [{ id: "matrix", label: "Matrix", type: "matrix" }],
   outputs: [
     { id: "geometry", label: "Geometry", type: "geometry" },

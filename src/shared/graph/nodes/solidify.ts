@@ -319,7 +319,7 @@ function getState(nodeId: string): SolidifyState {
 export const SOLIDIFY_NODE: NodeDefinition = {
   type: "modifier/solidify",
   label: "Solidify",
-  category: "transform",
+  category: "modeling",
   inputs: [
     { id: "geometry", label: "Geometry", type: "geometry", owns: true },
     { id: "thickness", label: "Thickness", type: "value" },

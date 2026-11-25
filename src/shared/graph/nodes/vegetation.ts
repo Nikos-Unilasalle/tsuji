@@ -224,7 +224,7 @@ const grassCache = createNodeCache<GrassState>((state) => {
 export const GRASS_FIELD_NODE: NodeDefinition = {
   type: "structure/grass-field",
   label: "Grass Field",
-  category: "structure",
+  category: "generators",
   inputs: [
     { id: "wind", label: "Wind Field", type: "any" },
     { id: "ground", label: "Ground", type: "geometry" },
@@ -616,7 +616,7 @@ function treeParamsFrom(inputs: Record<string, unknown>, params: Record<string, 
 export const TREE_NODE: NodeDefinition = {
   type: "object/tree",
   label: "Tree (Parametric)",
-  category: "object",
+  category: "generators",
   inputs: [
     { id: "wind", label: "Wind Field", type: "any" },
     { id: "ground", label: "Ground", type: "geometry" },
@@ -1056,7 +1056,7 @@ const swayCache = createNodeCache<SwayState>((state) => {
 export const WIND_SWAY_NODE: NodeDefinition = {
   type: "geometry/wind-sway",
   label: "Wind Sway",
-  category: "structure",
+  category: "deform",
   inputs: [
     { id: "geometry", label: "Geometry", type: "geometry", owns: true },
     { id: "wind", label: "Wind Field", type: "any" },

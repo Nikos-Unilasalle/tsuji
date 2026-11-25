@@ -189,7 +189,7 @@ function applyResultTransform(
 export const GEOMETRY_TWIST_BEND_TAPER_NODE: NodeDefinition = {
   type: "geometry/twist-bend-taper",
   label: "Twist / Bend / Taper",
-  category: "structure",
+  category: "deform",
   inputs: [
     { id: "geometry", label: "Geometry", type: "geometry", owns: true },
     { id: "matrix", label: "Matrix", type: "matrix" },
@@ -405,7 +405,7 @@ export const GEOMETRY_TWIST_BEND_TAPER_NODE: NodeDefinition = {
 export const GEOMETRY_WAVE_RIPPLE_NODE: NodeDefinition = {
   type: "geometry/wave-ripple",
   label: "Wave / Ripple",
-  category: "structure",
+  category: "deform",
   inputs: [
     { id: "geometry", label: "Geometry", type: "geometry", owns: true },
     { id: "matrix", label: "Matrix", type: "matrix" },
@@ -564,7 +564,7 @@ export const GEOMETRY_WAVE_RIPPLE_NODE: NodeDefinition = {
 export const GEOMETRY_FACET_EXPLODE_NODE: NodeDefinition = {
   type: "geometry/facet-explode",
   label: "Facet Explode",
-  category: "structure",
+  category: "fx",
   inputs: [
     { id: "geometry", label: "Geometry", type: "geometry", owns: true },
     { id: "matrix", label: "Matrix", type: "matrix" },

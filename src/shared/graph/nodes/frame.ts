@@ -16,8 +16,8 @@ export const FRAME_MIN_HEIGHT = 80;
  */
 export const CANVAS_FRAME_NODE: NodeDefinition = {
   type: FRAME_TYPE,
-  label: "Frame",
-  category: "utility",
+  label: "Comment Frame",
+  category: "structure",
   inputs: [],
   outputs: [],
   defaultParams: {

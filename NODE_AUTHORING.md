@@ -43,7 +43,7 @@ import { NodeDefinition } from "../types";
 export const MY_NODE: NodeDefinition = {
   type: "category/my-node",      // unique, lowercase, "category/name"
   label: "My Node",               // shown in the editor
-  category: "math",               // which palette section it lives in — see the table below
+  category: "math",               // which palette section it lives in — see section 3
   inputs: [
     { id: "a", label: "A", type: "value" },
   ],
@@ -78,43 +78,46 @@ Rules for `evaluate`:
 ## 3. The category
 
 `category` picks which section of the node palette your node shows up in,
-and its color — the same color shows on the node's header in the graph and
-on its param panel when selected. Use one of these exactly (from
-`src/shared/graph/categories.ts`):
+and its colour — the same colour shows on the node's header in the graph and
+on its param panel when selected. Categories are grouped into six families;
+the palette lists the families in workflow order and, inside each, the
+categories and their nodes alphabetically. All of it lives in
+`src/shared/graph/categories.ts`.
 
-| category      | palette section    |
-|---------------|---------------------|
-| `structure`   | Structure           |
-| `transform`   | Transform           |
-| `math`        | Math                |
-| `time`        | Time / Animation    |
-| `logic`       | Logic               |
-| `io`          | I/O                 |
-| `instance`    | Instance            |
-| `curve`       | Curve / Path        |
-| `object`      | Object              |
-| `lighting`    | Lighting & Shadows  |
-| `texture`     | Texture             |
-| `text`        | Text                |
-| `list`        | List                |
-| `compose`     | Compose             |
-| `physics`     | Physics             |
-| `particles`   | Particles           |
-| `postprocess` | Post-Process & FX   |
-| `post`        | Post-render 2D      |
-| `calibration` | Calibration         |
-| `converter`   | Converter           |
-| `sound`       | Sound / Audio       |
-| `utility`     | Utility             |
+| family | category key → palette section |
+|---|---|
+| Geometry | `attribute` Attributes · `curve` Curves · `deform` Deform · `generators` Generators · `import` Import · `instance` Instances & Points · `modeling` Modeling · `primitives` Primitives · `selection` Selection & Groups · `strokes` Strokes & Drawing · `volume` Volumes (SDF) |
+| Scene | `camera` Camera · `lighting` Lighting · `structure` Scene & Graph · `transform` Transform |
+| Appearance | `fx` Object FX · `material` Materials · `postprocess` Post-Process & Stylize · `texture` Textures · `textureTools` Texture Tools |
+| Animation & Simulation | `particles` Particles · `physics` Physics & Fluids · `rig` Rig / IK · `time` Time & Animation |
+| Data | `convert` Compose & Convert · `dataviz` Data Viz · `list` Lists · `logic` Logic · `math` Math · `text` Text |
+| Interaction & Audio | `io` Input & HUD · `music` Music · `sound` Sound |
 
-Pick the one matching BIBLE.md's catalog section for your node — if BIBLE.md
-lists it under "Logic", use `category: "logic"`. Two exceptions:
-- **Any Compose/Decompose node** (Compose Vector, Decompose Matrix, Compose
-  Color, etc.) always uses `category: "converter"`, regardless of which
-  BIBLE.md section it's listed under — grouped together for findability,
-  not by what they conceptually belong to.
-- **Generic cross-type conversion utilities** (Value ↔ Vector ↔ Color, not
-  in BIBLE.md's catalog at all) also use `converter`.
+**File a node by what it does to its data, not by the data it touches.**
+Extrude is Modeling even though it moves points; Lattice is Deform even
+though it takes a matrix; a scatter is Instances & Points wherever its
+points come from. Some hints:
+- *Modeling* changes topology (adds, removes, rebuilds faces); *Deform*
+  only moves existing points.
+- *Generators* build something procedural from parameters (terrain, tree,
+  L-system); *Primitives* are the plain shapes.
+- *Compose & Convert* holds every compose/decompose and type conversion.
+- *Object FX* are effects on one object; *Post-Process & Stylize* act on the
+  render (the stylize looks offer "Apply To: Screen / Object" in one node).
+
+**Never decide behaviour from a category.** Re-filing a node must not change
+what it does. Use an explicit flag on the definition instead:
+`ownershipPassThrough` (geometry wired in is not drawn on its own),
+`managedByViewport` (lights). `nodeCatalog.test.ts` fails on any
+`def.category === "…"` test outside the palette.
+
+**Labels are unique** among the nodes the palette offers (the same test
+checks it): when two nodes would share a name, qualify one ("Texture Blur",
+"Physics Spawner").
+
+**Search synonyms** go in `nodes/nodeKeywords.ts`: what a Blender or Houdini
+user would type ("wrangle", "shrinkwrap", "VDB"), and a node's former name
+when it is renamed. The palette filter and the node search both match them.
 
 ## 4. The socket types
 

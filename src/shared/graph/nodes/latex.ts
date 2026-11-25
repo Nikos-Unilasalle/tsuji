@@ -105,7 +105,7 @@ const FIELDS: ParamFieldDef[] = [
 export const LATEX_NODE: NodeDefinition = {
   type: "math/latex",
   label: "LaTeX",
-  category: "math",
+  category: "dataviz",
   inputs: [
     { id: "tex", label: "LaTeX", type: "text" },
     { id: "at", label: "At", type: "vector" },

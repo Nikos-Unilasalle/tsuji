@@ -139,7 +139,7 @@ const transformCache = createNodeCache<GpuPassState>(disposeGpuPassState);
  */
 export const TEXTURE_TRANSFORM_NODE: NodeDefinition = {
   type: "texture/transform",
-  label: "Transform",
+  label: "Texture Transform",
   category: "textureTools",
   inputs: [
     { id: "texture", label: "Texture", type: "texture" },
@@ -466,7 +466,7 @@ const mapRangeCache = createNodeCache<GpuPassState>(disposeGpuPassState);
 
 export const TEXTURE_MAP_RANGE_NODE: NodeDefinition = {
   type: "texture/map-range",
-  label: "Map Range",
+  label: "Texture Map Range",
   category: "textureTools",
   inputs: [
     { id: "texture", label: "Texture", type: "texture" },
@@ -609,7 +609,7 @@ function blurDownsampleFactor(radius: number): number {
 /** Separable blur, radius in output pixels — the same number means the same softness at any resolution. */
 export const TEXTURE_BLUR_NODE: NodeDefinition = {
   type: "texture/blur",
-  label: "Blur",
+  label: "Texture Blur",
   category: "textureTools",
   inputs: [
     { id: "texture", label: "Texture", type: "texture" },
@@ -848,7 +848,7 @@ const thresholdCache = createNodeCache<GpuPassState>(disposeGpuPassState);
 /** Steps luminance to 0/1 at a cutoff, with an optional smoothstep edge width. */
 export const TEXTURE_THRESHOLD_NODE: NodeDefinition = {
   type: "texture/threshold",
-  label: "Threshold",
+  label: "Texture Threshold",
   category: "textureTools",
   inputs: [
     { id: "texture", label: "Texture", type: "texture" },
@@ -904,7 +904,7 @@ const invertCache = createNodeCache<GpuPassState>(disposeGpuPassState);
 
 export const TEXTURE_INVERT_NODE: NodeDefinition = {
   type: "texture/invert",
-  label: "Invert",
+  label: "Texture Invert",
   category: "textureTools",
   inputs: [
     { id: "texture", label: "Texture", type: "texture" },
@@ -1608,7 +1608,7 @@ const BLOOM_COMPOSITE_BODY = /* glsl */ `
  */
 export const TEXTURE_BLOOM_NODE: NodeDefinition = {
   type: "texture/bloom",
-  label: "Bloom",
+  label: "Texture Bloom",
   category: "textureTools",
   inputs: [
     { id: "texture", label: "Texture", type: "texture" },
@@ -1698,7 +1698,7 @@ const grainCache = createNodeCache<GpuPassState>(disposeGpuPassState);
 /** Film Grain — soft value-noise grain in grain-sized cells, re-rolled every frame when Animated. */
 export const TEXTURE_FILM_GRAIN_NODE: NodeDefinition = {
   type: "texture/film-grain",
-  label: "Film Grain",
+  label: "Texture Film Grain",
   category: "textureTools",
   inputs: [
     { id: "texture", label: "Texture", type: "texture" },

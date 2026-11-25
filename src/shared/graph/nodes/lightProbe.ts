@@ -134,6 +134,7 @@ export const LIGHT_PROBE_NODE: NodeDefinition = {
   type: "light/probe",
   label: "Light Probe",
   category: "lighting",
+  managedByViewport: true,
   inputs: [
     { id: "matrix", label: "Matrix", type: "matrix" },
     { id: "intensity", label: "Intensity", type: "value" },

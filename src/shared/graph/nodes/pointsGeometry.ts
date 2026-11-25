@@ -402,7 +402,7 @@ export function writePointsToMesh(nodeId: string, inputObj: THREE.Object3D, poin
 export const MESH_TO_POINTS_NODE: NodeDefinition = {
   type: "converter/mesh-to-points",
   label: "Mesh to Points",
-  category: "converter",
+  category: "instance",
   inputs: [
     { id: "geometry", label: "Geometry", type: "geometry" },
     // An outer transform composed on top of the mesh's own world matrix —
@@ -446,7 +446,7 @@ export const MESH_TO_POINTS_NODE: NodeDefinition = {
 export const POINTS_TO_MESH_NODE: NodeDefinition = {
   type: "converter/points-to-mesh",
   label: "Points to Mesh",
-  category: "converter",
+  category: "instance",
   inputs: [
     { id: "geometry", label: "Geometry", type: "geometry" },
     { id: "points", label: "Points (Local)", type: "list" },

@@ -575,7 +575,7 @@ function getOrCreateGltfState(nodeId: string): GltfState {
 export const OBJECT_GLTF_NODE: NodeDefinition = {
   type: "object/gltf",
   label: "glTF Model",
-  category: "object",
+  category: "import",
   inputs: [
     { id: "visible", label: "Visible", type: "value" },
     { id: "matrix", label: "Matrix", type: "matrix" },

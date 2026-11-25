@@ -44,7 +44,8 @@ export const POINTS_INFLUENCE_BASE = "#000000";
 export const POINTS_INFLUENCE_NODE: NodeDefinition = {
   type: "list/points-influence",
   label: "Points Influence",
-  category: "list",
+  category: "selection",
+  ownershipPassThrough: true,
   inputs: [
     { id: "geometry", label: "Geometry (shortcut)", type: "geometry" },
     { id: "points", label: "Points", type: "list" },

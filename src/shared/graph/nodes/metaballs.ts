@@ -592,7 +592,7 @@ function wantsRaymarch(params: Record<string, unknown>, ctx: { connectedOutputs?
 export const METABALLS_NODE: NodeDefinition = {
   type: "object/metaballs",
   label: "Metaballs",
-  category: "object",
+  category: "generators",
   inputs: [
     { id: "geometry", label: "Centres (Geometry)", type: "geometry", owns: true },
     { id: "points", label: "Centres (Points)", type: "list" },

@@ -204,7 +204,7 @@ function withCornerUVs(source: THREE.BufferGeometry, uvs: Float32Array): THREE.B
 export const UV_UNWRAP_NODE: NodeDefinition = {
   type: "modifier/uv-unwrap",
   label: "UV Unwrap",
-  category: "transform",
+  category: "modeling",
   inputs: [
     { id: "geometry", label: "Geometry", type: "geometry", owns: true },
     { id: "scale", label: "UV Scale", type: "value" },

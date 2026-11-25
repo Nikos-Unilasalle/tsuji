@@ -111,7 +111,7 @@ export function writeOnTiming(lengths: number[], speed: number, pause: number, o
 export const WRITE_ON_NODE: NodeDefinition = {
   type: "curve/write-on",
   label: "Write On",
-  category: "curve",
+  category: "strokes",
   inputs: [
     { id: "curves", label: "Curves", type: "curve" },
     { id: "list", label: "Curves (List)", type: "list" },

@@ -29,7 +29,7 @@ const laserCache = createNodeCache<LaserState>((s) => {
 export const OBJECT_LASER_BEAM_NODE: NodeDefinition = {
   type: "object/laser-beam",
   label: "Laser Beam (Stage FX)",
-  category: "object",
+  category: "fx",
   inputs: [
     { id: "visible", label: "Visible", type: "value" },
     { id: "matrix", label: "Matrix", type: "matrix" },

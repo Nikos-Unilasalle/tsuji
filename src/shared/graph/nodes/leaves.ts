@@ -75,7 +75,7 @@ const LEAVES_PARAM_FIELDS: ParamFieldDef[] = [
 export const OBJECT_LEAVES_NODE: NodeDefinition = {
   type: "object/leaves",
   label: "Leaves",
-  category: "object",
+  category: "generators",
   inputs: [
     { id: "wind", label: "Wind Field", type: "any" },
     { id: "ground", label: "Ground", type: "geometry" },

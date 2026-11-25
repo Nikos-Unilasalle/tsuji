@@ -60,7 +60,7 @@ function counterpart(root: THREE.Object3D, copy: THREE.Object3D, node: THREE.Obj
 export const MAKE_MORPH_TARGETS_NODE: NodeDefinition = {
   type: "object/make-morph-targets",
   label: LABEL,
-  category: "object",
+  category: "deform",
   inputs: [
     { id: "basis", label: "Basis", type: "geometry" },
     { id: `${TARGET_PREFIX}0`, label: "Target 1", type: "geometry" },

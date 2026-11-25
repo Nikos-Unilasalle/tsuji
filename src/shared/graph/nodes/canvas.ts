@@ -25,7 +25,7 @@ const triggerStateCache = createNodeCache<boolean>();
 export const CANVAS_GOTO_NODE: NodeDefinition = {
   type: "canvas/goto",
   label: "Go To Canvas",
-  category: "utility",
+  category: "structure",
   inputs: [
     { id: "trigger", label: "Trigger", type: "value" },
     { id: "canvas", label: "Canvas (1-6)", type: "value" },

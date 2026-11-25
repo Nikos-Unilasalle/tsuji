@@ -46,7 +46,8 @@ const poissonCache = createNodeCache<PoissonState>();
 export const POISSON_DISK_2D_NODE: NodeDefinition = {
   type: "list/poisson-disk-2d",
   label: "Poisson Disk 2D",
-  category: "list",
+  category: "instance",
+  ownershipPassThrough: true,
   pure: true,
   inputs: [
     { id: "boundary", label: "Boundary (closed curve)", type: "curve" },
