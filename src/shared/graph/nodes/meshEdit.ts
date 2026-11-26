@@ -631,7 +631,7 @@ export const EXTRUDE_MESH_NODE: NodeDefinition = {
     { id: "random", label: "Random %", kind: "number", step: 0.05, group: "Random" },
     { id: "seed", label: "Seed", kind: "number", step: 1, group: "Random" },
     ...FACE_SELECTION_PARAM_FIELDS.map((f) => ({ ...f, group: "Extrude" })),
-    { id: "group", label: "Group (faces; empty = legacy triangle mode)", kind: "text", group: "Extrude" },
+    { id: "group", label: "Group (faces; empty = legacy triangle mode)", kind: "text", group: "Extrude", help: "group", domain: "face" },
     { id: "individual", label: "Individual Faces", kind: "boolean", group: "Extrude" },
   ],
   // New nodes work on the PolyMesh's real faces and honour groups; saved
@@ -925,7 +925,7 @@ export const DELETE_GEOMETRY_NODE: NodeDefinition = {
   newNodeParams: { group: "*" },
   paramFields: [
     ...FACE_SELECTION_PARAM_FIELDS,
-    { id: "group", label: "Group (empty = legacy triangle mode)", kind: "text" },
+    { id: "group", label: "Group (empty = legacy triangle mode)", kind: "text", help: "group" },
     { id: "domain", label: "Group Domain", kind: "select", options: ["face", "edge", "point"] },
     { id: "keepSelected", label: "Delete Non-Selected", kind: "boolean" },
   ],

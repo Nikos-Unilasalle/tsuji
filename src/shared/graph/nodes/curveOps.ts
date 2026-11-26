@@ -777,7 +777,7 @@ export const MESH_EDGES_TO_CURVES_NODE: NodeDefinition = {
       options: ["edges", "boundary"],
       optionLabels: ["Edges in group", "Boundary of face group"],
     },
-    { id: "group", label: "Group", kind: "text" },
+    { id: "group", label: "Group", kind: "text", help: "group" },
   ],
   evaluate: (inputs, params, ctx) => {
     const obj = inputs.geometry instanceof THREE.Object3D ? inputs.geometry : null;

@@ -22,7 +22,7 @@ import { PointTree } from "../mesh/spatial";
  */
 
 export const DEFORM_GROUP_FIELDS: ParamFieldDef[] = [
-  { id: "group", label: "Group (points; empty = all)", kind: "text", group: "Group" },
+  { id: "group", label: "Group (points; empty = all)", kind: "text", group: "Group", help: "group", domain: "point" },
   { id: "weightAttribute", label: "Weight Attribute (float, points)", kind: "text", group: "Group" },
 ];
 

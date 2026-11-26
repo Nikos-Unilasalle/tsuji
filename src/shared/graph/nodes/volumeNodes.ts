@@ -23,7 +23,7 @@ import {
   type Vec3,
 } from "../mesh/sdfGrid";
 import { createModifierMesh, emitModifiedMesh, primitiveOutputs } from "./object";
-import { valueSignature, GROUP_HELP } from "./polyModifier";
+import { valueSignature } from "./polyModifier";
 
 /*
  * Volume / SDF nodes (phase 8 of docs/parametric-modeling-plan.md).
@@ -407,8 +407,7 @@ export const POINTS_TO_SDF_NODE = defineVolumeNode({
   paramFields: [
     { id: "radius", label: "Radius", kind: "number", step: 0.01, group: "Spheres" },
     { id: "usePscale", label: "Scale by pscale attribute", kind: "boolean", group: "Spheres" },
-    { id: "group", label: "Point Group", kind: "text", group: "Spheres" },
-    { id: "_groupHelp", label: GROUP_HELP, kind: "note", group: "Spheres" },
+    { id: "group", label: "Point Group", kind: "text", group: "Spheres", help: "group", domain: "point" },
     ...SIZING_FIELDS,
   ],
   build(run) {

@@ -1,4 +1,5 @@
-import React, { createContext, memo, useContext, useEffect, useRef, useState } from "react";
+import React, { createContext, memo, useContext, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { groupPreview } from "../shared/graph/groupPreviewStore";
 import { Handle, NodeResizeControl, Position, useUpdateNodeInternals } from "@xyflow/react";
 import * as THREE from "three";
 import { CATEGORY_COLOR, NodeCategory, UNKNOWN_CATEGORY_COLOR } from "../shared/graph/categories";
@@ -352,10 +353,17 @@ function useInspectorValue(nodeId?: string) {
 }
 
 /** Geometry Spreadsheet: the table the node left in the inspector store. */
-function renderSpreadsheet(val: unknown) {
+/**
+ * The Geometry Spreadsheet's table. Linked to the viewport: the row under the
+ * pointer lights its element up on the mesh, and an element clicked on the
+ * mesh (with the spreadsheet selected) scrolls here and is highlighted.
+ */
+function SpreadsheetView({ val, nodeId }: { val: unknown; nodeId: string }) {
+  const live = useSyncExternalStore(groupPreview.subscribe, groupPreview.get);
   if (!isSpreadsheetTable(val)) return <span style={{ color: "#6b7280" }}>no mesh</span>;
+  const focused = live.sheetFocus?.nodeId === nodeId ? live.sheetFocus.index : -1;
   return (
-    <div>
+    <div onMouseLeave={() => groupPreview.hoverSheetRow(null)}>
       <div className="spreadsheet-caption">
         {val.count === val.total ? `${val.total} ${val.domain}s` : `${val.count} / ${val.total} ${val.domain}s`}
         {val.groups.length > 0 && ` · groups: ${val.groups.join(", ")}`}
@@ -371,7 +379,11 @@ function renderSpreadsheet(val: unknown) {
         </thead>
         <tbody>
           {val.rows.map((row) => (
-            <tr key={row.index}>
+            <tr
+              key={row.index}
+              className={row.index === focused ? "is-focused" : undefined}
+              onMouseEnter={() => groupPreview.hoverSheetRow({ nodeId, index: row.index })}
+            >
               <td>{row.index}</td>
               {row.cells.map((cell, i) => (
                 <td key={i}>{cell}</td>
@@ -564,7 +576,7 @@ export const GraphNode = memo(function GraphNode({ data, selected }: { data: Gra
           {data.groupSize} node{data.groupSize === 1 ? "" : "s"} ⏎
         </div>
       )}
-      {data.nodeType === SPREADSHEET_TYPE && <div className="graph-node-inspector graph-node-spreadsheet nodrag nowheel">{renderSpreadsheet(inspectorVal)}</div>}
+      {data.nodeType === SPREADSHEET_TYPE && <div className="graph-node-inspector graph-node-spreadsheet nodrag nowheel"><SpreadsheetView val={inspectorVal} nodeId={data.nodeId ?? ""} /></div>}
       {data.nodeType === "io/inspector" && (
         <div className="graph-node-inspector">{renderValuePreview(inspectorVal)}</div>
       )}

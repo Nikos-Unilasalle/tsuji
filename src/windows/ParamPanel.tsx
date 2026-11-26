@@ -1,3 +1,6 @@
+import { GroupHelpButton } from "./GroupHelp";
+import { ExpressionHelpButton } from "./ExpressionHelp";
+import { groupPreview } from "../shared/graph/groupPreviewStore";
 import { isKeyReservedForPlayback } from "../shared/graph/playbackKeys";
 import { Fragment, useEffect, useRef, useState } from "react";
 import { vectorAxes } from "../shared/graph/exposedComponent";
@@ -766,6 +769,17 @@ export function ParamPanel({
                         <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                           {field.kind !== "button" && field.label}
                         </span>
+                        {field.kind === "text" && field.help === "expression" && (
+                          <ExpressionHelpButton onPick={(formula) => onChange(field.id, formula)} />
+                        )}
+                        {field.kind === "text" && field.help === "group" && (
+                          <GroupHelpButton
+                            onPick={(expression) => onChange(field.id, expression)}
+                            onHover={(expression) =>
+                              groupPreview.hoverExpression(expression === null ? null : { nodeId, fieldId: field.id, expression })
+                            }
+                          />
+                        )}
                       </label>
                       {EXPOSABLE_KINDS.has(field.kind) && onToggleExposed && (
                         <button

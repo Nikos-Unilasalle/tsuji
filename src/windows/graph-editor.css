@@ -722,3 +722,17 @@ input, textarea, [contenteditable="true"], .drag-number-editing, .param-text-inp
   top: 0;
   background: var(--canvas-bg);
 }
+
+/* Linked to the viewport: the row under the pointer lights its element up, a picked element's row stays highlighted. */
+.spreadsheet-table tbody tr {
+  cursor: default;
+}
+
+.spreadsheet-table tbody tr:hover td {
+  background: rgba(34, 211, 238, 0.16);
+}
+
+.spreadsheet-table tbody tr.is-focused td {
+  background: rgba(34, 211, 238, 0.3);
+  color: #ecfeff;
+}

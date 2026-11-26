@@ -263,7 +263,19 @@ export type ParamFieldDef =
     }
   | { id: string; label: string; kind: "color"; group?: string }
   | { id: string; label: string; kind: "vector"; step?: number; degrees?: boolean; group?: string }
-  | { id: string; label: string; kind: "text"; group?: string }
+  | {
+      id: string;
+      label: string;
+      kind: "text";
+      group?: string;
+      /**
+       * A "?" beside the field opening a help panel: "group" for a group
+       * expression, "expression" for an Attribute Expression formula.
+       */
+      help?: "group" | "expression";
+      /** With help "group": the domain the expression is read on, when the node fixes it (else its Domain param, else inferred). */
+      domain?: "point" | "edge" | "face" | "corner";
+    }
   /**
    * Read-only message with no control attached — a full-width, wrapping,
    * selectable block. For text that has to be *read* rather than edited: a

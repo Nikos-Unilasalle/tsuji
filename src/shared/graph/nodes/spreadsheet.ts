@@ -48,7 +48,7 @@ export const SPREADSHEET_NODE: NodeDefinition = {
   paramFields: [
     { id: "domain", label: "Domain", kind: "select", options: [...ATTR_DOMAINS] },
     { id: "columns", label: "Columns (empty = P + stored attributes)", kind: "text" },
-    { id: "group", label: "Only Group", kind: "text" },
+    { id: "group", label: "Only Group", kind: "text", help: "group" },
     { id: "rows", label: "Rows", kind: "number", step: 1 },
     { id: "offset", label: "First Row", kind: "number", step: 1 },
   ],

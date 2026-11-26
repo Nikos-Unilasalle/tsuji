@@ -122,11 +122,10 @@ export function polyNodeStatus(nodeId: string): PolyNodeStatus | undefined {
   return statuses.get(nodeId);
 }
 
-export const GROUP_HELP =
-  "Group: empty or * = all · name · a b (union) · a & !b · a ^ b · rim_* · 0-10:2 (indices) · @P.y>0 · @piece==1";
-
 export function groupFields(spec: { domain: AttrDomain | "choose"; label?: string }, group = "Group"): ParamFieldDef[] {
-  const fields: ParamFieldDef[] = [{ id: "group", label: spec.label ?? "Group", kind: "text", group }];
+  const fields: ParamFieldDef[] = [
+    { id: "group", label: spec.label ?? "Group", kind: "text", group, help: "group", ...(spec.domain !== "choose" ? { domain: spec.domain } : {}) },
+  ];
   if (spec.domain === "choose") fields.push({ id: "domain", label: "Domain", kind: "select", options: [...ATTR_DOMAINS], group });
   return fields;
 }
@@ -228,7 +227,7 @@ export function definePolyNode(spec: PolyNodeSpec): NodeDefinition {
     defaultParams: defaults,
     paramFields: baseFields,
     upgradeParams: spec.upgradeParams,
-    dynamicParamFields: (instance: NodeInstance) => [...baseFields, ...statusFields(instance.id, Boolean(groupSpec))],
+    dynamicParamFields: (instance: NodeInstance) => [...baseFields, ...statusFields(instance.id)],
     evaluate: (inputs, params, ctx) => {
       const inputObj = inputs.geometry instanceof THREE.Object3D ? inputs.geometry : null;
       const emptyOutputs = () => Object.fromEntries((spec.outputs ?? []).map((o) => [o.id, o.type === "list" ? [] : o.type === "value" ? 0 : null]));
@@ -323,10 +322,9 @@ export function definePolyNode(spec: PolyNodeSpec): NodeDefinition {
   };
 }
 
-function statusFields(nodeId: string, hasGroup: boolean): ParamFieldDef[] {
+function statusFields(nodeId: string): ParamFieldDef[] {
   const status = statuses.get(nodeId);
   const fields: ParamFieldDef[] = [];
-  if (hasGroup) fields.push({ id: "_groupHelp", label: GROUP_HELP, kind: "note", group: "Group" });
   if (!status) return fields;
   status.lines.forEach((line, i) =>
     fields.push({ id: `_status${i}`, label: (line.warn ? "⚠ " : "") + line.text, kind: "note", ...(line.warn ? { tone: "warn" as const } : {}), group: "Status" }),

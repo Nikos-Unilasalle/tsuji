@@ -177,7 +177,7 @@ export const BRIDGE_NODE = definePolyNode({
   group: { domain: "edge", label: "Group A" },
   defaultParams: { elements: "edges", groupB: "", segments: 1, twist: 0 },
   paramFields: [
-    { id: "groupB", label: "Group B (blank: split Group A in two)", kind: "text", group: "Group" },
+    { id: "groupB", label: "Group B (blank: split Group A in two)", kind: "text", group: "Group", help: "group" },
     { id: "elements", label: "Bridge", kind: "select", options: ["edges", "faces"], optionLabels: ["Edge loops", "Face groups (holes)"], group: "Bridge" },
     { id: "segments", label: "Segments", kind: "number", step: 1, group: "Bridge" },
     { id: "twist", label: "Twist (vertices)", kind: "number", step: 1, group: "Bridge" },

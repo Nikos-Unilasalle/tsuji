@@ -193,7 +193,7 @@ export const SUBDIVIDE_NODE: NodeDefinition = {
   paramFields: [
     { id: "mode", label: "Mode", kind: "select", options: ["simple", "catmull-clark"] },
     { id: "levels", label: "Levels", kind: "number", step: 1 },
-    { id: "group", label: "Group (Simple mode: subdivide only these faces)", kind: "text" },
+    { id: "group", label: "Group (Simple mode: subdivide only these faces)", kind: "text", help: "group", domain: "face" },
   ],
   evaluate: (inputs, params, ctx) => {
     const inputObj = inputs.geometry instanceof THREE.Object3D ? inputs.geometry : null;

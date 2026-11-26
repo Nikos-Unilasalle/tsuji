@@ -626,6 +626,14 @@ import { ViewportParamHUD } from "../../windows/ViewportParamHUD";
 import { VirtualInterfaceHUD } from "../../windows/VirtualInterfaceHUD";
 import { VIRTUAL_INTERFACE_NODE } from "../graph/nodes/virtualInterface";
 import "./viewport.css";
+import { createGroupOverlay } from "./groupOverlay";
+import { computeGroupPreview, nearestElement, type AvailableGroup, type LegendEntry } from "./groupPreview";
+import { groupPreview } from "../graph/groupPreviewStore";
+import { readPolyMesh } from "../graph/mesh/polyIO";
+import { elementPositions } from "../graph/mesh/selectOps";
+import { evaluateGroup } from "../graph/mesh/groupExpr";
+import { worldMatrixOf as polyWorldMatrixOf } from "../graph/objectPosition";
+import { SPREADSHEET_TYPE } from "../graph/nodes/spreadsheet";
 
 // HUD elements are CSS/DOM overlays, which video export (which captures the
 // WebGL canvas) would otherwise omit. These helpers redraw each element onto a
@@ -1072,6 +1080,19 @@ export function Viewport({
   uvCheckerRef.current = uvChecker;
   // UV view: the selected object's UV layout, filled in by the render loop.
   const [uvPanelOpen, setUvPanelOpen] = useState(false);
+  // Group overlay: groups ticked in the Groups menu, and what the overlay
+  // reports back each frame (badge line, legend, groups on offer) — the
+  // latter only pushed to React when it actually changes.
+  const [shownGroups, setShownGroups] = useState<string[]>([]);
+  const shownGroupsRef = useRef(shownGroups);
+  shownGroupsRef.current = shownGroups;
+  const [groupsMenuOpen, setGroupsMenuOpen] = useState(false);
+  const [groupInfo, setGroupInfo] = useState<{ badge: { text: string; error: boolean } | null; legend: LegendEntry[]; available: AvailableGroup[] }>({
+    badge: null,
+    legend: [],
+    available: [],
+  });
+  const groupInfoSigRef = useRef("");
   const uvPanelOpenRef = useRef(uvPanelOpen);
   uvPanelOpenRef.current = uvPanelOpen;
   const uvPanelDataRef = useRef<UVPanelData | null>(null);
@@ -1962,6 +1983,8 @@ export function Viewport({
     const raycaster = outputMode ? null : new THREE.Raycaster();
     const transformControls = outputMode ? null : new TransformControls(activeCamera, renderer.domElement);
     transformControls?.setColors(GIZMO_X_COLOR, GIZMO_Y_COLOR, GIZMO_Z_COLOR, GIZMO_ACTIVE_COLOR);
+    // three's default handles read oversized next to the objects they move.
+    if (transformControls) transformControls.size = 0.75;
     // Scale: the centre handle grows with any movement (Shift shrinks), and
     // Shift on an axis handle scales all three — see gizmoScale.ts.
     if (transformControls) {
@@ -2009,6 +2032,7 @@ export function Viewport({
     // vertex buffer, which is a scale curve handles' one-Mesh-per-point
     // design cannot survive (see pointCloudHandles.ts).
     const pointsSelectionHandles = createPointCloudHandles();
+    const groupOverlay = outputMode ? null : createGroupOverlay();
     // The selected Skin node's joints: dots to click, one at a time, to edit how that joint pulls on the mesh.
     const skinJointHandles = createPointCloudHandles();
     // Rigs drawn in front of the scene right now (see setInFront).
@@ -5506,6 +5530,29 @@ export function Viewport({
       // the object.
       selectedPointIndices.clear();
 
+      // A Geometry Spreadsheet is selected: a click on its mesh picks the
+      // nearest element of its domain and scrolls the table to it, instead
+      // of selecting the object.
+      const sheetNode = graphRef.current.nodes.find((n) => n.id === selectedNodeIdRef.current && n.type === SPREADSHEET_TYPE);
+      const sheetObject = sheetNode ? latestResultsRef.current?.get(sheetNode.id)?.geometry : undefined;
+      if (raycaster && sheetNode && sheetObject instanceof THREE.Object3D) {
+        const read = readPolyMesh(sheetObject);
+        const sheetHit = read ? raycaster.intersectObject(sheetObject, true)[0] : undefined;
+        if (read && sheetHit) {
+          const domain = (["point", "edge", "face", "corner"] as const).find((d) => d === sheetNode.params.domain) ?? "point";
+          const local = sheetHit.point.clone().applyMatrix4(polyWorldMatrixOf(read.srcMesh).invert());
+          const index = nearestElement(read.mesh, domain, local, elementPositions(read.mesh, domain));
+          if (index >= 0) {
+            const mask = evaluateGroup(read.mesh, domain, String(sheetNode.params.group ?? "")).mask;
+            let row = 0;
+            for (let i = 0; i < index; i++) if (mask[i]) row++;
+            onParamChangeRef.current?.("offset", mask[index] ? row : 0, sheetNode.id);
+            groupPreview.focusSheetElement({ nodeId: sheetNode.id, index });
+            return;
+          }
+        }
+      }
+
       // A speaker icon is clickable too: it is drawn over everything, so it wins over what lies behind it.
       if (raycaster && soundIcons.size > 0) {
         const iconHit = raycaster.intersectObjects(soundIconGroup.children, false)[0];
@@ -6517,6 +6564,29 @@ export function Viewport({
         pointsSelectionNodeId = null;
         selectedPointsSelectionIndices.clear();
         pointsSelectionSynced = { points: null, matrix: new THREE.Matrix4(), revision: -1 };
+      }
+
+      // Groups and selections, drawn on the mesh: the selected node's own
+      // group, a formula hovered in the group help, the groups ticked in the
+      // Groups menu, the spreadsheet row under the pointer. See groupPreview.ts.
+      if (groupOverlay) {
+        const live = groupPreview.get();
+        const preview = computeGroupPreview({
+          graph: graphRef.current,
+          registry: registryRef.current,
+          results,
+          selectedNodeId: selectedNodeIdRef.current,
+          shownGroups: shownGroupsRef.current,
+          expressionHover: live.expressionHover,
+          sheetHover: live.sheetHover,
+        });
+        groupOverlay.sync(showUiOverlayRef.current ? preview.layers : []);
+        if (groupOverlay.group.parent !== scene) scene.add(groupOverlay.group);
+        const sig = JSON.stringify([preview.badge, preview.legend, preview.available]);
+        if (sig !== groupInfoSigRef.current) {
+          groupInfoSigRef.current = sig;
+          setGroupInfo({ badge: preview.badge, legend: preview.legend, available: preview.available });
+        }
       }
 
       // Points Influence: its mesh shows the painted map as a heatmap while
@@ -7635,9 +7705,12 @@ export function Viewport({
         renderer.render(editorUiScene, camera);
       }
 
-      // 2. Render Corner 3D Orientation Gizmo HUD (110x110 px in bottom-left)
+      // 2. Render Corner 3D Orientation Gizmo HUD (bottom-left): a fifth of
+      // the pane's short side, 48–76 px, so stacked panes don't lose half
+      // their height to it.
       if (gizmo && !outputMode && showUiOverlayRef.current) {
-        const gizmoSize = 110;
+        const shortSide = Math.min(renderer.domElement.clientWidth, renderer.domElement.clientHeight);
+        const gizmoSize = Math.round(Math.max(48, Math.min(76, shortSide * 0.2)));
         renderer.clearDepth();
         renderer.setScissorTest(true);
         renderer.setScissor(12, 12, gizmoSize, gizmoSize);
@@ -10673,6 +10746,59 @@ export function Viewport({
           );
         })()}
       {!outputMode && uvPanelOpen && <UVPreviewPanel source={uvPanelDataRef} onClose={() => setUvPanelOpen(false)} />}
+      {!outputMode && groupsMenuOpen && (
+        <div className="viewport-groups-menu" onPointerDown={(e) => e.stopPropagation()}>
+          <div className="viewport-groups-head">
+            <strong>Groups</strong>
+            {shownGroups.length > 0 && (
+              <button type="button" className="viewport-groups-link" onClick={() => setShownGroups([])}>
+                Hide all
+              </button>
+            )}
+            <button type="button" className="viewport-groups-close" onClick={() => setGroupsMenuOpen(false)} aria-label="Close">
+              ×
+            </button>
+          </div>
+          {groupInfo.available.length === 0 ? (
+            <div className="viewport-groups-empty">Select a node whose geometry carries groups (Select, Extrude, Inset…).</div>
+          ) : (
+            groupInfo.available.map((g) => {
+              const on = shownGroups.includes(g.key);
+              const color = groupInfo.legend.find((l) => l.key === g.key)?.color;
+              return (
+                <label key={g.key} className={`viewport-groups-row${on ? " is-on" : ""}`}>
+                  <input
+                    type="checkbox"
+                    checked={on}
+                    onChange={() => setShownGroups((prev) => (prev.includes(g.key) ? prev.filter((k) => k !== g.key) : [...prev, g.key]))}
+                  />
+                  <span className="viewport-groups-swatch" style={{ background: on && color ? color : "transparent" }} />
+                  <span className="viewport-groups-name">{g.name}</span>
+                  <span className="viewport-groups-count">
+                    {g.count} / {g.total} {g.domain}s
+                  </span>
+                </label>
+              );
+            })
+          )}
+        </div>
+      )}
+      {!outputMode && (groupInfo.badge || groupInfo.legend.length > 0) && (
+        <div className="viewport-group-badge">
+          {groupInfo.badge && (
+            <span className={`viewport-group-badge-line${groupInfo.badge.error ? " is-error" : ""}`}>
+              <span className="viewport-group-badge-dot" />
+              {groupInfo.badge.text}
+            </span>
+          )}
+          {groupInfo.legend.map((l) => (
+            <span key={l.key} className="viewport-group-badge-line">
+              <span className="viewport-group-badge-dot" style={{ background: l.color }} />
+              {l.name} · {l.count} {l.domain}s
+            </span>
+          ))}
+        </div>
+      )}
       {/* Top-Left Viewport HUD & Controls — editor-only, never shown in the output window */}
       {/* Top-Left Viewport HUD & Controls — editor-only, never shown in the output window */}
       {!outputMode && (
@@ -10780,6 +10906,17 @@ export function Viewport({
               style={{ fontSize: "10px", fontWeight: 700 }}
             >
               UV
+            </button>
+            <button
+              type="button"
+              className={`viewport-hud-button ${groupsMenuOpen || shownGroups.length > 0 ? "viewport-hud-button-active" : ""}`}
+              onClick={() => setGroupsMenuOpen((prev) => !prev)}
+              title="Groups — show the groups on the selected node's mesh, each in its colour"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 3 3 8l9 5 9-5-9-5z" />
+                <path d="m3 13 9 5 9-5" fill="currentColor" fillOpacity="0.35" />
+              </svg>
             </button>
             <button
               type="button"

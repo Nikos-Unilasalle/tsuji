@@ -1,0 +1,190 @@
+.group-help-btn {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin-left: 6px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid color-mix(in srgb, var(--chrome-text-muted) 60%, transparent);
+  background: transparent;
+  color: var(--chrome-text-muted);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 14px;
+  text-align: center;
+  cursor: pointer;
+}
+
+.group-help-btn:hover,
+.group-help-btn.is-open {
+  border-color: var(--accent-color);
+  color: var(--accent-color);
+}
+
+.group-help-pop {
+  position: fixed;
+  z-index: 100001;
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 16px);
+  padding: 0;
+  border-radius: 10px;
+  border: 1px solid var(--chrome-border);
+  background: var(--chrome-surface);
+  color: var(--chrome-text);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.group-help-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 10px 8px 12px;
+  border-bottom: 1px solid color-mix(in srgb, var(--chrome-border) 60%, transparent);
+  font-size: 13px;
+  cursor: move;
+  user-select: none;
+  touch-action: none;
+}
+
+.group-help-head strong {
+  flex: 1;
+}
+
+.group-help-grip {
+  color: var(--chrome-text-muted);
+  font-size: 12px;
+  letter-spacing: -1px;
+}
+
+.group-help-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 10px 14px 14px;
+}
+
+.group-help-close {
+  border: none;
+  background: transparent;
+  color: var(--chrome-text-muted);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.group-help-close:hover {
+  color: var(--chrome-text);
+}
+
+.group-help-intro,
+.group-help-note {
+  margin: 0 0 8px;
+  color: var(--chrome-text-muted);
+}
+
+.group-help-pop h4 {
+  margin: 10px 0 4px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent-color);
+}
+
+.group-help-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.group-help-row {
+  display: grid;
+  grid-template-columns: 158px 1fr;
+  gap: 10px;
+  align-items: baseline;
+  padding: 4px 6px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--chrome-text);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.group-help-row:hover {
+  background: var(--chrome-surface-raised);
+}
+
+.group-help-row code {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 11.5px;
+  color: #fcd34d;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.group-help-row span {
+  color: var(--chrome-text-muted);
+}
+
+/* Formula help: the function list, grouped, as compact chips. */
+.expr-help-fn-group {
+  margin: 4px 0 8px;
+}
+
+.expr-help-fn-title {
+  margin: 0 0 4px 2px;
+  font-size: 11px;
+  color: var(--chrome-text-muted);
+}
+
+.expr-help-fn-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.expr-help-fn {
+  padding: 2px 6px;
+  border-radius: 5px;
+  background: var(--chrome-surface-raised);
+  color: #fcd34d;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 11px;
+  user-select: text;
+}
+
+/* Long snippets (formulas): the code on its own line, whole, the explanation under it. */
+.group-help-list.is-stacked .group-help-row {
+  grid-template-columns: 1fr;
+  gap: 1px;
+}
+
+.group-help-list.is-stacked .group-help-row code {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+/* Same slim scrollbar as the node list (node-palette.css). */
+.group-help-body {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--chrome-border) 80%, transparent) transparent;
+}
+
+.group-help-body::-webkit-scrollbar {
+  width: 6px;
+}
+
+.group-help-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.group-help-body::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--chrome-border) 80%, transparent);
+  border-radius: 3px;
+}

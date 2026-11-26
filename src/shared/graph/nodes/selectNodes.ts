@@ -170,7 +170,7 @@ export const SELECT_NODE = definePolyNode({
   paramFields: [
     { id: "mode", label: "Mode", kind: "select", options: [...SELECT_MODES], group: "Selection" },
     SPACE_FIELD,
-    { id: "expression", label: "Expression (mode expression)", kind: "text", group: "Selection" },
+    { id: "expression", label: "Expression (mode expression)", kind: "text", group: "Selection", help: "group" },
     { id: "center", label: "Center / Plane Point", kind: "vector", step: 0.1, group: "Selection" },
     { id: "size", label: "Box Size", kind: "vector", step: 0.1, group: "Selection" },
     { id: "radius", label: "Sphere Radius", kind: "number", step: 0.05, group: "Selection" },
@@ -313,7 +313,7 @@ export const SELECT_TOPOLOGY_NODE = definePolyNode({
     { id: "op", label: "Compare (valence / sides / piece)", kind: "select", options: [...COMPARE_OPS], group: "Selection" },
     { id: "value", label: "Value", kind: "number", step: 1, group: "Selection" },
     { id: "angle", label: "Angle (sharp / flat-region, °)", kind: "number", step: 1, group: "Selection" },
-    { id: "seeds", label: "Seed Group (flat-region)", kind: "text", group: "Selection" },
+    { id: "seeds", label: "Seed Group (flat-region)", kind: "text", group: "Selection", help: "group", domain: "face" },
     ...OUTPUT_FIELDS,
   ],
   run: (run) => {
@@ -578,7 +578,7 @@ export const SELECT_DISTANCE_NODE = definePolyNode({
     { id: "metric", label: "Metric", kind: "select", options: ["euclidean", "surface"], optionLabels: ["Straight line", "Along the surface"], group: "Selection" },
     SPACE_FIELD,
     { id: "center", label: "Point", kind: "vector", step: 0.1, group: "Selection" },
-    { id: "seeds", label: "Group (target group)", kind: "text", group: "Selection" },
+    { id: "seeds", label: "Group (target group)", kind: "text", group: "Selection", help: "group", domain: "point" },
     { id: "radius", label: "Radius", kind: "number", step: 0.05, group: "Selection" },
     { id: "falloff", label: "Falloff", kind: "select", options: [...FALLOFFS], group: "Selection" },
     { id: "threshold", label: "In group when weight >", kind: "number", step: 0.05, group: "Selection" },
@@ -680,7 +680,7 @@ export const GROUP_COMBINE_NODE = definePolyNode({
   category: "selection",
   outputs: COUNT_OUTPUTS,
   defaultParams: { ...OUTPUT_DEFAULTS, expression: "a & !b" },
-  paramFields: [{ id: "expression", label: "Expression", kind: "text", group: "Selection" }, ...OUTPUT_FIELDS],
+  paramFields: [{ id: "expression", label: "Expression", kind: "text", group: "Selection", help: "group" }, ...OUTPUT_FIELDS],
   run: (run) => {
     const domain = domainParam(run);
     const r = evaluateGroup(run.mesh, domain, run.str("expression", ""));
@@ -702,7 +702,7 @@ export const GROUP_EXPAND_NODE = definePolyNode({
   outputs: COUNT_OUTPUTS,
   defaultParams: { ...OUTPUT_DEFAULTS, source: "selected", sourceDomain: "face", mode: "grow", steps: 1, rule: "auto" },
   paramFields: [
-    { id: "source", label: "Source Group", kind: "text", group: "Selection" },
+    { id: "source", label: "Source Group", kind: "text", group: "Selection", help: "group" },
     { id: "sourceDomain", label: "Source Domain", kind: "select", options: [...ATTR_DOMAINS], group: "Selection" },
     { id: "mode", label: "Mode", kind: "select", options: [...EXPAND_MODES], group: "Selection" },
     { id: "steps", label: "Steps (grow / shrink)", kind: "number", step: 1, group: "Selection" },
@@ -760,7 +760,7 @@ export const GROUP_PATH_NODE = definePolyNode({
     { id: "mode", label: "Mode", kind: "select", options: [...PATH_MODES], group: "Selection" },
     { id: "start", label: "Start Point Group (shortest-path)", kind: "text", group: "Selection" },
     { id: "end", label: "End Point Group (shortest-path)", kind: "text", group: "Selection" },
-    { id: "seeds", label: "Seed Edge Group (loops / rings)", kind: "text", group: "Selection" },
+    { id: "seeds", label: "Seed Edge Group (loops / rings)", kind: "text", group: "Selection", help: "group", domain: "edge" },
     ...OUTPUT_FIELDS,
   ],
   run: (run) => {

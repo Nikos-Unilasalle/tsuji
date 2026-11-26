@@ -21,7 +21,6 @@ import { maskIndices } from "../mesh/groupExpr";
 import { promoteValues, type PromoteReduce } from "../mesh/promote";
 import { elementNormals, elementPositions } from "../mesh/selectOps";
 import {
-  ATTRIB_EXPR_FUNCTIONS,
   AttribExprError,
   cachedAttribExpr,
   layoutVariables,
@@ -176,11 +175,6 @@ function toColor(raw: unknown, fallback: number): THREE.Color {
 
 const SLOTS = [1, 2, 3] as const;
 const PARAM_LETTERS = ["a", "b", "c", "d"] as const;
-
-export const EXPRESSION_HELP =
-  "Per element: P N id count t f a–d and any attribute by name (P.x, Cd.r). " +
-  "+ - * / % ^, 2x, (x, y, z), |v|, c ? a : b, < == && || !. Functions: " +
-  ATTRIB_EXPR_FUNCTIONS.join(" · ");
 
 interface ExprVarSource {
   name: string;
@@ -348,9 +342,8 @@ const EXPRESSION_FIELDS: ParamFieldDef[] = [
   ...SLOTS.flatMap((k): ParamFieldDef[] => [
     { id: `name${k}`, label: `Attribute ${k}`, kind: "text", group: "Assignments" },
     TYPE_FIELD(`type${k}`, `Type ${k}`, "Assignments", true),
-    { id: `formula${k}`, label: `= Formula ${k}`, kind: "text", group: "Assignments" },
+    { id: `formula${k}`, label: `= Formula ${k}`, kind: "text", group: "Assignments", help: "expression" },
   ]),
-  { id: "_help", label: EXPRESSION_HELP, kind: "note", group: "Assignments" },
   ...PARAM_LETTERS.map((l): ParamFieldDef => ({ id: l, label: l, kind: "number", step: 0.1, group: "Parameters" })),
 ];
 
