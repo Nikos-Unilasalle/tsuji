@@ -80,6 +80,8 @@ interface SliceState {
   tracerPos: Float32Array;
   tracerAge: Float32Array;
   streamLines: THREE.LineSegments;
+  /** Streamlines seeded inside recirculation (trapped and shed vortices): the inlet's never reach them. */
+  vortexLines: THREE.LineSegments;
   pressureBars: THREE.LineSegments;
   liftArrow: THREE.ArrowHelper;
   dragArrow: THREE.ArrowHelper;
@@ -152,15 +154,18 @@ function createSlice(): SliceState {
   tracers.renderOrder = 2;
   const streamLines = new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.55 }));
   streamLines.frustumCulled = false;
+  const vortexLines = new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0xfde68a, transparent: true, opacity: 0.9 }));
+  vortexLines.frustumCulled = false;
+  vortexLines.renderOrder = 3;
   const pressureBars = new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ vertexColors: true }));
   pressureBars.frustumCulled = false;
   const liftArrow = new THREE.ArrowHelper(new THREE.Vector3(0, 1, 0), new THREE.Vector3(), 1, 0x22c55e);
   const dragArrow = new THREE.ArrowHelper(new THREE.Vector3(1, 0, 0), new THREE.Vector3(), 1, 0xef4444);
-  group.add(fieldMesh, tracers, streamLines, pressureBars, liftArrow, dragArrow);
+  group.add(fieldMesh, tracers, streamLines, vortexLines, pressureBars, liftArrow, dragArrow);
   return {
     backend: "cpu", sim: null, renderer: null, gridKey: "", sliceKey: "", baseChains: [], chord: 0, maskKey: "",
     group, fieldMesh, fieldTex: null, tracers, tracerPos: new Float32Array(0), tracerAge: new Float32Array(0),
-    streamLines, pressureBars, liftArrow, dragArrow, seed: 1, clMean: 0, cdMean: 0, meanChords: 0,
+    streamLines, vortexLines, pressureBars, liftArrow, dragArrow, seed: 1, clMean: 0, cdMean: 0, meanChords: 0,
   };
 }
 
@@ -254,6 +259,64 @@ function advect(s: Lbm2D | Lbm2DGPU, x: number, y: number, h: number): V2 {
   return [x + k * u2, y + k * v2];
 }
 
+/**
+ * Streamlines through the recirculating air — a vortex trapped in a cavity,
+ * a separation bubble, the wake's eddies. Seeds sit where the air flows
+ * backwards (against the wind), one per patch of `spacing` cells; each line
+ * is traced at a constant step along the flow's direction (the air there is
+ * slow, so time-stepping would barely move) until it closes on itself, hits
+ * the obstacle, leaves the tunnel or runs into an earlier line.
+ */
+export function recirculationLines(s: Lbm2D | Lbm2DGPU, lengthCells: number, maxLines = 60): V2[][] {
+  const { nx, ny } = s;
+  const spacing = Math.max(2, Math.round(lengthCells / 28));
+  const gx = Math.ceil(nx / spacing), gy = Math.ceil(ny / spacing);
+  const taken = new Uint8Array(gx * gy); // seeding: one line per patch
+  const drawn = new Int32Array(nx * ny).fill(-1); // collisions: which line went through each cell
+  const cellOf = (x: number, y: number) => Math.min(gy - 1, Math.max(0, Math.floor(y / spacing))) * gx + Math.min(gx - 1, Math.max(0, Math.floor(x / spacing)));
+  const dir = (x: number, y: number): V2 | null => {
+    const [u, v] = sampleVelocity(s, x, y);
+    const m = Math.hypot(u, v);
+    return m > 1e-4 * U_LATTICE ? [u / m, v / m] : null;
+  };
+  const lines: V2[][] = [];
+  const h = 0.5;
+  for (let cj = 1; cj < gy - 1 && lines.length < maxLines; cj++) {
+    for (let ci = 1; ci < gx - 1 && lines.length < maxLines; ci++) {
+      if (taken[cj * gx + ci]) continue;
+      const x0 = (ci + 0.5) * spacing, y0 = (cj + 0.5) * spacing;
+      if (isSolidAt(s, x0, y0)) continue;
+      const c = Math.round(y0) * nx + Math.round(x0);
+      if (!(s.ux[c] < -0.02 * U_LATTICE)) continue;
+      let x = x0, y = y0;
+      const pts: V2[] = [[x, y]];
+      const id = lines.length;
+      const mine = new Set<number>([cj * gx + ci]);
+      const cells: number[] = [];
+      const maxSteps = Math.round((6 * lengthCells) / h);
+      for (let k = 0; k < maxSteps; k++) {
+        const d1 = dir(x, y);
+        if (!d1) break;
+        const d2 = dir(x + 0.5 * h * d1[0], y + 0.5 * h * d1[1]);
+        if (!d2) break;
+        x += h * d2[0]; y += h * d2[1];
+        if (x < 1 || y < 1 || x > nx - 2 || y > ny - 2 || isSolidAt(s, x, y)) break;
+        pts.push([x, y]);
+        if (k > 16 && Math.hypot(x - x0, y - y0) < 0.75 * h * 2) break; // closed
+        const f = Math.round(y) * nx + Math.round(x);
+        if (drawn[f] >= 0 && drawn[f] !== id) break;
+        cells.push(f);
+        mine.add(cellOf(x, y));
+      }
+      if (pts.length < 12) continue;
+      for (const g of mine) taken[g] = 1;
+      for (const f of cells) drawn[f] = id;
+      lines.push(pts);
+    }
+  }
+  return lines;
+}
+
 const PARAM_FIELDS: ParamFieldDef[] = [
   { id: "sliceAxis", label: "Slice Normal Axis", kind: "select", options: [...AXES], group: "Tunnel" },
   { id: "sliceCount", label: "Slice Count", kind: "number", step: 1, group: "Tunnel" },
@@ -292,6 +355,7 @@ const PARAM_FIELDS: ParamFieldDef[] = [
   { id: "tracerCount", label: "Tracer Count (per slice)", kind: "number", step: 100, group: "Display" },
   { id: "showStreamlines", label: "Show Streamlines", kind: "boolean", group: "Display" },
   { id: "streamlineCount", label: "Streamline Count (per slice)", kind: "number", step: 2, group: "Display" },
+  { id: "showVortexLines", label: "Show Vortex Streamlines (loops in recirculating air)", kind: "boolean", group: "Display" },
   { id: "showPressure", label: "Show Pressure Bars", kind: "boolean", group: "Display" },
   { id: "pressureScale", label: "Pressure Bar Scale (chords per Cp)", kind: "number", step: 0.02, group: "Display" },
   { id: "showForces", label: "Show Lift / Drag (+ lift curve)", kind: "boolean", group: "Display" },
@@ -583,6 +647,20 @@ function runSlice(
   }
   sl.streamLines.visible = showStream;
 
+  const showVortex = flag(params.showVortexLines, false);
+  if (showVortex && sim.steps > 0) {
+    const seg: number[] = [];
+    const a = new THREE.Vector3(), b = new THREE.Vector3();
+    for (const l of recirculationLines(sim, lengthCells)) {
+      for (let i = 0; i + 1 < l.length; i += 2) {
+        toWorld(l[i], a); toWorld(l[Math.min(l.length - 1, i + 2)], b);
+        seg.push(a.x, a.y, a.z, b.x, b.y, b.z);
+      }
+    }
+    sl.vortexLines.geometry.setAttribute("position", new THREE.Float32BufferAttribute(seg, 3));
+  }
+  sl.vortexLines.visible = showVortex;
+
   // ---- Pressure bars on the section: one per cell of section, on both faces --------------------
   const showPressure = flag(params.showPressure, true);
   if (showPressure) {
@@ -690,7 +768,7 @@ export const WIND_TUNNEL_2D_NODE: NodeDefinition = {
     simulate: true, warmUp: true, stepsPerFrame: 40, averageChords: 4, solver: "auto", computeChords: 8, computeRequest: 0,
     unitMeters: 0.01, viscosity: 1.5e-5,
     field: "vorticity", range: 12, opacity: 0.9, fadeCalm: true, calmOpacity: 0.06,
-    showField: true, showTracers: false, tracerCount: 800, showStreamlines: true, streamlineCount: 24,
+    showField: true, showTracers: false, tracerCount: 800, showStreamlines: true, streamlineCount: 24, showVortexLines: false,
     showPressure: true, pressureScale: 0.08, showForces: true, forceScale: 0.5,
   },
   paramFields: PARAM_FIELDS,

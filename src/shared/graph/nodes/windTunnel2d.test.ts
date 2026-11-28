@@ -1,7 +1,8 @@
 import * as THREE from "three";
 import { describe, expect, test } from "vitest";
 import { EvalContext } from "../types";
-import { WIND_TUNNEL_2D_NODE, windTunnelState } from "./windTunnel2d";
+import { recirculationLines, WIND_TUNNEL_2D_NODE, windTunnelState } from "./windTunnel2d";
+import { U_LATTICE } from "../../three/fluid/lbm2d";
 import { disposeEvalSession } from "../evaluate";
 import { chainSegments, isClosed, rasterise, sliceObject, TunnelFrame } from "../../three/fluid/tunnelSection";
 import { LineSegments2 } from "three/examples/jsm/lines/LineSegments2.js";
@@ -55,6 +56,33 @@ describe("tunnel section", () => {
       const side = mask[c - 1] + mask[c + 1] + mask[c - 60] + mask[c + 60];
       expect(side).toBeGreaterThan(0);
     }
+  });
+});
+
+describe("vortex streamlines", () => {
+  test("a vortex in the field comes out as closed loops around its core", () => {
+    const nx = 80, ny = 60, cx = 40, cy = 30;
+    const ux = new Float32Array(nx * ny), uy = new Float32Array(nx * ny);
+    for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+      // A solid-body vortex: the air turns around (cx, cy), against the wind on its top half.
+      const w = U_LATTICE / 20;
+      ux[j * nx + i] = -w * (j - cy);
+      uy[j * nx + i] = w * (i - cx);
+    }
+    const sim = { nx, ny, ux, uy, rho: new Float32Array(nx * ny).fill(1), solid: new Uint8Array(nx * ny) };
+    const lines = recirculationLines(sim as never, 40);
+    expect(lines.length).toBeGreaterThan(0);
+    let closed = 0;
+    for (const l of lines) {
+      const [x0, y0] = l[0], [x1, y1] = l[l.length - 1];
+      const r0 = Math.hypot(x0 - cx, y0 - cy);
+      if (r0 > 25) continue; // rings that reach the tunnel's walls are cut there
+      expect(Math.hypot(x1 - x0, y1 - y0)).toBeLessThan(1.5);
+      // A streamline of a vortex keeps its radius.
+      for (const [x, y] of l) expect(Math.abs(Math.hypot(x - cx, y - cy) - r0)).toBeLessThan(0.5);
+      closed++;
+    }
+    expect(closed).toBeGreaterThan(3);
   });
 });
 
