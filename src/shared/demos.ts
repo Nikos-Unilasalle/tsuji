@@ -573,6 +573,12 @@ export const DEMO_CATALOG: DemoCategory[] = [
         description: "3D Navier-Stokes fluid simulation with blackbody raymarching.",
       },
       {
+        file: "demo_physics_kasper_wing.tsuji",
+        label: "Trapped Vortex Wing (Alsomitra, Kasper Notch)",
+        description:
+          "A parametric wing modelled on the Alsomitra macrocarpa seed, with a Kasper notch cut in its upper surface, flown in a 2D wind tunnel next to its smooth twin. Watch the vortex settle in the notch, and compare lift and drag live. Change the angle, thickness or notch, then press Compute on a tunnel.",
+      },
+      {
         file: "demo_vegetation_tree_species.tsuji",
         label: "Tree Species",
         description: "The eight growth habits side by side: oak, clumped cherry, conifer, willow, birch, palm, bush and a bare winter tree.",

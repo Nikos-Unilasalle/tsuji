@@ -1,0 +1,801 @@
+{
+  "canvases": [
+    {
+      "nodes": [
+        {
+          "id": "setup_env",
+          "type": "lighting/environment",
+          "position": {
+            "x": -1500,
+            "y": -700
+          },
+          "params": {
+            "color": 725024,
+            "intensity": 0.7,
+            "background": 1,
+            "ambientIntensity": 0.25,
+            "sunIntensity": 0
+          }
+        },
+        {
+          "id": "setup_render",
+          "type": "render",
+          "position": {
+            "x": -1200,
+            "y": -700
+          },
+          "params": {
+            "frameCount": 600,
+            "fps": 30,
+            "resolutionPreset": "16:9 (1920x1080)",
+            "width": 1920,
+            "height": 1080
+          }
+        },
+        {
+          "id": "setup_key",
+          "type": "light/directional",
+          "position": {
+            "x": -900,
+            "y": -700
+          },
+          "params": {
+            "location": {
+              "x": -6,
+              "y": 8,
+              "z": -3
+            },
+            "target": {
+              "x": 0,
+              "y": -1.5,
+              "z": 0.5
+            },
+            "intensity": 2.2,
+            "castShadow": 0
+          }
+        },
+        {
+          "id": "setup_fill",
+          "type": "light/directional",
+          "position": {
+            "x": -600,
+            "y": -700
+          },
+          "params": {
+            "location": {
+              "x": -4,
+              "y": -6,
+              "z": 5
+            },
+            "target": {
+              "x": 0,
+              "y": -1.5,
+              "z": 0.5
+            },
+            "intensity": 0.6,
+            "castShadow": 0
+          }
+        },
+        {
+          "id": "camera",
+          "type": "calibration/camera",
+          "position": {
+            "x": -300,
+            "y": -700
+          },
+          "params": {
+            "location": {
+              "x": -12.5,
+              "y": 0.4,
+              "z": 0.6
+            },
+            "useTarget": true,
+            "target": {
+              "x": -0.7,
+              "y": -1.9,
+              "z": 1.3
+            },
+            "fov": 34,
+            "active": true
+          }
+        },
+        {
+          "id": "f_params",
+          "type": "utility/frame",
+          "position": {
+            "x": -1500,
+            "y": -450
+          },
+          "params": {
+            "title": "1 · Design parameters — shared by both wings (edit, then Compute)",
+            "color": 14251782,
+            "width": 560,
+            "height": 760
+          }
+        },
+        {
+          "id": "p_angle",
+          "type": "value/constant",
+          "position": {
+            "x": -1460,
+            "y": -380
+          },
+          "params": {
+            "name": "Angle of attack (°)",
+            "value": 15
+          }
+        },
+        {
+          "id": "p_re",
+          "type": "value/constant",
+          "position": {
+            "x": -1460,
+            "y": -260
+          },
+          "params": {
+            "name": "Reynolds number (seed ≈ 1000)",
+            "value": 1000
+          }
+        },
+        {
+          "id": "p_thick",
+          "type": "value/constant",
+          "position": {
+            "x": -1460,
+            "y": -140
+          },
+          "params": {
+            "name": "Thickness (fraction of chord)",
+            "value": 0.3
+          }
+        },
+        {
+          "id": "p_camber",
+          "type": "value/constant",
+          "position": {
+            "x": -1460,
+            "y": -20
+          },
+          "params": {
+            "name": "Camber (fraction of chord)",
+            "value": 0.05
+          }
+        },
+        {
+          "id": "p_depth",
+          "type": "value/constant",
+          "position": {
+            "x": -1220,
+            "y": 100
+          },
+          "params": {
+            "name": "Notch depth (fraction of chord)",
+            "value": 0.22
+          }
+        },
+        {
+          "id": "p_start",
+          "type": "value/constant",
+          "position": {
+            "x": -1220,
+            "y": 220
+          },
+          "params": {
+            "name": "Notch start (fraction of chord)",
+            "value": 0.3
+          }
+        },
+        {
+          "id": "f_wings",
+          "type": "utility/frame",
+          "position": {
+            "x": -880,
+            "y": -450
+          },
+          "params": {
+            "title": "2 · Parametric wing — Alsomitra planform, profile with a Kasper notch on top",
+            "color": 11817737,
+            "width": 620,
+            "height": 760
+          }
+        },
+        {
+          "id": "wing_notch",
+          "type": "math/function-surface",
+          "position": {
+            "x": -840,
+            "y": -380
+          },
+          "params": {
+            "name": "Wing with Kasper notch",
+            "mode": "parametric",
+            "formula": "(1.9*v, (1.4*(1-0.5*v^2))*if(u>0,max((d*4*((1-cos(pi*u))/2)*(1-((1-cos(pi*u))/2)))+(c*(1+1.2*exp(-(v/0.12)^2))*5*(0.2969*sqrt(((1-cos(pi*u))/2))-0.126*((1-cos(pi*u))/2)-0.3516*((1-cos(pi*u))/2)^2+0.2843*((1-cos(pi*u))/2)^3-0.1036*((1-cos(pi*u))/2)^4))-(a*sqrt(sin(pi*clamp((((1-cos(pi*u))/2)-b)/0.45,0,1)))*(1-0.4*clamp((((1-cos(pi*u))/2)-b)/0.45,0,1))),(d*4*((1-cos(pi*u))/2)*(1-((1-cos(pi*u))/2)))-0.6*(c*(1+1.2*exp(-(v/0.12)^2))*5*(0.2969*sqrt(((1-cos(pi*u))/2))-0.126*((1-cos(pi*u))/2)-0.3516*((1-cos(pi*u))/2)^2+0.2843*((1-cos(pi*u))/2)^3-0.1036*((1-cos(pi*u))/2)^4))),(d*4*((1-cos(pi*u))/2)*(1-((1-cos(pi*u))/2)))-(c*(1+1.2*exp(-(v/0.12)^2))*5*(0.2969*sqrt(((1-cos(pi*u))/2))-0.126*((1-cos(pi*u))/2)-0.3516*((1-cos(pi*u))/2)^2+0.2843*((1-cos(pi*u))/2)^3-0.1036*((1-cos(pi*u))/2)^4)))+0.3*v^4, (-0.77+0.45*v^2)+((1-cos(pi*u))/2)*(1.4*(1-0.5*v^2)))",
+            "uMin": -1,
+            "uMax": 1,
+            "vMin": -1,
+            "vMax": 1,
+            "resolution": 160,
+            "zMin": -100,
+            "zMax": 100,
+            "colorLow": 8145438,
+            "colorHigh": 14724195,
+            "opacity": 1,
+            "gridLines": 8,
+            "gridColor": 3875856,
+            "gridWidth": 1,
+            "a": 0.22,
+            "b": 0.3,
+            "c": 0.3,
+            "d": 0.05
+          }
+        },
+        {
+          "id": "smooth_offset",
+          "type": "object/empty",
+          "position": {
+            "x": -840,
+            "y": 60
+          },
+          "params": {
+            "name": "Below: the smooth twin",
+            "location": {
+              "x": 0,
+              "y": -3.4,
+              "z": 0
+            },
+            "visible": 0
+          }
+        },
+        {
+          "id": "wing_smooth",
+          "type": "math/function-surface",
+          "position": {
+            "x": -560,
+            "y": 60
+          },
+          "params": {
+            "name": "Same wing, no notch (a = 0)",
+            "mode": "parametric",
+            "formula": "(1.9*v, (1.4*(1-0.5*v^2))*if(u>0,max((d*4*((1-cos(pi*u))/2)*(1-((1-cos(pi*u))/2)))+(c*(1+1.2*exp(-(v/0.12)^2))*5*(0.2969*sqrt(((1-cos(pi*u))/2))-0.126*((1-cos(pi*u))/2)-0.3516*((1-cos(pi*u))/2)^2+0.2843*((1-cos(pi*u))/2)^3-0.1036*((1-cos(pi*u))/2)^4))-(a*sqrt(sin(pi*clamp((((1-cos(pi*u))/2)-b)/0.45,0,1)))*(1-0.4*clamp((((1-cos(pi*u))/2)-b)/0.45,0,1))),(d*4*((1-cos(pi*u))/2)*(1-((1-cos(pi*u))/2)))-0.6*(c*(1+1.2*exp(-(v/0.12)^2))*5*(0.2969*sqrt(((1-cos(pi*u))/2))-0.126*((1-cos(pi*u))/2)-0.3516*((1-cos(pi*u))/2)^2+0.2843*((1-cos(pi*u))/2)^3-0.1036*((1-cos(pi*u))/2)^4))),(d*4*((1-cos(pi*u))/2)*(1-((1-cos(pi*u))/2)))-(c*(1+1.2*exp(-(v/0.12)^2))*5*(0.2969*sqrt(((1-cos(pi*u))/2))-0.126*((1-cos(pi*u))/2)-0.3516*((1-cos(pi*u))/2)^2+0.2843*((1-cos(pi*u))/2)^3-0.1036*((1-cos(pi*u))/2)^4)))+0.3*v^4, (-0.77+0.45*v^2)+((1-cos(pi*u))/2)*(1.4*(1-0.5*v^2)))",
+            "uMin": -1,
+            "uMax": 1,
+            "vMin": -1,
+            "vMax": 1,
+            "resolution": 160,
+            "zMin": -100,
+            "zMax": 100,
+            "colorLow": 8145438,
+            "colorHigh": 14724195,
+            "opacity": 1,
+            "gridLines": 8,
+            "gridColor": 3875856,
+            "gridWidth": 1,
+            "a": 0,
+            "b": 0.3,
+            "c": 0.3,
+            "d": 0.05
+          }
+        },
+        {
+          "id": "cut_notch",
+          "type": "modifier/clip-box",
+          "position": {
+            "x": -560,
+            "y": -380
+          },
+          "params": {
+            "name": "Cutaway at the slice (display only)",
+            "location": {
+              "x": 0.9,
+              "y": 0,
+              "z": 0.5
+            },
+            "size": {
+              "x": 3.2,
+              "y": 3,
+              "z": 5
+            },
+            "clipMode": "inside"
+          }
+        },
+        {
+          "id": "cut_smooth",
+          "type": "modifier/clip-box",
+          "position": {
+            "x": -280,
+            "y": 260
+          },
+          "params": {
+            "name": "Cutaway at the slice (display only)",
+            "location": {
+              "x": 0.9,
+              "y": -3.4,
+              "z": 0.5
+            },
+            "size": {
+              "x": 3.2,
+              "y": 3,
+              "z": 5
+            },
+            "clipMode": "inside"
+          }
+        },
+        {
+          "id": "f_tunnel",
+          "type": "utility/frame",
+          "position": {
+            "x": -200,
+            "y": -450
+          },
+          "params": {
+            "title": "3 · Wind tunnels — one slice at 35 % of the span, same air, same angle",
+            "color": 959977,
+            "width": 640,
+            "height": 760
+          }
+        },
+        {
+          "id": "tunnel_notch",
+          "type": "physics/wind-tunnel-2d",
+          "position": {
+            "x": -160,
+            "y": -380
+          },
+          "params": {
+            "name": "Tunnel — Kasper notch",
+            "sliceAxis": "X",
+            "sliceCount": 1,
+            "station": -0.7,
+            "flowAxis": "+Z",
+            "reynoldsMode": "airspeed",
+            "cellsPerChord": 96,
+            "upstream": 1,
+            "downstream": 2.5,
+            "height": 2.2,
+            "thickness": 1.5,
+            "simulate": true,
+            "warmUp": true,
+            "stepsPerFrame": 40,
+            "computeChords": 10,
+            "unitMeters": 0.04,
+            "field": "vorticity",
+            "range": 10,
+            "opacity": 0.85,
+            "fadeCalm": true,
+            "calmOpacity": 0.05,
+            "showField": true,
+            "showStreamlines": true,
+            "streamlineCount": 22,
+            "showPressure": false,
+            "showForces": true,
+            "forceScale": 0.5
+          }
+        },
+        {
+          "id": "tunnel_smooth",
+          "type": "physics/wind-tunnel-2d",
+          "position": {
+            "x": -160,
+            "y": 60
+          },
+          "params": {
+            "name": "Tunnel — smooth wing",
+            "sliceAxis": "X",
+            "sliceCount": 1,
+            "station": -0.7,
+            "flowAxis": "+Z",
+            "reynoldsMode": "airspeed",
+            "cellsPerChord": 96,
+            "upstream": 1,
+            "downstream": 2.5,
+            "height": 2.2,
+            "thickness": 1.5,
+            "simulate": true,
+            "warmUp": true,
+            "stepsPerFrame": 40,
+            "computeChords": 10,
+            "unitMeters": 0.04,
+            "field": "vorticity",
+            "range": 10,
+            "opacity": 0.85,
+            "fadeCalm": true,
+            "calmOpacity": 0.05,
+            "showField": true,
+            "showStreamlines": true,
+            "streamlineCount": 22,
+            "showPressure": false,
+            "showForces": true,
+            "forceScale": 0.5
+          }
+        },
+        {
+          "id": "f_hud",
+          "type": "utility/frame",
+          "position": {
+            "x": 500,
+            "y": -450
+          },
+          "params": {
+            "title": "4 · Readouts — lift and drag coefficients, live",
+            "color": 2278750,
+            "width": 640,
+            "height": 760
+          }
+        },
+        {
+          "id": "hud_title",
+          "type": "hub/text",
+          "position": {
+            "x": 540,
+            "y": -380
+          },
+          "params": {
+            "text": "Alsomitra macrocarpa · trapped vortex (Kasper notch)",
+            "x": 60,
+            "y": 60,
+            "fontSize": 40,
+            "color": 16317180
+          }
+        },
+        {
+          "id": "hud_sub",
+          "type": "hub/text",
+          "position": {
+            "x": 540,
+            "y": -260
+          },
+          "params": {
+            "text": "2D lattice-Boltzmann wind tunnel · colour = vorticity · arrows = lift / drag",
+            "x": 60,
+            "y": 112,
+            "fontSize": 24,
+            "color": 9741240
+          }
+        },
+        {
+          "id": "hud_notch",
+          "type": "hub/text",
+          "position": {
+            "x": 840,
+            "y": -140
+          },
+          "params": {
+            "text": "Kasper notch",
+            "x": 60,
+            "y": 300,
+            "fontSize": 34,
+            "color": 16498468
+          }
+        },
+        {
+          "id": "cl_notch",
+          "type": "converter/value-to-text",
+          "position": {
+            "x": 540,
+            "y": -140
+          },
+          "params": {
+            "decimals": 2,
+            "prefix": "Cl "
+          }
+        },
+        {
+          "id": "cd_notch",
+          "type": "converter/value-to-text",
+          "position": {
+            "x": 540,
+            "y": -30
+          },
+          "params": {
+            "decimals": 2,
+            "prefix": "Cd "
+          }
+        },
+        {
+          "id": "hud_cl_notch",
+          "type": "hub/text",
+          "position": {
+            "x": 840,
+            "y": -30
+          },
+          "params": {
+            "x": 60,
+            "y": 346,
+            "fontSize": 28,
+            "color": 14870768
+          }
+        },
+        {
+          "id": "hud_cd_notch",
+          "type": "hub/text",
+          "position": {
+            "x": 840,
+            "y": 80
+          },
+          "params": {
+            "x": 230,
+            "y": 346,
+            "fontSize": 28,
+            "color": 14870768
+          }
+        },
+        {
+          "id": "hud_smooth",
+          "type": "hub/text",
+          "position": {
+            "x": 840,
+            "y": 200
+          },
+          "params": {
+            "text": "Smooth wing",
+            "x": 60,
+            "y": 760,
+            "fontSize": 34,
+            "color": 8246268
+          }
+        },
+        {
+          "id": "cl_smooth",
+          "type": "converter/value-to-text",
+          "position": {
+            "x": 540,
+            "y": 200
+          },
+          "params": {
+            "decimals": 2,
+            "prefix": "Cl "
+          }
+        },
+        {
+          "id": "cd_smooth",
+          "type": "converter/value-to-text",
+          "position": {
+            "x": 540,
+            "y": 310
+          },
+          "params": {
+            "decimals": 2,
+            "prefix": "Cd "
+          }
+        },
+        {
+          "id": "hud_cl_smooth",
+          "type": "hub/text",
+          "position": {
+            "x": 840,
+            "y": 310
+          },
+          "params": {
+            "x": 60,
+            "y": 806,
+            "fontSize": 28,
+            "color": 14870768
+          }
+        },
+        {
+          "id": "hud_cd_smooth",
+          "type": "hub/text",
+          "position": {
+            "x": 840,
+            "y": 420
+          },
+          "params": {
+            "x": 230,
+            "y": 806,
+            "fontSize": 28,
+            "color": 14870768
+          }
+        }
+      ],
+      "connections": [
+        {
+          "id": "setup_env.environment->setup_render.environment",
+          "fromNode": "setup_env",
+          "fromSocket": "environment",
+          "toNode": "setup_render",
+          "toSocket": "environment"
+        },
+        {
+          "id": "wing_notch.geometry->cut_notch.geometry",
+          "fromNode": "wing_notch",
+          "fromSocket": "geometry",
+          "toNode": "cut_notch",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "wing_smooth.geometry->cut_smooth.geometry",
+          "fromNode": "wing_smooth",
+          "fromSocket": "geometry",
+          "toNode": "cut_smooth",
+          "toSocket": "geometry"
+        },
+        {
+          "id": "p_thick.out->wing_notch.c",
+          "fromNode": "p_thick",
+          "fromSocket": "out",
+          "toNode": "wing_notch",
+          "toSocket": "c"
+        },
+        {
+          "id": "p_camber.out->wing_notch.d",
+          "fromNode": "p_camber",
+          "fromSocket": "out",
+          "toNode": "wing_notch",
+          "toSocket": "d"
+        },
+        {
+          "id": "p_thick.out->wing_smooth.c",
+          "fromNode": "p_thick",
+          "fromSocket": "out",
+          "toNode": "wing_smooth",
+          "toSocket": "c"
+        },
+        {
+          "id": "p_camber.out->wing_smooth.d",
+          "fromNode": "p_camber",
+          "fromSocket": "out",
+          "toNode": "wing_smooth",
+          "toSocket": "d"
+        },
+        {
+          "id": "p_depth.out->wing_notch.a",
+          "fromNode": "p_depth",
+          "fromSocket": "out",
+          "toNode": "wing_notch",
+          "toSocket": "a"
+        },
+        {
+          "id": "p_start.out->wing_notch.b",
+          "fromNode": "p_start",
+          "fromSocket": "out",
+          "toNode": "wing_notch",
+          "toSocket": "b"
+        },
+        {
+          "id": "smooth_offset.matrix->wing_smooth.space",
+          "fromNode": "smooth_offset",
+          "fromSocket": "matrix",
+          "toNode": "wing_smooth",
+          "toSocket": "space"
+        },
+        {
+          "id": "wing_notch.geometry->tunnel_notch.obstacle",
+          "fromNode": "wing_notch",
+          "fromSocket": "geometry",
+          "toNode": "tunnel_notch",
+          "toSocket": "obstacle"
+        },
+        {
+          "id": "wing_smooth.geometry->tunnel_smooth.obstacle",
+          "fromNode": "wing_smooth",
+          "fromSocket": "geometry",
+          "toNode": "tunnel_smooth",
+          "toSocket": "obstacle"
+        },
+        {
+          "id": "p_angle.out->tunnel_notch.angle",
+          "fromNode": "p_angle",
+          "fromSocket": "out",
+          "toNode": "tunnel_notch",
+          "toSocket": "angle"
+        },
+        {
+          "id": "p_re.out->tunnel_notch.reynolds",
+          "fromNode": "p_re",
+          "fromSocket": "out",
+          "toNode": "tunnel_notch",
+          "toSocket": "reynolds"
+        },
+        {
+          "id": "p_angle.out->tunnel_smooth.angle",
+          "fromNode": "p_angle",
+          "fromSocket": "out",
+          "toNode": "tunnel_smooth",
+          "toSocket": "angle"
+        },
+        {
+          "id": "p_re.out->tunnel_smooth.reynolds",
+          "fromNode": "p_re",
+          "fromSocket": "out",
+          "toNode": "tunnel_smooth",
+          "toSocket": "reynolds"
+        },
+        {
+          "id": "tunnel_notch.cl->cl_notch.value",
+          "fromNode": "tunnel_notch",
+          "fromSocket": "cl",
+          "toNode": "cl_notch",
+          "toSocket": "value"
+        },
+        {
+          "id": "tunnel_notch.cd->cd_notch.value",
+          "fromNode": "tunnel_notch",
+          "fromSocket": "cd",
+          "toNode": "cd_notch",
+          "toSocket": "value"
+        },
+        {
+          "id": "cl_notch.text->hud_cl_notch.text",
+          "fromNode": "cl_notch",
+          "fromSocket": "text",
+          "toNode": "hud_cl_notch",
+          "toSocket": "text"
+        },
+        {
+          "id": "cd_notch.text->hud_cd_notch.text",
+          "fromNode": "cd_notch",
+          "fromSocket": "text",
+          "toNode": "hud_cd_notch",
+          "toSocket": "text"
+        },
+        {
+          "id": "tunnel_smooth.cl->cl_smooth.value",
+          "fromNode": "tunnel_smooth",
+          "fromSocket": "cl",
+          "toNode": "cl_smooth",
+          "toSocket": "value"
+        },
+        {
+          "id": "tunnel_smooth.cd->cd_smooth.value",
+          "fromNode": "tunnel_smooth",
+          "fromSocket": "cd",
+          "toNode": "cd_smooth",
+          "toSocket": "value"
+        },
+        {
+          "id": "cl_smooth.text->hud_cl_smooth.text",
+          "fromNode": "cl_smooth",
+          "fromSocket": "text",
+          "toNode": "hud_cl_smooth",
+          "toSocket": "text"
+        },
+        {
+          "id": "cd_smooth.text->hud_cd_smooth.text",
+          "fromNode": "cd_smooth",
+          "fromSocket": "text",
+          "toNode": "hud_cd_smooth",
+          "toSocket": "text"
+        }
+      ],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    },
+    {
+      "nodes": [],
+      "connections": [],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    },
+    {
+      "nodes": [],
+      "connections": [],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    },
+    {
+      "nodes": [],
+      "connections": [],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    },
+    {
+      "nodes": [],
+      "connections": [],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    },
+    {
+      "nodes": [],
+      "connections": [],
+      "keyframes": {},
+      "markers": [],
+      "exposedParams": []
+    }
+  ],
+  "activeCanvas": 0
+}

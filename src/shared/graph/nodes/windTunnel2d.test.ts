@@ -4,6 +4,8 @@ import { EvalContext } from "../types";
 import { WIND_TUNNEL_2D_NODE, windTunnelState } from "./windTunnel2d";
 import { disposeEvalSession } from "../evaluate";
 import { chainSegments, isClosed, rasterise, sliceObject, TunnelFrame } from "../../three/fluid/tunnelSection";
+import { LineSegments2 } from "three/examples/jsm/lines/LineSegments2.js";
+import { LineSegmentsGeometry } from "three/examples/jsm/lines/LineSegmentsGeometry.js";
 
 const frameX: TunnelFrame = {
   origin: new THREE.Vector3(0, 0, 0),
@@ -26,6 +28,17 @@ describe("tunnel section", () => {
     expect(filled).toBeGreaterThan(300);
     expect(filled).toBeLessThan(420);
     expect(mask[20 * 40 + 20]).toBe(1);
+  });
+
+  test("fat lines drawn with a surface (its grid, an outline) are not cut as walls", () => {
+    const root = new THREE.Group();
+    root.add(new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 4, 48).rotateZ(Math.PI / 2)));
+    const grid = new LineSegments2(new LineSegmentsGeometry().setPositions([-2, -1, -1, 2, 1, 1]));
+    root.add(grid);
+    root.updateMatrixWorld(true);
+    const chains = chainSegments(sliceObject(root, frameX, (o) => o.matrixWorld), 1e-7);
+    expect(chains).toHaveLength(1);
+    expect(isClosed(chains[0], 1e-7)).toBe(true);
   });
 
   test("a thin plate cuts into one open line, stroked without diagonal gaps", () => {

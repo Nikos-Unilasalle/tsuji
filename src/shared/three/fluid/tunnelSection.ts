@@ -73,7 +73,9 @@ export function sliceObject(root: THREE.Object3D | THREE.BufferGeometry, f: Tunn
   } else {
     root.traverse((o) => {
       const mesh = o as THREE.Mesh;
-      if (!mesh.isMesh || !o.visible) return;
+      // Fat lines (Line2, LineSegments2: a function's grid, a drawn outline) are
+      // meshes of screen-space quads, not surfaces: cutting them walls off the flow.
+      if (!mesh.isMesh || !o.visible || (o as { isLineSegments2?: boolean }).isLineSegments2) return;
       slice(mesh.geometry, worldMatrixOf(o));
     });
   }
