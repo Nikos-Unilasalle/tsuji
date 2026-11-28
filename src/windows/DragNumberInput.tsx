@@ -11,9 +11,21 @@ function isIntegerField(step: number): boolean {
   return Number.isInteger(step) && step >= 1;
 }
 
-function formatValue(v: number, integer: boolean): string {
+/**
+ * Three decimals, or three significant digits below 1 — a viscosity of
+ * 1.5e-5 must not read (and, once edited, become) 0.
+ */
+export function formatValue(v: number, integer: boolean): string {
   if (!Number.isFinite(v)) return "0";
-  return integer ? String(Math.round(v)) : String(Math.round(v * 1000) / 1000);
+  if (integer) return String(Math.round(v));
+  if (v !== 0 && Math.abs(v) < 1) return String(Number(v.toPrecision(3)));
+  return String(Math.round(v * 1000) / 1000);
+}
+
+/** A dragged value, rounded to a tenth of the step (at most 0.001): fine steps keep their digits. */
+export function roundDragged(raw: number, step: number): number {
+  const q = Math.min(1e-3, Math.abs(step) / 10 || 1e-3);
+  return Number((Math.round(raw / q) * q).toPrecision(12));
 }
 
 export type KeyframeStatus = "none" | "exact" | "interpolated";
@@ -78,7 +90,15 @@ export function DragNumberInput({
   // but the click that ends a drag gesture must not.
   const justDraggedRef = useRef(false);
 
+  // The text the editor opened with: leaving it untouched changes nothing
+  // (the shown text may be rounded; committing it would round the value).
+  const openedTextRef = useRef("");
+
   const commitEdit = (raw: string) => {
+    if (raw === openedTextRef.current) {
+      setEditing(false);
+      return;
+    }
     const parsed = Number.parseFloat(raw);
     const next = Number.isFinite(parsed) ? parsed : value;
     onChange(clamp(integer ? Math.round(next) : next), { isDrag: false });
@@ -127,7 +147,7 @@ export function DragNumberInput({
 
       const currentStep = (isVector || !ev.shiftKey) ? (step || 0.1) : (step || 0.1) * 0.1;
       const raw = startValue + (accumulatedDy / PIXELS_PER_STEP) * currentStep;
-      const newValue = clamp(integer ? Math.round(raw) : Math.round(raw * 1000) / 1000);
+      const newValue = clamp(integer ? Math.round(raw) : roundDragged(raw, currentStep));
       liveValueRef.current = newValue;
       onChange(newValue, { shiftKey: ev.shiftKey, startValue, isDrag: true });
     };
@@ -148,7 +168,8 @@ export function DragNumberInput({
       if (dragged) {
         onDragEnd?.();
       } else {
-        setText(formatValue(liveValueRef.current, integer));
+        openedTextRef.current = formatValue(liveValueRef.current, integer);
+        setText(openedTextRef.current);
         setEditing(true);
       }
     };
@@ -206,7 +227,8 @@ export function DragNumberInput({
           justDraggedRef.current = false;
           return;
         }
-        setText(formatValue(value, integer));
+        openedTextRef.current = formatValue(value, integer);
+        setText(openedTextRef.current);
         setEditing(true);
       }}
       onPointerDown={handlePointerDown}
