@@ -60,7 +60,7 @@ function extractItems(rawItems: unknown): THREE.Object3D[] {
 
 export const SPAWN_NODE: NodeDefinition = {
   type: "structure/spawn",
-  label: "Spawner",
+  label: "Instance Spawner",
   category: "instance",
   pure: true,
   inputs: [

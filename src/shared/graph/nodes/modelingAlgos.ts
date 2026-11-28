@@ -170,14 +170,14 @@ export const DISPLACE_NODE = definePolyNode({
   },
   paramFields: [
     WEIGHT_FIELD,
-    { id: "source", label: "Source", kind: "select", options: [...DISPLACE_SOURCES], group: "Displace" },
-    { id: "direction", label: "Direction", kind: "select", options: [...DISPLACE_DIRECTIONS], group: "Displace" },
-    { id: "amount", label: "Amount / Amplitude", kind: "number", step: 0.01, group: "Displace" },
-    { id: "vector", label: "Vector", kind: "vector", step: 0.1, group: "Displace" },
-    { id: "attribute", label: "Attribute (float, or vec3 = offset)", kind: "text", group: "Displace" },
-    { id: "scale", label: "Noise Scale", kind: "number", step: 0.1, group: "Noise" },
-    { id: "seed", label: "Noise Seed", kind: "number", step: 1, group: "Noise" },
-    { id: "octaves", label: "Noise Octaves", kind: "number", step: 1, group: "Noise" },
+    { id: "source", label: "How Far", kind: "select", options: [...DISPLACE_SOURCES], optionLabels: ["The same amount everywhere", "From an attribute", "From a noise"], group: "Displace" },
+    { id: "direction", label: "Direction", kind: "select", options: [...DISPLACE_DIRECTIONS], optionLabels: ["Along the normal", "Along a vector"], group: "Displace" },
+    { id: "amount", label: "Amount", kind: "number", step: 0.01, group: "Displace" },
+    { id: "vector", label: "Vector", kind: "vector", step: 0.1, group: "Displace", showIf: { direction: ["vector"] } },
+    { id: "attribute", label: "Attribute (float, or vec3 = offset)", kind: "text", group: "Displace", showIf: { source: ["attribute"] } },
+    { id: "scale", label: "Noise Scale", kind: "number", step: 0.1, group: "Noise", showIf: { source: ["noise"] } },
+    { id: "seed", label: "Noise Seed", kind: "number", step: 1, group: "Noise", showIf: { source: ["noise"] } },
+    { id: "octaves", label: "Noise Octaves", kind: "number", step: 1, group: "Noise", showIf: { source: ["noise"] } },
   ],
   run: (run) => {
     const mesh = run.mesh;
@@ -257,7 +257,7 @@ export const TRANSFORM_ELEMENTS_NODE = definePolyNode({
     { id: "rotate", label: "Rotate", kind: "vector", step: 1, degrees: true, group: "Transform" },
     { id: "scale", label: "Scale", kind: "vector", step: 0.1, group: "Transform" },
     { id: "pivot", label: "Pivot", kind: "select", options: [...TRANSFORM_PIVOTS], group: "Transform" },
-    { id: "pivotPoint", label: "Custom Pivot", kind: "vector", step: 0.1, group: "Transform" },
+    { id: "pivotPoint", label: "Pivot Point", kind: "vector", step: 0.1, group: "Transform", showIf: { pivot: ["custom"] } },
   ],
   run: (run) => {
     const mesh = run.mesh;
@@ -416,7 +416,7 @@ export const POKE_NODE = definePolyNode({
 
 export const DIVIDE_NODE = definePolyNode({
   type: "modeling/divide",
-  label: "Divide / Tessellate",
+  label: "Divide Faces",
   category: CATEGORY,
   group: { domain: "face" },
   inputs: [{ id: "cuts", label: "Cuts", type: "value" }],
@@ -544,9 +544,9 @@ export const DECIMATE_NODE = definePolyNode({
   outputs: [{ id: "triangles", label: "Triangles", type: "value" }],
   defaultParams: { target: "ratio", ratio: 0.5, count: 1000, preserveBoundary: true },
   paramFields: [
-    { id: "target", label: "Target", kind: "select", options: ["ratio", "count"], group: "Decimate" },
-    { id: "ratio", label: "Ratio (of triangles)", kind: "number", step: 0.05, group: "Decimate" },
-    { id: "count", label: "Triangle Count", kind: "number", step: 100, group: "Decimate" },
+    { id: "target", label: "Reduce To", kind: "select", options: ["ratio", "count"], optionLabels: ["A share of the triangles", "A triangle count"], group: "Decimate" },
+    { id: "ratio", label: "Keep (share)", kind: "number", step: 0.05, percent: true, group: "Decimate", showIf: { target: ["ratio"] } },
+    { id: "count", label: "Triangle Count", kind: "number", step: 100, group: "Decimate", showIf: { target: ["count"] } },
     { id: "preserveBoundary", label: "Preserve Boundary", kind: "boolean", group: "Decimate" },
   ],
   run: (run) => {
@@ -582,11 +582,11 @@ export const SORT_NODE = definePolyNode({
   inputs: [{ id: "point", label: "Point", type: "vector" }],
   defaultParams: { domain: "point", by: "axis", axis: "y", point: new THREE.Vector3(0, 0, 0), seed: 0, attribute: "", descending: false },
   paramFields: [
-    { id: "by", label: "Sort By", kind: "select", options: [...SORT_KEYS], group: "Sort" },
-    { id: "axis", label: "Axis", kind: "select", options: ["x", "y", "z"], group: "Sort" },
-    { id: "point", label: "Distance To", kind: "vector", step: 0.1, group: "Sort" },
-    { id: "seed", label: "Seed", kind: "number", step: 1, group: "Sort" },
-    { id: "attribute", label: "Attribute", kind: "text", group: "Sort" },
+    { id: "by", label: "Sort By", kind: "select", options: [...SORT_KEYS], optionLabels: ["Position along an axis", "Distance to a point", "Random", "An attribute", "Reverse the order"], group: "Sort" },
+    { id: "axis", label: "Axis", kind: "select", options: ["x", "y", "z"], group: "Sort", showIf: { by: ["axis"] } },
+    { id: "point", label: "Distance To", kind: "vector", step: 0.1, group: "Sort", showIf: { by: ["distance"] } },
+    { id: "seed", label: "Seed", kind: "number", step: 1, group: "Sort", showIf: { by: ["random"] } },
+    { id: "attribute", label: "Attribute", kind: "text", group: "Sort", showIf: { by: ["attribute"] } },
     { id: "descending", label: "Descending", kind: "boolean", group: "Sort" },
   ],
   run: (run) => {
@@ -683,7 +683,7 @@ export const EDGE_MARKS = ["crease", "sharp", "seam"] as const;
 
 export const EDGE_MARK_NODE = definePolyNode({
   type: "modeling/edge-mark",
-  label: "Edge Crease / Mark",
+  label: "Mark Edges",
   category: CATEGORY,
   group: { domain: "edge" },
   inputs: [{ id: "value", label: "Crease", type: "value" }],

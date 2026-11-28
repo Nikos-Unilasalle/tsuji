@@ -1,4 +1,5 @@
 import { resolveDefinition } from "./groups";
+import { isTeleport, teleportSource } from "./nodes/teleport";
 import { Graph, NodeDefinition, NodeInstance, NodeRegistry } from "./types";
 
 /**
@@ -64,6 +65,12 @@ function isOwnedDownstream(
   if (visited.has(nodeId)) return false;
   visited.add(nodeId);
 
+  // A teleport stands in for its source: what its wires feed counts as fed by the source.
+  const viaTeleport = graph.nodes.some(
+    (n) => isTeleport(n) && teleportSource(n) === nodeId && isOwnedDownstream(graph, registry, n.id, visited),
+  );
+  if (viaTeleport) return true;
+
   return graph.connections.some((connection) => {
     if (connection.fromNode !== nodeId) return false;
     const consumer = graph.nodes.find((n) => n.id === connection.toNode);
@@ -80,7 +87,11 @@ function isOwnedDownstream(
       const fromSocket = producerDef ? outputSocketsOf(producerDef, graph, producer).find((s) => s.id === connection.fromSocket) : undefined;
       if (
         fromSocket &&
+        // Not the object itself: a curve, a list of points or curves
+        // (converted on the wire — see socketCoercion.ts; a List Group's list
+        // of objects does hand them over), a matrix, a value…
         (fromSocket.type === "curve" ||
+          (fromSocket.type === "list" && !producerDef?.ownershipPassThrough) ||
           fromSocket.type === "matrix" ||
           fromSocket.type === "value" ||
           fromSocket.type === "color" ||
@@ -116,7 +127,8 @@ export function resolveSceneRoots(graph: Graph, registry: NodeRegistry): string[
       // Lights are put into the scene by the viewport's own light pass: a light
       // has to exist even when it is only wired up as another node's aim
       // target, and it is invisible in its own right anyway.
-      if (!def || def.managedByViewport) return false;
+      // A teleport's geometry is its source's own object, already drawn (or owned) through the source.
+      if (!def || def.managedByViewport || isTeleport(node)) return false;
       if (!producesGeometry(def, graph, node)) return false;
       return !isOwnedDownstream(graph, registry, node.id);
     })

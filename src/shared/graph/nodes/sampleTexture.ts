@@ -104,7 +104,7 @@ export const SAMPLE_TEXTURE_NODE: NodeDefinition = {
   category: "textureTools",
   inputs: [
     { id: "texture", label: "Texture", type: "texture" },
-    { id: "positions", label: "Positions", type: "list" },
+    { id: "positions", label: "Points", type: "list" },
     { id: "geometry", label: "Geometry (Fallback)", type: "geometry" },
     { id: "plane", label: "Plane", type: "text" },
     { id: "uvScale", label: "UV Scale", type: "vector" },

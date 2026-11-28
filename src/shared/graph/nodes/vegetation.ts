@@ -941,7 +941,7 @@ export const INTERACTION_MAP_NODE: NodeDefinition = {
   category: "texture",
   inputs: [
     { id: "source", label: "Source (Object)", type: "geometry" },
-    { id: "positions", label: "Positions", type: "list" },
+    { id: "positions", label: "Points", type: "list" },
     { id: "center", label: "Center (Follow)", type: "vector" },
     { id: "size", label: "Size", type: "value" },
     { id: "radius", label: "Brush Radius", type: "value" },

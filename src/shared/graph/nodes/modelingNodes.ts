@@ -109,9 +109,9 @@ export const GROUP_TO_POINTS_NODE = definePolyNode({
   dependsOnPose: true,
   group: { domain: "choose", defaultDomain: "point" },
   outputs: [
-    { id: "points", label: "Points (list)", type: "list" },
-    { id: "normals", label: "Normals / Ups (list)", type: "list" },
-    { id: "scales", label: "Scales (list)", type: "list" },
+    { id: "points", label: "Points", type: "list" },
+    { id: "normals", label: "Normals", type: "list" },
+    { id: "scales", label: "Scales", type: "list" },
     { id: "indices", label: "Indices (list)", type: "list" },
     { id: "count", label: "Count", type: "value" },
   ],

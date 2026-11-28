@@ -96,13 +96,13 @@ export const STROKE_OUTLINE_NODE: NodeDefinition = {
   label: "Stroke Outline",
   category: "strokes",
   inputs: [
-    { id: "curves", label: "Curves", type: "curve" },
+    { id: "curves", label: "Curves", type: "list" },
     { id: "list", label: "Curves (List)", type: "list" },
     { id: "width", label: "Width", type: "value" },
     { id: "spread", label: "Spread", type: "value" },
   ],
   outputs: [
-    { id: "curves", label: "Outlines", type: "curve" },
+    { id: "curves", label: "Outlines", type: "list" },
     { id: "list", label: "Outlines (List)", type: "list" },
   ],
   defaultParams: { width: 0.1, minWidth: 0.01, spread: 0, usePressure: true, caps: "round" },
@@ -175,7 +175,7 @@ export const STROKE_STYLE_NODE: NodeDefinition = {
   label: "Stroke Style",
   category: "strokes",
   inputs: [
-    { id: "curves", label: "Curves", type: "curve" },
+    { id: "curves", label: "Curves", type: "list" },
     { id: "list", label: "Curves (List)", type: "list" },
     { id: "opacities", label: "Opacity (List)", type: "list" },
     { id: "bleeds", label: "Bleed (List)", type: "list" },
@@ -183,7 +183,7 @@ export const STROKE_STYLE_NODE: NodeDefinition = {
     { id: "fillColor", label: "Fill Color", type: "color" },
   ],
   outputs: [
-    { id: "curves", label: "Curves", type: "curve" },
+    { id: "curves", label: "Curves", type: "list" },
     { id: "list", label: "Curves (List)", type: "list" },
   ],
   defaultParams: {

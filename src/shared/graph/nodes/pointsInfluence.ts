@@ -43,7 +43,7 @@ export const POINTS_INFLUENCE_BASE = "#000000";
  */
 export const POINTS_INFLUENCE_NODE: NodeDefinition = {
   type: "list/points-influence",
-  label: "Points Influence",
+  label: "Paint Point Influence",
   category: "selection",
   ownershipPassThrough: true,
   inputs: [

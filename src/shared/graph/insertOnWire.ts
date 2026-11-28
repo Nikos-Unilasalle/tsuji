@@ -1,3 +1,5 @@
+import { canConnectSockets } from "./socketCoercion";
+import type { SocketType } from "./sockets";
 import { SocketDef } from "./sockets";
 
 /**
@@ -69,7 +71,16 @@ export function segmentIntersectsRect(a: Point, b: Point, rect: Rect): boolean {
   );
 }
 
-/** First socket whose type accepts (or is accepted by) `type` — mirrors GraphEditor's own isValidConnection rule: an "any" socket matches anything. */
+/**
+ * The socket a wire of `type` should land on — mirrors GraphEditor's own
+ * isValidConnection rule: the same type first, then "any", then a shape
+ * that converts on the wire (points ↔ mesh, curve ↔ list).
+ */
 export function findCompatibleSocket(sockets: SocketDef[], type: string): SocketDef | null {
-  return sockets.find((s) => s.type === "any" || type === "any" || s.type === type) ?? null;
+  return (
+    sockets.find((s) => s.type === type) ??
+    sockets.find((s) => s.type === "any" || type === "any") ??
+    sockets.find((s) => canConnectSockets(type as SocketType, s.type) || canConnectSockets(s.type, type as SocketType)) ??
+    null
+  );
 }

@@ -56,6 +56,11 @@ describe("node catalogue", () => {
     expect(find("vdb remesh")).toContain("volume/voxel-remesh");
   });
 
+  it("explains every geometry node in a sentence at the top of its panel", () => {
+    const missing = offered.filter((d) => CATEGORY_FAMILY[d.category] === "geometry" && !d.description).map((d) => d.type);
+    expect(missing).toEqual([]);
+  });
+
   it("gives every Group field the group-syntax help", () => {
     const missing: string[] = [];
     for (const d of offered) {

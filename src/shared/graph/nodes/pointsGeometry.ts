@@ -401,7 +401,7 @@ export function writePointsToMesh(nodeId: string, inputObj: THREE.Object3D, poin
 
 export const MESH_TO_POINTS_NODE: NodeDefinition = {
   type: "converter/mesh-to-points",
-  label: "Mesh to Points",
+  label: "Mesh to Points (Editable)",
   category: "instance",
   inputs: [
     { id: "geometry", label: "Geometry", type: "geometry" },
@@ -445,7 +445,7 @@ export const MESH_TO_POINTS_NODE: NodeDefinition = {
  */
 export const POINTS_TO_MESH_NODE: NodeDefinition = {
   type: "converter/points-to-mesh",
-  label: "Points to Mesh",
+  label: "Write Points to Mesh",
   category: "instance",
   inputs: [
     { id: "geometry", label: "Geometry", type: "geometry" },

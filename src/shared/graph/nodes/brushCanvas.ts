@@ -155,7 +155,7 @@ export const BRUSH_CANVAS_NODE: NodeDefinition = {
   label: "Brush Canvas (p5.brush)",
   category: "texture",
   inputs: [
-    { id: "curves", label: "Curves", type: "curve" },
+    { id: "curves", label: "Curves", type: "list" },
     { id: "strokeColor", label: "Stroke Color", type: "color" },
     { id: "fillColor", label: "Fill Color", type: "color" },
     { id: "strokeWeight", label: "Stroke Weight", type: "value" },

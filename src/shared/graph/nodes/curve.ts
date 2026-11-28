@@ -743,14 +743,14 @@ export const CURVE_ARRAY_NODE: NodeDefinition = {
     { id: "step", label: "Step Scale", type: "value" },
   ],
   outputs: [
-    { id: "curves", label: "Curves (List)", type: "list" },
+    { id: "curves", label: "Curves", type: "list" },
     // The exact offset/scale used per copy, same order as `curves` — feed
     // either into List Statistics' Max to size a spoke/bound to match the
     // outermost copy exactly (offset directly; scale needs multiplying by
     // the base curve's own Radius first), instead of re-deriving
     // Count*Spacing by hand and risking it drifting out of sync.
     { id: "offsets", label: "Offsets (List)", type: "list" },
-    { id: "scales", label: "Scales (List)", type: "list" },
+    { id: "scales", label: "Scales", type: "list" },
   ],
   // Spacing on by default (additive, world units — the common ask); Step at
   // 0 leaves proportional growth off unless dialled in on top.
@@ -791,7 +791,7 @@ export const CURVE_ARRAY_NODE: NodeDefinition = {
 /** 3. Curve to Mesh Node (Variable Thickness Profile) */
 export const CURVE_TO_MESH_NODE: NodeDefinition = {
   type: "curve/to_mesh",
-  label: "Curve to Mesh",
+  label: "Curve to Tube",
   category: "curve",
   inputs: [
     { id: "curve", label: "Curve", type: "curve" },
@@ -1369,10 +1369,10 @@ export const CURVE_DEFORM_NODE: NodeDefinition = {
 /** 6. Curves to Mesh (List) Node — extrudes every curve in a list and merges them into one mesh. */
 export const CURVES_TO_MESH_NODE: NodeDefinition = {
   type: "curve/to_mesh_list",
-  label: "Curves to Meshes",
+  label: "Curves to Tubes",
   category: "curve",
   inputs: [
-    { id: "curves", label: "Curves (List)", type: "list" },
+    { id: "curves", label: "Curves", type: "list" },
     { id: "thickness", label: "Thickness", type: "value" },
     { id: "startProgress", label: "Start %", type: "value" },
     { id: "endProgress", label: "End %", type: "value" },

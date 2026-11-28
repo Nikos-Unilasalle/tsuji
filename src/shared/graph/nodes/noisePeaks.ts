@@ -136,7 +136,7 @@ const peaksCache = createNodeCache<Cached<{ points: THREE.Vector3[]; strengths: 
  */
 export const NOISE_PEAKS_NODE: NodeDefinition = {
   type: "list/noise-peaks",
-  label: "Noise Peaks",
+  label: "Points at Noise Peaks",
   category: "instance",
   ownershipPassThrough: true,
   inputs: [
@@ -246,7 +246,7 @@ const scatterAroundCache = createNodeCache<Cached<ScatterAroundOutput>>();
  */
 export const SCATTER_AROUND_NODE: NodeDefinition = {
   type: "list/scatter-around",
-  label: "Scatter Around",
+  label: "Scatter Around Points",
   category: "instance",
   ownershipPassThrough: true,
   inputs: [

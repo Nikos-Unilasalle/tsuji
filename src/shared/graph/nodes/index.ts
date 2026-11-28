@@ -1,3 +1,6 @@
+import { TELEPORT_NODE } from "./teleport";
+import { LINE_NODE } from "./linePrimitive";
+import { withDescription } from "./nodeDescriptions";
 import { withKeywords } from "./nodeKeywords";
 import { legacyObjectEffect, screenOrObjectEffect } from "./effectTarget";
 import { createRegistry } from "../types";
@@ -492,6 +495,8 @@ export const STARTER_NODES = [
   POSTPROCESS_VIGNETTE_NODE,
   POSTPROCESS_RGB_SHIFT_NODE,
   POSTPROCESS_DOF_NODE,
+  LINE_NODE,
+  TELEPORT_NODE,
   screenOrObjectEffect(POSTPROCESS_OUTLINE_NODE, MODIFIER_OUTLINE_NODE),
   POSTPROCESS_FILM_GRAIN_NODE,
   POSTPROCESS_GLITCH_NODE,
@@ -674,7 +679,7 @@ STARTER_NODES.forEach((def, i) => {
 
 // Search synonyms (Blender / Houdini names, former labels) — see nodeKeywords.ts.
 STARTER_NODES.forEach((def, i) => {
-  STARTER_NODES[i] = withKeywords(def);
+  STARTER_NODES[i] = withDescription(withKeywords(def));
 });
 
 export const DEFAULT_REGISTRY = createRegistry(STARTER_NODES);

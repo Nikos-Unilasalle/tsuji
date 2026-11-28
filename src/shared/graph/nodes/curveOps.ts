@@ -183,11 +183,11 @@ function paramAt(line: Polyline, cum: number[], s: number): number {
 
 const CURVE_INPUTS: SocketDef[] = [
   { id: "curve", label: "Curve", type: "curve" },
-  { id: "curves", label: "Curves (List)", type: "list" },
+  { id: "curves", label: "Curves", type: "list" },
 ];
 const CURVE_OUTPUTS: SocketDef[] = [
   { id: "curve", label: "Curve", type: "curve" },
-  { id: "curves", label: "Curves (List)", type: "list" },
+  { id: "curves", label: "Curves", type: "list" },
   { id: "geometry", label: "Curve Preview", type: "geometry" },
 ];
 
@@ -614,7 +614,7 @@ const SWEEP_FIELDS: ParamFieldDef[] = [
  */
 export const SWEEP_CURVE_NODE: NodeDefinition = {
   type: "curve/sweep",
-  label: "Sweep (Curve to Mesh)",
+  label: "Sweep",
   category: "curve",
   inputs: [
     { id: "curve", label: "Path", type: "curve" },
@@ -764,7 +764,7 @@ export const MESH_EDGES_TO_CURVES_NODE: NodeDefinition = {
   inputs: [{ id: "geometry", label: "Geometry", type: "geometry" }],
   outputs: [
     { id: "curve", label: "First Curve", type: "curve" },
-    { id: "curves", label: "Curves (List)", type: "list" },
+    { id: "curves", label: "Curves", type: "list" },
     { id: "count", label: "Count", type: "value" },
     { id: "geometry", label: "Curve Preview", type: "geometry" },
   ],

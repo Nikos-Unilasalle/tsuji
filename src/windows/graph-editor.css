@@ -736,3 +736,13 @@ input, textarea, [contenteditable="true"], .drag-number-editing, .param-text-inp
   background: rgba(34, 211, 238, 0.3);
   color: #ecfeff;
 }
+
+/* Teleport: a stand-in for another node's outputs — dashed, so it never reads as the node itself. */
+.graph-node.graph-node-teleport {
+  border-style: dashed;
+  border-width: 2px;
+}
+
+.graph-node-teleport-mark {
+  opacity: 0.8;
+}

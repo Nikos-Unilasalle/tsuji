@@ -617,7 +617,7 @@ export const LATTICE_DEFORM_NODE: NodeDefinition = {
     // nothing wired) defaults to full influence, same "missing = 1" the
     // FFD's own strength blend already uses.
     { id: "pointInfluence", label: "Per-Point Influence (List)", type: "list" },
-    { id: "points", label: "Points List", type: "list" },
+    { id: "points", label: "Points", type: "list" },
     { id: "bulge", label: "Bulge", type: "value" },
     { id: "twist", label: "Twist (°)", type: "value" },
     { id: "taper", label: "Taper", type: "value" },

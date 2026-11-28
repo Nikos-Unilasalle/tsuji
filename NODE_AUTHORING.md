@@ -115,6 +115,17 @@ what it does. Use an explicit flag on the definition instead:
 checks it): when two nodes would share a name, qualify one ("Texture Blur",
 "Physics Spawner").
 
+**A sentence of help**: every node in the Geometry family has a
+`description` (one or two plain sentences: what it does, what to wire in),
+shown at the top of its param panel. Set it on the definition or add it to
+`nodes/nodeDescriptions.ts`; `nodeCatalog.test.ts` fails on a geometry node
+without one.
+
+**Fields that belong to one mode**: give them `showIf: { mode: ["box"] }`
+(any param, several values, several params) and the panel hides them while
+the node is in another mode. Give a select's options readable
+`optionLabels` ("Inside a box", not "box").
+
 **Search synonyms** go in `nodes/nodeKeywords.ts`: what a Blender or Houdini
 user would type ("wrangle", "shrinkwrap", "VDB"), and a node's former name
 when it is renamed. The palette filter and the node search both match them.
@@ -138,8 +149,28 @@ There is no Boolean or Trigger type. A boolean travels as a `value`
 socket carrying `0` or `1` — use `toBoolean`/`fromBoolean` from
 `sockets.ts` to convert.
 
-The editor only lets you connect a wire between two sockets of the SAME
-type — that's enforced automatically, you don't need to check it yourself.
+The editor connects two sockets of the same type (or `any`), plus a few
+pairs that carry the same thing in two shapes and convert on the wire
+(`socketCoercion.ts`) — so every node that deals in points or curves plugs
+into every other:
+
+| wire               | the input receives                                   |
+|--------------------|------------------------------------------------------|
+| `geometry` → `list`  | the mesh's points, as positions (world space)        |
+| `list` → `geometry`  | a point-only mesh (a PolyMesh with points, no faces) |
+| `curve` → `list`     | a list of one curve                                  |
+| `list` → `curve`     | a curve through the positions                        |
+
+That's enforced automatically, you don't need to check it yourself.
+
+**Naming the sockets that carry points and curves** (ids are saved in
+files, so they never change once shipped; labels can):
+- a list of positions: id `points`, label "Points" — with aligned lists
+  `normals` ("Normals") and `scales` ("Scales") when the node has them;
+- a mesh: id `geometry`, label "Geometry";
+- one curve: type `curve`, id `curve`, label "Curve"; several: type `list`,
+  id `curves`, label "Curves". Don't add "(List)" to a label — the socket's
+  colour already says it is a list.
 
 ## 5. Dynamic input count (rare — skip unless your node explicitly needs it)
 

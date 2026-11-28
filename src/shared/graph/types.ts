@@ -235,7 +235,19 @@ export interface EvalContext {
  * fallback for unconnected inputs), it just shows nothing in the panel.
  * `id` must match a key in `defaultParams`.
  */
-export type ParamFieldDef =
+export type ParamFieldDef = ParamFieldBase & {
+  /**
+   * Show the field only while another param has one of these values — the
+   * fields of a mode the node is not in stay out of the way. Purely visual:
+   * the param keeps its value.
+   */
+  showIf?: ParamShowIf;
+};
+
+/** `{ mode: ["box", "sphere"] }`: shown while `mode` is "box" or "sphere". All listed params must match. */
+export type ParamShowIf = Record<string, readonly (string | number | boolean)[]>;
+
+type ParamFieldBase =
   /**
    * `degrees` is a *display* unit only: the param itself, and every socket
    * carrying the same quantity, stay in radians so an Oscillator or Value
@@ -333,6 +345,12 @@ export interface NodeDefinition {
   label: string;
   /** Drives the node header color, the param panel color, and which palette section it appears in. */
   category: NodeCategory;
+  /**
+   * One or two plain sentences shown at the top of the param panel: what the
+   * node does and what to wire into it. Filled in centrally from
+   * nodes/nodeDescriptions.ts when the node file doesn't set it.
+   */
+  description?: string;
   inputs: SocketDef[];
   outputs: SocketDef[];
   /** Per-instance knobs — also supplies the fallback value for an input socket left unconnected. */

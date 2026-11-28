@@ -94,6 +94,8 @@ function GroupPortsEditor({
 interface ParamPanelProps {
   nodeId: string;
   label: string;
+  /** What the node does, in a sentence or two — shown under the title. */
+  description?: string;
   category?: NodeCategory;
   fields: ParamFieldDef[];
   params: Record<string, unknown>;
@@ -487,6 +489,7 @@ export function vectorField(
 export function ParamPanel({
   nodeId,
   label,
+  description,
   category,
   fields,
   params,
@@ -562,6 +565,8 @@ export function ParamPanel({
 
   const groupsMap: Map<string, ParamFieldDef[]> = new Map();
   for (const field of fields) {
+    // A field that only applies to another mode of this node stays hidden.
+    if (field.showIf && !Object.entries(field.showIf).every(([param, values]) => values.includes(params[param] as string | number | boolean))) continue;
     const groupName = getGroupName(field);
     if (!groupsMap.has(groupName)) {
       groupsMap.set(groupName, []);
@@ -670,6 +675,8 @@ export function ParamPanel({
             </button>
           </div>
         </div>
+
+        {description && <p className="param-panel-description">{description}</p>}
 
         <div className="param-name-section">
           <div className="param-row">

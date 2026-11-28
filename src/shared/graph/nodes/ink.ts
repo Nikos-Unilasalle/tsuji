@@ -93,7 +93,7 @@ const TRANSFORM_DEFAULTS = {
 
 const INK_INPUTS = [
   { id: "curve", label: "Curve", type: "curve" as const },
-  { id: "curves", label: "Curves (List)", type: "list" as const },
+  { id: "curves", label: "Curves", type: "list" as const },
   { id: "material", label: "Material", type: "material" as const },
   { id: "color", label: "Color", type: "color" as const },
   { id: "opacity", label: "Opacity", type: "value" as const },

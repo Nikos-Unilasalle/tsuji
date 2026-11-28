@@ -42,7 +42,7 @@ export const PARTICLES_TO_POINTS_NODE: NodeDefinition = {
     { id: "xValues", label: "X Values (List)", type: "list" },
     { id: "yValues", label: "Y Values (List)", type: "list" },
     { id: "zValues", label: "Z Values (List)", type: "list" },
-    { id: "points", label: "Points (Vectors)", type: "list" },
+    { id: "points", label: "Points", type: "list" },
     { id: "count", label: "Live Count", type: "value" },
   ],
   defaultParams: {},

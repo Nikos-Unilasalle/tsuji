@@ -179,6 +179,7 @@ describe("GIZMO_SELECTABLE_TYPES", () => {
   it("lists the primitive object node types", () => {
     expect(GIZMO_SELECTABLE_TYPES).toEqual([
       "object/box",
+      "object/line",
       "object/plane",
       "object/sphere",
       "object/disc",

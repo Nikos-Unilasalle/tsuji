@@ -38,7 +38,7 @@ export const HEX_GRID_NODE: NodeDefinition = {
   ],
   outputs: [
     { id: "geometry", label: "Geometry", type: "geometry" },
-    { id: "positions", label: "Positions", type: "list" },
+    { id: "positions", label: "Points", type: "list" },
     { id: "count", label: "Count", type: "value" },
     { id: "xValues", label: "X Values", type: "list" },
     { id: "yValues", label: "Y Values", type: "list" },

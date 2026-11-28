@@ -126,8 +126,8 @@ function vec(raw: unknown): Vec3 | null {
 
 const SIZING_FIELDS: ParamFieldDef[] = [
   { id: "sizing", label: "Size By", kind: "select", options: ["resolution", "voxel"], optionLabels: ["Resolution (cells)", "Voxel Size"], group: "Grid" },
-  { id: "resolution", label: "Resolution (longest side)", kind: "number", step: 1, group: "Grid" },
-  { id: "voxel", label: "Voxel Size", kind: "number", step: 0.005, group: "Grid" },
+  { id: "resolution", label: "Resolution (longest side)", kind: "number", step: 1, group: "Grid", showIf: { sizing: ["resolution"] } },
+  { id: "voxel", label: "Voxel Size", kind: "number", step: 0.005, group: "Grid", showIf: { sizing: ["voxel"] } },
   { id: "padding", label: "Padding", kind: "number", step: 0.05, group: "Grid" },
   { id: "band", label: "Exact Band (voxels)", kind: "number", step: 0.5, group: "Grid" },
 ];
@@ -366,7 +366,7 @@ export const MESH_TO_SDF_NODE = defineVolumeNode({
   paramFields: [
     ...SIZING_FIELDS,
     { id: "sign", label: "Inside", kind: "select", options: ["solid", "shell"], optionLabels: ["Solid (closed mesh)", "Shell (open mesh, thickness)"], group: "Distance" },
-    { id: "thickness", label: "Shell Thickness", kind: "number", step: 0.005, group: "Distance" },
+    { id: "thickness", label: "Shell Thickness", kind: "number", step: 0.005, group: "Distance", showIf: { sign: ["shell"] } },
   ],
   build(run) {
     const opts = sizing(run.num, run.str);
@@ -398,7 +398,7 @@ export const POINTS_TO_SDF_NODE = defineVolumeNode({
   label: "Points to SDF",
   primary: "optional",
   inputs: [
-    { id: "points", label: "Points (Vector List)", type: "list" },
+    { id: "points", label: "Points", type: "list" },
     { id: "radii", label: "Radii (List)", type: "list" },
     { id: "radius", label: "Radius", type: "value" },
   ],
@@ -606,13 +606,13 @@ export const VOXEL_REMESH_NODE = defineVolumeNode({
   defaultParams: { sizing: "voxel", voxel: 0.05, resolution: 48, relax: 2, offset: 0, transfer: true, sign: "solid", thickness: 0.02 },
   paramFields: [
     { id: "sizing", label: "Size By", kind: "select", options: ["voxel", "resolution"], optionLabels: ["Voxel Size", "Resolution (cells)"] },
-    { id: "voxel", label: "Voxel Size", kind: "number", step: 0.005 },
-    { id: "resolution", label: "Resolution (longest side)", kind: "number", step: 1 },
+    { id: "voxel", label: "Voxel Size", kind: "number", step: 0.005, showIf: { sizing: ["voxel"] } },
+    { id: "resolution", label: "Resolution (longest side)", kind: "number", step: 1, showIf: { sizing: ["resolution"] } },
     { id: "offset", label: "Offset", kind: "number", step: 0.005 },
     { id: "relax", label: "Relax Iterations", kind: "number", step: 1 },
     { id: "transfer", label: "Transfer Attributes (nearest)", kind: "boolean" },
     { id: "sign", label: "Inside", kind: "select", options: ["solid", "shell"], optionLabels: ["Solid (closed mesh)", "Shell (open mesh, thickness)"] },
-    { id: "thickness", label: "Shell Thickness", kind: "number", step: 0.005 },
+    { id: "thickness", label: "Shell Thickness", kind: "number", step: 0.005, showIf: { sign: ["shell"] } },
   ],
   build(run) {
     const src = run.primary!.poly;

@@ -53,7 +53,7 @@ export const CURVES_TO_LINES_NODE: NodeDefinition = {
   label: "Curves to Lines",
   category: "curve",
   inputs: [
-    { id: "curves", label: "Curves (List)", type: "list" },
+    { id: "curves", label: "Curves", type: "list" },
     { id: "material", label: "Material", type: "material" },
     { id: "matrix", label: "Matrix", type: "matrix" },
     { id: "visible", label: "Visible", type: "value" },

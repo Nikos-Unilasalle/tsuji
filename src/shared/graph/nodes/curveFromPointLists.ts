@@ -79,7 +79,7 @@ export const CURVES_FROM_POINT_LISTS_NODE: NodeDefinition = {
   label: "Curves from Point Lists",
   category: "curve",
   inputs: [{ id: "pointLists", label: "Point Lists (List of Lists)", type: "list" }, ...COMMON_PRIMITIVE_INPUTS],
-  outputs: [{ id: "curves", label: "Curves (List)", type: "list" }, ...COMMON_PRIMITIVE_OUTPUTS],
+  outputs: [{ id: "curves", label: "Curves", type: "list" }, ...COMMON_PRIMITIVE_OUTPUTS],
   defaultParams: {
     ...COMMON_DEFAULT_PARAMS,
     radius: 0.1,

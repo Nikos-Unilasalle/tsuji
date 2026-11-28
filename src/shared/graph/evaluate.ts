@@ -3,6 +3,8 @@ import { getEvalProfiler } from "./evalProfiler";
 import { resolveDefinition } from "./groups";
 import { createNodeCache } from "./nodeCaches";
 import { applyBakedTransform, applyPoseSockets } from "./poseSockets";
+import { coerceInput } from "./socketCoercion";
+import { isTeleport, teleportSource } from "./nodes/teleport";
 import { Connection, EasingType, EvalContext, Graph, Keyframe, KeyframeStore, NodeDefinition, NodeInstance, NodeRegistry } from "./types";
 
 export interface TopoResult {
@@ -356,6 +358,13 @@ export function topoSort(graph: Graph): TopoResult {
     if (!nodeIds.has(conn.fromNode) || !nodeIds.has(conn.toNode)) continue;
     downstream.get(conn.fromNode)!.push(conn.toNode);
     inDegree.set(conn.toNode, (inDegree.get(conn.toNode) ?? 0) + 1);
+  }
+  // A teleport runs after its source, as if wired to it (see nodes/teleport.ts).
+  for (const node of graph.nodes) {
+    const source = isTeleport(node) ? teleportSource(node) : "";
+    if (!source || !nodeIds.has(source) || source === node.id) continue;
+    downstream.get(source)!.push(node.id);
+    inDegree.set(node.id, (inDegree.get(node.id) ?? 0) + 1);
   }
 
   const queue = [...inDegree.entries()].filter(([, degree]) => degree === 0).map(([id]) => id);
@@ -744,6 +753,14 @@ export function evaluateGraph(graph: Graph, registry: NodeRegistry, ctx: EvalCon
       const instance = nodesById.get(nodeId);
       if (!instance) continue;
 
+      // A teleport hands on exactly what its source produced this frame.
+      if (isTeleport(instance)) {
+        const source = teleportSource(instance);
+        results.set(nodeId, results.get(source) ?? {});
+        if (ran.has(source)) ran.add(nodeId);
+        continue;
+      }
+
       // Not registry.get: a group's sockets come from the subgraph it carries,
       // not from its type — see groups.ts.
       const def = resolveDefinition(instance, registry);
@@ -841,8 +858,12 @@ export function evaluateGraph(graph: Graph, registry: NodeRegistry, ctx: EvalCon
           inputSources.set(socket.id, conn.fromNode);
           // Priority rule: Node connection l'emporte toujours sur les keyframes!
           const fresh = results.get(conn.fromNode)?.[conn.fromSocket];
-          inputs[socket.id] =
-            fresh !== undefined ? fresh : previousFrameOutputs?.get(conn.fromNode)?.[conn.fromSocket];
+          // Points travel as a mesh or a list, curves alone or in a list: a
+          // wire between the two shapes converts here (socketCoercion.ts).
+          inputs[socket.id] = coerceInput(
+            fresh !== undefined ? fresh : previousFrameOutputs?.get(conn.fromNode)?.[conn.fromSocket],
+            socket.type,
+          );
         } else {
           // Unconnected socket: evaluate keyframe interpolation if keyframes exist
           const fallback = params[socket.id];

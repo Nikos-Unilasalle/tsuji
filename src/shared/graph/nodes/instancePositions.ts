@@ -29,7 +29,7 @@ function asNumber(v: unknown, fallback: number): number {
  */
 export const INSTANCE_POSITIONS_NODE: NodeDefinition = {
   type: "structure/instance-positions",
-  label: "Instance Positions",
+  label: "Instances to Points",
   category: "instance",
   pure: true,
   inputs: [
@@ -37,7 +37,7 @@ export const INSTANCE_POSITIONS_NODE: NodeDefinition = {
     { id: "heightOffset", label: "Height Offset", type: "value" },
   ],
   outputs: [
-    { id: "positions", label: "Positions", type: "list" },
+    { id: "positions", label: "Points", type: "list" },
     { id: "count", label: "Count", type: "value" },
   ],
   defaultParams: { heightOffset: 0, anchor: "origin" },

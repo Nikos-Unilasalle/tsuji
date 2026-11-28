@@ -1,3 +1,5 @@
+import { canConnectSockets } from "../shared/graph/socketCoercion";
+import { TELEPORT_TYPE, isTeleport, teleportSource } from "../shared/graph/nodes/teleport";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { setDropProjector } from "../shared/graph/imageDrop";
 import { useStableHandler } from "../shared/useStableHandler";
@@ -150,8 +152,35 @@ function innerNodeCount(subgraph: Graph): number {
 /** Node types that only ever exist because a group put them there. */
 const GROUP_INTERNAL_TYPES = new Set([GROUP_TYPE, GROUP_INPUT_TYPE, GROUP_OUTPUT_TYPE]);
 const EDGE_STROKE_WIDTH = 3;
+
+/** Nodes worth teleporting: anything with outputs that isn't a group's own boundary or a canvas frame. */
+function canTeleport(node: NodeInstance | undefined): boolean {
+  if (!node || GROUP_INTERNAL_TYPES.has(node.type) || node.type === FRAME_TYPE || node.type === "utility/reroute") return false;
+  return true;
+}
 const DEFAULT_NODE_WIDTH = 160;
 const DEFAULT_NODE_HEIGHT = 90;
+
+/**
+ * Name, colour and custom name a node shows. A teleport takes its source's,
+ * so it reads as that node seen from somewhere else (or "Teleport (source
+ * deleted)" when the source is gone).
+ */
+function teleportLook(
+  graph: Graph,
+  registry: NodeRegistry,
+  instance: NodeInstance,
+  label: string,
+  category: GraphNodeData["category"],
+): Pick<GraphNodeData, "label" | "customName" | "category"> {
+  const ownName = typeof instance.params?.name === "string" ? instance.params.name : "";
+  if (!isTeleport(instance)) return { label, customName: ownName, category };
+  const source = graph.nodes.find((n) => n.id === teleportSource(instance));
+  const sourceDef = source ? resolveDefinition(source, registry) : undefined;
+  if (!source || !sourceDef) return { label: "Teleport (source deleted)", customName: ownName, category };
+  const sourceName = typeof source.params?.name === "string" ? source.params.name : "";
+  return { label: sourceDef.label, customName: sourceName, category: sourceDef.category };
+}
 
 function toFlowNodes(graph: Graph, registry: NodeRegistry, selectedIds?: Set<string>): Node<GraphNodeData>[] {
   return graph.nodes.map((instance) => {
@@ -176,9 +205,7 @@ function toFlowNodes(graph: Graph, registry: NodeRegistry, selectedIds?: Set<str
         ...groupData(instance),
         nodeId: instance.id,
         nodeType: instance.type,
-        label: def?.label ?? `${instance.type} (unknown)`,
-        customName: typeof instance.params?.name === "string" ? instance.params.name : "",
-        category: def?.category,
+        ...teleportLook(graph, registry, instance, def?.label ?? `${instance.type} (unknown)`, def?.category),
         inputs,
         outputs,
         ...(instance.subgraph ? { groupSize: innerNodeCount(instance.subgraph) } : {}),
@@ -592,6 +619,8 @@ function GraphEditorContent({
       // and any other way a node can leave are covered by the same rule
       // rather than each needing to remember to call it.
       const deletedIds = new Set(deletedNodes.map((n) => n.id));
+      // A node's teleports go with it.
+      for (const n of graph.nodes) if (isTeleport(n) && deletedIds.has(teleportSource(n))) deletedIds.add(n.id);
       for (const id of deletedIds) selectedIdsRef.current.delete(id);
 
       const nextNodes = nodes.filter((n) => !deletedIds.has(n.id));
@@ -652,8 +681,8 @@ function GraphEditorContent({
         .find((n) => n.id === connection.target)
         ?.data.inputs.find((s) => s.id === connection.targetHandle);
       if (!sourceSocket || !targetSocket) return false;
-      if (sourceSocket.type === "any" || targetSocket.type === "any") return true;
-      return sourceSocket.type === targetSocket.type;
+      // Same type, "any", or one of the shapes that convert on the wire (points ↔ mesh, curve ↔ list).
+      return canConnectSockets(sourceSocket.type, targetSocket.type);
     },
     [nodes],
   );
@@ -1080,7 +1109,10 @@ function GraphEditorContent({
           const sourceSocket = sourceNode?.data.outputs.find((s) => s.id === pendingWireConnection.handleId);
           const sourceType = sourceSocket?.type || "any";
           const matchingInput =
-            inputs.find((s) => s.type === sourceType || s.type === "any" || sourceType === "any") || inputs[0];
+            inputs.find((s) => s.type === sourceType) ||
+            inputs.find((s) => s.type === "any" || sourceType === "any") ||
+            inputs.find((s) => canConnectSockets(sourceType, s.type)) ||
+            inputs[0];
 
           if (matchingInput) {
             const newEdge: Edge = {
@@ -1100,7 +1132,10 @@ function GraphEditorContent({
           const targetSocket = sourceNode?.data.inputs.find((s) => s.id === pendingWireConnection.handleId);
           const targetType = targetSocket?.type || "any";
           const matchingOutput =
-            outputs.find((s) => s.type === targetType || s.type === "any" || targetType === "any") || outputs[0];
+            outputs.find((s) => s.type === targetType) ||
+            outputs.find((s) => s.type === "any" || targetType === "any") ||
+            outputs.find((s) => canConnectSockets(s.type, targetType)) ||
+            outputs[0];
 
           if (matchingOutput) {
             const withoutConflict = nextEdges.filter(
@@ -1374,6 +1409,39 @@ function GraphEditorContent({
     // In front of the original (selected) but nudged down-right so it's visible.
     pasteClipboard(24);
   }, [copySelected, pasteClipboard]);
+
+  /**
+   * Right-click → Teleport: a stand-in carrying `nodeId`'s outputs, placed
+   * just under it (drag it wherever its wires are needed). A teleport of a
+   * teleport points at the original.
+   */
+  const createTeleport = useCallback(
+    (nodeId: string) => {
+      const clicked = graph.nodes.find((n) => n.id === nodeId);
+      if (!clicked) return;
+      const sourceId = isTeleport(clicked) ? teleportSource(clicked) : clicked.id;
+      const sourceFlow = nodes.find((n) => n.id === sourceId);
+      const source = graph.nodes.find((n) => n.id === sourceId);
+      if (!source || !sourceFlow) return;
+      const ports = sourceFlow.data.outputs.map((s) => ({ id: s.id, label: s.label, type: s.type }));
+      const id = randomId();
+      // Just under the node clicked, clear of its neighbours along the wire.
+      const at = clicked.position;
+      const clickedFlow = nodes.find((n) => n.id === clicked.id);
+      const height = clickedFlow?.measured?.height ?? clickedFlow?.height ?? 160;
+      const teleport: NodeInstance = {
+        id,
+        type: TELEPORT_TYPE,
+        params: { source: sourceId, ports },
+        position: { x: at.x, y: at.y + height + 30 },
+      };
+      selectedIdsRef.current = new Set([id]);
+      onGraphChange?.({ ...graph, nodes: [...graph.nodes, teleport] });
+      onSelectNode(id);
+      onSelectNodes?.([id]);
+    },
+    [graph, nodes, onGraphChange, onSelectNode, onSelectNodes],
+  );
 
   /** Cmd+G — the selection becomes one group node, which then becomes the selection. */
   const groupSelected = useCallback(() => {
@@ -2022,6 +2090,19 @@ function GraphEditorContent({
                   <span>Copy</span>
                   <span className="graph-context-menu-shortcut">Ctrl+C</span>
                 </button>
+                {contextMenu.nodeId && canTeleport(graph.nodes.find((n) => n.id === contextMenu.nodeId)) && (
+                  <button
+                    type="button"
+                    className="graph-context-menu-item"
+                    title="A copy of this node's outputs to place anywhere — no wire across the canvas"
+                    onClick={() => {
+                      if (contextMenu.nodeId) createTeleport(contextMenu.nodeId);
+                      setContextMenu(null);
+                    }}
+                  >
+                    <span>Teleport</span>
+                  </button>
+                )}
                 {isGroupInstance(graph.nodes.find((n) => n.id === contextMenu.nodeId)) && (
                   <button
                     type="button"

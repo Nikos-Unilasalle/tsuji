@@ -813,7 +813,7 @@ export const EXTRUDE_MESH_NODE: NodeDefinition = {
  */
 export const FACE_SELECTION_NODE: NodeDefinition = {
   type: "modifier/face-selection",
-  label: "Face Selection",
+  label: "Face Selection (Legacy)",
   category: "selection",
   pure: true,
   inputs: [

@@ -3417,6 +3417,7 @@ function MainEditor() {
         <ParamPanel
           nodeId={selectedInstance.id}
           label={selectedDef.label}
+          description={selectedDef.description}
           category={selectedDef.category}
           fields={
             selectedDef.dynamicParamFields

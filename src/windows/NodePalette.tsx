@@ -9,7 +9,7 @@ import {
   FAMILY_ORDER,
   NodeCategory,
 } from "../shared/graph/categories";
-import { nodeMatches } from "../shared/graph/nodes/nodeKeywords";
+import { nodeMatchScore, nodeMatches } from "../shared/graph/nodes/nodeKeywords";
 import { NodeDefinition } from "../shared/graph/types";
 import "./node-palette.css";
 
@@ -109,7 +109,10 @@ export const NodePalette = memo(function NodePalette({ nodes, onAddNode, onDropN
     if (!searching) return [] as NodeDefinition[];
     return CATEGORY_ORDER.flatMap((category) =>
       (grouped.get(category) ?? []).filter((def) => nodeMatches(def, query, CATEGORY_LABEL[category])),
-    );
+    )
+      .map((def, i) => ({ def, i, score: nodeMatchScore(def, query) }))
+      .sort((a, b) => b.score - a.score || a.i - b.i)
+      .map((r) => r.def);
   }, [grouped, query, searching]);
 
   useEffect(() => setHighlight(0), [query]);

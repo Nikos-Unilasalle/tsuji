@@ -439,7 +439,7 @@ export const RAY_BURST_NODE: NodeDefinition = {
 /** Sample Surface Node — N random points + normals over a mesh's surface (area-weighted). */
 export const SAMPLE_SURFACE_NODE: NodeDefinition = {
   type: "physics/sample",
-  label: "Surface Scatter",
+  label: "Scatter on Surface",
   category: "instance",
   inputs: [
     { id: "geometry", label: "Surface", type: "geometry" },
@@ -476,7 +476,7 @@ export const SAMPLE_SURFACE_NODE: NodeDefinition = {
 /** Volume Scatter Node — N random points + normals inside a mesh's 3D volume. */
 export const VOLUME_SCATTER_NODE: NodeDefinition = {
   type: "physics/volume_scatter",
-  label: "Volume Scatter",
+  label: "Scatter in Volume",
   category: "instance",
   inputs: [
     { id: "geometry", label: "Volume", type: "geometry" },

@@ -257,11 +257,11 @@ export const REVOLVE_NODE = definePolyNode({
   defaultParams: { axis: "y", direction: [0, 1, 0], center: [0, 0, 0], angle: 360, segments: 16, weldSeam: true, flip: false },
   paramFields: [
     { id: "axis", label: "Axis", kind: "select", options: ["x", "y", "z", "custom"], group: "Revolve" },
-    { id: "direction", label: "Axis Direction (custom)", kind: "vector", step: 0.1, group: "Revolve" },
+    { id: "direction", label: "Axis Direction", kind: "vector", step: 0.1, group: "Revolve", showIf: { axis: ["custom"] } },
     { id: "center", label: "Center", kind: "vector", step: 0.1, group: "Revolve" },
     { id: "angle", label: "Angle (°)", kind: "number", step: 5, group: "Revolve" },
     { id: "segments", label: "Segments", kind: "number", step: 1, group: "Revolve" },
-    { id: "weldSeam", label: "Weld seam (full turn)", kind: "boolean", group: "Revolve" },
+    { id: "weldSeam", label: "Weld the seam (full turn)", kind: "boolean", group: "Revolve" },
     { id: "flip", label: "Flip normals", kind: "boolean", group: "Revolve" },
   ],
   run: (run) => {
@@ -314,7 +314,7 @@ export const MIRROR_NODE = definePolyNode({
     { id: "mode", label: "Mode", kind: "select", options: ["mirror", "symmetrize"], optionLabels: ["Mirror (keep both)", "Symmetrize (one side → other)"], group: "Mirror" },
     { id: "axis", label: "Plane Axis", kind: "select", options: ["x", "y", "z"], group: "Mirror" },
     { id: "offset", label: "Plane Offset", kind: "number", step: 0.05, group: "Mirror" },
-    { id: "keep", label: "Source Side (symmetrize)", kind: "select", options: ["positive", "negative"], group: "Mirror" },
+    { id: "keep", label: "Copy From Side", kind: "select", options: ["positive", "negative"], optionLabels: ["Positive (+)", "Negative (−)"], group: "Mirror", showIf: { mode: ["symmetrize"] } },
     { id: "weld", label: "Weld seam", kind: "boolean", group: "Mirror" },
     { id: "tolerance", label: "Weld Tolerance", kind: "number", step: 0.0001, group: "Mirror" },
     { id: "flip", label: "Fix winding of copies", kind: "boolean", group: "Mirror" },
@@ -355,7 +355,7 @@ export const MIRROR_NODE = definePolyNode({
 
 export const FUSE_NODE = definePolyNode({
   type: "modeling/fuse",
-  label: "Fuse",
+  label: "Merge by Distance",
   category: CATEGORY,
   group: { domain: "point" },
   inputs: [{ id: "distance", label: "Distance", type: "value" }],
@@ -418,9 +418,9 @@ export const DISSOLVE_NODE = definePolyNode({
   defaultParams: { mode: "faces", angle: 5, delimitMaterial: true, delimitSharp: true },
   paramFields: [
     { id: "mode", label: "Mode", kind: "select", options: ["faces", "edges", "points", "limited"], optionLabels: ["Faces", "Edges", "Points", "Limited (by angle)"], group: "Dissolve" },
-    { id: "angle", label: "Max Angle (°, limited)", kind: "number", step: 1, group: "Dissolve" },
-    { id: "delimitMaterial", label: "Keep material borders (limited)", kind: "boolean", group: "Dissolve" },
-    { id: "delimitSharp", label: "Keep sharp edges and seams (limited)", kind: "boolean", group: "Dissolve" },
+    { id: "angle", label: "Max Angle (°)", kind: "number", step: 1, group: "Dissolve", showIf: { mode: ["limited"] } },
+    { id: "delimitMaterial", label: "Keep material borders", kind: "boolean", group: "Dissolve", showIf: { mode: ["limited"] } },
+    { id: "delimitSharp", label: "Keep sharp edges and seams", kind: "boolean", group: "Dissolve", showIf: { mode: ["limited"] } },
   ],
   run: (run) => {
     const mode = run.str("mode", "faces");

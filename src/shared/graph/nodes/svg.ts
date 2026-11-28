@@ -187,7 +187,7 @@ export const SVG_TO_CURVES_NODE: NodeDefinition = {
   ],
   outputs: [
     { id: "curve", label: "Curve (first)", type: "curve" },
-    { id: "curves", label: "Curves (list)", type: "list" },
+    { id: "curves", label: "Curves", type: "list" },
     { id: "geometry", label: "Curve Preview", type: "geometry" },
   ],
   defaultParams: {

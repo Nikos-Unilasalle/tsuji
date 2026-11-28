@@ -185,7 +185,7 @@ export const RIDGE_LAYERS_NODE: NodeDefinition = {
   category: "strokes",
   inputs: [
     { id: "anchors", label: "Anchors (Vector List)", type: "list" },
-    { id: "scales", label: "Scales (List)", type: "list" },
+    { id: "scales", label: "Scales", type: "list" },
     { id: "width", label: "Width", type: "value" },
     { id: "height", label: "Height", type: "value" },
     { id: "seed", label: "Seed", type: "value" },

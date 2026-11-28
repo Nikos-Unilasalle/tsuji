@@ -238,7 +238,7 @@ export const TEXT_ANIMATOR_NODE: NodeDefinition = {
   outputs: [
     { id: "geometry", label: "Geometry", type: "geometry", owns: true },
     { id: "matrices", label: "Matrices", type: "list" },
-    { id: "positions", label: "Positions", type: "list" },
+    { id: "positions", label: "Points", type: "list" },
     { id: "characters", label: "Characters", type: "list" },
     { id: "weights", label: "Weights", type: "list" },
     { id: "count", label: "Count", type: "value" },
@@ -527,7 +527,7 @@ export const TEXT_DECOMPOSE_NODE: NodeDefinition = {
     { id: "characters", label: "Characters", type: "list" },
     { id: "words", label: "Words", type: "list" },
     { id: "lines", label: "Lines", type: "list" },
-    { id: "positions", label: "Positions", type: "list" },
+    { id: "positions", label: "Points", type: "list" },
     { id: "matrices", label: "Matrices", type: "list" },
     { id: "count", label: "Count", type: "value" },
     { id: "width", label: "Total Width", type: "value" },
@@ -713,7 +713,7 @@ export const CURVE_TEXT_ON_PATH_NODE: NodeDefinition = {
   outputs: [
     { id: "geometry", label: "Geometry", type: "geometry", owns: true },
     { id: "matrices", label: "Matrices", type: "list" },
-    { id: "positions", label: "Positions", type: "list" },
+    { id: "positions", label: "Points", type: "list" },
     { id: "count", label: "Count", type: "value" },
     { id: "matrix", label: "Matrix", type: "matrix" },
   ],

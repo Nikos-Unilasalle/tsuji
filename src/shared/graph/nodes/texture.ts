@@ -868,7 +868,7 @@ function getPixelSpawnerState(nodeId: string): PixelSpawnerState {
  */
 export const TEXTURE_PIXEL_SPAWNER_NODE: NodeDefinition = {
   type: "texture/pixel-spawner",
-  label: "Texture Pixel Spawner",
+  label: "Instances from Pixels",
   category: "instance",
   inputs: [
     { id: "texture", label: "Texture", type: "texture" },
@@ -879,7 +879,7 @@ export const TEXTURE_PIXEL_SPAWNER_NODE: NodeDefinition = {
   outputs: [
     { id: "geometry", label: "Geometry", type: "geometry" },
     { id: "colors", label: "Colors", type: "list" },
-    { id: "positions", label: "Positions", type: "list" },
+    { id: "positions", label: "Points", type: "list" },
     { id: "intensities", label: "Intensities", type: "list" },
     { id: "count", label: "Count", type: "value" },
   ],

@@ -113,13 +113,13 @@ export const WRITE_ON_NODE: NodeDefinition = {
   label: "Write On",
   category: "strokes",
   inputs: [
-    { id: "curves", label: "Curves", type: "curve" },
+    { id: "curves", label: "Curves", type: "list" },
     { id: "list", label: "Curves (List)", type: "list" },
     { id: "progress", label: "Progress (0-1)", type: "value" },
     { id: "speed", label: "Speed", type: "value" },
   ],
   outputs: [
-    { id: "curves", label: "Curves", type: "curve" },
+    { id: "curves", label: "Curves", type: "list" },
     { id: "list", label: "Curves (List)", type: "list" },
     // One entry per input stroke, in order, whether started or not — to drive
     // whatever should follow each stroke (Stroke Style's wash, a seal…).

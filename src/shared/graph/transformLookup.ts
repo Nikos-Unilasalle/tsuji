@@ -10,6 +10,7 @@ import { Graph } from "./types";
  */
 export const GIZMO_SELECTABLE_TYPES = [
   "object/box",
+  "object/line",
   "object/plane",
   "object/sphere",
   "object/disc",

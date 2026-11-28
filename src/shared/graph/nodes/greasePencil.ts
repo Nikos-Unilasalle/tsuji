@@ -729,7 +729,7 @@ export const GREASE_PENCIL_NODE: NodeDefinition = {
   ],
   outputs: [
     { id: "geometry", label: "Geometry", type: "geometry" },
-    { id: "curves", label: "Curves", type: "curve" },
+    { id: "curves", label: "Curves", type: "list" },
     { id: "matrix", label: "Matrix", type: "matrix" },
   ],
   reset: { params: ["frames"] },

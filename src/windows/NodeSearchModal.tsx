@@ -1,4 +1,4 @@
-import { nodeMatches } from "../shared/graph/nodes/nodeKeywords";
+import { nodeMatchScore, nodeMatches } from "../shared/graph/nodes/nodeKeywords";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { CATEGORY_COLOR, CATEGORY_LABEL } from "../shared/graph/categories";
 import { GROUP_INPUT_TYPE, GROUP_OUTPUT_TYPE, GROUP_TYPE } from "../shared/graph/groups";
@@ -31,7 +31,11 @@ export function NodeSearchModal({ registry, onSelectNodeType, onClose }: NodeSea
 
   const filteredNodes = useMemo(() => {
     if (!query.trim()) return availableNodes;
-    return availableNodes.filter((node) => nodeMatches(node, query, CATEGORY_LABEL[node.category] ?? node.category));
+    return availableNodes
+      .filter((node) => nodeMatches(node, query, CATEGORY_LABEL[node.category] ?? node.category))
+      .map((node, i) => ({ node, i, score: nodeMatchScore(node, query) }))
+      .sort((a, b) => b.score - a.score || a.i - b.i)
+      .map((r) => r.node);
   }, [availableNodes, query]);
 
   useEffect(() => {

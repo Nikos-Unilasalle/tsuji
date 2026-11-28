@@ -157,7 +157,7 @@ export const SCATTER_ON_CURVES_NODE: NodeDefinition = {
   ],
   outputs: [
     { id: "points", label: "Points", type: "list" },
-    { id: "scales", label: "Scales (List)", type: "list" },
+    { id: "scales", label: "Scales", type: "list" },
     { id: "count", label: "Count", type: "value" },
   ],
   defaultParams: {

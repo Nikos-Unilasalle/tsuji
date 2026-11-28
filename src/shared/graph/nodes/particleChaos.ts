@@ -173,7 +173,7 @@ export const PARTICLE_STRANGE_ATTRACTOR_NODE: NodeDefinition = {
   outputs: [
     { id: "geometry", label: "Geometry", type: "geometry" },
     { id: "matrix", label: "Matrix", type: "matrix" },
-    { id: "points", label: "Points List", type: "list" },
+    { id: "points", label: "Points", type: "list" },
   ],
   defaultParams: {
     visible: true,

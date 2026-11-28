@@ -28,7 +28,7 @@ import { resolvePointsInput } from "./pointsGeometry";
  */
 export const POINTS_SELECTION_NODE: NodeDefinition = {
   type: "list/points-selection",
-  label: "Points Selection",
+  label: "Pick Points",
   category: "selection",
   ownershipPassThrough: true,
   inputs: [

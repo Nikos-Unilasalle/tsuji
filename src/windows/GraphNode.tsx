@@ -1,5 +1,6 @@
 import React, { createContext, memo, useContext, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { groupPreview } from "../shared/graph/groupPreviewStore";
+import { TELEPORT_TYPE } from "../shared/graph/nodes/teleport";
 import { Handle, NodeResizeControl, Position, useUpdateNodeInternals } from "@xyflow/react";
 import * as THREE from "three";
 import { CATEGORY_COLOR, NodeCategory, UNKNOWN_CATEGORY_COLOR } from "../shared/graph/categories";
@@ -526,8 +527,13 @@ export const GraphNode = memo(function GraphNode({ data, selected }: { data: Gra
   const categoryColor = data.category ? CATEGORY_COLOR[data.category] : UNKNOWN_CATEGORY_COLOR;
 
   return (
-    <div className="graph-node" style={{ borderColor: selected ? categoryColor : undefined }}>
+    <div
+      className={"graph-node" + (data.nodeType === TELEPORT_TYPE ? " graph-node-teleport" : "")}
+      style={{ borderColor: selected ? categoryColor : undefined }}
+      title={data.nodeType === TELEPORT_TYPE ? "Teleport — the outputs of another node, without the long wire" : undefined}
+    >
       <div className="graph-node-title" style={{ color: categoryColor }}>
+        {data.nodeType === TELEPORT_TYPE && <span className="graph-node-teleport-mark" aria-hidden="true">⇢ </span>}
         {data.label}
       </div>
       <div className="graph-node-body">

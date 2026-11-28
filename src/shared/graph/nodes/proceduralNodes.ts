@@ -65,7 +65,7 @@ export const RAY_PROJECT_MODES = ["nearest", "normal", "direction"] as const;
 
 export const RAY_PROJECT_NODE = definePolyNode({
   type: "modeling/ray-project",
-  label: "Ray / Project / Shrinkwrap",
+  label: "Shrinkwrap / Project",
   category: "deform",
   group: { domain: "point", label: "Point Group" },
   dependsOnPose: true,
@@ -79,8 +79,8 @@ export const RAY_PROJECT_NODE = definePolyNode({
   defaultParams: { mode: "nearest", direction: new THREE.Vector3(0, -1, 0), bidirectional: true, offset: 0, maxDistance: 0, amount: 1 },
   paramFields: [
     { id: "mode", label: "Mode", kind: "select", options: [...RAY_PROJECT_MODES], optionLabels: ["Nearest surface (shrinkwrap)", "Along point normal", "Along direction"], group: "Project" },
-    { id: "direction", label: "Direction (world)", kind: "vector", step: 0.1, group: "Project" },
-    { id: "bidirectional", label: "Both ways (rays)", kind: "boolean", group: "Project" },
+    { id: "direction", label: "Direction (world)", kind: "vector", step: 0.1, group: "Project", showIf: { mode: ["direction"] } },
+    { id: "bidirectional", label: "Both ways", kind: "boolean", group: "Project", showIf: { mode: ["normal", "direction"] } },
     { id: "offset", label: "Offset (along hit normal)", kind: "number", step: 0.005, group: "Project" },
     { id: "maxDistance", label: "Max Distance (0 = any)", kind: "number", step: 0.05, group: "Project" },
     { id: "amount", label: "Amount", kind: "number", step: 0.05, group: "Project" },
@@ -198,8 +198,8 @@ export const COPY_TO_POINTS_NODE = definePolyNode({
   },
   paramFields: [
     { id: "orient", label: "Orient", kind: "select", options: ["normal", "none"], optionLabels: ["By N (or orient / up attributes)", "None (keep source axes)"], group: "Copies" },
-    { id: "alignAxis", label: "Axis aligned to N", kind: "select", options: ["y", "z"], optionLabels: ["+Y", "+Z (Houdini)"], group: "Copies" },
-    { id: "upHint", label: "Up Hint (no up attribute)", kind: "vector", step: 0.1, group: "Copies" },
+    { id: "alignAxis", label: "Axis aligned to N", kind: "select", options: ["y", "z"], optionLabels: ["+Y", "+Z (Houdini)"], group: "Copies", showIf: { orient: ["normal"] } },
+    { id: "upHint", label: "Up Hint (no up attribute)", kind: "vector", step: 0.1, group: "Copies", showIf: { orient: ["normal"] } },
     { id: "scale", label: "Scale", kind: "number", step: 0.05, group: "Copies" },
     { id: "usePscale", label: "Scale by pscale / scale attributes", kind: "boolean", group: "Copies" },
     { id: "variantMode", label: "Variant", kind: "select", options: ["attribute", "random", "cycle"], optionLabels: ["variant attribute (int)", "Random", "Cycle by point"], group: "Variants" },
@@ -444,7 +444,7 @@ export const LSYSTEM_NODE: NodeDefinition = {
 
 export const HEIGHTFIELD_ERODE_NODE = definePolyNode({
   type: "modeling/heightfield-erode",
-  label: "HeightField Erode",
+  label: "Erode Terrain",
   category: "generators",
   group: { domain: "point", label: "Erodible Points" },
   inputs: [{ id: "seed", label: "Seed", type: "value" }],
@@ -525,7 +525,7 @@ export const HEIGHTFIELD_ERODE_NODE = definePolyNode({
 
 export const GEODESIC_DISTANCE_NODE = definePolyNode({
   type: "modeling/geodesic-distance",
-  label: "Geodesic Distance",
+  label: "Surface Distance (Geodesic)",
   category: "attribute",
   group: { domain: "point", label: "Source Points" },
   outputs: [{ id: "maxDistance", label: "Max Distance", type: "value" }],

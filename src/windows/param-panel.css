@@ -504,3 +504,13 @@
   border-color: var(--accent-color, #38bdf8);
   color: var(--accent-color, #38bdf8);
 }
+
+/* What the node does, under the title. */
+.param-panel-description {
+  margin: 0;
+  padding: 2px 12px 10px;
+  color: var(--chrome-text-muted);
+  font-size: 11.5px;
+  line-height: 1.45;
+  border-bottom: 1px solid color-mix(in srgb, var(--chrome-border) 45%, transparent);
+}
