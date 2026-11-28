@@ -85,15 +85,15 @@
           },
           "params": {
             "location": {
-              "x": -12.5,
+              "x": -10.5,
               "y": 0.4,
-              "z": 0.6
+              "z": 0.2
             },
             "useTarget": true,
             "target": {
               "x": -0.7,
-              "y": -1.9,
-              "z": 1.3
+              "y": -1.5,
+              "z": 0.9
             },
             "fov": 34,
             "active": true
@@ -122,7 +122,7 @@
           },
           "params": {
             "name": "Angle of attack (°)",
-            "value": 15
+            "value": 10
           }
         },
         {
@@ -133,8 +133,8 @@
             "y": -260
           },
           "params": {
-            "name": "Reynolds number (seed ≈ 1000)",
-            "value": 1000
+            "name": "Reynolds number",
+            "value": 800
           }
         },
         {
@@ -146,7 +146,7 @@
           },
           "params": {
             "name": "Thickness (fraction of chord)",
-            "value": 0.3
+            "value": 0.18
           }
         },
         {
@@ -158,7 +158,7 @@
           },
           "params": {
             "name": "Camber (fraction of chord)",
-            "value": 0.05
+            "value": 0.06
           }
         },
         {
@@ -170,7 +170,7 @@
           },
           "params": {
             "name": "Notch depth (fraction of chord)",
-            "value": 0.22
+            "value": 0.16
           }
         },
         {
@@ -182,7 +182,7 @@
           },
           "params": {
             "name": "Notch start (fraction of chord)",
-            "value": 0.3
+            "value": 0.06
           }
         },
         {
@@ -223,10 +223,10 @@
             "gridLines": 8,
             "gridColor": 3875856,
             "gridWidth": 1,
-            "a": 0.22,
-            "b": 0.3,
-            "c": 0.3,
-            "d": 0.05
+            "a": 0.16,
+            "b": 0.06,
+            "c": 0.18,
+            "d": 0.06
           }
         },
         {
@@ -240,7 +240,7 @@
             "name": "Below: the smooth twin",
             "location": {
               "x": 0,
-              "y": -3.4,
+              "y": -3.0,
               "z": 0
             },
             "visible": 0
@@ -271,9 +271,9 @@
             "gridColor": 3875856,
             "gridWidth": 1,
             "a": 0,
-            "b": 0.3,
-            "c": 0.3,
-            "d": 0.05
+            "b": 0.06,
+            "c": 0.18,
+            "d": 0.06
           }
         },
         {
@@ -309,7 +309,7 @@
             "name": "Cutaway at the slice (display only)",
             "location": {
               "x": 0.9,
-              "y": -3.4,
+              "y": -3.0,
               "z": 0.5
             },
             "size": {
@@ -328,7 +328,7 @@
             "y": -450
           },
           "params": {
-            "title": "3 · Wind tunnels — one slice at 35 % of the span, same air, same angle",
+            "title": "3 · Wind tunnels — one slice at 35 % of the span, same air, same angle (10°, Re 800)",
             "color": 959977,
             "width": 640,
             "height": 760
@@ -366,6 +366,9 @@
             "showField": true,
             "showStreamlines": true,
             "streamlineCount": 22,
+            "showTracers": true,
+            "tracerCount": 600,
+            "averageChords": 4,
             "showPressure": false,
             "showForces": true,
             "forceScale": 0.5
@@ -403,6 +406,9 @@
             "showField": true,
             "showStreamlines": true,
             "streamlineCount": 22,
+            "showTracers": true,
+            "tracerCount": 600,
+            "averageChords": 4,
             "showPressure": false,
             "showForces": true,
             "forceScale": 0.5
@@ -416,10 +422,10 @@
             "y": -450
           },
           "params": {
-            "title": "4 · Readouts — lift and drag coefficients, live",
+            "title": "4 · Readouts — time-averaged lift, drag and lift-to-drag",
             "color": 2278750,
-            "width": 640,
-            "height": 760
+            "width": 700,
+            "height": 1200
           }
         },
         {
@@ -445,7 +451,7 @@
             "y": -260
           },
           "params": {
-            "text": "2D lattice-Boltzmann wind tunnel · colour = vorticity · arrows = lift / drag",
+            "text": "2D lattice-Boltzmann wind tunnel · colour = vorticity · dots = air · values averaged over 4 chords",
             "x": 60,
             "y": 112,
             "fontSize": 24,
@@ -456,7 +462,7 @@
           "id": "hud_notch",
           "type": "hub/text",
           "position": {
-            "x": 840,
+            "x": 900,
             "y": -140
           },
           "params": {
@@ -468,10 +474,10 @@
           }
         },
         {
-          "id": "cl_notch",
+          "id": "clMean_notch",
           "type": "converter/value-to-text",
           "position": {
-            "x": 540,
+            "x": 560,
             "y": -140
           },
           "params": {
@@ -480,23 +486,11 @@
           }
         },
         {
-          "id": "cd_notch",
-          "type": "converter/value-to-text",
-          "position": {
-            "x": 540,
-            "y": -30
-          },
-          "params": {
-            "decimals": 2,
-            "prefix": "Cd "
-          }
-        },
-        {
-          "id": "hud_cl_notch",
+          "id": "hud_clMean_notch",
           "type": "hub/text",
           "position": {
-            "x": 840,
-            "y": -30
+            "x": 900,
+            "y": -70
           },
           "params": {
             "x": 60,
@@ -506,14 +500,52 @@
           }
         },
         {
-          "id": "hud_cd_notch",
-          "type": "hub/text",
+          "id": "cdMean_notch",
+          "type": "converter/value-to-text",
           "position": {
-            "x": 840,
-            "y": 80
+            "x": 560,
+            "y": -70
           },
           "params": {
-            "x": 230,
+            "decimals": 2,
+            "prefix": "Cd "
+          }
+        },
+        {
+          "id": "hud_cdMean_notch",
+          "type": "hub/text",
+          "position": {
+            "x": 900,
+            "y": 0
+          },
+          "params": {
+            "x": 200,
+            "y": 346,
+            "fontSize": 28,
+            "color": 14870768
+          }
+        },
+        {
+          "id": "liftToDrag_notch",
+          "type": "converter/value-to-text",
+          "position": {
+            "x": 560,
+            "y": 0
+          },
+          "params": {
+            "decimals": 2,
+            "prefix": "L/D "
+          }
+        },
+        {
+          "id": "hud_liftToDrag_notch",
+          "type": "hub/text",
+          "position": {
+            "x": 900,
+            "y": 70
+          },
+          "params": {
+            "x": 340,
             "y": 346,
             "fontSize": 28,
             "color": 14870768
@@ -523,23 +555,23 @@
           "id": "hud_smooth",
           "type": "hub/text",
           "position": {
-            "x": 840,
-            "y": 200
+            "x": 900,
+            "y": 160
           },
           "params": {
             "text": "Smooth wing",
             "x": 60,
-            "y": 760,
+            "y": 720,
             "fontSize": 34,
             "color": 8246268
           }
         },
         {
-          "id": "cl_smooth",
+          "id": "clMean_smooth",
           "type": "converter/value-to-text",
           "position": {
-            "x": 540,
-            "y": 200
+            "x": 560,
+            "y": 160
           },
           "params": {
             "decimals": 2,
@@ -547,11 +579,25 @@
           }
         },
         {
-          "id": "cd_smooth",
+          "id": "hud_clMean_smooth",
+          "type": "hub/text",
+          "position": {
+            "x": 900,
+            "y": 230
+          },
+          "params": {
+            "x": 60,
+            "y": 766,
+            "fontSize": 28,
+            "color": 14870768
+          }
+        },
+        {
+          "id": "cdMean_smooth",
           "type": "converter/value-to-text",
           "position": {
-            "x": 540,
-            "y": 310
+            "x": 560,
+            "y": 230
           },
           "params": {
             "decimals": 2,
@@ -559,31 +605,106 @@
           }
         },
         {
-          "id": "hud_cl_smooth",
+          "id": "hud_cdMean_smooth",
           "type": "hub/text",
           "position": {
-            "x": 840,
-            "y": 310
+            "x": 900,
+            "y": 300
           },
           "params": {
-            "x": 60,
-            "y": 806,
+            "x": 200,
+            "y": 766,
             "fontSize": 28,
             "color": 14870768
           }
         },
         {
-          "id": "hud_cd_smooth",
-          "type": "hub/text",
+          "id": "liftToDrag_smooth",
+          "type": "converter/value-to-text",
           "position": {
-            "x": 840,
-            "y": 420
+            "x": 560,
+            "y": 300
           },
           "params": {
-            "x": 230,
-            "y": 806,
+            "decimals": 2,
+            "prefix": "L/D "
+          }
+        },
+        {
+          "id": "hud_liftToDrag_smooth",
+          "type": "hub/text",
+          "position": {
+            "x": 900,
+            "y": 370
+          },
+          "params": {
+            "x": 340,
+            "y": 766,
             "fontSize": 28,
             "color": 14870768
+          }
+        },
+        {
+          "id": "ratio",
+          "type": "value/math",
+          "position": {
+            "x": 560,
+            "y": 480
+          },
+          "params": {
+            "name": "Notch L/D ÷ smooth L/D",
+            "op": "divide"
+          }
+        },
+        {
+          "id": "gain1",
+          "type": "value/math",
+          "position": {
+            "x": 560,
+            "y": 560
+          },
+          "params": {
+            "op": "subtract",
+            "b": 1
+          }
+        },
+        {
+          "id": "gain",
+          "type": "value/math",
+          "position": {
+            "x": 560,
+            "y": 640
+          },
+          "params": {
+            "op": "multiply",
+            "b": 100
+          }
+        },
+        {
+          "id": "gain_text",
+          "type": "converter/value-to-text",
+          "position": {
+            "x": 760,
+            "y": 560
+          },
+          "params": {
+            "decimals": 0,
+            "prefix": "Lift-to-drag gain from the notch: ",
+            "suffix": " %"
+          }
+        },
+        {
+          "id": "hud_gain",
+          "type": "hub/text",
+          "position": {
+            "x": 960,
+            "y": 560
+          },
+          "params": {
+            "x": 60,
+            "y": 980,
+            "fontSize": 30,
+            "color": 8843180
           }
         }
       ],
@@ -701,59 +822,129 @@
           "toSocket": "reynolds"
         },
         {
-          "id": "tunnel_notch.cl->cl_notch.value",
+          "id": "tunnel_notch.clMean->clMean_notch.value",
           "fromNode": "tunnel_notch",
-          "fromSocket": "cl",
-          "toNode": "cl_notch",
+          "fromSocket": "clMean",
+          "toNode": "clMean_notch",
           "toSocket": "value"
         },
         {
-          "id": "tunnel_notch.cd->cd_notch.value",
+          "id": "clMean_notch.text->hud_clMean_notch.text",
+          "fromNode": "clMean_notch",
+          "fromSocket": "text",
+          "toNode": "hud_clMean_notch",
+          "toSocket": "text"
+        },
+        {
+          "id": "tunnel_notch.cdMean->cdMean_notch.value",
           "fromNode": "tunnel_notch",
-          "fromSocket": "cd",
-          "toNode": "cd_notch",
+          "fromSocket": "cdMean",
+          "toNode": "cdMean_notch",
           "toSocket": "value"
         },
         {
-          "id": "cl_notch.text->hud_cl_notch.text",
-          "fromNode": "cl_notch",
+          "id": "cdMean_notch.text->hud_cdMean_notch.text",
+          "fromNode": "cdMean_notch",
           "fromSocket": "text",
-          "toNode": "hud_cl_notch",
+          "toNode": "hud_cdMean_notch",
           "toSocket": "text"
         },
         {
-          "id": "cd_notch.text->hud_cd_notch.text",
-          "fromNode": "cd_notch",
+          "id": "tunnel_notch.liftToDrag->liftToDrag_notch.value",
+          "fromNode": "tunnel_notch",
+          "fromSocket": "liftToDrag",
+          "toNode": "liftToDrag_notch",
+          "toSocket": "value"
+        },
+        {
+          "id": "liftToDrag_notch.text->hud_liftToDrag_notch.text",
+          "fromNode": "liftToDrag_notch",
           "fromSocket": "text",
-          "toNode": "hud_cd_notch",
+          "toNode": "hud_liftToDrag_notch",
           "toSocket": "text"
         },
         {
-          "id": "tunnel_smooth.cl->cl_smooth.value",
+          "id": "tunnel_smooth.clMean->clMean_smooth.value",
           "fromNode": "tunnel_smooth",
-          "fromSocket": "cl",
-          "toNode": "cl_smooth",
+          "fromSocket": "clMean",
+          "toNode": "clMean_smooth",
           "toSocket": "value"
         },
         {
-          "id": "tunnel_smooth.cd->cd_smooth.value",
-          "fromNode": "tunnel_smooth",
-          "fromSocket": "cd",
-          "toNode": "cd_smooth",
-          "toSocket": "value"
-        },
-        {
-          "id": "cl_smooth.text->hud_cl_smooth.text",
-          "fromNode": "cl_smooth",
+          "id": "clMean_smooth.text->hud_clMean_smooth.text",
+          "fromNode": "clMean_smooth",
           "fromSocket": "text",
-          "toNode": "hud_cl_smooth",
+          "toNode": "hud_clMean_smooth",
           "toSocket": "text"
         },
         {
-          "id": "cd_smooth.text->hud_cd_smooth.text",
-          "fromNode": "cd_smooth",
+          "id": "tunnel_smooth.cdMean->cdMean_smooth.value",
+          "fromNode": "tunnel_smooth",
+          "fromSocket": "cdMean",
+          "toNode": "cdMean_smooth",
+          "toSocket": "value"
+        },
+        {
+          "id": "cdMean_smooth.text->hud_cdMean_smooth.text",
+          "fromNode": "cdMean_smooth",
           "fromSocket": "text",
-          "toNode": "hud_cd_smooth",
+          "toNode": "hud_cdMean_smooth",
+          "toSocket": "text"
+        },
+        {
+          "id": "tunnel_smooth.liftToDrag->liftToDrag_smooth.value",
+          "fromNode": "tunnel_smooth",
+          "fromSocket": "liftToDrag",
+          "toNode": "liftToDrag_smooth",
+          "toSocket": "value"
+        },
+        {
+          "id": "liftToDrag_smooth.text->hud_liftToDrag_smooth.text",
+          "fromNode": "liftToDrag_smooth",
+          "fromSocket": "text",
+          "toNode": "hud_liftToDrag_smooth",
+          "toSocket": "text"
+        },
+        {
+          "id": "tunnel_notch.liftToDrag->ratio.a",
+          "fromNode": "tunnel_notch",
+          "fromSocket": "liftToDrag",
+          "toNode": "ratio",
+          "toSocket": "a"
+        },
+        {
+          "id": "tunnel_smooth.liftToDrag->ratio.b",
+          "fromNode": "tunnel_smooth",
+          "fromSocket": "liftToDrag",
+          "toNode": "ratio",
+          "toSocket": "b"
+        },
+        {
+          "id": "ratio.out->gain1.a",
+          "fromNode": "ratio",
+          "fromSocket": "out",
+          "toNode": "gain1",
+          "toSocket": "a"
+        },
+        {
+          "id": "gain1.out->gain.a",
+          "fromNode": "gain1",
+          "fromSocket": "out",
+          "toNode": "gain",
+          "toSocket": "a"
+        },
+        {
+          "id": "gain.out->gain_text.value",
+          "fromNode": "gain",
+          "fromSocket": "out",
+          "toNode": "gain_text",
+          "toSocket": "value"
+        },
+        {
+          "id": "gain_text.text->hud_gain.text",
+          "fromNode": "gain_text",
+          "fromSocket": "text",
+          "toNode": "hud_gain",
           "toSocket": "text"
         }
       ],

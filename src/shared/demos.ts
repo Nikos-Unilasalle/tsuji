@@ -576,7 +576,7 @@ export const DEMO_CATALOG: DemoCategory[] = [
         file: "demo_physics_kasper_wing.tsuji",
         label: "Trapped Vortex Wing (Alsomitra, Kasper Notch)",
         description:
-          "A parametric wing modelled on the Alsomitra macrocarpa seed, with a Kasper notch cut in its upper surface, flown in a 2D wind tunnel next to its smooth twin. Watch the vortex settle in the notch, and compare lift and drag live. Change the angle, thickness or notch, then press Compute on a tunnel.",
+          "A parametric wing modelled on the Alsomitra macrocarpa seed, with a Kasper notch cut behind its leading edge, flown in a 2D wind tunnel next to its smooth twin. A vortex settles in the notch: the flow steadies, drag drops and lift-to-drag rises (time-averaged, shown live). Change the angle, Reynolds number or notch and watch the gain move.",
       },
       {
         file: "demo_vegetation_tree_species.tsuji",

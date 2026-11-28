@@ -78,6 +78,10 @@ describe("Wind Tunnel 2D node (CPU)", () => {
     expect(up.cd as number).toBeGreaterThan(0.05);
     expect(Math.abs(flat.cl as number)).toBeLessThan(0.1);
     expect(up.cl as number).toBeGreaterThan((flat.cl as number) + 0.3);
+    // Time-averaged coefficients follow the instantaneous ones, without their swing.
+    expect(up.clMean as number).toBeGreaterThan(0.3);
+    expect(Math.abs((up.clMean as number) - (up.cl as number))).toBeLessThan(0.3);
+    expect(up.liftToDrag as number).toBeCloseTo((up.clMean as number) / (up.cdMean as number), 9);
     // Airspeed for Re 500 on a 1 cm chord in air.
     expect(up.airspeed as number).toBeCloseTo((500 * 1.5e-5) / 0.01, 9);
     expect((up.streamlines as unknown[]).length).toBeGreaterThan(10);

@@ -84,6 +84,11 @@ interface SliceState {
   liftArrow: THREE.ArrowHelper;
   dragArrow: THREE.ArrowHelper;
   seed: number;
+  /** Cl / Cd averaged over the last `averageChords` chords of air (vortex shedding makes them swing). */
+  clMean: number;
+  cdMean: number;
+  /** Chords of air the mean has seen since the flow last changed (0 = start over). */
+  meanChords: number;
 }
 
 interface TunnelState {
@@ -155,7 +160,7 @@ function createSlice(): SliceState {
   return {
     backend: "cpu", sim: null, renderer: null, gridKey: "", sliceKey: "", baseChains: [], chord: 0, maskKey: "",
     group, fieldMesh, fieldTex: null, tracers, tracerPos: new Float32Array(0), tracerAge: new Float32Array(0),
-    streamLines, pressureBars, liftArrow, dragArrow, seed: 1,
+    streamLines, pressureBars, liftArrow, dragArrow, seed: 1, clMean: 0, cdMean: 0, meanChords: 0,
   };
 }
 
@@ -273,6 +278,7 @@ const PARAM_FIELDS: ParamFieldDef[] = [
   { id: "simulate", label: "Simulate While Playing / Exporting", kind: "boolean", group: "Solver" },
   { id: "warmUp", label: "Video Export: Settle the Flow Before Frame 1", kind: "boolean", group: "Solver" },
   { id: "stepsPerFrame", label: "Steps per Frame", kind: "number", step: 5, group: "Solver" },
+  { id: "averageChords", label: "Averaging (chords of air, for the time-averaged outputs)", kind: "number", step: 1, group: "Solver" },
   { id: "solver", label: "Solver", kind: "select", options: ["auto", "gpu", "cpu"], group: "Solver" },
   { id: "unitMeters", label: "Scene Unit (m)", kind: "number", step: 0.01, group: "Real World" },
   { id: "viscosity", label: "Kinematic Viscosity (m²/s, air 1.5e-5)", kind: "number", step: 0.000001, group: "Real World" },
@@ -312,6 +318,8 @@ interface Shared {
 
 interface SliceResult {
   cl: number;
+  clMean: number;
+  cdMean: number;
   cd: number;
   chord: number;
   streamlines: THREE.Vector3[][];
@@ -404,6 +412,7 @@ function runSlice(
     sl.renderer = renderer;
     sl.gridKey = gridKey;
     sl.maskKey = "";
+    sl.meanChords = 0;
     sl.tracerPos = new Float32Array(0);
   }
   const sim = sl.sim;
@@ -414,6 +423,7 @@ function runSlice(
   const maskKey = `${sl.sliceKey}|${sh.angle}|${grid.x0}|${grid.y0}|${dx}|${sh.thickness}|${gridKey}`;
   if (maskKey !== sl.maskKey) {
     sl.maskKey = maskKey;
+    sl.meanChords = 0;
     const mask = rasterise(chains, grid, sh.thickness / 2, 1e-6 * chord);
     if (backend === "gpu") setSolidGPU(sim as Lbm2DGPU, mask);
     else setSolid(sim as Lbm2D, mask);
@@ -447,6 +457,20 @@ function runSlice(
     if (samples > 0) { sim.cd = sumX / samples / dyn; sim.cl = sumY / samples / dyn; }
     sl.tracerPos = new Float32Array(0); // re-seeded over the settled flow
     ran = 0;
+    // Compute already averages over half its run: the mean starts from there.
+    sl.clMean = sim.cl;
+    sl.cdMean = sim.cd;
+    sl.meanChords = Math.max(1, computeSteps / 2);
+  }
+  if (playSteps > 0 && sim.steps > 0) {
+    // Running mean in chords of air travelled: a plain mean at first, then an
+    // exponential one over the last `averageChords` chords.
+    const dc = (playSteps * U_LATTICE) / lengthCells;
+    const window = Math.max(0.1, numberInput(undefined, params.averageChords, 4));
+    sl.meanChords += dc;
+    const k = Math.min(1, Math.max(dc / window, dc / sl.meanChords));
+    sl.clMean += k * (sim.cl - sl.clMean);
+    sl.cdMean += k * (sim.cd - sl.cdMean);
   }
 
   // ---- Field plane ----------------------------------------------------------------------------
@@ -621,13 +645,15 @@ function runSlice(
 
   return {
     cl, cd, chord, streamlines,
+    clMean: sim.steps > 0 ? sl.clMean : 0,
+    cdMean: sim.steps > 0 ? sl.cdMean : 0,
     section: chains.map((l) => l.map((q) => fromFrame(q, frame))),
     liftFoot: origin,
     liftTip: origin.clone().addScaledVector(frame.up, cl * fScale),
   };
 }
 
-const EMPTY = { streamlines: [], section: [], cl: 0, cd: 0, chord: 0, airspeed: 0, clPerSlice: [], cdPerSlice: [], stations: [], liftCurve: [] };
+const EMPTY = { streamlines: [], section: [], cl: 0, cd: 0, clMean: 0, cdMean: 0, liftToDrag: 0, chord: 0, airspeed: 0, clPerSlice: [], cdPerSlice: [], stations: [], liftCurve: [] };
 
 export const WIND_TUNNEL_2D_NODE: NodeDefinition = {
   type: "physics/wind-tunnel-2d",
@@ -647,6 +673,9 @@ export const WIND_TUNNEL_2D_NODE: NodeDefinition = {
     { id: "section", label: "Section (point lists)", type: "list" },
     { id: "cl", label: "Lift Coefficient Cl (chord-weighted)", type: "value" },
     { id: "cd", label: "Drag Coefficient Cd (chord-weighted)", type: "value" },
+    { id: "clMean", label: "Cl, time-averaged", type: "value" },
+    { id: "cdMean", label: "Cd, time-averaged", type: "value" },
+    { id: "liftToDrag", label: "Lift / Drag (time-averaged)", type: "value" },
     { id: "clPerSlice", label: "Cl per Slice", type: "list" },
     { id: "cdPerSlice", label: "Cd per Slice", type: "list" },
     { id: "stations", label: "Stations", type: "list" },
@@ -658,7 +687,7 @@ export const WIND_TUNNEL_2D_NODE: NodeDefinition = {
     sliceAxis: "X", sliceCount: 1, station: 0, stationFrom: -1, stationTo: 1,
     flowAxis: "+Z", angle: 5, reynolds: 2000, reynoldsMode: "airspeed",
     cellsPerChord: 96, upstream: 1, downstream: 3, height: 2.5, thickness: 1.5,
-    simulate: true, warmUp: true, stepsPerFrame: 40, solver: "auto", computeChords: 8, computeRequest: 0,
+    simulate: true, warmUp: true, stepsPerFrame: 40, averageChords: 4, solver: "auto", computeChords: 8, computeRequest: 0,
     unitMeters: 0.01, viscosity: 1.5e-5,
     field: "vorticity", range: 12, opacity: 0.9, fadeCalm: true, calmOpacity: 0.06,
     showField: true, showTracers: false, tracerCount: 800, showStreamlines: true, streamlineCount: 24,
@@ -753,6 +782,8 @@ export const WIND_TUNNEL_2D_NODE: NodeDefinition = {
     const sumC = ok.reduce((s, r) => s + r.chord, 0);
     const cl = ok.reduce((s, r) => s + r.cl * r.chord, 0) / sumC;
     const cd = ok.reduce((s, r) => s + r.cd * r.chord, 0) / sumC;
+    const clMean = ok.reduce((s, r) => s + r.clMean * r.chord, 0) / sumC;
+    const cdMean = ok.reduce((s, r) => s + r.cdMean * r.chord, 0) / sumC;
     const liftCurve = ok.length > 1 ? ok.map((r) => r.liftTip) : [];
     const showCurve = flag(params.showForces, true) && liftCurve.length > 1;
     if (showCurve) st.liftCurve.geometry.setFromPoints(liftCurve);
@@ -765,7 +796,8 @@ export const WIND_TUNNEL_2D_NODE: NodeDefinition = {
       geometry: st.group,
       streamlines: ok.flatMap((r) => r.streamlines),
       section: ok.flatMap((r) => r.section),
-      cl, cd,
+      cl, cd, clMean, cdMean,
+      liftToDrag: Math.abs(cdMean) > 1e-9 ? clMean / cdMean : 0,
       clPerSlice: results.map((r) => r?.cl ?? 0),
       cdPerSlice: results.map((r) => r?.cd ?? 0),
       stations,
